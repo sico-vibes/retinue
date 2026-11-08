@@ -18,13 +18,19 @@ impl Root {
             Some(self.render_new_project_dialog(colors, cx))
         } else if self.staff.is_some() {
             Some(self.render_staff_dialog(colors, cx))
+        } else if self.pending_model.is_some() {
+            Some(self.render_model_change_dialog(colors, cx))
+        } else if self.confirm_bypass.is_some() {
+            Some(self.render_bypass_dialog(colors, cx))
         } else if self.confirm.is_some() {
             Some(self.render_confirm(colors, cx))
         } else {
             None
         }?;
+        // A click on the backdrop closes the dialog; the card stops its own.
         Some(
             div()
+                .id("dialog-backdrop")
                 .absolute()
                 .top_0()
                 .left_0()
@@ -33,7 +39,17 @@ impl Root {
                 .items_center()
                 .justify_center()
                 .bg(colors.scrim)
-                .child(card)
+                .on_mouse_down(gpui::MouseButton::Left, cx.listener(|root, _: &gpui::MouseDownEvent, _window, cx| {
+                    root.close_top_dialog(cx);
+                }))
+                .child(
+                    div()
+                        .on_mouse_down(gpui::MouseButton::Left, cx.listener(|_, _: &gpui::MouseDownEvent, _window, cx| {
+                            // A click inside the card is not a click on the backdrop.
+                            cx.stop_propagation();
+                        }))
+                        .child(card),
+                )
                 .into_any_element(),
         )
     }
@@ -98,6 +114,14 @@ impl Root {
                             cx.notify();
                         }
                         CloseKind::Confirm => root.close_confirm(cx),
+                        CloseKind::ModelChange => {
+                            root.pending_model = None;
+                            cx.notify();
+                        }
+                        CloseKind::Bypass => {
+                            root.confirm_bypass = None;
+                            cx.notify();
+                        }
                     })),
             )
             .into_any_element()
@@ -518,6 +542,82 @@ impl Root {
 
     // ---- one confirmation ------------------------------------------------------
 
+    /// "Switch model and start fresh?": the daemon's own reason, then what stays.
+    fn render_model_change_dialog(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let Some(pending) = self.pending_model.as_ref() else { return div().into_any_element() };
+        let body_text = if pending.context_at_risk {
+            crate::ui::composer::model_change_body(Some(&pending.reason))
+        } else {
+            "This conversation has no working memory to lose yet, so the new model starts here cleanly.".to_owned()
+        };
+        let model = pending.model.clone();
+        let head = self.dialog_head("Switch model and start fresh?", "", colors, cx, CloseKind::ModelChange);
+        let body = div()
+            .flex()
+            .flex_col()
+            .gap(px(12.0))
+            .child(head)
+            .child(
+                div()
+                    .text_size(px(theme::FS_XS))
+                    .text_color(colors.text_2)
+                    .child(SharedString::from(format!("New model: {model}"))),
+            )
+            .child(div().text_size(px(theme::FS_SM)).text_color(colors.text_2).child(SharedString::from(body_text)))
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap(px(8.0))
+                    .child(self.ghost_button("Keep current model", "model-keep", colors, cx, |root, cx| {
+                        root.pending_model = None;
+                        cx.notify();
+                    }))
+                    .child(self.small_primary("Switch model", "model-switch", colors, cx, |root, cx| {
+                        let model = root.pending_model.as_ref().map(|pending| pending.model.clone());
+                        root.write_model(model, cx);
+                    })),
+            );
+        self.dialog_shell(460.0, colors, cx, body.into_any_element())
+    }
+
+    /// "Give this bot full access?": the app's own warning before `bypass`.
+    fn render_bypass_dialog(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let Some(session_id) = self.confirm_bypass.clone() else { return div().into_any_element() };
+        let name = self.selected_agent().map(|agent| agent.name.clone()).unwrap_or_else(|| "this bot".to_owned());
+        let head = self.dialog_head("Give this bot full access?", "", colors, cx, CloseKind::Bypass);
+        let body = div()
+            .flex()
+            .flex_col()
+            .gap(px(12.0))
+            .child(head)
+            .child(
+                div()
+                    .text_size(px(theme::FS_SM))
+                    .text_color(colors.text_2)
+                    .child(SharedString::from(format!(
+                        "The agent will run commands and change files without asking you. Cancel and Stop still stop it. This is {name}'s own setting, so every conversation is affected."
+                    ))),
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap(px(8.0))
+                    .child(self.ghost_button("Keep asking", "bypass-cancel", colors, cx, |root, cx| {
+                        root.confirm_bypass = None;
+                        cx.notify();
+                    }))
+                    .child(self.small_primary("Allow full access", "bypass-allow", colors, cx, move |root, cx| {
+                        root.confirm_bypass = None;
+                        let _ = &session_id;
+                        root.write_permission("bypass".to_owned(), cx);
+                    })),
+            );
+        self.dialog_shell(460.0, colors, cx, body.into_any_element())
+    }
+
+
     fn render_confirm(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
         let Some(confirm) = self.confirm.as_ref() else { return div().into_any_element() };
         let title = confirm.title.clone();
@@ -548,6 +648,8 @@ pub enum CloseKind {
     NewProject,
     Staff,
     Confirm,
+    ModelChange,
+    Bypass,
 }
 
 fn checkbox(checked: bool, colors: Colors) -> AnyElement {

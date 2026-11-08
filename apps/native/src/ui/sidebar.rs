@@ -16,8 +16,10 @@ use gpui::{div, prelude::*, px, Animation, AnimationExt, AnyElement, Context, Sh
 use crate::art::{self, Glyph, Mark};
 use crate::state::{conversation_status, project_blocks, Agent, ConversationStatus, Session, Tone};
 use crate::theme::{self, Colors, DensityTokens};
+use crate::ui::menu::{Menu, MenuChoice, MenuItem};
 use crate::ui::motion;
-use crate::ui::root::{ProjectMenu, Root, SidebarView};
+use crate::ui::root::{Root, SidebarView};
+use crate::ui::search::{matches, search_words};
 
 /// The width a sidebar row gives its title, for the marquee. Layout, not magic:
 /// the sidebar width less the row's portrait, padding and status.
@@ -57,8 +59,10 @@ impl Root {
             .into_any_element()
     }
 
-    /// The search box: a placeholder in this slice, exactly as the brief allows.
-    fn render_search(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    /// The search box: it filters the tree and the roster as it is typed
+    /// (`ui/ProjectSearch.tsx` behaviour), and a click puts the caret in it.
+    fn render_search(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let query = self.sidebar_search.read(cx).text().to_owned();
         div()
             .id("sidebar-search")
             .mx(px(8.0))
@@ -72,14 +76,26 @@ impl Root {
             .bg(colors.input)
             .border_1()
             .border_color(colors.line)
-            .cursor_pointer()
             .hover(move |style| style.border_color(colors.line_strong))
             .child(art::glyph(Glyph::SEARCH, 12.0, colors.text_3))
-            .child(div().text_color(colors.text_3).text_size(px(theme::FS_XS)).child("Search"))
-            .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| {
-                root.notice = Some("Search comes in a later slice.".to_owned());
-                cx.notify();
-            }))
+            .child(div().flex_1().min_w(px(0.0)).child(self.sidebar_search.clone()))
+            .when(!query.is_empty(), |this| {
+                this.child(
+                    div()
+                        .id("search-clear")
+                        .size(px(16.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(4.0))
+                        .cursor_pointer()
+                        .hover(move |style| style.bg(colors.hover))
+                        .child(art::glyph(Glyph::X, 9.0, colors.text_3))
+                        .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| {
+                            root.sidebar_search.update(cx, |input, cx| input.set_text(String::new(), cx));
+                        })),
+                )
+            })
             .into_any_element()
     }
 
@@ -177,47 +193,59 @@ impl Root {
             .into_any_element()
     }
 
-    /// New project, and the gear that opens Settings.
+    /// New project, the bell, the plan-usage line and the gear that opens Settings.
     fn render_sidebar_footer(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
-        div()
+        let bell = self.render_needs_bell(colors, cx);
+        let usage = self.render_usage_line(colors, cx);
+        let mut footer = div()
             .mx(px(8.0))
             .mb(px(8.0))
             .mt(px(6.0))
             .flex()
-            .items_center()
-            .gap(px(4.0))
+            .flex_col()
             .child(
                 div()
-                    .id("new-project")
-                    .flex_1()
-                    .h(px(28.0))
-                    .px(px(8.0))
                     .flex()
                     .items_center()
-                    .gap(px(6.0))
-                    .rounded(px(theme::RADIUS_SM))
-                    .text_color(colors.text_2)
-                    .text_size(px(theme::FS_XS))
-                    .cursor_pointer()
-                    .hover(move |style| style.text_color(colors.text_1).bg(colors.hover))
-                    .child(art::glyph(Glyph::PLUS, 12.0, colors.text_2))
-                    .child("New project")
-                    .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_new_project(cx))),
-            )
-            .child(
-                div()
-                    .id("open-settings")
-                    .size(px(28.0))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(theme::RADIUS_SM))
-                    .cursor_pointer()
-                    .hover(move |style| style.bg(colors.hover))
-                    .child(art::glyph(Glyph::SETTINGS, 14.0, colors.text_2))
-                    .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_settings(cx))),
-            )
-            .into_any_element()
+                    .gap(px(4.0))
+                    .child(
+                        div()
+                            .id("new-project")
+                            .flex_1()
+                            .h(px(28.0))
+                            .px(px(8.0))
+                            .flex()
+                            .items_center()
+                            .gap(px(6.0))
+                            .rounded(px(theme::RADIUS_SM))
+                            .text_color(colors.text_2)
+                            .text_size(px(theme::FS_XS))
+                            .cursor_pointer()
+                            .hover(move |style| style.text_color(colors.text_1).bg(colors.hover))
+                            .active(move |style| style.bg(colors.selected))
+                            .child(art::glyph(Glyph::PLUS, 12.0, colors.text_2))
+                            .child("New project")
+                            .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_new_project(cx))),
+                    )
+                    .child(bell)
+                    .child(
+                        div()
+                            .id("open-settings")
+                            .size(px(28.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(theme::RADIUS_SM))
+                            .cursor_pointer()
+                            .hover(move |style| style.bg(colors.hover))
+                            .child(art::glyph(Glyph::SETTINGS, 14.0, colors.text_2))
+                            .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_settings(cx))),
+                    ),
+            );
+        if let Some(usage) = usage {
+            footer = footer.child(usage);
+        }
+        footer.into_any_element()
     }
 
     fn render_projects_tree(
@@ -227,20 +255,49 @@ impl Root {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let employees: Vec<Agent> = self.employees().into_iter().cloned().collect();
-        let projects = self.snapshot().map(|snapshot| snapshot.projects.clone()).unwrap_or_default();
-        let sessions = self.sessions().to_vec();
+        let employees_all: Vec<Agent> = self.employees().into_iter().cloned().collect();
+        let filter = search_words(self.sidebar_search.read(cx).text());
+        let employees: Vec<Agent> = employees_all
+            .iter()
+            .filter(|agent| matches(&filter, &[agent.name.as_str(), agent.role_or_default(), agent.description.as_str()]))
+            .cloned()
+            .collect();
+        let projects_all = self.snapshot().map(|snapshot| snapshot.projects.clone()).unwrap_or_default();
+        let projects: Vec<crate::state::Project> = projects_all
+            .iter()
+            .filter(|project| matches(&filter, &[project.name.as_str(), project.path.clone().unwrap_or_default().as_str()]))
+            .cloned()
+            .collect();
+        // With words in the box, a project stays when it or one of its bots
+        // answers them; with an empty box the whole tree is shown.
+        let sessions_all = self.sessions().to_vec();
+        let sessions: Vec<Session> = sessions_all
+            .iter()
+            .filter(|session| {
+                filter.is_empty()
+                    || matches(&filter, &[session.title_or_default()])
+                    || session.agent_id.as_deref().is_some_and(|agent_id| employees.iter().any(|agent| agent.id == agent_id))
+                    || projects.iter().any(|project| Some(&project.id) == session.project_id.as_ref())
+            })
+            .cloned()
+            .collect();
         let members = self.members.clone();
         let blocks = project_blocks(&employees, &projects, &sessions, members.as_ref());
         let approvals = self.approval_session_ids();
         let selected_session = self.session_id.clone();
         let folded = self.folded_projects.clone();
-        let menu = self.menu.as_ref().map(|menu| menu.key.clone());
         let hovered = self.hovered.clone();
 
         let mut list = div().flex().flex_col().gap(px(tokens.group_gap)).px(px(6.0)).py(px(4.0));
         if blocks.is_empty() {
-            list = list.child(div().px(px(6.0)).py(px(6.0)).text_size(px(theme::FS_XS)).text_color(colors.text_3).child("No projects yet."));
+            list = list.child(
+                div()
+                    .px(px(6.0))
+                    .py(px(6.0))
+                    .text_size(px(theme::FS_XS))
+                    .text_color(colors.text_3)
+                    .child(SharedString::from(if filter.is_empty() { "No projects yet.".to_owned() } else { "Nothing matches that search.".to_owned() })),
+            );
         }
         for block in &blocks {
             let name = block.project.as_ref().map(|project| project.name.clone()).unwrap_or_else(|| "No project".to_owned());
@@ -248,7 +305,6 @@ impl Root {
             let closing = self.is_closing(&block.key);
             let key = block.key.clone();
             let project_id = block.project.as_ref().map(|project| project.id.clone());
-            let menu_open = menu.as_deref() == Some(block.key.as_str());
             let add_key = block.key.clone();
             let add_name = name.clone();
             let add_project = project_id.clone();
@@ -294,27 +350,20 @@ impl Root {
                         .items_center()
                         .justify_center()
                         .rounded(px(theme::RADIUS_SM))
-                        .opacity(if menu_open { 1.0 } else { 0.55 })
+                        .opacity(0.55)
                         .cursor_pointer()
                         .hover(move |style| style.bg(colors.hover).opacity(1.0))
+                        .active(move |style| style.bg(colors.selected))
                         .child(art::glyph(Glyph::PLUS, 12.0, colors.text_2))
-                        .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| {
-                            root.toggle_menu(
-                                ProjectMenu {
-                                    key: add_key.clone(),
-                                    project_id: add_project.clone(),
-                                    project_name: add_name.clone(),
-                                },
-                                cx,
-                            );
+                        .on_click(cx.listener(move |root, event: &gpui::ClickEvent, window, cx| {
+                            let at = root.click_position(event, window);
+                            let items = project_menu_items(add_project.clone(), add_name.clone());
+                            root.open_menu(Menu::new(format!("project-{add_key}"), at, items).width(240.0), cx);
                         })),
                 );
             }
 
             let mut section = div().flex().flex_col().gap(px(2.0)).child(head);
-            if menu_open {
-                section = section.child(self.render_project_menu(colors, cx));
-            }
 
             let mut rows = div().flex().flex_col().gap(px(tokens.row_gap)).pl(px(8.0)).py(px(2.0));
             if block.bots.is_empty() {
@@ -392,72 +441,65 @@ impl Root {
         list.into_any_element()
     }
 
-    /// The project "+" menu: New conversation, Hire an employee, Ask the CEO.
-    fn render_project_menu(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
-        let Some(menu) = self.menu.clone() else { return div().into_any_element() };
-        let project_id = menu.project_id.clone();
-        let project_name = menu.project_name.clone();
-        let items: [(Glyph, &str); 3] = [
-            (Glyph::MESSAGES, "New conversation"),
-            (Glyph::USER_PLUS, "Hire an employee…"),
-            (Glyph::BELL, "Ask the CEO who to hire"),
-        ];
-        let mut panel = div()
-            .mx(px(8.0))
-            .mb(px(2.0))
-            .p(px(3.0))
-            .flex()
-            .flex_col()
-            .gap(px(1.0))
-            .rounded(px(theme::RADIUS_SM))
-            .bg(colors.panel)
-            .border_1()
-            .border_color(colors.line_strong);
-        for (index, (glyph, label)) in items.into_iter().enumerate() {
-            let project = project_id.clone();
-            let name = project_name.clone();
-            let id = SharedString::from(format!("menu-{}-{index}", menu.key));
-            panel = panel.child(
-                div()
-                    .id(id)
-                    .h(px(28.0))
-                    .px(px(8.0))
-                    .flex()
-                    .items_center()
-                    .gap(px(7.0))
-                    .rounded(px(theme::RADIUS_SM))
-                    .text_size(px(theme::FS_XS))
-                    .text_color(colors.text_1)
-                    .cursor_pointer()
-                    .hover(move |style| style.bg(colors.hover))
-                    .child(art::glyph(glyph, 12.0, colors.text_2))
-                    .child(SharedString::from(label))
-                    .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| match index {
-                        0 => {
-                            if let Some(agent) = root.agent_id.clone() {
-                                root.new_conversation(agent, project.clone(), cx);
-                            } else {
-                                root.error = Some("Choose an employee first.".to_owned());
-                                cx.notify();
-                            }
-                        }
-                        1 => root.open_team(crate::ui::root::TeamTab::Hire, project.clone(), cx),
-                        _ => {
-                            if let Some(project_id) = project.clone() {
-                                root.ask_ceo_to_staff_for_menu(project_id, name.clone(), cx);
-                            }
-                        }
-                    })),
-            );
-        }
-        panel.into_any_element()
-    }
+}
 
-    /// Ask the CEO from a project's menu: the project's own conversation, or a
-    /// note when it has no id yet.
-    fn ask_ceo_to_staff_for_menu(&mut self, project_id: String, _name: String, cx: &mut Context<Self>) {
-        self.ask_ceo_to_staff(project_id, cx);
+/// The project menu's rows, built where the trigger is so each one owns what it
+/// needs.
+fn project_menu_items(project_id: Option<String>, project_name: String) -> Vec<MenuItem> {
+    let mut items = Vec::new();
+    if project_id.is_none() {
+        items.push(MenuItem::Choice(
+            MenuChoice::new(
+                "new-conversation",
+                "New conversation",
+                std::rc::Rc::new(move |root: &mut Root, cx: &mut Context<Root>| {
+                    if let Some(agent_id) = root.agent_id.clone() {
+                        root.new_conversation(agent_id, None, cx);
+                    } else {
+                        root.error = Some("Choose an employee first.".to_owned());
+                        cx.notify();
+                    }
+                }),
+            )
+            .icon(Glyph::MESSAGES),
+        ));
+        return items;
     }
+    let project = project_id.clone();
+    items.push(MenuItem::Choice(
+        MenuChoice::new(
+            "new-conversation",
+            "New conversation",
+            std::rc::Rc::new(move |root: &mut Root, cx: &mut Context<Root>| {
+                if let Some(agent_id) = root.agent_id.clone() {
+                    root.new_conversation(agent_id, project.clone(), cx);
+                } else {
+                    root.error = Some("Choose an employee first.".to_owned());
+                    cx.notify();
+                }
+            }),
+        )
+        .icon(Glyph::MESSAGES),
+    ));
+    let hire = project_id.clone().unwrap_or_default();
+    items.push(MenuItem::Choice(
+        MenuChoice::new("hire", "Hire an employee…", std::rc::Rc::new(move |root: &mut Root, cx: &mut Context<Root>| {
+            root.open_team(crate::ui::root::TeamTab::Hire, Some(hire.clone()), cx);
+        }))
+        .icon(Glyph::USER_PLUS),
+    ));
+    let ask = project_id.unwrap_or_default();
+    items.push(MenuItem::Choice(
+        MenuChoice::new("ask-ceo", "Ask the CEO who to hire", std::rc::Rc::new(move |root: &mut Root, cx: &mut Context<Root>| {
+            root.ask_ceo_to_staff(ask.clone(), cx);
+            let _ = &project_name;
+        }))
+        .icon(Glyph::BELL),
+    ));
+    items
+}
+
+impl Root {
 
     #[allow(clippy::too_many_arguments)]
     fn render_employee(
@@ -528,6 +570,7 @@ impl Root {
                     .rounded(px(theme::RADIUS_MD))
                     .cursor_pointer()
                     .when(!holds_selection, |this| this.hover(move |style| style.bg(colors.hover)))
+                    .active(move |style| style.bg(colors.selected_strong))
                     .on_hover(cx.listener(move |root, is_hovered: &bool, _window, cx| {
                         root.set_hovered(is_hovered.then(|| hover_key.clone()), cx);
                     }))
@@ -575,14 +618,16 @@ impl Root {
                                     .child(SharedString::from(subtitle)),
                             ),
                     )
-                    .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| match &latest_id {
-                        Some(session_id) => {
-                            if !expanded {
-                                root.set_employee_fold(row_key_owned.clone(), true, cx);
+                    .on_mouse_down(gpui::MouseButton::Left, cx.listener(move |root, _: &gpui::MouseDownEvent, _window, cx| {
+                        match &latest_id {
+                            Some(session_id) => {
+                                if !expanded {
+                                    root.set_employee_fold(row_key_owned.clone(), true, cx);
+                                }
+                                root.open_conversation(agent_id.clone(), session_id.clone(), cx);
                             }
-                            root.open_conversation(agent_id.clone(), session_id.clone(), cx);
+                            None => root.new_conversation(agent_id.clone(), None, cx),
                         }
-                        None => root.new_conversation(agent_id.clone(), None, cx),
                     })),
             );
 
@@ -650,7 +695,7 @@ impl Root {
                                 .child(div().child("·"))
                                 .child(status_element(status, colors, &card_key)),
                         )
-                        .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| {
+                        .on_mouse_down(gpui::MouseButton::Left, cx.listener(move |root, _: &gpui::MouseDownEvent, _window, cx| {
                             root.open_conversation(card_agent.clone(), card_session.clone(), cx);
                         })),
                 );
@@ -690,6 +735,8 @@ impl Root {
             };
             let agent_id = agent.id.clone();
             let status_key = format!("roster-{}", agent.id);
+            let menu_agent = agent.id.clone();
+            let menu_name = agent.name.clone();
             list = list.child(
                 div()
                     .id(SharedString::from(format!("team-{}", agent.id)))
@@ -711,7 +758,31 @@ impl Root {
                             .child("Idle")
                             .into_any_element(),
                     })
-                    .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| root.select_agent(agent_id.clone(), cx))),
+                    .child(
+                        div()
+                            .id(SharedString::from(format!("roster-more-{}", agent.id)))
+                            .size(px(20.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(4.0))
+                            .cursor_pointer()
+                            .hover(move |style| style.bg(colors.selected))
+                            .child(art::glyph(Glyph::MORE, 11.0, colors.text_3))
+                            .on_mouse_down(gpui::MouseButton::Left, cx.listener(|_, _: &gpui::MouseDownEvent, _window, cx| {
+                                // The press belongs to the button, not to the row
+                                // that would select the bot.
+                                cx.stop_propagation();
+                            }))
+                            .on_click(cx.listener(move |root, event: &gpui::ClickEvent, window, cx| {
+                                let at = root.click_position(event, window);
+                                let items = crate::ui::team::bot_menu_items(menu_agent.clone(), menu_name.clone());
+                                root.open_menu(Menu::new(format!("roster-{menu_agent}"), at, items).width(210.0), cx);
+                            })),
+                    )
+                    .on_mouse_down(gpui::MouseButton::Left, cx.listener(move |root, _: &gpui::MouseDownEvent, _window, cx| {
+                        root.select_agent(agent_id.clone(), cx)
+                    })),
             );
         }
         list.into_any_element()

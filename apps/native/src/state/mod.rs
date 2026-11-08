@@ -4,7 +4,10 @@
 //! authoritative, the window applies ordered events on top of one snapshot, and
 //! unknown fields and event types are ignored rather than refused.
 
+pub mod bot;
 pub mod projects;
+pub mod quota;
+pub mod slash;
 pub mod team;
 
 use serde::Deserialize;
@@ -13,6 +16,24 @@ use serde_json::Value;
 use crate::daemon::client::DaemonEvent;
 
 pub use projects::{conversation_status, project_blocks, project_of_session, ConversationStatus, Tone};
+
+pub mod serde_defaults {
+    //! The daemon writes `null` where a list is empty in more than one place (a
+    //! message with no attachments, a snapshot with no quota rows yet), and a
+    //! list that refuses `null` throws the whole snapshot away. These turn `null`
+    //! into the empty value instead, so an old daemon shape still reads.
+
+    use serde::{Deserialize, Deserializer};
+
+    pub fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+    where
+        D: Deserializer<'de>,
+        T: Default + Deserialize<'de>,
+    {
+        Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+    }
+}
+
 
 /// The bot's stored look, as far as the mark is concerned (`blob/haze/icons.ts`).
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -59,6 +80,53 @@ pub struct Agent {
     /// The preset this employee was hired from, when it was hired from one.
     #[serde(default)]
     pub preset_id: Option<String>,
+    /// The bot's own model, effort, speed and permission mode: what a new
+    /// conversation starts with (`agent.update`).
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub thinking: Option<String>,
+    #[serde(default)]
+    pub service_tier: Option<String>,
+    #[serde(default)]
+    pub approval_mode: Option<String>,
+    #[serde(default)]
+    pub effective_approval_mode: Option<String>,
+    #[serde(default)]
+    pub instructions: Option<String>,
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
+    pub tags: Vec<String>,
+    /// `all`, `input` (approvals and questions only) or `muted`.
+    #[serde(default)]
+    pub notification_level: Option<String>,
+}
+
+impl Agent {
+    /// The permission mode this bot starts conversations on, as the composer
+    /// shows it (`sessionApprovalMode` in `ui/ComposerControls.tsx`).
+    pub fn permission_mode(&self) -> String {
+        self.effective_approval_mode
+            .as_deref()
+            .or(self.approval_mode.as_deref())
+            .map(str::trim)
+            .filter(|mode| APPROVAL_MODES.contains(mode))
+            .unwrap_or("ask")
+            .to_owned()
+    }
+}
+
+/// Every permission mode the app offers, in the order its menu lists them.
+pub const APPROVAL_MODES: [&str; 4] = ["ask", "accept_edits", "auto", "bypass"];
+
+/// A permission mode's two labels: the pill's word and the menu's sentence
+/// (`APPROVAL_MODE_COPY` in `ui/ComposerControls.tsx`).
+pub fn approval_mode_copy(mode: &str) -> (String, &'static str) {
+    match mode {
+        "accept_edits" => ("Accept edits".to_owned(), "Reading and editing files inside the project run; every command asks."),
+        "auto" => ("Auto".to_owned(), "Low-risk actions inside the project run; anything else asks."),
+        "bypass" => ("Full access".to_owned(), "The agent acts without asking. Use only in projects you trust."),
+        _ => ("Ask first".to_owned(), "You approve each command and file change."),
+    }
 }
 
 impl Agent {
@@ -131,6 +199,20 @@ pub struct Message {
     pub created_at: Option<String>,
     pub status: Option<String>,
     pub meta: Option<Value>,
+    /// The images a message carried, as the daemon stored them.
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
+    pub attachments: Vec<MessageAttachment>,
+}
+
+/// One image on a message: its name, the staged path it was sent from and,
+/// when the daemon copied it, the file it keeps.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct MessageAttachment {
+    pub name: String,
+    pub path: String,
+    pub file: Option<String>,
+    pub media_type: Option<String>,
 }
 
 impl Message {
@@ -141,6 +223,7 @@ impl Message {
     pub fn text(&self) -> &str {
         self.content.as_deref().unwrap_or("")
     }
+
 
     /// Thinking is hidden: it is the agent's working notes, not the conversation.
     pub fn is_thinking(&self) -> bool {
@@ -193,6 +276,9 @@ pub struct SessionLink {
     pub peer_agent_id: Option<String>,
     pub peer_name: Option<String>,
     pub topic: Option<String>,
+    /// The conversation this side conversation was started from, so the column
+    /// can draw it under its own branch.
+    pub origin_session_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -210,18 +296,73 @@ pub struct Session {
     pub project_path: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
     pub messages: Vec<Message>,
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
     pub tools: Vec<Tool>,
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
     pub turns: Vec<Turn>,
     pub link: Option<SessionLink>,
     pub partial: bool,
     pub limited_until: Option<String>,
     pub workspace_label: Option<String>,
+    /// What this conversation pinned for itself: the model, effort, speed and
+    /// permission mode that differ from the bot's own defaults.
+    pub model_lock: Option<ModelLock>,
+    /// The project's own permission mode, when it sets one.
+    pub project_approval_mode: Option<String>,
+    /// How much of the provider's context the conversation has used, and which
+    /// model that was: switching model with context costs the working memory.
+    pub context_used: Option<f64>,
+    pub context_model: Option<String>,
+}
+
+/// `SessionModelLock` in `types.ts`: a field that is absent follows the bot.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct ModelLock {
+    pub model: Option<String>,
+    pub thinking: Option<String>,
+    pub approval_mode: Option<String>,
+    pub approval_mode_source: Option<String>,
+    pub service_tier: Option<String>,
+    pub plan_mode: Option<bool>,
 }
 
 impl Session {
     pub fn stamp(&self) -> &str {
         self.updated_at.as_deref().or(self.created_at.as_deref()).unwrap_or("")
+    }
+
+    /// The model this conversation runs on: its own pin, else the bot's.
+    pub fn model(&self, agent: Option<&Agent>) -> Option<String> {
+        self.model_lock
+            .as_ref()
+            .and_then(|lock| lock.model.clone())
+            .or_else(|| agent.and_then(|agent| agent.model.clone()))
+    }
+
+    /// The permission mode in force here (`sessionApprovalMode`): the
+    /// conversation's own pin, then its project's, then the bot's.
+    pub fn permission_mode(&self, agent: Option<&Agent>) -> (String, bool, bool) {
+        let pinned = self
+            .model_lock
+            .as_ref()
+            .and_then(|lock| lock.approval_mode.as_deref())
+            .map(str::trim)
+            .filter(|mode| APPROVAL_MODES.contains(mode));
+        if let Some(mode) = pinned {
+            return (mode.to_owned(), true, false);
+        }
+        let project = self
+            .project_approval_mode
+            .as_deref()
+            .map(str::trim)
+            .filter(|mode| APPROVAL_MODES.contains(mode));
+        if let Some(mode) = project {
+            return (mode.to_owned(), false, true);
+        }
+        (agent.map(Agent::permission_mode).unwrap_or_else(|| "ask".to_owned()), false, false)
     }
 
     pub fn title_or_default(&self) -> &str {
@@ -249,11 +390,45 @@ pub struct Permission {
     pub session_id: Option<String>,
     pub title: Option<String>,
     pub detail: Option<String>,
+    pub description: Option<String>,
+    pub tool: Option<String>,
+    pub command: Option<String>,
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
     pub choices: Vec<String>,
     pub kind: Option<String>,
     pub status: Option<String>,
+    pub created_at: Option<String>,
+    pub expires_at: Option<String>,
+    /// The project a "always allow" rule could cover (`projectName`).
+    pub project_name: Option<String>,
+    /// Whether the daemon offered to remember this request, and its sentence.
+    pub rememberable: bool,
+    pub remember_label: Option<String>,
+    /// The bot's own questions, for a `kind: "question"` card.
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
+    pub questions: Vec<UserQuestion>,
     /// What the CEO proposes, carried by a `kind: "proposal"` card.
     pub proposal: Option<Proposal>,
+}
+
+/// One structured question a bot asks (`UserQuestion` in `types.ts`).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct UserQuestion {
+    pub id: String,
+    pub header: String,
+    pub question: String,
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
+    pub options: Vec<QuestionOption>,
+    pub multi_select: bool,
+    pub allow_other: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct QuestionOption {
+    pub label: String,
+    pub description: Option<String>,
 }
 
 /// `ProposalCard` in `types.ts`.
@@ -276,9 +451,14 @@ impl Proposal {
 }
 
 impl Permission {
-    /// A question or a proposal is not answered with Allow/Deny in this window.
-    pub fn is_simple_approval(&self) -> bool {
-        !matches!(self.kind.as_deref(), Some("question") | Some("proposal"))
+    /// A question or a proposal is answered with its own card, not Allow/Deny.
+    pub fn is_question(&self) -> bool {
+        matches!(self.kind.as_deref(), Some("question"))
+    }
+
+    /// A proposal needs `proposal.decide`, not `permission.reply`.
+    pub fn is_proposal(&self) -> bool {
+        self.proposal.is_some() || matches!(self.kind.as_deref(), Some("proposal"))
     }
 
     pub fn proposal_kind(&self) -> Option<&str> {
@@ -286,33 +466,85 @@ impl Permission {
         Some(proposal.kind.as_str())
     }
 
-    /// A `hire` proposal, which this window can answer with `proposal.decide`.
-    pub fn is_hire_proposal(&self) -> bool {
-        matches!(self.proposal_kind(), Some("hire"))
+    /// The sentence under an approval card's title: the daemon's own detail, the
+    /// command's first line, or a plain "the agent asked to use X".
+    pub fn body(&self) -> String {
+        if let Some(detail) = self.detail.as_deref().map(str::trim).filter(|text| !text.is_empty()) {
+            return detail.to_owned();
+        }
+        if let Some(description) = self.description.as_deref().map(str::trim).filter(|text| !text.is_empty()) {
+            return description.to_owned();
+        }
+        if self.command.is_some() {
+            return String::new();
+        }
+        match self.tool.as_deref().map(str::trim).filter(|text| !text.is_empty()) {
+            Some(tool) => format!("The agent requested permission to use {tool}."),
+            None => "The agent requested permission.".to_owned(),
+        }
     }
+}
 
-    /// A `bot` proposal, which this window can create from or skip.
-    pub fn is_bot_proposal(&self) -> bool {
-        matches!(self.proposal_kind(), Some("bot"))
+/// The word a choice shows (`permissionChoiceLabel` in `ui/permissionChoices.ts`).
+/// A provider's own id is never renamed; only the shared spellings are.
+pub fn permission_choice_label(choice: &str) -> String {
+    match choice {
+        "allow_once" | "allow" | "approve" | "accept" => "Allow once".to_owned(),
+        "allow_session" => "Allow this session".to_owned(),
+        "deny" | "reject" | "decline" => "Deny".to_owned(),
+        "reject_once" => "Reject once".to_owned(),
+        "reject_always" => "Reject always".to_owned(),
+        other => {
+            let mut chars = other.replace(['_', '-'], " ").to_lowercase().chars().collect::<Vec<_>>();
+            if let Some(first) = chars.first_mut() {
+                *first = first.to_uppercase().next().unwrap_or(*first);
+            }
+            chars.into_iter().collect()
+        }
     }
+}
 
-    /// Only `hire` and `bot` proposals are answered here; every other card,
-    /// including a question, still says to open Bitbots.
-    pub fn is_answerable_proposal(&self) -> bool {
-        self.is_hire_proposal() || self.is_bot_proposal()
-    }
+/// The allow and deny choices, found by their first word
+/// (`choicesForShortcuts` in `ui/ApprovalCard.tsx`), so Enter and Escape pick
+/// the same buttons the React card does.
+pub fn approval_shortcuts(choices: &[String]) -> (Option<String>, Option<String>) {
+    let first_word = |choice: &str| {
+        choice
+            .replace(['_', '/', '.', '-'], " ")
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .to_lowercase()
+    };
+    let allow = choices
+        .iter()
+        .find(|choice| matches!(first_word(choice).as_str(), "allow" | "approve" | "accept"))
+        .cloned();
+    let deny = choices
+        .iter()
+        .find(|choice| matches!(first_word(choice).as_str(), "deny" | "reject" | "decline"))
+        .cloned();
+    (allow, deny)
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Snapshot {
     pub sequence: u64,
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
     pub agents: Vec<Agent>,
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
     pub sessions: Vec<Session>,
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
     pub projects: Vec<Project>,
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
     pub permissions: Vec<Permission>,
     /// The coding agents the daemon knows. The mark needs each one's provider.
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
     pub runtimes: Vec<Runtime>,
+    /// The plan limits each provider reported (`quota.list`, `quota.updated`).
+    #[serde(default, deserialize_with = "serde_defaults::null_as_default")]
+    pub quotas: Vec<Value>,
     /// Conversations this window saw deleted. A late event must not revive one.
     #[serde(skip)]
     pub deleted_sessions: Vec<String>,
@@ -323,6 +555,39 @@ pub struct Snapshot {
     /// Agents only arrive in a snapshot, so a hiring event asks for a fresh one.
     #[serde(skip)]
     pub refresh_wanted: bool,
+    /// The queued messages of each conversation, from `session.queue.list`.
+    #[serde(skip)]
+    pub queues: std::collections::BTreeMap<String, QueueState>,
+    /// Conversations whose queue changed, so the window reloads it.
+    #[serde(skip)]
+    pub dirty_queues: Vec<String>,
+}
+
+/// A conversation's queue: what waits to be sent, and whether it is paused.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct QueueState {
+    pub items: Vec<QueuedPrompt>,
+    pub paused: bool,
+}
+
+/// One queued message (`QueuedPrompt` in `types.ts`).
+#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct QueuedPrompt {
+    pub id: String,
+    pub session_id: String,
+    pub text: String,
+    pub attachments: Vec<Value>,
+    /// `user`, `send_later`, `retry` or a daemon kind.
+    #[serde(rename = "kind")]
+    pub kind_name: String,
+    pub due_at: Option<String>,
+    pub status: String,
+    pub error: Option<String>,
+    pub position: i64,
+    pub created_at: Option<String>,
+    pub when_limit_resets: bool,
+    pub ambiguous: bool,
 }
 
 impl Snapshot {
@@ -367,6 +632,23 @@ impl Snapshot {
             .collect();
         rows.sort_by(|a, b| b.stamp().cmp(a.stamp()).then_with(|| b.id.cmp(&a.id)));
         rows
+    }
+
+    /// The conversations of one bot that were archived, newest first.
+    pub fn archived_conversations_for(&self, agent_id: &str) -> Vec<Session> {
+        let mut rows: Vec<Session> = self
+            .sessions
+            .iter()
+            .filter(|session| session.agent_id.as_deref() == Some(agent_id) && !session.is_side() && session.archived)
+            .cloned()
+            .collect();
+        rows.sort_by(|a, b| b.stamp().cmp(a.stamp()).then_with(|| b.id.cmp(&a.id)));
+        rows
+    }
+
+    /// The queued messages of one conversation.
+    pub fn queue(&self, session_id: &str) -> QueueState {
+        self.queues.get(session_id).cloned().unwrap_or_default()
     }
 
     /// The waiting approval for one conversation, if there is one.
@@ -428,6 +710,27 @@ pub fn apply_event(snapshot: &mut Snapshot, event: &DaemonEvent) {
                 }
             }
         }
+        // One provider's plan limits changed: keep every other row as it was.
+        "quota.updated" => {
+            let provider = payload.get("provider").and_then(Value::as_str).unwrap_or("");
+            let row = payload.get("quota").filter(|row| row.is_object()).cloned().unwrap_or_else(|| payload.clone());
+            if !provider.is_empty() {
+                snapshot.quotas.retain(|quota| quota.get("provider").and_then(Value::as_str) != Some(provider));
+                let mut row = row;
+                if row.get("provider").is_none() {
+                    row["provider"] = Value::String(provider.to_owned());
+                }
+                snapshot.quotas.push(row);
+            }
+        }
+        // The queue is read back on demand; this only says which conversation's.
+        "queue.changed" => {
+            if let Some(session_id) = payload.get("sessionId").and_then(Value::as_str) {
+                if !snapshot.dirty_queues.iter().any(|seen| seen == session_id) {
+                    snapshot.dirty_queues.push(session_id.to_owned());
+                }
+            }
+        }
         // Hiring changes who is in a project and can create an agent, and agents
         // only arrive in a full snapshot: reload the members, and mark the
         // snapshot stale so the window takes a fresh one.
@@ -453,10 +756,6 @@ fn apply_session_changed(snapshot: &mut Snapshot, payload: &Value) {
     if snapshot.deleted_sessions.iter().any(|deleted| deleted == id) {
         return;
     }
-    if row.get("archived").and_then(Value::as_bool) == Some(true) {
-        snapshot.sessions.retain(|session| session.id != id);
-        return;
-    }
     if let Some(index) = snapshot.sessions.iter().position(|session| session.id == id) {
         patch_session(&mut snapshot.sessions[index], &row);
         return;
@@ -476,6 +775,9 @@ fn patch_session(session: &mut Session, row: &Value) {
     if let Some(state) = row.get("state").and_then(Value::as_str) {
         session.state = Some(state.to_owned());
     }
+    if let Some(archived) = row.get("archived").and_then(Value::as_bool) {
+        session.archived = archived;
+    }
     if let Some(updated) = row.get("updatedAt").and_then(Value::as_str) {
         session.updated_at = Some(updated.to_owned());
     }
@@ -484,6 +786,18 @@ fn patch_session(session: &mut Session, row: &Value) {
     }
     if let Some(project_name) = row.get("projectName") {
         session.project_name = project_name.as_str().map(str::to_owned);
+    }
+    if row.get("modelLock").is_some_and(|value| value.is_object()) {
+        session.model_lock = serde_json::from_value(row["modelLock"].clone()).ok();
+    }
+    if let Some(mode) = row.get("projectApprovalMode") {
+        session.project_approval_mode = mode.as_str().map(str::to_owned);
+    }
+    if let Some(used) = row.get("contextUsed").and_then(Value::as_f64) {
+        session.context_used = Some(used);
+    }
+    if let Some(model) = row.get("contextModel") {
+        session.context_model = model.as_str().map(str::to_owned);
     }
     if let Some(rows) = row.get("messages").filter(|rows| rows.as_array().is_some_and(|rows| !rows.is_empty())) {
         if let Ok(messages) = serde_json::from_value::<Vec<Message>>(rows.clone()) {

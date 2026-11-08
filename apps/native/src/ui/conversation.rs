@@ -1,55 +1,27 @@
-//! The conversation pane: the header, the message list, the approval card and
-//! the composer. The reading and sending path is ported from
-//! `apps/desktop/src/ui/App.tsx` (`MessageItem`, `sendPrompt`) and the markdown
-//! subset from `ui/SafeMarkdown.tsx`.
+//! The conversation pane: the header, the message list, and the composer. The
+//! reading and sending path is ported from `apps/desktop/src/ui/App.tsx`
+//! (`MessageItem`, `sendPrompt`); one row's own drawing lives in `message`.
 //!
 //! The list is GPUI's `list` with bottom alignment, so a long conversation stays
 //! smooth and the view sticks to the bottom while text streams.
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
+use std::sync::Arc;
 
-use gpui::{
-    div, prelude::*, px, AnyElement, Context, FontStyle, FontWeight, HighlightStyle, Rgba,
-    SharedString, StyledText, Window,
-};
+use gpui::{div, prelude::*, px, AnyElement, Context, FontWeight, Image, SharedString, Window};
 
 use crate::state::{Permission, Session};
 use crate::theme::{self, Colors};
-use crate::ui::markdown::{parse_blocks, parse_inline, Block, Inline};
+use crate::ui::message::{self, FileRef, ImageRef, Row, RowContext};
 use crate::ui::root::Root;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Row {
-    /// The owner's own message: a bubble on the right.
-    User(String),
-    /// The bot's reply: markdown, plain.
-    Assistant(String),
-    /// A notice from the daemon, in one muted line.
-    Notice(String),
-    /// A single tool step, in one muted line.
-    Tool(String),
-    /// A run of tool steps, as one line that expands (`ActivitySummaryLine` in
-    /// `ui/ActivityDetails.tsx`): "Ran 3 commands · edited 1 file".
-    Steps { key: String, summary: String, lines: Vec<String> },
-}
 
 /// One entry before runs of tool steps are folded together.
 enum Piece {
-    User(String),
-    Assistant(String),
+    User { id: String, text: String, images: Vec<ImageRef>, files: Vec<FileRef>, at: String },
+    Assistant { id: String, text: String, at: String },
     Notice(String),
-    Tool { id: String, kind: String, line: String },
-}
-
-impl Piece {
-    fn into_row(self) -> Row {
-        match self {
-            Piece::User(text) => Row::User(text),
-            Piece::Assistant(text) => Row::Assistant(text),
-            Piece::Notice(text) => Row::Notice(text),
-            Piece::Tool { line, .. } => Row::Tool(line),
-        }
-    }
+    Tool { kind: String, line: String },
 }
 
 /// The rows the list shows: messages and tool steps in time order, thinking left
@@ -63,18 +35,44 @@ pub fn build_rows(session: &Session) -> Vec<Row> {
             continue;
         }
         let text = message.text().to_owned();
+        let id = message
+            .id
+            .clone()
+            .unwrap_or_else(|| format!("{}-{}", message.turn_id.clone().unwrap_or_default(), message.sequence));
+        let at = message.created_at.clone().unwrap_or_default();
+        let stamp = if at.is_empty() { "9999".to_owned() } else { at.clone() };
         let piece = match message.role() {
-            "user" => Piece::User(text),
+            "user" => {
+                let images: Vec<ImageRef> = message
+                    .attachments
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, attachment)| attachment_is_image(attachment))
+                    .map(|(index, attachment)| ImageRef {
+                        session_id: session.id.clone(),
+                        message_id: id.clone(),
+                        index,
+                        name: attachment.name.clone(),
+                    })
+                    .collect();
+                let files: Vec<FileRef> = message
+                    .attachments
+                    .iter()
+                    .filter(|attachment| !attachment_is_image(attachment))
+                    .map(|attachment| FileRef { name: attachment.name.clone(), path: attachment.path.clone(), size: String::new() })
+                    .collect();
+                Piece::User { id, text, images, files, at }
+            }
             "notice" => Piece::Notice(text),
             "assistant" | "" => {
                 if text.trim().is_empty() {
                     continue;
                 }
-                Piece::Assistant(text)
+                Piece::Assistant { id, text, at }
             }
             _ => Piece::Notice(text),
         };
-        entries.push((message.created_at.clone().unwrap_or_else(|| "9999".to_owned()), order, piece));
+        entries.push((stamp, order, piece));
     }
     for (index, tool) in session.tools.iter().enumerate() {
         order += 1;
@@ -82,8 +80,7 @@ pub fn build_rows(session: &Session) -> Vec<Row> {
             tool.started_at.clone().unwrap_or_else(|| "9999".to_owned()),
             order,
             Piece::Tool {
-                id: tool.id.clone().unwrap_or_else(|| format!("tool-{index}")),
-                kind: tool.kind.clone().unwrap_or_default(),
+                kind: tool.kind.clone().unwrap_or_else(|| format!("tool-{index}")),
                 line: tool.summary(),
             },
         ));
@@ -91,17 +88,17 @@ pub fn build_rows(session: &Session) -> Vec<Row> {
     entries.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
 
     let mut rows: Vec<Row> = Vec::new();
-    let mut run: Vec<(String, String, String)> = Vec::new();
-    let flush = |run: &mut Vec<(String, String, String)>, rows: &mut Vec<Row>| {
+    let mut run: Vec<(String, String)> = Vec::new();
+    let flush = |run: &mut Vec<(String, String)>, rows: &mut Vec<Row>| {
         match run.len() {
             0 => {}
-            1 => rows.push(Row::Tool(run[0].2.clone())),
+            1 => rows.push(Row::Tool(run[0].1.clone())),
             _ => {
-                let kinds: Vec<String> = run.iter().map(|(_, kind, _)| kind.clone()).collect();
+                let kinds: Vec<String> = run.iter().map(|(kind, _)| kind.clone()).collect();
                 rows.push(Row::Steps {
-                    key: format!("steps:{}:{}", run[0].0, run.len()),
+                    key: format!("steps:{}:{}", run[0].1, run.len()),
                     summary: steps_summary(&kinds),
-                    lines: run.iter().map(|(_, _, line)| line.clone()).collect(),
+                    lines: run.iter().map(|(_, line)| line.clone()).collect(),
                 });
             }
         }
@@ -109,15 +106,32 @@ pub fn build_rows(session: &Session) -> Vec<Row> {
     };
     for (_, _, piece) in entries {
         match piece {
-            Piece::Tool { id, kind, line } => run.push((id, kind, line)),
-            other => {
+            Piece::Tool { kind, line } => run.push((kind, line)),
+            Piece::User { id, text, images, files, at } => {
                 flush(&mut run, &mut rows);
-                rows.push(other.into_row());
+                rows.push(Row::User { id, text, images, files, at });
+            }
+            Piece::Assistant { id, text, at } => {
+                flush(&mut run, &mut rows);
+                rows.push(Row::Assistant { id, text, at });
+            }
+            Piece::Notice(text) => {
+                flush(&mut run, &mut rows);
+                rows.push(Row::Notice(text));
             }
         }
     }
     flush(&mut run, &mut rows);
     rows
+}
+
+/// Whether an attachment travelled as an image the daemon can serve.
+fn attachment_is_image(attachment: &crate::state::MessageAttachment) -> bool {
+    if attachment.media_type.as_deref().is_some_and(|media_type| media_type.starts_with("image/")) {
+        return true;
+    }
+    let name = attachment.path.to_lowercase();
+    [".png", ".jpg", ".jpeg", ".gif", ".webp"].iter().any(|extension| name.ends_with(extension))
 }
 
 /// "Ran 3 commands · edited 1 file", from `activitySummary` in
@@ -177,6 +191,7 @@ impl Root {
                 .and_then(|session| session.project_name.clone())
                 .or_else(|| self.selected_session().and_then(|session| self.snapshot().and_then(|snapshot| snapshot.project_name(session.project_id.as_deref()).map(str::to_owned))));
             let busy = session.as_ref().map(Session::is_busy).unwrap_or(false);
+            let title = session.as_ref().map(|session| session.title_or_default().to_owned());
             let mut row = div()
                 .h(px(44.0))
                 .flex_none()
@@ -211,7 +226,13 @@ impl Root {
                     .child(div().text_color(colors.text_3).child(" / "))
                     .child(div().text_size(px(theme::FS_SM)).text_color(colors.text_2).child(SharedString::from(project)));
             }
-            row = row.child(div().flex_1());
+            if let Some(title) = title {
+                row = row
+                    .child(div().text_color(colors.text_3).child("·"))
+                    .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(theme::FS_XS)).text_color(colors.text_3).child(SharedString::from(title)));
+            } else {
+                row = row.child(div().flex_1());
+            }
             if busy {
                 row = row.child(
                     div()
@@ -236,25 +257,59 @@ impl Root {
 
         let body: AnyElement = match (&session, agent_name.as_ref()) {
             (Some(session), _) => {
+                // A row's height is the height its text takes at the pane's
+                // width, so a window resize has to measure every row again.
+                let width = f32::from(self.list.viewport_bounds().size.width);
+                if width > 0.0 && (width - self.list_width).abs() > 0.5 {
+                    self.list_width = width;
+                    if self.list_count > 0 {
+                        self.list.remeasure();
+                    }
+                }
                 let rows = Rc::new(build_rows(session));
-                let columns = colors;
-                let expanded = self.expanded_steps.clone();
+                let light = !colors.dark;
+                let _ = light;
+                // The row closure cannot borrow the window's state, so the few
+                // things it draws from are copied into it once per frame.
+                let images: Rc<BTreeMap<String, Arc<Image>>> = Rc::new(self.message_images.clone());
+                let expanded: Rc<BTreeSet<String>> = Rc::new(self.expanded_steps.clone());
+                let hovered = self.hovered_message.clone();
+                let project_path = session.project_path.clone();
+                let session_id = session.id.clone();
                 let this = cx.weak_entity();
+                // Ask for the pictures this conversation shows, once each.
+                let wanted: Vec<ImageRef> = rows
+                    .iter()
+                    .filter_map(|row| match row {
+                        Row::User { images, .. } => Some(images.clone()),
+                        _ => None,
+                    })
+                    .flatten()
+                    .collect();
+                for reference in wanted {
+                    self.request_message_image(&session_id, &reference.message_id, reference.index, cx);
+                }
                 div()
                     .flex_1()
                     .w_full()
                     .flex()
                     .overflow_hidden()
-                    .child(gpui::list(self.list.clone(), move |index, _window, _cx| {
-                        let row = rows.get(index).cloned().unwrap_or(Row::Notice(String::new()));
-                        match row {
-                            Row::Steps { key, summary, lines } => {
-                                let open = expanded.contains(&key);
-                                steps_row(key, summary, lines, open, columns, this.clone())
-                            }
-                            other => render_row(&other, columns),
-                        }
-                    }).flex_1().h_full())
+                    .child(
+                        gpui::list(self.list.clone(), move |index, _window, _cx| {
+                            let row = rows.get(index).cloned().unwrap_or(Row::Notice(String::new()));
+                            let context = RowContext {
+                                colors,
+                                project_path: project_path.clone(),
+                                images: (*images).clone(),
+                                expanded: (*expanded).clone(),
+                                hovered: hovered.clone(),
+                                root: this.clone(),
+                            };
+                            message::render_row(&row, &context)
+                        })
+                        .flex_1()
+                        .h_full(),
+                    )
                     .into_any_element()
             }
             (None, Some(_)) => div()
@@ -285,320 +340,22 @@ impl Root {
             .child(body);
 
         if let Some(permission) = permission {
-            pane = pane.child(if permission.is_answerable_proposal() || permission.proposal_kind().is_some() {
-                self.render_proposal(&permission, colors, cx)
-            } else {
-                self.render_approval(&permission, colors, cx)
-            });
+            pane = pane.child(self.render_pending_card(&permission, colors, cx));
         }
         pane.child(self.render_composer(colors, session.as_ref(), approvals_waiting, cx)).into_any_element()
     }
 
-    fn render_approval(&mut self, permission: &Permission, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
-        let title = permission.title.clone().unwrap_or_else(|| "Approval needed".to_owned());
-        let detail = permission.detail.clone().unwrap_or_default();
-        let mut card = div()
-            .mx(px(12.0))
-            .mb(px(8.0))
-            .p(px(10.0))
-            .flex()
-            .flex_col()
-            .gap(px(6.0))
-            .rounded(px(theme::RADIUS_MD))
-            .bg(colors.raised)
-            .border_1()
-            .border_color(colors.line_strong)
-            .child(div().text_size(px(theme::FS_SM)).font_weight(FontWeight::MEDIUM).child(SharedString::from(title)));
-        if !detail.trim().is_empty() {
-            card = card.child(div().text_size(px(theme::FS_XS)).text_color(colors.text_2).child(SharedString::from(detail)));
-        }
-        if permission.is_simple_approval() && !permission.choices.is_empty() {
-            let mut buttons = div().flex().items_center().gap(px(8.0));
-            for choice in permission.choices.iter().take(3) {
-                let (label, primary) = match choice.as_str() {
-                    "allow_once" | "allow" | "approve" => ("Allow", true),
-                    "deny" | "reject" => ("Deny", false),
-                    other => (other, false),
-                };
-                let permission_id = permission.id.clone();
-                let choice = choice.clone();
-                buttons = buttons.child(
-                    div()
-                        .id(SharedString::from(format!("permission-{permission_id}-{choice}")))
-                        .h(px(26.0))
-                        .px(px(10.0))
-                        .flex()
-                        .items_center()
-                        .rounded(px(theme::RADIUS_SM))
-                        .bg(if primary { colors.accent } else { colors.raised })
-                        .text_color(if primary { colors.base } else { colors.text_1 })
-                        .text_size(px(theme::FS_XS))
-                        .cursor_pointer()
-                        .hover(move |style| style.bg(if primary { colors.selected_strong } else { colors.selected }))
-                        .child(SharedString::from(label.to_owned()))
-                        .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| {
-                            root.reply_permission(permission_id.clone(), choice.clone(), cx);
-                        })),
-                );
-            }
-            card = card.child(buttons);
+    /// The card waiting in this conversation: an approval, a question or a
+    /// proposal, each with its own way of being answered.
+    fn render_pending_card(&mut self, permission: &Permission, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        if permission.is_proposal() {
+            self.render_proposal(permission, colors, cx)
+        } else if permission.is_question() {
+            self.render_question(permission, colors, cx)
         } else {
-            card = card.child(
-                div()
-                    .text_size(px(theme::FS_XS))
-                    .text_color(colors.text_3)
-                    .child("Open this in Bitbots to answer."),
-            );
-        }
-        card.into_any_element()
-    }
-    fn render_composer(&mut self, colors: Colors, session: Option<&Session>, approvals_waiting: bool, cx: &mut Context<Self>) -> AnyElement {
-        let placeholder_hint = if approvals_waiting {
-            "Answer the request above first"
-        } else if session.map(Session::is_busy).unwrap_or(false) {
-            "Your message queues for after this turn"
-        } else {
-            "Enter sends · Shift+Enter adds a line"
-        };
-        let send_label = if session.map(Session::is_busy).unwrap_or(false) { "Send later" } else { "Send" };
-        div()
-            .flex_none()
-            .px(px(12.0))
-            .pb(px(12.0))
-            .pt(px(6.0))
-            .child(
-                div()
-                    .p(px(8.0))
-                    .flex()
-                    .flex_col()
-                    .gap(px(6.0))
-                    .rounded(px(theme::RADIUS_LG))
-                    .bg(colors.panel)
-                    .border_1()
-                    .border_color(colors.line_strong)
-                    .child(self.composer.clone())
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(8.0))
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .truncate()
-                                    .text_size(px(theme::FS_2XS))
-                                    .text_color(colors.text_3)
-                                    .child(SharedString::from(placeholder_hint.to_owned())),
-                            )
-                            .child(
-                                div()
-                                    .id("send-message")
-                                    .h(px(26.0))
-                                    .px(px(10.0))
-                                    .flex()
-                                    .items_center()
-                                    .rounded(px(theme::RADIUS_SM))
-                                    .bg(colors.accent)
-                                    .text_color(colors.base)
-                                    .text_size(px(theme::FS_XS))
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .cursor_pointer()
-                                    .hover(|style| style.bg(colors.selected_strong))
-                                    .child(send_label)
-                                    .on_click(cx.listener(|root, _: &gpui::ClickEvent, window, cx| root.send(window, cx))),
-                            ),
-                    ),
-            )
-            .into_any_element()
-    }
-}
-
-fn render_row(row: &Row, colors: Colors) -> AnyElement {
-    match row {
-        Row::Steps { .. } => div().into_any_element(),
-        Row::User(text) => div()
-            .w_full()
-            .px(px(16.0))
-            .py(px(4.0))
-            .flex()
-            .justify_end()
-            .child(
-                div()
-                    .max_w(px(560.0))
-                    .px(px(11.0))
-                    .py(px(7.0))
-                    .rounded(px(theme::RADIUS_MD))
-                    .bg(colors.bubble_user)
-                    .text_size(px(theme::FS_MD))
-                    .text_color(colors.text_1)
-                    .whitespace_normal()
-                    .child(SharedString::from(text.clone())),
-            )
-            .into_any_element(),
-        Row::Assistant(text) => div()
-            .w_full()
-            .px(px(16.0))
-            .py(px(5.0))
-            .child(render_markdown(text, colors))
-            .into_any_element(),
-        Row::Notice(text) => div()
-            .w_full()
-            .px(px(16.0))
-            .py(px(3.0))
-            .text_size(px(theme::FS_XS))
-            .text_color(colors.text_3)
-            .child(SharedString::from(text.clone()))
-            .into_any_element(),
-        Row::Tool(text) => div()
-            .w_full()
-            .px(px(16.0))
-            .py(px(3.0))
-            .flex()
-            .items_center()
-            .gap(px(6.0))
-            .child(div().size(px(4.0)).rounded_full().bg(colors.text_3))
-            .child(
-                div()
-                    .text_size(px(theme::FS_XS))
-                    .text_color(colors.text_3)
-                    .child(SharedString::from(text.clone())),
-            )
-            .into_any_element(),
-    }
-}
-
-/// A run of tool steps as one muted line, which expands into the steps on click
-/// (`ActivitySummaryLine` in `ui/ActivityDetails.tsx`).
-fn steps_row(
-    key: String,
-    summary: String,
-    lines: Vec<String>,
-    open: bool,
-    colors: Colors,
-    this: gpui::WeakEntity<Root>,
-) -> AnyElement {
-    let toggle_key = key.clone();
-    let mut column = div()
-        .id(SharedString::from(format!("steps-{key}")))
-        .w_full()
-        .px(px(16.0))
-        .py(px(3.0))
-        .flex()
-        .flex_col()
-        .gap(px(2.0))
-        .child(
-            div()
-                .id(SharedString::from(format!("steps-toggle-{key}")))
-                .flex()
-                .items_center()
-                .gap(px(6.0))
-                .cursor_pointer()
-                .hover(move |style| style.text_color(colors.text_2))
-                .child(crate::art::glyph(if open { crate::art::Glyph::CHEVRON_DOWN } else { crate::art::Glyph::CHEVRON }, 10.0, colors.text_3))
-                .child(div().size(px(4.0)).rounded_full().bg(colors.text_3))
-                .child(
-                    div()
-                        .text_size(px(theme::FS_XS))
-                        .text_color(colors.text_3)
-                        .child(SharedString::from(summary)),
-                )
-                .on_click(move |_event: &gpui::ClickEvent, _window: &mut gpui::Window, cx: &mut gpui::App| {
-                    if let Some(root) = this.upgrade() {
-                        let key = toggle_key.clone();
-                        root.update(cx, |root, cx| root.toggle_steps(key, cx));
-                    }
-                }),
-        );
-    if open {
-        for line in lines {
-            column = column.child(
-                div()
-                    .pl(px(26.0))
-                    .text_size(px(theme::FS_XS))
-                    .text_color(colors.text_3)
-                    .child(SharedString::from(line)),
-            );
+            self.render_approval(permission, colors, cx)
         }
     }
-    column.into_any_element()
-}
-
-/// Basic markdown: paragraphs, headings, fenced code, bullet and numbered lists,
-/// with inline code, bold and italic. Tables, charts and images are later slices.
-pub fn render_markdown(text: &str, colors: Colors) -> AnyElement {
-    let mut column = div().flex().flex_col().gap(px(6.0)).text_size(px(theme::FS_MD)).text_color(colors.text_1);
-    for block in parse_blocks(text) {
-        column = column.child(match block {
-            Block::Paragraph(text) => inline_text(&text, colors, theme::FS_MD, colors.text_1),
-            Block::Heading { level, text } => {
-                let size = if level == 1 { theme::FS_XL } else if level == 2 { theme::FS_LG } else { theme::FS_MD };
-                inline_text(&text, colors, size, colors.text_1).font_weight(FontWeight::SEMIBOLD)
-            }
-            Block::Code { text, .. } => div()
-                .w_full()
-                .p(px(10.0))
-                .rounded(px(theme::RADIUS_SM))
-                .bg(colors.raised)
-                .font_family(theme::MONO_FONT)
-                .text_size(px(theme::FS_XS))
-                .text_color(colors.text_2)
-                .child(SharedString::from(text)),
-            Block::List { ordered, items } => {
-                let mut list = div().flex().flex_col().gap(px(2.0));
-                for (index, item) in items.iter().enumerate() {
-                    let marker = if ordered { format!("{}.", index + 1) } else { "•".to_owned() };
-                    list = list.child(
-                        div()
-                            .flex()
-                            .gap(px(6.0))
-                            .pl(px(if item.depth > 0 { 14.0 } else { 2.0 }))
-                            .child(div().w(px(14.0)).text_color(colors.text_3).child(SharedString::from(marker)))
-                            .child(inline_text(&item.text, colors, theme::FS_MD, colors.text_1)),
-                    );
-                }
-                list
-            }
-        });
-    }
-    column.into_any_element()
-}
-
-/// One paragraph of inline runs. Bold, italic and code are highlight ranges on
-/// one shaped text, so wrapping and selection behave like plain text.
-fn inline_text(text: &str, colors: Colors, size: f32, color: Rgba) -> gpui::Div {
-    let mut joined = String::new();
-    let mut highlights: Vec<(std::ops::Range<usize>, HighlightStyle)> = Vec::new();
-    for token in parse_inline(text) {
-        let start = joined.len();
-        match token {
-            Inline::Text(text) => joined.push_str(&text),
-            Inline::Code(code) => {
-                joined.push_str(&code);
-                highlights.push((
-                    start..joined.len(),
-                    HighlightStyle { background_color: Some(colors.raised.into()), ..Default::default() },
-                ));
-            }
-            Inline::Strong(strong) => {
-                joined.push_str(&strong);
-                highlights.push((
-                    start..joined.len(),
-                    HighlightStyle { font_weight: Some(FontWeight::SEMIBOLD), ..Default::default() },
-                ));
-            }
-            Inline::Em(emphasis) => {
-                joined.push_str(&emphasis);
-                highlights.push((
-                    start..joined.len(),
-                    HighlightStyle { font_style: Some(FontStyle::Italic), ..Default::default() },
-                ));
-            }
-        }
-    }
-    div()
-        .text_size(px(size))
-        .text_color(color)
-        .child(StyledText::new(SharedString::from(joined)).with_highlights(highlights))
 }
 
 #[cfg(test)]
@@ -628,10 +385,10 @@ mod tests {
             ..Session::default()
         };
         let rows = build_rows(&session);
-        assert_eq!(
-            rows,
-            vec![Row::User("Fix the tests".into()), Row::Tool("Ran a command".into()), Row::Assistant("Done".into())]
-        );
+        assert_eq!(rows.len(), 3);
+        assert!(matches!(rows[0], Row::User { .. }));
+        assert_eq!(rows[1], Row::Tool("Ran a command".into()));
+        assert!(matches!(&rows[2], Row::Assistant { text, .. } if text == "Done"));
         assert_eq!(row_count(&session), rows.len());
     }
 
@@ -655,10 +412,9 @@ mod tests {
         let rows = build_rows(&session);
         assert_eq!(rows.len(), 1, "one muted row for the whole run");
         match &rows[0] {
-            Row::Steps { summary, lines, key } => {
+            Row::Steps { summary, lines, .. } => {
                 assert_eq!(summary, "Ran 30 commands");
                 assert_eq!(lines.len(), 30, "every step is still there, behind the row");
-                assert!(key.starts_with("steps:t0:30"));
             }
             other => panic!("expected one steps row, got {other:?}"),
         }
@@ -696,7 +452,27 @@ mod tests {
         // One step, then the reply, then a run of two.
         assert_eq!(rows.len(), 3, "{rows:?}");
         assert!(matches!(rows[0], Row::Tool(_)));
-        assert!(matches!(rows[1], Row::Assistant(_)));
+        assert!(matches!(rows[1], Row::Assistant { .. }));
         assert!(matches!(rows[2], Row::Steps { .. }));
+    }
+
+    #[test]
+    fn a_sent_image_belongs_to_its_message() {
+        let mut message = message("user", "Look", "2026-11-08T10:00:00Z");
+        message.attachments.push(crate::state::MessageAttachment {
+            name: "shot.png".into(),
+            path: "C:/tmp/shot.png".into(),
+            file: None,
+            media_type: Some("image/png".into()),
+        });
+        let session = Session { id: "s1".into(), messages: vec![message], ..Session::default() };
+        let rows = build_rows(&session);
+        match &rows[0] {
+            Row::User { images, .. } => {
+                assert_eq!(images.len(), 1);
+                assert_eq!(images[0].key(), format!("s1:user-2026-11-08T10:00:00Z:0"));
+            }
+            other => panic!("expected a user row, got {other:?}"),
+        }
     }
 }

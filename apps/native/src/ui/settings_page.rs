@@ -66,12 +66,28 @@ impl Root {
                 vec![
                     field("Theme", "System follows Windows; Light and Dark pin it.", themes.into_any_element(), colors),
                     field("Density", "Row heights and gaps, everywhere a list is.", densities.into_any_element(), colors),
+                    field(
+                        "Plan usage in the sidebar",
+                        "One line at the foot of the sidebar with the limit closest to running out. Reading a coding agent's own sign-in is off until you turn it on.",
+                        {
+                            let on = self.usage_bar;
+                            let mut row = div().flex().gap(px(2.0));
+                            row = row.child(self.choice_button("On", on, "usage-on".to_owned(), colors, cx, |root, cx| {
+                                root.set_usage_bar(true, cx);
+                                root.load_quotas(cx);
+                            }));
+                            row = row.child(self.choice_button("Off", !on, "usage-off".to_owned(), colors, cx, |root, cx| {
+                                root.set_usage_bar(false, cx)
+                            }));
+                            row.into_any_element()
+                        },
+                        colors,
+                    ),
                 ],
             )
         };
 
-        let data = {
-            let path = self.db_path.display().to_string();
+        let data = {            let path = self.db_path.display().to_string();
             let installed = paths::installed_db_path();
             let installed_line = if installed.is_file() {
                 format!("The installed Bitbots database is at {}.", installed.display())

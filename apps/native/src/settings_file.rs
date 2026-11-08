@@ -18,6 +18,10 @@ pub struct NativeSettings {
     pub theme: ThemeChoice,
     /// `compact`, `regular` or `roomy`.
     pub density: Density,
+    /// Conversations the owner pinned, in the order they pinned them.
+    pub pinned_sessions: Vec<String>,
+    /// Whether the sidebar shows the plan-usage line (`experimental.usageBar`).
+    pub usage_bar: bool,
 }
 
 pub fn read(path: &Path) -> NativeSettings {
@@ -44,6 +48,20 @@ pub fn write_appearance(path: &Path, theme: ThemeChoice, density: Density) -> st
     let mut settings = read(path);
     settings.theme = theme;
     settings.density = density;
+    write(path, &settings)
+}
+
+/// Save the pinned conversations, in their own order.
+pub fn write_pinned_sessions(path: &Path, pinned: &[String]) -> std::io::Result<()> {
+    let mut settings = read(path);
+    settings.pinned_sessions = pinned.to_vec();
+    write(path, &settings)
+}
+
+/// Save whether the sidebar shows the plan-usage line.
+pub fn write_usage_bar(path: &Path, enabled: bool) -> std::io::Result<()> {
+    let mut settings = read(path);
+    settings.usage_bar = enabled;
     write(path, &settings)
 }
 

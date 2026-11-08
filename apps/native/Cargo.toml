@@ -24,9 +24,17 @@ uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 rusqlite = { version = "0.37", features = ["bundled", "backup"] }
 log = "0.4"
+# A pasted screenshot arrives as pixels; every provider takes PNG, so the window
+# encodes it the way `src-tauri/src/clipboard.rs` does. GPUI's own clipboard read
+# is the source: it hands back the bytes Windows holds (a PNG, or a DIB turned
+# into a BMP), and this decodes and re-encodes them.
+image = { version = "0.25", default-features = false, features = ["png", "bmp", "jpeg", "gif", "webp"] }
 # `SPI_GETCLIENTAREAANIMATION`: Windows' "Show animations" switch. GPUI has no
 # reduced-motion query at the pinned revision, and this is the one call it needs.
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell"] }
+# A finished turn, a failure or a waiting approval raises a Windows toast while
+# the window is in the background, under the app's own id.
+windows = { version = "0.57", features = ["Data_Xml_Dom", "UI_Notifications"] }
 
 [build-dependencies]
 # The Haze portraits are full-colour vector art; GPUI's `svg()` element draws one

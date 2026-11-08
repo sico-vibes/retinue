@@ -11,6 +11,7 @@ use crate::art::{self, Glyph, Mark};
 use crate::state::team;
 use crate::state::Agent;
 use crate::theme::{self, Colors};
+use crate::ui::menu::{Menu, MenuChoice, MenuItem};
 use crate::ui::root::{Root, TeamTab};
 
 impl Root {
@@ -45,6 +46,25 @@ impl Root {
                 .child(back)
                 .child(div().text_size(px(theme::FS_LG)).font_weight(FontWeight::SEMIBOLD).child("Team"))
                 .child(div().flex_1())
+                .child(
+                    div()
+                        .id("new-bot")
+                        .h(px(26.0))
+                        .px(px(10.0))
+                        .flex()
+                        .items_center()
+                        .gap(px(5.0))
+                        .rounded(px(theme::RADIUS_SM))
+                        .bg(colors.accent)
+                        .text_color(colors.text_inverse)
+                        .text_size(px(theme::FS_XS))
+                        .font_weight(FontWeight::MEDIUM)
+                        .cursor_pointer()
+                        .hover(move |style| style.bg(colors.selected_strong))
+                        .child(art::glyph(Glyph::PLUS, 11.0, colors.text_inverse))
+                        .child("New bot")
+                        .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_bot_wizard(cx))),
+                )
                 .child(
                     div()
                         .mr(px(6.0))
@@ -146,19 +166,23 @@ impl Root {
             })
             .collect();
         let mut list = div().flex().flex_col().gap(px(8.0));
-        if shown.is_empty() {
+        if shown.is_empty() && employees.is_empty() {
             list = list.child(
                 div()
                     .py(px(24.0))
                     .text_color(colors.text_2)
-                    .child(if employees.is_empty() { "No one on your team yet." } else { "No one matches that search." }),
+                    .child("No one on your team yet."),
             );
-            if employees.is_empty() {
-                list = list.child(self.primary_button("Hire your first employee", "hire-first", colors, cx, |root, cx| {
-                    root.team_tab = TeamTab::Hire;
-                    cx.notify();
-                }));
+            list = list.child(self.primary_button("Create your first bot", "create-first", colors, cx, |root, cx| {
+                root.open_bot_wizard(cx);
+            }));
+            if let Some(archived) = self.render_archived_bots(colors, cx) {
+                list = list.child(archived);
             }
+            return list.into_any_element();
+        }
+        if shown.is_empty() {
+            list = list.child(div().py(px(24.0)).text_color(colors.text_2).child("No one matches that search."));
             return list.into_any_element();
         }
         let approvals = self.approval_session_ids();
@@ -290,6 +314,27 @@ impl Root {
                                     .text_color(state.1)
                                     .child(SharedString::from(state.0)),
                             )
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("bot-more-{}", agent.id)))
+                                    .size(px(22.0))
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded(px(theme::RADIUS_SM))
+                                    .cursor_pointer()
+                                    .hover(move |style| style.bg(colors.hover))
+                                    .child(art::glyph(Glyph::MORE, 12.0, colors.text_3))
+                                    .on_click(cx.listener({
+                                        let agent_id = agent.id.clone();
+                                        let name = agent.name.clone();
+                                        move |root, event: &gpui::ClickEvent, window, cx| {
+                                            let at = root.click_position(event, window);
+                                            let items = bot_menu_items(agent_id.clone(), name.clone());
+                                            root.open_menu(Menu::new(format!("bot-{agent_id}"), at, items).width(210.0), cx);
+                                        }
+                                    })),
+                            )
                             .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| {
                                 root.select_agent(agent_id.clone(), cx);
                             })),
@@ -297,7 +342,9 @@ impl Root {
                     .child(chips),
             );
         }
-        list.into_any_element()
+        list
+            .when_some(self.render_archived_bots(colors, cx), |this, archived| this.child(archived))
+            .into_any_element()
     }
 
     fn render_catalogue(&mut self, query: &str, colors: Colors, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
@@ -367,10 +414,7 @@ impl Root {
                                 .text_color(colors.text_3)
                                 .child("Give a new employee a name, a portrait, a role and instructions."),
                         )
-                        .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| {
-                            root.notice = Some("Creating your own employee comes in a later slice. Hire a preset for now.".to_owned());
-                            cx.notify();
-                        })),
+                        .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_bot_wizard(cx))),
                 ),
         )
         .into_any_element()
@@ -559,6 +603,34 @@ impl Root {
 
 /// The Team page's search placeholder, for `Root::new` and the page's header.
 pub const SEARCH_PLACEHOLDER: &str = "Search roles, skills or names";
+
+/// One person's own menu on the Team page: their settings, or archiving them.
+pub(crate) fn bot_menu_items(agent_id: String, name: String) -> Vec<MenuItem> {
+    let settings_id = agent_id.clone();
+    let archive_id = agent_id;
+    vec![
+        MenuItem::Choice(
+            MenuChoice::new("settings", "Bot settings…", std::rc::Rc::new(move |root: &mut Root, cx: &mut Context<Root>| {
+                root.open_bot_editor(settings_id.clone(), cx);
+            }))
+            .icon(Glyph::SETTINGS),
+        ),
+        MenuItem::Separator,
+        MenuItem::Choice(
+            MenuChoice::new("archive", format!("Archive {name}"), std::rc::Rc::new(move |root: &mut Root, cx: &mut Context<Root>| {
+                root.confirm = Some(crate::ui::root::Confirm {
+                    title: format!("Archive {name}?"),
+                    body: "It leaves the sidebar and the Team page. Its conversations stay saved, and you can restore it from Archived bots.".to_owned(),
+                    confirm_label: "Archive".to_owned(),
+                    action: crate::ui::root::ConfirmAction::ArchiveBot(archive_id.clone()),
+                });
+                cx.notify();
+            }))
+            .icon(Glyph::ARCHIVE)
+            .danger(),
+        ),
+    ]
+}
 
 /// A catalogue card is 208 px wide with 14 px of padding either side.
 const CARD_TEXT_WIDTH: f32 = 178.0;

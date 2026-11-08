@@ -10,4 +10,6 @@ pub mod ready;
 pub mod supervisor;
 pub mod worker;
 
-pub use worker::{DaemonHandle, DaemonState, Command, Update, BACKOFF_MS, start};
+pub use worker::{
+    start, Command, DaemonHandle, DaemonState, PromptAttachment, PromptMethod, Update, BACKOFF_MS,
+};

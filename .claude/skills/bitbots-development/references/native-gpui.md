@@ -7,7 +7,15 @@ November 2026) adds the look, the team and new projects: Haze portraits and
 logos, the working shimmer, the marquee and the folding motion, the light theme
 and density, the Team page with hiring, new projects with the CEO staffing
 choice, hire and bot proposal cards, a first Settings page, daemon restart with
-backoff, and `scripts/install.ps1`. Later slices add the remaining screens.
+backoff, and `scripts/install.ps1`. Slice 3 (8 November 2026) makes it a working
+day: the shared menu/select/toast primitives, the full composer (model, effort
+and permission controls, `/commands`, the queue, pasted and dropped images,
+history), approvals, questions and every proposal kind, message actions and rich
+markdown, conversation rename/pin/archive with branch lines, the sidebar search,
+the quick switcher and its shortcuts, the bot wizard and settings with archived
+bots, the plan-usage line, "Needs you" and Windows notifications. Later slices
+add Tasks and schedules, diffs, the terminal, the companion and dictation, and
+the rest of Settings.
 Lane: Gogo; the Director reviews, runs the gates and commits.
 
 ## Pinning GPUI
@@ -136,6 +144,121 @@ the outer loop restarts after 1, 2, 5 and 10 s, then stops and offers Retry. A
 clean `Command::Shutdown` must return `Stopped`, or closing the window restarts
 the daemon.
 
+**The bootstrap line can take 20 seconds.** Opening a copy of an 804 MB installed
+database re-creates its read indexes, and the daemon answered after 20 s where a
+fresh database answers in 2. `supervisor::BOOTSTRAP_TIMEOUT` is 45 s for that
+reason; a 10 s limit made every start on the owner's data look like "the daemon
+did not start", five times in a row, and the Retry button then never helped.
+
+## Shared pieces (slice 3)
+
+**Menus and popovers.** `anchored()` and `deferred()` do exist at the pinned rev
+(`crates/gpui/src/elements/`), which the slice 1 notes' "no popover API" would
+hide. One menu at a time lives on `Root` (`src/ui/menu.rs`): a panel in window
+coordinates (`anchored().position(at).snap_to_window_with_margin(px(8.0))`), a
+transparent full-window backdrop under it that closes on any click, and
+`deferred(panel).with_priority(20)` so it paints over every column and over a
+`list`. The click position comes from `ClickEvent::position()` — the same call
+serves a "…" button and a right-click, and there is no way to ask GPUI where a
+trigger element is. Escape closes the menu through the window's own
+`on_key_down`, because a menu is not focused.
+
+**Pressed state.** `Div` has `.active(..)` (a `StyleRefinement`), so a button or
+row can darken while the mouse is down without tracking mouse-down state.
+
+**Focus.** `TextInput` takes three hooks: `set_on_submit`, `set_on_key` (returns
+`true` when it used the key, so Enter does not also send) and `set_on_change`
+(called after any edit, so a field that filters a tree can ask for a redraw).
+A `/command` menu's arrows, Enter and Escape, the Up-arrow history and Ctrl+V for
+a picture all live in that key hook. `window.is_window_active()` is how the
+window knows it does not have the person's attention (notifications).
+
+**Clipboard images.** `cx.read_from_clipboard()` returns `ClipboardEntry::Image`
+with the bytes Windows holds: a PNG when the source app put one there, and a
+**BMP** when it only offered a DIB (GPUI's Windows reader wraps the DIB in a BMP
+header). `src-tauri` avoids this by reading through `arboard`; here the bytes are
+re-encoded with the `image` crate (`files::clipboard_png`), which is a runtime
+dependency now. Do not add `arboard`: its `clipboard-win 5.4.1` pin is yanked and
+an offline build refuses it.
+
+**Drag and drop.** A file dropped on the window arrives as an internal drag whose
+value is `Arc<Vec<PathBuf>>`: `.can_drop(|v, ..| v.is::<Arc<Vec<PathBuf>>>())` and
+`.on_drop(..)` on the root div. There is no separate file-drop event at this rev.
+
+**Toasts.** A `Toast` on `Root` with an `Instant` deadline and one spawned timer
+that clears it after 4 s; the renderer draws it in the root's bottom-left corner.
+A toast is the right answer for "Copied" and "Renamed", and it is what keeps a
+failed clipboard write from taking over the error bar.
+
+**Dialogs.** They are overlays over a `relative()` root; Escape and a backdrop
+click both close them, and the window's key handler closes the top-most one
+first. A dialog that must not close on a backdrop click puts an empty
+`on_mouse_down` on its card.
+
+## Rows, widths and what a file chip may do (fix round, 8 November 2026)
+
+- **The list caches each row's height.** After any event that can change a row
+  (`message.delta`, `message.completed`, `tool.changed`, `turn.completed`,
+  `turn.error`, `session.changed`), after a `reset`/`splice`, and whenever
+  `ListState::viewport_bounds().size.width` changes, call
+  `list.remeasure()`. Without it a grown row keeps its old height and the next
+  row is drawn on top of it.
+- **Every text block needs a width-constrained chain**: `w_full().min_w(px(0.0))`
+  on the column, the paragraph and the list row's text (`flex_1().min_w(px(0.0))`),
+  or one unbreakable token in inline code widens every ancestor and the pane
+  clips it. A fenced code block keeps its own lines and scrolls sideways
+  (`id(..).overflow_x_scroll().whitespace_nowrap()`), as `<pre>` does.
+- **Inline code needs `line_height(size * 1.65)`** on its text div, or the
+  highlight background paints over the line above (clearest in the light theme).
+- **A chip never runs a file.** A message names paths a bot chose, so opening one
+  with its program executes bot-written code. `files::show_in_folder` is the only
+  action (`explorer.exe /select,<canonical path>`, which highlights and runs
+  nothing), plus an in-window preview for images and text inside the project
+  (`files::read_preview`). `files::spawn_guard` tests enforce it by scanning the
+  source.
+- **Keys need a focused element.** `on_key_down` on the root view is not a window
+  listener; on a page with no field the event goes nowhere. Bind shortcuts as
+  `actions!` in the `"Workspace"` context, `.track_focus(..).key_context("Workspace")`
+  on the root, and focus the root when a page has no field.
+- **Stop the press inside a dialog card, a menu panel or a "…" button**:
+  `cx.stop_propagation()` on its own `on_mouse_down`, or the backdrop's close and
+  the card's own click both fire.
+
+## Traps that kill or blank the window
+
+- **Never touch a text field through its entity from inside its own hook.** A hook
+  runs while the field is leased, and `Entity::lease` removes the entity from its
+  map: a second `update`/`read` panics ("cannot update X while it is already being
+  updated") and the panic aborts the process silently. The hooks take the field
+  (`&mut TextInput`), and only the owner is notified. Programmatic `set_text`
+  does not fire the change hook.
+- **Install `trace::install_panic_hook()` first in `main`.** Without it a panic is
+  a silent quit: the daemon child is dropped (the log stops at "daemon child
+  stopped") and the message goes to stderr.
+- **Draw an overlay from a clone.** `self.menu.take()` in `render` gives the menu
+  one frame; this window repaints continuously, so it vanishes. Same for anything
+  a render consumes.
+- **A percentage width inside a content-sized parent is nothing.** A user bubble
+  is as wide as its text, so `w_full()`/a wrapper block inside it collapses to one
+  character. Bubbles draw shaped text directly (`styled_inline`).
+- **`min_w(px(0.0))` + `w_full()` on every level of a text chain** is what stops a
+  long inline-code token from widening the pane; it belongs in the chain whose
+  width is definite (columns, rows with `flex_1`), not in a bubble.
+- **Moving a transparent window leaves a frame edge behind** when captured; take
+  screenshots without moving it when judging layout.
+
+## The snapshot's lists can be null
+
+The daemon writes `null` where a list is empty in several places (a message with
+no attachments, `quotas` before the first reading), and one `null` where a `Vec`
+is expected throws the **whole** snapshot away — the window then shows nothing and
+the log says only "snapshot did not parse: invalid type: null, expected a
+sequence". Every list on `Snapshot`, `Session`, `Message`, `Permission`,
+`Agent`, `UserQuestion` and `QueuedPrompt` carries
+`#[serde(default, deserialize_with = "serde_defaults::null_as_default")]`. A new
+list field needs it too; `#[serde(default)]` alone does not accept an explicit
+`null`.
+
 ## What the preview's daemon client does
 
 Port of `apps/desktop/src-tauri/src/lib.rs`: find `bitbotsd.exe` (beside us,
@@ -146,3 +269,22 @@ protocol 1 + `127.0.0.1:` + a capability, then `POST /v1/rpc` with
 `{"v":1,"afterSequence":n}`, `events.replay.complete`, `replay.gap` → fresh
 snapshot). The capability is memory-only: its `Debug` prints `<redacted>` and it
 never reaches a log.
+
+Every RPC body is `{"v":1,"id":"…","method":"…","params":{…}}`, and the answer
+wraps the result: `{"v":1,"id":"…","ok":true,"result":{…}}`. `Command::Rpc` in
+`worker.rs` is the door for the calls a screen drives by hand: the window sends a
+`tag` with it and gets `Update::Rpc { tag, value }` back, so the worker holds no
+per-method knowledge and the window reads only the calls it made. Three tags are
+deliberately quiet on failure (`catalog`, `queue-list`, `image`): their absence
+is a placeholder or a retry row, not a red bar over the conversation.
+
+`clientMessageId` is 8 to 80 characters of letters, digits, hyphens or
+underscores, and a send without one is not idempotent: a resend after a timeout
+can send the prompt twice. `uuid::Uuid::new_v4()` fits.
+
+**A conversation's model cannot be unset.** `session.model.update` refuses
+`model: null` ("Choose a concrete model. Conversation model selections cannot be
+unset."), and `session.model.plan` refuses the same. So the model menu offers
+concrete models only; the pill shows the bot's own model until a conversation
+pins one, exactly as the React pill does.
+

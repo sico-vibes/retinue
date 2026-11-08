@@ -141,8 +141,8 @@ fn image(key: &str) -> Option<Arc<Image>> {
     IMAGES.get(key).cloned()
 }
 
-/// Every portrait the build embedded, for the tests and the look previews.
-#[cfg(test)]
+/// Every portrait the build embedded: the look picker draws them and the tests
+/// check them.
 pub fn portrait_ids() -> &'static [&'static str] {
     generated::portrait_ids()
 }
@@ -380,7 +380,19 @@ glyphs! {
     CHEVRON => "chevron-right",
     CHEVRON_DOWN => "chevron-down",
     ARROW_LEFT => "arrow-left",
+    ARROW_RIGHT => "arrow-right",
     CHECK => "check",
+    PIN => "pin",
+    ARCHIVE => "archive",
+    PENCIL => "pencil",
+    MORE => "more",
+    CLOCK => "clock",
+    PAPERCLIP => "paperclip",
+    COPY => "copy",
+    ROTATE => "rotate-ccw",
+    IMAGE => "image",
+    FOLDER => "folder",
+    SHIELD => "shield-alert",
 }
 
 /// Draw one icon at `size`, in `color`.

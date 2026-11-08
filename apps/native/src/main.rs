@@ -1,3 +1,4 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 //! Bitbots in Rust (GPUI), slice 1: an installable core.
 //!
 //! The window is a native preview of the desktop app: it starts its own
@@ -7,6 +8,8 @@
 
 mod art;
 mod daemon;
+mod files;
+mod notify;
 mod paths;
 mod settings_file;
 mod state;
@@ -20,8 +23,12 @@ use gpui::{
 };
 
 fn main() {
+    // First, before any window or daemon exists: a panic must reach the log, or
+    // a crash looks like a silent quit.
+    trace::install_panic_hook();
     Application::new().run(|cx: &mut App| {
         cx.bind_keys(ui::text_input::key_bindings());
+        cx.bind_keys(ui::search::key_bindings());
 
         let db_path = std::env::var_os("BLOBLEX_DB_PATH")
             .map(std::path::PathBuf::from)

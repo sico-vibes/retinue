@@ -3,19 +3,22 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Instant;
 
 use gpui::{
-    div, prelude::*, px, App, AsyncApp, Context, Entity, ListAlignment, ListState, SharedString,
-    Subscription, Window, WindowAppearance,
+    div, prelude::*, px, AnyElement, App, AsyncApp, Context, Entity, Image, ListAlignment, ListState,
+    SharedString, Subscription, Window, WindowAppearance,
 };
 
 use crate::daemon::{start, Command, DaemonHandle, DaemonState, Update};
 use crate::paths;
 use crate::settings_file;
+use crate::state::bot::BotForm;
 use crate::state::{apply_event, Agent, Session, Snapshot};
 use crate::state::projects::MembersByProject;
 use crate::theme::{self, Colors, Density, DensityTokens, ThemeChoice};
+use crate::ui::menu::{Menu, Toast};
 use crate::ui::motion;
 use crate::ui::text_input::TextInput;
 
@@ -26,7 +29,8 @@ pub enum SidebarView {
     Team,
 }
 
-/// What the main area shows: the conversation, the Team page or Settings.
+/// What the main area shows: the conversation, the Team page, Settings or one
+/// bot's own page.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Page {
     Conversation,
@@ -50,20 +54,19 @@ impl TeamTab {
     }
 }
 
+/// The field a freshly opened dialog puts the caret in.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum FocusTarget {
+    BotName,
+    ProjectName,
+}
+
 /// The first-run question: the installed Bitbots has a database, this app does
 /// not. Asked once, in the window, before any daemon starts.
 pub struct FirstRunQuestion {
     pub source: PathBuf,
     pub target: PathBuf,
     pub error: Option<String>,
-}
-
-/// A project's "+" menu, shown under its header.
-#[derive(Clone)]
-pub struct ProjectMenu {
-    pub key: String,
-    pub project_id: Option<String>,
-    pub project_name: String,
 }
 
 /// The new-project dialog: a name and a folder (`project.create`).
@@ -89,11 +92,95 @@ pub struct HireDialog {
     pub error: Option<String>,
 }
 
-/// One coding-agent model in the hire dialog's list.
-#[derive(Clone, Debug, Default)]
+/// One coding-agent model, as `runtime.models` reports it: the id, its name, the
+/// effort levels it offers and the one it starts on.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct ModelChoice {
     pub id: String,
     pub label: String,
+    /// The provider the model belongs to (`claude`, `codex`, `opencode`, …),
+    /// which the menu shows as the row's own line.
+    pub provider: String,
+    /// The effort levels this model accepts, in the provider's own order.
+    pub thinking: Vec<String>,
+    pub default_thinking: Option<String>,
+}
+
+/// A runtime's model catalog, parsed from one `runtime.models` answer.
+#[derive(Clone, Debug, Default)]
+pub struct Catalog {
+    pub provider: String,
+    pub models: Vec<ModelChoice>,
+}
+
+impl Catalog {
+    pub fn model(&self, id: Option<&str>) -> Option<&ModelChoice> {
+        let id = id?;
+        self.models.iter().find(|model| model.id == id)
+    }
+}
+
+/// A model change waiting for the owner to agree to a new provider session.
+pub struct PendingModel {
+    pub session_id: String,
+    pub model: String,
+    /// The daemon's own answer, when it could give one.
+    pub reason: String,
+    pub context_at_risk: bool,
+}
+
+/// One image in the composer, before or after it is staged for sending.
+#[derive(Clone)]
+pub struct ComposerImage {
+    pub id: String,
+    pub name: String,
+    /// The staged path the daemon is handed, once the file is written.
+    pub path: Option<String>,
+    /// The decoded picture, for the thumbnail.
+    pub preview: Option<Arc<Image>>,
+    pub error: Option<String>,
+}
+
+impl ComposerImage {
+    pub fn ready(&self) -> bool {
+        self.path.is_some() && self.error.is_none()
+    }
+}
+
+/// The `/command` menu's own state: where it starts in the text, what filters it
+/// and which row the arrow keys are on.
+#[derive(Clone, Debug)]
+pub struct SlashState {
+    /// The byte offset of the slash in the composer.
+    pub start: usize,
+    pub query: String,
+    pub index: usize,
+}
+
+/// Renaming a conversation in place.
+#[derive(Clone, Debug)]
+pub struct RenameState {
+    pub session_id: String,
+    pub error: Option<String>,
+}
+
+/// The quick switcher's state: its query and the highlighted row.
+#[derive(Clone, Debug, Default)]
+pub struct QuickState {
+    pub index: usize,
+}
+
+/// One file, shown inside the window: a picture, or text Bitbots read itself.
+/// Nothing a message names is ever started as a program.
+pub struct FilePreview {
+    pub title: String,
+    pub path: String,
+    /// The project folder the chip resolved the path against.
+    pub project: Option<String>,
+    pub kind: crate::files::PreviewKind,
+    pub text: Option<String>,
+    pub image: Option<Arc<Image>>,
+    pub note: Option<String>,
 }
 
 /// A confirmation dialog: one sentence, a primary action, a cancel.
@@ -104,9 +191,11 @@ pub struct Confirm {
     pub action: ConfirmAction,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub enum ConfirmAction {
     CopyDataAgain,
+    ArchiveBot(String),
+    ArchiveSession(String),
 }
 
 /// After a new project: how to staff it (`ui/StaffProjectDialog.tsx`).
@@ -137,7 +226,9 @@ pub struct Root {
     pub(crate) expanded_steps: BTreeSet<String>,
     /// Rows that are closing: the key and when the 180 ms finishes.
     pub(crate) closing: BTreeMap<String, Instant>,
-    pub(crate) menu: Option<ProjectMenu>,
+    /// The one open menu, and the toast under it.
+    pub(crate) menu: Option<Menu>,
+    pub(crate) toast: Option<Toast>,
     pub(crate) hovered: Option<String>,
     pub(crate) members: Option<MembersByProject>,
     /// Whether this window already asked the daemon to scan for coding agents.
@@ -151,11 +242,37 @@ pub struct Root {
     pub(crate) composer: Entity<TextInput>,
     pub(crate) team_search: Entity<TextInput>,
     pub(crate) project_name: Entity<TextInput>,
+    /// The sidebar's search field, which filters the tree as it is typed.
+    pub(crate) sidebar_search: Entity<TextInput>,
+    /// The quick switcher's field.
+    pub(crate) quick_search: Entity<TextInput>,
+    /// The bot form's fields (the wizard and a bot's own page share them).
+    pub(crate) bot_name: Entity<TextInput>,
+    pub(crate) bot_role: Entity<TextInput>,
+    pub(crate) bot_description: Entity<TextInput>,
+    pub(crate) bot_instructions: Entity<TextInput>,
+    pub(crate) bot_tags: Entity<TextInput>,
+    /// The models each runtime reported, and which runtimes were asked.
+    pub(crate) catalogs: BTreeMap<String, Catalog>,
+    pub(crate) catalog_requested: BTreeSet<String>,
     pub(crate) models: BTreeMap<String, Vec<ModelChoice>>,
-    pub(crate) models_requested: BTreeSet<String>,
     pub(crate) list: ListState,
     pub(crate) list_session: Option<String>,
     pub(crate) list_count: usize,
+    /// The width the rows were last measured at. A row's height depends on it,
+    /// so a resize has to remeasure every row.
+    pub(crate) list_width: f32,
+    /// A message, tool or turn changed, so the rows that are already measured
+    /// are stale and must be measured again before they are drawn.
+    pub(crate) rows_dirty: bool,
+
+    /// The window's own focus, so a key reaches the window even on a page with
+    /// no field in it (Settings, the Team page).
+    pub(crate) root_focus: gpui::FocusHandle,
+    pub(crate) need_root_focus: bool,
+    /// Whether the owner opened Settings or the Team page in this run. The
+    /// window always starts on the conversation view; it never restores a page.
+    pub(crate) page_explicit: bool,
     pub(crate) pending_prompt: Option<String>,
     pub(crate) first_run: Option<FirstRunQuestion>,
     pub(crate) new_project: Option<NewProjectDialog>,
@@ -163,6 +280,61 @@ pub struct Root {
     pub(crate) hire: Option<HireDialog>,
     pub(crate) confirm: Option<Confirm>,
     pub(crate) data_busy: bool,
+    /// The images waiting in the composer.
+    pub(crate) images: Vec<ComposerImage>,
+    /// The images of a first message, held while its conversation is created.
+    pub(crate) pending_attachments: Vec<crate::daemon::PromptAttachment>,
+    /// The conversation waiting for the owner to agree to Full access.
+    pub(crate) confirm_bypass: Option<String>,
+    /// The `/command` menu, when a slash is being typed.
+    pub(crate) slash: Option<SlashState>,
+    /// Whether the queue's rows are shown under the composer.
+    pub(crate) queue_open: bool,
+    /// The last prompts sent here, newest last, for recalling with Up.
+    pub(crate) sent: Vec<String>,
+    /// A model change the owner has to agree to.
+    pub(crate) pending_model: Option<PendingModel>,
+    /// Conversations the owner pinned, in the order they pinned them.
+    pub(crate) pinned: Vec<String>,
+    /// Whether the conversations column lists archived ones.
+    pub(crate) show_archived: bool,
+    /// The conversation being renamed in place, and its own field.
+    pub(crate) renaming: Option<RenameState>,
+    pub(crate) rename_input: Entity<TextInput>,
+    /// The quick switcher, open with Ctrl+K.
+    pub(crate) quick: Option<QuickState>,
+    /// The bot being created or edited, with its wizard step.
+    pub(crate) bot_form: Option<BotForm>,
+    /// The picture the owner enlarged, by its cache key.
+    pub(crate) viewer: Option<String>,
+    /// The file a chip opened for a look inside the window.
+    pub(crate) file_preview: Option<FilePreview>,
+    /// The images decoded so far, by `<session>:<message>:<index>`.
+    pub(crate) message_images: BTreeMap<String, Arc<Image>>,
+    pub(crate) message_images_requested: BTreeSet<String>,
+    /// Which row's actions are showing, by message id.
+    pub(crate) hovered_message: Option<String>,
+    /// Each conversation's last seen state, so only a real change notifies.
+    pub(crate) watched_states: BTreeMap<String, String>,
+    pub(crate) watched_booted: bool,
+    /// Whether this window has focus, and Windows' own notification switch.
+    pub(crate) focused: bool,
+    pub(crate) usage_bar: bool,
+    /// The usage panel, opened from the sidebar's line.
+    pub(crate) usage_open: bool,
+    /// The "Needs you" list, opened from the bell.
+    pub(crate) needs_open: bool,
+    /// The shortcut sheet (Ctrl+/).
+    pub(crate) shortcuts_open: bool,
+    /// A field a dialog should take the caret into on its first frame.
+    pub(crate) pending_focus: Option<FocusTarget>,
+    /// A question card's chosen options, by question id.
+    pub(crate) question_choices: BTreeMap<String, Vec<String>>,
+    /// A question card's own typed answer, by question id.
+    pub(crate) question_other: BTreeMap<String, String>,
+    /// The question whose free-text answer is being typed in the composer:
+    /// `(permission id, question id)`.
+    pub(crate) question_target: Option<(String, String)>,
 }
 
 impl Root {
@@ -202,18 +374,93 @@ impl Root {
         };
 
         let this = cx.weak_entity();
-        let composer = cx.new(|cx| {
-            let mut input = TextInput::new("Message your bot…", px(20.0), px(theme::FS_MD), cx);
+        let composer = {
             let this = this.clone();
-            input.set_on_submit(Box::new(move |window, cx: &mut App| {
-                if let Some(root) = this.upgrade() {
-                    root.update(cx, |root, cx| root.send(window, cx));
-                }
-            }));
-            input
-        });
+            cx.new(move |cx| {
+                let mut input = TextInput::new("Message your bot…", px(20.0), px(theme::FS_MD), cx);
+                let submit_root = this.clone();
+                // Enter: the words go out, and the box is emptied through the box
+                // it was handed, never through the entity (it is leased here).
+                input.set_on_submit(Box::new(move |input, _window, cx: &mut App| {
+                    let text = input.text().to_owned();
+                    if let Some(root) = submit_root.upgrade() {
+                        let sent = root.update(cx, |root, cx| root.dispatch_send(text, cx));
+                        if sent {
+                            input.clear_quiet();
+                            root.update(cx, |_root, cx| cx.notify());
+                        }
+                    }
+                }));
+                let change_root = this.clone();
+                // Typing keeps the `/command` menu and the note above the box in
+                // step, so the window redraws on every change.
+                input.set_on_change(Box::new(move |text: &str, cursor: usize, cx: &mut App| {
+                    if let Some(root) = change_root.upgrade() {
+                        let (text, cursor) = (text.to_owned(), cursor);
+                        root.update(cx, |root, cx| root.slash_from_text(&text, cursor, cx));
+                    }
+                }));
+                let key_root = this.clone();
+                // The menu's arrows, the history and a pasted picture are the
+                // box's own keys.
+                input.set_on_key(Box::new(move |input, event, window, cx: &mut App| {
+                    match key_root.upgrade() {
+                        Some(root) => root.update(cx, |root, cx| root.composer_key(input, event, window, cx)),
+                        None => false,
+                    }
+                }));
+                input
+            })
+        };
         let team_search = cx.new(|cx| TextInput::new(crate::ui::team::SEARCH_PLACEHOLDER, px(18.0), px(theme::FS_SM), cx));
         let project_name = cx.new(|cx| TextInput::new("Project name", px(20.0), px(theme::FS_MD), cx));
+        let sidebar_search = {
+            let this = this.clone();
+            cx.new(move |cx| {
+                let mut input = TextInput::new("Search", px(18.0), px(theme::FS_XS), cx);
+                let this = this.clone();
+                input.set_on_change(Box::new(move |_text: &str, _cursor: usize, cx: &mut App| {
+                    if let Some(root) = this.upgrade() {
+                        // The tree and the roster are filtered as the words are
+                        // typed, so the window has to draw again.
+                        root.update(cx, |_root, cx| cx.notify());
+                    }
+                }));
+                input
+            })
+        };
+        let quick_search = {
+            let this = this.clone();
+            cx.new(move |cx| {
+                let mut input = TextInput::new("Search or run an action", px(22.0), px(theme::FS_MD), cx);
+                let this = this.clone();
+                input.set_on_change(Box::new(move |_text: &str, _cursor: usize, cx: &mut App| {
+                    if let Some(root) = this.upgrade() {
+                        root.update(cx, |root, cx| root.quick_query_changed(cx));
+                    }
+                }));
+                input
+            })
+        };
+        let bot_name = cx.new(|cx| TextInput::new("Name", px(20.0), px(theme::FS_MD), cx));
+        let bot_role = cx.new(|cx| TextInput::new("Role", px(18.0), px(theme::FS_SM), cx));
+        let bot_description = cx.new(|cx| TextInput::new("What it does", px(18.0), px(theme::FS_SM), cx));
+        let bot_instructions = cx.new(|cx| TextInput::new("How it should work", px(18.0), px(theme::FS_SM), cx));
+        let bot_tags = cx.new(|cx| TextInput::new("tags, comma separated", px(18.0), px(theme::FS_SM), cx));
+        let rename_input = {
+            let this = this.clone();
+            cx.new(move |cx| {
+                let mut input = TextInput::new("Conversation name", px(18.0), px(theme::FS_XS), cx);
+                let this = this.clone();
+                input.set_on_submit(Box::new(move |input, _window, cx: &mut App| {
+                    let typed = input.text().to_owned();
+                    if let Some(root) = this.upgrade() {
+                        root.update(cx, |root, cx| root.commit_rename(typed, cx));
+                    }
+                }));
+                input
+            })
+        };
 
         if let Some(updates) = updates {
             Self::follow(updates, &this, cx);
@@ -242,6 +489,7 @@ impl Root {
             expanded_steps: BTreeSet::new(),
             closing: BTreeMap::new(),
             menu: None,
+            toast: None,
             hovered: None,
             members: None,
             runtimes_asked: false,
@@ -253,11 +501,24 @@ impl Root {
             composer,
             team_search,
             project_name,
+            sidebar_search,
+            quick_search,
+            bot_name,
+            bot_role,
+            bot_description,
+            bot_instructions,
+            bot_tags,
+            catalogs: BTreeMap::new(),
+            catalog_requested: BTreeSet::new(),
             models: BTreeMap::new(),
-            models_requested: BTreeSet::new(),
             list: ListState::new(0, ListAlignment::Bottom, px(600.0)),
             list_session: None,
             list_count: 0,
+            list_width: 0.0,
+            rows_dirty: false,
+            root_focus: cx.focus_handle(),
+            need_root_focus: false,
+            page_explicit: false,
             pending_prompt: None,
             first_run,
             new_project: None,
@@ -265,6 +526,35 @@ impl Root {
             hire: None,
             confirm: None,
             data_busy: false,
+            images: Vec::new(),
+            pending_attachments: Vec::new(),
+            confirm_bypass: None,
+            slash: None,
+            queue_open: false,
+            sent: Vec::new(),
+            pending_model: None,
+            pinned: settings.pinned_sessions,
+            show_archived: false,
+            renaming: None,
+            rename_input,
+            quick: None,
+            bot_form: None,
+            viewer: None,
+            file_preview: None,
+            message_images: BTreeMap::new(),
+            message_images_requested: BTreeSet::new(),
+            hovered_message: None,
+            watched_states: BTreeMap::new(),
+            watched_booted: false,
+            focused: true,
+            usage_bar: settings.usage_bar,
+            usage_open: false,
+            needs_open: false,
+            shortcuts_open: false,
+            pending_focus: None,
+            question_choices: BTreeMap::new(),
+            question_other: BTreeMap::new(),
+            question_target: None,
         }
     }
 
@@ -402,6 +692,357 @@ impl Root {
         }
     }
 
+    /// One answer to a `Command::Rpc`, by the tag the window sent with it. A tag
+    /// nobody recognises is ignored: an old daemon cannot invent a shape.
+    fn on_rpc(&mut self, tag: String, value: serde_json::Value, cx: &mut Context<Self>) {
+        match tag.as_str() {
+            "catalog" => {
+                let runtime_id = value
+                    .get("catalog")
+                    .and_then(|catalog| catalog.get("runtimeId"))
+                    .or_else(|| value.get("runtimeId"))
+                    .and_then(|id| id.as_str())
+                    .unwrap_or("")
+                    .to_owned();
+                let catalog = crate::ui::composer::parse_catalog(&runtime_id, &value);
+                self.models.insert(runtime_id.clone(), catalog.models.clone());
+                self.catalogs.insert(runtime_id, catalog);
+            }
+            "queue-list" => {
+                if let Some(session_id) = value.get("sessionId").and_then(|id| id.as_str()).map(str::to_owned).or_else(|| self.session_id.clone()) {
+                    let items = value
+                        .get("items")
+                        .and_then(|items| items.as_array())
+                        .map(|rows| {
+                            rows.iter()
+                                .filter_map(|row| serde_json::from_value::<crate::state::QueuedPrompt>(row.clone()).ok())
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default();
+                    let paused = value.get("paused").and_then(|paused| paused.as_bool()).unwrap_or(false);
+                    if let Some(snapshot) = self.snapshot.as_mut() {
+                        snapshot.queues.insert(session_id, crate::state::QueueState { items, paused });
+                    }
+                }
+            }
+            "queue" => self.load_queue(cx),
+            "quota" => {
+                if let Some(rows) = value.get("quotas").and_then(|rows| rows.as_array()).cloned() {
+                    if let Some(snapshot) = self.snapshot.as_mut() {
+                        snapshot.quotas = rows;
+                    }
+                }
+            }
+            "image" => {
+                let key = value.get("key").and_then(|key| key.as_str()).unwrap_or("").to_owned();
+                let data_url = value.get("dataUrl").and_then(|url| url.as_str()).unwrap_or("");
+                if !key.is_empty() {
+                    match crate::files::decode_data_url(data_url).and_then(|bytes| {
+                        crate::files::image_format(&bytes).map(|format| (bytes, format))
+                    }) {
+                        Some((bytes, format)) => {
+                            // The id and the size only: never the picture itself.
+                            crate::trace::log(format!("message image ready: {key} ({} bytes)", bytes.len()));
+                            self.message_images.insert(key, Arc::new(Image::from_bytes(format, bytes)));
+                        }
+                        None => crate::trace::log(format!("message image could not be decoded: {key}")),
+                    }
+                }
+            }
+            "agent" | "agent-save" => {
+                if tag == "agent-save" {
+                    self.bot_form = None;
+                    self.toast("Saved.", cx);
+                }
+                self.daemon_command(Command::Refresh, cx);
+            }
+            "agent-create" => {
+                self.bot_form = None;
+                let name = value
+                    .get("agent")
+                    .and_then(|agent| agent.get("name"))
+                    .and_then(|name| name.as_str())
+                    .unwrap_or("")
+                    .to_owned();
+                if !name.is_empty() {
+                    self.agent_id = value
+                        .get("agent")
+                        .and_then(|agent| agent.get("id"))
+                        .and_then(|id| id.as_str())
+                        .map(str::to_owned)
+                        .or(self.agent_id.take());
+                    self.page = Page::Conversation;
+                    self.toast(format!("{name} joined your team."), cx);
+                }
+                self.daemon_command(Command::Refresh, cx);
+            }
+            "agent-archive" | "agent-restore" => {
+                self.toast(if tag == "agent-archive" { "Archived. Its conversations are kept." } else { "Restored." }, cx);
+                self.daemon_command(Command::Refresh, cx);
+            }
+            "session" | "session-model" => {}
+            "rename" => {
+                self.renaming = None;
+                self.toast("Renamed.", cx);
+            }
+            "archive" => self.toast("Conversation archived.", cx),
+            _ => {}
+        }
+        cx.notify();
+    }
+
+    /// The quick switcher's query changed: the first row is the one to run.
+    pub(crate) fn quick_query_changed(&mut self, cx: &mut Context<Self>) {
+        if let Some(quick) = self.quick.as_mut() {
+            quick.index = 0;
+        }
+        cx.notify();
+    }
+
+    /// Copy words to the clipboard and say so, as every Copy in the app does.
+    pub(crate) fn copy_to_clipboard(&mut self, text: String, cx: &mut Context<Self>) {
+        cx.write_to_clipboard(gpui::ClipboardItem::new_string(text));
+        self.toast("Copied", cx);
+    }
+
+    /// Retry one of the bot's own replies: the prompt is sent again as a new one
+    /// (`MessageContextMenu` → `session.prompt`).
+    pub(crate) fn retry_prompt(&mut self, text: String, cx: &mut Context<Self>) {
+        let Some(session_id) = self.session_id.clone() else { return };
+        let text = text.trim().to_owned();
+        if text.is_empty() {
+            return;
+        }
+        self.daemon_command(
+            Command::SendPrompt {
+                session_id,
+                text,
+                attachments: Vec::new(),
+                method: crate::daemon::PromptMethod::Queue,
+                client_message_id: uuid::Uuid::new_v4().to_string(),
+            },
+            cx,
+        );
+        self.toast("Sent again. The answer follows this turn.", cx);
+    }
+
+    /// Put a reply's words back in the box to change before sending.
+    pub(crate) fn edit_prompt(&mut self, text: String, cx: &mut Context<Self>) {
+        self.composer.update(cx, |input, cx| input.set_text(text, cx));
+        self.toast("In the box, ready to change.", cx);
+    }
+
+    /// Show the file a message named, inside the window, after the same check
+    /// the app makes: it must resolve inside this conversation's project and be
+    /// a real file. **Never** opened with its own program (see
+    /// `files::show_in_folder`).
+    pub(crate) fn preview_file(&mut self, path: String, project: Option<String>, cx: &mut Context<Self>) {
+        let file = match crate::files::canonical_project_file(&path, project.as_deref()) {
+            Ok(file) => file,
+            Err(error) => {
+                self.notice = Some(error);
+                cx.notify();
+                return;
+            }
+        };
+        let title = file.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_else(|| path.clone());
+        let read = file.clone();
+        let task = cx.background_executor().spawn(async move { crate::files::read_preview(&read).map(|(kind, bytes)| (kind, bytes, read)) });
+        cx.spawn(async move |this, cx: &mut AsyncApp| {
+            let result = task.await;
+            cx.update(|app| {
+                if let Some(root) = this.upgrade() {
+                    root.update(app, |root, cx| {
+                        match result {
+                            Ok((kind, bytes, file)) => {
+                                let (text, image, note) = match kind {
+                                    crate::files::PreviewKind::Image => {
+                                        let image = crate::files::image_format(&bytes).map(|format| Arc::new(Image::from_bytes(format, bytes)));
+                                        (None, image, None)
+                                    }
+                                    crate::files::PreviewKind::Text => {
+                                        let mut text = crate::files::preview_text(&bytes);
+                                        let note = (bytes.len() as u64 > crate::files::PREVIEW_READ_BYTES).then(|| {
+                                            "Only the first 200 KB of this file are shown.".to_owned()
+                                        });
+                                        if bytes.len() as u64 >= crate::files::PREVIEW_READ_BYTES {
+                                            text.push_str("\n… the rest of this file is not shown.");
+                                        }
+                                        (Some(text), None, note)
+                                    }
+                                };
+                                root.file_preview = Some(FilePreview {
+                                    title,
+                                    path: file.to_string_lossy().to_string(),
+                                    project: project.clone(),
+                                    kind,
+                                    text,
+                                    image,
+                                    note,
+                                });
+                            }
+                            Err(error) => root.notice = Some(error),
+                        }
+                        cx.notify();
+                    });
+                }
+            });
+        })
+        .detach();
+    }
+
+    /// Highlight the file in its own folder. The one action a chip offers, and
+    /// it runs nothing.
+    pub(crate) fn show_in_folder(&mut self, path: String, project: Option<String>, cx: &mut Context<Self>) {
+        match crate::files::canonical_project_file(&path, project.as_deref()) {
+            Ok(file) => {
+                if let Err(error) = crate::files::show_in_folder(&file) {
+                    self.notice = Some(error);
+                }
+            }
+            Err(error) => self.notice = Some(error),
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn close_file_preview(&mut self, cx: &mut Context<Self>) {
+        self.file_preview = None;
+        cx.notify();
+    }
+
+    /// Open a link from a message, only when it is one Bitbots opens.
+    pub(crate) fn open_link(&mut self, url: String, cx: &mut Context<Self>) {
+        if let Err(error) = crate::files::open_link(&url) {
+            self.error = Some(error);
+        }
+        cx.notify();
+    }
+
+    /// The changes a tool proposed, when an approval card carries a diff.
+    pub(crate) fn approval_diff(&self, permission: &crate::state::Permission) -> Option<String> {
+        let detail = permission.detail.as_deref()?;
+        let looks_like_diff = detail.lines().any(|line| {
+            let trimmed = line.trim_start();
+            trimmed.starts_with("@@")
+                || trimmed.starts_with("+++")
+                || trimmed.starts_with("---")
+                || trimmed.starts_with('+')
+                || trimmed.starts_with('-')
+        });
+        looks_like_diff.then(|| detail.to_owned())
+    }
+
+    pub(crate) fn begin_rename(&mut self, cx: &mut Context<Self>) {
+        let Some(session_id) = self.session_id.clone() else { return };
+        self.start_rename(session_id, cx);
+    }
+
+    /// Start renaming one conversation: the field holds its current name.
+    pub(crate) fn start_rename(&mut self, session_id: String, cx: &mut Context<Self>) {
+        let title = self
+            .snapshot()
+            .and_then(|snapshot| snapshot.session(&session_id))
+            .map(|session| session.title.clone().unwrap_or_default())
+            .unwrap_or_default();
+        let input = self.rename_input.clone();
+        input.update(cx, |input, cx| input.set_text(title, cx));
+        self.renaming = Some(RenameState { session_id, error: None });
+        cx.notify();
+    }
+
+    /// Keep the typed name and send `session.rename`.
+    /// The Rename button: the field is not leased here, so its words are read
+    /// through it (`Context::update_entity`), and the box is handed to the work.
+    pub(crate) fn commit_rename_from_field(&mut self, cx: &mut Context<Self>) {
+        let typed = self.rename_input.read(cx).text().to_owned();
+        self.commit_rename(typed, cx);
+    }
+
+    pub(crate) fn commit_rename(&mut self, typed: String, cx: &mut Context<Self>) {
+        let Some(rename) = self.renaming.clone() else { return };
+        let title = typed.trim().to_owned();
+        if title.is_empty() {
+            if let Some(rename) = self.renaming.as_mut() {
+                rename.error = Some("A conversation needs a name.".to_owned());
+            }
+            cx.notify();
+            return;
+        }
+        if title.chars().count() > 120 {
+            if let Some(rename) = self.renaming.as_mut() {
+                rename.error = Some("Keep the name to 120 characters.".to_owned());
+            }
+            cx.notify();
+            return;
+        }
+        self.daemon_command(
+            Command::Rpc {
+                tag: "rename".to_owned(),
+                method: "session.rename".to_owned(),
+                params: serde_json::json!({ "sessionId": rename.session_id, "title": title }),
+            },
+            cx,
+        );
+    }
+
+    /// Pin or unpin a conversation, kept on this computer.
+    pub(crate) fn toggle_pin(&mut self, session_id: String, cx: &mut Context<Self>) {
+        if let Some(index) = self.pinned.iter().position(|id| id == &session_id) {
+            self.pinned.remove(index);
+        } else {
+            self.pinned.push(session_id);
+        }
+        let _ = crate::settings_file::write_pinned_sessions(&paths::settings_file_path(), &self.pinned);
+        cx.notify();
+    }
+
+    /// Archive or unarchive a conversation (`session.archive`).
+    pub(crate) fn set_archived(&mut self, session_id: String, archived: bool, cx: &mut Context<Self>) {
+        self.daemon_command(
+            Command::Rpc {
+                tag: "archive".to_owned(),
+                method: "session.archive".to_owned(),
+                params: serde_json::json!({ "sessionId": session_id, "archived": archived }),
+            },
+            cx,
+        );
+        if archived && self.session_id.as_deref() == Some(session_id.as_str()) {
+            self.session_id = None;
+        }
+    }
+
+    /// Turn the plan-usage line in the sidebar on or off.
+    pub(crate) fn set_usage_bar(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        self.usage_bar = enabled;
+        let _ = crate::settings_file::write_usage_bar(&paths::settings_file_path(), enabled);
+        cx.notify();
+    }
+
+    /// Read the plan limits once, and again when the owner asks.
+    pub(crate) fn load_quotas(&mut self, cx: &mut Context<Self>) {
+        self.daemon_command(
+            Command::Rpc { tag: "quota".to_owned(), method: "quota.list".to_owned(), params: serde_json::json!({}) },
+            cx,
+        );
+    }
+
+    /// Ask for one message's picture, once.
+    pub(crate) fn request_message_image(&mut self, session_id: &str, message_id: &str, index: usize, cx: &mut Context<Self>) {
+        let key = format!("{session_id}:{message_id}:{index}");
+        if self.message_images.contains_key(&key) || !self.message_images_requested.insert(key.clone()) {
+            return;
+        }
+
+        self.daemon_command(
+            Command::Rpc {
+                tag: "image".to_owned(),
+                method: "message.image".to_owned(),
+                params: serde_json::json!({ "sessionId": session_id, "messageId": message_id, "index": index }),
+            },
+            cx,
+        );
+    }
+
     fn reload_members(&mut self, project_ids: Vec<String>, cx: &mut Context<Self>) {
         if project_ids.is_empty() {
             return;
@@ -437,6 +1078,15 @@ impl Root {
                     apply_event(snapshot, &event);
                     let dirty = std::mem::take(&mut snapshot.dirty_members);
                     let refresh = std::mem::take(&mut snapshot.refresh_wanted);
+                    let queues = std::mem::take(&mut snapshot.dirty_queues);
+                    // Anything that can change a row's content changes its
+                    // height. A quota or presence event cannot.
+                    if matches!(
+                        event.event_type.as_str(),
+                        "message.delta" | "message.completed" | "tool.changed" | "command.changed" | "turn.completed" | "turn.error" | "session.changed"
+                    ) {
+                        self.rows_changed();
+                    }
                     self.sync_list(cx);
                     if !dirty.is_empty() {
                         self.reload_members(dirty, cx);
@@ -444,12 +1094,17 @@ impl Root {
                     if refresh {
                         self.refresh_members_and_snapshot(cx);
                     }
+                    if queues.iter().any(|id| Some(id) == self.session_id.as_ref()) {
+                        self.load_queue(cx);
+                    }
                 }
+                self.watch_notifications(cx);
             }
             Update::SessionLoaded(session) => {
                 if let Some(snapshot) = self.snapshot.as_mut() {
                     snapshot.sessions.retain(|existing| existing.id != session.id);
                     snapshot.sessions.push(*session);
+                    self.rows_changed();
                     self.sync_list(cx);
                 }
             }
@@ -470,7 +1125,19 @@ impl Root {
                     self.page = Page::Conversation;
                     self.select_session(Some(id.clone()), cx);
                     if let Some(text) = self.pending_prompt.take() {
-                        self.daemon_command(Command::SendPrompt { session_id: id, text }, cx);
+                        let attachments = std::mem::take(&mut self.pending_attachments);
+                        let busy = self.selected_session().map(Session::is_busy).unwrap_or(false);
+                        let method = if busy { crate::daemon::PromptMethod::Queue } else { crate::daemon::PromptMethod::Prompt };
+                        self.daemon_command(
+                            Command::SendPrompt {
+                                session_id: id,
+                                text,
+                                attachments,
+                                method,
+                                client_message_id: uuid::Uuid::new_v4().to_string(),
+                            },
+                            cx,
+                        );
                     }
                 }
             }
@@ -529,7 +1196,20 @@ impl Root {
             }
             Update::Sent => {
                 self.error = None;
+                // A prompt sent into a running turn becomes a queued item, so
+                // the rows above the box are read again.
+                self.load_queue(cx);
             }
+            Update::Rpc { tag, value } => self.on_rpc(tag, value, cx),
+            Update::RpcFailed { tag, message } => match tag.as_str() {
+                // A picture the daemon no longer has shows its placeholder, as
+                // the app does, and says nothing over the conversation.
+                "image" => crate::trace::log(format!("message image unavailable: {message}")),
+                // The queue and the model list are chrome: their absence is not
+                // worth a red bar either.
+                "queue-list" | "catalog" => {}
+                _ => self.error = Some(message),
+            },
             Update::Cancelled | Update::PermissionReplied => {
                 self.error = None;
             }
@@ -599,23 +1279,44 @@ impl Root {
         // again whenever a project appears.
         self.members.get_or_insert_with(BTreeMap::new);
         self.reload_members(project_ids, cx);
+        // The composer's controls need this conversation's model list, and the
+        // usage line needs the plan limits once.
+        if let Some(runtime_id) = self.selected_session().map(|session| session.runtime_id.clone()) {
+            self.request_catalog(runtime_id, cx);
+        }
+        if self.snapshot.as_ref().is_some_and(|snapshot| snapshot.quotas.is_empty()) {
+            self.load_quotas(cx);
+        }
+        self.load_queue(cx);
+        self.watch_notifications(cx);
     }
 
     fn select_session(&mut self, session_id: Option<String>, cx: &mut Context<Self>) {
         self.session_id = session_id;
+        self.renaming = None;
         self.sync_list(cx);
+        self.load_queue(cx);
+        if let Some(runtime_id) = self.selected_session().map(|session| session.runtime_id.clone()) {
+            self.request_catalog(runtime_id, cx);
+        }
         cx.notify();
     }
 
     /// Keep the message list in step with the conversation on screen: a changed
     /// conversation resets it (to the bottom), more messages append, so a long
     /// conversation stays smooth and sticks to the bottom while text streams.
-    fn sync_list(&mut self, _cx: &mut Context<Self>) {
+    ///
+    /// A row that grows (streamed text, a tool step finishing) keeps its old
+    /// measured height unless the list is told, and then the next row is drawn
+    /// on top of it. `remeasure` throws the heights away and the list measures
+    /// the visible rows again, which is the browser's own relayout.
+    pub(crate) fn sync_list(&mut self, _cx: &mut Context<Self>) {
         let session_id = self.session_id.clone();
         let count = self
             .selected_session()
             .map(crate::ui::conversation::row_count)
             .unwrap_or(0);
+        let mut remeasure = false;
         if self.list_session != session_id {
             self.list_session = session_id;
             self.list_count = count;
@@ -623,6 +1324,7 @@ impl Root {
             // Opening or switching a conversation lands on its last line, not
             // wherever the previous one was left.
             self.scroll_to_end();
+            remeasure = true;
         } else if count != self.list_count {
             if count > self.list_count {
                 let old = self.list_count;
@@ -631,7 +1333,20 @@ impl Root {
                 self.list.reset(count);
             }
             self.list_count = count;
+            remeasure = true;
         }
+        if std::mem::take(&mut self.rows_dirty) {
+            remeasure = true;
+        }
+        if remeasure && self.list_count > 0 {
+            self.list.remeasure();
+        }
+    }
+
+    /// Note that a row's content changed, so its height is no longer the one the
+    /// list remembers.
+    pub(crate) fn rows_changed(&mut self) {
+        self.rows_dirty = true;
     }
 
     /// Put the message list at its last row.
@@ -662,6 +1377,10 @@ impl Root {
         if self.selected_session().map(|session| session.partial).unwrap_or(false) {
             self.daemon_command(Command::LoadSession { session_id }, cx);
         }
+        self.load_queue(cx);
+        if let Some(runtime_id) = self.selected_session().map(|session| session.runtime_id.clone()) {
+            self.request_catalog(runtime_id, cx);
+        }
         cx.notify();
     }
 
@@ -673,6 +1392,10 @@ impl Root {
     /// "Open team page": the Team page in the main area, on the tab asked for.
     pub(crate) fn open_team(&mut self, tab: TeamTab, project_id: Option<String>, cx: &mut Context<Self>) {
         self.page = Page::Team;
+        self.page_explicit = true;
+        // Neither page has a field to keep the caret, so keys must reach the
+        // window itself.
+        self.need_root_focus = true;
         self.team_tab = tab;
         self.team_project = project_id;
         self.menu = None;
@@ -681,12 +1404,15 @@ impl Root {
 
     pub(crate) fn open_settings(&mut self, cx: &mut Context<Self>) {
         self.page = Page::Settings;
+        self.page_explicit = true;
+        self.need_root_focus = true;
         self.menu = None;
         cx.notify();
     }
 
     pub(crate) fn back_to_conversation(&mut self, cx: &mut Context<Self>) {
         self.page = Page::Conversation;
+        self.need_root_focus = true;
         if self.session_id.is_none() {
             self.sync_list(cx);
         }
@@ -765,13 +1491,6 @@ impl Root {
         self.closing.get(key).map(|until| *until > Instant::now()).unwrap_or(false)
     }
 
-    pub(crate) fn toggle_menu(&mut self, menu: ProjectMenu, cx: &mut Context<Self>) {
-        self.menu = match self.menu.as_ref().map(|open| open.key.clone()) {
-            Some(key) if key == menu.key => None,
-            _ => Some(menu),
-        };
-        cx.notify();
-    }
 
     pub(crate) fn set_hovered(&mut self, key: Option<String>, cx: &mut Context<Self>) {
         if self.hovered != key {
@@ -781,30 +1500,6 @@ impl Root {
     }
 
     // ---- actions --------------------------------------------------------------
-
-    /// Send the composer's text: to the open conversation, or to a new one when
-    /// the bot has none yet.
-    pub(crate) fn send(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let text = self.composer.read(cx).text().trim().to_owned();
-        if text.is_empty() {
-            return;
-        }
-        let Some(agent_id) = self.agent_id.clone() else {
-            self.error = Some("Choose an employee first.".to_owned());
-            return;
-        };
-        self.error = None;
-        match self.session_id.clone() {
-            Some(session_id) => self.daemon_command(Command::SendPrompt { session_id, text }, cx),
-            None => {
-                self.pending_prompt = Some(text);
-                self.new_conversation(agent_id, None, cx);
-            }
-        }
-        self.composer.update(cx, |input, cx| input.clear(window, cx));
-        self.focus_composer(window, cx);
-        cx.notify();
-    }
 
     pub(crate) fn new_conversation(&mut self, agent_id: String, project_id: Option<String>, cx: &mut Context<Self>) {
         self.agent_id = Some(agent_id.clone());
@@ -839,13 +1534,44 @@ impl Root {
         }
     }
 
+    /// Answer an approval card with one of its own choices.
     pub(crate) fn reply_permission(&mut self, permission_id: String, choice: String, cx: &mut Context<Self>) {
-        self.daemon_command(Command::ReplyPermission { permission_id, choice }, cx);
+        self.daemon_command(Command::ReplyPermission { permission_id, choice, answers: None, remember: false, remember_project: false }, cx);
+    }
+
+    /// Answer it and remember the rule, for this project only or for every one.
+    pub(crate) fn reply_permission_remembered(&mut self, permission_id: String, choice: String, project_only: bool, cx: &mut Context<Self>) {
+        self.daemon_command(
+            Command::ReplyPermission { permission_id, choice, answers: None, remember: true, remember_project: project_only },
+            cx,
+        );
+    }
+
+    /// Answer a question card, or dismiss it (`answers: None`).
+    pub(crate) fn reply_question(&mut self, permission_id: String, answers: Option<serde_json::Value>, cx: &mut Context<Self>) {
+        let choice = if answers.is_some() { "answer" } else { "dismiss" };
+        self.daemon_command(
+            Command::ReplyPermission { permission_id, choice: choice.to_owned(), answers, remember: false, remember_project: false },
+            cx,
+        );
     }
 
     pub(crate) fn decide_proposal(&mut self, id: String, approve: bool, cx: &mut Context<Self>) {
         let decision = if approve { "approve" } else { "reject" }.to_owned();
         self.daemon_command(Command::DecideProposal { id, decision }, cx);
+    }
+
+    /// A `merge` proposal's third choice: reject it and throw the copy away.
+    pub(crate) fn decide_proposal_with(&mut self, id: String, decision: &str, discard: bool, cx: &mut Context<Self>) {
+        if discard {
+            let params = serde_json::json!({ "id": id, "decision": decision, "discard": true });
+            self.daemon_command(
+                Command::Rpc { tag: "proposal".to_owned(), method: "proposal.decide".to_owned(), params },
+                cx,
+            );
+        } else {
+            self.daemon_command(Command::DecideProposal { id, decision: decision.to_owned() }, cx);
+        }
     }
 
     /// "Hire all N": every waiting proposal of the same group, this one first.
@@ -855,7 +1581,7 @@ impl Root {
         }
     }
 
-    fn focus_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn focus_composer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let handle = self.composer.read(cx).handle();
         window.focus(&handle, cx);
     }
@@ -864,8 +1590,25 @@ impl Root {
 
     pub(crate) fn open_new_project(&mut self, cx: &mut Context<Self>) {
         self.menu = None;
+        self.project_name.update(cx, |input, cx| input.set_text(String::new(), cx));
         self.new_project = Some(NewProjectDialog { folder: None, error: None, busy: false });
+        self.pending_focus = Some(FocusTarget::ProjectName);
         cx.notify();
+    }
+
+    /// Close whatever dialog is on top, which Escape and a backdrop click do.
+    pub(crate) fn close_top_dialog(&mut self, cx: &mut Context<Self>) {
+        if self.bot_form.is_some() {
+            self.close_bot_form(cx);
+        } else if self.pending_model.take().is_some()
+            || self.confirm_bypass.take().is_some()
+            || self.confirm.take().is_some()
+            || self.hire.take().is_some()
+            || self.staff.take().is_some()
+            || self.new_project.take().is_some()
+        {
+            cx.notify();
+        }
     }
 
     /// The Windows folder picker, through GPUI's own dialog.
@@ -970,7 +1713,7 @@ impl Root {
         if runtime_id.is_empty() {
             return;
         }
-        if self.models.contains_key(&runtime_id) || !self.models_requested.insert(runtime_id.clone()) {
+        if self.models.contains_key(&runtime_id) || !self.catalog_requested.insert(runtime_id.clone()) {
             return;
         }
         self.daemon_command(Command::LoadModels { runtime_id }, cx);
@@ -1069,6 +1812,8 @@ impl Root {
         let Some(confirm) = self.confirm.take() else { return };
         match confirm.action {
             ConfirmAction::CopyDataAgain => self.copy_data_again(cx),
+            ConfirmAction::ArchiveBot(agent_id) => self.archive_bot(agent_id, cx),
+            ConfirmAction::ArchiveSession(session_id) => self.set_archived(session_id, true, cx),
         }
     }
 
@@ -1255,6 +2000,35 @@ impl Render for Root {
             }
         }
 
+        // The text fields paint themselves, so they need the theme of this frame.
+        theme::set_current_light(!colors.dark);
+        // The window always opens on the conversation view; the open page is not
+        // remembered across launches (`page_explicit` is only set by a click or a
+        // key in this run).
+        if !self.page_explicit {
+            self.page = Page::Conversation;
+        }
+        // Windows decides whether this window has the person's attention; a turn
+        // that finishes while it does not is what a notification is for.
+        self.focused = window.is_window_active();
+        // A page with no field (Settings, the Team page) puts focus on the window
+        // itself, so Ctrl+K and the rest still arrive.
+        if std::mem::take(&mut self.need_root_focus) {
+            let handle = self.root_focus.clone();
+            window.defer(cx, move |window, cx| window.focus(&handle, cx));
+        }
+        // A dialog that just opened puts the caret in its first field, on the
+        // next frame: focusing during a paint is not allowed.
+        if let Some(target) = self.pending_focus.take() {
+            let handle = match target {
+                FocusTarget::BotName if self.bot_form.is_some() => Some(self.bot_name.read(cx).handle()),
+                FocusTarget::ProjectName if self.new_project.is_some() => Some(self.project_name.read(cx).handle()),
+                _ => None,
+            };
+            if let Some(handle) = handle {
+                window.defer(cx, move |window, cx| window.focus(&handle, cx));
+            }
+        }
         let sidebar = self.render_sidebar(colors, window, cx);
         let conversations = if self.page == Page::Settings {
             div().into_any_element()
@@ -1266,7 +2040,16 @@ impl Render for Root {
             Page::Team => self.render_team_page(colors, window, cx),
             Page::Settings => self.render_settings_page(colors, cx),
         };
-        let overlays = self.render_dialogs(colors, cx);
+        let dialogs = self.render_dialogs(colors, cx);
+        let menu = self.render_menu_layer(colors, cx);
+        let quick = self.render_quick_switcher(colors, cx);
+        let shortcuts = self.render_shortcut_sheet(colors, cx);
+        let needs = self.render_needs_panel(colors, cx);
+        let usage = self.render_usage_panel(colors, cx);
+        let bots = self.render_bot_dialog(colors, cx);
+        let file_preview = self.render_file_preview(colors, cx);
+        let viewer = self.render_image_viewer(colors, cx);
+        let toast = self.render_toast(colors);
 
         div()
             .relative()
@@ -1277,6 +2060,31 @@ impl Render for Root {
             .font_family(theme::UI_FONT)
             .text_color(colors.text_1)
             .text_size(px(theme::FS_SM))
+            // The window's own focus, and the context a global shortcut is bound
+            // to, so a key reaches the window on every page.
+            .track_focus(&self.root_focus)
+            .key_context("Workspace")
+            .on_action(cx.listener(|root, _: &crate::ui::search::QuickSwitcher, window, cx| root.toggle_quick(window, cx)))
+            .on_action(cx.listener(|root, _: &crate::ui::search::NewConversation, _window, cx| {
+                if let Some(agent_id) = root.agent_id.clone() {
+                    root.new_conversation(agent_id, None, cx);
+                }
+            }))
+            .on_action(cx.listener(|root, _: &crate::ui::search::OpenSettings, _window, cx| root.open_settings(cx)))
+            .on_action(cx.listener(|root, _: &crate::ui::search::FocusComposer, window, cx| root.focus_composer(window, cx)))
+            .on_action(cx.listener(|root, _: &crate::ui::search::ShortcutSheet, _window, cx| {
+                root.shortcuts_open = !root.shortcuts_open;
+                cx.notify();
+            }))
+            .on_action(cx.listener(|root, _: &crate::ui::search::NextConversation, _window, cx| root.step_conversation(true, cx)))
+            .on_action(cx.listener(|root, _: &crate::ui::search::PreviousConversation, _window, cx| root.step_conversation(false, cx)))
+            .on_key_down(cx.listener(|root, event: &gpui::KeyDownEvent, window, cx| root.window_key(event, window, cx)))
+            // An image dropped on the window is read and staged, as the app does:
+            // the drop payload is the paths Windows handed over.
+            .can_drop(|value: &dyn std::any::Any, _window, _cx| value.is::<std::sync::Arc<Vec<PathBuf>>>())
+            .on_drop(cx.listener(|root, paths: &std::sync::Arc<Vec<PathBuf>>, _window, cx| {
+                root.drop_files(paths.as_ref().clone(), cx);
+            }))
             .child(
                 div()
                     .flex_1()
@@ -1290,8 +2098,272 @@ impl Render for Root {
             .when_some(self.daemon_banner(cx), |this, banner| this.child(banner))
             .when_some(self.error.clone(), |this, message| this.child(self.render_error_bar(&message, colors, cx)))
             .when_some(self.notice.clone(), |this, message| this.child(self.render_notice_bar(&message, colors, cx)))
-            .when_some(overlays, |this, overlays| this.child(overlays))
+            .when_some(needs, |this, element| this.child(element))
+            .when_some(usage, |this, element| this.child(element))
+            .when_some(dialogs, |this, element| this.child(element))
+            .when_some(bots, |this, element| this.child(element))
+            .when_some(file_preview, |this, element| this.child(element))
+            .when_some(viewer, |this, element| this.child(element))
+            .when_some(quick, |this, element| this.child(element))
+            .when_some(shortcuts, |this, element| this.child(element))
+            .when_some(menu, |this, element| this.child(element))
+            .when_some(toast, |this, element| this.child(element))
             .into_any_element()
+    }
+}
+
+impl Root {
+    /// The window's own keys: the overlays first, then the shortcuts of section 5.
+    fn window_key(&mut self, event: &gpui::KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let keystroke = &event.keystroke;
+        let ctrl = keystroke.modifiers.control || keystroke.modifiers.platform;
+        let alt = keystroke.modifiers.alt;
+        let key = keystroke.key.to_lowercase();
+        if self.quick.is_some() && self.quick_key(event, window, cx) {
+            return;
+        }
+        if ctrl && key == "k" {
+            self.toggle_quick(window, cx);
+            return;
+        }
+        if ctrl && key == "/" {
+            self.shortcuts_open = !self.shortcuts_open;
+            cx.notify();
+            return;
+        }
+        if ctrl && key == "n" {
+            if let Some(agent_id) = self.agent_id.clone() {
+                self.new_conversation(agent_id, None, cx);
+            }
+            return;
+        }
+        if ctrl && key == "," {
+            self.open_settings(cx);
+            return;
+        }
+        if ctrl && key == "l" {
+            self.focus_composer(window, cx);
+            return;
+        }
+        if alt && (key == "down" || key == "up") {
+            self.step_conversation(key == "down", cx);
+            return;
+        }
+        if key == "escape" {
+            // Close the first thing that is open, and put the caret back in the
+            // box when nothing is. Escape is the one key that always means
+            // "leave this", so the order is the order things sit above the
+            // conversation.
+            if self.slash.is_some() {
+                self.slash = None;
+            } else if self.menu.take().is_some() {
+                // Escape closes a menu and puts focus back on its trigger; a
+                // click elsewhere closes it and leaves focus where the owner put
+                // it (`MenuClose`).
+                if crate::ui::menu::MenuClose::Escape.restores_focus() {
+                    self.focus_composer(window, cx);
+                }
+            } else {
+                let closed = self.file_preview.take().is_some()
+                    | self.viewer.take().is_some()
+                    | self.quick.take().is_some()
+                    | self.bot_form.take().is_some()
+                    | self.confirm.take().is_some()
+                    | self.pending_model.take().is_some()
+                    | self.confirm_bypass.take().is_some()
+                    | self.renaming.take().is_some()
+                    | std::mem::take(&mut self.shortcuts_open)
+                    | std::mem::take(&mut self.needs_open)
+                    | std::mem::take(&mut self.usage_open);
+                if !closed {
+                    self.focus_composer(window, cx);
+                }
+            }
+            cx.notify();
+        }
+        // Everything else belongs to the box the caret is in.
+    }
+
+    /// A file a chip asked to show: a picture, or its text, inside the window.
+    /// Nothing here starts a program (`files::show_in_folder` is the only action
+    /// a chip has, and it only highlights the file).
+    fn render_file_preview(&mut self, colors: Colors, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let preview = self.file_preview.as_ref()?;
+        let title = preview.title.clone();
+        let path = preview.path.clone();
+        let note = preview.note.clone();
+        let preview_project = preview.project.clone();
+        let mut body = div().w_full().min_w(px(0.0)).flex().flex_col().gap(px(6.0));
+        match (&preview.kind, preview.image.clone(), preview.text.clone()) {
+            (crate::files::PreviewKind::Image, Some(image), _) => {
+                body = body.child(
+                    div()
+                        .w_full()
+                        .flex()
+                        .justify_center()
+                        .child(gpui::img(image).max_h(px(560.0)).max_w(px(760.0))),
+                );
+            }
+            (_, _, Some(text)) => {
+                body = body.child(
+                    div()
+                        .id("file-preview-text")
+                        .w_full()
+                        .min_w(px(0.0))
+                        .max_h(px(520.0))
+                        .overflow_y_scroll()
+                        .p(px(10.0))
+                        .rounded(px(theme::RADIUS_SM))
+                        .bg(colors.panel)
+                        .border_1()
+                        .border_color(colors.line)
+                        .font_family(theme::MONO_FONT)
+                        .text_size(px(theme::FS_XS))
+                        .text_color(colors.text_2)
+                        .child(SharedString::from(text)),
+                );
+            }
+            _ => {
+                body = body.child(
+                    div()
+                        .text_size(px(theme::FS_XS))
+                        .text_color(colors.text_3)
+                        .child("This file could not be shown."),
+                );
+            }
+        }
+        if let Some(note) = note {
+            body = body.child(div().text_size(px(theme::FS_2XS)).text_color(colors.text_3).child(SharedString::from(note)));
+        }
+        let card = div()
+            .id("file-preview-card")
+            .w(px(820.0))
+            .max_h(px(680.0))
+            .p(px(14.0))
+            .flex()
+            .flex_col()
+            .gap(px(8.0))
+            .rounded(px(theme::RADIUS_LG))
+            .bg(colors.overlay)
+            .border_1()
+            .border_color(colors.line_strong)
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.0))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.0))
+                            .truncate()
+                            .text_size(px(theme::FS_SM))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child(SharedString::from(title)),
+                    )
+                    .child(
+                        div()
+                            .id("file-preview-folder")
+                            .h(px(22.0))
+                            .px(px(8.0))
+                            .flex()
+                            .items_center()
+                            .rounded(px(4.0))
+                            .border_1()
+                            .border_color(colors.line)
+                            .text_size(px(theme::FS_2XS))
+                            .text_color(colors.text_2)
+                            .cursor_pointer()
+                            .hover(move |style| style.bg(colors.selected))
+                            .child("Show in folder")
+                            .on_click(cx.listener({
+                                let path = path.clone();
+                                let project = preview_project.clone();
+                                move |root, _: &gpui::ClickEvent, _window, cx| {
+                                    root.show_in_folder(path.clone(), project.clone(), cx);
+                                }
+                            })),
+                    )
+                    .child(
+                        div()
+                            .id("file-preview-close")
+                            .size(px(22.0))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(4.0))
+                            .cursor_pointer()
+                            .hover(move |style| style.bg(colors.hover))
+                            .child(crate::art::glyph(crate::art::Glyph::X, 12.0, colors.text_3))
+                            .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.close_file_preview(cx))),
+                    ),
+            )
+            .child(div().text_size(px(theme::FS_2XS)).text_color(colors.text_3).truncate().child(SharedString::from(preview.path.clone())))
+            .child(body);
+        Some(
+            div()
+                .id("file-preview-backdrop")
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(colors.scrim)
+                .on_mouse_down(gpui::MouseButton::Left, cx.listener(|root, _: &gpui::MouseDownEvent, _window, cx| {
+                    root.close_file_preview(cx);
+                }))
+                .child(
+                    div()
+                        .on_mouse_down(gpui::MouseButton::Left, cx.listener(|_, _: &gpui::MouseDownEvent, _window, cx| {
+                            // A click inside the card is not a click on the backdrop.
+                            cx.stop_propagation();
+                        }))
+                        .child(card),
+                )
+                .into_any_element(),
+        )
+    }
+
+    /// One picture, enlarged, over the window (`MediaPreview`'s viewer).
+    fn render_image_viewer(&mut self, colors: Colors, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let key = self.viewer.clone()?;
+        let image = self.message_images.get(&key).cloned()?;
+        let name = key
+            .split(':')
+            .next_back()
+            .map(|index| format!("Image {index}"))
+            .unwrap_or_else(|| "Image".to_owned());
+        Some(
+            div()
+                .id("image-viewer")
+                .absolute()
+                .top_0()
+                .left_0()
+                .size_full()
+                .flex()
+                .flex_col()
+                .items_center()
+                .justify_center()
+                .gap(px(8.0))
+                .bg(colors.scrim)
+                .cursor_pointer()
+                .child(
+                    div()
+                        .max_w(px(900.0))
+                        .max_h(px(700.0))
+                        .rounded(px(theme::RADIUS_MD))
+                        .overflow_hidden()
+                        .child(gpui::img(image).max_h(px(680.0))),
+                )
+                .child(div().text_size(px(theme::FS_XS)).text_color(colors.text_2).child(SharedString::from(format!("{name} · click to close"))))
+                .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| {
+                    root.viewer = None;
+                    cx.notify();
+                }))
+                .into_any_element(),
+        )
     }
 }
 

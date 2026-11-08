@@ -24,6 +24,22 @@ pub fn backoff_for(attempt: usize) -> Option<Duration> {
 /// How often the worker looks at the daemon process for an exit it did not ask for.
 const EXIT_POLL: Duration = Duration::from_millis(400);
 
+/// One image sent with a prompt: the path the daemon reads and the name the
+/// transcript shows (`ComposerAttachment` once it is ready).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PromptAttachment {
+    pub path: String,
+    pub name: String,
+}
+
+/// How a prompt travels: straight to the turn, or into the conversation's queue
+/// because a turn is already running (`busySend.ts`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PromptMethod {
+    Prompt,
+    Queue,
+}
+
 /// What the window asks the daemon to do. Every one of these is an RPC the
 /// React app makes the same way, through `tauri.ts`.
 pub enum Command {
@@ -34,9 +50,28 @@ pub enum Command {
     LoadSession { session_id: String },
     /// Who is hired where: one `project.members` call per project.
     LoadProjectMembers { project_ids: Vec<String> },
-    SendPrompt { session_id: String, text: String },
+    SendPrompt {
+        session_id: String,
+        text: String,
+        attachments: Vec<PromptAttachment>,
+        method: PromptMethod,
+        /// This send's own id, so a resend after a timeout returns the message
+        /// that already went instead of sending it twice.
+        client_message_id: String,
+    },
     CancelTurn { session_id: String },
-    ReplyPermission { permission_id: String, choice: String },
+    /// One card's answer: a choice, a question's answers, or a remembered rule.
+    ReplyPermission {
+        permission_id: String,
+        choice: String,
+        answers: Option<Value>,
+        remember: bool,
+        remember_project: bool,
+    },
+    /// Any other RPC the window drives by hand. The answer comes back as
+    /// `Update::Rpc` under the same `tag`, so the window interprets only the
+    /// calls it made.
+    Rpc { tag: String, method: String, params: Value },
     /// `project.create`: a new project from the window's dialog.
     CreateProject { name: String, path: Option<String> },
     /// `project.hire`: a preset into projects, or an employee already on the team.
@@ -91,6 +126,10 @@ pub enum Update {
     ProposalDecided,
     DaemonVersion(String),
     Models { runtime_id: String, models: Vec<crate::ui::root::ModelChoice> },
+    /// The answer to a `Command::Rpc`, under the tag the window sent.
+    Rpc { tag: String, value: Value },
+    /// A `Command::Rpc` the daemon refused, in words for the owner.
+    RpcFailed { tag: String, message: String },
     Sent,
     Cancelled,
     PermissionReplied,
@@ -343,16 +382,46 @@ async fn handle_command(
             load_members(client, updates, &project_ids).await;
             true
         }
-        Command::SendPrompt { session_id, text } => {
-            report(client, updates, "session.prompt", json!({ "sessionId": session_id, "text": text }), |_| Update::Sent).await;
+        Command::SendPrompt { session_id, text, attachments, method, client_message_id } => {
+            let mut params = json!({ "sessionId": session_id, "text": text, "clientMessageId": client_message_id });
+            if !attachments.is_empty() {
+                params["attachments"] = json!(attachments
+                    .iter()
+                    .map(|attachment| json!({ "path": attachment.path, "name": attachment.name }))
+                    .collect::<Vec<_>>());
+            }
+            let rpc = match method {
+                PromptMethod::Prompt => "session.prompt",
+                PromptMethod::Queue => "session.queue.add",
+            };
+            report(client, updates, rpc, params, |_| Update::Sent).await;
             true
         }
         Command::CancelTurn { session_id } => {
             report(client, updates, "session.cancel", json!({ "sessionId": session_id }), |_| Update::Cancelled).await;
             true
         }
-        Command::ReplyPermission { permission_id, choice } => {
-            report(client, updates, "permission.reply", json!({ "permissionId": permission_id, "choice": choice }), |_| Update::PermissionReplied).await;
+        Command::ReplyPermission { permission_id, choice, answers, remember, remember_project } => {
+            let mut params = json!({ "permissionId": permission_id, "choice": choice });
+            if let Some(answers) = answers {
+                params["answers"] = answers;
+            }
+            if remember {
+                params["remember"] = json!(true);
+                params["rememberScope"] = json!(if remember_project { "project" } else { "bot" });
+            }
+            report(client, updates, "permission.reply", params, |_| Update::PermissionReplied).await;
+            true
+        }
+        Command::Rpc { tag, method, params } => {
+            match client.rpc(&method, params).await {
+                Ok(value) => {
+                    let _ = updates.send(Update::Rpc { tag, value }).await;
+                }
+                Err(error) => {
+                    let _ = updates.send(Update::RpcFailed { tag, message: describe(&method, error) }).await;
+                }
+            }
             true
         }
         Command::CreateProject { name, path } => {
@@ -424,7 +493,7 @@ async fn handle_command(
                                     .and_then(Value::as_str)
                                     .filter(|label| !label.is_empty())
                                     .unwrap_or(id);
-                                Some(crate::ui::root::ModelChoice { id: id.to_owned(), label: label.to_owned() })
+                                Some(crate::ui::root::ModelChoice { id: id.to_owned(), label: label.to_owned(), ..Default::default() })
                             })
                             .collect::<Vec<_>>()
                     })

@@ -43,8 +43,26 @@ pub fn key_bindings() -> Vec<KeyBinding> {
 /// The most lines the composer grows to before it stops growing.
 pub const MAX_LINES: usize = 8;
 
+// The hooks take `&mut TextInput` **and** `&mut App`, and that shape is the
+// point. A hook runs while this box is leased (an input listener holds it), so
+// it must not go back through `entity.update(..)` on the same box: GPUI takes the
+// entity out of its map while it is leased, and the second call panics with
+// "cannot update ... while it is already being updated", which aborts the
+// window. Passing the box itself lets a hook read and edit it directly; the
+// owner is notified through `Root`, which is a different entity.
+
 /// What Enter does with no shift: the window sends the message.
-pub type SubmitHandler = Box<dyn Fn(&mut Window, &mut App) + 'static>;
+pub type SubmitHandler = Box<dyn Fn(&mut TextInput, &mut Window, &mut App) + 'static>;
+
+/// A key the window wants to see before the box acts on it: the `/command` menu,
+/// the history recall and the quick switcher's arrow keys. Returning `true` means
+/// the key was used and the box must not also act on it.
+pub type KeyHook = Box<dyn Fn(&mut TextInput, &gpui::KeyDownEvent, &mut Window, &mut App) -> bool + 'static>;
+
+/// Called after the owner typed, with the new text and the caret, so a field that
+/// filters a list can redraw. It never receives the box, because the box is
+/// leased while this runs.
+pub type ChangeHook = Box<dyn Fn(&str, usize, &mut App) + 'static>;
 
 pub struct TextInput {
     focus_handle: FocusHandle,
@@ -57,6 +75,8 @@ pub struct TextInput {
     font_size: Pixels,
     /// Enter with no shift: the window sends the message.
     on_submit: Option<SubmitHandler>,
+    on_key: Option<KeyHook>,
+    on_change: Option<ChangeHook>,
     lines: Vec<ShapedLine>,
     bounds: Option<Bounds<Pixels>>,
     is_selecting: bool,
@@ -74,6 +94,8 @@ impl TextInput {
             line_height,
             font_size,
             on_submit: None,
+            on_key: None,
+            on_change: None,
             lines: Vec::new(),
             bounds: None,
             is_selecting: false,
@@ -82,6 +104,20 @@ impl TextInput {
 
     pub fn set_on_submit(&mut self, submit: SubmitHandler) {
         self.on_submit = Some(submit);
+    }
+
+    pub fn set_on_key(&mut self, hook: KeyHook) {
+        self.on_key = Some(hook);
+    }
+
+    pub fn set_on_change(&mut self, hook: ChangeHook) {
+        self.on_change = Some(hook);
+    }
+
+    /// Where the caret is, in bytes, which is what the `/command` menu and the
+    /// history recall read.
+    pub fn cursor(&self) -> usize {
+        self.cursor
     }
 
     pub fn text(&self) -> &str {
@@ -97,21 +133,57 @@ impl TextInput {
         self.content.trim().is_empty()
     }
 
+    /// Replace the whole text, as the window does (a recalled prompt, a rename
+    /// field, the quick switcher's empty box). This is not the owner typing, so
+    /// it does not call the change hook: the caller is already in control and may
+    /// be inside this box's own update.
     pub fn set_text(&mut self, text: String, cx: &mut Context<Self>) {
-        self.content = text;
-        self.cursor = self.content.len();
-        self.anchor = self.cursor;
+        self.set_text_quiet(text);
         cx.notify();
     }
 
+    /// The same, for a caller that already holds the box and will notify itself.
+    pub fn set_text_quiet(&mut self, text: String) {
+        self.content = text;
+        self.cursor = self.content.len();
+        self.anchor = self.cursor;
+        self.marked_range = None;
+    }
+
+    /// Remove one byte range, for a `/command` chip that is taken back out.
+    pub fn delete_range_quiet(&mut self, start: usize, end: usize) {
+        let start = start.min(self.content.len());
+        let end = end.clamp(start, self.content.len());
+        let mut content = String::with_capacity(self.content.len());
+        content.push_str(&self.content[..start]);
+        content.push_str(&self.content[end..]);
+        self.content = content;
+        self.cursor = start;
+        self.anchor = start;
+        self.marked_range = None;
+    }
+
+    /// Tell the owner of this field that the owner typed. Never through the field
+    /// itself: the field is leased by the caller while this runs.
+    fn changed(&self, cx: &mut App) {
+        if let Some(change) = self.on_change.as_ref() {
+            change(&self.content, self.cursor, cx);
+        }
+    }
+
     pub fn clear(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.clear_quiet();
+        let _ = window;
+        cx.notify();
+    }
+
+    /// Empty the box without notifying, for a caller that holds it.
+    pub fn clear_quiet(&mut self) {
         self.content.clear();
         self.cursor = 0;
         self.anchor = 0;
         self.marked_range = None;
         self.lines.clear();
-        let _ = window;
-        cx.notify();
     }
 
     /// The number of explicit lines, which is how tall the box grows.
@@ -328,6 +400,7 @@ impl EntityInputHandler for TextInput {
         self.cursor = cursor;
         self.anchor = cursor;
         self.marked_range = None;
+        self.changed(cx);
         cx.notify();
     }
 
@@ -533,7 +606,7 @@ impl Element for TextElement {
 
 impl Render for TextInput {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let submit = self.on_submit.is_some();
+        let submit = self.on_submit.is_some() || self.on_key.is_some();
         div()
             .flex()
             .flex_col()
@@ -560,19 +633,35 @@ impl Render for TextInput {
             .on_mouse_move(cx.listener(Self::on_mouse_move))
             .when(submit, |this| {
                 this.on_key_down(cx.listener(|input, event: &gpui::KeyDownEvent, window, cx| {
+                    // A hook is taken out of the box so it can be handed the box
+                    // itself (it is leased right now, so it must not go back
+                    // through the entity); it goes straight back afterwards.
+                    if let Some(hook) = input.on_key.take() {
+                        let used = hook(input, event, window, cx);
+                        input.on_key = Some(hook);
+                        if used {
+                            return;
+                        }
+                    }
                     if event.keystroke.key == "enter" && !event.keystroke.modifiers.shift {
                         if let Some(submit) = input.on_submit.take() {
-                            submit(window, cx);
+                            submit(input, window, cx);
                             input.on_submit = Some(submit);
                         }
                     }
                 }))
             })
-            .child(TextElement {
-                input: cx.entity(),
-                placeholder_color: crate::theme::haze_dark().text_3,
-                cursor_color: crate::theme::haze_dark().text_1,
-                selection_color: crate::theme::haze_dark().selected_strong,
+            .child({
+                // The window's own colours, not a fixed dark set: the placeholder
+                // was nearly invisible on a light background. It is `text_3` at
+                // full strength, so it reads as a hint rather than as text.
+                let current = crate::theme::current_colors();
+                TextElement {
+                    input: cx.entity(),
+                    placeholder_color: current.placeholder,
+                    cursor_color: current.text_1,
+                    selection_color: current.selected_strong,
+                }
             })
     }
 }

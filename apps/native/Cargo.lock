@@ -566,6 +566,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite",
  "uuid",
+ "windows 0.57.0",
  "windows-sys 0.59.0",
 ]
 

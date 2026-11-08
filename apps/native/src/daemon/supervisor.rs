@@ -14,7 +14,11 @@ use std::time::Duration;
 use super::ready::{parse_ready, ReadyError};
 
 pub const DAEMON_EXE: &str = "bitbotsd.exe";
-const BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(10);
+// A copy of a large installed database opens and re-creates its read indexes on
+// the first start, which measured 20 seconds on an 804 MB database; the line is
+// still a timeout, not a hang, and a daemon that starts normally answers in
+// seconds.
+const BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(45);
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -148,7 +152,7 @@ pub fn spawn_daemon(executable: &Path, db_path: &Path) -> Result<DaemonProcess, 
     };
     let stderr = child.stderr.take();
 
-    // The line is read on its own thread so the 10 second wait is a timeout and
+    // The line is read on its own thread so the 45 second wait is a timeout and
     // not a hang. That thread keeps the pipe drained afterwards: a daemon whose
     // stdout buffer fills would block.
     let (bootstrap_tx, bootstrap_rx) = std::sync::mpsc::sync_channel(1);
@@ -181,7 +185,7 @@ pub fn spawn_daemon(executable: &Path, db_path: &Path) -> Result<DaemonProcess, 
         Err(_) => {
             let _ = child.kill();
             let _ = child.wait();
-            return Err("Daemon did not send its bootstrap line within 10 seconds.".to_owned());
+            return Err("Daemon did not send its bootstrap line within 45 seconds.".to_owned());
         }
     };
 

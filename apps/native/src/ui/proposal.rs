@@ -13,38 +13,206 @@ use crate::theme::{self, Colors};
 use crate::ui::root::Root;
 
 impl Root {
-    /// The card for a waiting proposal, or the plain "open this in Bitbots" line.
+    /// The card for a waiting proposal. Every kind the daemon can carry gets a
+    /// card with the decision it offers: `merge` also offers Discard, and a
+    /// `task` that opens a conversation approves into it.
     pub(crate) fn render_proposal(&mut self, permission: &Permission, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
-        if permission.is_hire_proposal() {
-            self.render_hire_proposal(permission, colors, cx)
-        } else if permission.is_bot_proposal() {
-            self.render_bot_proposal(permission, colors, cx)
-        } else {
-            div()
-                .mx(px(12.0))
-                .mb(px(8.0))
-                .p(px(10.0))
-                .flex()
-                .flex_col()
-                .gap(px(6.0))
-                .rounded(px(theme::RADIUS_MD))
-                .bg(colors.raised)
-                .border_1()
-                .border_color(colors.line_strong)
-                .child(
-                    div()
-                        .text_size(px(theme::FS_SM))
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(SharedString::from(permission.title.clone().unwrap_or_else(|| "The CEO proposes".to_owned()))),
-                )
-                .child(
-                    div()
-                        .text_size(px(theme::FS_XS))
-                        .text_color(colors.text_3)
-                        .child("Open this in Bitbots to answer."),
-                )
-                .into_any_element()
+        let kind = permission.proposal_kind().unwrap_or("").to_owned();
+        match kind.as_str() {
+            "hire" => self.render_hire_proposal(permission, colors, cx),
+            "bot" => self.render_bot_proposal(permission, colors, cx),
+            "project" => self.render_project_proposal(permission, colors, cx),
+            "task" => self.render_task_proposal(permission, colors, cx),
+            "playbook" => self.render_text_proposal(permission, "Update its playbook", "text", colors, cx),
+            "profile" => self.render_text_proposal(permission, "Remember something about you", "value", colors, cx),
+            "permission" => self.render_permission_proposal(permission, colors, cx),
+            "merge" => self.render_merge_proposal(permission, colors, cx),
+            _ => self.render_text_proposal(permission, "The CEO proposes", "reason", colors, cx),
         }
+    }
+
+    /// The shell every proposal card shares: who proposes, what it is, the body
+    /// and the decisions.
+    #[allow(clippy::too_many_arguments)]
+    fn proposal_shell(
+        &mut self,
+        permission: &Permission,
+        title: &str,
+        colors: Colors,
+        cx: &mut Context<Self>,
+        body: AnyElement,
+        approve_label: &str,
+        reject_label: &str,
+        discard: bool,
+    ) -> AnyElement {
+        let ceo = self
+            .snapshot()
+            .and_then(|snapshot| snapshot.manager())
+            .map(|agent| agent.name.clone())
+            .unwrap_or_else(|| "The CEO".to_owned());
+        let proposal_id = permission.proposal.as_ref().map(|proposal| proposal.id.clone()).unwrap_or_default();
+        let reject_id = proposal_id.clone();
+        let discard_id = proposal_id.clone();
+        let approve_id = proposal_id.clone();
+        let mut actions = div().flex().items_center().justify_end().gap(px(8.0));
+        if discard {
+            actions = actions.child(self.ghost_button("Discard", &format!("discard-{proposal_id}"), colors, cx, move |root, cx| {
+                root.decide_proposal_with(discard_id.clone(), "reject", true, cx);
+            }));
+        }
+        actions = actions
+            .child(self.ghost_button(reject_label, &format!("reject-{proposal_id}"), colors, cx, move |root, cx| {
+                root.decide_proposal(reject_id.clone(), false, cx)
+            }))
+            .child(self.small_primary(approve_label, &format!("approve-{proposal_id}"), colors, cx, move |root, cx| {
+                root.decide_proposal(approve_id.clone(), true, cx)
+            }));
+        div()
+            .mx(px(12.0))
+            .mb(px(8.0))
+            .p(px(12.0))
+            .flex()
+            .flex_col()
+            .gap(px(8.0))
+            .rounded(px(theme::RADIUS_MD))
+            .bg(colors.raised)
+            .border_1()
+            .border_color(colors.line_strong)
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(div().text_size(px(theme::FS_2XS)).text_color(colors.text_3).child(SharedString::from(format!("{ceo} proposes"))))
+                    .child(
+                        div()
+                            .text_size(px(theme::FS_SM))
+                            .font_weight(FontWeight::MEDIUM)
+                            .child(SharedString::from(title.to_owned())),
+                    ),
+            )
+            .child(body)
+            .child(actions)
+            .into_any_element()
+    }
+
+    /// A labelled line inside a proposal card.
+    fn proposal_field(&self, label: &str, value: &str, colors: Colors, mono: bool) -> AnyElement {
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(1.0))
+            .child(div().text_size(px(theme::FS_2XS)).text_color(colors.text_3).child(SharedString::from(label.to_owned())))
+            .child(
+                div()
+                    .text_size(px(theme::FS_XS))
+                    .text_color(colors.text_1)
+                    .when(mono, |this| this.font_family(theme::MONO_FONT))
+                    .whitespace_normal()
+                    .child(SharedString::from(if value.trim().is_empty() { "—".to_owned() } else { value.to_owned() })),
+            )
+            .into_any_element()
+    }
+
+    fn render_project_proposal(&mut self, permission: &Permission, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let Some(proposal) = permission.proposal.clone() else { return div().into_any_element() };
+        let folder = proposal.text("folder");
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(self.proposal_field("Name", proposal.text("name"), colors, false))
+            .child(self.proposal_field("What it is for", proposal.text("description"), colors, false));
+        body = body.child(self.proposal_field("Folder", folder, colors, true));
+        if folder.trim().is_empty() {
+            body = body.child(
+                div()
+                    .text_size(px(theme::FS_2XS))
+                    .text_color(colors.text_3)
+                    .child("The proposal names no folder, so the project keeps its conversations in the bot's own."),
+            );
+        }
+        self.proposal_shell(permission, "Create a project", colors, cx, body.into_any_element(), "Approve", "Reject", false)
+    }
+
+    fn render_task_proposal(&mut self, permission: &Permission, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let Some(proposal) = permission.proposal.clone() else { return div().into_any_element() };
+        let body = div()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(self.proposal_field("For", proposal.text("botName"), colors, false))
+            .child(self.proposal_field("Project", proposal.text("projectName"), colors, false))
+            .child(self.proposal_field("The task", proposal.text("brief"), colors, false))
+            .child(self.proposal_field("Done when", proposal.text("doneGoal"), colors, false));
+        self.proposal_shell(permission, "Hand a task to a bot", colors, cx, body.into_any_element(), "Approve", "Reject", false)
+    }
+
+    fn render_permission_proposal(&mut self, permission: &Permission, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let Some(proposal) = permission.proposal.clone() else { return div().into_any_element() };
+        let mode = proposal.text("mode");
+        let body = div()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(self.proposal_field("Conversation", proposal.text("conversation"), colors, true))
+            .child(self.proposal_field("Permission", if mode == "auto" { "Auto" } else { "Ask first" }, colors, false))
+            .child(
+                div()
+                    .text_size(px(theme::FS_2XS))
+                    .text_color(colors.text_3)
+                    .child("Changes this bot's permission for all its conversations, from their next turn. Full access can never be set this way."),
+            );
+        self.proposal_shell(permission, "Change this bot's approvals", colors, cx, body.into_any_element(), "Approve", "Reject", false)
+    }
+
+    fn render_merge_proposal(&mut self, permission: &Permission, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let Some(proposal) = permission.proposal.clone() else { return div().into_any_element() };
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap(px(6.0))
+            .child(self.proposal_field("Task", proposal.text("taskTitle"), colors, false))
+            .child(self.proposal_field("Bot", proposal.text("botName"), colors, false))
+            .child(self.proposal_field("Branch", proposal.text("branch"), colors, true))
+            .child(self.proposal_field("Merge into", proposal.text("baseBranch"), colors, true))
+            .child(self.proposal_field("Changes", proposal.text("diffSummary"), colors, false));
+        let files: Vec<String> = proposal
+            .payload
+            .as_ref()
+            .and_then(|payload| payload.get("files"))
+            .and_then(|files| files.as_array())
+            .map(|files| files.iter().filter_map(|file| file.as_str().map(str::to_owned)).collect())
+            .unwrap_or_default();
+        if !files.is_empty() {
+            body = body.child(self.proposal_field("Files", &files.join("\n"), colors, true));
+        }
+        body = body.child(
+            div()
+                .text_size(px(theme::FS_2XS))
+                .text_color(colors.text_3)
+                .child("The task ran in its own copy of the project so it could not clash with other work. Merging brings its changes back and removes the copy."),
+        );
+        self.proposal_shell(permission, "Merge its work back", colors, cx, body.into_any_element(), "Merge", "Keep branch", true)
+    }
+
+    /// A card whose body is one field: a playbook's text, a remembered fact, or a
+    /// proposal this window cannot lay out.
+    fn render_text_proposal(
+        &mut self,
+        permission: &Permission,
+        title: &str,
+        key: &str,
+        colors: Colors,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let Some(proposal) = permission.proposal.clone() else { return div().into_any_element() };
+        let mut body = div().flex().flex_col().gap(px(6.0));
+        let reason = proposal.text("reason").to_owned();
+        if !reason.is_empty() {
+            body = body.child(div().text_size(px(theme::FS_XS)).text_color(colors.text_2).child(SharedString::from(reason)));
+        }
+        body = body.child(self.proposal_field(if key == "value" { "New value" } else { "Its proposal" }, proposal.text(key), colors, false));
+        self.proposal_shell(permission, title, colors, cx, body.into_any_element(), "Approve", "Reject", false)
     }
 
     fn card_shell(&self, title: &str, subtitle: &str, colors: Colors) -> (gpui::Div, gpui::Div) {

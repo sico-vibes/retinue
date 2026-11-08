@@ -35,6 +35,12 @@ pub fn installed_db_path() -> PathBuf {
     local_app_data().join(INSTALLED_DIR_NAME).join("bloblex.db")
 }
 
+/// The folder a pasted or dropped image is written to before it is sent: the
+/// daemon hands its path to the coding agent, exactly as the installed app does.
+pub fn attachments_dir() -> PathBuf {
+    native_data_dir().join("attachments")
+}
+
 /// Small settings file the window owns (folded projects today).
 pub fn settings_file_path() -> PathBuf {
     native_data_dir().join("native-settings.json")

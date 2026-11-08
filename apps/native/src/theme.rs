@@ -6,6 +6,8 @@
 //! Values are the CSS values, alpha included, so a later side-by-side check
 //! compares like with like.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use gpui::{rgb, rgba, Rgba};
 use serde::{Deserialize, Serialize};
 
@@ -84,6 +86,27 @@ pub struct Colors {
     pub accent: Rgba,
     /// `--scrim`: behind a dialog.
     pub scrim: Rgba,
+    /// A field's hint: `--text-3` at full strength, so a placeholder reads as a
+    /// hint on both backgrounds instead of vanishing into the light one.
+    pub placeholder: Rgba,
+}
+
+/// The colours the window is drawing with right now, for the two places that
+/// cannot be handed them: a text field's own paint and its placeholder.
+static CURRENT_IS_LIGHT: AtomicBool = AtomicBool::new(false);
+
+/// The root view says which theme it is drawing, once per frame.
+pub fn set_current_light(light: bool) {
+    CURRENT_IS_LIGHT.store(light, Ordering::Relaxed);
+}
+
+/// The colours of the last frame.
+pub fn current_colors() -> Colors {
+    if CURRENT_IS_LIGHT.load(Ordering::Relaxed) {
+        haze_light()
+    } else {
+        haze_dark()
+    }
 }
 
 /// Haze, dark (`haze.css:5-36`).
@@ -114,6 +137,7 @@ pub fn haze_dark() -> Colors {
         status_info: rgb(0x6ea8ff),
         accent: rgb(0xf3f3f2),
         scrim: rgba(0x00000052),
+        placeholder: rgb(0x8f8f8d),
     }
 }
 
@@ -146,6 +170,7 @@ pub fn haze_light() -> Colors {
         status_info: rgb(0x2f6bd6),
         accent: rgb(0x1b1b1a),
         scrim: rgba(0x00000052),
+        placeholder: rgb(0x6d6d6b),
     }
 }
 
