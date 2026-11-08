@@ -362,3 +362,17 @@ pins one, exactly as the React pill does.
   -NoNewline` joins an array with no separators and silently flattens a whole
   file into one line. Use the edit tool for multi-line work; if a script must
   touch files, write single values only (`-Raw` in, `-Raw` out).
+
+## The Haze look in GPUI (Director's look pass, 8 November 2026)
+
+- **The misty backdrop** (`src/backdrop.rs`). GPUI at the pin draws no radial gradients, so `.haze-backdrop`'s four blobs are computed with the same CSS maths (ellipse radii in vw/vh, the stop alphas, src-over, 80% opacity) into a 480×300 PNG once per theme. It is drawn as `img(..).absolute().size_full().object_fit(ObjectFit::Fill)`, the root's first child. The blobs are soft, so stretching shows no difference, and a light ordered dither prevents banding. Never paint an opaque `.bg` on the root: it hides the backdrop and the Windows Mica behind it.
+- **Inter is bundled** (`assets/fonts`, OFL). The app's `@fontsource-variable/inter` latin `.woff2` was turned into static Regular, Medium, SemiBold and Bold TTFs with fontTools' instancer, all with typographic family `Inter`. They load with `cx.text_system().add_fonts` before the first window. DirectWrite won't take a `.woff2`, and a variable font's weights aren't reliable here.
+- **Wrapped text measures without an ancestor's `max_w`.** A paragraph in a `w_full().max_w(608)` bubble wrapped at the uncapped width when measured and at 608 when painted, so every bubble came out a line short and overlapped the next row. Give text containers **explicit widths** computed from the list's real width (`RowContext::column_width`, `bubble_width()`). Keep `max_w` only on content-sized boxes holding a `StyledText` directly.
+- **Measured from the React app, not guessed:**
+  - chat column min(760, pane − 40), with 30 px above the first row and 24 px below the last;
+  - bubbles: 15/10 px padding, 18 px corners, 14 px text at a 1.6 line height, at most min(672, 80%) wide. The user bubble is `--bubble-user`, the reply `--surface-raised`;
+  - composer: at most 800 px, `--surface-input`, a 1 px `--line` border, 22 px corners, 96 px minimum height, padding 10/10/8/14. Its pills have no fill until hovered, 30 px tall, and the send button is round, 30 px;
+  - sidebar search: 34 px, 10 px corners, `--surface-raised`, a "Ctrl K" hint.
+
+  Measure with `getComputedStyle` in the browser preview before changing a size.
+- **Capturing the native window for review:** use `PrintWindow(hwnd, dc, 2)` on the process's largest *visible* window. `CopyFromScreen` captures whatever is on screen at those coordinates, including the owner's other windows; don't use it.

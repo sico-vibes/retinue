@@ -28,7 +28,19 @@ pub const RADIUS_SM: f32 = 7.0;
 pub const RADIUS_MD: f32 = 10.0;
 pub const RADIUS_LG: f32 = 14.0;
 
-pub const UI_FONT: &str = "Segoe UI Variable Text";
+/// `--font-ui`: Inter, bundled (`assets/fonts`), as the app ships it.
+pub const UI_FONT: &str = "Inter";
+
+/// Inter's static weights, converted from the app's own `@fontsource-variable/inter`
+/// (latin, OFL; `assets/fonts/LICENSE-Inter.txt`).
+pub fn bundled_fonts() -> Vec<std::borrow::Cow<'static, [u8]>> {
+    vec![
+        std::borrow::Cow::Borrowed(include_bytes!("../assets/fonts/Inter-Regular.ttf").as_slice()),
+        std::borrow::Cow::Borrowed(include_bytes!("../assets/fonts/Inter-Medium.ttf").as_slice()),
+        std::borrow::Cow::Borrowed(include_bytes!("../assets/fonts/Inter-SemiBold.ttf").as_slice()),
+        std::borrow::Cow::Borrowed(include_bytes!("../assets/fonts/Inter-Bold.ttf").as_slice()),
+    ]
+}
 pub const MONO_FONT: &str = "Cascadia Mono";
 
 /// The version this build reports on the About page.

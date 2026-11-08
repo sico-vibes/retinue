@@ -130,6 +130,17 @@ pub struct RowContext {
     /// The row whose actions are showing.
     pub hovered: Option<String>,
     pub root: gpui::WeakEntity<Root>,
+    /// The chat column's width in pixels, settled from the list's own width.
+    /// Bubbles take explicit widths from it: GPUI measures wrapped text without
+    /// an ancestor's `max_w`, so a capped bubble measured a line short.
+    pub column_width: f32,
+}
+
+impl RowContext {
+    /// `.message-content`: min(42rem, 80%) of the column.
+    pub fn bubble_width(&self) -> f32 {
+        (self.column_width * 0.8).clamp(120.0, 672.0)
+    }
 }
 
 /// An image's thumbnail, or the placeholder that says it is loading.
@@ -265,6 +276,21 @@ where
 }
 
 /// Draw one row.
+/// `.chat-column` (`shell.css:190`): messages sit in a centred column.
+pub const CHAT_COLUMN_WIDTH: f32 = 760.0;
+/// `.message-bubble`: 18px corners, 1.6 line height.
+const BUBBLE_RADIUS: f32 = 18.0;
+const MESSAGE_LINE_HEIGHT: f32 = 1.6;
+
+/// A reply short and plain enough to be as wide as its words.
+fn is_short_reply(body: &str) -> bool {
+    let trimmed = body.trim();
+    !trimmed.contains('\n')
+        && trimmed.chars().count() <= 90
+        && !trimmed.starts_with(['#', '>', '-', '*', '|', '`'])
+        && !trimmed.contains("](")
+}
+
 pub fn render_row(row: &Row, ctx: &RowContext) -> AnyElement {
     let colors = ctx.colors;
     match row {
@@ -272,7 +298,7 @@ pub fn render_row(row: &Row, ctx: &RowContext) -> AnyElement {
         Row::Notice(text) => div()
             .w_full()
             .min_w(px(0.0))
-            .px(px(16.0))
+            .px(px(4.0))
             .py(px(3.0))
             .text_size(px(theme::FS_XS))
             .text_color(colors.text_3)
@@ -282,7 +308,7 @@ pub fn render_row(row: &Row, ctx: &RowContext) -> AnyElement {
         Row::Tool(text) => div()
             .w_full()
             .min_w(px(0.0))
-            .px(px(16.0))
+            .px(px(4.0))
             .py(px(3.0))
             .flex()
             .items_center()
@@ -293,15 +319,16 @@ pub fn render_row(row: &Row, ctx: &RowContext) -> AnyElement {
         Row::User { text, images, files, id, .. } => {
             let hovered = ctx.hovered.as_deref() == Some(id.as_str());
             let mut bubble = div()
-                .max_w(px(560.0))
+                .max_w(px(ctx.bubble_width()))
                 .min_w(px(0.0))
-                .px(px(11.0))
-                .py(px(7.0))
+                .px(px(15.0))
+                .py(px(10.0))
                 .flex()
                 .flex_col()
                 .gap(px(6.0))
-                .rounded(px(theme::RADIUS_MD))
+                .rounded(px(BUBBLE_RADIUS))
                 .bg(colors.bubble_user)
+                .line_height(px(theme::FS_MD * MESSAGE_LINE_HEIGHT))
                 .text_size(px(theme::FS_MD))
                 .text_color(colors.text_1)
                 .whitespace_normal();
@@ -325,8 +352,8 @@ pub fn render_row(row: &Row, ctx: &RowContext) -> AnyElement {
                 .id(SharedString::from(format!("row-{id}")))
                 .w_full()
                 .min_w(px(0.0))
-                .px(px(16.0))
-                .py(px(4.0))
+                .pt(px(14.0))
+                .pb(px(6.0))
                 .flex()
                 .flex_col()
                 .items_end()
@@ -339,24 +366,43 @@ pub fn render_row(row: &Row, ctx: &RowContext) -> AnyElement {
         Row::Assistant { text, id, .. } => {
             let hovered = ctx.hovered.as_deref() == Some(id.as_str());
             let (body, files) = split_file_reference(text);
+            // `.message-bubble` on Haze's raised surface. A one-line reply is as
+            // wide as its words (fit-content); anything with blocks takes the
+            // column's width, because its blocks need a settled width to wrap.
+            let short = is_short_reply(&body);
             let mut column = div()
-                .w_full()
                 .min_w(px(0.0))
+                .max_w(px(ctx.bubble_width()))
+                .px(px(15.0))
+                .py(px(10.0))
+                .rounded(px(BUBBLE_RADIUS))
+                .bg(colors.raised)
+                .text_size(px(theme::FS_MD))
+                .line_height(px(theme::FS_MD * MESSAGE_LINE_HEIGHT))
+                .text_color(colors.text_1)
                 .flex()
                 .flex_col()
-                .gap(px(4.0))
-                .child(render_markdown(&body, ctx));
+                .gap(px(4.0));
+            column = if short {
+                column.child(styled_inline(body.trim(), colors))
+            } else {
+                column.w(px(ctx.bubble_width())).child(render_markdown(&body, ctx))
+            };
             if let Some(file) = files {
-                column = column.child(div().px(px(2.0)).child(file_chip(&file, ctx)));
+                column = column.child(div().child(file_chip(&file, ctx)));
             }
             div()
                 .id(SharedString::from(format!("row-{id}")))
                 .w_full()
                 .min_w(px(0.0))
-                .px(px(16.0))
-                .py(px(5.0))
+                .pt(px(8.0))
+                .pb(px(6.0))
                 .flex()
                 .flex_col()
+                // Only a one-line reply is sized to its words; a long one is
+                // stretched, so its text wraps against a settled width (sized to
+                // its content, the bubble measured one line short).
+                .when(short, |this| this.items_start())
                 .gap(px(2.0))
                 .on_hover(cx_hover(ctx, id.clone()))
                 .when(hovered, |this| this.child(div().flex().items_center().gap(px(8.0)).child(actions(row, ctx))))
@@ -767,7 +813,7 @@ fn inline_text(text: &str, colors: Colors, size: f32, color: Rgba) -> gpui::Div 
     // paragraph. Only for a parent whose width is settled (a column, a row with
     // `flex_1`); a content-sized bubble takes `styled_inline` itself.
     div()
-        .line_height(px(size * 1.65))
+        .line_height(px(size * MESSAGE_LINE_HEIGHT))
         .text_size(px(size))
         .text_color(color)
         .child(styled_inline(text, colors))

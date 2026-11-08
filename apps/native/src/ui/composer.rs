@@ -769,7 +769,8 @@ impl Root {
     pub(crate) fn render_composer(&mut self, colors: Colors, session: Option<&Session>, approvals_waiting: bool, cx: &mut Context<Self>) -> AnyElement {
         let busy = session_busy(session);
         let queue = session.and_then(|session| self.snapshot().map(|snapshot| snapshot.queue(&session.id)));
-        let mut column = div().flex_none().px(px(12.0)).pb(px(12.0)).pt(px(6.0)).flex().flex_col().gap(px(6.0));
+        // `.composer-wrap`: min(800px, 100% - 40px), centred, 6px above and 14px below.
+        let mut column = div().w_full().max_w(px(COMPOSER_WIDTH)).flex().flex_col().gap(px(6.0));
 
         if let Some(queue) = queue.as_ref() {
             if !queue.items.is_empty() {
@@ -793,7 +794,6 @@ impl Root {
         } else {
             "Enter sends · Shift+Enter adds a line · paste an image"
         };
-        let send_label = if busy { "Send later" } else { "Send" };
 
         let mut controls = div().flex().items_center().gap(px(4.0)).flex_wrap();
         if let Some(session) = session {
@@ -804,36 +804,42 @@ impl Root {
         }
         controls = controls.child(div().flex_1());
         controls = controls.child(
+            // The app's round send button: an arrow, or a clock while the
+            // message would wait for the running turn.
             div()
                 .id("send-message")
-                .h(px(26.0))
-                .px(px(10.0))
+                .size(px(30.0))
+                .flex_none()
                 .flex()
                 .items_center()
-                .rounded(px(theme::RADIUS_SM))
+                .justify_center()
+                .rounded(px(15.0))
                 .bg(colors.accent)
-                .text_color(colors.text_inverse)
-                .text_size(px(theme::FS_XS))
-                .font_weight(FontWeight::MEDIUM)
                 .cursor_pointer()
-                .hover(|style| style.bg(colors.selected_strong))
-                .active(|style| style.bg(colors.selected))
-                .child(send_label)
+                .hover(move |style| style.opacity(0.88))
+                .active(move |style| style.opacity(0.76))
+                .child(art::glyph(if busy { Glyph::CLOCK } else { Glyph::ARROW_UP }, 15.0, colors.text_inverse))
                 .on_click(cx.listener(|root, _: &gpui::ClickEvent, window, cx| root.send(window, cx))),
         );
 
-        column
-            .child(
+        let column = column.child(
+                // `.composer-box` (composer.css:9, Haze's input surface): 22px
+                // corners, a hairline border and the 96px resting height.
                 div()
-                    .p(px(8.0))
+                    .min_h(px(96.0))
+                    .pt(px(10.0))
+                    .pr(px(10.0))
+                    .pb(px(8.0))
+                    .pl(px(14.0))
                     .flex()
                     .flex_col()
+                    .justify_between()
                     .gap(px(6.0))
-                    .rounded(px(theme::RADIUS_LG))
-                    .bg(colors.panel)
+                    .rounded(px(22.0))
+                    .bg(colors.input)
                     .border_1()
-                    .border_color(colors.line_strong)
-                    .child(div().min_h(px(36.0)).child(self.composer.clone()))
+                    .border_color(colors.line)
+                    .child(div().min_h(px(36.0)).text_size(px(theme::FS_MD)).child(self.composer.clone()))
                     .child(
                         div()
                             .flex()
@@ -850,7 +856,16 @@ impl Root {
                             )
                             .child(controls),
                     ),
-            )
+            );
+        div()
+            .flex_none()
+            .w_full()
+            .px(px(20.0))
+            .pt(px(6.0))
+            .pb(px(14.0))
+            .flex()
+            .justify_center()
+            .child(column)
             .into_any_element()
     }
 
@@ -901,18 +916,18 @@ impl Root {
         let title = detail.map(|(_, detail)| detail.to_owned());
         div()
             .id(SharedString::from(format!("pill-{id}")))
-            .h(px(26.0))
+            // `.composer-execution-pill`: no fill until hovered, 30px tall.
+            .h(px(30.0))
             .px(px(8.0))
             .flex()
             .items_center()
-            .gap(px(5.0))
-            .rounded(px(theme::RADIUS_SM))
-            .bg(colors.raised)
+            .gap(px(6.0))
+            .rounded(px(15.0))
             .text_color(colors.text_2)
             .text_size(px(theme::FS_XS))
             .cursor_pointer()
-            .hover(move |style| style.bg(colors.selected).text_color(colors.text_1))
-            .active(move |style| style.bg(colors.selected_strong))
+            .hover(move |style| style.bg(colors.hover).text_color(colors.text_1))
+            .active(move |style| style.bg(colors.selected))
             .when_some(detail, |this, (glyph, _)| this.child(art::glyph(glyph, 11.0, colors.text_3)))
             .child(div().max_w(px(150.0)).truncate().child(SharedString::from(label.to_owned())))
             .child(art::glyph(Glyph::CHEVRON_DOWN, 10.0, colors.text_3))
@@ -1341,6 +1356,10 @@ pub fn question_answers(
     }
     Some(serde_json::Value::Object(answers))
 }
+
+
+/// `.composer-wrap` (`shell.css:260`): the composer never grows past 800px.
+const COMPOSER_WIDTH: f32 = 800.0;
 
 #[cfg(test)]
 mod tests {

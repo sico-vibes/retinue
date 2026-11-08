@@ -7,6 +7,7 @@
 //! windows.
 
 mod art;
+mod backdrop;
 mod companion;
 mod daemon;
 mod dictation;
@@ -33,6 +34,11 @@ fn main() {
     // a crash looks like a silent quit.
     trace::install_panic_hook();
     Application::new().run(|cx: &mut App| {
+        // Inter, the app's own UI face (`ui/theme.css`), bundled as static
+        // weights so the window never depends on what Windows has installed.
+        if let Err(error) = cx.text_system().add_fonts(theme::bundled_fonts()) {
+            trace::log(format!("fonts: Inter could not be loaded ({error}); Segoe UI stands in"));
+        }
         cx.bind_keys(ui::text_input::key_bindings());
         cx.bind_keys(ui::search::key_bindings());
 

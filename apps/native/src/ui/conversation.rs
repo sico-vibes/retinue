@@ -266,6 +266,12 @@ impl Root {
                         self.list.remeasure();
                     }
                 }
+                // `.chat-column`: min(760px, the pane less its 20px sides).
+                let column_width = if self.list_width > 0.0 {
+                    (self.list_width - 40.0).clamp(0.0, message::CHAT_COLUMN_WIDTH)
+                } else {
+                    message::CHAT_COLUMN_WIDTH
+                };
                 let rows = Rc::new(build_rows(session));
                 let light = !colors.dark;
                 let _ = light;
@@ -298,6 +304,7 @@ impl Root {
                         gpui::list(self.list.clone(), move |index, _window, _cx| {
                             let row = rows.get(index).cloned().unwrap_or(Row::Notice(String::new()));
                             let context = RowContext {
+                                column_width,
                                 colors,
                                 project_path: project_path.clone(),
                                 images: (*images).clone(),
@@ -305,7 +312,23 @@ impl Root {
                                 hovered: hovered.clone(),
                                 root: this.clone(),
                             };
-                            message::render_row(&row, &context)
+                            // Every row sits in the centred chat column, 30px of
+                            // air above the first and 24px below the last.
+                            let last = index + 1 == rows.len();
+                            div()
+                                .w_full()
+                                .px(px(20.0))
+                                .when(index == 0, |this| this.pt(px(30.0)))
+                                .when(last, |this| this.pb(px(24.0)))
+                                .flex()
+                                .justify_center()
+                                .child(
+                                    div()
+                                        .w(px(column_width))
+                                        .min_w(px(0.0))
+                                        .child(message::render_row(&row, &context)),
+                                )
+                                .into_any_element()
                         })
                         .flex_1()
                         .h_full(),

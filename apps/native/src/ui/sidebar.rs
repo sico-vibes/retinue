@@ -65,20 +65,21 @@ impl Root {
         let query = self.sidebar_search.read(cx).text().to_owned();
         div()
             .id("sidebar-search")
-            .mx(px(8.0))
-            .mt(px(8.0))
-            .h(px(30.0))
-            .px(px(9.0))
+            .mx(px(10.0))
+            .mt(px(10.0))
+            .h(px(34.0))
+            .px(px(10.0))
             .flex()
             .items_center()
-            .gap(px(7.0))
-            .rounded(px(theme::RADIUS_SM))
-            .bg(colors.input)
-            .border_1()
-            .border_color(colors.line)
-            .hover(move |style| style.border_color(colors.line_strong))
-            .child(art::glyph(Glyph::SEARCH, 12.0, colors.text_3))
+            .gap(px(8.0))
+            .rounded(px(theme::RADIUS_MD))
+            .bg(colors.raised)
+            .hover(move |style| style.bg(colors.hover))
+            .child(art::glyph(Glyph::SEARCH, 13.0, colors.text_3))
             .child(div().flex_1().min_w(px(0.0)).child(self.sidebar_search.clone()))
+            .when(query.is_empty(), |this| {
+                this.child(div().flex_none().text_size(px(theme::FS_2XS)).text_color(colors.text_3).child("Ctrl K"))
+            })
             .when(!query.is_empty(), |this| {
                 this.child(
                     div()
@@ -146,29 +147,38 @@ impl Root {
             .my(px(8.0))
             .child(
                 div()
-                    .p(px(2.0))
-                    .flex()
-                    .gap(px(2.0))
-                    .rounded(px(theme::RADIUS_MD))
-                    .bg(colors.hover)
-                    .child(projects)
-                    .child(team),
-            )
-            .child(
-                div()
-                    .id("open-team-page")
-                    .h(px(24.0))
-                    .px(px(6.0))
                     .flex()
                     .items_center()
-                    .justify_center()
-                    .rounded(px(theme::RADIUS_SM))
-                    .text_color(colors.text_2)
-                    .text_size(px(theme::FS_XS))
-                    .cursor_pointer()
-                    .hover(move |style| style.text_color(colors.text_1).bg(colors.hover))
-                    .child("Open team page")
-                    .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_team(crate::ui::root::TeamTab::Team, None, cx))),
+                    .gap(px(4.0))
+                    .child(
+                        // `.sidebar-view-switch`: 32px, 10px corners.
+                        div()
+                            .flex_1()
+                            .h(px(32.0))
+                            .p(px(2.0))
+                            .flex()
+                            .gap(px(2.0))
+                            .rounded(px(theme::RADIUS_MD))
+                            .bg(colors.hover)
+                            .child(projects)
+                            .child(team),
+                    )
+                    .child(
+                        // The Team page (hiring, the roster in full).
+                        div()
+                            .id("open-team-page")
+                            .size(px(32.0))
+                            .flex_none()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .rounded(px(theme::RADIUS_MD))
+                            .cursor_pointer()
+                            .hover(move |style| style.bg(colors.hover))
+                            .active(move |style| style.bg(colors.selected))
+                            .child(art::glyph(Glyph::USER_PLUS, 14.0, colors.text_2))
+                            .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_team(crate::ui::root::TeamTab::Team, None, cx))),
+                    ),
             )
             .into_any_element()
     }

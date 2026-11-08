@@ -381,6 +381,7 @@ glyphs! {
     CHEVRON_DOWN => "chevron-down",
     ARROW_LEFT => "arrow-left",
     ARROW_RIGHT => "arrow-right",
+    ARROW_UP => "arrow-up",
     CHECK => "check",
     PIN => "pin",
     ARCHIVE => "archive",

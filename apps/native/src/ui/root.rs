@@ -1991,9 +1991,9 @@ impl Render for Root {
                 .flex_col()
                 .items_center()
                 .justify_center()
-                .bg(colors.backdrop_fallback)
                 .font_family(theme::UI_FONT)
                 .text_color(colors.text_1)
+                .child(haze_backdrop(colors))
                 .child(self.render_first_run(first_run_error, colors, cx))
                 .into_any_element();
         }
@@ -2010,9 +2010,9 @@ impl Render for Root {
                     .flex_col()
                     .items_center()
                     .justify_center()
-                    .bg(colors.backdrop_fallback)
                     .font_family(theme::UI_FONT)
                     .text_color(colors.text_1)
+                    .child(haze_backdrop(colors))
                     .child(self.render_problem(&message, colors))
                     .into_any_element();
             }
@@ -2074,7 +2074,6 @@ impl Render for Root {
             .size_full()
             .flex()
             .flex_col()
-            .bg(colors.backdrop_fallback)
             .font_family(theme::UI_FONT)
             .text_color(colors.text_1)
             .text_size(px(theme::FS_SM))
@@ -2103,6 +2102,8 @@ impl Render for Root {
             .on_drop(cx.listener(|root, paths: &std::sync::Arc<Vec<PathBuf>>, _window, cx| {
                 root.drop_files(paths.as_ref().clone(), cx);
             }))
+            // The misty backdrop first, so every column draws over it.
+            .child(haze_backdrop(colors))
             .child(
                 div()
                     .flex_1()
@@ -2584,6 +2585,18 @@ impl Root {
     }
 }
 
+
+/// Haze's misty backdrop (`haze.css` `.haze-backdrop`), stretched under the
+/// whole window.
+fn haze_backdrop(colors: Colors) -> impl IntoElement {
+    gpui::img(crate::backdrop::haze(colors.dark))
+        .absolute()
+        .top_0()
+        .left_0()
+        .size_full()
+        .object_fit(gpui::ObjectFit::Fill)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2663,3 +2676,4 @@ mod tests {
         let _ = std::fs::remove_dir_all(&folder);
     }
 }
+
