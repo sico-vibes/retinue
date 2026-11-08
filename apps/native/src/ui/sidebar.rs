@@ -38,6 +38,7 @@ impl Root {
             .bg(colors.sidebar)
             .border_r_1()
             .border_color(colors.line)
+            .child(self.render_brand_row(colors, cx))
             .child(self.render_search(colors, cx))
             .child(self.render_ceo_row(colors, cx))
             .child(self.render_view_switch(colors, cx))
@@ -61,6 +62,43 @@ impl Root {
 
     /// The search box: it filters the tree and the roster as it is typed
     /// (`ui/ProjectSearch.tsx` behaviour), and a click puts the caret in it.
+    /// The brand row at the top of the sidebar: the mark, the name, the Needs
+    /// you bell and a new conversation for the selected bot (`.sidebar-brand`).
+    fn render_brand_row(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let bell = self.render_needs_bell(colors, cx);
+        div()
+            .mx(px(10.0))
+            .mt(px(10.0))
+            .h(px(28.0))
+            .pl(px(2.0))
+            .flex()
+            .items_center()
+            .gap(px(8.0))
+            .child(gpui::img(art::brand_mark()).size(px(20.0)).flex_none().rounded(px(5.0)))
+            .child(div().flex_1().text_size(px(theme::FS_SM)).font_weight(gpui::FontWeight::SEMIBOLD).child("Bitbots"))
+            .child(bell)
+            .child(
+                div()
+                    .id("brand-new-conversation")
+                    .size(px(28.0))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(theme::RADIUS_SM))
+                    .cursor_pointer()
+                    .hover(move |style| style.bg(colors.hover))
+                    .active(move |style| style.bg(colors.selected))
+                    .child(art::glyph(Glyph::PLUS, 15.0, colors.text_2))
+                    .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| {
+                        if let Some(agent_id) = root.agent_id.clone() {
+                            root.new_conversation(agent_id, None, cx);
+                        }
+                    })),
+            )
+            .into_any_element()
+    }
+
     fn render_search(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
         let query = self.sidebar_search.read(cx).text().to_owned();
         div()
@@ -185,27 +223,32 @@ impl Root {
 
     fn switch_button(&self, label: &str, view: SidebarView, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
         let active = self.view == view;
+        let team_size = self.employees().len();
         div()
             .id(SharedString::from(format!("view-{label}")))
             .flex_1()
-            .h(px(26.0))
+            .h(px(28.0))
             .flex()
             .items_center()
             .justify_center()
-            .rounded(px(theme::RADIUS_SM))
+            .rounded(px(8.0))
             .bg(if active { colors.selected } else { gpui::rgba(0x00000000) })
             .text_color(if active { colors.text_1 } else { colors.text_2 })
             .text_size(px(theme::FS_XS))
             .cursor_pointer()
             .hover(move |style| style.text_color(colors.text_1))
+            .gap(px(6.0))
+            .child(art::glyph(if view == SidebarView::Team { Glyph::USERS } else { Glyph::FOLDER }, 13.0, if active { colors.text_1 } else { colors.text_3 }))
             .child(SharedString::from(label.to_owned()))
+            .when(view == SidebarView::Team && team_size > 0, |this| {
+                this.child(div().text_size(px(theme::FS_2XS)).text_color(colors.text_3).child(SharedString::from(team_size.to_string())))
+            })
             .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| root.set_view(view, cx)))
             .into_any_element()
     }
 
     /// New project, the bell, the plan-usage line and the gear that opens Settings.
     fn render_sidebar_footer(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
-        let bell = self.render_needs_bell(colors, cx);
         let usage = self.render_usage_line(colors, cx);
         let mut footer = div()
             .mx(px(8.0))
@@ -237,7 +280,6 @@ impl Root {
                             .child("New project")
                             .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_new_project(cx))),
                     )
-                    .child(bell)
                     .child(
                         div()
                             .id("open-settings")
@@ -563,6 +605,7 @@ impl Root {
         let row_key_owned = row_key.to_owned();
         let show_more = recent.len() > 1;
         let hover_key = row_key.to_owned();
+        let fold_key = row_key.to_owned();
 
         let mut row = div()
             .flex()
@@ -597,6 +640,7 @@ impl Root {
                                     .flex()
                                     .items_center()
                                     .gap(px(8.0))
+                                    .font_weight(gpui::FontWeight::MEDIUM)
                                     .child(
                                         motion::marquee(
                                             SharedString::from(format!("name-{row_key}")),
@@ -628,6 +672,29 @@ impl Root {
                                     .child(SharedString::from(subtitle)),
                             ),
                     )
+                    .when(show_more && (hovered || holds_selection || expanded), |this| {
+                        let fold_key = fold_key.clone();
+                        this.child(
+                            div()
+                                .id(SharedString::from(format!("employee-more-{row_key}")))
+                                .flex_none()
+                                .size(px(22.0))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(theme::RADIUS_SM))
+                                .cursor_pointer()
+                                .hover(move |style| style.bg(colors.hover))
+                                .child(art::glyph(if expanded { Glyph::CHEVRON_DOWN } else { Glyph::CHEVRON }, 12.0, colors.text_3))
+                                // The row opens on a press, so the chevron keeps its own.
+                                .on_mouse_down(gpui::MouseButton::Left, cx.listener(move |root, _: &gpui::MouseDownEvent, _window, cx| {
+                                    cx.stop_propagation();
+                                    // The owner's choice wins from now on, so it is
+                                    // written even when it agrees with the selection.
+                                    root.set_employee_fold(fold_key.clone(), !expanded, cx);
+                                })),
+                        )
+                    })
                     .on_mouse_down(gpui::MouseButton::Left, cx.listener(move |root, _: &gpui::MouseDownEvent, _window, cx| {
                         match &latest_id {
                             Some(session_id) => {
@@ -640,26 +707,6 @@ impl Root {
                         }
                     })),
             );
-
-        if show_more {
-            let fold_key = row_key.to_owned();
-            row = row.child(
-                div()
-                    .id(SharedString::from(format!("employee-more-{row_key}")))
-                    .ml(px(38.0))
-                    .h(px(16.0))
-                    .text_size(px(theme::FS_2XS))
-                    .text_color(colors.text_3)
-                    .cursor_pointer()
-                    .hover(move |style| style.text_color(colors.text_1))
-                    .child(if expanded { "Hide conversations" } else { "Show conversations" })
-                    .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| {
-                        // The owner's choice wins from now on, so it is written
-                        // even when it agrees with what the selection implied.
-                        root.set_employee_fold(fold_key.clone(), !expanded, cx);
-                    })),
-            );
-        }
 
         if expanded || card_closing {
             let approvals = self.approval_session_ids();

@@ -282,11 +282,19 @@ pub const CHAT_COLUMN_WIDTH: f32 = 760.0;
 const BUBBLE_RADIUS: f32 = 18.0;
 const MESSAGE_LINE_HEIGHT: f32 = 1.6;
 
+/// Text that surely sits on one line of a bubble `width` wide, so the bubble
+/// may be as wide as its words. Inter at 14px averages under 7.6px a
+/// character; anything that might wrap gets an explicit width instead, because
+/// GPUI measures wrapped text in a content-sized box at the wrong width.
+fn fits_one_line(text: &str, width: f32) -> bool {
+    let trimmed = text.trim();
+    !trimmed.contains('\n') && (trimmed.chars().count() as f32) * 7.6 <= width - 30.0
+}
+
 /// A reply short and plain enough to be as wide as its words.
-fn is_short_reply(body: &str) -> bool {
+fn is_short_reply(body: &str, width: f32) -> bool {
     let trimmed = body.trim();
-    !trimmed.contains('\n')
-        && trimmed.chars().count() <= 90
+    fits_one_line(trimmed, width)
         && !trimmed.starts_with(['#', '>', '-', '*', '|', '`'])
         && !trimmed.contains("](")
 }
@@ -340,10 +348,22 @@ pub fn render_row(row: &Row, ctx: &RowContext) -> AnyElement {
                 bubble = bubble.child(strip);
             }
             if !text.trim().is_empty() {
-                // The shaped paragraph itself, not a block around it: this bubble
-                // is as wide as its text (up to its cap), so a wrapper has no
-                // width to wrap against and the text becomes one character a line.
-                bubble = bubble.child(styled_inline(text, colors));
+                if fits_one_line(text, ctx.bubble_width()) {
+                    // As wide as its words: the shaped line itself, no wrapper.
+                    bubble = bubble.child(styled_inline(text.trim(), colors));
+                } else {
+                    // A text that wraps takes the bubble's full width, set
+                    // explicitly so it is measured at the width it is painted.
+                    bubble = bubble.w(px(ctx.bubble_width()));
+                    for paragraph in text.trim().split("\n\n") {
+                        bubble = bubble.child(
+                            div()
+                                .w_full()
+                                .min_w(px(0.0))
+                                .child(styled_inline(paragraph.trim_end(), colors)),
+                        );
+                    }
+                }
             }
             for file in files {
                 bubble = bubble.child(file_chip(file, ctx));
@@ -369,7 +389,7 @@ pub fn render_row(row: &Row, ctx: &RowContext) -> AnyElement {
             // `.message-bubble` on Haze's raised surface. A one-line reply is as
             // wide as its words (fit-content); anything with blocks takes the
             // column's width, because its blocks need a settled width to wrap.
-            let short = is_short_reply(&body);
+            let short = is_short_reply(&body, ctx.bubble_width());
             let mut column = div()
                 .min_w(px(0.0))
                 .max_w(px(ctx.bubble_width()))

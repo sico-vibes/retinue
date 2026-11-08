@@ -122,7 +122,10 @@ mod tests {
             .nth(1)
             .expect("the user row");
         let body = &bubble[..bubble.find("Row::Assistant").unwrap_or(bubble.len())];
-        assert!(body.contains("styled_inline(text, colors)"), "the bubble draws the shaped text itself");
+        assert!(body.contains("styled_inline(text.trim(), colors)"), "a one-line bubble draws the shaped text itself");
+        // A text that wraps gets the bubble's explicit width: GPUI measures
+        // wrapped text in a content-sized box at the wrong width (look pass, 8 Nov).
+        assert!(body.contains("bubble.w(px(ctx.bubble_width()))"), "a wrapping user bubble has an explicit width");
         assert!(
             !body.contains("inline_text("),
             "a block inside a content-sized bubble collapses to one character wide; use `styled_inline`"

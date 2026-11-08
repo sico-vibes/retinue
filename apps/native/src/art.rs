@@ -376,6 +376,7 @@ glyphs! {
     X => "x",
     SETTINGS => "settings",
     USER_PLUS => "user-plus",
+    USERS => "users",
     MESSAGES => "messages-square",
     CHEVRON => "chevron-right",
     CHEVRON_DOWN => "chevron-down",
@@ -436,6 +437,19 @@ pub fn agent_color(value: &str) -> Rgba {
 #[cfg(test)]
 pub fn provider_of(runtimes: &BTreeMap<String, String>, runtime_id: &str) -> Option<String> {
     runtimes.get(runtime_id).cloned()
+}
+
+/// The app's own mark (`apps/desktop/src/assets/bloblex-128.png`), for the
+/// sidebar's brand row.
+static BRAND_MARK: std::sync::LazyLock<Arc<gpui::Image>> = std::sync::LazyLock::new(|| {
+    Arc::new(gpui::Image::from_bytes(
+        gpui::ImageFormat::Png,
+        include_bytes!("../../desktop/src/assets/bloblex-128.png").to_vec(),
+    ))
+});
+
+pub fn brand_mark() -> Arc<gpui::Image> {
+    BRAND_MARK.clone()
 }
 
 #[cfg(test)]
@@ -510,3 +524,4 @@ mod tests {
         assert_eq!(provider_of(&runtimes, "rt-2"), None);
     }
 }
+
