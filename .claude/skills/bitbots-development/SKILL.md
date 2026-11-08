@@ -74,3 +74,4 @@ Rules for updating:
 - `references/verification.md`: gates, the browser preview, production checks, inspecting the installed app, flaky-test causes.
 - `references/pipeline.md`: the Director and lane workflow, launching Codex and OpenCode lanes, worktrees, cleanup, and the release procedure.
 - `references/lessons.md`: dated pitfalls and their fixes (the living log).
+- `references/native-gpui.md`: the native Rust (GPUI) app in `apps/native`: the GPUI pin, entities and async tasks, lists, the IME text field, and how it talks to the daemon.
