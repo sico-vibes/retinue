@@ -12,6 +12,7 @@ use gpui::{
 };
 
 use crate::daemon::{start, Command, DaemonHandle, DaemonState, Update};
+use crate::companion::Shared;
 use crate::paths;
 use crate::settings_file;
 use crate::state::bot::BotForm;
@@ -206,6 +207,9 @@ pub struct StaffDialog {
 
 pub struct Root {
     pub(crate) db_path: PathBuf,
+    /// Slice 5: the state the companion window shares, fed from here (the one
+    /// daemon connection lives in this struct).
+    pub(crate) shared: Entity<Shared>,
     pub(crate) daemon: Option<DaemonHandle>,
     pub(crate) snapshot: Option<Snapshot>,
     pub(crate) daemon_state: DaemonState,
@@ -338,7 +342,7 @@ pub struct Root {
 }
 
 impl Root {
-    pub fn new(db_path: PathBuf, system_is_light: bool, cx: &mut Context<Self>) -> Self {
+    pub fn new(db_path: PathBuf, system_is_light: bool, shared: Entity<Shared>, cx: &mut Context<Self>) -> Self {
         let settings_path = paths::settings_file_path();
         let settings = settings_file::read(&settings_path);
         let installed = paths::installed_db_path();
@@ -471,6 +475,7 @@ impl Root {
 
         Self {
             db_path,
+            shared,
             daemon,
             snapshot: None,
             daemon_state: DaemonState::Starting,
@@ -1052,6 +1057,16 @@ impl Root {
     }
 
     fn on_update(&mut self, update: Update, cx: &mut Context<Self>) {
+        // Slice 5: the companion window reads the same snapshot and events, and
+        // never a second daemon connection. Three lines: this mirror, the
+        // selection at the end, and the field above.
+        let shared = self.shared.clone();
+        match &update {
+            Update::Snapshot(snapshot) => shared.update(cx, |shared, cx| shared.mirror_snapshot((**snapshot).clone(), cx)),
+            Update::Event(event) => shared.update(cx, |shared, cx| shared.mirror_event(event, cx)),
+            Update::Connected(connected) => shared.update(cx, |shared, cx| shared.set_connected(*connected, cx)),
+            _ => {}
+        }
         match update {
             Update::Daemon(state) => {
                 if let DaemonState::Missing(message) | DaemonState::Stopped(message) = &state {
@@ -1060,6 +1075,7 @@ impl Root {
                 if matches!(state, DaemonState::Running) {
                     self.daemon_command(Command::LoadHealth, cx);
                 }
+                shared.update(cx, |shared, cx| shared.set_daemon_state(state.clone(), cx));
                 self.daemon_state = state;
             }
             Update::DaemonVersion(version) => self.daemon_version = Some(version),
@@ -1230,6 +1246,8 @@ impl Root {
                 }
             }
         }
+        // Slice 5: the companion follows the same conversation and bot.
+        shared.update(cx, |shared, cx| shared.set_selection(self.session_id.clone(), self.agent_id.clone(), cx));
         cx.notify();
     }
 

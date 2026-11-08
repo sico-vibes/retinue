@@ -22,6 +22,11 @@ pub struct NativeSettings {
     pub pinned_sessions: Vec<String>,
     /// Whether the sidebar shows the plan-usage line (`experimental.usageBar`).
     pub usage_bar: bool,
+    /// Slice 5: the companion's sounds, volume, positions and size. Stored under
+    /// `companion`; slice 6 builds the switches that write it.
+    pub companion: crate::companion::CompanionSettings,
+    /// Slice 5: dictation's on/off switch and model, under `dictation`.
+    pub dictation: crate::dictation::settings::DictationSettings,
 }
 
 pub fn read(path: &Path) -> NativeSettings {
@@ -62,6 +67,21 @@ pub fn write_pinned_sessions(path: &Path, pinned: &[String]) -> std::io::Result<
 pub fn write_usage_bar(path: &Path, enabled: bool) -> std::io::Result<()> {
     let mut settings = read(path);
     settings.usage_bar = enabled;
+    write(path, &settings)
+}
+
+/// Save the companion's own settings (its sounds, volume, position and size).
+pub fn write_companion(path: &Path, companion: &crate::companion::CompanionSettings) -> std::io::Result<()> {
+    let mut settings = read(path);
+    settings.companion = companion.clone();
+    write(path, &settings)
+}
+
+/// Save dictation's own settings (the switch and the model).
+#[allow(dead_code)] // Slice 6's Settings page is the first writer.
+pub fn write_dictation(path: &Path, dictation: &crate::dictation::settings::DictationSettings) -> std::io::Result<()> {
+    let mut settings = read(path);
+    settings.dictation = dictation.clone();
     write(path, &settings)
 }
 

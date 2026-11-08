@@ -288,3 +288,77 @@ unset."), and `session.model.plan` refuses the same. So the model menu offers
 concrete models only; the pill shows the bot's own model until a conversation
 pins one, exactly as the React pill does.
 
+
+## Floating windows, hotkeys, audio and shared state (slice 5)
+
+- **A second window is `cx.open_window` with `WindowKind::PopUp`, and that kind is
+  the whole trick.** On Windows it is created with `WS_EX_TOOLWINDOW` and no
+  `WS_SYSMENU`/`WS_THICKFRAME`: frameless, no taskbar entry, no resize border.
+  `show: false` keeps it hidden until something shows it, and `window_background:
+  WindowBackgroundAppearance::Transparent` lets a rounded capsule cut the desktop
+  through. Paint the capsule opaque — Haze's companion surfaces are smoke
+  (`#202124` dark, `#f4f2ee` light), not glass.
+- **Never call `ShowWindow`, `SetWindowPos`, `SetForegroundWindow` or anything
+  that sends window messages from inside `render`, from an observer callback, or
+  from `cx.update`.** They pump messages, GPUI's window procedure re-enters the
+  app, and the second borrow panics with `RefCell already borrowed`
+  (`app/async_context.rs`). GPUI's own `Window::resize` defers the Win32 call to
+  the platform executor for exactly this reason; do the same —
+  `cx.background_executor().spawn(async move { … }).detach()` (`window::defer` in
+  slice 5). Reads (`GetWindowRect`, `GetCursorPos`, `EnumDisplayMonitors`,
+  `GetDpiForWindow`) are fine inline.
+- **There is no `Window::show/hide/move/set_position` at this revision.** Ask for
+  the raw handle with `HasWindowHandle::window_handle(window)` — note the inherent
+  `Window::window_handle` shadows the trait method and returns GPUI's own handle,
+  so call it as `<gpui::Window as HasWindowHandle>::window_handle(window)` — then
+  `Win32WindowHandle.hwnd.get()` gives the number `windows-sys` takes. Keep that
+  `isize` in the view; it survives every repaint.
+- **Dragging a frameless window yourself.** `start_window_move` is a no-op on
+  Windows. Record `GetCursorPos` and `GetWindowRect` on mouse-down, then on each
+  mouse-move place the window at `rect + (cursor - cursor0)`; clamp into the work
+  area on release. Resizing is the same with a rectangle function
+  (`positions::resized_rect`) and eight invisible strips as handles.
+- **A hotkey belongs to the thread that registers it.** `RegisterHotKey(NULL, …)`
+  posts `WM_HOTKEY` to that thread's queue, so one dedicated thread with
+  `GetMessageW` is enough — no message-only window. Register from that thread;
+  wake it with `PostThreadMessageW(thread_id, WM_APP, …)` and answer the caller
+  through an `mpsc` reply channel. A refused shortcut returns 0: report the React
+  app's own sentence ("Ctrl+Alt+B is already in use."), keep the other shortcut,
+  and log it. A running Bitbots desktop app already holds both, which is what a
+  dev machine will show.
+- **Watcher threads post to the UI, they never touch it.** Here one thread reads
+  an `async_channel` of clock ticks and dictation events in a `cx.spawn` task;
+  every Win32 window change is a message on that channel, so a paint never blocks
+  on a lock the audio or speech thread holds.
+- **Audio without files.** Cues are Web Audio oscillator recipes in the React app
+  (`soundCues.ts`, `dictationSound.ts`); `cpal` plus a hand-written oscillator
+  reproduces them exactly — exponential attack/decay to `0.0001`, glide by
+  `from * (to/from)^u`, and the same master gain (`0.32 * volume / 0.8`).
+  `cpal::Stream` is `!Send`, so the stream lives on its own thread, is built
+  lazily on the first cue (an install with sounds off pays nothing), and the
+  callback `try_lock`s the mixer and writes silence rather than waiting.
+- **One daemon connection, two windows.** `Root` still owns it; a small `Shared`
+  entity mirrors the snapshot and replays the same ordered events
+  (`state::apply_event`) so both windows can never disagree. `Root::on_update`
+  gains one mirror line per update kind plus a selection sync (slice 5 added
+  seven lines and one constructor parameter). Commands go back through
+  `root.daemon_command`, so the daemon sees exactly one client.
+- **Seeding a view that is still hidden works from `main.rs`**: after
+  `open_window`, `WindowHandle::entity(cx)` gives the view, and
+  `window::hwnd_of_handle(cx, handle)` gives its `HWND` — the platform window
+  exists even while hidden, so a `show: false` window can be attached before its
+  first paint.
+- **`dictation` depends on `bloblex-speech` with `features = ["native"]` from the
+  app's own workspace, and that is fine.** Cargo resolves the path dependency's
+  `version.workspace = true` fields against *its* workspace root (the repository
+  root), not the app's. `sherpa-onnx-sys` downloads a ~120 MB prebuilt archive
+  into `<CARGO_TARGET_DIR>/sherpa-onnx-prebuilt` on first build; copy that folder
+  from another target dir to skip the download. Linking is static, so the exe
+  needs no extra files.
+- **Headless checks.** `BITBOTS_NATIVE_SMOKE_SECS` closes the window by itself;
+  slice 5 adds `BITBOTS_NATIVE_START_DICTATION=1`, which toggles dictation once so
+  the no-model message lands in `native.log` without a keyboard.
+- **Bulk-editing your own source with PowerShell costs a night.** `Set-Content
+  -NoNewline` joins an array with no separators and silently flattens a whole
+  file into one line. Use the edit tool for multi-line work; if a script must
+  touch files, write single values only (`-Raw` in, `-Raw` out).

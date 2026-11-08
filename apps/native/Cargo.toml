@@ -29,12 +29,38 @@ log = "0.4"
 # is the source: it hands back the bytes Windows holds (a PNG, or a DIB turned
 # into a BMP), and this decodes and re-encodes them.
 image = { version = "0.25", default-features = false, features = ["png", "bmp", "jpeg", "gif", "webp"] }
-# `SPI_GETCLIENTAREAANIMATION`: Windows' "Show animations" switch. GPUI has no
-# reduced-motion query at the pinned revision, and this is the one call it needs.
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell"] }
 # A finished turn, a failure or a waiting approval raises a Windows toast while
 # the window is in the background, under the app's own id.
 windows = { version = "0.57", features = ["Data_Xml_Dom", "UI_Notifications"] }
+# Slice 5: on-device dictation. The engine (sherpa-onnx + cpal) lives behind its
+# `native` feature; the catalog, the lifecycle and the resampling are the same
+# ones the installed app uses, so a model it already downloaded is reused.
+bloblex-speech = { path = "../../crates/bloblex-speech", features = ["native"] }
+# Slice 5: the companion's cues are synthesised, never files. `cpal` is the same
+# audio backend the speech engine uses, addressed directly so a cue does not
+# wait for the dictation stack.
+cpal = "0.15"
+# The clipboard fallback for a transcript dictated while neither window is in
+# front (the React app hands every transcript to the window that owns Ctrl+E;
+# this window-less path needs somewhere to put it).
+arboard = "3.7"
+# The companion and dictation windows are frameless, always-on-top and hidden on
+# demand, and GPUI at the pinned revision has no API for any of those: it hands
+# out its window handles through this trait, and the HWND goes to Win32.
+raw-window-handle = "0.6"
+# `SPI_GETCLIENTAREAANIMATION`: Windows' "Show animations" switch. GPUI has no
+# reduced-motion query at the pinned revision, and this is the one call it needs.
+# `SetWindowPos`/`ShowWindow`/`GetCursorPos`: the floating windows' position,
+# size and visibility. `GetMonitorInfoW`/`EnumDisplayMonitors`: the work areas.
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_HiDpi",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+] }
 
 [build-dependencies]
 # The Haze portraits are full-colour vector art; GPUI's `svg()` element draws one
