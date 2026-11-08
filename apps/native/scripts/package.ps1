@@ -2,12 +2,15 @@
 #
 # 1. bitbotsd (+ bitbots-hook) in release, into their own target dir on C:
 # 2. bitbots-native in release
-# 3. stage apps/native/dist/Bitbots-Native-<version>/ and zip it
-# 4. an installer only if cargo-packager is already installed (it is not part of
-#    this repository, and installing it needs the network)
+# 3. stage apps/native/dist/Bitbots-Native-<version>/ with install.ps1, the icon
+#    and a short README, then zip it
 #
 # The product name is "Bitbots (Rust preview)" and the app keeps its own database,
 # so it never replaces the installed Bitbots.
+#
+# cargo-packager is not used: it is not available offline. install.ps1 does the
+# same job for a per-user install: copy the folder, add a Start menu shortcut, and
+# remove both again with -Uninstall.
 
 [CmdletBinding()]
 param(
@@ -49,32 +52,39 @@ $hook = Join-Path $DaemonTarget 'release\bitbots-hook.exe'
 if (Test-Path $hook) { Copy-Item $hook $dist } else { Write-Warning 'bitbots-hook.exe was not found beside bitbotsd.exe; Health check and outside sessions will be limited.' }
 Copy-Item (Join-Path $NativeTarget 'release\bitbots-native.exe') $dist
 
-# The icon the release assets carry (`tauri.conf.json` bundle.icon).
+# The installer, which also removes the app again with -Uninstall.
+Copy-Item (Join-Path $PSScriptRoot 'install.ps1') $dist
+
+# The icon is embedded in the exe (build.rs) and also shipped here, so the folder
+# looks right and a shortcut can be recreated by hand.
 $icon = Join-Path $root 'assets\icon\bloblex.ico'
 if (Test-Path $icon) { Copy-Item $icon (Join-Path $dist 'bitbots-native.ico') }
 
 $readme = @"
 Bitbots (Rust preview) $version
 
-Run bitbots-native.exe. It starts its own bitbotsd.exe beside it and keeps its
-own database in %LOCALAPPDATA%\Bitbots Native\bloblex.db, so it never shares one
-with the installed Bitbots. It is a preview: it shows the projects tree, the
-conversations column and one conversation, and sends messages.
+Install:
+  Right-click install.ps1, "Run with PowerShell", or:
+  pwsh -ExecutionPolicy Bypass -File install.ps1
+  It copies this folder to %LOCALAPPDATA%\Programs\Bitbots Native and adds a
+  Start menu shortcut named "Bitbots (Rust preview)".
 
+Remove:
+  pwsh -ExecutionPolicy Bypass -File "`$env:LOCALAPPDATA\Programs\Bitbots Native\install.ps1" -Uninstall
+  That removes the shortcut and the app folder. Your data is kept.
+
+Run:
+  bitbots-native.exe starts its own bitbotsd.exe beside it and keeps its own
+  database in %LOCALAPPDATA%\Bitbots Native\bloblex.db, so it never shares one
+  with the installed Bitbots.
+
+Settings (gear, bottom left): theme and density, and copying the installed
+Bitbots data again.
 Log: %LOCALAPPDATA%\Bitbots Native\native.log
 "@
-Set-Content -Path (Join-Path $dist 'READ ME.txt') -Value $readme -Encoding utf8
+Set-Content -Path (Join-Path $dist 'README.txt') -Value $readme -Encoding utf8
 
 $zip = "$dist.zip"
 if (Test-Path $zip) { Remove-Item -Force $zip }
 Compress-Archive -Path (Join-Path $dist '*') -DestinationPath $zip -Force
 Write-Host "4/4 packaged: $zip"
-
-$packager = Get-Command cargo-packager -ErrorAction SilentlyContinue
-if ($packager) {
-  Write-Host 'cargo-packager found: building an NSIS installer (per user, Start menu shortcut)'
-  cargo packager --release --formats nsis --out-dir (Join-Path $native 'dist') --manifest-path (Join-Path $native 'Cargo.toml')
-  if ($LASTEXITCODE -ne 0) { Write-Warning 'cargo-packager failed; the zip is still there.' }
-} else {
-  Write-Host 'cargo-packager is not installed, so this run produced the zip only (no installer).'
-}

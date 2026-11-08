@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use gpui::{
     div, prelude::*, px, AnyElement, Context, FontStyle, FontWeight, HighlightStyle, Rgba,
-    SharedString, StyledText,
+    SharedString, StyledText, Window,
 };
 
 use crate::state::{Permission, Session};
@@ -26,14 +26,36 @@ pub enum Row {
     Assistant(String),
     /// A notice from the daemon, in one muted line.
     Notice(String),
-    /// One tool step, in one muted line.
+    /// A single tool step, in one muted line.
     Tool(String),
+    /// A run of tool steps, as one line that expands (`ActivitySummaryLine` in
+    /// `ui/ActivityDetails.tsx`): "Ran 3 commands · edited 1 file".
+    Steps { key: String, summary: String, lines: Vec<String> },
+}
+
+/// One entry before runs of tool steps are folded together.
+enum Piece {
+    User(String),
+    Assistant(String),
+    Notice(String),
+    Tool { id: String, kind: String, line: String },
+}
+
+impl Piece {
+    fn into_row(self) -> Row {
+        match self {
+            Piece::User(text) => Row::User(text),
+            Piece::Assistant(text) => Row::Assistant(text),
+            Piece::Notice(text) => Row::Notice(text),
+            Piece::Tool { line, .. } => Row::Tool(line),
+        }
+    }
 }
 
 /// The rows the list shows: messages and tool steps in time order, thinking left
-/// out, exactly the order a reload gives.
+/// out, with each run of tool steps folded into one row.
 pub fn build_rows(session: &Session) -> Vec<Row> {
-    let mut entries: Vec<(String, usize, Row)> = Vec::new();
+    let mut entries: Vec<(String, usize, Piece)> = Vec::new();
     let mut order = 0;
     for message in &session.messages {
         order += 1;
@@ -41,25 +63,98 @@ pub fn build_rows(session: &Session) -> Vec<Row> {
             continue;
         }
         let text = message.text().to_owned();
-        let row = match message.role() {
-            "user" => Row::User(text),
-            "notice" => Row::Notice(text),
+        let piece = match message.role() {
+            "user" => Piece::User(text),
+            "notice" => Piece::Notice(text),
             "assistant" | "" => {
                 if text.trim().is_empty() {
                     continue;
                 }
-                Row::Assistant(text)
+                Piece::Assistant(text)
             }
-            _ => Row::Notice(text),
+            _ => Piece::Notice(text),
         };
-        entries.push((message.created_at.clone().unwrap_or_else(|| "9999".to_owned()), order, row));
+        entries.push((message.created_at.clone().unwrap_or_else(|| "9999".to_owned()), order, piece));
     }
-    for tool in &session.tools {
+    for (index, tool) in session.tools.iter().enumerate() {
         order += 1;
-        entries.push((tool.started_at.clone().unwrap_or_else(|| "9999".to_owned()), order, Row::Tool(tool.summary())));
+        entries.push((
+            tool.started_at.clone().unwrap_or_else(|| "9999".to_owned()),
+            order,
+            Piece::Tool {
+                id: tool.id.clone().unwrap_or_else(|| format!("tool-{index}")),
+                kind: tool.kind.clone().unwrap_or_default(),
+                line: tool.summary(),
+            },
+        ));
     }
     entries.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.cmp(&b.1)));
-    entries.into_iter().map(|(_, _, row)| row).collect()
+
+    let mut rows: Vec<Row> = Vec::new();
+    let mut run: Vec<(String, String, String)> = Vec::new();
+    let flush = |run: &mut Vec<(String, String, String)>, rows: &mut Vec<Row>| {
+        match run.len() {
+            0 => {}
+            1 => rows.push(Row::Tool(run[0].2.clone())),
+            _ => {
+                let kinds: Vec<String> = run.iter().map(|(_, kind, _)| kind.clone()).collect();
+                rows.push(Row::Steps {
+                    key: format!("steps:{}:{}", run[0].0, run.len()),
+                    summary: steps_summary(&kinds),
+                    lines: run.iter().map(|(_, _, line)| line.clone()).collect(),
+                });
+            }
+        }
+        run.clear();
+    };
+    for (_, _, piece) in entries {
+        match piece {
+            Piece::Tool { id, kind, line } => run.push((id, kind, line)),
+            other => {
+                flush(&mut run, &mut rows);
+                rows.push(other.into_row());
+            }
+        }
+    }
+    flush(&mut run, &mut rows);
+    rows
+}
+
+/// "Ran 3 commands · edited 1 file", from `activitySummary` in
+/// `ui/conversation.ts`. One step is shown as itself, so this only counts runs.
+pub fn steps_summary(kinds: &[String]) -> String {
+    let mut commands = 0;
+    let mut tools = 0;
+    let mut searches = 0;
+    let mut files = 0;
+    let mut reads = 0;
+    for kind in kinds {
+        match kind.as_str() {
+            "shell" | "command" | "terminal" => commands += 1,
+            "edit" | "write" | "create" | "multi_edit" => files += 1,
+            "read" | "read_file" | "view" => reads += 1,
+            "search" | "grep" | "find" | "glob" | "list" => searches += 1,
+            _ => tools += 1,
+        }
+    }
+    let plural = |count: usize, one: &str, many: &str| format!("{count} {}", if count == 1 { one } else { many });
+    let parts: Vec<String> = [
+        (commands > 0).then(|| format!("ran {}", plural(commands, "command", "commands"))),
+        (tools > 0).then(|| format!("used {}", plural(tools, "tool", "tools"))),
+        (searches > 0).then(|| format!("searched {}", if searches == 1 { "once".to_owned() } else { format!("{searches} times") })),
+        (files > 0).then(|| format!("edited {}", plural(files, "file", "files"))),
+        (reads > 0).then(|| format!("read {}", plural(reads, "file", "files"))),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let line = parts.join(" · ");
+    let line = if line.is_empty() { plural(kinds.len(), "step", "steps") } else { line };
+    let mut chars = line.chars();
+    match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => line,
+    }
 }
 
 pub fn row_count(session: &Session) -> usize {
@@ -67,8 +162,9 @@ pub fn row_count(session: &Session) -> usize {
 }
 
 impl Root {
-    pub(crate) fn render_conversation_pane(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
-        let agent_name = self.selected_agent().map(|agent| agent.name.clone());
+    pub(crate) fn render_conversation_pane(&mut self, colors: Colors, _window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let agent = self.selected_agent().cloned();
+        let agent_name = agent.as_ref().map(|agent| agent.name.clone());
         let session = self.selected_session().cloned();
         let permission = session
             .as_ref()
@@ -87,15 +183,29 @@ impl Root {
                 .px(px(14.0))
                 .flex()
                 .items_center()
-                .gap(px(6.0))
+                .gap(px(8.0))
                 .border_b_1()
-                .border_color(colors.line)
-                .child(
-                    div()
-                        .text_size(px(theme::FS_SM))
-                        .font_weight(FontWeight::MEDIUM)
-                        .child(SharedString::from(agent_name.clone().unwrap_or_else(|| "No employee".to_owned()))),
+                .border_color(colors.line);
+            if let Some(agent) = agent.as_ref() {
+                let provider = self.provider_of(agent);
+                row = row.child(
+                    crate::art::Mark::for_agent(
+                        32.0,
+                        crate::art::agent_color(&agent.color),
+                        agent.icon(),
+                        provider.as_deref(),
+                        agent.name.clone(),
+                        colors,
+                    )
+                    .render(),
                 );
+            }
+            row = row.child(
+                div()
+                    .text_size(px(theme::FS_SM))
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(SharedString::from(agent_name.clone().unwrap_or_else(|| "No employee".to_owned()))),
+            );
             if let Some(project) = project {
                 row = row
                     .child(div().text_color(colors.text_3).child(" / "))
@@ -128,6 +238,8 @@ impl Root {
             (Some(session), _) => {
                 let rows = Rc::new(build_rows(session));
                 let columns = colors;
+                let expanded = self.expanded_steps.clone();
+                let this = cx.weak_entity();
                 div()
                     .flex_1()
                     .w_full()
@@ -135,7 +247,13 @@ impl Root {
                     .overflow_hidden()
                     .child(gpui::list(self.list.clone(), move |index, _window, _cx| {
                         let row = rows.get(index).cloned().unwrap_or(Row::Notice(String::new()));
-                        render_row(&row, columns)
+                        match row {
+                            Row::Steps { key, summary, lines } => {
+                                let open = expanded.contains(&key);
+                                steps_row(key, summary, lines, open, columns, this.clone())
+                            }
+                            other => render_row(&other, columns),
+                        }
                     }).flex_1().h_full())
                     .into_any_element()
             }
@@ -167,7 +285,11 @@ impl Root {
             .child(body);
 
         if let Some(permission) = permission {
-            pane = pane.child(self.render_approval(&permission, colors, cx));
+            pane = pane.child(if permission.is_answerable_proposal() || permission.proposal_kind().is_some() {
+                self.render_proposal(&permission, colors, cx)
+            } else {
+                self.render_approval(&permission, colors, cx)
+            });
         }
         pane.child(self.render_composer(colors, session.as_ref(), approvals_waiting, cx)).into_any_element()
     }
@@ -230,7 +352,6 @@ impl Root {
         }
         card.into_any_element()
     }
-
     fn render_composer(&mut self, colors: Colors, session: Option<&Session>, approvals_waiting: bool, cx: &mut Context<Self>) -> AnyElement {
         let placeholder_hint = if approvals_waiting {
             "Answer the request above first"
@@ -294,6 +415,7 @@ impl Root {
 
 fn render_row(row: &Row, colors: Colors) -> AnyElement {
     match row {
+        Row::Steps { .. } => div().into_any_element(),
         Row::User(text) => div()
             .w_full()
             .px(px(16.0))
@@ -343,6 +465,62 @@ fn render_row(row: &Row, colors: Colors) -> AnyElement {
             )
             .into_any_element(),
     }
+}
+
+/// A run of tool steps as one muted line, which expands into the steps on click
+/// (`ActivitySummaryLine` in `ui/ActivityDetails.tsx`).
+fn steps_row(
+    key: String,
+    summary: String,
+    lines: Vec<String>,
+    open: bool,
+    colors: Colors,
+    this: gpui::WeakEntity<Root>,
+) -> AnyElement {
+    let toggle_key = key.clone();
+    let mut column = div()
+        .id(SharedString::from(format!("steps-{key}")))
+        .w_full()
+        .px(px(16.0))
+        .py(px(3.0))
+        .flex()
+        .flex_col()
+        .gap(px(2.0))
+        .child(
+            div()
+                .id(SharedString::from(format!("steps-toggle-{key}")))
+                .flex()
+                .items_center()
+                .gap(px(6.0))
+                .cursor_pointer()
+                .hover(move |style| style.text_color(colors.text_2))
+                .child(crate::art::glyph(if open { crate::art::Glyph::CHEVRON_DOWN } else { crate::art::Glyph::CHEVRON }, 10.0, colors.text_3))
+                .child(div().size(px(4.0)).rounded_full().bg(colors.text_3))
+                .child(
+                    div()
+                        .text_size(px(theme::FS_XS))
+                        .text_color(colors.text_3)
+                        .child(SharedString::from(summary)),
+                )
+                .on_click(move |_event: &gpui::ClickEvent, _window: &mut gpui::Window, cx: &mut gpui::App| {
+                    if let Some(root) = this.upgrade() {
+                        let key = toggle_key.clone();
+                        root.update(cx, |root, cx| root.toggle_steps(key, cx));
+                    }
+                }),
+        );
+    if open {
+        for line in lines {
+            column = column.child(
+                div()
+                    .pl(px(26.0))
+                    .text_size(px(theme::FS_XS))
+                    .text_color(colors.text_3)
+                    .child(SharedString::from(line)),
+            );
+        }
+    }
+    column.into_any_element()
 }
 
 /// Basic markdown: paragraphs, headings, fenced code, bullet and numbered lists,
@@ -461,5 +639,64 @@ mod tests {
     fn an_empty_reply_does_not_take_a_row() {
         let session = Session { messages: vec![message("assistant", "   ", "2026-11-08T10:00:00Z")], ..Session::default() };
         assert!(build_rows(&session).is_empty());
+    }
+
+    fn tool(id: &str, kind: &str, at: &str) -> Tool {
+        Tool { id: Some(id.into()), kind: Some(kind.into()), started_at: Some(at.into()), ..Tool::default() }
+    }
+
+    #[test]
+    fn a_run_of_tool_steps_is_one_row_that_expands() {
+        // The live report: thirty commands before the final reply.
+        let tools: Vec<Tool> = (0..30)
+            .map(|index| tool(&format!("t{index}"), "shell", &format!("2026-11-08T10:00:{:02}Z", index % 60)))
+            .collect();
+        let session = Session { tools, ..Session::default() };
+        let rows = build_rows(&session);
+        assert_eq!(rows.len(), 1, "one muted row for the whole run");
+        match &rows[0] {
+            Row::Steps { summary, lines, key } => {
+                assert_eq!(summary, "Ran 30 commands");
+                assert_eq!(lines.len(), 30, "every step is still there, behind the row");
+                assert!(key.starts_with("steps:t0:30"));
+            }
+            other => panic!("expected one steps row, got {other:?}"),
+        }
+        assert_eq!(row_count(&session), 1);
+    }
+
+    #[test]
+    fn the_summary_counts_every_kind_of_step() {
+        let tools = vec![
+            tool("a", "shell", "2026-11-08T10:00:01Z"),
+            tool("b", "edit", "2026-11-08T10:00:02Z"),
+            tool("c", "read", "2026-11-08T10:00:03Z"),
+            tool("d", "grep", "2026-11-08T10:00:04Z"),
+        ];
+        let session = Session { tools, ..Session::default() };
+        let rows = build_rows(&session);
+        match &rows[0] {
+            Row::Steps { summary, .. } => assert_eq!(summary, "Ran 1 command · searched once · edited 1 file · read 1 file"),
+            other => panic!("expected a steps row, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_message_ends_the_run() {
+        let session = Session {
+            messages: vec![message("assistant", "Between", "2026-11-08T10:00:02Z")],
+            tools: vec![
+                tool("a", "shell", "2026-11-08T10:00:01Z"),
+                tool("b", "shell", "2026-11-08T10:00:03Z"),
+                tool("c", "shell", "2026-11-08T10:00:04Z"),
+            ],
+            ..Session::default()
+        };
+        let rows = build_rows(&session);
+        // One step, then the reply, then a run of two.
+        assert_eq!(rows.len(), 3, "{rows:?}");
+        assert!(matches!(rows[0], Row::Tool(_)));
+        assert!(matches!(rows[1], Row::Assistant(_)));
+        assert!(matches!(rows[2], Row::Steps { .. }));
     }
 }

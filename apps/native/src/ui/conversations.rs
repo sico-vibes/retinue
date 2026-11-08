@@ -13,6 +13,7 @@ use crate::ui::sidebar::{short_time, status_element};
 
 impl Root {
     pub(crate) fn render_conversations(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let tokens = self.tokens();
         let Some(agent) = self.selected_agent().cloned() else {
             return div()
                 .w(px(theme::CONVERSATIONS_WIDTH))
@@ -54,7 +55,7 @@ impl Root {
         }
         for group in &groups {
             let name = group.project.as_ref().map(|project| project.name.clone()).unwrap_or_else(|| "No project".to_owned());
-            let mut section = div().flex().flex_col().gap(px(theme::ROW_GAP)).pb(px(theme::GROUP_GAP)).child(
+            let mut section = div().flex().flex_col().gap(px(tokens.row_gap)).pb(px(tokens.group_gap)).child(
                 div()
                     .px(px(4.0))
                     .pt(px(6.0))
@@ -77,7 +78,7 @@ impl Root {
                         .flex_col()
                         .gap(px(2.0))
                         .px(px(10.0))
-                        .py(px(theme::CARD_PAD_Y))
+                        .py(px(tokens.card_pad_y))
                         .rounded(px(theme::RADIUS_MD))
                         .text_color(if is_selected { colors.text_1 } else { colors.text_2 })
                         .when(is_selected, |this| this.bg(colors.selected))
@@ -93,7 +94,7 @@ impl Root {
                                 .text_color(colors.text_3)
                                 .child(SharedString::from(short_time(session.stamp())))
                                 .child(div().child("·"))
-                                .child(status_element(status, colors)),
+                                .child(status_element(status, colors, &format!("convo-{}", session.id))),
                         )
                         .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| {
                             root.open_conversation(agent_id.clone(), session_id.clone(), cx);

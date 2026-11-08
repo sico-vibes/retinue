@@ -5,6 +5,7 @@
 //! unknown fields and event types are ignored rather than refused.
 
 pub mod projects;
+pub mod team;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -12,6 +13,13 @@ use serde_json::Value;
 use crate::daemon::client::DaemonEvent;
 
 pub use projects::{conversation_status, project_blocks, project_of_session, ConversationStatus, Tone};
+
+/// The bot's stored look, as far as the mark is concerned (`blob/haze/icons.ts`).
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Look {
+    pub icon: Option<String>,
+}
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -45,6 +53,12 @@ pub struct Agent {
     pub created_at: String,
     #[serde(default)]
     pub updated_at: String,
+    /// The Haze mark this bot shows: a portrait id or a logo choice.
+    #[serde(default)]
+    pub look: Option<Look>,
+    /// The preset this employee was hired from, when it was hired from one.
+    #[serde(default)]
+    pub preset_id: Option<String>,
 }
 
 impl Agent {
@@ -55,6 +69,45 @@ impl Agent {
     /// A bot the sidebar lists: not archived, not a sub-bot, not the CEO.
     pub fn is_employee(&self) -> bool {
         !self.archived && !self.hidden && self.parent_agent_id.is_none() && !self.is_manager()
+    }
+
+    pub fn icon(&self) -> Option<&str> {
+        self.look.as_ref().and_then(|look| look.icon.as_deref())
+    }
+
+    pub fn role_or_default(&self) -> &str {
+        self.role
+            .as_deref()
+            .map(str::trim)
+            .filter(|role| !role.is_empty())
+            .or_else(|| Some(self.description.trim()).filter(|text| !text.is_empty()))
+            .unwrap_or("Employee")
+    }
+}
+
+/// One coding agent the daemon found (`runtime.list`, and `runtimes` in the
+/// snapshot). The window only needs enough of it to label the agent and to see
+/// whether it can be used.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Runtime {
+    pub id: String,
+    pub provider: String,
+    pub display_name: Option<String>,
+    pub status: Option<String>,
+    pub auth_state: Option<String>,
+}
+
+impl Runtime {
+    /// `runtimeUsable`: an agent that is installed and signed in.
+    pub fn is_usable(&self) -> bool {
+        let status = self.status.as_deref().unwrap_or("");
+        let auth = self.auth_state.as_deref().unwrap_or("");
+        status != "missing" && status != "unavailable" && auth != "missing" && !self.id.is_empty()
+    }
+
+    pub fn label(&self) -> String {
+        crate::art::provider_name(&self.provider)
     }
 }
 
@@ -199,12 +252,54 @@ pub struct Permission {
     pub choices: Vec<String>,
     pub kind: Option<String>,
     pub status: Option<String>,
+    /// What the CEO proposes, carried by a `kind: "proposal"` card.
+    pub proposal: Option<Proposal>,
+}
+
+/// `ProposalCard` in `types.ts`.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct Proposal {
+    pub id: String,
+    pub kind: String,
+    pub payload: Option<Value>,
+}
+
+impl Proposal {
+    pub fn text(&self, key: &str) -> &str {
+        self.payload
+            .as_ref()
+            .and_then(|payload| payload.get(key))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+    }
 }
 
 impl Permission {
-    /// A question or a proposal is not answered with Allow/Deny in this slice.
+    /// A question or a proposal is not answered with Allow/Deny in this window.
     pub fn is_simple_approval(&self) -> bool {
         !matches!(self.kind.as_deref(), Some("question") | Some("proposal"))
+    }
+
+    pub fn proposal_kind(&self) -> Option<&str> {
+        let proposal = self.proposal.as_ref()?;
+        Some(proposal.kind.as_str())
+    }
+
+    /// A `hire` proposal, which this window can answer with `proposal.decide`.
+    pub fn is_hire_proposal(&self) -> bool {
+        matches!(self.proposal_kind(), Some("hire"))
+    }
+
+    /// A `bot` proposal, which this window can create from or skip.
+    pub fn is_bot_proposal(&self) -> bool {
+        matches!(self.proposal_kind(), Some("bot"))
+    }
+
+    /// Only `hire` and `bot` proposals are answered here; every other card,
+    /// including a question, still says to open Bitbots.
+    pub fn is_answerable_proposal(&self) -> bool {
+        self.is_hire_proposal() || self.is_bot_proposal()
     }
 }
 
@@ -216,9 +311,18 @@ pub struct Snapshot {
     pub sessions: Vec<Session>,
     pub projects: Vec<Project>,
     pub permissions: Vec<Permission>,
+    /// The coding agents the daemon knows. The mark needs each one's provider.
+    pub runtimes: Vec<Runtime>,
     /// Conversations this window saw deleted. A late event must not revive one.
     #[serde(skip)]
     pub deleted_sessions: Vec<String>,
+    /// Projects whose hiring changed since the last snapshot, as the event names
+    /// them. The window reloads each one's `project.members`.
+    #[serde(skip)]
+    pub dirty_members: Vec<String>,
+    /// Agents only arrive in a snapshot, so a hiring event asks for a fresh one.
+    #[serde(skip)]
+    pub refresh_wanted: bool,
 }
 
 impl Snapshot {
@@ -237,6 +341,20 @@ impl Snapshot {
     pub fn project_name(&self, id: Option<&str>) -> Option<&str> {
         let id = id?;
         self.projects.iter().find(|project| project.id == id).map(|project| project.name.as_str())
+    }
+
+    /// A bot's provider, through the runtime it runs on.
+    pub fn provider_of(&self, agent: &Agent) -> Option<String> {
+        self.runtimes
+            .iter()
+            .find(|runtime| runtime.id == agent.runtime_id)
+            .map(|runtime| runtime.provider.clone())
+            .filter(|provider| !provider.is_empty())
+    }
+
+    /// The runtime table's own order, usable agents first.
+    pub fn usable_runtimes(&self) -> Vec<&Runtime> {
+        self.runtimes.iter().filter(|runtime| runtime.is_usable()).collect()
     }
 
     /// The conversations a bot has, newest first, without side conversations.
@@ -275,7 +393,13 @@ pub fn apply_event(snapshot: &mut Snapshot, event: &DaemonEvent) {
                 }
             }
         }
-        "project.changed" => apply_project_changed(snapshot, payload),
+        "project.changed" => {
+            apply_project_changed(snapshot, payload);
+            snapshot.refresh_wanted = true;
+        }
+        "proposal.changed" => {
+            snapshot.refresh_wanted = true;
+        }
         "permission.requested" => {
             let row = payload.get("permission").cloned().unwrap_or_else(|| payload.clone());
             if let Ok(permission) = serde_json::from_value::<Permission>(row) {
@@ -297,6 +421,24 @@ pub fn apply_event(snapshot: &mut Snapshot, event: &DaemonEvent) {
         "tool.changed" | "command.changed" => apply_tool(snapshot, payload),
         "turn.completed" => set_turn_state(snapshot, payload, Some("completed")),
         "turn.error" => set_turn_state(snapshot, payload, None),
+        "runtime.changed" => {
+            if let Some(rows) = payload.get("runtimes").and_then(Value::as_array) {
+                if let Ok(runtimes) = serde_json::from_value::<Vec<Runtime>>(Value::Array(rows.clone())) {
+                    snapshot.runtimes = runtimes;
+                }
+            }
+        }
+        // Hiring changes who is in a project and can create an agent, and agents
+        // only arrive in a full snapshot: reload the members, and mark the
+        // snapshot stale so the window takes a fresh one.
+        "project.members.changed" => {
+            if let Some(project_id) = payload.get("projectId").and_then(Value::as_str) {
+                if !snapshot.dirty_members.iter().any(|seen| seen == project_id) {
+                    snapshot.dirty_members.push(project_id.to_owned());
+                }
+            }
+            snapshot.refresh_wanted = true;
+        }
         _ => {}
     }
 }

@@ -626,3 +626,10 @@ Symptom/ask: "Haze should be frosted glass", but the 26 October fix only made th
 - **Cause:** opening warms the provider (`session.warm` → resume in `main.rs`). The resume called `update_session_state(.., "idle")` (and `clear_session_provider_id`), and both write `updated_at`, which the sidebar shows as the conversation's age.
 - **Fix:** `Storage::set_session_state_quietly` (no `updated_at`) for the resume path; `clear_session_provider_id` no longer touches `updated_at`.
 - **Avoid:** `updated_at` means "something happened in the conversation". Housekeeping (resume, clearing a provider id) must not write it.
+
+## 2026-11-08 · Native (GPUI) slice 2 · What the review caught
+
+- **Replacing a SQLite file:** when the daemon has been killed rather than closed, `bloblex.db-wal` and `-shm` can survive. Moving only `bloblex.db` aside and writing a fresh copy in its place lets SQLite replay the stale log onto the new file. Move the sidecars with the main file (`install_copy` in `apps/native/src/ui/root.rs`), and run a large copy off the UI thread.
+- **GPUI flex scroll areas** need `.min_h(px(0.0))`, or the list grows past its parent and runs over a fixed footer (the CSS `min-height: 0` rule).
+- **Clipped text in GPUI** shows no "…" unless the element uses `.truncate()`. `overflow_hidden` with `nowrap` only cuts. A fixed-height multi-line box needs an explicit `line_height`, or the second line is cut in half.
+- **Checking the native window:** the lane can't see it. The Director launches the packaged exe with `BLOBLEX_DB_PATH` set to a backup copy of the real database, clicks with `SetCursorPos`/`mouse_event`, and captures with `CopyFromScreen`. Every fix round above came from those screenshots, not from the tests.

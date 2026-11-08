@@ -1,10 +1,14 @@
 # Native GPUI app (`apps/native`)
 
-The Rust port of Bitbots. Slice 1 (8 November 2026) is an installable core: the
+The Rust port of Bitbots. Slice 1 (8 November 2026) was an installable core: the
 window opens, starts its own `bitbotsd`, shows the projects tree, the
-conversations column and one conversation, and streams replies. Later slices add
-the remaining screens. Lane: Gogo; the Director reviews, runs the gates and
-commits.
+conversations column and one conversation, and streams replies. Slice 2 (8
+November 2026) adds the look, the team and new projects: Haze portraits and
+logos, the working shimmer, the marquee and the folding motion, the light theme
+and density, the Team page with hiring, new projects with the CEO staffing
+choice, hire and bot proposal cards, a first Settings page, daemon restart with
+backoff, and `scripts/install.ps1`. Later slices add the remaining screens.
+Lane: Gogo; the Director reviews, runs the gates and commits.
 
 ## Pinning GPUI
 
@@ -79,6 +83,58 @@ wants `Rgba` (`gpui::rgba(0x00000000)` for "no fill"), text runs want `Hsla`
   is readable when Windows draws nothing.
 - `std::os::windows::process::CommandExt::creation_flags(0x0800_0000)` is
   `CREATE_NO_WINDOW`, so the daemon child never flashes a console.
+- Windows' "Show animations" is `SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, ..)`
+  (`windows-sys`, feature `Win32_UI_WindowsAndMessaging`). GPUI has no
+  reduced-motion query at the pinned rev, so read it yourself, cache it in an
+  `AtomicBool`, and refresh it when the window appearance changes.
+
+## Images, SVG and build-time art (slice 2)
+
+- `svg()` draws one **tint** only (`render_alpha_mask`) and loads its file through
+  the app's `AssetSource`, which this window does not install. For a one-colour
+  drawing from bytes in the binary, paint it yourself:
+  `window.paint_svg(bounds, name.into(), Some(bytes), TransformationMatrix::default(), color, cx)`
+  inside a small custom `Element` (`src/art.rs` `TintSvg`). That is how the Lucide
+  icons and the tinted agent logos are drawn.
+- `img(Arc<Image>)` renders a PNG in colour. `Image::from_bytes(ImageFormat::Svg, ..)`
+  exists but its `to_image_data` path skips the BGRA swap the `img` asset loader
+  does, so full-colour SVGs are rasterised to PNG at **build time** instead:
+  `build.rs` renders with `resvg` (already in the lock through gpui) and encodes
+  with `image`, writes `<OUT_DIR>/art_assets.rs`, and `include!`s it. Mind the
+  alpha: `tiny_skia` pixmaps are premultiplied, so demultiply before encoding.
+- Decode each image once, into a `LazyLock<BTreeMap<&str, Arc<Image>>>`; `img()`
+  per frame would decode 30 portraits again every 16 ms.
+
+## Animation, appearance and dialogs (slice 2)
+
+- `element.with_animation(id, Animation::new(dur).repeat().with_easing(..), |el, delta| ..)`
+  drives the frames. `AnimationElement` has **no `.child`**: build the div with its
+  children first, then animate it, or use `.map_element(..)`.
+- A one-shot with a stable id runs once and stays at the end; to replay a close
+  animation, render for `dur` with a *different* id (`{key}:close`) and reverse the
+  delta. Keep the row mounted for that long with a timer, then drop it.
+- There is no `rotation` on `Div` and no gradient-to-text at this rev: fold
+  chevrons are two icons, and the working shimmer is a soft band of the text
+  colour slid across the word inside an `overflow_hidden` box.
+- `window.observe_window_appearance(..)` returns a `Subscription` that must be
+  kept alive, and it fires **immediately** on registration, so register it outside
+  `render` (the open-window closure is the safe place) and hand the result to the
+  root view.
+- `cx.prompt_for_paths(PathPromptOptions { files: false, directories: true, .. })`
+  works on Windows (IFileOpenDialog) and returns a oneshot receiver, so await it in
+  a `cx.spawn`.
+- Dialogs are an overlay: `div().absolute().top_0().left_0().size_full()` inside a
+  `relative()` root view. `overflow_y_scroll` is on `StatefulInteractiveElement`,
+  so the scrolling div needs an `.id(..)` first.
+
+## Restarting the daemon (slice 2)
+
+`worker.rs` runs one session at a time: start `bitbotsd`, snapshot, follow events,
+serve commands. `serve_commands` is a `tokio::select!` over the command channel and
+a 400 ms `child.try_wait()` poll; an exit it did not ask for returns `Died`, and
+the outer loop restarts after 1, 2, 5 and 10 s, then stops and offers Retry. A
+clean `Command::Shutdown` must return `Stopped`, or closing the window restarts
+the daemon.
 
 ## What the preview's daemon client does
 

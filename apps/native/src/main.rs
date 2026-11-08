@@ -5,6 +5,7 @@
 //! shows the projects tree, the conversations column and one conversation. Later
 //! slices add the remaining screens.
 
+mod art;
 mod daemon;
 mod paths;
 mod settings_file;
@@ -14,8 +15,8 @@ mod trace;
 mod ui;
 
 use gpui::{
-    px, size, App, AppContext, Application, Bounds, TitlebarOptions, WindowBackgroundAppearance,
-    WindowBounds, WindowOptions,
+    px, size, App, AppContext, Application, Bounds, TitlebarOptions, WindowAppearance,
+    WindowBackgroundAppearance, WindowBounds, WindowOptions,
 };
 
 fn main() {
@@ -45,9 +46,14 @@ fn main() {
                 ..Default::default()
             },
             move |window, cx| {
-                let root = cx.new(|cx| ui::Root::new(db_path, cx));
+                // Windows' theme at start, and the observer keeps it in step.
+                let appearance = window.appearance();
+                let system_is_light = appearance != WindowAppearance::Dark
+                    && appearance != WindowAppearance::VibrantDark;
+                let root = cx.new(|cx| ui::Root::new(db_path, system_is_light, cx));
                 let handle = root.read(cx).composer_handle(cx);
                 window.focus(&handle, cx);
+                root.update(cx, |root, cx| root.watch_appearance(window, cx));
                 root
             },
         )

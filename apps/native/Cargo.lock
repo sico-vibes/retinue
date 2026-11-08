@@ -553,16 +553,20 @@ version = "0.1.0"
 dependencies = [
  "async-channel 2.5.0",
  "chrono",
+ "embed-resource",
  "futures-util",
  "gpui",
+ "image",
  "log",
  "reqwest",
+ "resvg",
  "rusqlite",
  "serde",
  "serde_json",
  "tokio",
  "tokio-tungstenite",
  "uuid",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

@@ -1,22 +1,32 @@
-//! The sidebar, ported from `apps/desktop/src/ui/TeamSidebar.tsx` (its search
-//! box and CEO row) and `ui/ProjectsSidebar.tsx` (the Projects tree, the
-//! Projects | Team switch and the roster).
+//! The sidebar: `ui/TeamSidebar.tsx` (the header, the CEO row and the roster)
+//! and `ui/ProjectsSidebar.tsx` (the Projects tree, the Projects | Team switch,
+//! the project "+" menu and the roster).
 //!
-//! Room and rules follow the design language of 8 November 2026: project headers
-//! 32px with a fold chevron, employee rows two lines with a 28px portrait, the
-//! employee holding the selection shows its newest four conversations as
-//! two-line cards, and a conversation's state is a word at the end of its line.
+//! Follows the design language of 8 November 2026: project headers 32px with a
+//! rotating chevron, employee rows two lines beside a 28px mark, the employee
+//! holding the selection shows its newest four conversations as two-line cards,
+//! and a conversation's state is a word at the end of its line. Spacing comes
+//! from the density tokens, and the working word carries the sweep.
 
 use std::collections::BTreeSet;
+use std::time::Duration;
 
-use gpui::{div, prelude::*, px, AnyElement, Context, SharedString};
+use gpui::{div, prelude::*, px, Animation, AnimationExt, AnyElement, Context, SharedString, Window};
 
+use crate::art::{self, Glyph, Mark};
 use crate::state::{conversation_status, project_blocks, Agent, ConversationStatus, Session, Tone};
-use crate::theme::{self, Colors};
-use crate::ui::root::{Root, SidebarView};
+use crate::theme::{self, Colors, DensityTokens};
+use crate::ui::motion;
+use crate::ui::root::{ProjectMenu, Root, SidebarView};
+
+/// The width a sidebar row gives its title, for the marquee. Layout, not magic:
+/// the sidebar width less the row's portrait, padding and status.
+const NAME_WIDTH: f32 = 150.0;
+const TITLE_WIDTH: f32 = 200.0;
 
 impl Root {
-    pub(crate) fn render_sidebar(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    pub(crate) fn render_sidebar(&mut self, colors: Colors, window: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+        let tokens = self.tokens();
         div()
             .w(px(theme::SIDEBAR_WIDTH))
             .h_full()
@@ -26,95 +36,124 @@ impl Root {
             .bg(colors.sidebar)
             .border_r_1()
             .border_color(colors.line)
-            .child(self.render_search(colors))
-            .child(self.render_ceo_row(colors))
+            .child(self.render_search(colors, cx))
+            .child(self.render_ceo_row(colors, cx))
             .child(self.render_view_switch(colors, cx))
             .child(
                 div()
                     .id("sidebar-scroll")
                     .flex_1()
+                    // A flex child refuses to shrink below its content without
+                    // this, which pushed the tree over the footer.
+                    .min_h(px(0.0))
                     .w_full()
                     .overflow_y_scroll()
                     .child(match self.view {
-                        SidebarView::Projects => self.render_projects_tree(colors, cx).into_any_element(),
-                        SidebarView::Team => self.render_team_list(colors, cx).into_any_element(),
+                        SidebarView::Projects => self.render_projects_tree(colors, tokens, window, cx).into_any_element(),
+                        SidebarView::Team => self.render_team_list(colors, tokens, cx).into_any_element(),
                     }),
             )
-            .child(self.render_new_project(colors, cx))
+            .child(self.render_sidebar_footer(colors, cx))
             .into_any_element()
     }
 
     /// The search box: a placeholder in this slice, exactly as the brief allows.
-    fn render_search(&self, colors: Colors) -> AnyElement {
+    fn render_search(&self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
         div()
+            .id("sidebar-search")
             .mx(px(8.0))
             .mt(px(8.0))
             .h(px(30.0))
             .px(px(9.0))
             .flex()
             .items_center()
+            .gap(px(7.0))
             .rounded(px(theme::RADIUS_SM))
             .bg(colors.input)
             .border_1()
             .border_color(colors.line)
-            .text_color(colors.text_3)
-            .text_size(px(theme::FS_XS))
-            .child("Search")
+            .cursor_pointer()
+            .hover(move |style| style.border_color(colors.line_strong))
+            .child(art::glyph(Glyph::SEARCH, 12.0, colors.text_3))
+            .child(div().text_color(colors.text_3).text_size(px(theme::FS_XS)).child("Search"))
+            .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| {
+                root.notice = Some("Search comes in a later slice.".to_owned());
+                cx.notify();
+            }))
             .into_any_element()
     }
 
-    fn render_ceo_row(&self, colors: Colors) -> AnyElement {
-        let Some(manager) = self.snapshot().and_then(|snapshot| snapshot.manager()) else {
+    fn render_ceo_row(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let Some(manager) = self.snapshot().and_then(|snapshot| snapshot.manager()).cloned() else {
             return div().into_any_element();
         };
-        let initial = initial_of(&manager.name);
-        let tint = agent_color(&manager.color, colors);
+        let provider = self.provider_of(&manager);
+        let mark = Mark::for_agent(32.0, art::agent_color(&manager.color), manager.icon(), provider.as_deref(), manager.name.clone(), colors).render();
+        // A CEO whose role is its own name would say "CEO" twice.
+        let role = manager.role.as_deref().map(str::trim).unwrap_or("");
+        let show_role = !role.is_empty() && !role.eq_ignore_ascii_case(manager.name.trim());
         div()
+            .id("ceo-row")
             .mx(px(8.0))
             .mt(px(8.0))
-            .px(px(8.0))
-            .h(px(38.0))
+            .px(px(4.0))
+            .py(px(3.0))
             .flex()
             .items_center()
             .gap(px(9.0))
             .rounded(px(theme::RADIUS_MD))
-            .child(
-                div()
-                    .size(px(26.0))
-                    .flex_none()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .rounded(px(theme::RADIUS_SM))
-                    .bg(colors.avatar)
-                    .text_color(tint)
-                    .text_size(px(theme::FS_XS))
-                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .child(initial),
-            )
+            .cursor_pointer()
+            .hover(move |style| style.bg(colors.hover))
+            .child(mark)
             .child(
                 div()
                     .flex()
                     .flex_col()
                     .child(div().text_size(px(theme::FS_SM)).font_weight(gpui::FontWeight::MEDIUM).child(SharedString::from(manager.name.clone())))
-                    .child(div().text_size(px(theme::FS_2XS)).text_color(colors.text_3).child("CEO")),
+                    .when(show_role, |this| {
+                        this.child(div().text_size(px(theme::FS_2XS)).text_color(colors.text_3).child(SharedString::from(role.to_owned())))
+                    }),
             )
+            .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| root.select_agent(manager.id.clone(), cx)))
             .into_any_element()
     }
 
+    /// Projects | Team, then "Open team page" (the Team page in the main area).
     fn render_view_switch(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
         let projects = self.switch_button("Projects", SidebarView::Projects, colors, cx);
         let team = self.switch_button("Team", SidebarView::Team, colors, cx);
         div()
+            .flex()
+            .flex_col()
+            .gap(px(4.0))
             .mx(px(8.0))
             .my(px(8.0))
-            .p(px(2.0))
-            .flex()
-            .gap(px(2.0))
-            .rounded(px(theme::RADIUS_MD))
-            .bg(colors.hover)
-            .child(projects)
-            .child(team)
+            .child(
+                div()
+                    .p(px(2.0))
+                    .flex()
+                    .gap(px(2.0))
+                    .rounded(px(theme::RADIUS_MD))
+                    .bg(colors.hover)
+                    .child(projects)
+                    .child(team),
+            )
+            .child(
+                div()
+                    .id("open-team-page")
+                    .h(px(24.0))
+                    .px(px(6.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(theme::RADIUS_SM))
+                    .text_color(colors.text_2)
+                    .text_size(px(theme::FS_XS))
+                    .cursor_pointer()
+                    .hover(move |style| style.text_color(colors.text_1).bg(colors.hover))
+                    .child("Open team page")
+                    .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_team(crate::ui::root::TeamTab::Team, None, cx))),
+            )
             .into_any_element()
     }
 
@@ -132,36 +171,62 @@ impl Root {
             .text_color(if active { colors.text_1 } else { colors.text_2 })
             .text_size(px(theme::FS_XS))
             .cursor_pointer()
-            .hover(|style| style.text_color(colors.text_1))
+            .hover(move |style| style.text_color(colors.text_1))
             .child(SharedString::from(label.to_owned()))
             .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| root.set_view(view, cx)))
             .into_any_element()
     }
 
-    fn render_new_project(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    /// New project, and the gear that opens Settings.
+    fn render_sidebar_footer(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
         div()
-            .id("new-project")
             .mx(px(8.0))
             .mb(px(8.0))
-            .h(px(28.0))
-            .px(px(8.0))
+            .mt(px(6.0))
             .flex()
             .items_center()
-            .gap(px(6.0))
-            .rounded(px(theme::RADIUS_SM))
-            .text_color(colors.text_2)
-            .text_size(px(theme::FS_XS))
-            .cursor_pointer()
-            .hover(|style| style.text_color(colors.text_1))
-            .child("New project")
-            .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| {
-                root.notice = Some("New project comes in a later slice.".to_owned());
-                cx.notify();
-            }))
+            .gap(px(4.0))
+            .child(
+                div()
+                    .id("new-project")
+                    .flex_1()
+                    .h(px(28.0))
+                    .px(px(8.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(6.0))
+                    .rounded(px(theme::RADIUS_SM))
+                    .text_color(colors.text_2)
+                    .text_size(px(theme::FS_XS))
+                    .cursor_pointer()
+                    .hover(move |style| style.text_color(colors.text_1).bg(colors.hover))
+                    .child(art::glyph(Glyph::PLUS, 12.0, colors.text_2))
+                    .child("New project")
+                    .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_new_project(cx))),
+            )
+            .child(
+                div()
+                    .id("open-settings")
+                    .size(px(28.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(theme::RADIUS_SM))
+                    .cursor_pointer()
+                    .hover(move |style| style.bg(colors.hover))
+                    .child(art::glyph(Glyph::SETTINGS, 14.0, colors.text_2))
+                    .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_settings(cx))),
+            )
             .into_any_element()
     }
 
-    fn render_projects_tree(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    fn render_projects_tree(
+        &mut self,
+        colors: Colors,
+        tokens: DensityTokens,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
         let employees: Vec<Agent> = self.employees().into_iter().cloned().collect();
         let projects = self.snapshot().map(|snapshot| snapshot.projects.clone()).unwrap_or_default();
         let sessions = self.sessions().to_vec();
@@ -170,23 +235,31 @@ impl Root {
         let approvals = self.approval_session_ids();
         let selected_session = self.session_id.clone();
         let folded = self.folded_projects.clone();
+        let menu = self.menu.as_ref().map(|menu| menu.key.clone());
+        let hovered = self.hovered.clone();
 
-        let mut list = div().flex().flex_col().gap(px(theme::GROUP_GAP)).px(px(6.0)).py(px(4.0));
+        let mut list = div().flex().flex_col().gap(px(tokens.group_gap)).px(px(6.0)).py(px(4.0));
         if blocks.is_empty() {
             list = list.child(div().px(px(6.0)).py(px(6.0)).text_size(px(theme::FS_XS)).text_color(colors.text_3).child("No projects yet."));
         }
         for block in &blocks {
             let name = block.project.as_ref().map(|project| project.name.clone()).unwrap_or_else(|| "No project".to_owned());
             let is_folded = folded.contains(&block.key);
+            let closing = self.is_closing(&block.key);
             let key = block.key.clone();
-            let fold_icon = if is_folded { "›" } else { "⌄" };
-            let mut section = div()
+            let project_id = block.project.as_ref().map(|project| project.id.clone());
+            let menu_open = menu.as_deref() == Some(block.key.as_str());
+            let add_key = block.key.clone();
+            let add_name = name.clone();
+            let add_project = project_id.clone();
+            let mut head = div()
                 .flex()
-                .flex_col()
+                .items_center()
                 .gap(px(2.0))
                 .child(
                     div()
                         .id(SharedString::from(format!("project-{}", block.key)))
+                        .flex_1()
                         .h(px(32.0))
                         .px(px(8.0))
                         .flex()
@@ -196,8 +269,8 @@ impl Root {
                         .text_color(colors.text_2)
                         .text_size(px(theme::FS_SM))
                         .cursor_pointer()
-                        .hover(|style| style.text_color(colors.text_1).bg(colors.hover))
-                        .child(div().w(px(10.0)).text_size(px(theme::FS_XS)).child(fold_icon))
+                        .hover(move |style| style.text_color(colors.text_1).bg(colors.hover))
+                        .child(fold_chevron(!is_folded, closing, colors))
                         .child(div().flex_1().truncate().child(SharedString::from(name.clone())))
                         .when(is_folded && !block.bots.is_empty(), |this| {
                             this.child(
@@ -211,57 +284,211 @@ impl Root {
                             root.toggle_project_fold(key.clone(), cx);
                         })),
                 );
+            // The "+" that opens the project menu: a conversation, a hire, or the CEO.
+            if project_id.is_some() {
+                head = head.child(
+                    div()
+                        .id(SharedString::from(format!("project-add-{}", add_key)))
+                        .size(px(24.0))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(theme::RADIUS_SM))
+                        .opacity(if menu_open { 1.0 } else { 0.55 })
+                        .cursor_pointer()
+                        .hover(move |style| style.bg(colors.hover).opacity(1.0))
+                        .child(art::glyph(Glyph::PLUS, 12.0, colors.text_2))
+                        .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| {
+                            root.toggle_menu(
+                                ProjectMenu {
+                                    key: add_key.clone(),
+                                    project_id: add_project.clone(),
+                                    project_name: add_name.clone(),
+                                },
+                                cx,
+                            );
+                        })),
+                );
+            }
 
-            if !is_folded {
-                let mut rows = div().flex().flex_col().gap(px(theme::ROW_GAP)).pl(px(8.0)).py(px(2.0));
-                if block.bots.is_empty() {
-                    rows = rows.child(
-                        div()
-                            .px(px(10.0))
-                            .py(px(4.0))
-                            .text_size(px(theme::FS_XS))
-                            .text_color(colors.text_3)
-                            .child("No one here yet."),
-                    );
-                }
-                for bot in &block.bots {
-                    let Some(agent) = employees.iter().find(|agent| agent.id == bot.agent_id).cloned() else { continue };
-                    let row_key = format!("{}:{}", block.key, agent.id);
-                    let recent: Vec<&Session> = bot
-                        .session_ids
-                        .iter()
-                        .take(crate::state::projects::RECENT_PER_BOT)
-                        .filter_map(|id| sessions.iter().find(|session| &session.id == id))
-                        .collect();
-                    let holds_selection = recent.iter().any(|session| Some(&session.id) == selected_session.as_ref());
-                    let expanded = !recent.is_empty() && self.employee_folds.get(&row_key).copied().unwrap_or(holds_selection);
-                    let needs_you = self.employee_needs_you(&agent.id, &approvals);
-                    let working = recent.iter().any(|session| session.is_busy());
-                    rows = rows.child(self.render_employee(colors, cx, &agent, &recent, holds_selection, expanded, needs_you, working, &row_key));
-                }
-                section = section.child(rows);
+            let mut section = div().flex().flex_col().gap(px(2.0)).child(head);
+            if menu_open {
+                section = section.child(self.render_project_menu(colors, cx));
+            }
+
+            let mut rows = div().flex().flex_col().gap(px(tokens.row_gap)).pl(px(8.0)).py(px(2.0));
+            if block.bots.is_empty() {
+                // "No one hired yet. Hire an employee" (`ProjectsSidebar.tsx:147`).
+                let hire_project = project_id.clone();
+                rows = rows.child(
+                    div()
+                        .id(SharedString::from(format!("hire-empty-{}", block.key)))
+                        .px(px(10.0))
+                        .py(px(4.0))
+                        .text_size(px(theme::FS_XS))
+                        .text_color(colors.text_3)
+                        .when(hire_project.is_some(), |this| {
+                            this.cursor_pointer()
+                                .hover(move |style| style.text_color(colors.text_1))
+                        })
+                        .child(if hire_project.is_some() { "No one hired yet. Hire an employee" } else { "No one here yet." })
+                        .when_some(hire_project, |this, project_id| {
+                            this.on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| {
+                                root.open_team(crate::ui::root::TeamTab::Hire, Some(project_id.clone()), cx);
+                            }))
+                        }),
+                );
+            }
+            let mut content_height = 0.0;
+            for bot in &block.bots {
+                let Some(agent) = employees.iter().find(|agent| agent.id == bot.agent_id).cloned() else { continue };
+                let row_key = format!("{}:{}", block.key, agent.id);
+                let recent: Vec<Session> = bot
+                    .session_ids
+                    .iter()
+                    .take(crate::state::projects::RECENT_PER_BOT)
+                    .filter_map(|id| sessions.iter().find(|session| &session.id == id).cloned())
+                    .collect();
+                let holds_selection = recent.iter().any(|session| Some(&session.id) == selected_session.as_ref());
+                let expanded = !recent.is_empty()
+                    && self.employee_folds.get(&row_key).copied().unwrap_or(holds_selection);
+                let card_closing = self.is_closing(&row_key);
+                let needs_you = self.employee_needs_you(&agent.id, &approvals);
+                let working = recent.iter().any(|session| session.is_busy());
+                let cards_height = if recent.len() > 1 {
+                    recent.len() as f32 * (tokens.card_h) + tokens.row_gap * (recent.len() - 1) as f32 + tokens.nest_gap
+                } else {
+                    0.0
+                };
+                content_height += tokens.person_h + if expanded || card_closing { cards_height } else { 0.0 } + tokens.row_gap;
+                rows = rows.child(self.render_employee(
+                    colors,
+                    tokens,
+                    window,
+                    cx,
+                    &agent,
+                    &recent,
+                    holds_selection,
+                    expanded,
+                    card_closing,
+                    needs_you,
+                    working,
+                    &row_key,
+                    hovered.as_deref() == Some(row_key.as_str()),
+                    cards_height,
+                ));
+            }
+            if !is_folded || closing {
+                section = section.child(collapsible(
+                    format!("project-rows-{}", block.key),
+                    !is_folded,
+                    closing,
+                    content_height.max(tokens.person_h) + 6.0,
+                    rows.into_any_element(),
+                ));
             }
             list = list.child(section);
         }
         list.into_any_element()
     }
 
+    /// The project "+" menu: New conversation, Hire an employee, Ask the CEO.
+    fn render_project_menu(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+        let Some(menu) = self.menu.clone() else { return div().into_any_element() };
+        let project_id = menu.project_id.clone();
+        let project_name = menu.project_name.clone();
+        let items: [(Glyph, &str); 3] = [
+            (Glyph::MESSAGES, "New conversation"),
+            (Glyph::USER_PLUS, "Hire an employee…"),
+            (Glyph::BELL, "Ask the CEO who to hire"),
+        ];
+        let mut panel = div()
+            .mx(px(8.0))
+            .mb(px(2.0))
+            .p(px(3.0))
+            .flex()
+            .flex_col()
+            .gap(px(1.0))
+            .rounded(px(theme::RADIUS_SM))
+            .bg(colors.panel)
+            .border_1()
+            .border_color(colors.line_strong);
+        for (index, (glyph, label)) in items.into_iter().enumerate() {
+            let project = project_id.clone();
+            let name = project_name.clone();
+            let id = SharedString::from(format!("menu-{}-{index}", menu.key));
+            panel = panel.child(
+                div()
+                    .id(id)
+                    .h(px(28.0))
+                    .px(px(8.0))
+                    .flex()
+                    .items_center()
+                    .gap(px(7.0))
+                    .rounded(px(theme::RADIUS_SM))
+                    .text_size(px(theme::FS_XS))
+                    .text_color(colors.text_1)
+                    .cursor_pointer()
+                    .hover(move |style| style.bg(colors.hover))
+                    .child(art::glyph(glyph, 12.0, colors.text_2))
+                    .child(SharedString::from(label))
+                    .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| match index {
+                        0 => {
+                            if let Some(agent) = root.agent_id.clone() {
+                                root.new_conversation(agent, project.clone(), cx);
+                            } else {
+                                root.error = Some("Choose an employee first.".to_owned());
+                                cx.notify();
+                            }
+                        }
+                        1 => root.open_team(crate::ui::root::TeamTab::Hire, project.clone(), cx),
+                        _ => {
+                            if let Some(project_id) = project.clone() {
+                                root.ask_ceo_to_staff_for_menu(project_id, name.clone(), cx);
+                            }
+                        }
+                    })),
+            );
+        }
+        panel.into_any_element()
+    }
+
+    /// Ask the CEO from a project's menu: the project's own conversation, or a
+    /// note when it has no id yet.
+    fn ask_ceo_to_staff_for_menu(&mut self, project_id: String, _name: String, cx: &mut Context<Self>) {
+        self.ask_ceo_to_staff(project_id, cx);
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn render_employee(
-        &self,
+        &mut self,
         colors: Colors,
+        tokens: DensityTokens,
+        window: &mut Window,
         cx: &mut Context<Self>,
         agent: &Agent,
-        recent: &[&Session],
+        recent: &[Session],
         holds_selection: bool,
         expanded: bool,
+        card_closing: bool,
         needs_you: bool,
         working: bool,
         row_key: &str,
+        hovered: bool,
+        cards_height: f32,
     ) -> AnyElement {
-        let latest = recent.first().copied();
-        let tint = agent_color(&agent.color, colors);
-        let initial = initial_of(&agent.name);
+        let latest = recent.first();
+        let provider = self.provider_of(agent);
+        let mark = Mark::for_agent(
+            // 28 px in the tree, whatever the density; the row itself gives the room.
+            28.0,
+            art::agent_color(&agent.color),
+            agent.icon(),
+            provider.as_deref(),
+            agent.name.clone(),
+            colors,
+        )
+        .render();
         let status: Option<ConversationStatus> = if needs_you {
             Some(ConversationStatus { label: "Needs you", tone: Tone::Needs })
         } else if working {
@@ -282,8 +509,8 @@ impl Root {
         let agent_id = agent.id.clone();
         let latest_id = latest.map(|session| session.id.clone());
         let row_key_owned = row_key.to_owned();
-        let more_open = !recent.is_empty();
-        let more_agent = agent.id.clone();
+        let show_more = recent.len() > 1;
+        let hover_key = row_key.to_owned();
 
         let mut row = div()
             .flex()
@@ -293,31 +520,22 @@ impl Root {
             .child(
                 div()
                     .id(SharedString::from(format!("employee-{row_key}")))
-                    .h(px(theme::PERSON_HEIGHT))
+                    .h(px(tokens.person_h))
                     .px(px(8.0))
                     .flex()
                     .items_center()
                     .gap(px(10.0))
                     .rounded(px(theme::RADIUS_MD))
                     .cursor_pointer()
-                    .when(!holds_selection, |this| this.hover(|style| style.bg(colors.hover)))
-                    .child(
-                        div()
-                            .size(px(28.0))
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded(px(theme::RADIUS_SM))
-                            .bg(colors.avatar)
-                            .text_color(tint)
-                            .text_size(px(theme::FS_XS))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child(initial),
-                    )
+                    .when(!holds_selection, |this| this.hover(move |style| style.bg(colors.hover)))
+                    .on_hover(cx.listener(move |root, is_hovered: &bool, _window, cx| {
+                        root.set_hovered(is_hovered.then(|| hover_key.clone()), cx);
+                    }))
+                    .child(mark)
                     .child(
                         div()
                             .flex_1()
+                            .min_w(px(0.0))
                             .flex()
                             .flex_col()
                             .gap(px(1.0))
@@ -327,16 +545,19 @@ impl Root {
                                     .items_center()
                                     .gap(px(8.0))
                                     .child(
-                                        div()
-                                            .flex_1()
-                                            .truncate()
-                                            .text_size(px(theme::FS_SM))
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(colors.text_1)
-                                            .child(SharedString::from(agent.name.clone())),
+                                        motion::marquee(
+                                            SharedString::from(format!("name-{row_key}")),
+                                            SharedString::from(agent.name.clone()),
+                                            px(theme::FS_SM),
+                                            NAME_WIDTH,
+                                            holds_selection,
+                                            hovered,
+                                            colors,
+                                            window,
+                                        ),
                                     )
                                     .child(match status {
-                                        Some(status) => status_element(status, colors),
+                                        Some(status) => status_element(status, colors, &format!("status-{row_key}")),
                                         None if !time.is_empty() => div()
                                             .flex_none()
                                             .text_size(px(theme::FS_2XS))
@@ -365,7 +586,7 @@ impl Root {
                     })),
             );
 
-        if more_open && recent.len() > 1 {
+        if show_more {
             let fold_key = row_key.to_owned();
             row = row.child(
                 div()
@@ -375,7 +596,7 @@ impl Root {
                     .text_size(px(theme::FS_2XS))
                     .text_color(colors.text_3)
                     .cursor_pointer()
-                    .hover(|style| style.text_color(colors.text_1))
+                    .hover(move |style| style.text_color(colors.text_1))
                     .child(if expanded { "Hide conversations" } else { "Show conversations" })
                     .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| {
                         // The owner's choice wins from now on, so it is written
@@ -383,16 +604,18 @@ impl Root {
                         root.set_employee_fold(fold_key.clone(), !expanded, cx);
                     })),
             );
-            let _ = more_agent;
         }
 
-        if expanded {
-            let mut cards = div().flex().flex_col().gap(px(theme::ROW_GAP)).pl(px(26.0)).py(px(theme::NEST_GAP));
+        if expanded || card_closing {
+            let approvals = self.approval_session_ids();
+            let selected = self.session_id.clone();
+            let mut cards = div().flex().flex_col().gap(px(tokens.row_gap)).pl(px(26.0)).py(px(tokens.nest_gap));
             for session in recent {
-                let selected = Some(&session.id) == self.session_id.as_ref();
-                let status = conversation_status(session, self.approval_session_ids().contains(&session.id));
-                let agent_id = agent.id.clone();
-                let session_id = session.id.clone();
+                let is_selected = Some(&session.id) == selected.as_ref();
+                let status = conversation_status(session, approvals.contains(&session.id));
+                let card_agent = agent.id.clone();
+                let card_session = session.id.clone();
+                let card_key = format!("card-{}", session.id);
                 cards = cards.child(
                     div()
                         .id(SharedString::from(format!("conversation-{}", session.id)))
@@ -401,13 +624,21 @@ impl Root {
                         .flex_col()
                         .gap(px(2.0))
                         .px(px(10.0))
-                        .py(px(theme::CARD_PAD_Y))
+                        .py(px(tokens.card_pad_y))
                         .rounded(px(theme::RADIUS_MD))
-                        .text_color(if selected { colors.text_1 } else { colors.text_2 })
-                        .when(selected, |this| this.bg(colors.selected))
-                        .when(!selected, |this| this.hover(|style| style.bg(colors.hover).text_color(colors.text_1)))
-                        .cursor_pointer()
-                        .child(div().truncate().text_size(px(theme::FS_SM)).child(SharedString::from(session.title_or_default().to_owned())))
+                        .text_color(if is_selected { colors.text_1 } else { colors.text_2 })
+                        .when(is_selected, |this| this.bg(colors.selected))
+                        .when(!is_selected, |this| this.hover(move |style| style.bg(colors.hover).text_color(colors.text_1)))
+                        .child(motion::marquee(
+                            SharedString::from(format!("title-{}", session.id)),
+                            SharedString::from(session.title_or_default().to_owned()),
+                            px(theme::FS_SM),
+                            TITLE_WIDTH,
+                            is_selected,
+                            hovered,
+                            colors,
+                            window,
+                        ))
                         .child(
                             div()
                                 .flex()
@@ -417,28 +648,34 @@ impl Root {
                                 .text_color(colors.text_3)
                                 .child(SharedString::from(short_time(session.stamp())))
                                 .child(div().child("·"))
-                                .child(status_element(status, colors)),
+                                .child(status_element(status, colors, &card_key)),
                         )
                         .on_click(cx.listener(move |root, _: &gpui::ClickEvent, _window, cx| {
-                            root.open_conversation(agent_id.clone(), session_id.clone(), cx);
+                            root.open_conversation(card_agent.clone(), card_session.clone(), cx);
                         })),
                 );
             }
-            row = row.child(cards);
+            row = row.child(collapsible(
+                format!("employee-cards-{row_key}"),
+                expanded,
+                card_closing,
+                cards_height.max(1.0),
+                cards.into_any_element(),
+            ));
         }
         row.into_any_element()
     }
 
-    fn render_team_list(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    fn render_team_list(&mut self, colors: Colors, tokens: DensityTokens, cx: &mut Context<Self>) -> AnyElement {
         let employees: Vec<Agent> = self.employees().into_iter().cloned().collect();
         let approvals = self.approval_session_ids();
-        let mut list = div().flex().flex_col().gap(px(theme::ROW_GAP)).p(px(6.0));
+        let mut list = div().flex().flex_col().gap(px(tokens.row_gap)).p(px(6.0));
         if employees.is_empty() {
             list = list.child(div().px(px(6.0)).py(px(6.0)).text_size(px(theme::FS_XS)).text_color(colors.text_3).child("No employees yet"));
         }
         for agent in &employees {
-            let tint = agent_color(&agent.color, colors);
-            let initial = initial_of(&agent.name);
+            let provider = self.provider_of(agent);
+            let mark = Mark::for_agent(24.0, art::agent_color(&agent.color), agent.icon(), provider.as_deref(), agent.name.clone(), colors).render();
             let needs_you = self.employee_needs_you(&agent.id, &approvals);
             let working = self
                 .sessions()
@@ -452,34 +689,22 @@ impl Root {
                 None
             };
             let agent_id = agent.id.clone();
+            let status_key = format!("roster-{}", agent.id);
             list = list.child(
                 div()
                     .id(SharedString::from(format!("team-{}", agent.id)))
-                    .h(px(theme::CARD_HEIGHT))
+                    .h(px(tokens.team_row_h))
                     .px(px(8.0))
                     .flex()
                     .items_center()
                     .gap(px(10.0))
                     .rounded(px(theme::RADIUS_MD))
                     .cursor_pointer()
-                    .hover(|style| style.bg(colors.hover))
-                    .child(
-                        div()
-                            .size(px(24.0))
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .rounded(px(theme::RADIUS_SM))
-                            .bg(colors.avatar)
-                            .text_color(tint)
-                            .text_size(px(theme::FS_2XS))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child(initial),
-                    )
+                    .hover(move |style| style.bg(colors.hover))
+                    .child(mark)
                     .child(div().flex_1().truncate().text_size(px(theme::FS_SM)).child(SharedString::from(agent.name.clone())))
                     .child(match status {
-                        Some(status) => status_element(status, colors),
+                        Some(status) => status_element(status, colors, &status_key),
                         None => div()
                             .text_size(px(theme::FS_2XS))
                             .text_color(colors.text_3)
@@ -493,9 +718,9 @@ impl Root {
     }
 }
 
-/// A status in words, with a bell for *Needs you* and the working colour while
-/// something is happening. The shimmer is a later slice.
-pub(crate) fn status_element(status: ConversationStatus, colors: Colors) -> AnyElement {
+/// A status in words, with a bell for *Needs you*, an alert for an error and the
+/// shimmer on *Working*. Colour only when something is happening.
+pub(crate) fn status_element(status: ConversationStatus, colors: Colors, id: &str) -> AnyElement {
     let color = match status.tone {
         Tone::Needs => colors.status_working,
         Tone::Working => colors.status_working,
@@ -503,49 +728,77 @@ pub(crate) fn status_element(status: ConversationStatus, colors: Colors) -> AnyE
         Tone::Bad => colors.status_danger,
         Tone::Idle => colors.text_3,
     };
-    let icon = match status.tone {
-        Tone::Needs => Some("◔"),
-        Tone::Bad => Some("!"),
-        _ => None,
-    };
-    div()
+    let mut element = div()
         .flex()
+        .flex_none()
         .items_center()
         .gap(px(4.0))
         .text_size(px(theme::FS_2XS))
         .text_color(color)
-        .when(status.tone == Tone::Needs, |this| this.font_weight(gpui::FontWeight::MEDIUM))
-        .when_some(icon, |this, icon| this.child(div().text_size(px(theme::FS_2XS)).child(icon)))
-        .child(SharedString::from(status.label))
+        .when(status.tone == Tone::Needs, |this| this.font_weight(gpui::FontWeight::MEDIUM));
+    match status.tone {
+        Tone::Needs => element = element.child(art::glyph(Glyph::BELL, 10.0, color)).child(SharedString::from(status.label)),
+        Tone::Bad => element = element.child(art::glyph(Glyph::ALERT, 10.0, color)).child(SharedString::from(status.label)),
+        Tone::Working => element = element.child(motion::working_word(SharedString::from(format!("shimmer-{id}")), colors)),
+        _ => element = element.child(SharedString::from(status.label)),
+    }
+    element.into_any_element()
+}
+
+/// A box that grows or shrinks to `height` over 180 ms, and is instant when
+/// Windows is not showing animations. While open it stops clipping as soon as
+/// the animation finishes, so a height that is a little short never truncates
+/// the rows for good.
+fn collapsible(id: String, open: bool, closing: bool, height: f32, content: AnyElement) -> AnyElement {
+    if !motion::animations_enabled() {
+        return if open { content } else { div().into_any_element() };
+    }
+    if open {
+        let element = div()
+            .w_full()
+            .overflow_hidden()
+            .child(content)
+            .with_animation(
+                format!("{id}:open"),
+                Animation::new(Duration::from_millis(motion::COLLAPSE_MS)),
+                move |element, delta| {
+                    if delta >= 0.999 {
+                        element
+                    } else {
+                        element.max_h(px(height * motion::ease_out(delta)))
+                    }
+                },
+            );
+        return element.into_any_element();
+    }
+    if closing {
+        let element = div()
+            .w_full()
+            .overflow_hidden()
+            .child(content)
+            .with_animation(
+                format!("{id}:close"),
+                Animation::new(Duration::from_millis(motion::COLLAPSE_MS)),
+                move |element, delta| element.max_h(px(height * (1.0 - motion::ease_out(delta)))),
+            );
+        return element.into_any_element();
+    }
+    div().into_any_element()
+}
+
+/// The fold arrow: open points down, closed points right.
+pub(crate) fn fold_chevron(open: bool, closing: bool, colors: Colors) -> AnyElement {
+    let _ = closing;
+    let glyph = if open { Glyph::CHEVRON_DOWN } else { Glyph::CHEVRON };
+    div()
+        .w(px(12.0))
+        .h(px(12.0))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(art::glyph(glyph, 12.0, colors.text_3))
         .into_any_element()
-}
-
-pub(crate) fn initial_of(name: &str) -> SharedString {
-    SharedString::from(name.chars().next().map(|ch| ch.to_uppercase().to_string()).unwrap_or_else(|| "?".to_owned()))
-}
-
-/// The bot's own colour, from the app's swatch list (`ui/agentColor.ts`).
-pub(crate) fn agent_color(value: &str, _colors: Colors) -> gpui::Rgba {
-    let key = value.trim().to_lowercase();
-    let hex = match key.as_str() {
-        "coral" => 0xF38C6F,
-        "orange" => 0xF0A05A,
-        "amber" => 0xE8C15A,
-        "lemon" => 0xE4D56A,
-        "lime" => 0xA8D45C,
-        "mint" => 0x89D6B3,
-        "teal" => 0x5EBEB0,
-        "cyan" => 0x6EC8E0,
-        "sky" => 0x7EB6F0,
-        "blue" => 0x82AAFF,
-        "violet" => 0xBF9CFF,
-        "pink" => 0xF0A0C4,
-        other => {
-            let custom = other.strip_prefix('#').unwrap_or(other);
-            u32::from_str_radix(custom, 16).unwrap_or(0x89D6B3) & 0xFFFFFF
-        }
-    };
-    gpui::rgb(hex)
 }
 
 /// "now", "3m", "4h", "2d", then a short date: `relativeTime` in

@@ -1,13 +1,13 @@
-//! Haze (dark) tokens, copied from the app's own stylesheets:
-//! `apps/desktop/src/ui/themes/haze.css` lines 5-36 (surfaces, text, lines,
-//! status), `ui/theme.css` (the type scale, radii and base palette) and
-//! `ui/density.css` (row heights and gaps).
+//! Haze tokens, copied from the app's own stylesheets: `ui/themes/haze.css`
+//! (the dark block at lines 5-36 and the light block at 37-64), `ui/theme.css`
+//! (the type scale and the radii) and `ui/density.css` (`--dn-*`).
 //!
 //! Every colour and size in a view comes from here; no view holds a raw colour.
 //! Values are the CSS values, alpha included, so a later side-by-side check
 //! compares like with like.
 
 use gpui::{rgb, rgba, Rgba};
+use serde::{Deserialize, Serialize};
 
 /// The sidebar and the conversations column, from the app's shell layout.
 pub const SIDEBAR_WIDTH: f32 = 280.0;
@@ -26,69 +26,70 @@ pub const RADIUS_SM: f32 = 7.0;
 pub const RADIUS_MD: f32 = 10.0;
 pub const RADIUS_LG: f32 = 14.0;
 
-/// `--dn-*` at the default density (`ui/density.css`).
-pub const ROW_GAP: f32 = 3.0;
-pub const GROUP_GAP: f32 = 10.0;
-pub const NEST_GAP: f32 = 4.0;
-pub const CARD_PAD_Y: f32 = 6.0;
-pub const PERSON_HEIGHT: f32 = 46.0;
-pub const CARD_HEIGHT: f32 = 40.0;
-
 pub const UI_FONT: &str = "Segoe UI Variable Text";
 pub const MONO_FONT: &str = "Cascadia Mono";
+
+/// The version this build reports on the About page.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[derive(Clone, Copy, Debug)]
 #[allow(dead_code)]
 pub struct Colors {
-    /// `--haze-base` `#1a1b1d`, used opaque where nothing blurs.
+    pub dark: bool,
+    /// `--haze-base` `#1a1b1d` (dark) / `#f1efeb` (light), opaque.
     pub base: Rgba,
     /// The same base at 80%, the documented fallback when Windows draws no blur.
     pub backdrop_fallback: Rgba,
-    /// `--surface-sidebar` `rgb(16 17 19 / .08)`.
+    /// `--surface-sidebar`.
     pub sidebar: Rgba,
-    /// `--surface-panel` `rgb(34 35 38 / .97)`.
+    /// `--surface-panel`.
     pub panel: Rgba,
-    /// `--surface-raised` `rgb(255 255 255 / .055)`.
+    /// `--surface-raised`.
     pub raised: Rgba,
-    /// `--surface-overlay` `rgb(36 37 40 / .96)`.
+    /// `--surface-overlay`.
     pub overlay: Rgba,
-    /// `--surface-input` `rgb(0 0 0 / .22)`.
+    /// `--surface-input`.
     pub input: Rgba,
-    /// `--surface-hover` `rgb(255 255 255 / .06)`.
+    /// `--surface-hover`.
     pub hover: Rgba,
-    /// `--surface-selected` `rgb(255 255 255 / .085)`.
+    /// `--surface-selected`.
     pub selected: Rgba,
-    /// `--surface-selected-strong` `rgb(255 255 255 / .12)`.
+    /// `--surface-selected-strong`.
     pub selected_strong: Rgba,
-    /// `--surface-avatar` `rgb(255 255 255 / .07)`.
+    /// `--surface-avatar`.
     pub avatar: Rgba,
-    /// `--bubble-user` `rgb(255 255 255 / .085)`.
+    /// `--bubble-user`.
     pub bubble_user: Rgba,
-    /// `--text-1` `#f3f3f2`.
+    /// `--text-1`.
     pub text_1: Rgba,
-    /// `--text-2` `rgb(243 243 242 / .70)`.
+    /// `--text-2`.
     pub text_2: Rgba,
-    /// `--text-3` `rgb(243 243 242 / .50)`.
+    /// `--text-3`.
     pub text_3: Rgba,
-    /// `--line` `rgb(255 255 255 / .08)`.
+    /// `--text-inverse`: the label on a filled button.
+    pub text_inverse: Rgba,
+    /// `--line`.
     pub line: Rgba,
-    /// `--line-strong` `rgb(255 255 255 / .14)`.
+    /// `--line-strong`.
     pub line_strong: Rgba,
-    /// `--status-working` `#ffae42`.
+    /// `--status-working`.
     pub status_working: Rgba,
-    /// `--status-success` `#3ddc97`.
+    /// `--status-success`.
     pub status_success: Rgba,
-    /// `--status-danger` `#ff6b6b`.
+    /// `--status-danger`.
     pub status_danger: Rgba,
-    /// `--status-info` `#6ea8ff`.
+    /// `--status-info`.
     pub status_info: Rgba,
-    /// `--accent` `#f3f3f2` while the owner has no accent colour.
+    /// `--accent`: the owner's accent, or text-1 while there is none.
     pub accent: Rgba,
+    /// `--scrim`: behind a dialog.
+    pub scrim: Rgba,
 }
 
-/// Haze, dark. Light mode is a later slice; this is the look the owner uses.
+/// Haze, dark (`haze.css:5-36`).
 pub fn haze_dark() -> Colors {
     Colors {
+        dark: true,
         base: rgb(0x1a1b1d),
         backdrop_fallback: rgba(0x1a1b1dcc),
         sidebar: rgba(0x10111314),
@@ -104,6 +105,7 @@ pub fn haze_dark() -> Colors {
         text_1: rgb(0xf3f3f2),
         text_2: rgba(0xf3f3f2b3),
         text_3: rgba(0xf3f3f280),
+        text_inverse: rgb(0x1a1b1d),
         line: rgba(0xffffff14),
         line_strong: rgba(0xffffff24),
         status_working: rgb(0xffae42),
@@ -111,6 +113,188 @@ pub fn haze_dark() -> Colors {
         status_danger: rgb(0xff6b6b),
         status_info: rgb(0x6ea8ff),
         accent: rgb(0xf3f3f2),
+        scrim: rgba(0x00000052),
+    }
+}
+
+/// Haze, light (`haze.css:37-64`). The status colours are darker here so they
+/// stay readable on a pale backdrop, exactly as the stylesheet sets them.
+pub fn haze_light() -> Colors {
+    Colors {
+        dark: false,
+        base: rgb(0xf1efeb),
+        backdrop_fallback: rgba(0xf1efebee),
+        sidebar: rgba(0xffffff14),
+        panel: rgba(0xfaf9f7f7),
+        raised: rgba(0xffffff8c),
+        overlay: rgba(0xfcfbfaf7),
+        input: rgba(0xffffff99),
+        hover: rgba(0x1414140b),
+        selected: rgba(0x14141412),
+        selected_strong: rgba(0x1414141a),
+        avatar: rgba(0x1414140f),
+        bubble_user: rgba(0x14141412),
+        text_1: rgb(0x1b1b1a),
+        text_2: rgba(0x1b1b1aad),
+        text_3: rgba(0x1b1b1a80),
+        text_inverse: rgb(0xffffff),
+        line: rgba(0x14141414),
+        line_strong: rgba(0x14141424),
+        status_working: rgb(0xa86a00),
+        status_success: rgb(0x14875f),
+        status_danger: rgb(0xd23a52),
+        status_info: rgb(0x2f6bd6),
+        accent: rgb(0x1b1b1a),
+        scrim: rgba(0x00000052),
+    }
+}
+
+/// `theme` from Settings: follow Windows, or pin light or dark.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ThemeChoice {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl ThemeChoice {
+    pub const ALL: [ThemeChoice; 3] = [ThemeChoice::System, ThemeChoice::Light, ThemeChoice::Dark];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            ThemeChoice::System => "System",
+            ThemeChoice::Light => "Light",
+            ThemeChoice::Dark => "Dark",
+        }
+    }
+
+    /// The stored value, which is also the Settings file's word. `from_key` is
+    /// its inverse, for a settings file written by hand.
+    pub fn key(self) -> &'static str {
+        match self {
+            ThemeChoice::System => "system",
+            ThemeChoice::Light => "light",
+            ThemeChoice::Dark => "dark",
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_key(value: &str) -> Self {
+        match value.trim().to_lowercase().as_str() {
+            "light" => ThemeChoice::Light,
+            "dark" => ThemeChoice::Dark,
+            _ => ThemeChoice::System,
+        }
+    }
+}
+
+/// Whether the window is light: an explicit choice wins, System follows Windows
+/// (GPUI's `window.appearance()`).
+pub fn is_light(choice: ThemeChoice, system_is_light: bool) -> bool {
+    match choice {
+        ThemeChoice::Light => true,
+        ThemeChoice::Dark => false,
+        ThemeChoice::System => system_is_light,
+    }
+}
+
+/// The colours for a choice and the current Windows appearance.
+pub fn colors(choice: ThemeChoice, system_is_light: bool) -> Colors {
+    if is_light(choice, system_is_light) {
+        haze_light()
+    } else {
+        haze_dark()
+    }
+}
+
+/// `--dn-*` spacing, from `ui/density.css:8-19`. Heights, gaps and padding only:
+/// no colour, no type.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DensityTokens {
+    pub row_pad_y: f32,
+    pub row_gap: f32,
+    pub group_gap: f32,
+    pub nest_gap: f32,
+    pub card_pad_y: f32,
+    pub team_row_h: f32,
+    pub person_h: f32,
+    pub card_h: f32,
+}
+
+/// The owner's density choice.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Density {
+    Compact,
+    #[default]
+    Regular,
+    Roomy,
+}
+
+impl Density {
+    pub const ALL: [Density; 3] = [Density::Compact, Density::Regular, Density::Roomy];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Density::Compact => "Compact",
+            Density::Regular => "Regular",
+            Density::Roomy => "Roomy",
+        }
+    }
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Density::Compact => "compact",
+            Density::Regular => "regular",
+            Density::Roomy => "roomy",
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn from_key(value: &str) -> Self {
+        match value.trim().to_lowercase().as_str() {
+            "compact" => Density::Compact,
+            "roomy" => Density::Roomy,
+            _ => Density::Regular,
+        }
+    }
+
+    /// The `:root` block, the `compact` block or the `roomy` block.
+    pub fn tokens(self) -> DensityTokens {
+        match self {
+            Density::Regular => DensityTokens {
+                row_pad_y: 6.0,
+                row_gap: 3.0,
+                group_gap: 10.0,
+                nest_gap: 4.0,
+                card_pad_y: 6.0,
+                team_row_h: 36.0,
+                person_h: 46.0,
+                card_h: 40.0,
+            },
+            Density::Compact => DensityTokens {
+                row_pad_y: 3.0,
+                row_gap: 1.0,
+                group_gap: 6.0,
+                nest_gap: 2.0,
+                card_pad_y: 4.0,
+                team_row_h: 30.0,
+                person_h: 38.0,
+                card_h: 34.0,
+            },
+            Density::Roomy => DensityTokens {
+                row_pad_y: 9.0,
+                row_gap: 6.0,
+                group_gap: 16.0,
+                nest_gap: 6.0,
+                card_pad_y: 9.0,
+                team_row_h: 44.0,
+                person_h: 54.0,
+                card_h: 48.0,
+            },
+        }
     }
 }
 
@@ -129,5 +313,56 @@ mod tests {
         assert!((colors.selected.a * 255.0 - 22.0).abs() < 0.5);
         // The backdrop fallback is the documented "about 80% opaque".
         assert!((colors.backdrop_fallback.a - 0.8).abs() < 0.01);
+    }
+
+    #[test]
+    fn the_light_tokens_are_light_and_keep_their_own_status_colours() {
+        let light = haze_light();
+        assert!(!light.dark);
+        // #f1efeb: a pale backdrop, not the dark one.
+        assert!(light.base.r > 0.85 && light.base.g > 0.85 && light.base.b > 0.85);
+        // --text-1 #1b1b1a on light.
+        assert!(light.text_1.r < 0.2);
+        // The status colours are the light block's, not the dark block's.
+        assert!((light.status_working.r - 0xa8 as f32 / 255.0).abs() < 0.01);
+        assert!((haze_dark().status_working.r - 0xff as f32 / 255.0).abs() < 0.01);
+        // #fff on a filled button in light, #1a1b1d in dark.
+        assert!(light.text_inverse.r > 0.99);
+        assert!(haze_dark().text_inverse.r < 0.2);
+    }
+
+    #[test]
+    fn the_theme_choice_system_follows_windows_and_an_explicit_choice_wins() {
+        assert!(is_light(ThemeChoice::System, true));
+        assert!(!is_light(ThemeChoice::System, false));
+        assert!(is_light(ThemeChoice::Light, false), "an explicit choice wins over Windows");
+        assert!(!is_light(ThemeChoice::Dark, true));
+        assert_eq!(ThemeChoice::from_key("Light"), ThemeChoice::Light);
+        assert_eq!(ThemeChoice::from_key("nonsense"), ThemeChoice::System);
+        assert!(colors(ThemeChoice::Light, false).base.r > 0.85);
+        assert!(colors(ThemeChoice::Dark, true).base.r < 0.2);
+    }
+
+    #[test]
+    fn density_follows_the_stylesheet_tokens() {
+        let regular = Density::Regular.tokens();
+        assert_eq!((regular.person_h, regular.card_h, regular.row_gap), (46.0, 40.0, 3.0));
+        let compact = Density::Compact.tokens();
+        assert_eq!((compact.person_h, compact.card_h, compact.row_gap), (38.0, 34.0, 1.0));
+        let roomy = Density::Roomy.tokens();
+        assert_eq!((roomy.person_h, roomy.card_h, roomy.row_gap), (54.0, 48.0, 6.0));
+        // Compact is tighter and roomy is looser than regular on every measure.
+        for (tight, loose) in [
+            (compact.row_gap, roomy.row_gap),
+            (compact.group_gap, roomy.group_gap),
+            (compact.person_h, roomy.person_h),
+            (compact.card_h, roomy.card_h),
+            (compact.team_row_h, roomy.team_row_h),
+        ] {
+            assert!(tight < regular.row_gap.max(loose) || tight < loose);
+            assert!(tight < loose);
+        }
+        assert_eq!(Density::from_key("Compact"), Density::Compact);
+        assert_eq!(Density::from_key("unknown"), Density::Regular);
     }
 }
