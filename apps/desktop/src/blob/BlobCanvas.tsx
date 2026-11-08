@@ -10,6 +10,10 @@ import { useThemeStyle } from './bitbots'
 import { resolveArt, type BotArt } from './art/art'
 import { PaintedBlob } from './art/PaintedBlob'
 import { HazeMark } from './haze/HazeMark'
+import { profilePhotoUrl } from './photos'
+import { useLookProvider } from './haze/runtimeRegistry'
+import { ProviderLogo } from '../ui/providerBrand'
+import './photos.css'
 import './art/art.css'
 import type { ThemeStyle } from '../ui/appearance'
 
@@ -346,6 +350,9 @@ function ClassicBlobCanvas({ color, size = 52, mood = 'idle', className = '', la
 export function BlobCanvas(props: BlobCanvasProps) {
   const documentStyle = useThemeStyle() as string
   const style = props.style ? String(props.style) : documentStyle
+  // A profile photo wins in every look; an explicit art (the art picker's own previews) still draws that art.
+  const photo = props.art ? null : profilePhotoUrl(props.look)
+  if (photo) return <ProfilePhotoMark {...props} url={photo} />
   // Haze shows no mascot: a logo or a character. An explicit art (the art picker) still draws it.
   if (style === 'haze' && !props.art) return <HazeMark {...props} />
   switch (props.art ?? resolveArt(props.look, style)) {
@@ -353,4 +360,19 @@ export function BlobCanvas(props: BlobCanvasProps) {
     case 'blob': return <ClassicBlobCanvas {...props} />
     default: return <PaintedBlob {...props} />
   }
+}
+
+const RESTING = new Set(['offline', 'sleeping', 'rate_limited'])
+
+/** A round profile picture in place of the mascot (`blob/photos.ts`). */
+function ProfilePhotoMark({ url, size = 24, mood = 'idle', look, label = 'Bot', decorative = false, className = '', dragRegion = false }: BlobCanvasProps & { url: string }) {
+  const provider = useLookProvider(look)
+  const a11y = decorative ? { 'aria-hidden': true as const } : { role: 'img' as const, 'aria-label': label }
+  // The coding agent's logo in a small circle at the bottom right, as Slack and
+  // Teams show a status badge; too small to read below 20px, so it is left off.
+  const badge = provider && size >= 20 ? Math.max(12, Math.round(size * .4)) : 0
+  return <span className={`profile-photo-mark${RESTING.has(mood) ? ' is-resting' : ''} ${className}`} style={{ width: size, height: size }} data-tauri-drag-region={dragRegion || undefined} {...a11y}>
+    <span className="profile-photo-clip"><img src={url} alt="" draggable={false} /></span>
+    {badge > 0 && provider && <span className="profile-photo-badge" style={{ width: badge, height: badge }} aria-hidden="true"><ProviderLogo provider={provider} size={Math.round(badge * .68)} /></span>}
+  </span>
 }

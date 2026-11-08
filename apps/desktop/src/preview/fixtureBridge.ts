@@ -1392,6 +1392,8 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       description: typeof params.description === 'string' ? params.description : existing.description,
       instructions: typeof params.instructions === 'string' ? params.instructions : existing.instructions,
       color: typeof params.color === 'string' ? params.color : existing.color,
+      // The look the editor saved (icon, art, profile photo); the real daemon keeps it too.
+      ...(params.look && typeof params.look === 'object' && !Array.isArray(params.look) ? { look: params.look as Agent['look'] } : {}),
       runtimeId: nextRuntime,
       defaultProject: Object.prototype.hasOwnProperty.call(params, 'defaultProject') ? (typeof params.defaultProject === 'string' ? params.defaultProject : null) : existing.defaultProject,
       updatedAt: new Date().toISOString(),

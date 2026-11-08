@@ -1,0 +1,67 @@
+/* Profile photos (blob/photos.ts): a round picture in place of the mascot, in
+   every look. A hairline ring keeps a dark picture from melting into a dark
+   panel; a resting bot (offline, sleeping, limited) dims, as the marks do. */
+.profile-photo-mark {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  vertical-align: top;
+  transition: opacity 160ms ease, filter 160ms ease;
+}
+.profile-photo-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--surface-avatar, rgb(255 255 255 / .07));
+  box-shadow: 0 0 0 1px var(--line, rgb(255 255 255 / .08));
+}
+.profile-photo-clip img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  pointer-events: none;
+  user-select: none;
+}
+.profile-photo-mark.is-resting { opacity: .62; filter: saturate(.55); }
+
+/* The coding agent's logo, a small round badge sitting on the photo's lower
+   right edge, ringed in the panel colour so it reads on any picture. */
+.profile-photo-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--haze-base, #1a1b1d);
+  box-shadow: 0 0 0 1.5px var(--haze-base, #1a1b1d), 0 0 0 2.5px var(--line, rgb(255 255 255 / .08));
+}
+
+/* The picker's grid: the same option tiles, with the picture filling a circle. */
+/* Its own tile (not .look-style-option, which counts the art styles), drawn the same way. */
+.profile-photo-grid .profile-photo-option {
+  min-width: 0;
+  padding: 3px;
+  display: grid;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.profile-photo-grid .profile-photo-option:hover { background: var(--surface-hover); }
+.profile-photo-grid .profile-photo-option.selected { border-color: color-mix(in srgb, var(--look-accent, var(--line-strong)) 55%, var(--line-strong)); background: color-mix(in srgb, var(--look-accent, transparent) 9%, var(--surface-selected)); }
+.profile-photo-grid .profile-photo-option:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.profile-photo-grid .profile-photo-option:disabled { opacity: .35; cursor: default; }
+.profile-photo-grid .profile-photo-option img {
+  width: 34px;
+  height: 34px;
+  display: block;
+  object-fit: cover;
+  border-radius: 50%;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) { .profile-photo-mark { transition: none; } }

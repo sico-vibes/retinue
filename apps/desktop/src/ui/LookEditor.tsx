@@ -18,6 +18,7 @@ import { AGENT_SWATCHES, swatchForColor } from './agentColor'
 import { useEntityNoun } from './vocabulary'
 import { HAZE_ICONS, ICON_LABELS, LOGO_ICONS, type HazeIcon } from '../blob/haze/icons'
 import { CHARACTER_ASSETS, HAZE_CHARACTERS, isHazeCharacter } from '../blob/haze/characters'
+import { PROFILE_PHOTOS } from '../blob/photos'
 import { rememberLookRuntime, useLookProvider } from '../blob/haze/runtimeRegistry'
 
 type LookTab = 'style' | 'tune'
@@ -74,8 +75,9 @@ export function LookEditor({ look, color, colorHex, name, locked = false, runtim
   const provider = useLookProvider(look)
 
   const chooseArt = (next: BotArt | undefined) => {
-    if (next) { onLookChange({ ...look, art: next }); return }
-    const { art: _art, ...rest } = look
+    // An art choice puts the mascot back, so a profile photo steps aside.
+    if (next) { const { photo: _photo, ...kept } = look; onLookChange({ ...kept, art: next }); return }
+    const { art: _art, photo: _photo, ...rest } = look
     onLookChange(rest)
   }
 
@@ -96,11 +98,12 @@ export function LookEditor({ look, color, colorHex, name, locked = false, runtim
   }
 
   if (style === 'haze') {
-    const pick = (icon: HazeIcon) => onLookChange({ ...look, icon })
-    const current = look.icon ?? 'logo'
+    const pick = (icon: HazeIcon) => { const { photo: _photo, ...rest } = look; onLookChange({ ...rest, icon }) }
+    const current = look.photo ? null : look.icon ?? 'logo'
     const keyboardChoices = provider ? HAZE_ICONS : HAZE_CHARACTERS.map(({ id }) => id)
     const option = (icon: HazeIcon) => {
-      const preview = { ...look, icon }
+      const { photo: _photo, ...withoutPhoto } = look
+      const preview = { ...withoutPhoto, icon }
       rememberLookRuntime(preview, runtimeId)
       const selected = current === icon
       const initialTabStop = !keyboardChoices.includes(current as never) && icon === keyboardChoices[0]
@@ -133,7 +136,8 @@ export function LookEditor({ look, color, colorHex, name, locked = false, runtim
         <div className="haze-icon-grid logos">{LOGO_ICONS.map(option)}</div>
         <span className="look-section-label">Characters</span>
         <div className="haze-icon-grid haze-character-grid">{HAZE_CHARACTERS.map(({ id }) => option(id))}</div>
-        {!isHazeCharacter(current) && <div className="look-colour"><span className="look-section-label">Colour</span><SwatchGrid value={color} onChange={onColorChange} disabled={locked} /></div>}
+        <ProfilePhotoPicker look={look} locked={locked} onLookChange={onLookChange} />
+        {!look.photo && !isHazeCharacter(current) && <div className="look-colour"><span className="look-section-label">Colour</span><SwatchGrid value={color} onChange={onColorChange} disabled={locked} /></div>}
       </div>
     </div>
   }
@@ -155,6 +159,7 @@ export function LookEditor({ look, color, colorHex, name, locked = false, runtim
 
     <div className="look-panel">
       <StyleControl art={(RETIRED_ROBOT_ARTS as readonly unknown[]).includes(look.art) ? 'robot' : look.art} style={style} look={look} colorHex={colorHex} locked={locked} onChange={chooseArt} />
+      <ProfilePhotoPicker look={look} locked={locked} onLookChange={onLookChange} />
 
       {art === 'robot'
         ? <BotEditor look={look} color={color} colorHex={colorHex} locked={locked} onLookChange={onLookChange} onColorChange={onColorChange} />
@@ -369,3 +374,23 @@ function TraitSlider({ look, control, pinned, locked = false, onChange }: { look
 
 const keysOf = (control: LookControl): readonly string[] => typeof control.keys === 'string' ? [control.keys] : control.keys
 const controlKey = (control: LookControl) => keysOf(control).join('+')
+
+/** Round profile pictures (`blob/photos.ts`): a choice that wins in every look. */
+function ProfilePhotoPicker({ look, locked, onLookChange }: { look: BlobLook; locked: boolean; onLookChange: (look: BlobLook) => void }) {
+  if (!PROFILE_PHOTOS.length) return null
+  const choose = (id: BlobLook['photo']) => {
+    if (!id || look.photo === id) { const { photo: _photo, ...rest } = look; onLookChange(rest); return }
+    onLookChange({ ...look, photo: id })
+  }
+  return <>
+    <span className="look-section-label">Profile photos</span>
+    <div className="haze-icon-grid profile-photo-grid" role="radiogroup" aria-label="Profile photo">
+      {PROFILE_PHOTOS.map((photo, index) => {
+        const selected = look.photo === photo.id
+        return <button key={photo.id} type="button" role="radio" aria-checked={selected} aria-label={`Profile photo ${index + 1}`} title={selected ? 'Remove the photo' : `Profile photo ${index + 1}`} tabIndex={selected ? 0 : -1} disabled={locked} className={`profile-photo-option${selected ? ' selected' : ''}`} onClick={() => choose(photo.id)}>
+          <img src={photo.url} alt="" draggable={false} />
+        </button>
+      })}
+    </div>
+  </>
+}

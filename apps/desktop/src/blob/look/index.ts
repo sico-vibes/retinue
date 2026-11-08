@@ -13,6 +13,7 @@ import {
   type BotArt, type PaintedShape,
 } from '../art/art'
 import { isHazeIcon, type HazeIcon } from '../haze/icons'
+import { isProfilePhoto, type ProfilePhoto } from '../photos'
 import { rememberLookRuntime } from '../haze/runtimeRegistry'
 
 export * from './bot'
@@ -34,6 +35,8 @@ export interface BlobLook {
   paint?: PaintedShape
   /** The Haze look's mark: the runtime logo or a character. Omitted, it is the logo. */
   icon?: HazeIcon
+  /** A round profile picture (`blob/photos.ts`). Set, it wins over the art and the icon in every look. */
+  photo?: ProfilePhoto['id']
 }
 
 export const SHAPE_LABELS: Record<BlobShape, string> = {
@@ -88,6 +91,7 @@ export function normalizeLook(raw: unknown): BlobLook | null {
   if (isHazeIcon(value.icon)) look.icon = value.icon
   // A retired pixel icon becomes the logo in the bot colour.
   else if (typeof value.icon === 'string' && value.icon.startsWith('px-')) look.icon = 'logo-tint'
+  if (isProfilePhoto(value.photo)) look.photo = value.photo
   return look
 }
 
@@ -102,6 +106,7 @@ export function agentLook(agent: { id?: string | null; look?: unknown; runtimeId
     ...(stored?.art ? { art: stored.art } : {}),
     ...(stored?.paint ? { paint: stored.paint } : {}),
     ...(stored?.icon ? { icon: stored.icon } : {}),
+    ...(stored?.photo ? { photo: stored.photo } : {}),
   }
   rememberLookRuntime(look, agent?.runtimeId)
   return look
@@ -120,7 +125,7 @@ export function sameLook(a: BlobLook | null | undefined, b: BlobLook | null | un
 
 function lookKey(look: BlobLook) {
   const pinned = Object.entries(look.traits ?? {}).sort(([a], [b]) => a.localeCompare(b))
-  return JSON.stringify([look.shape, look.seed ?? '', pinned, look.bot ?? null, look.art ?? null, look.paint ?? null, look.icon ?? null])
+  return JSON.stringify([look.shape, look.seed ?? '', pinned, look.bot ?? null, look.art ?? null, look.paint ?? null, look.icon ?? null, look.photo ?? null])
 }
 
 const cache = new Map<string, FormLayout>()
