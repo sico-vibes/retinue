@@ -47,6 +47,8 @@ mod scaffold;
 mod mcp_bridge;
 mod model_presentation;
 mod team;
+// Phase 9: the 28 preset employees the owner hires into projects.
+mod presets;
 mod subbots;
 #[cfg(test)]
 mod subbots_tests;
@@ -960,14 +962,16 @@ async fn quota_poll_loop(st: AppState, mut events: broadcast::Receiver<EventEnve
     }
 }
 
-/// FIX36 D1: the default description of the built-in Manager.
-const MANAGER_DESCRIPTION: &str = "Runs your team: knows every project and bot, plans the work and asks before it acts.";
-/// FIX36 D1: the Manager's default persona (well under the 1200-character limit).
-const MANAGER_INSTRUCTIONS: &str = "You are the Manager. You work across all of the user's projects and know every bot on the team. When the user describes a goal, break it into steps, decide which project and which bots it touches, and propose the work. Ask the user before consequential actions: creating a project, creating a bot, assigning a task, or changing your own playbook. Keep answers short and concrete: what you know, what you plan, what you need. Delegate with message_blob by writing a self-contained brief. Never guess about the user's projects: call list_projects and list_blobs first, then act. If a request is vague, ask one clarifying question instead of inventing scope.";
+/// FIX36 D1: the default description of the built-in CEO.
+const MANAGER_DESCRIPTION: &str = "Runs your team: knows every project and employee, staffs each project and asks before it acts.";
+/// FIX36 D1: the CEO's default persona (well under the 1200-character limit).
+/// Phase 9 (8 November 2026): the Manager is the CEO, and it hires employees
+/// into projects from the preset catalogue.
+const MANAGER_INSTRUCTIONS: &str = "You are the CEO. Your team works in projects. You know every project and every employee on the team, you plan the work, and you ask before you act. When a project starts, or the owner asks you to staff one, interview them briefly first: the goal, the stack, what done looks like, and what matters most. Then call list_presets and propose_hires with the smallest team that fits, two to six people, each with a one-line reason. Reuse an employee already hired instead of hiring again. Use propose_bot only for a need no preset covers, and say why. Never hire anyone without a proposal the owner approves. Ask before any other consequential action: creating a project, creating a bot, assigning a task, or changing your own playbook. Delegate with message_blob by writing a self-contained brief. Keep answers short and concrete: what you know, what you plan, what you need. Never guess about the owner's projects: call list_projects and list_blobs first, then act. If a request is vague, ask one clarifying question instead of inventing scope.";
 
 async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, DispatchError> {
     match method {
-        "project.list" | "project.create" | "project.update" | "project.delete" | "agent.team.update" | "agent.conversation" | "agent.conversation.create" | "agent.conversations" | "agent.projects" => team::team_rpc(st, method, &p).await,
+        "project.list" | "project.create" | "project.update" | "project.delete" | "agent.team.update" | "agent.conversation" | "agent.conversation.create" | "agent.conversations" | "agent.projects" | "preset.list" | "project.members" | "project.hire" | "project.release" => team::team_rpc(st, method, &p).await,
         "outside.status" | "outside.preview" | "outside.enable" | "outside.disable" | "outside.sessions" => outside::rpc(st, method, &p).await,
         "external.status" | "external.enable" | "external.disable" | "external.setTier" | "external.setFullAccess" | "external.rotate" => external::rpc(st, method, &p).await,
         "automation.create" | "automation.list" | "automation.get" | "automation.update" | "automation.pause" | "automation.resume" | "automation.delete" | "automation.run_now" | "automation.runs" | "automation.preview" => automations::rpc(st, method, &p).await,
@@ -1024,10 +1028,10 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             if let Some(manager) = st.db.manager_agent().map_err(agent_error)? { return Ok(json!({"manager": manager, "created": false})); }
             let mut fields = if p.is_object() { p.clone() } else { json!({}) };
             if let Some(object) = fields.as_object_mut() { object.remove("agentId"); object.remove("systemRole"); object.remove("role"); }
-            if !fields["name"].is_string() { fields["name"] = json!("Manager"); }
+            if !fields["name"].is_string() { fields["name"] = json!("CEO"); }
             if !fields["description"].is_string() { fields["description"] = json!(MANAGER_DESCRIPTION); }
             if !fields["instructions"].is_string() { fields["instructions"] = json!(MANAGER_INSTRUCTIONS); }
-            fields["role"] = json!("Manager");
+            fields["role"] = json!("CEO");
             fields["systemRole"] = json!("manager");
             let agent = agent_create_from_rpc(st, fields).await?;
             Ok(json!({"manager": agent, "created": true}))
@@ -1037,8 +1041,19 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             let refs = secrets::parse_refs(&p["envRefs"])?;
             let mut fields = p.clone();
             if let Some(object) = fields.as_object_mut() { object.remove("envRefs"); }
+            // Phase 9: a new bot's project is a team placement, not a column of
+            // the create body (storage ignores it there), so it is written
+            // through the one path that validates it.
+            let project = fields.as_object_mut().and_then(|object| object.remove("projectId")).and_then(|value| value.as_str().filter(|id| !id.is_empty()).map(str::to_owned));
             let agent = agent_create_from_rpc(st, fields).await?;
             if !refs.is_empty() { if let Some(id) = agent["id"].as_str() { st.db.env_refs_set(id, &refs).map_err(agent_error)?; } }
+            let mut agent = agent;
+            if let (Some(project), Some(id)) = (project, agent["id"].as_str().map(str::to_owned)) {
+                let (_placed, events) = st.db.agent_set_team(&id, &json!({"projectId": project})).map_err(agent_error)?;
+                st.broadcast_persisted(events);
+                team::auto_hire(st, &id, &project).await;
+                agent = st.db.agent_get(&id).map_err(agent_error)?;
+            }
             Ok(json!({"agent": secrets::with_refs(st, agent)}))
         }
         "agent.update" => {
@@ -1087,12 +1102,21 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             let (agent, events) = st.db.agent_update(id, &fields).map_err(agent_error)?;
             if let Some(refs) = &refs { st.db.env_refs_set(id, refs).map_err(agent_error)?; }
             st.broadcast_persisted(events);
+            // Phase 9: a default project named here is a team placement, so it
+            // goes through the path that validates it and hires the bot.
+            let mut agent = agent;
+            if let Some(project) = p["projectId"].as_str().filter(|id| !id.is_empty()) {
+                let (_placed, placement_events) = st.db.agent_set_team(id, &json!({"projectId": project})).map_err(agent_error)?;
+                st.broadcast_persisted(placement_events);
+                team::auto_hire(st, id, project).await;
+                agent = st.db.agent_get(id).map_err(agent_error)?;
+            }
             Ok(json!({"agent":secrets::with_refs(st, agent)}))
         }
         "agent.delete" => {
             let id=p["agentId"].as_str().ok_or_else(||derr("invalid_argument","agentId is required",StatusCode::BAD_REQUEST))?;
             let existing=st.db.agent_get(id).map_err(agent_error)?;
-            if existing["systemRole"].as_str()==Some("manager") { return Err(derr("conflict","The Manager can't be removed; you can rename it or change its model",StatusCode::CONFLICT)); }
+            if existing["systemRole"].as_str()==Some("manager") { return Err(derr("conflict","The CEO can't be removed; you can rename it or change its model",StatusCode::CONFLICT)); }
             if bot_is_locked(&existing) { return Err(locked_bot_error()); }
             let (agent,events)=st.db.agent_archive(id).map_err(agent_error)?;
             st.broadcast_persisted(events);
@@ -1106,7 +1130,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             if p["confirm"] != true { return Err(derr("invalid_argument", "Confirm permanent deletion of the bot and its conversations.", StatusCode::BAD_REQUEST)); }
             let agent = st.db.agent_get(id).map_err(agent_error)?;
             if bot_is_locked(&agent) { return Err(locked_bot_error()); }
-            if agent["systemRole"] == "manager" { return Err(derr("conflict", "The Manager can't be removed; you can rename it or change its model", StatusCode::CONFLICT)); }
+            if agent["systemRole"] == "manager" { return Err(derr("conflict", "The CEO can't be removed; you can rename it or change its model", StatusCode::CONFLICT)); }
             // Phase 8: a parent's sub-bots go with it (each is purged the same way, so a busy one blocks it).
             for child in st.db.subbot_agents(Some(id)).map_err(agent_error)? {
                 if let Some(child_id) = child["id"].as_str() { Box::pin(dispatch(st, "agent.purge", json!({"agentId":child_id,"confirm":true}))).await?; }
@@ -2654,6 +2678,10 @@ pub(crate) async fn new_session_with(st: &AppState, p: Value, pin: Option<&ModeP
     // Stamp the conversation's project. A null stamp is left absent and inferred later.
     // Explicit null stamps nothing (a null stamp reads back as no project).
     st.db.merge_session_data(&id, &json!({"projectId": if explicit_none { None } else { project_id.clone() }})).map_err(agent_error)?;
+    // Phase 9: a conversation in a project hires its bot into that project, so
+    // every way of opening a conversation (a new chat, a task, an approved
+    // assignment, a side conversation) keeps the project's team true.
+    if let (Some(hired), Some(project)) = (agent_id.as_deref(), project_id.as_deref()) { team::auto_hire(st, hired, project).await; }
     // Phase 1: a conversation with its own worktree in a project with a setup script runs it once, before its first turn.
     if project_setup::wanted(st, project_id.as_deref(), &p["link"], &project) { st.db.merge_session_data(&id, &json!({"setupPending": true})).map_err(agent_error)?; }
     // A lazy conversation stops here: no provider is spawned. The first prompt
@@ -6119,13 +6147,13 @@ mod phase2a_tests {
         let main = opened["session"]["id"].as_str().unwrap().to_owned();
         assert_eq!(dispatch(&st, "agent.conversation", json!({"agentId":lead_id})).await.unwrap()["session"]["id"], main.as_str(), "one main conversation per blob");
         let lead_instructions = adapter.instructions.lock().unwrap()[&main].clone();
-        for expected in ["You are Lead, the user's Manager", "Your role: CTO.", "What you are for: Plans the work.", "address them as the admin", "You are a casual bot", "you ask the user before creating projects", "message_blob"] {
+        for expected in ["You are Lead, the user's CEO", "Your role: CTO.", "What you are for: Plans the work.", "address them as the admin", "You are a casual bot", "you ask the user before creating projects", "message_blob"] {
             assert!(lead_instructions.contains(expected), "missing {expected:?} in {lead_instructions}");
         }
 
         let listed = call_tool(&st, &main, "list_blobs", json!({})).await;
         let roster = listed["content"][0]["text"].as_str().unwrap();
-        assert!(roster.contains("- Lead (you) [manager] — CTO") && roster.contains("- Mate"), "{roster}");
+        assert!(roster.contains("- Lead (you) [ceo] — CTO") && roster.contains("- Mate"), "{roster}");
         for (args, error) in [(json!({"blob":"Lead","message":"hi"}), "You cannot message yourself"), (json!({"blob":"Nobody","message":"hi"}), "No teammate is called that"), (json!({"blob":"Mate","message":"  "}), "message is required")] {
             let result = call_tool(&st, &main, "message_blob", args).await;
             assert_eq!(result["isError"], true);
@@ -6271,7 +6299,7 @@ mod phase2a_tests {
             let refused = call_tool(&st, "worker-create", tool, json!({"blob":"Boss","name":"Nope"})).await;
             assert_eq!(refused["isError"], true, "{tool} must be refused for an ordinary bot");
             if tool == "create_blob" { assert_eq!(refused["content"][0]["text"], "Unknown tool create_blob."); }
-            else { assert_eq!(refused["content"][0]["text"], "Only the Manager can list projects or change bots. Ask the Manager (@Boss)."); }
+            else { assert_eq!(refused["content"][0]["text"], "Only the CEO can list projects or change bots. Ask the CEO (@Boss)."); }
         }
         // The Manager sees the two manager tools; create_blob is gone from the bridge.
         let boss_tools = tool_names(&team::mcp_rpc(&st, "boss-create", "mcp.tools.list", &json!({})).await.unwrap());
@@ -6292,10 +6320,10 @@ mod phase2a_tests {
         assert_eq!(worker["leader"], false);
 
         // The Manager is permanent: it cannot be archived, given a project or demoted.
-        assert_eq!(dispatch(&st, "agent.delete", json!({"agentId":boss_id})).await.unwrap_err().1.message, "The Manager can't be removed; you can rename it or change its model");
+        assert_eq!(dispatch(&st, "agent.delete", json!({"agentId":boss_id})).await.unwrap_err().1.message, "The CEO can't be removed; you can rename it or change its model");
         let project_id = st.db.project_list().unwrap()[0]["id"].as_str().unwrap().to_owned();
-        assert_eq!(dispatch(&st, "agent.team.update", json!({"agentId":boss_id,"projectId":project_id})).await.unwrap_err().1.message, "The Manager works across every project");
-        assert_eq!(dispatch(&st, "agent.team.update", json!({"agentId":boss_id,"leader":false})).await.unwrap_err().1.message, "The Manager can't be removed; you can rename it or change its model");
+        assert_eq!(dispatch(&st, "agent.team.update", json!({"agentId":boss_id,"projectId":project_id})).await.unwrap_err().1.message, "The CEO works across every project");
+        assert_eq!(dispatch(&st, "agent.team.update", json!({"agentId":boss_id,"leader":false})).await.unwrap_err().1.message, "The CEO can't be removed; you can rename it or change its model");
         // ... but its name can change, and it stays the Manager.
         let renamed = dispatch(&st, "agent.update", json!({"agentId":boss_id,"name":"Chief"})).await.unwrap()["agent"].clone();
         assert_eq!(renamed["name"], "Chief");
@@ -6312,8 +6340,8 @@ mod phase2a_tests {
         let first = dispatch(&st, "manager.ensure", json!({"runtimeId":runtime_id})).await.unwrap();
         assert_eq!(first["created"], true);
         let manager = first["manager"].clone();
-        assert_eq!((manager["name"].as_str(), manager["role"].as_str(), manager["systemRole"].as_str()), (Some("Manager"), Some("Manager"), Some("manager")));
-        assert_eq!(manager["description"], "Runs your team: knows every project and bot, plans the work and asks before it acts.");
+        assert_eq!((manager["name"].as_str(), manager["role"].as_str(), manager["systemRole"].as_str()), (Some("CEO"), Some("CEO"), Some("manager")));
+        assert_eq!(manager["description"], "Runs your team: knows every project and employee, staffs each project and asks before it acts.");
         assert_eq!(manager["effectiveApprovalMode"], "bypass");
         assert!(manager["projectId"].is_null());
         assert!(manager["instructions"].as_str().unwrap().chars().count() < 1200, "the manager persona stays short");
@@ -6321,7 +6349,7 @@ mod phase2a_tests {
         let second = dispatch(&st, "manager.ensure", json!({"runtimeId":runtime_id,"name":"Other"})).await.unwrap();
         assert_eq!(second["created"], false);
         assert_eq!(second["manager"]["id"], manager["id"]);
-        assert_eq!(st.db.agent_list(false, None).unwrap().len(), 1, "only the Manager exists");
+        assert_eq!(st.db.agent_list(false, None).unwrap().len(), 1, "only the CEO exists");
         assert_eq!(dispatch(&st, "manager.get", json!({})).await.unwrap()["manager"]["id"], manager["id"]);
     }
     #[tokio::test]
@@ -6334,19 +6362,19 @@ mod phase2a_tests {
         let main = json!({"kind":"main"});
         // With no Manager yet, an ordinary bot is told to ask the user to set one up.
         let no_manager = team::runtime_instructions(&st, &mate, &main, std::path::Path::new("."));
-        assert!(no_manager.contains("tell the user they need to set up a Manager"), "{no_manager}");
+        assert!(no_manager.contains("tell the user they need to set up a CEO"), "{no_manager}");
         // Every bot is told what the composer's `#` means, not only the Manager.
         assert!(no_manager.contains("A #Name in the user's message names a project"), "{no_manager}");
         assert!(!no_manager.contains("tag the Manager as @"), "{no_manager}");
         // The Manager gets the manager paragraph, not the refusal.
         let boss = dispatch(&st, "manager.ensure", json!({"name":"Boss","runtimeId":runtime_id})).await.unwrap()["manager"].clone();
         let as_manager = team::runtime_instructions(&st, &boss, &main, std::path::Path::new("."));
-        assert!(as_manager.contains("You are Boss, the user's Manager"), "{as_manager}");
-        assert!(as_manager.contains("you ask the user before creating projects, bots or assigning tasks."), "{as_manager}");
+        assert!(as_manager.contains("You are Boss, the user's CEO"), "{as_manager}");
+        assert!(as_manager.contains("you ask the user before creating projects, bots, hiring or assigning tasks."), "{as_manager}");
         assert!(!as_manager.contains("You cannot create projects or bots"), "{as_manager}");
         // Another bot is told to tag the Manager by its real name.
         let named = team::runtime_instructions(&st, &mate, &main, std::path::Path::new("."));
-        assert!(named.contains("tag the Manager as @Boss so the user can ask them"), "{named}");
+        assert!(named.contains("tag the CEO as @Boss so the user can ask them"), "{named}");
     }
     #[tokio::test]
     async fn team_prose_always_says_bot() {
@@ -12358,7 +12386,7 @@ mod phase2a_tests {
         for tool in ["propose_project", "propose_bot", "assign_task"] {
             let refused = call_tool(&st, "worker-main", tool, json!({"name":"X","brief":"do it","provider":"codex"})).await;
             assert_eq!(refused["isError"], true, "{tool} must be refused for an ordinary bot");
-            assert_eq!(refused["content"][0]["text"], "Only the Manager can list projects or change bots. Ask the Manager (@Boss).");
+            assert_eq!(refused["content"][0]["text"], "Only the CEO can list projects or change bots. Ask the CEO (@Boss).");
         }
         let worker_tools = tool_names(&team::mcp_rpc(&st, "worker-main", "mcp.tools.list", &json!({})).await.unwrap());
         let boss_tools = tool_names(&team::mcp_rpc(&st, "boss-main", "mcp.tools.list", &json!({})).await.unwrap());
@@ -12519,7 +12547,7 @@ mod phase2a_tests {
         for tool in ["remember_about_user", "forget_about_user", "recall_about_user", "update_playbook"] {
             let refused = call_tool(&st, "worker-main", tool, json!({"category":"identity","key":"x","value":"y","text":"z"})).await;
             assert_eq!(refused["isError"], true, "{tool} must be refused for an ordinary bot");
-            assert!(refused["content"][0]["text"].as_str().unwrap().contains("Only the Manager"), "{refused}");
+            assert!(refused["content"][0]["text"].as_str().unwrap().contains("Only the CEO"), "{refused}");
         }
         let boss_tools = tool_names(&team::mcp_rpc(&st, "boss-main", "mcp.tools.list", &json!({})).await.unwrap());
         for tool in ["remember_about_user", "forget_about_user", "recall_about_user", "update_playbook"] {
@@ -12624,7 +12652,7 @@ mod phase2a_tests {
     async fn manager_context_block_is_only_for_the_manager_and_resent_only_when_it_changes() {
         let (st, _rx, _data, boss_id, _worker) = proposal_state().await;
 
-        // Only the Manager's session produces the block.
+        // Only the CEO's session produces the block.
         assert!(crate::knowledge::context_for_prompt(&st, "worker-main").is_none(), "an ordinary bot never gets it");
         let first = crate::knowledge::context_for_prompt(&st, "boss-main").expect("the Manager gets the block");
         assert!(first.contains("<bloblex_manager>") && first.contains("</bloblex_manager>"));
@@ -12678,7 +12706,7 @@ mod phase2a_tests {
             && message["meta"]["kind"] == "context_reset"
             && message["meta"]["reason"] == "manager_handover"
             && message["meta"]["contextLost"] == false
-            && message["content"] == "New model, same Manager. It has its notes and playbook."), "{messages:?}");
+            && message["content"] == "New model, same CEO. It has its notes and playbook."), "{messages:?}");
         assert!(st.db.session_manager_handover("boss-main").unwrap(), "the handover is armed");
         // An ordinary bot never arms one.
         crate::knowledge::announce_model_change(&st, "worker-main").await;
@@ -13131,6 +13159,9 @@ mod phase2a_tests {
 
     // Phase 6 (Gogo's lane): a project's icon, and the favicon in its own folder.
     include!("project_icon_tests.rs");
+
+    // Phase 9 (Gogo's lane): employees, hiring and the CEO.
+    include!("phase9_tests.rs");
 
     // Phase 5 (Sona S1): secrets in the credential store, and one-use secret requests.
     include!("secrets_tests.rs");
@@ -14623,7 +14654,7 @@ mod fix39_p6_tests {
         st.db.update_session_state(worker_main, "idle").unwrap();
         let refused = team::mcp_rpc(&st, worker_main, "mcp.tools.call", &json!({"name":"update_project","arguments":{"project":project["id"],"tags":["nope"]}})).await.unwrap();
         assert_eq!(refused["isError"], true);
-        assert!(refused["content"][0]["text"].as_str().unwrap().contains("Only the Manager"));
+        assert!(refused["content"][0]["text"].as_str().unwrap().contains("Only the CEO"));
         assert_eq!(st.db.project_get(project["id"].as_str().unwrap()).unwrap()["tags"], json!([]), "nothing changed");
     }
 

@@ -538,6 +538,14 @@ const NO_DESKTOP_BACKDROP: WindowBackdrop = { effect: 'none', active: false, tra
  * resolves to an honest report even when Windows will not draw it, and never
  * throws into the UI.
  */
+/** Tells the shell the main window has painted, so it can be shown (8 November
+ * 2026: showing it before restoring its size left stray lines from the first
+ * frame). The shell also shows it on a timer if this never arrives. */
+export async function mainWindowReady(): Promise<void> {
+  if (!inDesktop) return
+  try { await invoke('main_window_ready') } catch { /* an older shell shows the window itself */ }
+}
+
 export async function applyWindowBackdrop(enabled: boolean, dark: boolean): Promise<WindowBackdrop> {
   if (!inDesktop) return NO_DESKTOP_BACKDROP
   try {

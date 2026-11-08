@@ -27,7 +27,7 @@ it('lists assigned work across bots, opens it and folds finished work', async ()
     expect(panel.querySelector('time')?.textContent).toMatch(/^1m \d+s$/)
     await act(async () => panel.querySelector<HTMLButtonElement>('[data-task-id="Investigate"]')!.click())
     expect(open).toHaveBeenCalledWith('Investigate')
-    expect(panel.querySelector('details')?.open).toBe(false)
+    expect(panel.querySelector('.working-bots-finished-toggle')?.getAttribute('aria-expanded')).toBe('false')
     await act(async () => root.render(<WorkingBotsPanel agents={agents} sessions={sessions.map(s => s.id === 'Queued task' ? { ...s, state: 'working', messages: [{ role: 'user', content: 'Start now', meta: { kind: 'blob_message' } }] } : s)} selectedId={null} onOpen={open} />))
     expect(panel.querySelector('[data-task-id="Queued task"]')?.textContent).toContain('Working')
   } finally { act(() => root.unmount()); host.remove() }
@@ -51,6 +51,8 @@ it('keeps an unhydrated side session out until its finished turn arrives', async
     const panel = host.querySelector('[aria-label="Working bots"]')!
     expect(panel.textContent).toContain('1 finished')
     expect(panel.textContent).not.toContain('Waiting')
+    // The finished list is folded (and not mounted) until it is opened.
+    await act(async () => panel.querySelector<HTMLButtonElement>('.working-bots-finished-toggle')!.click())
     expect(panel.querySelector('time')?.textContent).toBe('1h 0m')
   } finally { act(() => root.unmount()); host.remove() }
 })

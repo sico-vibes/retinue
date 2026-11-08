@@ -68,8 +68,8 @@ export function FirstRunOnboarding({ runtimes, scanning, error, onScan, onCreate
   const [pickedLook, setPickedLook] = useState<ThemeStyle | null>(null)
   const [name, setName] = useState('')
   // The first bot is a full draft, so its look, colour, role and description are chosen here, not later.
-  // Onboarding sets up the Manager: the one bot that runs the team.
-  const [draft, setDraft] = useState<AgentDraft>(() => ({ ...createDraft(runtimes, null), name: 'Manager', color: 'violet' }))
+  // Onboarding sets up the CEO: the one bot that runs the team.
+  const [draft, setDraft] = useState<AgentDraft>(() => ({ ...createDraft(runtimes, null), name: 'CEO', color: 'violet' }))
   const [models, setModels] = useState<CatalogModel[]>([])
   const [modelLoading, setModelLoading] = useState(false)
   const [modelError, setModelError] = useState<string | null>(null)
@@ -166,10 +166,10 @@ export function FirstRunOnboarding({ runtimes, scanning, error, onScan, onCreate
         {notSignedIn && <div className="onboarding-guide-block"><small>{guide.signInSummary}</small><div className="onboarding-command"><span>Sign in</span><code>{guide.signInCommand}</code>{copyButton(guide.signInCommand, 'Copy ' + providerName + ' sign-in command')}<a className="onboarding-doc-link" href={guide.signInDocsUrl}>Docs</a></div></div>}
       </article>
     })}</div>{copyNotice && <p role="status" className="onboarding-notice">{copyNotice}</p>}{friendlyScanError && <p role="alert">{friendlyScanError.title}{friendlyScanError.detail ? ' ' + friendlyScanError.detail : ''}</p>}<div className="onboarding-actions split"><button className="ghost-button" onClick={() => setStep(0)}>Back</button><button className="secondary-button" onClick={onScan} disabled={scanning}><Search size={14} />{scanning ? 'Scanning…' : 'Scan again'}</button>{runtimes.length ? <button className="primary-button" onClick={() => setStep(2)}>Continue</button> : <button className="primary-button" onClick={finish}>Continue without an agent</button>}</div></section>}
-    {step === 2 && <section className="onboarding-step onboarding-bot-step"><h1 id="onboarding-title" tabIndex={-1} ref={headingRef}>Meet your Manager</h1><p>It plans the work with you and asks before it creates anything. You can change all of this later.</p>
+    {step === 2 && <section className="onboarding-step onboarding-bot-step"><h1 id="onboarding-title" tabIndex={-1} ref={headingRef}>Meet your CEO</h1><p>It plans the work with you and asks before it creates anything. You can change all of this later.</p>
       <div className="onboarding-bot-layout">
         <div className="onboarding-bot-look">
-          <LookEditor look={look} runtimeId={draft.runtimeId} color={draft.color} colorHex={colorHex} name={draft.name.trim() || 'Manager'} onLookChange={(next, color) => setDraft({ ...draft, look: next, color: color ?? draft.color })} onColorChange={(next) => setDraft({ ...draft, color: next })} />
+          <LookEditor look={look} runtimeId={draft.runtimeId} color={draft.color} colorHex={colorHex} name={draft.name.trim() || 'CEO'} onLookChange={(next, color) => setDraft({ ...draft, look: next, color: color ?? draft.color })} onColorChange={(next) => setDraft({ ...draft, color: next })} />
         </div>
         <div className="onboarding-bot-fields">
           <label className="onboarding-field">Name<input className="text-input" value={draft.name} maxLength={40} onChange={(event) => setDraft({ ...draft, name: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter' && ready) { event.preventDefault(); void create() } }} /></label>
@@ -183,7 +183,7 @@ export function FirstRunOnboarding({ runtimes, scanning, error, onScan, onCreate
       </div>
       {error && <p role="alert" className="onboarding-error">{error}</p>}
       <ImportTemplate onImported={finish} />
-      <div className="onboarding-actions split"><button className="ghost-button" disabled={creating} onClick={() => setStep(1)}>Back</button><button className="primary-button" onClick={() => void create()} disabled={creating || !ready}>{creating ? 'Setting up…' : celebrated ? 'Ready' : 'Create Manager'}</button></div>
+      <div className="onboarding-actions split"><button className="ghost-button" disabled={creating} onClick={() => setStep(1)}>Back</button><button className="primary-button" onClick={() => void create()} disabled={creating || !ready}>{creating ? 'Setting up…' : celebrated ? 'Ready' : 'Create CEO'}</button></div>
     </section>}
   </section></main>
 }

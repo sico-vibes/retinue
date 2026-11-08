@@ -90,13 +90,13 @@ pub fn directive(st: &AppState, session_id: &str, value: &Value) -> Result<Optio
         }
         "manager" => {
             if !is_manager_session(st, session_id) {
-                return Err(invalid("That command is only for the Manager."));
+                return Err(invalid("That command is only for the CEO."));
             }
             let instruction = MANAGER_COMMANDS
                 .iter()
                 .find(|(candidate, _)| *candidate == name)
                 .map(|(_, text)| *text)
-                .ok_or_else(|| invalid(format!("There is no Manager command \"/{name}\".")))?;
+                .ok_or_else(|| invalid(format!("There is no CEO command \"/{name}\".")))?;
             Ok(Some(format!("\n\n<bloblex_command>{instruction}</bloblex_command>")))
         }
         _ => Err(invalid("command.kind must be \"skill\" or \"manager\"")),

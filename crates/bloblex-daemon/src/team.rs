@@ -468,7 +468,8 @@ pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, works
         None => lines.push(format!("You are a casual {noun}, not tied to a project. Your scratch workspace is {}; take general requests and work wherever the user points you.", workspace.display())),
     }
     if agent["systemRole"].as_str() == Some("manager") {
-        lines.push(format!("You are {name}, the user's Manager: chat like a capable team lead. Ground yourself with list_projects and list_blobs, then route by role, description, tags and project. Read the user's message for the project first: a #Name in it is a project, matched by its name or one of its tags. When the request needs a project and they named none, call ask_user and offer the projects as options before you delegate; never let a bot's own placement decide where its work lands, and pass `project` on message_blob and start_conversation whenever you know it. With no project, research goes to a free bot tagged researcher; for project P, use P's researcher. If none fits, propose_bot for that project (or propose_project when a project is needed); do small things yourself when appropriate; you ask the user before creating projects, bots or assigning tasks."));
+        lines.push(format!("You are {name}, the user's CEO: chat like a capable team lead. Your team works in projects. Ground yourself with list_projects and list_blobs, then route by role, description, tags and project. Read the user's message for the project first: a #Name in it is a project, matched by its name or one of its tags. When the request needs a project and they named none, call ask_user and offer the projects as options before you delegate; never let a bot's own placement decide where its work lands, and pass `project` on message_blob and start_conversation whenever you know it. With no project, research goes to a free bot tagged researcher; for project P, use P's researcher. If none fits, propose_bot for that project (or propose_project when a project is needed); do small things yourself when appropriate; you ask the user before creating projects, bots, hiring or assigning tasks."));
+        lines.push("When a project starts, or the user asks you to staff one, interview them briefly: the goal, the stack, what done looks like, and what matters most. Then call list_presets and propose_hires with the smallest team that fits, two to six people, each with a one-line reason. An employee already hired is reused: hire them again into the new project instead of making a second one. Use propose_bot only for a need no preset covers, and say so. Never hire without a proposal the user approves.".to_owned());
         lines.push("Read details with your read tools, and make consequential changes an approval card: creating or updating projects and bots, assigning a task, opening a conversation and changing a permission are proposed and wait for the owner. A message to a teammate is not consequential: `message_blob` is sent at once with no approval, so use it for ordinary delegation and only use `assign_task` when the user wants the work tracked as a task. Fill the brief or message yourself, and for a task also doneGoal and reportBack; never ask the user to fill a task form. Use a new topic for parallel work or conversation to follow up. Locked bots refuse settings changes; never propose Full access. After delegating, say briefly who will do what and end your turn. Approval outcomes are recorded here; teammate replies arrive later and wake you to report back.".into());
         lines.push(format!("Any {noun} can work in any project: each conversation is opened in one project. Pass `project` (an id, an exact name, or one of the project's tags from list_projects) to `message_blob` or `assign_task` to open the work in a specific project; without it, the work opens in the project of the conversation you are in."));
         lines.push("Your notes about the user and your playbook are yours across model changes: keep the profile current with `remember_about_user` (read it with `recall_about_user`), and propose playbook edits with `update_playbook`. Never store secrets in either.".to_owned());
@@ -480,8 +481,8 @@ pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, works
         lines.push("When nothing changed and nothing needs the user, say nothing or one short line.".to_owned());
     } else {
         match st.db.manager_agent().ok().flatten() {
-            Some(manager) => lines.push(format!("You cannot create projects or {nouns}; the Manager does that. If the user asks you to, say so briefly and tag the Manager as @{} so the user can ask them.", agent_name(&manager))),
-            None => lines.push(format!("You cannot create projects or {nouns}; the Manager does that. If the user asks you to, say so briefly and tell the user they need to set up a Manager.")),
+            Some(manager) => lines.push(format!("You cannot create projects or {nouns}; the CEO does that. If the user asks you to, say so briefly and tag the CEO as @{} so the user can ask them.", agent_name(&manager))),
+            None => lines.push(format!("You cannot create projects or {nouns}; the CEO does that. If the user asks you to, say so briefly and tell the user they need to set up a CEO.")),
         }
     }
     lines.push(String::new());
@@ -498,7 +499,7 @@ pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, works
         lines.push(String::new());
         lines.push(format!("This is a side conversation. Messages here come from {peer}, another {noun}, not from the user. Do what {peer} asks and answer them directly; your final message each turn is delivered back to {peer} automatically. Keep it focused: results, evidence and open questions."));
         if let Some(topic) = link["topic"].as_str().filter(|topic| !topic.trim().is_empty()) { lines.push(format!("Topic of this conversation: {topic}.")); }
-        lines.push("If you need a decision or information only the user can give, use the ask_user tool, then end your turn. Your Manager is told you are waiting, but only the user can answer; their answer arrives as your next message. Do not ask the Manager to answer for the user.".into());
+        lines.push("If you need a decision or information only the user can give, use the ask_user tool, then end your turn. Your CEO is told you are waiting, but only the user can answer; their answer arrives as your next message. Do not ask the CEO to answer for the user.".into());
         lines.push("If you were asked to check something and there is nothing to report, reply exactly `(pass)`.".into());
         if link["subbot"] == true {
             lines.push(format!("You are a helper {peer} started. The user can open this conversation and write to you directly: a message that is not {peer}'s brief is from the user, so answer them. You cannot start helpers of your own."));
@@ -553,7 +554,7 @@ fn tools(is_automation: bool, memory_enabled: bool, ask_user: bool, is_manager: 
         return json!(list);
     }
     let mut list: Vec<Value> = vec![
-        json!({"name":"list_blobs","description":"List your teammates in Bitbots: name, role, what each is for, project, whether they are busy, and which one is the Manager.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}),
+        json!({"name":"list_blobs","description":"List your teammates in Bitbots: name, role, what each is for, project, whether they are busy, and which one is the CEO.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}),
         json!({"name":"list_conversations","description":"List your side conversations with teammates, newest first: id, topic, teammate, who started it, size and the latest reply. Use it to find a conversation to continue.","inputSchema":{"type":"object","properties":{"blob":{"type":"string","description":"Only conversations with this teammate (optional)."}},"additionalProperties":false}}),
         json!({"name":"message_blob","description":"Send a message to one teammate in a private side conversation. Use it whenever the user asks you to message, ask or hand work to a teammate: it is sent at once, with no approval card. Continue an earlier conversation you started by passing its id as `conversation`, or start a new one with a short `topic`. Returns at once; their reply is delivered to you later as a message starting with \"[Reply from <name>]\". After sending, tell the user who you asked and end your turn.","inputSchema":{"type":"object","properties":{"blob":{"type":"string","description":"The teammate's name, as shown by list_blobs."},"message":{"type":"string","description":"A self-contained brief: goal, context, paths, constraints and what to send back."},"doneGoal":{"type":"string","description":"What must be true for the work to count as done. It is relayed back with the reply as a 'Done when' line (optional)."},"topic":{"type":"string","description":"For a new conversation: a short title of 3 to 6 words, like a chat title."},"conversation":{"type":"string","description":"The id of a conversation you started with this teammate, from list_conversations, to continue it."},"project":{"type":"string","description":"For a new conversation: the project (an id, an exact name, or a tag only one project carries) it opens in. Defaults to the project of this conversation."}},"required":["blob","message"],"additionalProperties":false}}),
         json!({"name":"schedule_task","description":format!("Propose a scheduled task for your {noun}. It is created disabled and will never run until the user approves it in Bitbots. Use this only when the user asks for something recurring or at a set time."),"inputSchema":{"type":"object","properties":{"name":{"type":"string","description":"A short title, 1 to 80 characters."},"prompt":{"type":"string","description":"The instruction to run unattended when the task fires."},"when":{"type":"object","description":"A schedule object: {\"kind\":\"once\",\"at\":\"<RFC3339>\"} or {\"kind\":\"cron\",\"cron\":\"m h dom mon dow\",\"timezone\":\"Area/City\"}."}},"required":["name","prompt","when"],"additionalProperties":false}}),
@@ -654,6 +655,8 @@ pub async fn mcp_rpc(st: &AppState, session_id: &str, method: &str, params: &Val
                 "start_conversation" if is_manager => crate::proposals::propose_start(st, session_id, args).await,
                 "propose_project" if is_manager => crate::proposals::propose_project(st, session_id, args).await,
                 "propose_bot" if is_manager => crate::proposals::propose_bot(st, session_id, args).await,
+                "list_presets" if is_manager => crate::proposals::list_presets(st, args).await,
+                "propose_hires" if is_manager => crate::proposals::propose_hires(st, session_id, args).await,
                 "assign_task" if is_manager => crate::proposals::assign_task(st, session_id, args).await,
                 "create_task" if is_manager => crate::tasks::manager_create(st, session_id, args).await,
                 "project_status" if is_manager => crate::proposals::project_status(st, args).await,
@@ -662,7 +665,7 @@ pub async fn mcp_rpc(st: &AppState, session_id: &str, method: &str, params: &Val
                 "forget_about_user" if is_manager => crate::knowledge::tool_forget(st, session_id, args).await,
                 "recall_about_user" if is_manager => crate::knowledge::tool_recall(st, args),
                 "update_playbook" if is_manager => crate::knowledge::tool_update_playbook(st, session_id, args).await,
-                "read_blob" | "read_project" | "read_conversation" | "get_conversation_permission" | "open_conversation" | "start_conversation" | "list_projects" | "update_blob" | "update_project" | "propose_project" | "propose_bot" | "assign_task" | "create_task" | "project_status" | "set_conversation_permission" | "remember_about_user" | "forget_about_user" | "recall_about_user" | "update_playbook" => Err(non_manager_error(st)),
+                "read_blob" | "read_project" | "read_conversation" | "get_conversation_permission" | "open_conversation" | "start_conversation" | "list_projects" | "update_blob" | "update_project" | "propose_project" | "propose_bot" | "list_presets" | "propose_hires" | "assign_task" | "create_task" | "project_status" | "set_conversation_permission" | "remember_about_user" | "forget_about_user" | "recall_about_user" | "update_playbook" => Err(non_manager_error(st)),
                 "schedule_task" => crate::automations::schedule_task_tool(st, session_id, args).await,
                 "list_my_schedules" => crate::automations::list_my_schedules_tool(st, session_id).await,
                 "ask_user" if ask_user => crate::questions::ask_user_tool(st, session_id, args).await,
@@ -707,7 +710,7 @@ async fn list_blobs(st: &AppState, session_id: &str) -> Result<String, String> {
         let provider = runtimes.iter().find(|r| r["id"] == agent["runtimeId"]).and_then(|r| r["provider"].as_str()).unwrap_or("unknown");
         let mut line = format!("- {}", agent_name(agent));
         if me.as_deref() == Some(id) { line.push_str(" (you)"); }
-        if agent["systemRole"].as_str() == Some("manager") { line.push_str(" [manager]"); }
+        if agent["systemRole"].as_str() == Some("manager") { line.push_str(" [ceo]"); }
         if let Some(role) = agent["role"].as_str().filter(|r| !r.trim().is_empty()) { line.push_str(&format!(" — {role}")); }
         line.push_str(&format!(" · {provider} · project: {project} · {}", if busy { "busy" } else { "available" }));
         // FIX39 item 21: a bot's tags are the routing signal the Manager matches
@@ -739,8 +742,8 @@ fn bounded_text(args: &Value, key: &str, limit: usize) -> Result<Option<String>,
 /// The error a non-manager gets when it tries to list projects or change blobs.
 pub(crate) fn non_manager_error(st: &AppState) -> String {
     match st.db.manager_agent().ok().flatten() {
-        Some(manager) => { let name = agent_name(&manager); format!("Only the Manager can list projects or change {}. Ask the Manager (@{name}).", entity_noun(true)) }
-        None => format!("Only the Manager can list projects or change {}, and this team has no Manager yet. Ask the user to set one up.", entity_noun(true)),
+        Some(manager) => { let name = agent_name(&manager); format!("Only the CEO can list projects or change {}. Ask the CEO (@{name}).", entity_noun(true)) }
+        None => format!("Only the CEO can list projects or change {}, and this team has no CEO yet. Ask the user to set one up.", entity_noun(true)),
     }
 }
 
@@ -939,7 +942,7 @@ async fn delegate_with(st: &AppState, session_id: &str, args: &Value, honour_pau
     // new brief meets. One keyed settings read, and the sentence is the Manager's
     // to relay.
     if honour_pause && st.db.delegation_paused().unwrap_or(false) {
-        return Err("Delegation is paused. Ask the user to resume it in Manager settings, or do the work yourself.".into());
+        return Err("Delegation is paused. Ask the user to resume it in the CEO's settings, or do the work yourself.".into());
     }
     let earlier = st.db.delegation_list_for_origin(session_id).unwrap_or_default();
     if let Some(error) = repeated_failure(&earlier, &target_id, chrono::Utc::now()) {
@@ -1626,12 +1629,16 @@ pub async fn team_rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, D
             // is permanent, so neither a project nor a leader change applies.
             if let Ok(agent) = st.db.agent_get(id) {
                 if agent["systemRole"].as_str() == Some("manager") {
-                    if p.get("projectId").is_some_and(|project| !project.is_null()) { return Err(derr("conflict", "The Manager works across every project", StatusCode::CONFLICT)); }
-                    if p.get("leader").is_some() { return Err(derr("conflict", "The Manager can't be removed; you can rename it or change its model", StatusCode::CONFLICT)); }
+                    if p.get("projectId").is_some_and(|project| !project.is_null()) { return Err(derr("conflict", "The CEO works across every project", StatusCode::CONFLICT)); }
+                    if p.get("leader").is_some() { return Err(derr("conflict", "The CEO can't be removed; you can rename it or change its model", StatusCode::CONFLICT)); }
                 }
             }
             let (agent, events) = st.db.agent_set_team(id, p).map_err(agent_error)?;
             st.broadcast_persisted(events);
+            // Phase 9: a bot given a default project is hired into it.
+            if let Some(project) = p.get("projectId").and_then(Value::as_str).filter(|id| !id.is_empty()) {
+                if let Some(hired) = agent["id"].as_str() { auto_hire(st, hired, project).await; }
+            }
             // A bot that changes project keeps its conversations; the panel
             // filters them by project instead of archiving the old main one.
             Ok(json!({"agent": agent}))
@@ -1644,8 +1651,136 @@ pub async fn team_rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, D
             st.db.agent_get(agent_id).map_err(agent_error)?;
             Ok(json!({"projects": st.db.agent_projects(agent_id).map_err(agent_error)?}))
         }
+        "preset.list" => crate::presets::list(st).map_err(|error| derr("internal", &error, StatusCode::INTERNAL_SERVER_ERROR)),
+        "project.members" => {
+            let project_id = required_project_id(p)?;
+            st.db.project_get(project_id).map_err(|_| derr("not_found", "That project no longer exists.", StatusCode::NOT_FOUND))?;
+            Ok(json!({"members": st.db.project_members(project_id).map_err(agent_error)?}))
+        }
+        "project.hire" => project_hire(st, p).await,
+        "project.release" => project_release(st, p).await,
         _ => Err(derr("not_found", "unknown method", StatusCode::NOT_FOUND)),
     }
+}
+
+/// `projectId` for the membership RPCs: required, and a non-empty string.
+fn required_project_id(p: &Value) -> Result<&str, DispatchError> {
+    p["projectId"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "projectId is required", StatusCode::BAD_REQUEST))
+}
+
+/// Hiring is a change to a project's team, so every open window is told. The
+/// agent's own `agent.changed` comes from storage when a bot is created.
+pub(crate) async fn emit_members_changed(st: &AppState, project_id: &str) {
+    st.emit("project.members.changed", json!({"projectId": project_id})).await;
+}
+
+/// A conversation, a task or a bot placement put a bot in a project it was not
+/// hired into: hire it first, so every project's team is the truth. The CEO
+/// belongs to every project implicitly and never gets a row.
+pub(crate) async fn auto_hire(st: &AppState, agent_id: &str, project_id: &str) {
+    let Ok(agent) = st.db.agent_get(agent_id) else { return };
+    if agent["systemRole"].as_str() == Some("manager") || agent["archived"] == true { return; }
+    match st.db.project_add_member(project_id, agent_id) {
+        Ok((_, true)) => emit_members_changed(st, project_id).await,
+        Ok((_, false)) => {}
+        Err(_) => {}
+    }
+}
+
+/// `project.hire {projectId, agentId?, presetId?, runtimeId?, model?}`.
+///
+/// Exactly one of `agentId` and `presetId`. A preset that already made a bot
+/// reuses it, so hiring Ada into two projects gives two memberships and one
+/// bot. Hiring is idempotent: hiring someone already in the project changes
+/// nothing and returns the row it already had.
+pub(crate) async fn project_hire(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+    let project_id = required_project_id(p)?.to_owned();
+    st.db.project_get(&project_id).map_err(|_| derr("not_found", "That project no longer exists.", StatusCode::NOT_FOUND))?;
+    let agent_id = p["agentId"].as_str().filter(|id| !id.is_empty());
+    let preset_id = p["presetId"].as_str().filter(|id| !id.is_empty());
+    match (agent_id, preset_id) {
+        (Some(_), Some(_)) => return Err(derr("invalid_argument", "Give either agentId or presetId, not both.", StatusCode::BAD_REQUEST)),
+        (None, None) => return Err(derr("invalid_argument", "Give an agentId or a presetId to hire.", StatusCode::BAD_REQUEST)),
+        _ => {}
+    }
+    let (agent_id, created) = match (agent_id, preset_id) {
+        (Some(id), None) => {
+            let agent = st.db.agent_get(id).map_err(|_| derr("not_found", "There is no such bot to hire.", StatusCode::NOT_FOUND))?;
+            if agent["archived"] == true { return Err(derr("not_found", "That bot is archived, so it cannot be hired.", StatusCode::NOT_FOUND)); }
+            if agent["systemRole"].as_str() == Some("manager") { return Err(derr("invalid_argument", "The CEO works in every project already.", StatusCode::BAD_REQUEST)); }
+            (id.to_owned(), false)
+        }
+        (None, Some(preset_id)) => hire_from_preset(st, preset_id, p).await?,
+        _ => unreachable!("exactly one of agentId and presetId is present"),
+    };
+    let (member, added) = st.db.project_add_member(&project_id, &agent_id).map_err(agent_error)?;
+    if added { emit_members_changed(st, &project_id).await; }
+    Ok(json!({"agentId": agent_id, "created": created, "member": member}))
+}
+
+/// The bot made from a preset: the one that already exists, or a new employee.
+/// `created` says which happened.
+async fn hire_from_preset(st: &AppState, preset_id: &str, p: &Value) -> Result<(String, bool), DispatchError> {
+    let preset = crate::presets::find(preset_id).ok_or_else(|| derr("not_found", "There is no such preset employee.", StatusCode::NOT_FOUND))?;
+    if let Some(existing) = st.db.agent_with_preset(preset_id).map_err(agent_error)? {
+        if let Some(id) = existing["id"].as_str() { return Ok((id.to_owned(), false)); }
+    }
+    // The CEO's coding agent and model are the default, so a hired employee
+    // works like the one that hired it; the first online runtime is the
+    // fallback when there is no CEO.
+    let runtimes = st.runtimes.read().await.clone();
+    let manager = st.db.manager_agent().map_err(agent_error)?;
+    let (runtime_id, model) = if let Some(runtime) = p["runtimeId"].as_str().filter(|id| !id.is_empty()) {
+        (runtime.to_owned(), p.get("model").cloned().unwrap_or(Value::Null))
+    } else if let Some(runtime_id) = manager.as_ref().and_then(|manager| manager["runtimeId"].as_str()) {
+        (runtime_id.to_owned(), manager.as_ref().and_then(|manager| manager.get("model")).cloned().unwrap_or(Value::Null))
+    } else {
+        let first = runtimes.iter().find(|runtime| runtime["status"].as_str() == Some("online")).or_else(|| runtimes.first());
+        let runtime_id = first.and_then(|runtime| runtime["id"].as_str()).ok_or_else(|| derr("conflict", "No coding agent is installed, so a new employee cannot start yet.", StatusCode::CONFLICT))?;
+        (runtime_id.to_owned(), Value::Null)
+    };
+    let base = json!({
+        "runtimeId": runtime_id,
+        "model": model,
+        "role": preset.role,
+        "description": preset.description,
+        "instructions": preset.instructions(),
+        "color": preset.color,
+        "look": preset.look(),
+        "approvalMode": "ask",
+    });
+    // A taken name gets " 2", " 3" and so on, so two presets of the same
+    // employee can be hired side by side.
+    let mut attempt = 1;
+    let agent = loop {
+        let name = if attempt == 1 { preset.nickname.clone() } else { format!("{} {attempt}", preset.nickname) };
+        let mut fields = base.clone();
+        fields["name"] = json!(name);
+        match crate::agent_create_from_rpc(st, fields).await {
+            Ok(agent) => break agent,
+            Err(error) if error.1.code == "conflict" && attempt < 50 => { attempt += 1; }
+            Err(error) => return Err(error),
+        }
+    };
+    let id = agent["id"].as_str().unwrap_or("").to_owned();
+    st.db.agent_set_preset(&id, Some(preset_id)).map_err(agent_error)?;
+    if !preset.tags.is_empty() {
+        let (_agent, events) = st.db.agent_set_team(&id, &json!({"tags": preset.tags})).map_err(agent_error)?;
+        st.broadcast_persisted(events);
+    }
+    Ok((id, true))
+}
+
+/// `project.release {projectId, agentId}`: the membership only. Conversations,
+/// the bot and a default project pointing elsewhere are untouched.
+async fn project_release(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+    let project_id = required_project_id(p)?.to_owned();
+    let agent_id = p["agentId"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "agentId is required", StatusCode::BAD_REQUEST))?;
+    st.db.project_get(&project_id).map_err(|_| derr("not_found", "That project no longer exists.", StatusCode::NOT_FOUND))?;
+    st.db.agent_get(agent_id).map_err(|_| derr("not_found", "There is no such bot.", StatusCode::NOT_FOUND))?;
+    let released = st.db.project_release(&project_id, agent_id).map_err(agent_error)?;
+    if released { emit_members_changed(st, &project_id).await; }
+    Ok(json!({"released": released}))
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { App } from './ui/App'
 import { DictationBubble } from './ui/DictationBubble'
 import { startWindowBackdrop } from './ui/windowBackdrop'
+import { mainWindowReady } from './tauri'
 import './ui/theme.css'
 import './ui/styles.css'
 import './ui/approval.css'
@@ -29,3 +30,14 @@ if (!dictation) startWindowBackdrop()
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>{dictation ? <DictationBubble /> : <App />}</React.StrictMode>,
 )
+
+// After the first render: let the shell show the main window (it starts
+// hidden so its saved size is restored before anyone sees a frame; 8 November
+// 2026), then let the shell's own transitions run. index.html adds `booting`,
+// which holds them still so the columns do not slide in on launch. A timer,
+// not animation frames: a hidden WebView2 may not run animation frames.
+const companionWindow = new URLSearchParams(window.location.search).has('companion')
+window.setTimeout(() => {
+  if (!dictation && !companionWindow) void mainWindowReady()
+  window.setTimeout(() => document.documentElement.classList.remove('booting'), 450)
+}, 30)

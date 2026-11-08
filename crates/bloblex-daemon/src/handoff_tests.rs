@@ -332,7 +332,7 @@ async fn preview_explains_each_reason_it_isnt_ready() {
 
     let manager = st.db.agent_create(&json!({"name": "Boss", "runtimeId": "rt-test", "systemRole": "manager"})).unwrap().0;
     session_of(&st, manager["id"].as_str().unwrap(), "r6", json!({}));
-    assert_eq!(reason("r6").await["reason"], "The Manager's conversations stay on their machine.");
+    assert_eq!(reason("r6").await["reason"], "The CEO's conversations stay on their machine.");
 
     session_of(&st, &agent, "r7", json!({"kind": "side", "peerAgentId": agent, "originSessionId": "ok"}));
     assert_eq!(reason("r7").await["reason"], "Only a bot's own conversations can move.");

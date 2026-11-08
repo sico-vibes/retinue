@@ -1,0 +1,22 @@
+/* Marquee: see Marquee.tsx. At rest the inner line is a clipped block with an
+   ellipsis; while it moves it becomes max-content wide and slides by
+   --marquee-shift, with soft edges from a mask (no colour of its own). */
+.marquee { display: block; min-width: 0; overflow: hidden; white-space: nowrap; }
+.marquee-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.marquee.overflowing.active, .marquee-host:hover .marquee.overflowing {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 14px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 14px), transparent 100%);
+}
+.marquee.overflowing.active .marquee-text, .marquee-host:hover .marquee.overflowing .marquee-text {
+  display: inline-block; overflow: visible; text-overflow: clip; padding-inline: 10px 14px; margin-inline-start: -10px;
+  animation: marquee-slide var(--marquee-time, 8s) cubic-bezier(.45, 0, .55, 1) 600ms infinite;
+}
+@keyframes marquee-slide {
+  0%, 18% { transform: translateX(0); }
+  50%, 68% { transform: translateX(var(--marquee-shift, 0)); }
+  100% { transform: translateX(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee.overflowing.active, .marquee-host:hover .marquee.overflowing { -webkit-mask-image: none; mask-image: none; }
+  .marquee.overflowing.active .marquee-text, .marquee-host:hover .marquee.overflowing .marquee-text { display: block; overflow: hidden; text-overflow: ellipsis; padding-inline: 0; margin-inline-start: 0; animation: none; }
+}

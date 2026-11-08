@@ -17,7 +17,7 @@ export const EXPERIMENTS = [
   { name: 'memory', label: 'Memory', help: () => `${entityNoun(themeStyle(), { plural: true, capital: true })} save and recall short notes across conversations. Shared notes wait for your approval.` },
   { name: 'approvalBadge', label: 'Taskbar badge', help: () => `Show waiting ${entityNoun(themeStyle(), { plural: true })} on the Windows taskbar and tray.` },
   { name: 'sidebarModel', label: 'Model and effort under the name', help: () => 'Shown in place of the last message while nothing is running.' },
-  { name: 'botLock', label: 'Lock a bot', help: () => `Adds Lock to a ${entityNoun(themeStyle())}'s right-click menu. Nobody can change a locked ${entityNoun(themeStyle())}, the Manager included, until you unlock it.` },
+  { name: 'botLock', label: 'Lock a bot', help: () => `Adds Lock to a ${entityNoun(themeStyle())}'s right-click menu. Nobody can change a locked ${entityNoun(themeStyle())}, the CEO included, until you unlock it.` },
 ] as const
 export type ExperimentName = typeof EXPERIMENTS[number]['name']
 export type Experiments = Record<ExperimentName, boolean>

@@ -1695,6 +1695,25 @@ fn reveal_in_explorer(path: String, project_root: Option<String>) -> Result<(), 
     Ok(())
 }
 
+/// The main window starts hidden (`visible: false` in `tauri.conf.json`) and shows
+/// itself once the front end has painted its first two frames. Replacing the first
+/// frame's invisible resize is the point: the saved size comes from the window-state
+/// plugin before anything is drawn, so a transparent WebView2 never keeps the edges
+/// of a frame drawn at the configured size.
+static MAIN_WINDOW_READY: AtomicBool = AtomicBool::new(false);
+
+#[tauri::command]
+fn main_window_ready(window: WebviewWindow) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("Only the main window can show itself.".to_string());
+    }
+    if MAIN_WINDOW_READY.swap(true, Ordering::SeqCst) {
+        return Ok(());
+    }
+    window.show().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())
+}
+
 #[tauri::command]
 fn show_main_window(app: AppHandle, session_id: Option<String>) -> Result<(), String> {
     if let Some(id) = session_id {
@@ -3336,7 +3355,16 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["companion", "dictation"]).build())
+        // Size, position and maximised state come back before the first frame, but
+        // never visibility: the window shows itself once the front end has painted
+        // (`main_window_ready`), so a transparent WebView2 is not resized after its
+        // first frame (which left thin lines along the old edges).
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(tauri_plugin_window_state::StateFlags::all().difference(tauri_plugin_window_state::StateFlags::VISIBLE))
+                .with_denylist(&["companion", "dictation"])
+                .build(),
+        )
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(AppState::default())
@@ -3418,6 +3446,20 @@ pub fn run() {
                     }
                 });
             }
+            // The window is hidden until the front end says it has painted. A front
+            // end that never says so (a stuck page, or an older bundle without the
+            // call) must not leave the app invisible.
+            let app_for_fallback = app.handle().clone();
+            thread::spawn(move || {
+                thread::sleep(Duration::from_millis(2500));
+                if MAIN_WINDOW_READY.swap(true, Ordering::SeqCst) {
+                    return;
+                }
+                let Some(window) = app_for_fallback.get_webview_window("main") else { return };
+                log_shell("warn", "main window shown by the fallback timer");
+                let _ = window.show();
+                let _ = window.set_focus();
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -3448,6 +3490,7 @@ pub fn run() {
             reveal_in_explorer,
             show_main_window,
             show_main_settings,
+            main_window_ready,
             set_active_session,
             get_active_session,
             set_active_runtime,

@@ -267,7 +267,7 @@ export function BlobSettings({ draft, runtimes, projects = [], errors, execution
         <span className="settings-row-control"><input className="text-input role-input" aria-label="Role" maxLength={40} placeholder="No role" value={draft.role} onChange={(event) => onDraftChange({ ...draft, role: event.target.value })} /></span>
       </div>
       {manager ? <div className="settings-row">
-        <RowCopy label="Projects" hint={`The Manager works across every project and knows every ${noun}. It can't be moved into one.`} />
+        <RowCopy label="Projects" hint={`The CEO works across every project and knows every ${noun}. It can't be moved into one.`} />
         <span className="settings-row-control"><span className="settings-value">All projects</span></span>
       </div> : <div className="settings-row">
         <RowCopy label="Team project" hint={`Which project this ${noun} belongs to on the team.`} />

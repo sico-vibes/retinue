@@ -24,6 +24,9 @@ import bloblexLogo from '../assets/bloblex-128.png'
 import { sessionsForPauseRequest } from './trayActions'
 import { applyEvent, formatUnknownSafe, isPermissionReplyAllowed, labelize, isAutomation, normalizeQueueState, type Agent, type AutomationRun, type ChatMessage, type ConnectionState, type DaemonEvent, type PermissionRequest, type Project, type Runtime, type Session, type Snapshot } from '../types'
 import { agentColorHex } from './agentColor'
+import { TeamPage, type TeamTab } from './TeamPage'
+import { announceMembersChanged } from './projectMembers'
+import { hireSiblings } from './proposalGroups'
 import { TeamSidebar } from './TeamSidebar'
 import { RuntimeProblemMarker } from './RuntimeProblemMarker'
 import { OutsideSessionPills, useOutsideSessions } from './OutsideSessions'
@@ -105,6 +108,7 @@ import { ProjectSettingsDialog } from './ProjectSettingsDialog'
 import { composerEnterAction, keysFor, normalizeBindings, normalizeSendShortcut, oppositeKeys, useShortcutActions, type SendShortcut, type ShortcutBindings } from './shortcuts'
 import { CompanionFanoutSummary, CompareView, FanoutDialog } from './FanoutCompare'
 import { NewProjectDialog } from './NewProjectDialog'
+import { StaffProjectDialog } from './StaffProjectDialog'
 import { StashMenu, type RestoredDraft } from './PromptStash'
 import { AnnotationTray, MAX_ANNOTATIONS, MessageAnnotations, ReplyAnnotator, type ReplyAnnotation } from './ReplyAnnotations'
 import { limitResetTime, limitWaitingUntil } from './usageLimitSend'
@@ -174,7 +178,10 @@ export function App() {
   useEffect(() => () => { if (companion) disposeCompanionAudio() }, [companion])
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   /** Off by default: the plan-usage bar along the bottom. */
-  const [usageBarEnabled, setUsageBarEnabled] = useState(false)
+  // Cached per window so the bar is in place on the first frame instead of
+  // arriving with the setting and pushing a border in (8 November 2026).
+  const [usageBarEnabled, setUsageBarEnabled] = useState(() => { try { return localStorage.getItem('bitbots.usageBar') === '1' } catch { return false } })
+  useEffect(() => { try { localStorage.setItem('bitbots.usageBar', usageBarEnabled ? '1' : '0') } catch { /* the cache only avoids a jump */ } }, [usageBarEnabled])
   const [claudeWorkflowsEnabled, setClaudeWorkflowsEnabled] = useState(true)
   /** Separate from the bottom usage bar. */
   const [usageTipsEnabled, setUsageTipsEnabled] = useState(false)
@@ -255,6 +262,8 @@ export function App() {
     else if (key === 'onboarding.tour') hydrateTour(value)
   }, [])
   const [analyticsOpen, setAnalyticsOpen] = useState(false)
+  // 8 November 2026: the Team page (employees and hiring) replaces the Bots tab.
+  const [teamPage, setTeamPage] = useState<{ tab: TeamTab; projectId: string | null } | null>(null)
   const [schedulesOpen, setSchedulesOpen] = useState(false)
   const [tasksOpen, setTasksOpen] = useState(false)
   // Phase 1B: comparisons (fan-out), the new project dialog, and the notes going with the next message.
@@ -262,6 +271,7 @@ export function App() {
   const [compareId, setCompareId] = useState<string | null>(null)
   const [fanoutOpen, setFanoutOpen] = useState(false)
   const [newProjectOpen, setNewProjectOpen] = useState(false)
+  const [staffProject, setStaffProject] = useState<Project | null>(null)
   const newProjectResolve = useRef<((project: Project | null) => void) | null>(null)
   const [annotations, setAnnotations] = useState<ReplyAnnotation[]>([])
   const [terminalDockOpen, setTerminalDockOpen] = useState(false)
@@ -1093,6 +1103,7 @@ export function App() {
       const heardFrom = eventSessionId(event.payload)
       if (heardFrom) noteSessionActivity(heardFrom)
       if (event.type === 'quota.updated') setQuotaRefreshing(false)
+      if (event.type === 'project.members.changed') announceMembersChanged()
       // A runtime's model list changed (or the runtime itself did): refresh the shared catalog cache.
       if ((event.type === 'runtime.models.changed' || event.type === 'runtime.changed') && event.payload && typeof event.payload === 'object') {
         const runtimeId = (event.payload as { runtimeId?: unknown; id?: unknown }).runtimeId ?? (event.payload as { id?: unknown }).id
@@ -1805,6 +1816,7 @@ export function App() {
     try { await rpc('session.rename', { sessionId: session.id, title }); await refresh() } catch (reason) { setError(messageOf(reason)) }
   }
   const selectConversation = (session: Session) => {
+    setTeamPage(null)
     setSideSessionId(null)
     setSelectedSessionId(session.id)
     void setActiveSession(session.id)
@@ -2394,7 +2406,18 @@ ${fileReferenceText(sentFile)}` : typed
     try { await scanRuntimes() } catch { /* Scan status carries the safe error. */ }
   }
 
-  const showUsage = () => { setSchedulesOpen(false); setTasksOpen(false); setCompareOpen(false); setAnalyticsOpen(true) }
+  const showUsage = () => { setTeamPage(null); setSchedulesOpen(false); setTasksOpen(false); setCompareOpen(false); setAnalyticsOpen(true) }
+  const openTeam = (tab: TeamTab = 'team', projectId: string | null = null) => { setSchedulesOpen(false); setTasksOpen(false); setCompareOpen(false); setAnalyticsOpen(false); setBlobPage(null); setTeamPage({ tab, projectId }) }
+  /** Starts a CEO conversation in a project and asks it to staff the project. */
+  const askCeoToStaff = async (projectId: string) => {
+    const ceo = managerOf(agents)
+    if (!ceo) { setError('Set up your CEO first.'); return }
+    setTeamPage(null)
+    const session = await createConversation(ceo, { projectId })
+    if (!session) return
+    const name = projects.find((project) => project.id === projectId)?.name ?? 'this project'
+    try { await doRpc('session.prompt', { sessionId: session.id, text: `Help me staff ${name}. Interview me briefly about the project, then propose who to hire.` }) } catch { /* shown inline */ }
+  }
   const openUsageSetting = () => { setSettingsInitialPage('General'); setSettingsGroup('Usage'); setSettingsFocus(null); setSettingsSheet(true) }
 
   const refreshQuota = () => {
@@ -2435,6 +2458,7 @@ ${fileReferenceText(sentFile)}` : typed
   }
 
   const selectAgent = (agent: Agent) => {
+    setTeamPage(null)
     const main = mainSessionFor(sessions, agent.id)
     setSideSessionId(null)
     setAnalyticsOpen(false)
@@ -2611,12 +2635,12 @@ ${fileReferenceText(sentFile)}` : typed
   const changeProjectFolder = (project: Project) => void openProjectFolder().then((path) => { if (path) void projectAction('project.update', { projectId: project.id, path }) })
   /** Phase 1A: projects are managed where their conversations are listed, inside each bot. */
   const conversationProjectActions: ProjectActions = { onOpenProjectSettings: setProjectSettings, onCreateProject: openNewProject, onImportProject: createProject, onRenameProject: renameProject, onChangeProjectFolder: changeProjectFolder, onDeleteProject: setProjectDelete, onSetProjectIcon: (project, icon) => void setProjectIcon(project, icon) }
-  /** Opens the Manager's conversation with a starter message to edit and send; false without a Manager. */
+  /** Opens the CEO's conversation with a starter message to edit and send; false without a Manager. */
   const planWithManager = (text: string) => {
     const manager = managerOf(agents)
     if (!manager) return false
     selectAgent(manager)
-    // The starter goes to the Manager's own box, wherever the open one is.
+    // The starter goes to the CEO's own box, wherever the open one is.
     saveDraft(draftKeyForAgent(manager), text)
     window.setTimeout(() => composerRef.current?.focus(), 0)
     return true
@@ -2835,7 +2859,7 @@ ${fileReferenceText(sentFile)}` : typed
     setOnboardingVisible(false)
   }
   /** The onboarding's first bot: its look, colour, name, role, description and verified model. */
-  /** Onboarding and the upgrade card both set up the Manager (or return the one that exists). */
+  /** Onboarding and the upgrade card both set up the CEO (or return the one that exists). */
   const createOnboardedBlob = async (onboardingDraft: AgentDraft) => {
     const draft: AgentDraft = onboardingDraft
     try {
@@ -2868,7 +2892,7 @@ ${fileReferenceText(sentFile)}` : typed
               <button type="button" className="icon-button small" title="More ways to create" aria-label={`${Noun} actions`} aria-haspopup="menu" aria-expanded={createMenuOpen} disabled={connection !== 'connected' || busy} onClick={() => setCreateMenuOpen((open) => !open)}><ChevronDown size={14} /></button>
               {createMenuOpen && <div className="menu-surface more-menu" role="menu">
                 {managerOf(agents)
-                  ? <><button className="menu-item" role="menuitem" onClick={startProjectWithManager}><BriefcaseBusiness size={15} />New project with {managerOf(agents)?.name ?? 'the Manager'}</button>
+                  ? <><button className="menu-item" role="menuitem" onClick={startProjectWithManager}><BriefcaseBusiness size={15} />New project with {managerOf(agents)?.name ?? 'the CEO'}</button>
                     <button className="menu-item" role="menuitem" onClick={() => { setCreateMenuOpen(false); void openNewProject() }}><FolderPlus size={15} />New project…</button>
                     <button className="menu-item" role="menuitem" onClick={() => void importProjectWithManager()}><FolderInput size={15} />Import project folder…</button></>
                   : <><button className="menu-item" role="menuitem" onClick={() => { setCreateMenuOpen(false); void openNewProject() }}><FolderPlus size={15} />New project…</button>
@@ -2881,10 +2905,10 @@ ${fileReferenceText(sentFile)}` : typed
           </div>
         </div>
         <div className="sr-only" aria-live="polite">{rosterAnnouncement}</div>
-        <TeamSidebar canCreate={runtimeReady} onOpenConversation={(agent, session) => { selectAgent(agent); selectConversation(session) }} onStartInProject={(agent, projectId) => newSession(agent.id, null, projectId)} selectedSessionId={sideSessionId ?? selectedSession?.id ?? null} onOpenSubbot={openSideConversation} machines={machines.length ? <MachineGroups machines={machines} selected={machineView} onOpen={(machine, bot) => setMachineView({ machineId: machine.id, botId: bot.id })} /> : null} banner={!managerOf(agents) && connection === 'connected' ? <ManagerSetupCard runtimes={runtimes.filter((runtime) => runtimeUsable(runtime))} disabled={connection !== 'connected'} onCreate={createOnboardedBlob} /> : null} agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} runtimeLogos={runtimeLogos} sidebarModel={experiments.sidebarModel} botLock={experiments.botLock} connected={connection === 'connected'} now={now} pinnedIds={pins.favorites ?? []} unreadSessionIds={unreadSessionIds} approvalSessionIds={approvalSessionIds} selectedAgentId={activeSelectedAgent?.id ?? null} onOpenSearch={openQuickSwitcher} actions={{
+        <TeamSidebar canCreate={runtimeReady} onOpenTeam={(tab) => openTeam(tab)} teamOpen={!!teamPage} onHire={(projectId) => openTeam('hire', projectId)} onAskCeo={(projectId) => void askCeoToStaff(projectId)} onOpenConversation={(agent, session) => { selectAgent(agent); selectConversation(session) }} onStartInProject={(agent, projectId) => newSession(agent.id, null, projectId)} selectedSessionId={sideSessionId ?? selectedSession?.id ?? null} onOpenSubbot={openSideConversation} machines={machines.length ? <MachineGroups machines={machines} selected={machineView} onOpen={(machine, bot) => setMachineView({ machineId: machine.id, botId: bot.id })} /> : null} banner={!managerOf(agents) && connection === 'connected' ? <ManagerSetupCard runtimes={runtimes.filter((runtime) => runtimeUsable(runtime))} disabled={connection !== 'connected'} onCreate={createOnboardedBlob} /> : null} agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} runtimeLogos={runtimeLogos} sidebarModel={experiments.sidebarModel} botLock={experiments.botLock} connected={connection === 'connected'} now={now} pinnedIds={pins.favorites ?? []} unreadSessionIds={unreadSessionIds} approvalSessionIds={approvalSessionIds} selectedAgentId={activeSelectedAgent?.id ?? null} onOpenSearch={openQuickSwitcher} actions={{
           onSelect: selectAgent,
           onCreate: (projectId) => openCreate(projectId),
-          onCreateProject: () => void openNewProject(),
+          onCreateProject: () => void openNewProject().then((project) => { if (project) setStaffProject(project) }),
           onEdit: openEdit,
           onArchive: setArchiveTarget,
           onDeleteBot: setPurgeTarget,
@@ -2933,7 +2957,7 @@ ${fileReferenceText(sentFile)}` : typed
       <section className="conversation-pane">
         {(launchWarnings.length > 0 || discoveryStatus.retrying) && !agentWarningDismissed && <LaunchWarnings warnings={launchWarnings} details={launchChecks.filter((check) => check.state === 'warning' || check.state === 'failed').map((check) => check.detail.startsWith(`${check.label}:`) ? check.detail : `${check.label}: ${check.detail}`).join('\n')} retrying={discoveryStatus.retrying} onSettings={() => { setSettingsInitialPage('Agents'); setSettingsSheet(true) }} onDismiss={() => setAgentWarningDismissed(true)} />}
         {discoveryConfirmation && <aside className="launch-scan-confirmation" role="status">{discoveryConfirmation}</aside>}
-        {compareOpen ? <CompareView initialId={compareId} agents={agents} connected={connection === 'connected'} onBack={() => setCompareOpen(false)} onStartNew={() => setFanoutOpen(true)} onOpenSession={(sessionId) => { setCompareOpen(false); const session = sessions.find((item) => item.id === sessionId); if (session) { setSelectedAgentId(session.agentId || null); setSelectedSessionId(session.id) } }} /> : tasksOpen ? <TasksView agents={agents} projects={projects} runtimes={runtimes} connected={connection === 'connected'} onBack={() => setTasksOpen(false)} onOpenSession={(sessionId) => { setTasksOpen(false); const session = sessions.find((item) => item.id === sessionId); if (session) { setSelectedAgentId(session.agentId || null); setSelectedSessionId(session.id) } }} /> : schedulesOpen ? <SchedulesView automations={snapshot?.automations ?? []} agents={agents} connected={connection === 'connected'} paused={schedulesPaused} nowMs={schedulesNowMs} agentId={schedulesAgentId} loadError={schedulesError} onBack={() => setSchedulesOpen(false)} onCreate={createAutomation} onUpdate={updateAutomation} onSetEnabled={setAutomationEnabled} onRunNow={runAutomationNow} onDelete={deleteAutomation} onLoadRuns={loadAutomationRuns} onPreview={previewAutomation} onSetPaused={setAutomationsPaused} onOpenSession={openAutomationSession} /> : analyticsOpen ? <AnalyticsView sessions={sessions} agents={agents} quotas={snapshot?.quotas ?? []} connected={connection === 'connected'} onRefreshQuota={refreshQuota} onTurnOnUsage={openUsageSetting} onBack={closeAnalytics} /> : blobPage && draft ? <BlobPage mode={blobPage.mode} agent={editingAgent} onOpenMemory={() => { setSettingsInitialPage('Memory'); setSettingsFocus(null); setSettingsSheet(true) }} onOpenSkills={() => { setSettingsInitialPage('Skills'); setSettingsFocus(null); setSettingsSheet(true) }} changes={draft && baseline ? changedFields(draft, baseline) : []} onDuplicate={editingAgent ? () => void duplicateAgent(editingAgent) : undefined} onExport={editingAgent ? () => void exportBlob(editingAgent) : undefined} draft={draft} runtime={draftRuntime} session={blobPage.mode === 'edit' ? selectedSession : null} runtimes={runtimes} projects={projects} sessions={pageSessions} legacyCount={pageLegacy.length} connected={connection === 'connected'} saving={busy} dirty={draftDirty} ready={draftReady} canStartSession={connection === 'connected' && !busy && runtimeUsable(draftRuntime)} error={formError} remoteNotice={remoteNotice} errors={fieldErrors} execution={executionFromAgent(editingAgent)} autoApprovals={snapshot?.autoApprovals ?? []} bypassNotices={snapshot?.bypassNotices ?? []} onDraftChange={(next) => { setDraft(next); setFormError(null) }} onExecutionGate={(gate) => { executionGate.current = gate }} onBack={() => closeBlobPage(editingAgent?.id ?? activeSelectedAgent?.id ?? null)} onSave={() => void saveBlob()} onCancel={() => { const source = remoteNotice && editingAgent ? draftFromAgent(editingAgent) : baseline; if (!source) return; setDraft(source); setBaseline(source); setRemoteNotice(null); setFormError(null) }} onArchive={() => { if (editingAgent) setArchiveTarget(editingAgent) }} onNewSession={() => { if (editingAgent) newSession(editingAgent.id) }} onOpenSession={(session) => { setSelectedSessionId(session.id); closeBlobPage(editingAgent?.id ?? null) }} /> : <>
+        {teamPage ? <TeamPage agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} connected={connection === 'connected'} initialTab={teamPage.tab} initialProjectId={teamPage.projectId} onBack={() => setTeamPage(null)} onOpenAgent={(agent) => { setTeamPage(null); selectAgent(agent) }} onEditAgent={(agent) => { setTeamPage(null); openEdit(agent) }} onCreateOwn={(projectId) => { setTeamPage(null); openCreate(projectId) }} onError={setError} onChanged={() => void refresh()} /> : compareOpen ? <CompareView initialId={compareId} agents={agents} connected={connection === 'connected'} onBack={() => setCompareOpen(false)} onStartNew={() => setFanoutOpen(true)} onOpenSession={(sessionId) => { setCompareOpen(false); const session = sessions.find((item) => item.id === sessionId); if (session) { setSelectedAgentId(session.agentId || null); setSelectedSessionId(session.id) } }} /> : tasksOpen ? <TasksView agents={agents} projects={projects} runtimes={runtimes} connected={connection === 'connected'} onBack={() => setTasksOpen(false)} onOpenSession={(sessionId) => { setTasksOpen(false); const session = sessions.find((item) => item.id === sessionId); if (session) { setSelectedAgentId(session.agentId || null); setSelectedSessionId(session.id) } }} /> : schedulesOpen ? <SchedulesView automations={snapshot?.automations ?? []} agents={agents} connected={connection === 'connected'} paused={schedulesPaused} nowMs={schedulesNowMs} agentId={schedulesAgentId} loadError={schedulesError} onBack={() => setSchedulesOpen(false)} onCreate={createAutomation} onUpdate={updateAutomation} onSetEnabled={setAutomationEnabled} onRunNow={runAutomationNow} onDelete={deleteAutomation} onLoadRuns={loadAutomationRuns} onPreview={previewAutomation} onSetPaused={setAutomationsPaused} onOpenSession={openAutomationSession} /> : analyticsOpen ? <AnalyticsView sessions={sessions} agents={agents} quotas={snapshot?.quotas ?? []} connected={connection === 'connected'} onRefreshQuota={refreshQuota} onTurnOnUsage={openUsageSetting} onBack={closeAnalytics} /> : blobPage && draft ? <BlobPage mode={blobPage.mode} agent={editingAgent} onOpenMemory={() => { setSettingsInitialPage('Memory'); setSettingsFocus(null); setSettingsSheet(true) }} onOpenSkills={() => { setSettingsInitialPage('Skills'); setSettingsFocus(null); setSettingsSheet(true) }} changes={draft && baseline ? changedFields(draft, baseline) : []} onDuplicate={editingAgent ? () => void duplicateAgent(editingAgent) : undefined} onExport={editingAgent ? () => void exportBlob(editingAgent) : undefined} draft={draft} runtime={draftRuntime} session={blobPage.mode === 'edit' ? selectedSession : null} runtimes={runtimes} projects={projects} sessions={pageSessions} legacyCount={pageLegacy.length} connected={connection === 'connected'} saving={busy} dirty={draftDirty} ready={draftReady} canStartSession={connection === 'connected' && !busy && runtimeUsable(draftRuntime)} error={formError} remoteNotice={remoteNotice} errors={fieldErrors} execution={executionFromAgent(editingAgent)} autoApprovals={snapshot?.autoApprovals ?? []} bypassNotices={snapshot?.bypassNotices ?? []} onDraftChange={(next) => { setDraft(next); setFormError(null) }} onExecutionGate={(gate) => { executionGate.current = gate }} onBack={() => closeBlobPage(editingAgent?.id ?? activeSelectedAgent?.id ?? null)} onSave={() => void saveBlob()} onCancel={() => { const source = remoteNotice && editingAgent ? draftFromAgent(editingAgent) : baseline; if (!source) return; setDraft(source); setBaseline(source); setRemoteNotice(null); setFormError(null) }} onArchive={() => { if (editingAgent) setArchiveTarget(editingAgent) }} onNewSession={() => { if (editingAgent) newSession(editingAgent.id) }} onOpenSession={(session) => { setSelectedSessionId(session.id); closeBlobPage(editingAgent?.id ?? null) }} /> : <>
         <ChatBackgroundLayer empty={conversationEmpty} />
         <header className="chat-header">
           <div className="chat-title">
@@ -3009,7 +3033,7 @@ ${fileReferenceText(sentFile)}` : typed
                 </div>
               </article>)}
               {activePermission && (activePermission.kind === 'proposal'
-                ? <ProposalCard key={activePermission.id} request={activePermission} managerName={managerOf(agents)?.name} projects={projects} runtimes={snapshot?.runtimes ?? []} onDecided={() => void refresh()} />
+                ? <ProposalCard key={activePermission.id} request={activePermission} managerName={managerOf(agents)?.name} projects={projects} runtimes={snapshot?.runtimes ?? []} siblings={hireSiblings(snapshot?.permissions ?? [], activePermission)} onDecided={() => void refresh()} />
                 : activePermission.kind === 'question'
                 ? <QuestionCard request={activePermission} onAnswer={(answers) => answerQuestion(activePermission, answers)} onDismiss={() => void answerQuestion(activePermission, null)} />
                 : <ApprovalCard permission={activePermission} focusOnMount={approvalFocusOnMount} onReply={(choice, options) => answerPermission(activePermission, choice, options)} />)}
@@ -3154,6 +3178,7 @@ ${fileReferenceText(sentFile)}` : typed
       {fanoutOpen && !companion && <FanoutDialog agents={bots} projects={projects} runtimes={runtimes} initialAgent={activeSelectedAgent ?? null} onCancel={() => setFanoutOpen(false)} onStarted={(fanout) => { setFanoutOpen(false); setCompareId(fanout.id); setTasksOpen(false); setCompareOpen(true) }} />}
       {projectSettings && !companion && <ProjectSettingsDialog project={projectSettings} runtimes={runtimes} onClose={() => setProjectSettings(null)} onSaved={() => { setProjectSettings(null); void refresh() }} />}
       {newProjectOpen && !companion && <NewProjectDialog onCancel={() => finishNewProject(null)} onDone={finishNewProject} />}
+      {staffProject && !companion && <StaffProjectDialog project={staffProject} ceoName={managerOf(agents)?.name ?? 'the CEO'} canAskCeo={!!managerOf(agents) && connection === 'connected'} onAskCeo={() => { const id = staffProject.id; setStaffProject(null); void askCeoToStaff(id) }} onHire={() => { const id = staffProject.id; setStaffProject(null); openTeam('hire', id) }} onSkip={() => setStaffProject(null)} />}
       <UndoToasts toasts={undoToasts} onRemove={removeUndoToast} onError={setError} />
       {revertTarget && <ConfirmDialog title={`Revert ${String(revertTarget.file.path)}?`} body="Only this turn’s saved change will be reversed. Later edits that conflict with it prevent the revert." confirmLabel="Revert change" cancelLabel="Keep it" tone="warning" onConfirm={async () => {
         try {
@@ -4269,7 +4294,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
             {soundError && <p className="companion-drop-error cset-error" role="alert">{soundError}</p>}
             <div className="cset-footer"><button type="button" className="btn primary" onClick={() => onOpenSettings()}>Open Bitbots settings</button><button type="button" className="btn secondary" onClick={() => void setCompanionVisibility(false)}>Hide companion</button></div>
   </>
-  // Every bot is listed; the bots chosen under "Teammates on the island" come first, after the Manager.
+  // Every bot is listed; the bots chosen under "Teammates on the island" come first, after the CEO.
   const pinRank = (id: string) => { const at = pinned.indexOf(id); return at < 0 ? pinned.length : at }
   const roster = activeAgents(agents).filter((item) => !item.hidden)
     .map((item) => ({ item, state: blobState(item, sessions, runtimes, connected), session: mainSessionFor(sessions, item.id) }))

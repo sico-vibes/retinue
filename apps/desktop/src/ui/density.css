@@ -1,6 +1,22 @@
-/* Density: CSS-only consumption of `data-density` on <html>, set by uiPrefs.
-   Layout only — heights, gaps and padding. No colour, no type. `default` is
-   untouched, so the base stylesheets stay the single source for it. */
+/* Density: CSS-only consumption of `data-density` on <html>, set by uiPrefs
+   (and before first paint by index.html). Layout only — heights, gaps and
+   padding. No colour, no type.
+
+   Lists use the tokens below (8 November 2026), so every look follows density
+   without a per-look override winning on specificity: the Projects tree, the
+   Conversations column and the Bots rows read them. */
+:root {
+  --dn-row-pad-y: 6px;      /* vertical padding inside a list row */
+  --dn-row-gap: 3px;        /* space between rows in one list */
+  --dn-group-gap: 10px;     /* space between groups (projects) */
+  --dn-nest-gap: 4px;       /* space between a row and the cards nested under it */
+  --dn-card-pad-y: 6px;     /* vertical padding inside a two-line card */
+  --dn-team-row-h: 36px;    /* Haze one-line bot rows */
+  --dn-person-h: 46px;      /* an employee row in the Projects tree */
+  --dn-card-h: 40px;        /* a conversation card or row */
+}
+:root[data-density="compact"] { --dn-row-pad-y: 3px; --dn-row-gap: 1px; --dn-group-gap: 6px; --dn-nest-gap: 2px; --dn-card-pad-y: 4px; --dn-team-row-h: 30px; --dn-person-h: 38px; --dn-card-h: 34px; }
+:root[data-density="roomy"] { --dn-row-pad-y: 9px; --dn-row-gap: 6px; --dn-group-gap: 16px; --dn-nest-gap: 6px; --dn-card-pad-y: 9px; --dn-team-row-h: 44px; --dn-person-h: 54px; --dn-card-h: 48px; }
 
 /* ── Compact ─────────────────────────────────────────────────────────── */
 :root[data-density="compact"] .bot-row,

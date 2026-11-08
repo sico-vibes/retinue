@@ -48,7 +48,7 @@ describe('SlashMenu', () => {
     const onRemove = vi.fn()
     const host = mount(<SlashCommandChip command={{ kind: 'manager', name: 'interview' }} onRemove={onRemove} />)
     expect(host.querySelector('.slash-chip')?.textContent).toContain('/interview')
-    expect(host.querySelector('.slash-chip-tag')?.textContent).toBe('Manager')
+    expect(host.querySelector('.slash-chip-tag')?.textContent).toBe('CEO')
     act(() => host.querySelector<HTMLButtonElement>('.slash-chip-remove')!.click())
     expect(onRemove).toHaveBeenCalled()
   })

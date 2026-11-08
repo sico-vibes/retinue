@@ -160,7 +160,7 @@ pub async fn spawn_tool(st: &AppState, session_id: &str, args: &Value) -> Result
     let parent_id = session["agentId"].as_str().ok_or("Only a bot's conversation can start sub-bots.")?.to_owned();
     let parent = st.db.agent_get(&parent_id).map_err(|_| "Your bot is no longer available.")?;
     if parent["archived"] == true { return Err("This bot is archived.".into()); }
-    if st.db.delegation_paused().unwrap_or(false) { return Err("Delegation is paused. Ask the user to resume it in Manager settings, or do the work yourself.".into()); }
+    if st.db.delegation_paused().unwrap_or(false) { return Err("Delegation is paused. Ask the user to resume it in the CEO's settings, or do the work yourself.".into()); }
     let entries = args["bots"].as_array().ok_or("bots must be a list of 1 to 5 sub-bots.")?;
     if entries.is_empty() || entries.len() > PER_CALL { return Err(format!("bots must hold 1 to {PER_CALL} sub-bots; {} were given.", entries.len())); }
 

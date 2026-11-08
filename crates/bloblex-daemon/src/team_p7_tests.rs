@@ -393,7 +393,7 @@ async fn p7_every_manager_tool_is_refused_for_an_ordinary_bot() {
     for name in names {
         let result=call(&st,"p7-worker",&name,json!({})).await;
         assert_eq!(result["isError"],true,"{name} must be refused for an ordinary bot: {result}");
-        assert!(result["content"][0]["text"].as_str().unwrap().contains("Only the Manager"),"{name}: {result}");
+        assert!(result["content"][0]["text"].as_str().unwrap().contains("Only the CEO"),"{name}: {result}");
     }
     // The list/read tools an ordinary bot legitimately keeps stay available.
     assert_ne!(call(&st,"p7-worker","list_blobs",json!({})).await["isError"],true);

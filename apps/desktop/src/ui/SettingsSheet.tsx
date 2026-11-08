@@ -65,7 +65,7 @@ const NAV: Array<{ label: string; tabs: SettingsTab[] }> = [
   ] },
   { label: 'Bots', tabs: [
     { label: 'Coding agents', icon: Bot, pages: [{ id: 'Agents', label: 'Agents' }, { id: 'Accounts', label: 'Accounts' }] },
-    { label: 'Manager', icon: BriefcaseBusiness, pages: [{ id: 'Manager', label: 'Manager' }] },
+    { label: 'CEO', icon: BriefcaseBusiness, pages: [{ id: 'Manager', label: 'CEO' }] },
     { label: 'Approvals', icon: ShieldCheck, pages: [{ id: 'Approvals', label: 'Approvals' }] },
     { label: 'Memory and skills', icon: Brain, pages: [{ id: 'Memory', label: 'Memory' }, { id: 'Skills', label: 'Skills' }] },
   ] },

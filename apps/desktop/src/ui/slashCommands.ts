@@ -2,7 +2,7 @@
 // composer, or after a space, opens a menu of three groups:
 //   - Actions the app performs itself (no message is sent);
 //   - Skills from the shared pool that are enabled for this bot;
-//   - Manager commands, only when the conversation's bot is the Manager.
+//   - Manager commands, only when the conversation's bot is the CEO.
 // Picking a skill or Manager command attaches it to the message; the message is
 // stored and shown exactly as typed (`/name` plus whatever follows).
 

@@ -84,7 +84,7 @@ pub(crate) fn may_ask(st: &AppState, session: &Value) -> Result<(), &'static str
 pub fn tool_schema() -> Value {
     json!({
         "name": "ask_user",
-        "description": "Ask the user one to six structured questions. The questions appear as a card in the chat; they may take a while to answer, so call this and then end your turn. Do not wait or poll. The user's answer arrives later as your next message. In a side conversation your Manager is told that you are waiting, but only the user can answer.",
+        "description": "Ask the user one to six structured questions. The questions appear as a card in the chat; they may take a while to answer, so call this and then end your turn. Do not wait or poll. The user's answer arrives later as your next message. In a side conversation your CEO is told that you are waiting, but only the user can answer.",
         "inputSchema": {
             "type": "object",
             "properties": {

@@ -157,12 +157,12 @@ describe('conversation permission mode', () => {
     const managerSet: Session = { ...session, modelLock: { ...session.modelLock, approvalMode: 'auto', approvalModeSource: 'manager' } }
     const host = mount(<PermissionModeControl session={managerSet} agent={agent} disabled={false} onSessionUpdated={() => undefined} onError={() => undefined} />)
     const trigger = host.querySelector<HTMLButtonElement>('.permission-pill')!
-    expect(trigger.textContent).toContain('set by the Manager')
-    expect(trigger.getAttribute('aria-label')).toContain('set by the Manager')
+    expect(trigger.textContent).toContain('set by the CEO')
+    expect(trigger.getAttribute('aria-label')).toContain('set by the CEO')
     // The owner's own pin shows no such mark.
     const own: Session = { ...session, modelLock: { ...session.modelLock, approvalMode: 'auto' } }
     const plain = mount(<PermissionModeControl session={own} agent={agent} disabled={false} onSessionUpdated={() => undefined} onError={() => undefined} />)
-    expect(plain.querySelector('.permission-pill')?.textContent).not.toContain('set by the Manager')
+    expect(plain.querySelector('.permission-pill')?.textContent).not.toContain('set by the CEO')
   })
 })
 

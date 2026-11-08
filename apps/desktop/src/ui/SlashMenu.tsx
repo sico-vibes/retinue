@@ -49,8 +49,8 @@ export function SlashMenu({ items, activeIndex, onPick, onHover }: {
 /** The picked command, shown at the start of the message like the reply strip. */
 export function SlashCommandChip({ command, onRemove }: { command: SlashCommand; onRemove: () => void }) {
   return <div className="slash-chip-row">
-    <span className="slash-chip" title={command.kind === 'manager' ? 'Manager command for this message' : 'Skill for this message'}>
-      <span className="slash-chip-tag">{command.kind === 'manager' ? 'Manager' : 'Skill'}</span>
+    <span className="slash-chip" title={command.kind === 'manager' ? 'CEO command for this message' : 'Skill for this message'}>
+      <span className="slash-chip-tag">{command.kind === 'manager' ? 'CEO' : 'Skill'}</span>
       <strong>/{command.name}</strong>
       <button type="button" className="slash-chip-remove" aria-label={`Remove /${command.name}`} onClick={onRemove}><X size={11} aria-hidden="true" /></button>
     </span>

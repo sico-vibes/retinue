@@ -21,7 +21,7 @@
         "minWidth": 1000,
         "minHeight": 680,
         "center": true,
-        "visible": true,
+        "visible": false,
         "resizable": true,
         "fullscreen": false,
         "titleBarStyle": "Visible",

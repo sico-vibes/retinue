@@ -1,9 +1,9 @@
 // Bot-first sidebar (Phase 1A, owner decision 29 October 2026): one list of
-// bots, the Manager pinned on top. Bots work in every project; a bot's
+// bots, the CEO pinned on top. Bots work in every project; a bot's
 // conversations are grouped by project in its conversations panel.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ProjectIcon } from './ProjectIcon'
-import { Archive, ArrowDownUp, Check, ChevronRight, Copy, Eye, EyeOff, FolderInput, FolderOpen, FolderPlus, Lock, LockOpen, MailOpen, Mail, Pencil, Pin, PinOff, Plus, Settings2, Tag, Trash2, X, Copy as Duplicate, Download, Star } from 'lucide-react'
+import { Archive, ArrowDownUp, Users, Check, ChevronRight, Copy, Eye, EyeOff, FolderInput, FolderOpen, FolderPlus, Lock, LockOpen, MailOpen, Mail, Pencil, Pin, PinOff, Plus, Settings2, Tag, Trash2, X, Copy as Duplicate, Download, Star } from 'lucide-react'
 import type { Agent, Project, Runtime, Session } from '../types'
 import { rpc } from '../tauri'
 import { agentLook } from '../blob/look'
@@ -21,6 +21,7 @@ import { useEntityNoun } from './vocabulary'
 import { SubbotRows } from './SubbotViews'
 import { SIDEBAR_SORTS, groupBotsByProject, sortBots, storeSidebarGrouping, storeSidebarSort, storeSidebarView, storedSidebarGrouping, storedSidebarSort, storedSidebarView, type SidebarView } from './sidebarOrder'
 import { ProjectsSidebar } from './ProjectsSidebar'
+import { useProjectMembers } from './projectMembers'
 
 export type MenuItem = { label: string; icon?: ReactNode; onSelect?: () => void; disabled?: boolean; danger?: boolean; checked?: boolean; submenu?: MenuItem[] } | 'separator'
 
@@ -87,8 +88,8 @@ export type TagTarget = { kind: 'project' | 'bot'; id: string; name: string; tag
 
 /**
  * The small tag editor behind a project's or a bot's right-click menu. Tags are
- * the routing vocabulary the Manager matches a job to; the owner edits them here
- * (`project.update` / `agent.team.update`), and the Manager sets them through its
+ * the routing vocabulary the CEO matches a job to; the owner edits them here
+ * (`project.update` / `agent.team.update`), and the CEO sets them through its
  * own tools. Self-contained: it saves with `rpc` and lets the usual
  * `project.changed`/`agent.changed` events update the sidebar.
  */
@@ -129,7 +130,7 @@ export function TagEditor({ target, onClose }: { target: TagTarget; onClose: () 
   return <div className="tag-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <section className="tag-editor" role="dialog" aria-modal="true" aria-label={`Tags for ${target.name}`}>
       <header className="tag-editor-head"><strong>Tags for {target.name}</strong><button type="button" className="icon-button tiny" aria-label="Close" onClick={onClose}><X size={15} /></button></header>
-      <p className="tag-editor-hint">Tags help the Manager pick the right bot and project for a job. Up to 8, one or two words each.</p>
+      <p className="tag-editor-hint">Tags help the CEO pick the right bot and project for a job. Up to 8, one or two words each.</p>
       <div className="tag-chips">
         {tags.map((tag) => <span key={tag} className="tag-chip">{tag}<button type="button" aria-label={`Remove ${tag}`} onClick={() => setTags((current) => current.filter((item) => item !== tag))}><X size={11} /></button></span>)}
         {tags.length === 0 && <span className="tag-empty">No tags yet.</span>}
@@ -176,7 +177,14 @@ export type TeamSidebarActions = {
   onOpenRuntimeSettings: () => void
 }
 
-export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos = false, sidebarModel = false, botLock = false, connected, now, pinnedIds, unreadSessionIds, approvalSessionIds, selectedAgentId, onOpenSearch, actions, banner, machines, onOpenSubbot, selectedSessionId, onOpenConversation, onStartInProject, canCreate = true }: {
+export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos = false, sidebarModel = false, botLock = false, connected, now, pinnedIds, unreadSessionIds, approvalSessionIds, selectedAgentId, onOpenSearch, actions, banner, machines, onOpenSubbot, selectedSessionId, onOpenConversation, onStartInProject, canCreate = true, onOpenTeam, teamOpen = false, onHire, onAskCeo }: {
+  /** Opens the Team page: the hiring list (or who works where). */
+  onOpenTeam?: (tab: 'team' | 'hire') => void
+  teamOpen?: boolean
+  /** Opens hiring for one project. */
+  onHire?: (projectId: string) => void
+  /** Starts a CEO conversation about staffing one project. */
+  onAskCeo?: (projectId: string) => void
   /** The Projects view: opens one conversation of a bot. */
   onOpenConversation?: (agent: Agent, session: Session) => void
   /** The Projects view: a new conversation with a bot in a project. */
@@ -237,9 +245,14 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
   const withSubbots = (agent: Agent) => hasSubbots(agent.id) && onOpenSubbot ? <div key={agent.id}>{renderRow(agent)}<SubbotRows parent={agent} onOpen={onOpenSubbot} selectedSessionId={selectedSessionId} /></div> : renderRow(agent)
   const [sort, setSort] = useState(storedSidebarSort)
   const [grouped, setGrouped] = useState(storedSidebarGrouping)
+  // 8 November 2026: Projects is the main view. The Team button swaps in the
+  // bot roster (with all its menus); the Team page holds hiring.
   const [view, setView] = useState<SidebarView>(storedSidebarView)
   const projectsView = view === 'projects' && !!onOpenConversation && !!onStartInProject
   const chooseView = (next: SidebarView) => { setView(next); storeSidebarView(next) }
+  const projectIds = useMemo(() => projects.map((project) => project.id), [projects])
+  const members = useProjectMembers(projectsView ? projectIds : [], agents.length)
+  const employeeCount = agents.filter((agent) => !agent.archived && !agent.parentAgentId && !isManager(agent)).length
   const [sortMenu, setSortMenu] = useState<{ x: number; y: number } | null>(null)
   const rows = sortBots(roster.filter((agent) => !pinnedIds.includes(agent.id)), sessions, sort)
   const groups = grouped ? groupBotsByProject(rows, projects) : null
@@ -251,14 +264,14 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
     const session = mainSessionFor(sessions, agent.id)
     const unread = !!session && unreadSessionIds.has(session.id)
     const isPinned = pinnedIds.includes(agent.id)
-    // The Manager can never be locked, so its menu never shows a lock entry.
+    // The CEO can never be locked, so its menu never shows a lock entry.
     const locked = agent.locked === true && !isManager(agent)
-    // The Manager stays pinned at the top, works across every project and can't be removed.
+    // The CEO stays pinned at the top, works across every project and can't be removed.
     if (isManager(agent)) return [
       { label: unread ? 'Mark as read' : 'Mark as unread', icon: unread ? <MailOpen size={15} /> : <Mail size={15} />, disabled: !session, onSelect: () => actions.onToggleUnread(agent, session, !unread) },
       'separator',
-      { label: 'Rename Manager', icon: <Pencil size={15} />, onSelect: () => actions.onRename(agent) },
-      { label: 'Edit Manager', icon: <Settings2 size={15} />, onSelect: () => actions.onEdit(agent) },
+      { label: 'Rename CEO', icon: <Pencil size={15} />, onSelect: () => actions.onRename(agent) },
+      { label: 'Edit CEO', icon: <Settings2 size={15} />, onSelect: () => actions.onEdit(agent) },
       { label: 'Copy conversation ID', icon: <Copy size={15} />, disabled: !session, onSelect: () => actions.onCopyConversationId(agent, session) },
     ]
     return [
@@ -388,7 +401,7 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
       }}>
       <span className="team-row-avatar">
         <BlobCanvas color={agentColorHex(agent.color)} size={haze ? 20 : 50} mood={status.mood} look={agentLook(agent)} label={agent.name} track={selected} />
-        {isManager(agent) && <span className="leader-badge" title="Manager" aria-hidden="true"><Star size={10} fill="currentColor" strokeWidth={0} /></span>}
+        {isManager(agent) && <span className="leader-badge" title="CEO" aria-hidden="true"><Star size={10} fill="currentColor" strokeWidth={0} /></span>}
         {agent.locked === true && <span className="lock-badge" title="Locked" aria-hidden="true"><Lock size={9} /></span>}
       </span>
       <span className="bot-row-copy">
@@ -409,7 +422,7 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
     </button>
     {banner}
     <nav className="sidebar-scroll" aria-label={Nouns} data-tour="roster"><div role="tree" aria-label={Nouns}>
-      {manager && <section className="team-group manager-group" aria-label="Manager">
+      {manager && <section className="team-group manager-group" aria-label="CEO">
         <div className="team-group-rows">{withSubbots(manager)}</div>
       </section>}
       {pinned.length > 0 && <section className="team-group" aria-label="Pinned">
@@ -417,14 +430,14 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
         <div className="team-group-rows">{pinned.map(withSubbots)}</div>
       </section>}
       {onOpenConversation && onStartInProject && <div className="sidebar-view-switch" role="group" aria-label="Sidebar view">
-        <button type="button" aria-pressed={!projectsView} onClick={() => chooseView('bots')}>{Nouns}</button>
-        <button type="button" aria-pressed={projectsView} onClick={() => chooseView('projects')}>Projects</button>
+        <button type="button" aria-pressed={projectsView} onClick={() => chooseView('projects')}><FolderOpen size={13} aria-hidden="true" />Projects</button>
+        <button type="button" aria-pressed={!projectsView} onClick={() => chooseView('bots')}><Users size={13} aria-hidden="true" />Team<small>{employeeCount}</small></button>
       </div>}
-      {projectsView && <ProjectsSidebar agents={agents} projects={projects} sessions={sessions} selectedSessionId={selectedSessionId ?? null} canCreate={connected && canCreate} onOpenConversation={onOpenConversation!} onStartInProject={onStartInProject!} onCreateProject={actions.onCreateProject} />}
+      {projectsView && <ProjectsSidebar agents={agents} projects={projects} sessions={sessions} members={members} approvalSessionIds={approvalSessionIds} selectedSessionId={selectedSessionId ?? null} canCreate={connected && canCreate} onOpenConversation={onOpenConversation!} onStartInProject={onStartInProject!} onCreateProject={actions.onCreateProject} onHire={onHire} onAskCeo={onAskCeo} />}
       {!projectsView && <section className="team-group" aria-label={Nouns}>
         <div className="team-group-head static">
           <span className="team-group-title"><span>{Nouns}</span></span>
-          <span className="team-group-actions"><button type="button" className="icon-button tiny" aria-label={`Sort ${nouns}`} title={`Sort ${nouns}`} aria-haspopup="menu" onClick={(event) => { menuTrigger.current = event.currentTarget; const rect = event.currentTarget.getBoundingClientRect(); setSortMenu({ x: rect.left, y: rect.bottom + 4 }) }}><ArrowDownUp size={13} /></button><button type="button" className="icon-button tiny" aria-label={`New ${noun}`} title={`New ${noun}`} onClick={() => actions.onCreate(null)}><Plus size={14} /></button></span>
+          <span className="team-group-actions"><button type="button" className="icon-button tiny" aria-label={`Sort ${nouns}`} title={`Sort ${nouns}`} aria-haspopup="menu" onClick={(event) => { menuTrigger.current = event.currentTarget; const rect = event.currentTarget.getBoundingClientRect(); setSortMenu({ x: rect.left, y: rect.bottom + 4 }) }}><ArrowDownUp size={13} /></button>{onOpenTeam && <button type="button" className="ghost-button small team-hire-button" aria-pressed={teamOpen} onClick={() => onOpenTeam('hire')}>Hire</button>}<button type="button" className="icon-button tiny" aria-label={`New ${noun}`} title={`New ${noun}`} onClick={() => actions.onCreate(null)}><Plus size={14} /></button></span>
         </div>
         {groups
           ? groups.map((group) => <div key={group.id} role="group" aria-label={group.name}><div className="team-subgroup-head">{group.name}</div><div className="team-group-rows">{group.agents.map(withSubbots)}</div></div>)

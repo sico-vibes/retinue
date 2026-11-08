@@ -60,6 +60,19 @@ pub fn tool_schemas() -> Vec<Value> {
             "conversation":{"type":"string","description":"The side conversation's id, from list_conversations."},
             "mode":{"type":"string","enum":["ask","auto"],"description":"The bot permission for all its conversations from their next turn."}
         },"required":["conversation","mode"],"additionalProperties":false}}),
+        // Phase 9: the CEO staffs a project from the preset catalogue.
+        json!({"name":"list_presets","description":"List the preset employees you can hire: id, nickname, role, department, tags, description and whether each is already hired. Read-only. Filter by department or tag.","inputSchema":{"type":"object","properties":{
+            "department":{"type":"string","description":"Only this department, by its id (optional)."},
+            "tag":{"type":"string","description":"Only employees with this tag (optional)."}
+        },"additionalProperties":false}}),
+        json!({"name":"propose_hires","description":"Propose hiring employees into a project. Each candidate becomes its own approval card, and the cards from one call are shown as one group with Hire all. Nothing is hired until the owner approves. Reuse an employee already hired instead of proposing them again.","inputSchema":{"type":"object","properties":{
+            "project":{"type":"string","description":"A project id, exact project name or unique tag."},
+            "candidates":{"type":"array","minItems":1,"maxItems":8,"items":{"type":"object","properties":{
+                "preset":{"type":"string","description":"A preset employee id from list_presets."},
+                "bot":{"type":"string","description":"An existing employee's name or id, instead of a preset."},
+                "reason":{"type":"string","description":"One line on why this project needs them."}
+            },"required":["reason"],"additionalProperties":false},"description":"1 to 8 candidates; each has a preset or a bot, and a reason."}
+        },"required":["project","candidates"],"additionalProperties":false}}),
     ];
     for tool in &mut schemas {
         let name = tool["name"].as_str().unwrap_or("").to_owned();
@@ -221,7 +234,7 @@ fn validate_permission(args: &Value) -> Result<Value, String> {
 pub(crate) fn manager_of_session(st: &AppState, session_id: &str) -> Result<Value, String> {
     let session = st.db.session_detail(session_id).map_err(|_| "This conversation is no longer available.".to_owned())?;
     if session["archived"] == true { return Err("This conversation is archived.".into()); }
-    let agent_id = session["agentId"].as_str().ok_or_else(|| "Only the Manager can propose work.".to_owned())?;
+    let agent_id = session["agentId"].as_str().ok_or_else(|| "Only the CEO can propose work.".to_owned())?;
     let agent = st.db.agent_get(agent_id).map_err(|_| "Your bot is no longer available.".to_owned())?;
     if agent["systemRole"].as_str() != Some("manager") || agent["archived"] == true { return Err(crate::team::non_manager_error(st)); }
     Ok(agent)
@@ -318,7 +331,7 @@ pub async fn propose_permission(st: &AppState, session_id: &str, args: &Value) -
     if row["link"]["kind"] != "side" { return Err("Only a side conversation between two bots can be changed here.".into()); }
     let manager_id = manager["id"].as_str().unwrap_or("");
     if row["link"]["peerAgentId"].as_str() != Some(manager_id) {
-        return Err("Only a side conversation the Manager started can be changed here.".into());
+        return Err("Only a side conversation the CEO started can be changed here.".into());
     }
     let target_id = row["agentId"].as_str().unwrap_or("").to_owned();
     if st.db.agent_get(&target_id).map(|agent| crate::bot_is_locked(&agent)).unwrap_or(false) {
@@ -329,6 +342,109 @@ pub async fn propose_permission(st: &AppState, session_id: &str, args: &Value) -
     let detail = format!("Conversation {conversation} · applies from the next turn");
     let id = create_proposal(st, session_id, &manager, "permission", payload, format!("Change {target}'s permission to {mode}"), Some(detail)).await?;
     Ok(waiting(&id))
+}
+
+/// Phase 9: `list_presets` — the catalogue, read-only, so the CEO can pick a
+/// team without guessing. Same data as `preset.list`, as text.
+pub async fn list_presets(st: &AppState, args: &Value) -> Result<String, String> {
+    let map = args.as_object().ok_or("the preset filter must be an object.")?;
+    reject_unknown(map, &["department", "tag"], "the preset filter")?;
+    let department = optional_str(map, "department", 40)?;
+    let tag = optional_str(map, "tag", 24)?.to_lowercase();
+    let hired = st.db.preset_agents().map_err(|error| error.to_string())?;
+    let departments = crate::presets::departments().iter().map(|department| format!("{} ({})", department.name, department.id)).collect::<Vec<_>>().join(", ");
+    let mut lines = vec![format!("Departments: {departments}.")];
+    let mut shown = 0;
+    for preset in crate::presets::presets() {
+        if !department.is_empty() && preset.department != department { continue; }
+        if !tag.is_empty() && !preset.tags.iter().any(|candidate| candidate.eq_ignore_ascii_case(&tag)) { continue; }
+        shown += 1;
+        let state = if hired.iter().any(|row| row["presetId"].as_str() == Some(preset.id.as_str())) { "hired" } else { "not hired" };
+        lines.push(format!(
+            "- {} — {} · {} · {} · tags: {} · {state}. {}",
+            preset.id,
+            preset.nickname,
+            preset.role,
+            crate::presets::department_name(&preset.department),
+            preset.tags.join(", "),
+            preset.description,
+        ));
+    }
+    if shown == 0 {
+        return Ok(format!("No preset employee matches that filter. Departments: {departments}."));
+    }
+    Ok(lines.join("\n"))
+}
+
+/// Phase 9: `propose_hires` — one `hire` proposal per candidate, sharing a
+/// `groupId` so the owner sees one card with Hire all. Nothing is hired until
+/// they approve it.
+pub async fn propose_hires(st: &AppState, session_id: &str, args: &Value) -> Result<String, String> {
+    let manager = manager_of_session(st, session_id)?;
+    let map = args.as_object().ok_or("the hiring proposal must be an object.")?;
+    reject_unknown(map, &["project", "candidates"], "the hiring proposal")?;
+    let project = crate::team::project_named(st, &required_str(map, "project", 200)?)?;
+    let project_id = project["id"].as_str().unwrap_or("").to_owned();
+    let project_name = project["name"].as_str().unwrap_or("the project").to_owned();
+    let candidates = map.get("candidates").and_then(Value::as_array).filter(|list| !list.is_empty() && list.len() <= 8).ok_or("candidates must be 1 to 8 entries.")?;
+    let group_id = Uuid::new_v4().to_string();
+    let mut waiting: Vec<String> = Vec::new();
+    let mut skipped: Vec<String> = Vec::new();
+    for (index, candidate) in candidates.iter().enumerate() {
+        let number = index + 1;
+        let entry = candidate.as_object().ok_or_else(|| format!("Candidate {number} must be an object."))?;
+        reject_unknown(entry, &["preset", "bot", "reason"], "the candidate").map_err(|error| format!("Candidate {number}: {error}"))?;
+        let preset_id = optional_str(entry, "preset", 40)?;
+        let wanted_bot = optional_str(entry, "bot", 80)?;
+        let reason = required_str(entry, "reason", 400)?;
+        if preset_id.is_empty() == wanted_bot.is_empty() {
+            return Err(format!("Candidate {number} needs a preset or a bot, not both."));
+        }
+        let mut payload = serde_json::Map::new();
+        payload.insert("projectId".into(), json!(project_id));
+        payload.insert("projectName".into(), json!(project_name));
+        payload.insert("reason".into(), json!(reason));
+        payload.insert("groupId".into(), json!(group_id));
+        let (nickname, role, portrait) = if !preset_id.is_empty() {
+            let preset = crate::presets::find(&preset_id).ok_or_else(|| format!("There is no preset employee called {preset_id}. Use list_presets for the ids."))?;
+            let existing = st.db.agent_with_preset(&preset_id).map_err(|error| error.to_string())?;
+            if let Some(id) = existing.as_ref().and_then(|agent| agent["id"].as_str()) {
+                if st.db.project_member(&project_id, id).map_err(|error| error.to_string())?.is_some() {
+                    skipped.push(format!("{} is already in {project_name}.", preset.nickname));
+                    continue;
+                }
+                payload.insert("agentId".into(), json!(id));
+            } else {
+                payload.insert("presetId".into(), json!(preset_id));
+            }
+            (preset.nickname.clone(), preset.role.clone(), preset.portrait.clone())
+        } else {
+            let agent = crate::team::blob_named(st, &wanted_bot)?;
+            if agent["systemRole"].as_str() == Some("manager") {
+                skipped.push(format!("{} is the CEO and works in every project already.", agent["name"].as_str().unwrap_or("The CEO")));
+                continue;
+            }
+            let id = agent["id"].as_str().unwrap_or("").to_owned();
+            if st.db.project_member(&project_id, &id).map_err(|error| error.to_string())?.is_some() {
+                skipped.push(format!("{} is already in {project_name}.", agent["name"].as_str().unwrap_or("That employee")));
+                continue;
+            }
+            payload.insert("agentId".into(), json!(id));
+            (agent["name"].as_str().unwrap_or("An employee").to_owned(), agent["role"].as_str().unwrap_or("").to_owned(), agent["look"]["icon"].as_str().unwrap_or("").to_owned())
+        };
+        payload.insert("nickname".into(), json!(nickname));
+        payload.insert("role".into(), json!(role));
+        payload.insert("portrait".into(), json!(portrait));
+        let detail = if role.is_empty() { payload.get("reason").and_then(Value::as_str).unwrap_or("").to_owned() } else { format!("{role} · {}", payload.get("reason").and_then(Value::as_str).unwrap_or("")) };
+        let id = create_proposal(st, session_id, &manager, "hire", Value::Object(payload), format!("Hire {nickname} into {project_name}"), Some(detail)).await?;
+        waiting.push(format!("- Hire {nickname} into {project_name} (proposal {id})"));
+    }
+    if waiting.is_empty() {
+        return Ok(format!("Nothing to hire: {}", skipped.join(" ")));
+    }
+    let mut text = format!("Waiting for the user's approval:\n{}", waiting.join("\n"));
+    if !skipped.is_empty() { text.push_str(&format!("\nSkipped: {}", skipped.join(" "))); }
+    Ok(text)
 }
 
 /// Read-only: a project's bots, each with its latest conversation title, state
@@ -387,11 +503,12 @@ pub(crate) fn describe(kind: &str, payload: &Value) -> String {
         "bot" => format!("create bot {}", payload["name"].as_str().unwrap_or("a bot")),
         "task" => format!("assign a task to {}", named(payload, "botName", "bot", "a bot")),
         "permission" => format!("set a conversation's permission to {}", payload["mode"].as_str().unwrap_or("a mode")),
+        "hire" => format!("hire {} into {}", payload["nickname"].as_str().unwrap_or("an employee"), named(payload, "projectName", "projectId", "a project")),
         "merge" => format!("merge {} into {}", payload["branch"].as_str().unwrap_or("a task branch"), payload["baseBranch"].as_str().unwrap_or("its branch")),
-        "playbook" => "change the Manager's playbook".to_owned(),
+        "playbook" => "change the CEO's playbook".to_owned(),
         "profile" => match payload["op"].as_str().unwrap_or("set") {
-            "forget" => format!("forget what the Manager knows ({})", payload["key"].as_str().unwrap_or("a preference")),
-            _ => format!("change what the Manager knows ({})", payload["key"].as_str().unwrap_or("a preference")),
+            "forget" => format!("forget what the CEO knows ({})", payload["key"].as_str().unwrap_or("a preference")),
+            _ => format!("change what the CEO knows ({})", payload["key"].as_str().unwrap_or("a preference")),
         },
         _ => "act".to_owned(),
     }
@@ -399,6 +516,29 @@ pub(crate) fn describe(kind: &str, payload: &Value) -> String {
 
 fn invalid(message: String) -> DispatchError {
     derr("invalid_argument", &message, StatusCode::BAD_REQUEST)
+}
+
+/// Phase 9: an approved hire runs `project.hire`. The card's payload is the
+/// whole contract, and the owner may add a runtime and model in `edits`.
+async fn apply_hire(st: &AppState, payload: &Value) -> Result<(Value, String), DispatchError> {
+    let map = payload.as_object().ok_or_else(|| invalid("The hiring proposal is empty.".into()))?;
+    reject_unknown(map, &["projectId", "projectName", "presetId", "agentId", "nickname", "role", "portrait", "reason", "groupId", "runtimeId", "model"], "the hiring proposal").map_err(invalid)?;
+    let project_id = required_str(map, "projectId", 80).map_err(invalid)?;
+    let preset_id = optional_str(map, "presetId", 40).map_err(invalid)?;
+    let agent_id = optional_str(map, "agentId", 80).map_err(invalid)?;
+    if preset_id.is_empty() == agent_id.is_empty() {
+        return Err(invalid("The hiring proposal names a preset or a bot, not both.".into()));
+    }
+    let mut params = json!({"projectId": project_id});
+    if !preset_id.is_empty() { params["presetId"] = json!(preset_id); }
+    if !agent_id.is_empty() { params["agentId"] = json!(agent_id); }
+    for key in ["runtimeId", "model"] {
+        if let Some(value) = map.get(key).filter(|value| value.as_str().is_some_and(|text| !text.trim().is_empty())) { params[key] = value.clone(); }
+    }
+    let result = crate::team::project_hire(st, &params).await?;
+    let nickname = map.get("nickname").and_then(Value::as_str).unwrap_or("an employee");
+    let project = map.get("projectName").and_then(Value::as_str).unwrap_or("the project");
+    Ok((result, format!("hired {nickname} into {project}")))
 }
 
 /// Run an approved proposal. Returns the stored result and a one-line summary
@@ -422,6 +562,7 @@ async fn apply(st: &AppState, session_id: &str, agent_id: Option<&str>, kind: &s
         "bot" => apply_bot(st, agent_id, payload).await,
         "task" => apply_task(st, session_id, payload).await,
         "permission" => apply_permission(st, agent_id, payload).await,
+        "hire" => apply_hire(st, payload).await,
         "merge" => apply_merge(st, session_id, payload).await,
         "playbook" => apply_playbook(st, payload),
         "profile" => apply_profile(st, payload),
@@ -436,7 +577,7 @@ fn apply_playbook(st: &AppState, payload: &Value) -> Result<(Value, String), Dis
         return Err(invalid(format!("The playbook must be at most {} characters.", crate::knowledge::MAX_PLAYBOOK_CHARS)));
     }
     let playbook = st.db.manager_playbook_append(text, "manager").map_err(agent_error)?;
-    Ok((json!({"version": playbook["version"], "playbook": playbook}), "updated the Manager's playbook".to_owned()))
+    Ok((json!({"version": playbook["version"], "playbook": playbook}), "updated the CEO's playbook".to_owned()))
 }
 
 /// Apply an approved profile change: `set` writes the fact, `forget` removes it.
@@ -446,13 +587,13 @@ fn apply_profile(st: &AppState, payload: &Value) -> Result<(Value, String), Disp
     match payload["op"].as_str().unwrap_or("set") {
         "forget" => {
             let removed = st.db.manager_profile_delete_key(category, key).map_err(agent_error)?;
-            Ok((json!({"deleted": removed, "category": category, "key": key}), format!("forgot what the Manager knew ({key})")))
+            Ok((json!({"deleted": removed, "category": category, "key": key}), format!("forgot what the CEO knew ({key})")))
         }
         "set" => {
             let value = payload["value"].as_str().unwrap_or("");
             let source = payload["source"].as_str().unwrap_or("learned");
             let fact = st.db.manager_profile_put(category, key, value, source, None).map_err(agent_error)?;
-            Ok((json!({"fact": fact, "category": category, "key": key}), format!("updated what the Manager knew ({key})")))
+            Ok((json!({"fact": fact, "category": category, "key": key}), format!("updated what the CEO knew ({key})")))
         }
         _ => Err(invalid("A profile proposal must be a set or a forget.".into())),
     }
@@ -575,7 +716,7 @@ async fn apply_permission(st: &AppState, agent_id: Option<&str>, payload: &Value
     if row["link"]["kind"] != "side" { return Err(invalid("That conversation is not a side conversation.".into())); }
     let manager_id = agent_id.unwrap_or("");
     if row["link"]["peerAgentId"].as_str() != Some(manager_id) {
-        return Err(invalid("That conversation was not started by the Manager that proposed this change.".into()));
+        return Err(invalid("That conversation was not started by the CEO that proposed this change.".into()));
     }
     let target_id = row["agentId"].as_str().unwrap_or("").to_owned();
     if st.db.agent_get(&target_id).map(|agent| crate::bot_is_locked(&agent)).unwrap_or(false) {
@@ -877,7 +1018,7 @@ fn validated_tags(value: Option<&Value>) -> Result<Value, String> {
 
 fn validate_bot_options(payload: &Value) -> Result<(), String> {
     if payload.get("approvalMode").is_some_and(|mode| !matches!(mode.as_str(), Some("ask" | "auto"))) {
-        return Err("The Manager can propose ask or auto, never Full access.".into());
+        return Err("The CEO can propose ask or auto, never Full access.".into());
     }
     for key in ["model", "thinking"] {
         if let Some(value) = payload.get(key).filter(|value| !value.is_null()) {

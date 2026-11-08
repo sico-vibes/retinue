@@ -303,7 +303,7 @@ async fn gather(st: &AppState, session_id: &str) -> Result<Facts, DispatchError>
     } else if st.db.delegation_list_for_origin(session_id).map(|rows| rows.iter().any(|row| !crate::delegations::is_terminal(row))).unwrap_or(false) {
         Some("This conversation has assignments running.".to_string())
     } else if agent.as_ref().is_some_and(|agent| agent["systemRole"].as_str() == Some("manager")) {
-        Some("The Manager's conversations stay on their machine.".to_string())
+        Some("The CEO's conversations stay on their machine.".to_string())
     } else if agent.is_none()
         // Anything but a bot's own conversation: a side conversation, an automation or board task, a
         // group, or one that is itself an assignment's child.

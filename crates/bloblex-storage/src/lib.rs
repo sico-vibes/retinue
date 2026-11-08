@@ -15,7 +15,11 @@ mod phase5;
 // Phase 5, section 7: Web Push subscriptions, one per device.
 mod phase6;
 mod phase8;
+mod phase9; // Phase 9: employees, hiring and the CEO
+pub use phase9::agent_accepts_preset;
 mod secret_refs; // Phase 5: environment references to secrets
+#[cfg(test)]
+mod phase9_tests;
 pub mod cron;
 
 #[derive(Debug, Error)]
@@ -860,11 +864,12 @@ fn ensure_proposal_schema(c: &Connection) -> Result<(), StorageError> {
     )?;
     // FIX36 D3 widens the `kind` CHECK with `profile`; FIX39 P5 widens it again
     // with `permission` (a Manager-proposed side-conversation mode) and FIX39 P10
-    // with `merge` (a finished task's worktree offered for merge). SQLite bakes a
+    // with `merge` (a finished task's worktree offered for merge). Phase 9 widens
+    // it with `hire` (the CEO proposing an employee for a project). SQLite bakes a
     // CHECK into the table definition, so an older database is rebuilt (rows
     // copied verbatim) instead of silently refusing the new kind.
     let ddl: String = c.query_row("SELECT sql FROM sqlite_master WHERE type='table' AND name='proposals'", [], |r| r.get(0))?;
-    if !ddl.contains("'profile'") || !ddl.contains("'permission'") || !ddl.contains("'merge'") {
+    if !ddl.contains("'profile'") || !ddl.contains("'permission'") || !ddl.contains("'merge'") || !ddl.contains("'hire'") {
         c.execute_batch(
             "BEGIN IMMEDIATE;
              ALTER TABLE proposals RENAME TO proposals_pre_profile;
@@ -872,7 +877,7 @@ fn ensure_proposal_schema(c: &Connection) -> Result<(), StorageError> {
                  id TEXT PRIMARY KEY NOT NULL,
                  session_id TEXT NOT NULL,
                  agent_id TEXT,
-                 kind TEXT NOT NULL CHECK(kind IN ('project','bot','task','playbook','profile','permission','merge')),
+                 kind TEXT NOT NULL CHECK(kind IN ('project','bot','task','playbook','profile','permission','merge','hire')),
                  payload TEXT NOT NULL CHECK(json_valid(payload)),
                  status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected','expired')),
                  result TEXT CHECK(result IS NULL OR json_valid(result)),
@@ -889,9 +894,80 @@ fn ensure_proposal_schema(c: &Connection) -> Result<(), StorageError> {
     Ok(())
 }
 
-/// The default Manager playbook (FIX36 D3), seeded once as version 1. Kept in
+/// The default CEO playbook (FIX36 D3), seeded once as version 1. Kept in
 /// the storage crate so a fresh database and a migration agree on the text.
+/// Phase 9 (8 November 2026): the Manager is the CEO, the team works in
+/// projects, and hiring comes from the preset catalogue.
 pub const DEFAULT_PLAYBOOK: &str = "\
+# How I work
+
+I am the user's CEO. My team works in projects. I plan, keep their notes and
+playbook, and ask before anything consequential. This playbook is my guide;
+the user can edit it, and their edits win over mine.
+
+## First run: get to know the user
+
+Before doing much, hold a short, friendly interview (a few questions at a time,
+never a wall of them). Ask about:
+
+- **Name and role** — what they are called, and what they do.
+- **How they work** — solo or in a team, how they like to be handed work, and
+  anything that reliably slows them down.
+- **Communication style** — direct or gentle, short or detailed, any phrasing
+  they dislike.
+- **Coding conventions** — language, formatting, testing and review habits.
+- **Design taste** — references, brands or products they admire, and what to
+  avoid.
+- **References** — docs, repos, sites or people that define \"good\" for them.
+
+Save each answer with `remember_about_user` as a small fact. When they correct
+you, record the correction rather than a second, conflicting fact. Never store
+secrets, keys, tokens or passwords.
+
+## Onboarding a project
+
+When a project starts, ask a focused round of questions and write down the
+answers:
+
+- **Goal** — what success looks like, in one or two sentences.
+- **Users** — who it is for.
+- **Platform** — desktop, web, mobile, or a mix.
+- **Stack** — languages, frameworks and tools they expect.
+- **Design** — look, feel and references.
+- **References** — existing code, designs or products.
+- **Success** — how they will judge that it is done.
+- **What matters most** — the one thing that must not go wrong.
+
+## Hiring a team
+
+Once I understand the work, hire the smallest team that covers it:
+
+- Call `list_presets` and pick from the employees Bitbots ships.
+- Call `propose_hires` with two to six people, each with a one-line reason.
+- One person per responsibility, and reuse someone already hired when the
+  role already fits instead of hiring a second one.
+- Use `propose_bot` only for a need no preset covers, and say why.
+- The owner approves every hire. I never hire anyone without a proposal they
+  approve.
+
+I do not create projects myself. I call `propose_project` and let the owner
+approve the card, and `assign_task` for tracked work.
+
+## Ground rules
+
+- Always ask before hiring, creating a project, creating a bot or assigning a
+  task.
+- Never store secrets — no keys, tokens or passwords anywhere.
+- Keep the user's locked preferences exactly as given; propose a change instead
+  of overwriting one.
+- Prefer a few durable facts over many small ones, and update over duplicate.
+- Keep this playbook short and useful; propose an edit with `update_playbook`.
+";
+
+/// The playbook as it read before Phase 9. A stored one that still matches it
+/// exactly is the untouched default, so it is replaced with the new text; an
+/// edited one is the owner's and stays.
+pub const DEFAULT_PLAYBOOK_V1: &str = "\
 # How I work
 
 I am the user's Manager. I plan, keep their notes and playbook, and ask before
@@ -2269,7 +2345,8 @@ impl Storage {
     fn migrate(conn: Connection, path: Option<&Path>) -> Result<Self, StorageError> {
         let storage = Self::migrate_versions(conn, path)?;
         { let mut c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; ensure_agent_accept_edits(&mut c, path)?; }
-        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; phase1b::ensure_phase1b_schema(&c)?; phase2::ensure_phase2_schema(&c)?; phase4::ensure_phase4_schema(&c)?; phase5::ensure_phase5_schema(&c)?; phase6::ensure_phase6_schema(&c)?; phase8::ensure_phase8_schema(&c)?; ensure_tasks_schema(&c)?; ensure_delegation_schema(&c)?; ensure_permission_rules_schema(&c)?; ensure_team_queue_schema(&c)?; ensure_client_message_id_indexes(&c)?; }
+        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; phase1b::ensure_phase1b_schema(&c)?; phase2::ensure_phase2_schema(&c)?; phase4::ensure_phase4_schema(&c)?; phase5::ensure_phase5_schema(&c)?; phase6::ensure_phase6_schema(&c)?; phase8::ensure_phase8_schema(&c)?; phase9::ensure_phase9_schema(&c)?; ensure_tasks_schema(&c)?; ensure_delegation_schema(&c)?; ensure_permission_rules_schema(&c)?; ensure_team_queue_schema(&c)?; ensure_client_message_id_indexes(&c)?; }
+        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; phase9::ensure_phase9_data(&c)?; }
         { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; secret_refs::ensure_secret_refs_schema(&c)?; }
         Ok(storage)
     }
@@ -2699,6 +2776,8 @@ impl Storage {
         let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
         if tx.execute("DELETE FROM projects WHERE id=?1", [id])? == 0 { return Err(StorageError::AgentNotFound); }
         tx.execute("UPDATE agents SET project_id=NULL WHERE project_id=?1", [id])?;
+        // Phase 9: a deleted project's team rows go with it.
+        tx.execute("DELETE FROM project_members WHERE project_id=?1", [id])?;
         // A rule for a project that no longer exists could never match again.
         tx.execute("DELETE FROM permission_rules WHERE project_id=?1", [id])?;
         let event = push_team_event(&tx, "project.changed", &json!({"action":"deleted","projectId":id}))?;
@@ -2888,6 +2967,17 @@ impl Storage {
         }
         if let Some(default) = &default_id {
             if !groups.iter().any(|group| group.0.as_ref() == Some(default)) { groups.push((Some(default.clone()), 0, String::new())); }
+        }
+        // Phase 9: a project the bot is hired into counts even with no
+        // conversation yet. Read through the membership table, so a released
+        // bot stops offering the project. The connection is already open here.
+        let memberships: Vec<String> = {
+            let mut q = c.prepare("SELECT project_id FROM project_members WHERE agent_id=?1 ORDER BY sort_order, hired_at, project_id")?;
+            let rows = q.query_map([agent_id], |r| r.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()?;
+            rows
+        };
+        for id in memberships {
+            if !groups.iter().any(|group| group.0.as_ref() == Some(&id)) { groups.push((Some(id), 0, String::new())); }
         }
         let mut out = Vec::new();
         for (project, count, at) in groups {
@@ -3120,7 +3210,7 @@ impl Storage {
         let kind = record["kind"].as_str().ok_or(StorageError::InvalidAgent)?;
         let agent_id = record["agentId"].as_str();
         let payload = &record["payload"];
-        if !["project", "bot", "task", "playbook", "profile", "permission", "merge"].contains(&kind) { return Err(StorageError::InvalidAgent); }
+        if !["project", "bot", "task", "playbook", "profile", "permission", "merge", "hire"].contains(&kind) { return Err(StorageError::InvalidAgent); }
         let mut c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let exists: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM sessions WHERE id=?1)", [session], |r| r.get(0))?;
@@ -3425,6 +3515,9 @@ impl Storage {
         if old["systemRole"].as_str()==Some("manager"){return Err(StorageError::AgentConflict)}
         if old["archived"]==true{tx.commit()?;return Ok((old,vec![]));} let rt=old["runtimeId"].as_str().unwrap_or("").to_owned(); let now=Utc::now().to_rfc3339_opts(SecondsFormat::Millis,true);
         let before=active_order(&tx,&rt)?;shift_active_except(&tx,&rt,id)?; tx.execute("UPDATE agents SET archived=1,updated_at=?2 WHERE id=?1",params![id,now])?;
+        // Phase 9: an archived employee frees its preset, so hiring that preset
+        // again makes a fresh bot instead of failing the unique index.
+        tx.execute("UPDATE agents SET preset_id=NULL WHERE id=?1",params![id])?;
         let remaining=active_ids(&tx,&rt)?;assign_active_order(&tx,&remaining,&before,&now)?;
         let mut events=Vec::new();let archived=agent_read(&tx,id)?;events.push(push_agent_event(&tx,"archived",&archived)?);
         for a in changed_agents(&tx,&rt)?{if before.iter().find(|previous|previous["id"]==a["id"]).is_some_and(|previous|previous["sortOrder"]!=a["sortOrder"]){events.push(push_agent_event(&tx,"reordered",&a)?);}}
@@ -3472,6 +3565,8 @@ impl Storage {
         tx.execute("DELETE FROM skill_agent_settings WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM proposals WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM app_events WHERE event_type='agent.changed' AND json_extract(payload,'$.agentId')=?1", [id])?;
+        // Phase 9: a purged bot leaves every project's team.
+        tx.execute("DELETE FROM project_members WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM agents WHERE id=?1", [id])?;
         let event = push_agent_event(&tx, "deleted", &agent)?;
         tx.commit()?;

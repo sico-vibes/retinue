@@ -1,6 +1,6 @@
 // Phase 1: per-project overrides. They are the owner's, set only here: a mode can
 // widen what bots may do in this project, and a setup script is code that runs on
-// this computer, so neither comes from a backup or the Manager. Phase 4: a repository's
+// this computer, so neither comes from a backup or the CEO. Phase 4: a repository's
 // `.bitbots.json` counts only once the owner has trusted that exact file, and never
 // turns on Full access.
 import { useEffect, useState } from 'react'

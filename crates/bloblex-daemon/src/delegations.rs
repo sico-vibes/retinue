@@ -779,7 +779,7 @@ pub async fn startup(st: &AppState) {
         let Some(text) = row["deliveryText"].as_str().filter(|text| !text.is_empty()) else { continue };
         if !st.db.session_exists(side).unwrap_or(false) { continue; }
         let from = row["fromAgentId"].as_str().unwrap_or("");
-        let name = st.db.agent_get(from).ok().and_then(|agent| agent["name"].as_str().map(str::to_owned)).unwrap_or_else(|| "The Manager".to_owned());
+        let name = st.db.agent_get(from).ok().and_then(|agent| agent["name"].as_str().map(str::to_owned)).unwrap_or_else(|| "The CEO".to_owned());
         // No notice is written: the "Waiting for" line is already in the transcript,
         // and the brief is redelivered exactly once, by the drain.
         let meta = json!({"kind":"blob_message","fromAgentId":from,"fromName":name,"delegationId":id});

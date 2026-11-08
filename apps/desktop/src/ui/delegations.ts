@@ -32,7 +32,7 @@ export type DelegationRecord = {
   updatedAt: string | null
   /** Why a queued assignment has not started: its conversation is mid-turn, or every global slot is taken. */
   queueReason: 'busy' | 'slots' | null
-  /** The teammate replied `(pass)`: done, with nothing to report and no relay to the Manager. */
+  /** The teammate replied `(pass)`: done, with nothing to report and no relay to the CEO. */
   silent?: boolean
   /** What must be true for the assignment to count as done, when it was given one. */
   doneGoal?: string | null

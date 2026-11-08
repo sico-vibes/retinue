@@ -1,10 +1,15 @@
 // A Manager proposal in the conversation: what it wants to create or do, with
 // the fields you can change before you approve. Nothing happens until you
-// choose Approve; Reject tells the Manager no.
+// choose Approve; Reject tells the CEO no.
 import { useState } from 'react'
 import { BlobCanvas } from '../blob/BlobCanvas'
 import type { BlobLook } from '../blob/look'
-import { BookOpen, Bot, FolderPlus, GitMerge, ListChecks, Pencil, ShieldCheck, UserCog } from 'lucide-react'
+import { BookOpen, Bot, FolderPlus, GitMerge, ListChecks, Pencil, ShieldCheck, UserCog, UserPlus } from 'lucide-react'
+import { HazeMark } from '../blob/haze/HazeMark'
+import type { HazeIcon } from '../blob/haze/icons'
+import { agentColorHex } from './agentColor'
+import { announceMembersChanged } from './projectMembers'
+import { PRESETS } from '../team/presets'
 import type { JsonRecord, PermissionRequest, Project, Runtime } from '../types'
 import { parseModelCatalog } from '../executionContract'
 import { useCachedRpc } from './catalogCache'
@@ -25,6 +30,7 @@ const KIND_LABEL: Record<string, { title: string; Icon: typeof Bot }> = {
   profile: { title: 'Change something it knows about you', Icon: UserCog },
   permission: { title: 'Change a bot\'s permission', Icon: ShieldCheck },
   merge: { title: 'Merge a task', Icon: GitMerge },
+  hire: { title: 'Hire an employee', Icon: UserPlus },
 }
 
 const text = (value: unknown) => typeof value === 'string' ? value : ''
@@ -69,8 +75,10 @@ export function proposalEdits(original: JsonRecord, edited: JsonRecord): JsonRec
   return Object.keys(changes).length ? changes : undefined
 }
 
-export function ProposalCard({ request, managerName = 'The Manager', projects, runtimes = [], onDecided, onError }: {
+export function ProposalCard({ request, managerName = 'The CEO', projects, runtimes = [], siblings = [], onDecided, onError }: {
   request: PermissionRequest
+  /** Other waiting `hire` proposals from the same `propose_hires` call (same groupId), for Hire all. */
+  siblings?: readonly PermissionRequest[]
   managerName?: string
   projects: readonly Project[]
   runtimes?: readonly Runtime[]
@@ -92,6 +100,7 @@ export function ProposalCard({ request, managerName = 'The Manager', projects, r
   const opening = kind === 'task' && draft.action === 'open'
   // FIX39 P10: a merge card has no fields to edit; it offers merge, keep or discard.
   const merging = kind === 'merge'
+  const hiring = kind === 'hire'
   const mergeFiles = Array.isArray(draft.files) ? draft.files.map(text).filter(Boolean) : []
   const { title, Icon } = updating
     ? { title: kind === 'bot' ? 'Update a bot' : 'Update a project', Icon: Pencil }
@@ -114,12 +123,26 @@ export function ProposalCard({ request, managerName = 'The Manager', projects, r
         if (result.result.runtimeId) await setActiveRuntime(result.result.runtimeId)
         await setActiveSession(result.result.sessionId)
       }
+      if (hiring && decision === 'approve') announceMembersChanged()
       onDecided?.(decision)
     } catch (reason) {
       const raw = reason instanceof Error ? reason.message : typeof reason === 'string' ? reason : ''
       const message = /model is not available in this runtime catalog/i.test(raw)
         ? 'This model is not available for the selected coding agent. Edit the proposal and choose an available model.'
         : raw ? friendlyErrorText(raw) : 'Could not complete this proposal. Check your connection and try again.'
+      setDecisionError(message)
+      onError?.(message)
+    } finally { setBusy(false) }
+  }
+  const hireAll = async () => {
+    setBusy(true)
+    setDecisionError(null)
+    try {
+      for (const item of [request, ...siblings]) if (item.proposal?.id) await rpc('proposal.decide', { id: item.proposal.id, decision: 'approve' })
+      announceMembersChanged()
+      onDecided?.('approve')
+    } catch (reason) {
+      const message = friendlyErrorText(reason instanceof Error ? reason.message : String(reason))
       setDecisionError(message)
       onError?.(message)
     } finally { setBusy(false) }
@@ -148,9 +171,18 @@ export function ProposalCard({ request, managerName = 'The Manager', projects, r
     <header className="proposal-head">
       <span className="proposal-icon" aria-hidden="true"><Icon size={15} /></span>
       <div><small>{managerName} proposes</small><strong>{title}</strong></div>
-      {kind !== 'playbook' && !opening && !merging && <button type="button" className="ghost-button small" aria-pressed={editing} onClick={() => setEditing((value) => !value)}><Pencil size={12} aria-hidden="true" />{editing ? 'Done editing' : 'Edit'}</button>}
+      {kind !== 'playbook' && !opening && !merging && !hiring && <button type="button" className="ghost-button small" aria-pressed={editing} onClick={() => setEditing((value) => !value)}><Pencil size={12} aria-hidden="true" />{editing ? 'Done editing' : 'Edit'}</button>}
     </header>
     <div className="proposal-body">
+      {hiring && <div className="proposal-hire">
+        <HazeMark color={agentColorHex(text(draft.color) || PRESETS.find((preset) => preset.id === text(draft.presetId))?.color || 'violet')} size={44} look={{ shape: 'circle', icon: (text(draft.portrait) || undefined) as HazeIcon | undefined }} label={text(draft.nickname) || 'Employee'} decorative />
+        <div className="proposal-hire-copy">
+          <strong>{text(draft.nickname) || text(draft.botName) || 'An employee'}</strong>
+          <span>{[text(draft.role), text(draft.projectName) ? `into ${text(draft.projectName)}` : ''].filter(Boolean).join(' · ')}</span>
+          {text(draft.reason) && <p>{text(draft.reason)}</p>}
+        </div>
+      </div>}
+      {hiring && siblings.length > 0 && <p className="proposal-hint">{siblings.length} more {siblings.length === 1 ? 'candidate is' : 'candidates are'} waiting after this one.</p>}
       {kind === 'project' && !updating && <>
         {field('name', 'Name', { max: 80 })}
         {field('description', 'What it is for', { multiline: true, max: 500 })}
@@ -261,8 +293,9 @@ export function ProposalCard({ request, managerName = 'The Manager', projects, r
       {decisionError && <p className="proposal-error" role="alert">{decisionError}</p>}
       {needsFolder && <small className="proposal-hint">Choose where the new folder goes, then approve.</small>}
       {merging && <button type="button" className="ghost-button small" disabled={busy} onClick={() => void decide('reject', true)}>Discard</button>}
-      <button type="button" className="ghost-button small" disabled={busy} onClick={() => void decide('reject')}>{merging ? 'Keep branch' : 'Reject'}</button>
-      <button type="button" className="primary-button small" disabled={busy || needsFolder} onClick={() => void decide('approve')}>{merging ? 'Merge' : 'Approve'}</button>
+      <button type="button" className="ghost-button small" disabled={busy} onClick={() => void decide('reject')}>{merging ? 'Keep branch' : hiring ? 'Skip' : 'Reject'}</button>
+      {hiring && siblings.length > 0 && <button type="button" className="secondary-button small" disabled={busy} onClick={() => void hireAll()}>Hire all {siblings.length + 1}</button>}
+      <button type="button" className="primary-button small" disabled={busy || needsFolder} onClick={() => void decide('approve')}>{merging ? 'Merge' : hiring ? 'Hire' : 'Approve'}</button>
     </footer>
   </section>
 }

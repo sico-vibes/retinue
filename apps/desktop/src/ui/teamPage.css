@@ -1,0 +1,93 @@
+/* Team page (8 November 2026). Flat surfaces, rounded rectangles, no glow;
+   colour only for status. Haze keeps it translucent over the backdrop. */
+.team-page { min-height: 0; flex: 1; display: flex; flex-direction: column; background: var(--app); }
+:root[data-style="haze"] .team-page { background: transparent; }
+.team-page .team-tabs { margin-left: auto; margin-right: 6px; display: inline-flex; gap: 2px; padding: 2px; border-radius: var(--radius-md, 10px); background: var(--surface-hover); border: 0; }
+.team-tabs button { height: 28px; padding: 0 12px; border: 0; border-radius: var(--radius-sm, 7px); background: none; color: var(--text-2); font: inherit; font-size: var(--fs-sm); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: background-color 120ms ease, color 120ms ease; }
+.team-tabs button.active { color: var(--text-1); background: var(--surface-selected, var(--surface-1)); }
+.team-tabs button:focus-visible { box-shadow: var(--focus-ring); }
+.team-tab-count { color: var(--text-3); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.team-scroll { flex: 1; min-height: 0; overflow: auto; }
+.team-column { width: min(960px, calc(100% - 48px)); margin: 0 auto; padding: 20px 0 48px; display: grid; gap: 18px; }
+.team-search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--radius-md, 10px); background: var(--surface-input, transparent); color: var(--text-3); }
+.team-search:focus-within { border-color: var(--line-focus, var(--line-strong)); }
+.team-search input { flex: 1; min-width: 0; border: 0; background: none; color: var(--text-1); font: inherit; font-size: var(--fs-sm); outline: none; }
+.team-empty { display: grid; justify-items: start; gap: 10px; padding: 24px 4px; color: var(--text-2); }
+
+/* Your team */
+.team-roster { display: grid; gap: 8px; }
+.team-person { display: grid; gap: 8px; padding: 10px 12px 12px; border: 1px solid var(--line); border-radius: var(--radius-md, 12px); background: var(--surface-card, transparent); animation: team-rise 220ms cubic-bezier(.2, .7, .2, 1) both; }
+.team-person-main { display: flex; align-items: center; gap: 12px; padding: 2px; border: 0; border-radius: var(--radius-sm, 8px); background: none; color: var(--text-1); font: inherit; text-align: left; cursor: pointer; }
+.team-person-main:focus-visible { box-shadow: var(--focus-ring); }
+.team-person-copy { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.team-person-copy strong { font-size: var(--fs-md, 15px); font-weight: 600; }
+.team-person-copy span { color: var(--text-2); font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-person-state { color: var(--text-3); font-size: var(--fs-xs); }
+.team-person-state.working { color: var(--status-working); }
+.team-person-projects { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-left: 58px; }
+.team-chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 4px 0 8px; border: 1px solid var(--line); border-radius: var(--radius-sm, 7px); background: none; color: var(--text-2); font: inherit; font-size: var(--fs-xs); }
+.team-chip button { display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 5px; background: none; color: var(--text-3); cursor: pointer; }
+.team-chip button:hover { color: var(--text-1); background: var(--surface-hover); }
+.team-chip.add { padding: 0 9px 0 7px; border-style: dashed; cursor: pointer; }
+.team-chip.add:hover:not(:disabled) { color: var(--text-1); background: var(--surface-hover); }
+.team-person-settings { margin-left: auto; }
+
+/* Hire */
+.team-catalogue { display: grid; gap: 22px; }
+.team-department h3 { margin: 0 0 10px 2px; color: var(--text-2); font-size: var(--fs-xs); font-weight: 600; letter-spacing: .02em; }
+.team-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(208px, 1fr)); gap: 10px; }
+.team-card { display: grid; grid-template-rows: auto 1fr auto auto; gap: 8px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-md, 12px); background: var(--surface-card, transparent); color: var(--text-1); text-align: left; transition: border-color 140ms ease, background-color 140ms ease, transform 160ms cubic-bezier(.2, .7, .2, 1); animation: team-rise 240ms cubic-bezier(.2, .7, .2, 1) both; }
+.team-card:hover { border-color: var(--line-strong); background: var(--surface-hover); transform: translateY(-1px); }
+.team-card-art { display: flex; }
+.team-card-copy { display: grid; gap: 2px; align-content: start; }
+.team-card-copy strong { font-size: var(--fs-md, 15px); font-weight: 600; }
+.team-card-role { color: var(--text-2); font-size: var(--fs-sm); }
+.team-card-copy p { margin: 4px 0 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.team-card-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.team-card-tags span { padding: 1px 6px; border-radius: 5px; background: var(--surface-hover); color: var(--text-3); font-size: var(--fs-2xs); }
+.team-card-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.team-card-hired { margin-right: auto; color: var(--text-3); font-size: var(--fs-2xs); }
+.team-card-create { place-items: center; align-content: center; grid-template-rows: none; min-height: 180px; border-style: dashed; color: var(--text-2); font: inherit; cursor: pointer; text-align: center; }
+.team-card-create span { color: var(--text-3); font-size: var(--fs-xs); max-width: 180px; }
+.team-card-create:focus-visible { box-shadow: var(--focus-ring); }
+
+/* Hire dialog */
+.team-dialog-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--scrim, rgba(0, 0, 0, .32)); animation: team-fade 140ms ease both; }
+.team-dialog { width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow: auto; display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-md, 14px); background: var(--surface-overlay, var(--surface-1)); box-shadow: var(--shadow-pop); animation: team-rise 180ms cubic-bezier(.2, .7, .2, 1) both; }
+:root[data-style="haze"] .team-dialog { backdrop-filter: blur(28px); }
+.team-dialog-head { display: flex; align-items: center; gap: 12px; }
+.team-dialog-head > div { flex: 1; display: grid; gap: 2px; }
+.team-dialog-head span { color: var(--text-2); font-size: var(--fs-sm); }
+.team-dialog-projects { display: grid; gap: 4px; margin: 0; padding: 0; border: 0; }
+.team-dialog-projects legend { margin-bottom: 6px; color: var(--text-2); font-size: var(--fs-xs); }
+.team-dialog-projects label { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 0 8px; border-radius: var(--radius-sm, 7px); cursor: pointer; }
+.team-dialog-projects label:hover { background: var(--surface-hover); }
+.team-dialog-projects label.inside { color: var(--text-3); cursor: default; }
+.team-dialog-projects label span { flex: 1; }
+.team-dialog-projects small { color: var(--text-3); font-size: var(--fs-2xs); }
+.team-dialog-field { display: grid; gap: 6px; color: var(--text-2); font-size: var(--fs-xs); }
+.team-dialog-field select { height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-sm, 7px); background: var(--surface-input, transparent); color: var(--text-1); font: inherit; font-size: var(--fs-sm); }
+.team-dialog-note { margin: 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.45; }
+.team-dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+@keyframes team-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes team-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .team-person, .team-card, .team-dialog, .team-dialog-backdrop { animation: none; }
+  .team-card, .team-tabs button { transition: none; }
+  .team-card:hover { transform: none; }
+}
+@media (max-width: 760px) {
+  .team-column { width: calc(100% - 32px); }
+  .team-person-projects { padding-left: 0; }
+}
+
+/* After a new project: how to staff it. */
+.staff-options { display: grid; gap: 8px; }
+.staff-option { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-md, 12px); background: none; color: var(--text-1); font: inherit; text-align: left; cursor: pointer; transition: background-color 140ms ease, border-color 140ms ease; }
+.staff-option:hover:not(:disabled) { border-color: var(--line-strong); background: var(--surface-hover); }
+.staff-option:focus-visible { box-shadow: var(--focus-ring); }
+.staff-option:disabled { opacity: .55; cursor: default; }
+.staff-option > svg { flex: 0 0 auto; margin-top: 1px; color: var(--text-2); }
+.staff-option span { display: grid; gap: 2px; }
+.staff-option small { color: var(--text-3); font-size: var(--fs-xs); line-height: 1.4; }

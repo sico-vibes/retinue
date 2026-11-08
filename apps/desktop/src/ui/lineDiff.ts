@@ -1,4 +1,4 @@
-// A small line diff for the Manager's playbook: what a proposal or an older
+// A small line diff for the CEO's playbook: what a proposal or an older
 // version changes, line by line. Longest common subsequence; playbooks are at
 // most 16,000 characters, so the table stays small.
 

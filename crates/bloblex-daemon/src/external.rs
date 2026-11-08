@@ -388,9 +388,10 @@ fn catalog() -> Vec<(Tier, Value)> {
     let id = |what: &str| json!({"type": "string", "description": what});
     vec![
         entry(Viewer, "get_status", "The Bitbots version, how many bots there are, the turns running now (bot, start time, what it is doing) and how many approvals are waiting.", schema(json!({}), &[])),
-        entry(Viewer, "list_bots", "The owner's bots: id, name, role, coding agent, model, effort, permission mode, project folder, whether it is busy, and whether it is the Manager.", schema(json!({}), &[])),
+        entry(Viewer, "list_bots", "The owner's bots: id, name, role, coding agent, model, effort, permission mode, project folder, whether it is busy, and whether it is the CEO.", schema(json!({}), &[])),
         entry(Viewer, "list_runtimes", "The coding agents installed on this computer, with the models and efforts each offers: enough to call create_bot.", schema(json!({}), &[])),
         entry(Viewer, "list_projects", "The distinct project folders bots work in, which bots have conversations in each (or default to it), and whether each is a git repository.", schema(json!({}), &[])),
+        entry(Viewer, "list_presets", "The preset employees the owner can hire into a project: department, id, nickname, portrait, role, tags, description and whether each is already hired.", schema(json!({}), &[])),
         entry(Viewer, "list_conversations", "Conversations, newest first: id, bot, title, project, state, last update and its separate git copy when it has one.", schema(json!({"botId": id("Only this bot's conversations."), "projectId": id("Only conversations in this project (from list_projects)."), "limit": {"type": "integer", "minimum": 1, "maximum": 100, "description": "How many to return (default 20)."}}), &[])),
         entry(Viewer, "read_conversation", "A conversation's messages: id, role, text, time and kind. Tool steps are one line each and images are paths only; a generated image names its mediaId and status instead. Without afterMessageId you get the latest messages; with it, the ones after that message.", schema(json!({"sessionId": id("The conversation."), "afterMessageId": id("Only messages after this one."), "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "How many to return (default 50)."}}), &["sessionId"])),
         entry(Viewer, "wait_for_turn", "Waits for the conversation's running turn to finish (up to timeoutSecs, 600 at most), then returns the reply and the turn's metrics, or the error when the turn failed. It returns early when an approval or a question is waiting.", schema(json!({"sessionId": id("The conversation."), "timeoutSecs": {"type": "integer", "minimum": 1, "maximum": 600, "description": "How long to wait (default 120)."}}), &["sessionId"])),
@@ -474,6 +475,7 @@ async fn call_tool(st: &AppState, tier: Tier, name: &str, args: &Value) -> ToolR
         "list_bots" => list_bots(st).await,
         "list_runtimes" => list_runtimes(st).await,
         "list_projects" => list_projects(st).await,
+        "list_presets" => crate::presets::list(st),
         "list_conversations" => list_conversations(st, args),
         "read_conversation" => read_conversation(st, args),
         "wait_for_turn" => wait_for_turn(st, args).await,
@@ -1113,7 +1115,7 @@ async fn update_bot(st: &AppState, args: &Value) -> ToolResult {
             Some(Some(folder))
         }
     };
-    if agent["systemRole"] == "manager" && matches!(folder, Some(Some(_))) { return Err("The Manager works across every project".to_owned()); }
+    if agent["systemRole"] == "manager" && matches!(folder, Some(Some(_))) { return Err("The CEO works across every project".to_owned()); }
     // The coding-agent settings first (model and effort checks, the lock check and the change event apply); if that fails, nothing else is written.
     if fields.as_object().is_some_and(|object| object.len() > 1) {
         crate::dispatch(st, "agent.update", fields).await.map_err(fail)?;

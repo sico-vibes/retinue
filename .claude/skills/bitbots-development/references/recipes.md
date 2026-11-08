@@ -41,6 +41,12 @@ The owner approved generating a PNG from the Nuphos reference family first, then
 3. Validate every current manifest entry and its source hash, then inspect the rendered SVG contact sheet and animation. `tools/review.py` builds the sheet and validation report. Package only current IDs, PNGs, provenance, static/animated SVGs and the pipeline; exclude withheld assets and superseded IDs.
 4. For app integration, copy only approved static and animated SVG pairs. Extend `characters.json`, storage `ICONS`, and both manager schemas together. Preserve the original SVG colours; the bot's colour continues to drive the separate Haze aura. Do not inline these SVGs or their style elements in React.
 
+## Add a preset employee (2026-11-08)
+
+1. Make (or reuse) a Haze portrait (`## Haze character portraits` above); it must be in `blob/haze/characters.json` and the daemon's `valid_look` allowlist.
+2. Add a row to `apps/desktop/src/team/presets.json`: unique `id` and `nickname`, the `portrait`, a `department` id from `departments`, `role` (≤40), a swatch `color`, ≤8 lower-case `tags`, `description` (≤255) and `instructions` as an array of lines. Each portrait is used once; Kratos stays the CEO's.
+3. `npx vitest run src/team` (the catalogue test checks every limit) and the daemon's catalogue test; nothing else changes: the Team page, `preset.list` and the CEO's `list_presets` read the same file.
+
 ## Add a daemon RPC or event
 
 1. Handler in `crates/bloblex-daemon/src/main.rs` `dispatch()` (or its module), with tests.

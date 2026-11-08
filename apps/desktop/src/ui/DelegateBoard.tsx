@@ -99,7 +99,7 @@ export function DelegateBoard({ tasks, agents, projects, nowMs, connected, busy,
     <section className="delegate-backlog" aria-labelledby="delegate-backlog-title">
       <header className="delegate-head"><h2 id="delegate-backlog-title">Unassigned</h2><span className="delegate-count">{drafts.length}</span></header>
       {drafts.length === 0
-        ? <p className="delegate-empty">No drafts. Ask your Manager to plan some work, or add a task.</p>
+        ? <p className="delegate-empty">No drafts. Ask your CEO to plan some work, or add a task.</p>
         : <ul className="delegate-list">{drafts.map((task) => <li key={task.id}>
           <article className={`delegate-draft${dragId === task.id ? ' dragging' : ''}${busy.has(task.id) ? ' busy' : ''}`} draggable={false}
             onDragStart={(event) => { setDragId(task.id); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', task.id) }}

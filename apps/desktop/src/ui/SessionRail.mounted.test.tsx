@@ -61,7 +61,7 @@ describe('rail repository changes', () => {
   it('explains that the Manager has no code changes instead of showing a Git error', async () => {
     replies['session.repository'] = repo({ gitRepo: false, repoRoot: null, branch: null, files: [], error: 'This project is not a git repository.' })
     await mount(session(), { isManager: true })
-    expect(card('changes').textContent).toContain('The Manager works in its own folder')
+    expect(card('changes').textContent).toContain('The CEO works in its own folder')
     expect(card('changes').querySelector('.rail-problem')).toBeNull()
     expect(card('changes').textContent).not.toContain('Git could not be read')
   })

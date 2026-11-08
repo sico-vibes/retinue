@@ -1,4 +1,4 @@
-// Settings › Manager › Hand-offs: one switch that stops the Manager from starting NEW assignments. It never
+// Settings › Manager › Hand-offs: one switch that stops the CEO from starting NEW assignments. It never
 // touches work that is already running or queued, approvals, questions, replies or a Stop.
 import { useEffect, useState } from 'react'
 import { rpc } from '../tauri'
@@ -28,8 +28,8 @@ export function DelegationPause({ connected }: { connected: boolean }) {
     } catch (reason) { setProblem(rpcFailure(reason).message) } finally { setSaving(false) }
   }
   return <SettingsGroup title="Hand-offs">
-    <SettingsRow label="Pause new hand-offs" hint="While paused, the Manager cannot start new work with a teammate and is told why. Work that is already running or queued, approvals, questions and Stop are not affected.">
-      <button type="button" className={`toggle ${paused ? 'on' : ''}`} role="switch" aria-label="Pause new hand-offs from the Manager" aria-checked={paused === true} disabled={!connected || paused === null || saving} onClick={() => void toggle()}><i /></button>
+    <SettingsRow label="Pause new hand-offs" hint="While paused, the CEO cannot start new work with a teammate and is told why. Work that is already running or queued, approvals, questions and Stop are not affected.">
+      <button type="button" className={`toggle ${paused ? 'on' : ''}`} role="switch" aria-label="Pause new hand-offs from the CEO" aria-checked={paused === true} disabled={!connected || paused === null || saving} onClick={() => void toggle()}><i /></button>
     </SettingsRow>
     {problem && <p className="settings-banner error" role="alert">{problem}</p>}
   </SettingsGroup>

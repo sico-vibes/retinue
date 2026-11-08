@@ -2,6 +2,24 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-08 · Storage · A new proposal kind needs two lists and a CHECK
+
+Adding `hire` (Phase 9) failed at run time with "The proposal could not be recorded: invalid agent", although the `proposals` table had been rebuilt with the new kind. Three places decide a kind: the table's `CHECK(kind IN (...))` in the DDL **and** in the rebuild branch of `ensure_proposal_schema`, the `ddl.contains("'<kind>'")` test that decides whether to rebuild at all, and the plain allowlist in `Storage::insert_proposal` (`lib.rs`, one array of kind names). The third one raises `InvalidAgent`, which the daemon reports as a validation failure rather than a schema problem. **To avoid:** grep for every list of proposal kinds (`"permission", "merge"`) when adding one, and add a test that only creates that kind (the storage suite alone found nothing, because `ensure_proposal_schema` passed).
+
+## 2026-11-08 · Looks · `valid_look` refuses a `style` key, so a preset cannot carry `{"style":"haze"}`
+
+Haze is a *look theme*, chosen in the UI; the stored `agents.look` is `{shape, seed, traits, bot, art, paint, icon}` and `valid_look` rejects any other key. A Haze portrait is therefore `{"shape":"circle","icon":"char-..."}`. The same shape is what `normalizeLook`/`agentLook` in `apps/desktop/src/blob/look/index.ts` read back. **To avoid:** before writing a look from the daemon, check it against `valid_look`, not against the UI's `BlobLook` type.
+
+## 2026-11-08 · Native shell · Thin lines crossed the window: a frame drawn before the window-state restore
+
+**Symptom:** on first open, thin light lines ran down through the chat and across near the bottom, framing a rectangle smaller than the window, and then stayed.
+
+**Root cause:** the main window is `transparent: true` and was created `visible: true` at the configured 1360×860 (`apps/desktop/src-tauri/tauri.conf.json`). `tauri-plugin-window-state` restores the saved geometry on the window-created event, which happens *after* the first frame is drawn (`tauri-plugin-window-state-2.5.0/src/lib.rs` 198–238: position, then size, then maximised, then `show`). A transparent WebView2 keeps the edges of the frame it painted at the configured size, so the frame and the window disagreed.
+
+**Fix:** the window starts `visible: false`; the plugin is built with `StateFlags::all().difference(StateFlags::VISIBLE)`, so size, position and maximised still restore but visibility never does; the front end calls the new `main_window_ready` command from a 30 ms timer after its first render (`apps/desktop/src/main.tsx`; a timer, not animation frames, because a hidden WebView2 may not run them), which shows and focuses the window once (`static MAIN_WINDOW_READY`, label `main` only); and a setup thread shows the window anyway after 2.5 s if the call never comes, so a stuck page or an older bundle cannot leave the app invisible. Tray, single-instance and `show_main_window` are untouched.
+
+**To avoid:** never create a transparent window at one size and resize it after its first paint — restore the geometry while the window is hidden, and make the first frame the one the person sees. When adding a command only the main window may call, copy `set_approval_badge`: take a `WebviewWindow` argument and reject anything whose `window.label()` is not `"main"`. **Application commands are not in the Tauri v2 ACL** — the generated `apps/desktop/src-tauri/gen/schemas/desktop-schema.json` has no row for `daemon_rpc` or `set_approval_badge` — so a capability entry for one is neither possible nor needed, and the label check is the whole restriction.
+
 ## 2026-11-01 · Storage · A correlated subquery made every conversation cost 250 to 400 ms
 
 `session_detail_parts` read each turn's `turn.error` detail with a correlated subquery inside the turns statement. `EXPLAIN QUERY PLAN` shows `SCAN e` for that form, while the same lookup with the turn id bound as `?1` is `SEARCH … USING INDEX idx_app_events_turn_error`. SQLite would not seek the partial index for the correlated term, so it scanned the whole event log **once per turn**: 11.5 to 14.3 s for the log's 167 turns, about 74 ms a turn. A conversation with one turn cost about 75 ms and a busy one 1.2 s, although every statement measured on its own stayed under 10 ms — which is why the cost looked unexplainable and was blamed on the 380 MB of tool payloads instead.

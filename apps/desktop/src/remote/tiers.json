@@ -212,6 +212,34 @@
       "params": null
     },
     {
+      "method": "preset.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "The preset employees Bitbots ships: id, nickname, portrait, role, department, tags and description, plus which bot each one made. The same list a window shows, and it names no folder or setting.",
+      "params": null
+    },
+    {
+      "method": "project.members",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Which employees a project has hired, with the hire time and order; the device joins the ids with the bot list it already reads.",
+      "params": null
+    },
+    {
+      "method": "project.hire",
+      "class": "never",
+      "minTier": null,
+      "why": "Hiring can create an employee, and creating a bot is never remote.",
+      "params": null
+    },
+    {
+      "method": "project.release",
+      "class": "never",
+      "minTier": null,
+      "why": "Hiring and releasing change a project's team, which is a desktop decision.",
+      "params": null
+    },
+    {
       "method": "permissions.policy.get",
       "class": "read",
       "minTier": "viewer",
@@ -1584,6 +1612,7 @@
     "permission.rules.changed": "drop",
     "permission.bypass_active": "drop",
     "project.clone.changed": "drop",
+    "project.members.changed": "drop",
     "runtime.changed": "drop",
     "session.context.reset": "drop",
     "session.context.updated": "drop",

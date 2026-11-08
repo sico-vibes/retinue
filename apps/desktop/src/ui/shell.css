@@ -625,3 +625,9 @@
 .sidebar-create-actions :is(.icon-button, .icon-button.small) { width: 30px; height: 30px; }
 /* A layer behind the conversation sits under its content without lifting anything. */
 .conversation-pane { isolation: isolate; }
+
+/* Launch (8 November 2026): until the first frames have painted, nothing in
+   the shell slides or fades, so no column edge or border moves across the
+   window while it opens. main.tsx removes `booting`. */
+:root.booting .app-shell, :root.booting .app-shell * { transition: none !important; }
+:root.booting .app-shell { animation: none !important; }

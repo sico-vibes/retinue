@@ -1,6 +1,6 @@
-// Settings › Manager: what the Manager knows about you and the playbook it
+// Settings › Manager: what the CEO knows about you and the playbook it
 // works from. Both live in the daemon outside any provider session, so they
-// stay when the Manager's model changes. The Manager can only propose changes
+// stay when the CEO's model changes. The CEO can only propose changes
 // to a locked fact or to the playbook; edits made here apply at once.
 import { useCallback, useEffect, useState } from 'react'
 import { AtSign, BadgeCheck, BriefcaseBusiness, Clock, Hash, Languages, Lock, LockOpen, MessageCircle, Pencil, Plus, RotateCcw, Trash2, UserRound, Wrench } from 'lucide-react'
@@ -26,7 +26,7 @@ export const FACT_CATEGORIES: Array<{ id: ManagerFact['category']; label: string
   { id: 'other', label: 'Other' },
 ]
 const SOURCE_WORD: Record<ManagerFact['source'], string> = { said: 'You said', learned: 'Learned', corrected: 'Checked by you' }
-const AUTHOR_WORD: Record<PlaybookVersion['author'], string> = { default: 'Starting playbook', user: 'Edited by you', manager: 'Proposed by the Manager' }
+const AUTHOR_WORD: Record<PlaybookVersion['author'], string> = { default: 'Starting playbook', user: 'Edited by you', manager: 'Proposed by the CEO' }
 export const FACT_VALUE_LIMIT = 1000
 export const PLAYBOOK_LIMIT = 16000
 
@@ -54,7 +54,7 @@ function FactForm({ draft, busy, onSave, onCancel }: { draft: FactDraft; busy: b
       <label className="settings-field"><span>What</span><input className="text-input" placeholder="Preferred language" value={value.key} maxLength={80} autoFocus onChange={(event) => setValue({ ...value, key: event.target.value })} /></label>
     </div>}
     <label className="settings-field"><span>{isNew ? 'Value' : value.key}</span><textarea className="text-input" rows={2} value={value.value} maxLength={FACT_VALUE_LIMIT} autoFocus={!isNew} onChange={(event) => setValue({ ...value, value: event.target.value })} /></label>
-    <label className="manager-fact-lock"><input type="checkbox" checked={value.locked} onChange={(event) => setValue({ ...value, locked: event.target.checked })} />Lock it, so the Manager has to ask before changing it</label>
+    <label className="manager-fact-lock"><input type="checkbox" checked={value.locked} onChange={(event) => setValue({ ...value, locked: event.target.checked })} />Lock it, so the CEO has to ask before changing it</label>
     <div className="settings-form-actions">
       <button type="button" className="ghost-button small" onClick={onCancel}>Cancel</button>
       <button className="primary-button small" disabled={busy || !ready}>Save</button>
@@ -62,7 +62,7 @@ function FactForm({ draft, busy, onSave, onCancel }: { draft: FactDraft; busy: b
   </form>
 }
 
-/** A small picture for the things the Manager commonly knows, so a label never reads like its value. */
+/** A small picture for the things the CEO commonly knows, so a label never reads like its value. */
 function FactIcon({ name }: { name: string }) {
   const key = name.toLowerCase()
   const Icon = /name/.test(key) ? UserRound : /role|job|work|title/.test(key) ? BriefcaseBusiness : /tone|voice|style|talk/.test(key) ? MessageCircle : /lang/.test(key) ? Languages : /time|zone|hour/.test(key) ? Clock : /mail|handle|contact/.test(key) ? AtSign : /tool|stack|editor/.test(key) ? Wrench : /prefer|like|value/.test(key) ? BadgeCheck : Hash
@@ -137,7 +137,7 @@ export function ManagerPage({ manager, connected = true, onOpenManager, agents =
     <SettingsGroup title="What it knows about you" action={<button type="button" className="ghost-button small" disabled={busy || !connected || editingFact !== null} onClick={() => setEditingFact({ category: 'workflow', key: '', value: '', locked: true })}><Plus size={13} aria-hidden="true" />Add</button>}>
       {editingFact && !editingFact.id && <FactForm draft={editingFact} busy={busy} onSave={(draft) => void saveFact(draft)} onCancel={() => setEditingFact(null)} />}
       {facts === null && <p className="settings-loading">Loading…</p>}
-      {facts !== null && facts.length === 0 && !editingFact && <p className="settings-empty manager-empty">Nothing yet. The Manager notes what it learns as you work together, and you can add things yourself. Lock what matters, and it will ask before changing it.</p>}
+      {facts !== null && facts.length === 0 && !editingFact && <p className="settings-empty manager-empty">Nothing yet. The CEO notes what it learns as you work together, and you can add things yourself. Lock what matters, and it will ask before changing it.</p>}
       {groups.map((group) => <div key={group.id} className="manager-fact-group">
         <h4>{group.label}</h4>
         <ul className="manager-facts">
@@ -151,7 +151,7 @@ export function ManagerPage({ manager, connected = true, onOpenManager, agents =
                   <small>{SOURCE_WORD[fact.source] ?? fact.source}{fact.updatedAt ? ` · ${when(fact.updatedAt)}` : ''}</small>
                 </span>
                 <span className="manager-fact-actions">
-                  <button type="button" className="icon-button" aria-pressed={fact.locked} aria-label={fact.locked ? `Unlock ${fact.key}` : `Lock ${fact.key}`} title={fact.locked ? 'Locked: the Manager asks before changing it' : 'Lock it'} disabled={busy} onClick={() => void toggleLock(fact)}>{fact.locked ? <Lock size={14} /> : <LockOpen size={14} />}</button>
+                  <button type="button" className="icon-button" aria-pressed={fact.locked} aria-label={fact.locked ? `Unlock ${fact.key}` : `Lock ${fact.key}`} title={fact.locked ? 'Locked: the CEO asks before changing it' : 'Lock it'} disabled={busy} onClick={() => void toggleLock(fact)}>{fact.locked ? <Lock size={14} /> : <LockOpen size={14} />}</button>
                   <button type="button" className="icon-button" aria-label={`Edit ${fact.key}`} title="Edit" disabled={busy} onClick={() => setEditingFact({ id: fact.id, category: fact.category, key: fact.key, value: fact.value, locked: fact.locked })}><Pencil size={14} /></button>
                   {confirmDelete === fact.id
                     ? <button type="button" className="ghost-button small danger" disabled={busy} onClick={() => void deleteFact(fact)} onBlur={() => setConfirmDelete(null)} autoFocus>Delete?</button>
@@ -164,7 +164,7 @@ export function ManagerPage({ manager, connected = true, onOpenManager, agents =
     </SettingsGroup>
 
     <SettingsGroup title="Playbook" action={editingPlaybook === null && current ? <button type="button" className="ghost-button small" disabled={busy || !connected} onClick={() => setEditingPlaybook(current.text)}><Pencil size={13} aria-hidden="true" />Edit</button> : undefined}>
-      <p className="manager-playbook-intro">How the Manager interviews you, plans a team and works with you. It can propose changes, which you approve in the chat.</p>
+      <p className="manager-playbook-intro">How the CEO interviews you, plans a team and works with you. It can propose changes, which you approve in the chat.</p>
       {editingPlaybook !== null
         ? <form className="manager-playbook-form" onSubmit={(event) => { event.preventDefault(); if (editingPlaybook.trim()) void savePlaybook(editingPlaybook) }}>
           <textarea className="text-input mono" aria-label="Playbook" rows={16} value={editingPlaybook} maxLength={PLAYBOOK_LIMIT} onChange={(event) => setEditingPlaybook(event.target.value)} />

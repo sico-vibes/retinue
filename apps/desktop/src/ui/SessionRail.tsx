@@ -106,7 +106,7 @@ const CHANGE_LIMIT = 8
 export function SessionRail({ session, usage, appliedModel, onOpenFile, onRevealFile, onCopyPath, onDiff, onOpenFolder, runtimeFacts, onOpenRemote, workingBots, botName = 'The bot', canCreatePr = false, onCreatePr, onReview, active = true, agents = [], isManager = false, onOpenSessionById, onOpenSchedules }: {
   /** Every bot, so a schedule can name the bot it wakes. */
   agents?: readonly Agent[]
-  /** The Manager sees every schedule; any other bot sees its own and its project's. */
+  /** The CEO sees every schedule; any other bot sees its own and its project's. */
   isManager?: boolean
   onOpenSessionById?: (sessionId: string) => void
   onOpenSchedules?: () => void
@@ -246,7 +246,7 @@ export function SessionRail({ session, usage, appliedModel, onOpenFile, onReveal
         {onCreatePr && <button type="button" className="rail-pr" disabled={!canPr} title={prTitle} onClick={() => repo && onCreatePr(repo)}>Create PR</button>}
       </div>}
       {notRepo && !readFailed && (isManager
-        ? <p className="rail-note">The Manager works in its own folder, not in a project, so it has no code changes of its own. The bots it assigns show their changes in their conversations.</p>
+        ? <p className="rail-note">The CEO works in its own folder, not in a project, so it has no code changes of its own. The bots it assigns show their changes in their conversations.</p>
         : <p className="rail-note">{folderName ? `${folderName} is not` : 'This folder is not'} a Git repository, so changes cannot be tracked. {view.earlier.length ? 'These are the files the coding agent reported.' : 'Files the coding agent edits appear here with their diff.'}</p>)}
       {readFailed && <p className="rail-note rail-problem" role="alert"><CircleAlert size={12} aria-hidden="true" /><span>{repo?.error ? `Git could not be read here: ${repo.error}` : 'The repository could not be read.'}{view.earlier.length ? ' Showing what the coding agent reported.' : ''} <button type="button" className="rail-link" onClick={repository.refresh}>Try again</button></span></p>}
       {view.fromRepository && repo && repo.files.length === 0 && <p className="rail-note">{repoName ? `No uncommitted changes in ${repoName}.` : 'No uncommitted changes.'}{view.earlier.length ? ' Earlier edits from this conversation are below.' : ''}</p>}

@@ -1,4 +1,4 @@
-// The Manager's assignments in the conversation that made them: a centred "Messaged ..." chip per run of messages sent
+// The CEO's assignments in the conversation that made them: a centred "Messaged ..." chip per run of messages sent
 // in a turn (like "Message from"), opening in place to a row per bot with its art, a status the daemon recorded, elapsed time, and a way into the teammate's
 // own conversation. Approving stays in that conversation; nothing here decides anything for the owner.
 import { useEffect, useState } from 'react'
@@ -84,7 +84,7 @@ function Row({ row, now, onOpen, onError, onFollowUp }: { row: DelegationRowMode
   </li>
 }
 
-export function DelegationGroup({ rows, onOpen, originSessionId, onFollowUp }: { rows: readonly DelegationRowModel[]; onOpen: (sessionId: string) => void; /** The Manager's conversation the group belongs to; the group stop is scoped to it. */ originSessionId?: string; /** Puts a follow-up question in the Manager's message box; the owner sends it. */ onFollowUp?: (row: DelegationRowModel) => void }) {
+export function DelegationGroup({ rows, onOpen, originSessionId, onFollowUp }: { rows: readonly DelegationRowModel[]; onOpen: (sessionId: string) => void; /** The CEO's conversation the group belongs to; the group stop is scoped to it. */ originSessionId?: string; /** Puts a follow-up question in the CEO's message box; the owner sends it. */ onFollowUp?: (row: DelegationRowModel) => void }) {
   const [problem, setProblem] = useState<string | null>(null)
   const [stopping, setStopping] = useState(false)
   const [confirmAll, setConfirmAll] = useState(false)

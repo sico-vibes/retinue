@@ -47,7 +47,7 @@ export function scheduleRows(automations: readonly Automation[], tasks: readonly
   return rows.sort((a, b) => (a.state === 'running' ? 0 : 1) - (b.state === 'running' ? 0 : 1))
 }
 
-/** `scope` limits the list to one bot (and its project's scheduled tasks); without it every schedule is listed, as the Manager sees them. `compact` is the rail's smaller list. */
+/** `scope` limits the list to one bot (and its project's scheduled tasks); without it every schedule is listed, as the CEO sees them. `compact` is the rail's smaller list. */
 export function ScheduleOverview({ agents, connected, onOpenSession, scope = null, compact = false, onOpenSchedules }: { agents: readonly Agent[]; connected: boolean; onOpenSession?: (sessionId: string) => void; scope?: ScheduleScope | null; compact?: boolean; onOpenSchedules?: () => void }) {
   const [automations, setAutomations] = useState<Automation[] | null>(null)
   const [tasks, setTasks] = useState<BoardTask[]>([])

@@ -362,5 +362,6 @@ export async function listenForTerminalExit(handler: (exit: TerminalExit) => voi
 
 /** A device has no native window, so there is no frosted backdrop to apply or read. */
 const NO_DEVICE_BACKDROP: WindowBackdrop = { effect: 'none', active: false, transparencyOff: false, reason: 'Not running in the desktop app.' }
+export async function mainWindowReady(): Promise<void> { /* a device has no native window */ }
 export async function applyWindowBackdrop(enabled: boolean, dark: boolean): Promise<WindowBackdrop> { void enabled; void dark; return NO_DEVICE_BACKDROP }
 export async function windowBackdropState(): Promise<WindowBackdrop> { return NO_DEVICE_BACKDROP }

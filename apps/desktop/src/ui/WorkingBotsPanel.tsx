@@ -6,6 +6,7 @@ import { agentLook } from '../blob/look'
 import { agentColorHex } from './agentColor'
 import { presentedSessionState } from './sessionOutcome'
 import { isSideSession, isWaitingDelegation, sessionIsBusy } from './teamSelectors'
+import { Collapse } from './Collapse'
 import './workingBotsPanel.css'
 
 /** Queued delivery notices are authoritative until a new message/turn arrives. */
@@ -45,6 +46,7 @@ export function taskElapsed(session: Session, status: string, now: number): stri
 /** Global assigned tasks stay visible while the owner moves between bots. */
 export function WorkingBotsPanel({ sessions, agents, selectedId, onOpen }: { sessions: readonly Session[]; agents: readonly Agent[]; selectedId: string | null; onOpen: (id: string) => void }) {
   const [expanded, setExpanded] = useState(true)
+  const [showFinished, setShowFinished] = useState(false)
   const [now, setNow] = useState(Date.now)
   const tasks = sessions.filter(s => isSideSession(s) && !s.archived).map(session => ({ session, status: taskStatus(session) })).filter(t => t.status !== 'Loading')
   const active = tasks.filter(t => !['Done', 'Failed', 'Cancelled'].includes(t.status))
@@ -66,6 +68,6 @@ export function WorkingBotsPanel({ sessions, agents, selectedId, onOpen }: { ses
   }
   return <section className="working-bots" aria-label="Working bots">
     {active.length > 0 && <button type="button" className="working-bots-heading" aria-expanded={expanded} onClick={() => setExpanded(v => !v)}><ChevronRight size={12} className={expanded ? 'open' : ''} aria-hidden="true" /><strong>Working bots</strong><span>{active.length}</span></button>}
-    {(expanded || !active.length) && <>{active.length > 0 && <ul>{active.map(row)}</ul>}{finished.length > 0 && <details><summary><ChevronRight size={12} aria-hidden="true" /><span>{finished.length} finished</span></summary><ul>{finished.map(row)}</ul></details>}</>}
+    {(expanded || !active.length) && <>{active.length > 0 && <ul>{active.map(row)}</ul>}{finished.length > 0 && <div className="working-bots-finished"><button type="button" className="working-bots-finished-toggle" aria-expanded={showFinished} onClick={() => setShowFinished((value) => !value)}><ChevronRight size={12} aria-hidden="true" className={`fold-chevron${showFinished ? ' open' : ''}`} /><span>{finished.length} finished</span></button><Collapse open={showFinished}><ul>{finished.map(row)}</ul></Collapse></div>}</>}
   </section>
 }

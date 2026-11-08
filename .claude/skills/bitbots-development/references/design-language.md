@@ -119,6 +119,15 @@ Haze character portraits keep their source SVG colours. Small marks and picker c
 
 One set of parts in `ui/QuotaBar.tsx`: `LimitMeter` (its mark shows how much of the window's time has passed), `LimitRow`, `ProviderLimits`, `UsagePanel`. The panel opens from the bottom bar and the sidebar line; there is no usage dialog. With the bar on, the sidebar line hides. The Usage page's stat tiles also pick what the chart plots.
 
+## Projects first, room and motion (owner, 8 November 2026)
+
+- **Projects is the main sidebar view**; bots are *employees*, and the Manager is shown as the **CEO** (the code still says `manager`). The bot roster is the sidebar's Team view; hiring lives on the Team page.
+- **Room:** project headers 32px with a density-driven gap between projects; employee rows two lines with a 28px portrait (name line carries the time, or *Needs you* / the working dot); conversations are two-line cards (title, then `time · status` in words). Never a 22px single line for the selected conversation.
+- **Long names and titles** end in an ellipsis at rest. A *selected* (or hovered) one that overflows slides left slowly, pauses and returns (`Marquee`), with soft mask edges and no colour; reduced motion keeps the ellipsis.
+- **Folding animates** (`Collapse`: grid rows 0fr→1fr, 180ms, chevron turns 90°); reduced motion is instant.
+- **Density is tokens**, not per-component overrides: `--dn-*` in `density.css` (row padding, row gap, group gap, nested gap, card padding, row minimums). A look must use the tokens, never a fixed height that beats density on specificity.
+- **Haze scrollbars** are a faint mist (`--scroll-thumb`, white 10% / black 12%) that brightens while the pointer is over its scroller; the usage bar sits on the backdrop with mist meters, colour only for warning or critical.
+
 ## Tokens
 
 All colours, sizes and radii come from `apps/desktop/src/ui/theme.css` tokens (`--surface-*`, `--text-1..3`, `--line*`, `--status-*`, `--radius-*`, `--shadow-pop`, `--focus-ring`, `--font-ui`, `--font-mono`, `--fs-*`, companion tokens). A look overrides tokens first and adds component rules only where tokens are not enough. Component stylesheets use tokens, not literals.

@@ -1,6 +1,7 @@
 // Development-only stand-in for src/tauri.ts, wired by vite.preview.config.ts
 // so the real App can be inspected in a browser without the daemon. Every
 // value below is a visual fixture, not product data.
+import { DEPARTMENTS, PRESETS } from '../team/presets'
 import { handleFixtureTaskRpc } from './fixtureTasks'
 import { EXPERIMENTS } from '../ui/experiments'
 import type { Agent, DaemonEvent, DaemonSupervisor, MessageMeta, PermissionRequest, Project, Runtime, Session, Snapshot, WindowBackdrop } from '../types'
@@ -465,6 +466,16 @@ async function fixtureRepository(sessionId: string) {
   const addedLines = files.reduce((sum, file) => sum + (Number(file.addedLines) || 0), 0)
   const removedLines = files.reduce((sum, file) => sum + (Number(file.removedLines) || 0), 0)
   return { ...base, files, addedLines: sessionId ? addedLines : 0, removedLines, truncated: mode === 'many' }
+}
+
+let fixtureHires: Array<{ projectId: string; agentId: string; hiredAt: number }> = []
+const fixtureReleased = new Set<string>()
+/** Members: explicit hires plus, like the daemon's migration, default projects and conversations. */
+function fixtureMembers(projectId: string) {
+  const ids = new Set(fixtureHires.filter((item) => item.projectId === projectId).map((item) => item.agentId))
+  for (const agent of agents) if (!agent.archived && agent.systemRole !== 'manager' && agent.projectId === projectId) ids.add(agent.id)
+  for (const session of sessions) if (session.agentId && (session as { projectId?: string | null }).projectId === projectId) ids.add(session.agentId)
+  return [...ids].filter((id) => !fixtureReleased.has(`${projectId}:${id}`) && agents.some((agent) => agent.id === id && agent.systemRole !== 'manager')).map((agentId, sortOrder) => ({ agentId, hiredAt: 0, sortOrder }))
 }
 
 export async function rpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
@@ -1442,6 +1453,44 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     sessions = [...sessions, session]
     return { session, created: true } as T
   }
+  // 8 November 2026: hiring (docs/plans/hiring-brief.md), kept in memory.
+  if (method === 'preset.list') {
+    return { departments: DEPARTMENTS, presets: PRESETS.map(({ instructions: _instructions, ...preset }) => ({ ...preset, hiredAgentId: agents.find((agent) => agent.presetId === preset.id && !agent.archived)?.id ?? null })) } as T
+  }
+  if (method === 'project.members') {
+    if (!projects.some((project) => project.id === params.projectId)) throw rpcError('not_found', 'That project is no longer available.')
+    return { members: fixtureMembers(String(params.projectId)) } as T
+  }
+  if (method === 'project.hire') {
+    const projectId = String(params.projectId ?? '')
+    if (!projects.some((project) => project.id === projectId)) throw rpcError('not_found', 'That project is no longer available.')
+    let agentId = typeof params.agentId === 'string' ? params.agentId : null
+    let created = false
+    if (!agentId) {
+      const preset = PRESETS.find((item) => item.id === params.presetId)
+      if (!preset) throw rpcError('invalid_argument', 'Name an employee or a preset.')
+      const existing = agents.find((agent) => agent.presetId === preset.id && !agent.archived)
+      if (existing) agentId = existing.id
+      else {
+        const base = agents[0]
+        const taken = (name: string) => agents.some((agent) => agent.name.toLowerCase() === name.toLowerCase())
+        let name = preset.nickname
+        for (let n = 2; taken(name); n += 1) name = `${preset.nickname} ${n}`
+        const agent = { ...base, id: `agent-${preset.id}`, name, role: preset.role, description: preset.description, instructions: preset.instructions.join(String.fromCharCode(10)), color: preset.color, tags: preset.tags, presetId: preset.id, systemRole: null, projectId: null, archived: false, look: { shape: 'circle', icon: preset.portrait }, runtimeId: typeof params.runtimeId === 'string' ? params.runtimeId : base?.runtimeId, updatedAt: new Date().toISOString() } as Agent
+        agents = [...agents, agent]
+        agentId = agent.id
+        created = true
+      }
+    }
+    if (!fixtureHires.some((item) => item.projectId === projectId && item.agentId === agentId)) fixtureHires.push({ projectId, agentId: agentId!, hiredAt: Date.now() })
+    return { agentId, created, member: { agentId, hiredAt: Date.now(), sortOrder: 0 } } as T
+  }
+  if (method === 'project.release') {
+    const before = fixtureHires.length
+    fixtureHires = fixtureHires.filter((item) => !(item.projectId === params.projectId && item.agentId === params.agentId))
+    fixtureReleased.add(`${params.projectId}:${params.agentId}`)
+    return { released: fixtureHires.length < before } as T
+  }
   if (method === 'agent.team.update') {
     const agent = agents.find((item) => item.id === params.agentId)
     if (!agent) throw rpcError('not_found', `That ${entityNoun(themeStyle())} is no longer available.`)
@@ -1849,6 +1898,8 @@ export async function setApprovalBadge(_count: number): Promise<void> { /* No na
 
 // The browser preview has no OS compositor behind it, so the frosted backdrop
 // reports itself unavailable instead of pretending.
+export async function mainWindowReady(): Promise<void> { /* the preview has no native window */ }
+
 export async function applyWindowBackdrop(_enabled: boolean, _dark: boolean): Promise<WindowBackdrop> {
   return { effect: 'none', active: false, transparencyOff: false, reason: 'Not running in the desktop app.' }
 }

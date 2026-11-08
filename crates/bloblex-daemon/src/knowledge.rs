@@ -260,7 +260,7 @@ pub async fn tool_update_playbook(st: &AppState, session_id: &str, args: &Value)
     let reason = args["reason"].as_str().map(str::trim).unwrap_or("").chars().take(280).collect::<String>();
     let base_version = st.db.manager_playbook_current().map_err(|error| error.to_string())?["version"].clone();
     let payload = json!({"text": text, "reason": reason, "baseVersion": base_version});
-    let id = crate::proposals::create_proposal(st, session_id, &manager, "playbook", payload, "Update the Manager's playbook".to_owned(), if reason.is_empty() { None } else { Some(reason) }).await?;
+    let id = crate::proposals::create_proposal(st, session_id, &manager, "playbook", payload, "Update the CEO's playbook".to_owned(), if reason.is_empty() { None } else { Some(reason) }).await?;
     Ok(format!("I proposed an update to my playbook. It applies when the user approves it (proposal {id})."))
 }
 
@@ -393,7 +393,7 @@ fn pending_line(proposal: &Value) -> String {
 fn build_handover(st: &AppState) -> String {
     let pending = st.db.proposals_pending().unwrap_or_default();
     let decisions = st.db.proposals_recent_decisions(10).unwrap_or_default();
-    let mut out = String::from("\n\n<bloblex_handover>\nYour model changed, but you are the same Manager: your notes and playbook are with you.\n\n");
+    let mut out = String::from("\n\n<bloblex_handover>\nYour model changed, but you are the same CEO: your notes and playbook are with you.\n\n");
     out.push_str(&manager_knowledge_body(st));
     out.push_str("\n\nOpen proposals waiting for the user's approval:");
     if pending.is_empty() {
@@ -433,7 +433,7 @@ pub async fn announce_model_change(st: &AppState, session_id: &str) {
         return;
     }
     let _ = st.db.set_session_manager_handover(session_id, true);
-    crate::team::note(st, session_id, "New model, same Manager. It has its notes and playbook.", json!({"kind":"context_reset","reason":"manager_handover","contextLost":false})).await;
+    crate::team::note(st, session_id, "New model, same CEO. It has its notes and playbook.", json!({"kind":"context_reset","reason":"manager_handover","contextLost":false})).await;
 }
 
 // ---------------------------------------------------------------------------

@@ -2,6 +2,9 @@
 // selected bot, grouped by the project each one works in (Phase 1A: bots work
 // in every project), newest first, with bot-to-bot conversations branching
 // under the conversation that started them.
+import { Collapse } from './Collapse'
+import { Marquee } from './Marquee'
+import { StatusLabel, type ConversationStatus } from './ProjectsSidebar'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { MachineBadge } from './MachineBots'
 import { hasSettled, settleOrder } from './sidebarOrder'
@@ -129,7 +132,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
     { label: 'Change folder…', icon: <FolderOpen size={15} />, onSelect: () => projectActions.onChangeProjectFolder(project) },
     ...(projectActions.onSetProjectIcon ? [{ label: 'Change icon…', icon: <Smile size={15} />, onSelect: () => setIconTarget({ projectId: project.id, x: lastTrigger.current?.getBoundingClientRect().left ?? 80, y: (lastTrigger.current?.getBoundingClientRect().bottom ?? 80) + 4 }) }] : []),
     ...(projectActions.onOpenProjectSettings ? [{ label: 'Project settings…', icon: <SlidersHorizontal size={15} />, onSelect: () => projectActions.onOpenProjectSettings?.(project) }] : []),
-    // FIX39 item 21: the Manager matches jobs to a project's tags; they moved here with the project headings.
+    // FIX39 item 21: the CEO matches jobs to a project's tags; they moved here with the project headings.
     { label: 'Tags…', icon: <Tag size={15} />, onSelect: () => setTagTarget({ kind: 'project', id: project.id, name: project.name, tags: [...(project.tags ?? [])] }) },
     'separator',
     { label: 'Delete project', icon: <Trash2 size={15} />, danger: true, onSelect: () => projectActions.onDeleteProject(project) },
@@ -154,13 +157,15 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
           : <span className="convo-twisty-space" aria-hidden="true" />}
         {renaming === session.id
           ? <RenameField initial={session.title?.trim() || ''} onDone={async (value) => { setRenaming(null); if (value && value !== session.title?.trim()) await onRename(session, value) }} />
-          : <button type="button" className="convo-open" onClick={open_} onDoubleClick={() => { if (node.kind === 'main') setRenaming(session.id) }} title={title}>
+          : <button type="button" className="convo-open marquee-host" onClick={open_} onDoubleClick={() => { if (node.kind === 'main') setRenaming(session.id) }} title={title}>
             {node.kind === 'side' && <span className="convo-pair" aria-hidden="true"><Face agent={node.role === 'sender' ? agent : peer} name={node.role === 'sender' ? agent.name : peerName} /><ArrowLeftRight size={10} /><Face agent={node.role === 'sender' ? peer : agent} name={node.role === 'sender' ? peerName : agent.name} /></span>}
             <span className="convo-copy">
-              <span className="convo-title">{title}</span>
-              {node.kind === 'side' && <span className="convo-sub">{node.role === 'sender' ? `Asked ${peerName}` : `From ${peerName}`}</span>}
+              <Marquee className="convo-title" text={title} active={active} />
+              {node.kind === 'side'
+                ? <span className="convo-sub">{node.role === 'sender' ? `Asked ${peerName}` : `From ${peerName}`}</span>
+                : <span className="convo-sub convo-meta"><time>{relativeTime(session.updatedAt ?? session.createdAt, now)}</time><span aria-hidden="true">·</span><StatusLabel {...(needsYou ? { tone: 'needs', label: 'Needs you' } : failed ? { tone: 'bad', label: 'Stopped with an error' } : busy ? { tone: 'working', label: 'Working' } : { tone: 'idle', label: 'Idle' }) as ConversationStatus} /></span>}
             </span>
-            {session.link?.movedTo ? <MachineBadge name={session.link.movedTo.name} /> : needsYou ? <span className="convo-flag needs">Needs you</span> : failed ? <span className="convo-flag failed">Failed</span> : busy ? <i className="convo-dot" aria-label="Working" /> : <time className="convo-time">{relativeTime(session.updatedAt ?? session.createdAt, now)}</time>}
+            {session.link?.movedTo ? <MachineBadge name={session.link.movedTo.name} /> : needsYou ? <span className="convo-flag needs">Needs you</span> : failed ? <span className="convo-flag failed">Failed</span> : busy ? <i className="convo-dot" aria-label="Working" /> : node.kind === 'side' ? <time className="convo-time">{relativeTime(session.updatedAt ?? session.createdAt, now)}</time> : null}
           </button>}
         {node.kind === 'main' && renaming !== session.id && <span className="convo-actions">
           <button type="button" className="convo-action" aria-label={`Rename ${title}`} title="Rename" onClick={() => setRenaming(session.id)}><Pencil size={12} aria-hidden="true" /></button>
@@ -168,7 +173,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
           <button type="button" className="convo-action danger" aria-label={`Delete ${title}`} title="Delete" disabled={busy} onClick={() => onDelete(session)}><Trash2 size={12} aria-hidden="true" /></button>
         </span>}
       </div>
-      {open && node.children.length > 0 && <ul role="group" className="convo-children" style={{ ['--parent-depth' as string]: depth }}>{node.children.map((child) => renderNode(child, depth + 1))}</ul>}
+      {node.children.length > 0 && <Collapse open={open}><ul role="group" className="convo-children" style={{ ['--parent-depth' as string]: depth }}>{node.children.map((child) => renderNode(child, depth + 1))}</ul></Collapse>}
     </li>
   }
 
@@ -194,7 +199,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
         return <section key={key} className="convo-project" aria-label={name} data-project-id={project?.id ?? 'none'}>
           <h3 className="convo-group convo-project-head">
             <button type="button" className="convo-project-fold" aria-expanded={!folded} aria-label={`${folded ? 'Expand' : 'Collapse'} ${name}`} title={folded ? 'Show conversations' : 'Hide conversations'} onClick={() => toggleProject(key)}>
-              {folded ? <ChevronRight size={12} aria-hidden="true" /> : <ChevronDown size={12} aria-hidden="true" />}
+              <ChevronRight size={12} aria-hidden="true" className={`fold-chevron${folded ? '' : ' open'}`} />
               <ProjectIcon project={project} size={13} />
               <span className="convo-project-name" title={project?.path ?? undefined}>{name}</span>
               {folded && <span className="convo-project-count">{nodes.length}</span>}
@@ -205,7 +210,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
               {project && projectActions && <button type="button" className="convo-action" aria-label={`${name} options`} aria-haspopup="menu" title="Project options" onClick={(event) => openMenu(event.currentTarget, `${name} actions`, projectItems(project))}><MoreHorizontal size={12} aria-hidden="true" /></button>}
             </span>
           </h3>
-          {!folded && <ul role="tree" className="convo-list">{nodes.map((node) => renderNode(node, 0))}</ul>}
+          <Collapse open={!folded}><ul role="tree" className="convo-list">{nodes.map((node) => renderNode(node, 0))}</ul></Collapse>
         </section>
       })}
     </div>

@@ -12,6 +12,7 @@
         const dictation = params.has('dictation')
         if (companion) document.documentElement.classList.add('companion-surface')
         if (dictation) document.documentElement.classList.add('dictation-surface')
+        if (!companion && !dictation) document.documentElement.classList.add('booting')
         try {
           const settings = JSON.parse(localStorage.getItem('bloblex.appearance') || '{}')
           const storedStyle = localStorage.getItem('bitbots.style')
@@ -28,6 +29,8 @@
           if (overlay) document.documentElement.dataset.surfaceTheme = surfaceTheme
           document.documentElement.dataset.textSize = textSize
           document.documentElement.dataset.themeChoice = theme
+          const density = localStorage.getItem('bitbots.density')
+          if (density === 'compact' || density === 'default' || density === 'roomy') document.documentElement.dataset.density = density
           // The shell restores the native frosted backdrop before the first frame; paint the matching tint right away.
           const backdrop = localStorage.getItem('bitbots.backdrop')
           if (!overlay && style === 'haze' && (backdrop === 'acrylic' || backdrop === 'blur')) document.documentElement.dataset.backdrop = backdrop

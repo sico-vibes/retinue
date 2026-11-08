@@ -141,14 +141,14 @@ export function PermissionModeControl({ session, agent, disabled, locked = false
     void apply(permissionWrite(next, blobMode))
   }
   const copy = APPROVAL_MODE_COPY[mode]
-  // FIX39 item 19: a mode the Manager proposed and the owner approved is marked
+  // FIX39 item 19: a mode the CEO proposed and the owner approved is marked
   // so the side-conversation pill says who set it.
   const managerSet = session.modelLock?.approvalModeSource === 'manager' && pinned
   return <div ref={rootRef} className="composer-popover-anchor">
-    <button ref={triggerRef} type="button" className={`composer-pill permission-pill mode-${planOn ? 'plan' : mode}`} data-tour="plan" aria-haspopup="menu" aria-expanded={open} aria-label={`${planOn ? 'Mode: Plan. ' : ''}Permissions: ${copy.title}${pinned ? ', set for this conversation' : `, ${noun} default`}${managerSet ? ', set by the Manager' : ''}`} title={locked ? LOCKED_CONTROL_TOOLTIP : planOn ? PLAN_DETAIL : copy.detail} disabled={disabled || saving} onClick={() => setOpen((value) => !value)}>
+    <button ref={triggerRef} type="button" className={`composer-pill permission-pill mode-${planOn ? 'plan' : mode}`} data-tour="plan" aria-haspopup="menu" aria-expanded={open} aria-label={`${planOn ? 'Mode: Plan. ' : ''}Permissions: ${copy.title}${pinned ? ', set for this conversation' : `, ${noun} default`}${managerSet ? ', set by the CEO' : ''}`} title={locked ? LOCKED_CONTROL_TOOLTIP : planOn ? PLAN_DETAIL : copy.detail} disabled={disabled || saving} onClick={() => setOpen((value) => !value)}>
       {saving ? <LoaderCircle size={14} className="spinning" aria-hidden="true" /> : planOn ? <ClipboardList size={14} aria-hidden="true" /> : <ModeIcon mode={mode} />}
       <span>{planOn ? 'Plan' : copy.label}</span>
-      {managerSet && <small className="permission-pill-source">set by the Manager</small>}
+      {managerSet && <small className="permission-pill-source">set by the CEO</small>}
       <ChevronDown size={12} aria-hidden="true" className="composer-pill-chevron" />
     </button>
     {open && <div ref={menuRef} className="composer-menu permission-menu align-left" role="menu" aria-label="Mode for this conversation" onKeyDown={(event) => { if (moveMenuFocus(menuRef.current, event.key)) event.preventDefault() }}>

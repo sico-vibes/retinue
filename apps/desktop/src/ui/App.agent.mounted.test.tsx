@@ -136,7 +136,16 @@ async function settleMicrotasks() {
   for (let index = 0; index < 20; index++) await Promise.resolve()
 }
 
+// These tests drive the bot roster, which since 8 November 2026 is the
+// sidebar's Team view (Projects is the default). Open it the way a saved
+// choice would.
+function showTeamView() {
+  const read = localStorage.getItem.bind(localStorage)
+  try { localStorage.getItem = ((key: string) => key === 'bitbots.sidebar.view' ? 'bots' : read(key)) as typeof localStorage.getItem } catch { /* a stub that refuses assignment keeps its own answers */ }
+}
+
 function mountApp(search = '') {
+  showTeamView()
   window.history.replaceState({}, '', `/${search}`)
   const host = document.createElement('div')
   document.body.append(host)
@@ -326,7 +335,7 @@ describe('blob roster and editor', () => {
     await view.settle()
     const nameField = view.host.querySelector<HTMLInputElement>('.onboarding-field input')
     await typeInto(nameField, 'Codex')
-    await click(buttonNamed(view.host, 'Create Manager'))
+    await click(buttonNamed(view.host, 'Create CEO'))
     await view.settle()
     const create = h.rpc.mock.calls.find(([method]) => method === 'manager.ensure')
     expect(create?.[1]).toMatchObject({ name: 'Codex', runtimeId: 'runtime-codex', color: 'violet', approvalMode: 'bypass' })
@@ -791,7 +800,7 @@ describe('blob roster and editor', () => {
     const view = startApp()
     await view.settle()
     const groups = [...view.host.querySelectorAll('.team-group')].map((group) => group.getAttribute('aria-label'))
-    expect(groups).toEqual(['Manager', 'Bots'])
+    expect(groups).toEqual(['CEO', 'Bots'])
     // An old team leader is an ordinary bot now.
     const formerLeader = view.host.querySelector('.team-row[data-agent-id="agent-claude"]')!
     expect(formerLeader.getAttribute('aria-label')).toBe('Claude, CTO')
@@ -880,7 +889,7 @@ describe('blob roster and editor', () => {
     configure(snapshot({ agents, sessions: [] }))
     const view = startApp()
     await view.settle()
-    expect(view.host.querySelector('.manager-setup')?.textContent).toContain('Meet your Manager')
+    expect(view.host.querySelector('.manager-setup')?.textContent).toContain('Meet your CEO')
     expect(view.host.querySelector('.manager-setup [aria-label="Later"]')).toBeNull()
   })
 

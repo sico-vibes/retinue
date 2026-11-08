@@ -135,7 +135,7 @@
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .composer-box:focus-within { border-color: var(--line-focus); }
 
 /* Sidebar rows: one line, the mark, the name and the status in words. */
-:root[data-style="haze"] .team-row { position: relative; isolation: isolate; overflow: hidden; min-height: 36px; padding-block: 0; padding-left: 10px; gap: 11px; border-radius: 11px; }
+:root[data-style="haze"] .team-row { position: relative; isolation: isolate; overflow: hidden; min-height: var(--dn-team-row-h, 36px); padding-block: 0; padding-left: 10px; gap: 11px; border-radius: 11px; }
 :root[data-style="haze"] .team-row.selected { box-shadow: none; }
 :root[data-style="haze"][data-theme="light"] .team-row.selected { background: var(--surface-selected); box-shadow: none; }
 :root[data-style="haze"] .team-row .bot-row-line + .bot-row-line { display: none; }
@@ -248,7 +248,7 @@
 :root[data-style="haze"] .blob-page-layout { width: min(880px, calc(100% - 48px)); max-width: none; }
 :root[data-style="haze"] .blob-page-layout .blob-page-column { width: 100%; max-width: none; }
 :root[data-style="haze"] .haze-look-editor { grid-template-columns: 260px minmax(0, 1fr); }
-:root[data-style="haze"] .team-row { min-height: 36px; }
+:root[data-style="haze"] .team-row { min-height: var(--dn-team-row-h, 36px); }
 :root[data-style="haze"] .team-row-avatar > .haze-mark.is-character { width: 26px !important; height: 26px !important; }
 :root[data-style="haze"] .chat-header .haze-mark.is-character { width: 26px !important; height: 26px !important; }
 @media (max-width: 760px) {
@@ -295,3 +295,17 @@
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) input[type="range"]:not(.look-slider input) { height: 16px; margin: 0; appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) input[type="range"]:not(.look-slider input)::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--text-1) 18%, transparent); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) input[type="range"]:not(.look-slider input)::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: -4px; appearance: none; -webkit-appearance: none; border: 0; border-radius: 50%; background: #fff; }
+
+/* Colour pass (owner, 8 November 2026: "blend more beautifully and more
+   seamless"). Scrollbars are a faint mist that brightens while the pointer is
+   over their scroller; the usage bar sits on the backdrop instead of a band of
+   its own; meters use the mist, with status colour only when a limit is near. */
+:root[data-style="haze"] { --scroll-thumb: rgb(255 255 255 / .10); --scroll-thumb-hover: rgb(255 255 255 / .24); }
+:root[data-style="haze"][data-theme="light"] { --scroll-thumb: rgb(20 20 20 / .12); --scroll-thumb-hover: rgb(20 20 20 / .26); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) *:hover { scrollbar-color: var(--scroll-thumb-hover) transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-bar { border-top-color: transparent; background: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-meter { background: var(--surface-selected); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-meter > b { background: color-mix(in srgb, var(--text-1) 46%, transparent); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-meter.tone-warning > b { background: var(--status-working); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-meter.tone-critical > b { background: var(--status-danger); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversations-panel { border-right-color: var(--line); }

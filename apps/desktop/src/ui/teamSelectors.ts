@@ -122,7 +122,7 @@ export function managerOf(agents: readonly Agent[]): Agent | null {
 }
 
 export function groupAgentsByProject(agents: readonly Agent[], projects: readonly Project[], showHidden = false): ProjectGroup[] {
-  // The Manager is pinned above every project, never inside one.
+  // The CEO is pinned above every project, never inside one.
   const visible = agents.filter((agent) => !agent.archived && !isManager(agent) && !agent.parentAgentId && (showHidden || agent.hidden !== true))
   const known = new Set(projects.map((project) => project.id))
   const groups: ProjectGroup[] = [...projects]
@@ -133,7 +133,7 @@ export function groupAgentsByProject(agents: readonly Agent[], projects: readonl
   return groups
 }
 
-/** Phase 1A: bots are no longer filed under projects. The roster is one list in the daemon's order; the Manager is pinned separately. */
+/** Phase 1A: bots are no longer filed under projects. The roster is one list in the daemon's order; the CEO is pinned separately. */
 export function rosterAgents(agents: readonly Agent[], showHidden = false): Agent[] {
   return agents.filter((agent) => !agent.archived && !isManager(agent) && !agent.parentAgentId && (showHidden || agent.hidden !== true))
 }

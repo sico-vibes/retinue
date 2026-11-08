@@ -19,7 +19,8 @@ $env:TAURI_CONFIG='{"bundle":{"externalBin":[]}}'   # skip staged sidecars for a
 cargo test -p bloblex-desktop --lib
 ```
 
-- Run vitest from `apps/desktop` (`cd apps/desktop; npx vitest run <file>`); from the root, `--root apps/desktop` fails for tests that mount `App` ("Denied ID ...docs/releases"). `FIX37.updateBadge` fails on `main` at `30c7b3d` (expects beta.36), and `cargo clippy --workspace` fails inside `bloblex-desktop` on Rust 1.94 in untouched code; use `--exclude bloblex-desktop` for a clean clippy run.
+- Run vitest from `apps/desktop` (`cd apps/desktop; npx vitest run <file>`); from the root, `--root apps/desktop` fails for tests that mount `App` ("Denied ID ...docs/releases"). `FIX37.updateBadge` fails on `main` at `30c7b3d` (expects beta.36), and `cargo clippy --workspace` fails inside `bloblex-desktop` on Rust 1.94 in untouched code; use `--exclude bloblex-desktop` for a clean clippy run. `cargo clippy -p bloblex-desktop` itself (8 November 2026, beta.50) stops at one error, `power.rs:222` `clippy::never_loop`, plus 8 warnings in `speech.rs`, `pty.rs`, `lib.rs` — all untouched code, none in a new command.
+- A fresh `CARGO_TARGET_DIR` makes `sherpa-onnx-sys`'s build script download 1.1 GB of prebuilt libs into `<target>\sherpa-onnx-prebuilt`; on 8 November 2026 that failed with HTTP 503 from GitHub. Don't copy the cache: point `SHERPA_ONNX_LIB_DIR` at an existing one (`<any other target>\sherpa-onnx-prebuilt\sherpa-onnx-v1.13.8-win-x64-static-MT-Release-lib\lib`).
 - Run the Vitest suite on a quiet machine. When lanes or cargo builds run at the same time, mounted tests time out in large numbers (57 and 100 false failures were seen); re-run the failing files alone, or use `npx vitest run --maxWorkers=4`, before believing a failure.
 - When filtering output in PowerShell, `Select-String` is case-insensitive: a pattern for `FAILED` also matches test names containing "failed" and can push the summary line out of view. Use `-CaseSensitive`.
 - The desktop crate cannot build from a path containing an apostrophe (the main checkout `D:\Basem's\...`): the Windows resource compiler mangles the icon path. Use a worktree or clone at `D:\fxNN`.
@@ -28,6 +29,10 @@ cargo test -p bloblex-desktop --lib
 - The Codex sandbox cannot let Vite write its temp config through a `node_modules` junction (`EPERM`): add `--configLoader runner` to `vite build` and `vitest run` there, or run the gate yourself.
 - `cargo test --workspace` stops at the first crate that fails, so later crates never run. Add `--no-fail-fast` when you need every failure (2026-10-27).
 - A `../tauri` export missing from a test's `vi.mock` factory makes every App-mounting test in that file fail with the same "No "x" export is defined" error, which hides the real failures behind it. After adding the export, expect more failures to appear (2026-10-27: 121 hid 32).
+
+## Checking the desktop crate from a worktree whose path has an apostrophe (8 November 2026)
+
+`CARGO_TARGET_DIR` on a short path does **not** get past `RC2135: file not found: D:\Basem's\...`: the resource compiler is fed the icon path inside the source tree, not the target dir. Copy the tree (about 15 MB without `.git`, `target`, `node_modules`) to a short path such as `D:\gw1\src`, add stub `apps/desktop/dist/index.html` and `apps/desktop/dist-remote/index.html`, then run `cargo check -p bloblex-desktop` there with `TAURI_CONFIG='{"bundle":{"externalBin":[]}}'`, `CARGO_TARGET_DIR='D:\gw1\target'` and `SHERPA_ONNX_LIB_DIR` as above. Delete the copy afterwards; the real worktree stays untouched, which also keeps the `gen/schemas` churn out of `git status`.
 
 ## T3 wave verification (2026-10-26)
 
