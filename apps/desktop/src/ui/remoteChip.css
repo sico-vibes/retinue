@@ -1,0 +1,12 @@
+/* Remote in the sidebar foot: a flat row with its state on the right. The detail lives in the tooltip. */
+.remote-chip { width: calc(100% - 16px); height: 36px; margin: 0 8px; padding: 0 10px; display: flex; align-items: center; gap: 10px; color: var(--text-2); border: 0; border-radius: var(--radius-sm); background: transparent; font: inherit; text-align: left; cursor: pointer; transition: color 120ms ease, background 120ms ease; }
+.remote-chip:hover { color: var(--text-1); background: var(--surface-hover); }
+.remote-chip-icon { position: relative; width: 20px; height: 20px; flex: 0 0 20px; display: grid; place-items: center; }
+.remote-chip-light { display: none; }
+.remote-chip-copy { min-width: 0; flex: 1; display: block; }
+.remote-chip-title { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: var(--fs-sm); }
+.remote-chip-title em { color: var(--text-3); font-size: var(--fs-xs); font-style: normal; }
+.remote-chip.tone-live .remote-chip-title em { color: var(--text-1); }
+.remote-chip.tone-waiting .remote-chip-title em { color: var(--status-working); }
+.remote-chip-detail { display: none; }
+@media (prefers-reduced-motion: reduce) { .remote-chip { transition: none; } }

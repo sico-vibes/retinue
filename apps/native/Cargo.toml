@@ -1,0 +1,84 @@
+[workspace]
+
+[package]
+name = "retinue-native"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Retinue in Rust (GPUI): the native preview of the desktop app"
+
+[[bin]]
+name = "retinue-native"
+path = "src/main.rs"
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed", rev = "e2f3d5ed8e5a2d8532ef0a82d3594593f0523804" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "io-util"] }
+tokio-tungstenite = "0.27"
+futures-util = "0.3"
+async-channel = "2"
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+rusqlite = { version = "0.37", features = ["bundled", "backup"] }
+log = "0.4"
+# A pasted screenshot arrives as pixels; every provider takes PNG, so the window
+# encodes it the way `src-tauri/src/clipboard.rs` does. GPUI's own clipboard read
+# is the source: it hands back the bytes Windows holds (a PNG, or a DIB turned
+# into a BMP), and this decodes and re-encodes them.
+image = { version = "0.25", default-features = false, features = ["png", "bmp", "jpeg", "gif", "webp"] }
+# A finished turn, a failure or a waiting approval raises a Windows toast while
+# the window is in the background, under the app's own id.
+windows = { version = "0.57", features = ["Data_Xml_Dom", "UI_Notifications"] }
+# Slice 5: on-device dictation. The engine (sherpa-onnx + cpal) lives behind its
+# `native` feature; the catalog, the lifecycle and the resampling are the same
+# ones the installed app uses, so a model it already downloaded is reused.
+retinue-speech = { path = "../../crates/retinue-speech", features = ["native"] }
+# Slice 5: the companion's cues are synthesised, never files. `cpal` is the same
+# audio backend the speech engine uses, addressed directly so a cue does not
+# wait for the dictation stack.
+cpal = "0.15"
+# The clipboard fallback for a transcript dictated while neither window is in
+# front (the React app hands every transcript to the window that owns Ctrl+E;
+# this window-less path needs somewhere to put it).
+arboard = "3.7"
+# Slice 4: the terminal dock runs the user's own shell in the project folder
+# through Windows ConPTY. `src-tauri/src/pty.rs` uses the same crate, so the
+# shells, the size limits and the process-tree kill behave the same way.
+portable-pty = "0.9"
+# Slice 4: a schedule stores its zone as an IANA name, and this is the machine's
+# own (chrono already depends on it, so this adds no build).
+iana-time-zone = "0.1"
+# The companion and dictation windows are frameless, always-on-top and hidden on
+# demand, and GPUI at the pinned revision has no API for any of those: it hands
+# out its window handles through this trait, and the HWND goes to Win32.
+raw-window-handle = "0.6"
+# `SPI_GETCLIENTAREAANIMATION`: Windows' "Show animations" switch. GPUI has no
+# reduced-motion query at the pinned revision, and this is the one call it needs.
+# `SetWindowPos`/`ShowWindow`/`GetCursorPos`: the floating windows' position,
+# size and visibility. `GetMonitorInfoW`/`EnumDisplayMonitors`: the work areas.
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_HiDpi",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+] }
+
+[build-dependencies]
+# The Haze portraits are full-colour vector art; GPUI's `svg()` element draws one
+# tint only, so build.rs rasterises them to PNG once and the window shows those.
+resvg = { version = "0.45", default-features = false }
+image = { version = "0.25", default-features = false, features = ["png"] }
+serde_json = "1"
+embed-resource = "3"
+
+[profile.release]
+opt-level = 2
+# One workspace, one binary: keeping debug info out makes the release build and the
+# installer noticeably smaller, and the preview has no crash reporter.
+debug = false

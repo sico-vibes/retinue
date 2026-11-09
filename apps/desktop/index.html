@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#101216" />
+    <meta name="description" content="A local control plane for coding agents." />
+    <script>
+      (() => {
+        const params = new URLSearchParams(window.location.search)
+        const companion = params.has('companion')
+        const dictation = params.has('dictation')
+        if (companion) document.documentElement.classList.add('companion-surface')
+        if (dictation) document.documentElement.classList.add('dictation-surface')
+        if (!companion && !dictation) document.documentElement.classList.add('booting')
+        try {
+          const settings = JSON.parse(localStorage.getItem('retinue.appearance') || '{}')
+          const storedStyle = localStorage.getItem('retinue.style')
+          // Retired looks (Frost, Pop, Dot, Legacy) paint as Haze.
+          const style = storedStyle === 'stone' ? 'stone' : 'haze'
+          document.documentElement.dataset.style = style
+          const queryTheme = params.get('theme')
+          const theme = ['system', 'dark', 'light'].includes(queryTheme) ? queryTheme : ['system', 'dark', 'light'].includes(settings.theme) ? settings.theme : 'system'
+          const textSize = ['small', 'default', 'large', 'larger'].includes(settings.textSize) ? settings.textSize : 'default'
+          const overlay = companion || dictation
+          const resolved = overlay ? 'dark' : theme === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : theme
+          const surfaceTheme = theme === 'system' ? (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : theme
+          document.documentElement.dataset.theme = resolved
+          if (overlay) document.documentElement.dataset.surfaceTheme = surfaceTheme
+          document.documentElement.dataset.textSize = textSize
+          document.documentElement.dataset.themeChoice = theme
+          const density = localStorage.getItem('retinue.density')
+          if (density === 'compact' || density === 'default' || density === 'roomy') document.documentElement.dataset.density = density
+          // The shell restores the native frosted backdrop before the first frame; paint the matching tint right away.
+          const backdrop = localStorage.getItem('retinue.backdrop')
+          if (!overlay && style === 'haze' && (backdrop === 'acrylic' || backdrop === 'blur')) document.documentElement.dataset.backdrop = backdrop
+        } catch { document.documentElement.dataset.theme = 'dark' }
+      })()
+    </script>
+    <title>Retinue</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

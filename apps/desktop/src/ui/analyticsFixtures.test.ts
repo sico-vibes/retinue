@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest'
+import { analyticsFixtures, answerUsageAnalytics } from './analyticsFixtures'
+
+const request = { from: '2026-09-25T23:00:00.000Z', to: '2026-10-02T23:00:00.000Z', bucket: 'day', tz: 'Europe/London' }
+
+describe('analytics fixtures', () => {
+  it('rejects an empty, reversed, or over-long range and an unknown blob', () => {
+    expect(() => answerUsageAnalytics({ ...request, from: request.to, to: request.from }, null)).toThrow(/invalid_argument/)
+    expect(() => answerUsageAnalytics({ ...request, bucket: 'month' }, null)).toThrow(/invalid_argument/)
+    expect(() => answerUsageAnalytics({ from: '2020-01-01T00:00:00.000Z', to: '2022-01-01T00:00:00.000Z', bucket: 'day', tz: 'UTC' }, 'full')).toThrow(/invalid_argument/)
+    expect(() => answerUsageAnalytics({ ...request, agentId: 'missing-agent' }, 'full')).toThrow(/not_found: agent not found/)
+    expect(() => answerUsageAnalytics({ ...request, agentId: 4 }, 'full')).toThrow(/projectPath and agentId must be strings/)
+    expect(() => answerUsageAnalytics({ ...request, from: request.to, to: request.from }, null)).toThrow(/analytics range, bucket, or timezone is invalid/)
+  })
+
+  it('covers reported tokens, unknown buckets, legacy sessions, and DST-week responses', () => {
+    const full = answerUsageAnalytics({ ...request, projectPath: 'C:/work/site', agentId: 'agent-claude' }, 'full')
+    expect(full.range).toEqual({ from: request.from, to: request.to, bucket: 'day', tz: 'Europe/London' })
+    expect(full.totals.tokens.total).toBe(1500)
+    expect('cost' in full.totals).toBe(false)
+    expect('subscriptions' in full).toBe(false)
+
+    const partial = answerUsageAnalytics(request, 'partial')
+    expect(partial.totals.tokensLowerBound).toBe(true)
+    expect(partial.totals.unreportedRuns).toBe(7)
+    expect(partial.totals.tokens.output).toBeNull()
+    expect(partial.totals.tokens.total).not.toBe(0)
+
+    const empty = answerUsageAnalytics(request, 'nodata')
+    expect(empty.totals.runs).toBe(0)
+    expect(empty.totals.tokens.total).toBeNull()
+    expect('cost' in empty.totals).toBe(false)
+    expect(empty.leaderboard).toEqual([])
+
+    const unknown = answerUsageAnalytics(request, 'unknown')
+    expect(unknown.totals.tokens.total).toBe(60)
+
+    const legacy = answerUsageAnalytics(request, 'legacy')
+    expect(legacy.leaderboard[0]).toMatchObject({ agentId: null, agentName: null })
+
+    const dst = answerUsageAnalytics({ ...request, bucket: 'week' }, 'dst')
+    expect(dst.range.tz).toBe('Europe/London')
+    expect(dst.range.bucket).toBe('week')
+    expect(dst.series.map((point) => point.bucketStart)).toEqual(['2026-03-23T00:00:00.000Z', '2026-03-29T23:00:00.000Z'])
+    expect(dst.series[1]?.bucketStart).not.toBe('2026-03-30T00:00:00.000Z')
+    expect(analyticsFixtures.dst.series[1]?.bucketStart).toBe('2026-03-29T23:00:00.000Z')
+  })
+})

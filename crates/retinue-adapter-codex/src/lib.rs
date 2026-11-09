@@ -1,0 +1,2205 @@
+//! Codex app-server adapter over JSON-RPC stdio; never reads terminal UI output.
+pub mod protocol;
+use async_trait::async_trait;
+use retinue_agent_core::*;
+use retinue_process::{prepare_command, ProcessTree, StdinWriter};
+use chrono::{Duration, Utc};
+use serde_json::{json, Value};
+use std::{
+    collections::{HashMap, VecDeque},
+    path::Path,
+    process::Stdio,
+    sync::{
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+        Arc, Mutex as StdMutex, Weak,
+    },
+};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    process::{Child, Command},
+    sync::{oneshot, Mutex},
+};
+
+const RPC_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+const CATALOG_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+const SHA256_EMPTY: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+
+fn sha256_fingerprint(value: &str) -> String {
+    instruction_sha256(value).unwrap_or_else(|| SHA256_EMPTY.to_owned())
+}
+struct Conn {
+    process: Arc<SharedProcess>,
+    process_key: String,
+    detached: AtomicBool,
+    runtime: RuntimeSpec,
+    cwd: std::path::PathBuf,
+    base_options: ExecOptions,
+    incoming: Mutex<HashMap<String, Value>>,
+    turn_id: Mutex<Option<String>>,
+    events: SessionEventSink,
+    meta: Mutex<ThreadMeta>,
+    turn: Mutex<TurnState>,
+    /// Whether the last turn ran in plan collaboration mode; the mode is sticky
+    /// on the thread, so leaving plan mode must be sent explicitly.
+    plan_active: AtomicBool,
+    /// Retinue session id, so notification handling can advance the shared
+    /// per-session instruction hash map below.
+    session_id: String,
+    instruction_hashes: Arc<Mutex<HashMap<String, Option<String>>>>,
+}
+
+struct SharedProcess {
+    stdin: Mutex<StdinWriter>,
+    child: Mutex<Child>,
+    process_tree: ProcessTree,
+    pending: Mutex<HashMap<String, oneshot::Sender<Result<Value, AdapterError>>>>,
+    next: AtomicU64,
+    routes: Mutex<HashMap<String, Weak<Conn>>>,
+    active_turns: Mutex<std::collections::HashSet<String>>,
+    active_sessions: AtomicUsize,
+    initialized: AtomicBool,
+    setup: Mutex<()>,
+    alive: AtomicBool,
+    shutdown_started: AtomicBool,
+    intentional_shutdown: AtomicBool,
+}
+
+#[derive(Clone)]
+struct SessionEventSink(Arc<SessionForwardQueue>);
+
+struct SessionForwardQueue {
+    events: StdMutex<VecDeque<QueuedEvent>>,
+    notify: tokio::sync::Notify,
+    closed: AtomicBool,
+}
+
+struct QueuedEvent {
+    event: AgentEvent,
+    delivered: Option<oneshot::Sender<()>>,
+}
+
+impl SessionEventSink {
+    fn new(target: EventSender) -> Self {
+        let queue = Arc::new(SessionForwardQueue {
+            events: StdMutex::new(VecDeque::new()),
+            notify: tokio::sync::Notify::new(),
+            closed: AtomicBool::new(false),
+        });
+        let reader = Arc::clone(&queue);
+        tokio::spawn(async move {
+            loop {
+                let notified = reader.notify.notified();
+                let item = reader.events.lock().unwrap().pop_front();
+                let Some(item) = item else { notified.await; continue; };
+                if target.send(item.event).await.is_err() {
+                    let mut queue = reader.events.lock().unwrap();
+                    reader.closed.store(true, Ordering::Release);
+                    queue.clear();
+                    break;
+                }
+                if let Some(ack) = item.delivered { let _ = ack.send(()); }
+            }
+        });
+        Self(queue)
+    }
+    async fn send(&self, event: AgentEvent) -> Result<(), ()> {
+        let (ack, delivered) = oneshot::channel();
+        {
+            let mut queue = self.0.events.lock().unwrap();
+            if self.0.closed.load(Ordering::Acquire) { return Err(()); }
+            queue.push_back(QueuedEvent { event, delivered: Some(ack) });
+        }
+        self.0.notify.notify_one();
+        delivered.await.map_err(|_| ())
+    }
+    fn enqueue(&self, mut event: AgentEvent) -> Result<(), ()> {
+        let mut queue = self.0.events.lock().unwrap();
+        if self.0.closed.load(Ordering::Acquire) { return Err(()); }
+        // Coalesce only stream updates; every other event is retained in order, even above the cap.
+        if queue.len() >= SESSION_FORWARD_QUEUE_COALESCE_CAP
+            && is_stream_event(&event) {
+                for pending in queue.iter_mut().rev() {
+                    if pending.delivered.is_some() || !is_stream_event(&pending.event) { break; }
+                    match merge_stream_event(&mut pending.event, event) {
+                        Ok(()) => {
+                            drop(queue);
+                            self.0.notify.notify_one();
+                            return Ok(());
+                        }
+                        Err(unmatched) => event = unmatched,
+                    }
+                }
+            }
+        queue.push_back(QueuedEvent { event, delivered: None });
+        drop(queue);
+        self.0.notify.notify_one();
+        Ok(())
+    }
+}
+
+const SHARED_PROCESS_IDLE_SHUTDOWN: std::time::Duration = std::time::Duration::from_secs(30);
+const SESSION_FORWARD_QUEUE_COALESCE_CAP: usize = 128;
+
+fn is_stream_event(event: &AgentEvent) -> bool {
+    matches!(event, AgentEvent::AssistantDelta { .. } | AgentEvent::ThinkingDelta { .. } | AgentEvent::ToolUpdated { .. } | AgentEvent::ContextUpdated { .. })
+}
+
+// The Err variant carries the whole AgentEvent; boxing would change the adapter's public event shape.
+#[allow(clippy::result_large_err)]
+fn merge_stream_event(previous: &mut AgentEvent, incoming: AgentEvent) -> Result<(), AgentEvent> {
+    match (previous, incoming) {
+        (AgentEvent::AssistantDelta { text: left }, AgentEvent::AssistantDelta { text: right })
+        | (AgentEvent::ThinkingDelta { text: left }, AgentEvent::ThinkingDelta { text: right }) => {
+            left.push_str(&right);
+            Ok(())
+        }
+        (
+            AgentEvent::ToolUpdated { tool_call_id: left_id, raw: left },
+            AgentEvent::ToolUpdated { tool_call_id: right_id, raw: right },
+        ) if *left_id == right_id => {
+            if let (Some(previous), Some(next)) = (left["outputDelta"].as_str(), right["outputDelta"].as_str()) {
+                let combined = format!("{previous}{next}").chars().take(4_000).collect::<String>();
+                left["outputDelta"] = json!(combined);
+            } else {
+                *left = right;
+            }
+            Ok(())
+        }
+        (
+            AgentEvent::ContextUpdated { used: left_used, size: left_size, model: left_model, estimated: left_estimated },
+            AgentEvent::ContextUpdated { used: right_used, size: right_size, model: right_model, estimated: right_estimated },
+        ) => {
+            if right_used.is_some() { *left_used = right_used; }
+            if right_size.is_some() { *left_size = right_size; }
+            if right_model.is_some() { *left_model = right_model; }
+            *left_estimated = right_estimated;
+            Ok(())
+        }
+        (_, incoming) => Err(incoming),
+    }
+}
+#[derive(Default)]
+struct TurnState {
+    id: Option<String>,
+    thread_id: Option<String>,
+    replay_gate: bool,
+    options: ExecOptions,
+    usage: Option<Value>,
+    completed: bool,
+    /// Set when this turn sent the blob's developer instructions through
+    /// `collaborationMode` on a default-mode turn. The outer `Some` records
+    /// that we sent them; the inner value is the hash of the text (`None` for
+    /// empty text that was sent as JSON `null`).
+    instruction_apply: Option<Option<String>>,
+    /// Whether a `thread/settings/updated` echo was observed during this turn.
+    instruction_echo_seen: bool,
+    /// Hash of the `developer_instructions` carried by the last echo observed.
+    instruction_echo_hash: Option<String>,
+}
+#[derive(Clone, Default)]
+struct ThreadMeta {
+    model: Option<String>,
+    tier: Option<String>,
+    effort: Option<String>,
+    desired_hash: Option<String>,
+    baseline_hash: Option<String>,
+    first_success_pending: bool,
+}
+fn id_key(id: &Value) -> String {
+    id.as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| id.to_string())
+}
+#[derive(Default)]
+pub struct CodexAdapter {
+    sessions: Mutex<HashMap<String, Arc<Conn>>>,
+    processes: Arc<Mutex<HashMap<String, Arc<SharedProcess>>>>,
+    start_locks: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
+    // Per-session (claude, codex) instruction-hash pair; a named type would not add meaning.
+    #[allow(clippy::type_complexity)]
+    instruction_context: Mutex<HashMap<String, (Option<String>, Option<String>)>>,
+    thread_instruction_hashes: Arc<Mutex<HashMap<String, Option<String>>>>,
+    idle_shutdown_ms: AtomicU64,
+}
+impl CodexAdapter {
+    async fn process_gate(&self, key: &str) -> Arc<Mutex<()>> {
+        let mut locks = self.start_locks.lock().await;
+        locks.entry(key.to_owned()).or_insert_with(|| Arc::new(Mutex::new(()))).clone()
+    }
+
+    async fn acquire_process(
+        &self,
+        key: &str,
+        runtime: &RuntimeSpec,
+        cwd: &Path,
+        options: &ExecOptions,
+    ) -> Result<Arc<SharedProcess>, AdapterError> {
+        let gate = self.process_gate(key).await;
+        let _gate = gate.lock().await;
+        {
+            let processes = self.processes.lock().await;
+            if let Some(process) = processes.get(key).filter(|process| process.alive.load(Ordering::Acquire)) {
+                process.active_sessions.fetch_add(1, Ordering::AcqRel);
+                return Ok(process.clone());
+            }
+        }
+        let process = Self::spawn_process(runtime, cwd, options).await?;
+        {
+            let mut processes = self.processes.lock().await;
+            process.active_sessions.store(1, Ordering::Release);
+            processes.insert(key.to_owned(), process.clone());
+        }
+        Ok(process)
+    }
+
+    #[doc(hidden)]
+    pub fn with_idle_shutdown(timeout: std::time::Duration) -> Self {
+        let adapter = Self::default();
+        adapter.idle_shutdown_ms.store(timeout.as_millis().max(1) as u64, Ordering::Relaxed);
+        adapter
+    }
+
+    fn idle_shutdown(&self) -> std::time::Duration {
+        let millis = self.idle_shutdown_ms.load(Ordering::Relaxed);
+        if millis == 0 { SHARED_PROCESS_IDLE_SHUTDOWN } else { std::time::Duration::from_millis(millis) }
+    }
+
+    async fn spawn(
+        &self,
+        r: &RuntimeSpec,
+        session_id: &str,
+        cwd: &Path,
+        events: EventSender,
+        options: &ExecOptions,
+    ) -> Result<Arc<Conn>, AdapterError> {
+        let inherited = std::env::vars_os()
+            .map(|(key, value)| format!("{key:?}={value:?}\n"))
+            .collect::<String>();
+        let key_data = json!({
+            "runtime": r.runtime_id,
+            "executable": r.executable,
+            "args": r.args,
+            "cwd": cwd,
+            "env": options.env,
+            "inheritedEnvironment": sha256_fingerprint(&inherited),
+        });
+        let key = sha256_fingerprint(&key_data.to_string());
+        let process = self.acquire_process(&key, r, cwd, options).await?;
+        Ok(Arc::new(Conn { plan_active: AtomicBool::new(false),
+            process,
+            process_key: key,
+            detached: AtomicBool::new(false),
+            runtime: r.clone(),
+            cwd: cwd.to_path_buf(),
+            base_options: options.clone(),
+            incoming: Mutex::new(HashMap::new()),
+            turn_id: Mutex::new(None),
+            events: SessionEventSink::new(events),
+            meta: Mutex::new(ThreadMeta::default()),
+            turn: Mutex::new(TurnState::default()),
+            session_id: session_id.to_owned(),
+            instruction_hashes: Arc::clone(&self.thread_instruction_hashes),
+        }))
+    }
+
+    async fn spawn_process(
+        r: &RuntimeSpec,
+        cwd: &Path,
+        options: &ExecOptions,
+    ) -> Result<Arc<SharedProcess>, AdapterError> {
+        let mut c = Command::new(&r.executable);
+        prepare_command(&mut c);
+        c.args(&r.args)
+            .args(["app-server", "--listen", "stdio://"])
+            .current_dir(cwd)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        for (key, value) in &options.env {
+            if !["LANG", "LC_ALL", "TZ", "NO_COLOR", "TERM"].contains(&key.as_str())
+                || value.contains('\0')
+            {
+                return Err(AdapterError::Unsupported("custom environment contains an unsupported key".into()));
+            }
+            c.env(key, value);
+        }
+        let mut child = c
+            .spawn()
+            .map_err(|e| AdapterError::Process(e.to_string()))?;
+        let process_tree = ProcessTree::attach(&mut child).map_err(|e| AdapterError::Process(e.to_string()))?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| AdapterError::Process("app-server stdin unavailable".into()))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| AdapterError::Process("app-server stdout unavailable".into()))?;
+        let process = Arc::new(SharedProcess {
+            stdin: Mutex::new(StdinWriter::new(stdin)),
+            child: Mutex::new(child),
+            process_tree,
+            pending: Mutex::new(HashMap::new()),
+            next: AtomicU64::new(1),
+            routes: Mutex::new(HashMap::new()),
+            active_turns: Mutex::new(std::collections::HashSet::new()),
+            active_sessions: AtomicUsize::new(0),
+            initialized: AtomicBool::new(false),
+            setup: Mutex::new(()),
+            alive: AtomicBool::new(true),
+            shutdown_started: AtomicBool::new(false),
+            intentional_shutdown: AtomicBool::new(false),
+        });
+        let reader = process.clone();
+        tokio::spawn(async move {
+            let mut lines = BufReader::new(stdout).lines();
+            while let Ok(Some(line)) = lines.next_line().await {
+                let Ok(v) = serde_json::from_str::<Value>(&line) else {
+                    continue;
+                };
+                let request_id = v.get("id").map(id_key);
+                if let Some(id) = request_id.as_ref() {
+                    if let Some(tx) = reader.pending.lock().await.remove(id) {
+                        let result = if v.get("error").is_some() { Err(AdapterError::Rejected(v["error"].to_string())) }
+                            else { Ok(v.get("result").cloned().unwrap_or(Value::Null)) };
+                        let _ = tx.send(result);
+                        continue;
+                    }
+                }
+                let method = v["method"].as_str().unwrap_or("");
+                let p = &v["params"];
+                let thread_id = p["threadId"].as_str().unwrap_or("");
+                let Some(r) = reader.routes.lock().await.get(thread_id).and_then(Weak::upgrade) else { continue; };
+                if request_id.is_some() && method == "item/tool/requestUserInput" {
+                    let key = format!("{}:{}", thread_id, request_id.as_deref().unwrap_or("unknown-request"));
+                    let questions = codex_questions(p);
+                    if !questions.is_empty() {
+                        r.incoming.lock().await.insert(key.clone(), v["id"].clone());
+                        let _ = r.events.enqueue(AgentEvent::QuestionRequested { provider_request_id: key, title: "Codex has a question".into(), questions });
+                        continue;
+                    }
+                }
+                if request_id.is_some() && method == "mcpServer/elicitation/request" {
+                    if p["serverName"].as_str() == Some("retinue") {
+                        let _ = write_response(&reader, &v["id"], elicitation_response(p, true, true)).await;
+                    } else {
+                        let key = format!("elicitation:{}:{}", thread_id, request_id.as_deref().unwrap_or("unknown-request"));
+                        r.incoming.lock().await.insert(key.clone(), json!({"rpcId":v["id"],"params":p}));
+                        let _ = r.events.enqueue(AgentEvent::PermissionRequested {
+                            provider_request_id: key,
+                            title: format!("Allow the {} tool?", p["serverName"].as_str().unwrap_or("MCP")),
+                            detail: p["message"].as_str().map(str::to_owned),
+                            choices: vec!["allow_once".into(), "deny".into()],
+                            raw: v.clone(),
+                        });
+                    }
+                    continue;
+                }
+                if request_id.is_some() && method.ends_with("requestApproval") && is_app_tool_request(p) {
+                    let _ = write_response(&reader, &v["id"], json!({"decision":"accept"})).await;
+                    continue;
+                }
+                if request_id.is_some()
+                    && v["method"]
+                        .as_str()
+                        .is_some_and(|m| m.ends_with("requestApproval"))
+                    {
+                        let key = format!("{}:{}", thread_id, request_id.as_deref().unwrap_or("unknown-request"));
+                        r.incoming.lock().await.insert(key.clone(), v["id"].clone());
+                        let _ = r.events.enqueue(AgentEvent::PermissionRequested {
+                                provider_request_id: key,
+                                title: "Codex approval request".into(),
+                                detail: Some(p.to_string()),
+                                choices: vec!["allow_once".into(), "deny".into()],
+                                raw: v.clone(),
+                        });
+                    }
+                if !method.is_empty() {
+                    let expected = r.turn.lock().await.id.clone();
+                    if method == "turn/started" {
+                        let thread_id = r.turn.lock().await.thread_id.clone();
+                        if thread_id.as_deref() == p["threadId"].as_str() {
+                            let mut state = r.turn.lock().await;
+                            state.id = p["turn"]["id"].as_str().map(str::to_owned);
+                            state.replay_gate = false;
+                        }
+                        continue;
+                    }
+                    if method.starts_with("item/") {
+                        let state = r.turn.lock().await;
+                        if state.replay_gate
+                            || state.thread_id.as_deref() != p["threadId"].as_str()
+                            || state.id.as_deref() != p["turnId"].as_str()
+                        {
+                            continue;
+                        }
+                    }
+                    match method {
+                        // An image finished: the tool row finishes with no bytes
+                        // in it, and the request (its file, or its failure) is
+                        // reported as its own event.
+                        "item/completed" if p["item"]["type"].as_str() == Some("imageGeneration") => {
+                            let item = &p["item"];
+                            let _ = r.events.enqueue(AgentEvent::ToolCompleted {
+                                tool_call_id: item["id"].as_str().unwrap_or("image").into(),
+                                raw: without_image_bytes(item),
+                                parent_tool_call_id: None,
+                            });
+                            if let Some(event) = image_generation_request(item) {
+                                let _ = r.events.enqueue(event);
+                            }
+                        }
+                        // The raw response item repeats the same image as base64.
+                        // It is never stored: the thread item above is the one
+                        // source, and this method deliberately maps to nothing.
+                        "rawResponseItem/completed" => {}
+                        "thread/tokenUsage/updated"
+                            if expected.as_deref() == p["turnId"].as_str() =>
+                        {
+                            let token_usage = p["tokenUsage"].clone();
+                            let (used, size) = context_window_from_token_usage(&token_usage);
+                            r.turn.lock().await.usage = Some(token_usage);
+                            let model = r.meta.lock().await.model.clone();
+                            if used.is_some() || size.is_some() {
+                                let _ = r.events.enqueue(AgentEvent::ContextUpdated { used, size, model, estimated: false });
+                            }
+                        }
+                        "turn/completed" if expected.as_deref() == p["turn"]["id"].as_str() => {
+                            let status = p["turn"]["status"].as_str().unwrap_or("");
+                            let success = status == "completed";
+                            let failed = !success;
+                            let (options, usage, instruction_apply, echo_seen, echo_hash) = {
+                                let mut t = r.turn.lock().await;
+                                if t.completed { continue; }
+                                t.completed = true;
+                                (t.options.clone(), t.usage.take(), t.instruction_apply.clone(), t.instruction_echo_seen, t.instruction_echo_hash.clone())
+                            };
+                            reader.active_turns.lock().await.remove(thread_id);
+                            let turn_id = r.turn_id.lock().await.clone().unwrap_or_default();
+                            let meta = r.meta.lock().await.clone();
+                            let report = usage_report(usage.as_ref(), meta.model.clone(), !failed);
+                            let _ = r.events.enqueue(AgentEvent::UsageReport {
+                                    turn_id: turn_id.clone(),
+                                    report,
+                            });
+                            if success {
+                                let mut outcomes =
+                                    outcomes_for_success(&meta, &options, usage.as_ref());
+                                // A developer-instructions change sent through
+                                // `collaborationMode` is reported only from the
+                                // observed settings echo, never from the request
+                                // shape alone (FIX2 honesty rules).
+                                let mut installed_hash = None;
+                                if let Some(desired) = instruction_apply {
+                                    let echo_matches = echo_seen && echo_hash == desired;
+                                    let rejected = echo_seen && !echo_matches;
+                                    outcomes.insert(
+                                        "instructions".into(),
+                                        instructions_outcome(desired.as_deref(), echo_seen, echo_matches),
+                                    );
+                                    if !rejected { installed_hash = Some(desired); }
+                                }
+                                if !outcomes.is_empty() {
+                                    let _ = r.events.enqueue(AgentEvent::ExecApplied { turn_id, outcomes });
+                                }
+                                if let Some(hash) = installed_hash {
+                                    let mut current = r.meta.lock().await;
+                                    current.baseline_hash = hash.clone();
+                                    current.desired_hash = hash.clone();
+                                    drop(current);
+                                    r.instruction_hashes.lock().await.insert(r.session_id.clone(), hash);
+                                }
+                                r.meta.lock().await.first_success_pending = false;
+                                let _ = r.events.enqueue(AgentEvent::TurnCompleted);
+                            } else if status == "interrupted" {
+                                let _ = r.events.enqueue(AgentEvent::TurnCancelled);
+                            } else if context_exhausted_evidence(
+                                &p["turn"]["error"].to_string(),
+                            ) {
+                                let _ = r.events.enqueue(AgentEvent::ContextExhausted);
+                            } else {
+                                if let Some(kind) = recovery_hint_for_codex_error(&p["turn"]["error"]) {
+                                    let _ = r.events.enqueue(AgentEvent::RecoveryHint { kind, retry_after_secs: retinue_agent_core::recovery::provider_retry_after(&p["turn"]["error"], chrono::Utc::now().timestamp()).map(|secs| secs.max(0) as u64) });
+                                }
+                                let _ = r.events.enqueue(AgentEvent::Error { message: p["turn"]["error"].to_string() });
+                            }
+                        }
+                        "thread/settings/updated" => {
+                            // The provider echoes the effective collaboration
+                            // settings here. Only the hash is retained.
+                            let applies = r.turn.lock().await.instruction_apply.is_some();
+                            if applies {
+                                let echo = p["threadSettings"]["collaborationMode"]["settings"]["developer_instructions"]
+                                    .as_str()
+                                    .and_then(instruction_sha256);
+                                let mut turn = r.turn.lock().await;
+                                turn.instruction_echo_seen = true;
+                                turn.instruction_echo_hash = echo;
+                            }
+                        }
+                        _ => {
+                            if let Some(e) = map_notification(method, p) {
+                                let _ = r.events.enqueue(e);
+                            }
+                        }
+                    }
+                }
+            }
+            reader.alive.store(false, Ordering::Release);
+            for (_, tx) in std::mem::take(&mut *reader.pending.lock().await) {
+                let _ = tx.send(Err(AdapterError::Process("Codex app-server exited".into())));
+            }
+            let sessions = reader.routes.lock().await.values().filter_map(Weak::upgrade).collect::<Vec<_>>();
+            for session in sessions {
+                let (turn_id, usage, active) = {
+                    let mut turn = session.turn.lock().await;
+                    let active = turn.id.is_some() && !turn.completed;
+                    turn.completed = true;
+                    (session.turn_id.lock().await.clone().unwrap_or_default(), turn.usage.take(), active)
+                };
+                if active {
+                    let model = session.meta.lock().await.model.clone();
+                    let _ = session.events.enqueue(AgentEvent::UsageReport {
+                        turn_id,
+                        report: usage_report(usage.as_ref(), model, false),
+                    });
+                }
+                if !reader.intentional_shutdown.load(Ordering::Acquire) {
+                    // Only a session with a turn in flight lost work. A session
+                    // whose turn already ended keeps its terminal outcome; a
+                    // process exit is not a turn failure for it.
+                    if active {
+                        let _ = session.events.enqueue(AgentEvent::Error { message: "Codex app-server exited unexpectedly".into() });
+                    }
+                }
+            }
+            reader.shutdown().await;
+        });
+        Ok(process)
+    }
+
+    async fn schedule_idle_shutdown(&self, c: &Arc<Conn>) {
+        let process = Arc::clone(&c.process);
+        let key = c.process_key.clone();
+        let processes = Arc::clone(&self.processes);
+        let gate = self.process_gate(&key).await;
+        let idle_shutdown = self.idle_shutdown();
+        tokio::spawn(async move {
+            tokio::time::sleep(idle_shutdown).await;
+            let _gate = gate.lock().await;
+            let removed = {
+                let mut all = processes.lock().await;
+                let still_current = all.get(&key).is_some_and(|current| Arc::ptr_eq(current, &process));
+                if still_current && process.active_sessions.load(Ordering::Acquire) == 0 {
+                    all.remove(&key);
+                    true
+                } else { false }
+            };
+            if removed { process.shutdown().await; }
+        });
+    }
+
+    async fn abandon_setup(&self, c: &Arc<Conn>) {
+        self.detach_route(c, None, true).await;
+    }
+
+    async fn detach_route(&self, c: &Arc<Conn>, provider_id: Option<&str>, shutdown_when_empty: bool) -> bool {
+        let gate = self.process_gate(&c.process_key).await;
+        let _gate = gate.lock().await;
+        if let Some(provider_id) = provider_id { c.process.routes.lock().await.remove(provider_id); }
+        if c.detached.swap(true, Ordering::AcqRel) { return false; }
+        let removed = {
+            let mut processes = self.processes.lock().await;
+            if processes.get(&c.process_key).is_some_and(|current| Arc::ptr_eq(current, &c.process)) {
+                let prior = c.process.active_sessions.load(Ordering::Acquire);
+                if prior > 0 {
+                    let remaining = c.process.active_sessions.fetch_sub(1, Ordering::AcqRel) - 1;
+                    if remaining == 0 && shutdown_when_empty {
+                        processes.remove(&c.process_key);
+                        true
+                    } else { remaining == 0 }
+                } else { false }
+            } else { false }
+        };
+        if removed && shutdown_when_empty { c.process.shutdown().await; }
+        removed
+    }
+
+    async fn resume_after_crash(&self, session_id: &str, old: &Arc<Conn>, current: &ExecOptions) -> Result<Arc<Conn>, AdapterError> {
+        let process = self.acquire_process(&old.process_key, &old.runtime, &old.cwd, &old.base_options).await?;
+        let previous_id = old.turn.lock().await.thread_id.clone().ok_or_else(|| AdapterError::Process("Codex session has no provider thread".into()))?;
+        let new = Arc::new(Conn { plan_active: AtomicBool::new(false),
+            process,
+            process_key: old.process_key.clone(),
+            detached: AtomicBool::new(false),
+            runtime: old.runtime.clone(),
+            cwd: old.cwd.clone(),
+            base_options: old.base_options.clone(),
+            incoming: Mutex::new(HashMap::new()),
+            turn_id: Mutex::new(old.turn_id.lock().await.clone()),
+            events: old.events.clone(),
+            meta: Mutex::new(old.meta.lock().await.clone()),
+            turn: Mutex::new(TurnState { thread_id: Some(previous_id.clone()), ..TurnState::default() }),
+            session_id: session_id.to_owned(),
+            instruction_hashes: Arc::clone(&self.thread_instruction_hashes),
+        });
+        let installed_instruction_hash = new.meta.lock().await.baseline_hash.clone();
+        // The replacement thread must carry the text the current prompt asked
+        // for, not whatever the crashed connection was last spawned with.
+        let mut resume_options = new.base_options.clone();
+        resume_options.instructions = current.instructions.clone();
+        let setup = async {
+            let resumed = Self::startup_call(
+                &new,
+                "thread/resume",
+                Self::resume_params(&previous_id, &new.cwd, &resume_options, installed_instruction_hash.as_deref()),
+            ).await;
+            let (thread, fresh) = match resumed {
+                Ok(thread) => (thread, false),
+                Err(AdapterError::ResumeRejected | AdapterError::ResumeFailed(_)) => {
+                    (Self::startup_call(&new, "thread/start", Self::start_params(&new.cwd, &new.base_options)).await?, true)
+                }
+                Err(error) => return Err(error),
+            };
+            let id = thread["thread"]["id"].as_str().or(thread["id"].as_str()).unwrap_or(&previous_id).to_owned();
+            if fresh {
+                let hash = instruction_sha256(new.base_options.instructions.as_deref().unwrap_or(""));
+                Self::set_thread_meta(&new, &thread, hash.clone(), hash.clone(), true).await;
+                self.thread_instruction_hashes.lock().await.insert(session_id.to_owned(), hash);
+            } else {
+                let previous = old.meta.lock().await.clone();
+                Self::set_thread_meta(&new, &thread, previous.desired_hash, previous.baseline_hash, previous.first_success_pending).await;
+            }
+            Ok::<(String, bool), AdapterError>((id, fresh))
+        }.await;
+        let (id, fresh) = match setup {
+            Ok(values) => values,
+            Err(error) => { self.abandon_setup(&new).await; return Err(error); }
+        };
+        new.turn.lock().await.thread_id = Some(id.clone());
+        new.process.routes.lock().await.insert(id.clone(), Arc::downgrade(&new));
+        if fresh {
+            let _ = new.events.enqueue(AgentEvent::SessionStarted { provider_session_id: id.clone() });
+            let _ = new.events.enqueue(AgentEvent::ContextChanged { reason: ContextChangeReason::FreshSession, context_lost: true });
+        }
+        self.sessions.lock().await.insert(session_id.to_owned(), new.clone());
+        Ok(new)
+    }
+    async fn call(c: &Conn, m: &str, p: Value) -> Result<Value, AdapterError> {
+        let id = c.process.next.fetch_add(1, Ordering::Relaxed).to_string();
+        let (tx, rx) = oneshot::channel();
+        c.process.pending.lock().await.insert(id.clone(), tx);
+        let mut b = serde_json::to_vec(&json!({"jsonrpc":"2.0","id":id,"method":m,"params":p}))
+            .map_err(|e| AdapterError::Protocol(e.to_string()))?;
+        b.push(b'\n');
+        if let Err(e) = c.process.stdin.lock().await.write(&b).await {
+            c.process.pending.lock().await.remove(&id);
+            return Err(AdapterError::Process(e.to_string()));
+        }
+        match tokio::time::timeout(RPC_TIMEOUT, rx).await {
+            Ok(Ok(v)) => v,
+            Ok(Err(_)) => Err(AdapterError::Process("app-server closed".into())),
+            Err(_) => {
+                c.process.pending.lock().await.remove(&id);
+                Err(AdapterError::Timeout)
+            }
+        }
+    }
+    async fn notify(c: &Conn, m: &str, p: Value) -> Result<(), AdapterError> {
+        let mut b = serde_json::to_vec(&json!({"jsonrpc":"2.0","method":m,"params":p}))
+            .map_err(|e| AdapterError::Protocol(e.to_string()))?;
+        b.push(b'\n');
+        c.process.stdin
+            .lock()
+            .await
+            .write(&b)
+            .await
+            .map_err(|e| AdapterError::Process(e.to_string()))
+    }
+    async fn initialize(c: &Conn) -> Result<(), AdapterError> {
+        let _guard = c.process.setup.lock().await;
+        if c.process.initialized.load(Ordering::Acquire) { return Ok(()); }
+        Self::call(c,"initialize",json!({"clientInfo":{"name":"Retinue","version":"0.1.0"},"capabilities":{"experimentalApi":true}})).await.map_err(|e| match e { AdapterError::Rejected(message) => AdapterError::Protocol(message), other => other })?;
+        Self::notify(c, "initialized", json!({})).await?;
+        c.process.initialized.store(true, Ordering::Release);
+        Ok(())
+    }
+    async fn startup_call(c: &Conn, method: &str, params: Value) -> Result<Value, AdapterError> {
+        let result = match Self::initialize(c).await {
+            Ok(()) => Self::call(c, method, params).await,
+            Err(e) => Err(e),
+        };
+        match result {
+            Err(AdapterError::Rejected(message))
+                if method == "thread/resume" && context_exhausted_evidence(&message) =>
+            {
+                Err(AdapterError::ContextExhausted)
+            }
+            Err(AdapterError::Rejected(message))
+                if method == "thread/resume" && resume_rejected_evidence(&message) =>
+            {
+                Err(AdapterError::ResumeRejected)
+            }
+            // A resume that never came up (the app-server failed to initialize or
+            // the call timed out) cannot be resumed either: report it so the
+            // caller can start a fresh thread instead of failing the turn.
+            Err(AdapterError::Process(message)) if method == "thread/resume" => {
+                Err(AdapterError::ResumeFailed(message))
+            }
+            Err(AdapterError::Timeout) if method == "thread/resume" => {
+                Err(AdapterError::ResumeFailed("thread/resume timed out".into()))
+            }
+            other => other,
+        }
+    }
+    fn start_params(cwd: &Path, options: &ExecOptions) -> Value {
+        let (approval,sandbox)=if options.approval_mode==retinue_agent_core::ApprovalMode::Bypass {("never","danger-full-access")}else{("on-request","workspace-write")};
+        let mut p = json!({"cwd":cwd.to_string_lossy(),"approvalPolicy":approval,"sandbox":sandbox});
+        if let Some(v) = &options.model {
+            p["model"] = json!(v)
+        }
+        if let Some(v) = options
+            .service_tier
+            .as_ref()
+            .filter(|v| v.as_str() != "standard" && v.as_str() != "fast")
+        {
+            p["serviceTier"] = json!(v)
+        }
+        if let Some(v) = &options.instructions {
+            p["developerInstructions"] = json!(v)
+        }
+        if let Some(config) = mcp_config(&options.mcp_servers) { p["config"] = config; }
+        p
+    }
+    fn resume_params(id: &str, cwd: &Path, options: &ExecOptions, installed_instruction_hash: Option<&str>) -> Value {
+        let (approval,sandbox)=if options.approval_mode==ApprovalMode::Bypass {("never","danger-full-access")}else{("on-request","workspace-write")};
+        let mut p = json!({"threadId":id,"cwd":cwd.to_string_lossy(),"approvalPolicy":approval,"sandbox":sandbox});
+        if let Some(config) = mcp_config(&options.mcp_servers) { p["config"] = config; }
+        if let Some(v) = &options.model {
+            p["model"] = json!(v)
+        }
+        if let Some(v) = options
+            .service_tier
+            .as_ref()
+            .filter(|v| v.as_str() != "standard" && v.as_str() != "fast")
+        {
+            p["serviceTier"] = json!(v)
+        }
+        // Resend the current text only when it differs from the text stored for
+        // the thread. The resume response carries no accepted-or-not signal, so
+        // callers must not report this as applied.
+        if let Some(v) = &options.instructions {
+            if instruction_sha256(v).as_deref() != installed_instruction_hash {
+                p["developerInstructions"] = json!(v)
+            }
+        }
+        p
+    }
+    /// The model a turn runs under: the explicitly requested one, else the
+    /// thread's configured model. This is the resolution plan mode already uses.
+    async fn turn_model(c: &Conn, requested: Option<&String>) -> Option<String> {
+        match requested {
+            Some(model) => Some(model.clone()),
+            None => c.meta.lock().await.model.clone(),
+        }
+    }
+    async fn set_thread_meta(
+        c: &Conn,
+        t: &Value,
+        hash: Option<String>,
+        baseline: Option<String>,
+        first_success_pending: bool,
+    ) {
+        *c.meta.lock().await = ThreadMeta {
+            model: t["model"].as_str().map(str::to_owned),
+            tier: t["serviceTier"].as_str().map(str::to_owned),
+            effort: t["reasoningEffort"].as_str().map(str::to_owned),
+            desired_hash: hash,
+            baseline_hash: baseline,
+            first_success_pending,
+        };
+    }
+}
+
+impl SharedProcess {
+    async fn shutdown(&self) {
+        if self.shutdown_started.swap(true, Ordering::AcqRel) { return; }
+        self.intentional_shutdown.store(true, Ordering::Release);
+        self.alive.store(false, Ordering::Release);
+        self.stdin
+            .lock()
+            .await
+            .close(&mut *self.child.lock().await, &self.process_tree)
+            .await;
+    }
+}
+
+/// True when a `turn/steer` JSON-RPC error means the expected turn is no longer
+/// active. The generated schema documents `expectedTurnId` as a precondition
+/// that "fails when it does not match the currently active turn", so the
+/// provider's own mismatch text is the only reliable signal available.
+fn steer_stale_evidence(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    [
+        "not active",
+        "no active turn",
+        "expectedturnid",
+        "expected turn",
+        "not the active turn",
+        "no longer active",
+        "turn mismatch",
+        "does not match",
+    ]
+        .iter()
+        .any(|evidence| message.contains(evidence))
+}
+
+fn resume_rejected_evidence(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    (message.contains("thread") || message.contains("session"))
+        && ["not found", "expired", "does not exist", "unknown id"]
+            .iter()
+            .any(|evidence| message.contains(evidence))
+}
+
+/// Maps the structured `CodexErrorInfo` on a failed turn to a recovery hint.
+/// Only the string variants named by the generated app-server schema are used;
+/// free-text `message` values and object variants produce no hint.
+fn recovery_hint_for_codex_error(error: &Value) -> Option<RecoveryHintKind> {
+    retinue_agent_core::recovery::provider_recovery(error)
+}
+
+fn context_exhausted_evidence(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+    [
+        "context window is full",
+        "prompt is too long",
+        "maximum context length",
+        "resume overflow",
+        "compaction failed: context",
+        "thread context overflow",
+    ]
+        .iter()
+        .any(|evidence| message.contains(evidence))
+}
+
+/// `config` overrides for app-owned MCP servers (`mcp_servers.<name>`).
+fn mcp_config(servers: &[McpServerSpec]) -> Option<Value> {
+    if servers.is_empty() { return None; }
+    let mut map = serde_json::Map::new();
+    for server in servers {
+        map.insert(server.name.clone(), json!({"command":server.command,"args":server.args,"env":server.env}));
+    }
+    Some(json!({"mcp_servers":map}))
+}
+
+/// Answers an MCP elicitation. Approval forms are filled by choosing the
+/// "allow/accept once" option (or the session option when `for_session`).
+fn elicitation_response(p: &Value, accept: bool, for_session: bool) -> Value {
+    if !accept || p["mode"].as_str() == Some("url") { return json!({"action":"decline"}); }
+    let schema = &p["requestedSchema"];
+    let mut content = serde_json::Map::new();
+    if let Some(properties) = schema["properties"].as_object() {
+        for (key, field) in properties {
+            let options: Vec<String> = field["enum"].as_array().map(|values| values.iter().filter_map(Value::as_str).map(str::to_owned).collect())
+                .or_else(|| field["oneOf"].as_array().map(|values| values.iter().filter_map(|v| v["const"].as_str()).map(str::to_owned).collect()))
+                .unwrap_or_default();
+            let persistent = |value: &str| { let lower = value.to_ascii_lowercase(); lower.contains("session") || lower.contains("always") };
+            let approving = |value: &str| { let lower = value.to_ascii_lowercase(); ["once", "accept", "approve", "allow", "yes"].iter().any(|word| lower.contains(word)) };
+            let chosen = options.iter().find(|value| approving(value) && persistent(value) == for_session)
+                .or_else(|| options.iter().find(|value| approving(value) && !persistent(value)));
+            if let Some(chosen) = chosen { content.insert(key.clone(), json!(chosen)); }
+            else if field["type"].as_str() == Some("boolean") { content.insert(key.clone(), json!(for_session && (key.contains("session") || key.contains("remember") || key.contains("persist")))); }
+            else if !field["default"].is_null() { content.insert(key.clone(), field["default"].clone()); }
+        }
+    }
+    let mut response = json!({"action":"accept","content":content});
+    if for_session { response["_meta"] = json!({"persist":"session"}); }
+    response
+}
+
+/// Approval requests for Retinue's own team tools are accepted without asking.
+fn is_app_tool_request(p: &Value) -> bool {
+    ["server", "serverName"].iter().any(|key| p[*key].as_str() == Some("retinue"))
+        || p["item"]["server"].as_str() == Some("retinue")
+}
+
+fn codex_questions(p: &Value) -> Vec<UserQuestion> {
+    p["questions"].as_array().map(|questions| questions.iter().filter_map(|item| {
+        let id = item["id"].as_str()?.to_owned();
+        let question = item["question"].as_str()?.trim().to_owned();
+        if question.is_empty() || item["isSecret"].as_bool() == Some(true) { return None; }
+        let options = item["options"].as_array().map(|options| options.iter().filter_map(|option| {
+            let label = option["label"].as_str()?.trim();
+            (!label.is_empty()).then(|| UserQuestionOption { label: label.into(), description: option["description"].as_str().unwrap_or("").trim().into() })
+        }).collect()).unwrap_or_default();
+        Some(UserQuestion { id, header: item["header"].as_str().unwrap_or("Question").trim().to_owned(), question, options, multi_select: false, allow_other: item["isOther"].as_bool().unwrap_or(true) })
+    }).collect()).unwrap_or_default()
+}
+
+async fn write_response(process: &SharedProcess, id: &Value, result: Value) -> Result<(), AdapterError> {
+    let mut b = serde_json::to_vec(&json!({"jsonrpc":"2.0","id":id,"result":result})).map_err(|e| AdapterError::Protocol(e.to_string()))?;
+    b.push(b'\n');
+    process.stdin.lock().await.write(&b).await.map_err(|e| AdapterError::Process(e.to_string()))
+}
+
+/// A readable title for a Codex thread item: the command, the MCP tool, the search.
+fn codex_item_title(item: &Value) -> String {
+    let text = |value: &Value| value.as_str().map(str::trim).filter(|text| !text.is_empty()).map(str::to_owned);
+    match item["type"].as_str().unwrap_or("") {
+        "commandExecution" => tool_activity("commandExecution", item, "Ran a command").label,
+        "mcpToolCall" => match (text(&item["server"]), text(&item["tool"])) {
+            (Some(server), Some(tool)) => format!("{server} · {tool}"),
+            (_, Some(tool)) => tool,
+            _ => "Used a tool".into(),
+        },
+        "dynamicToolCall" => match (text(&item["namespace"]), text(&item["tool"])) {
+            (Some(namespace), Some(tool)) => format!("{namespace} · {tool}"),
+            (_, Some(tool)) => tool,
+            _ => "Used a tool".into(),
+        },
+        "webSearch" => tool_activity("webSearch", item, "Searched the web").label,
+        "fileChange" => "Edited files".into(),
+        "imageView" => text(&item["path"]).map(|path| format!("Viewed {path}")).unwrap_or_else(|| "Viewed an image".into()),
+        other => tool_activity(other, item, &text(&item["name"]).unwrap_or_else(|| match other {
+            "" => "Codex step".into(),
+            other => other.chars().enumerate().flat_map(|(index, ch)| if index > 0 && ch.is_uppercase() { vec![' ', ch.to_ascii_lowercase()] } else if index == 0 { vec![ch.to_ascii_uppercase()] } else { vec![ch] }).collect(),
+        })).label,
+    }
+}
+
+/// The item's own record with any image bytes and the saved file's path removed:
+/// Codex returns the image as base64 in `result`, and neither that nor where the
+/// file is may reach a tool row, a message, an event log or a log line.
+fn without_image_bytes(item: &Value) -> Value {
+    let mut clean = item.clone();
+    if let Some(object) = clean.as_object_mut() {
+        for key in ["result", "image", "data", "base64", "savedPath"] {
+            object.remove(key);
+        }
+    }
+    clean
+}
+
+/// A one-line, bounded reason from Codex's failure shape (a string or an object
+/// with a message), so nothing multi-line or unbounded is stored.
+fn image_failure_reason(failure: &Value) -> Option<String> {
+    let text = failure.as_str().or_else(|| failure["message"].as_str())?.trim();
+    if text.is_empty() {
+        return None;
+    }
+    Some(text.lines().next().unwrap_or("").chars().take(200).collect())
+}
+
+/// `imageGeneration/completed`: where the image is (`savedPath`), the image
+/// itself (`result`, base64) or why it failed.
+fn image_generation_request(item: &Value) -> Option<AgentEvent> {
+    let tool_call_id = item["id"].as_str().unwrap_or("image").to_owned();
+    let saved_path = item["savedPath"].as_str().filter(|path| !path.trim().is_empty()).map(str::to_owned);
+    let inline_base64 = item["result"].as_str().filter(|data| !data.trim().is_empty()).map(str::to_owned);
+    let failure = item.get("failure").and_then(image_failure_reason);
+    let failed = failure.is_some() || item["status"].as_str() == Some("failed");
+    let failure = if failed { failure.or_else(|| Some("The image request failed.".to_owned())) } else { None };
+    // A request with nothing to point at is not an image request.
+    (saved_path.is_some() || inline_base64.is_some() || failure.is_some()).then_some(AgentEvent::ImageRequested {
+        tool_call_id,
+        stem: None,
+        saved_path,
+        inline_base64,
+        failure,
+    })
+}
+
+fn map_notification(method: &str, p: &Value) -> Option<AgentEvent> {
+    match method {
+        "thread/name/updated" => p["threadName"]
+            .as_str()
+            .map(|title| AgentEvent::SessionTitle { title: title.to_owned() }),
+        "item/agentMessage/delta" | "item/agentMessageDelta" => p["delta"]
+            .as_str()
+            .map(|text| AgentEvent::AssistantDelta { text: text.into() }),
+        "item/commandExecution/outputDelta" => Some(AgentEvent::ToolUpdated {
+            tool_call_id: p["itemId"].as_str()?.to_owned(),
+            raw: json!({"type":"commandExecution","outputDelta":p["delta"].as_str()?}),
+        }),
+        "item/mcpToolCall/progress" => Some(AgentEvent::ToolUpdated {
+            tool_call_id: p["itemId"].as_str()?.to_owned(),
+            raw: json!({"type":"mcpToolCall","progress":p["message"].as_str()?}),
+        }),
+        "item/started" => {
+            let i = &p["item"];
+            match i["type"].as_str().unwrap_or("") {
+                "agentMessage" => i["text"]
+                    .as_str()
+                    .map(|text| AgentEvent::AssistantDelta { text: text.into() }),
+                // Reasoning items carry no user-facing content here; they are not activity.
+                "userMessage" | "plan" | "reasoning" => None,
+                // The image is still being made: the row shows it as pending, and
+                // a started item never carries the bytes into its raw record.
+                "imageGeneration" => Some(AgentEvent::ToolStarted {
+                    tool_call_id: i["id"].as_str().unwrap_or("image").into(),
+                    kind: "imageGeneration".into(),
+                    title: "Generating an image".into(),
+                    raw: without_image_bytes(i),
+                    parent_tool_call_id: None,
+                }),
+                _ => Some(AgentEvent::ToolStarted {
+                    tool_call_id: i["id"].as_str().unwrap_or("item").into(),
+                    kind: i["type"].as_str().unwrap_or("other").into(),
+                    title: codex_item_title(i),
+                    raw: i.clone(),
+                    parent_tool_call_id: None,
+                }),
+            }
+        }
+        "item/completed" => {
+            let i = &p["item"];
+            match i["type"].as_str().unwrap_or("") {
+                "agentMessage" => i["text"]
+                    .as_str()
+                    .map(|text| AgentEvent::AssistantMessage { text: text.into() }),
+                "plan" => i["text"].as_str().map(str::trim).filter(|text| !text.is_empty())
+                    .map(|text| AgentEvent::PlanProposed { markdown: text.into() }),
+                "userMessage" | "reasoning" => None,
+                "fileChange" => i["changes"]
+                    .as_array()
+                    .and_then(|v| v.first())
+                    .and_then(|c| c["path"].as_str())
+                    .map(|path| AgentEvent::FileChanged {
+                        path: path.into(),
+                        raw: i.clone(),
+                    }),
+                // Never the default arm: the base64 image would be stored in the
+                // tool row. The request names where the image is, or why it failed.
+                "imageGeneration" => image_generation_request(i),
+                _ => Some(AgentEvent::ToolCompleted {
+                    tool_call_id: i["id"].as_str().unwrap_or("item").into(),
+                    raw: i.clone(),
+                    parent_tool_call_id: None,
+                }),
+            }
+        }
+        _ => None,
+    }
+}
+fn outcomes_for_success(
+    meta: &ThreadMeta,
+    o: &ExecOptions,
+    usage: Option<&Value>,
+) -> std::collections::BTreeMap<String, SettingOutcome> {
+    let mut m = std::collections::BTreeMap::new();
+    if let Some(req) = &o.model {
+        m.insert(
+            "model".into(),
+            outcome(
+                json!(req),
+                meta.model.as_ref().map(|v| v == req),
+                EvidenceKind::ProviderEcho,
+                meta.model.as_ref().map(|v| json!(v)),
+                None,
+            ),
+        );
+    }
+    if let Some(req) = &o.service_tier {
+        m.insert(
+            "serviceTier".into(),
+            outcome(
+                json!(req),
+                meta.tier.as_ref().map(|v| v == req),
+                EvidenceKind::ProviderEcho,
+                meta.tier.as_ref().map(|v| json!(v)),
+                None,
+            ),
+        );
+    }
+    if let Some(req) = &o.thinking {
+        let n = usage.and_then(|v| v["reasoningOutputTokens"].as_u64());
+        m.insert(
+            "thinking".into(),
+            outcome(
+                json!(req),
+                Some(true),
+                if n.is_some() {
+                    EvidenceKind::UsageEffect
+                } else {
+                    EvidenceKind::SuccessfulTurn
+                },
+                n.map(|v| json!(v))
+                    .or_else(|| meta.effort.as_ref().map(|v| json!(v))),
+                None,
+            ),
+        );
+    }
+    if meta.first_success_pending {
+        if let Some(hash) = meta
+            .desired_hash
+            .as_ref()
+            .filter(|hash| meta.baseline_hash.as_ref() == Some(*hash))
+        {
+            m.insert(
+                "instructions".into(),
+                outcome(
+                    json!(hash),
+                    Some(true),
+                    EvidenceKind::SuccessfulTurn,
+                    Some(json!(hash)),
+                    None,
+                ),
+            );
+        }
+    }
+    m
+}
+fn outcome(
+    requested: Value,
+    applied: Option<bool>,
+    kind: EvidenceKind,
+    value: Option<Value>,
+    reason: Option<String>,
+) -> SettingOutcome {
+    SettingOutcome {
+        requested: Some(requested),
+        applied,
+        evidence_kind: kind,
+        evidence_value: value,
+        reason,
+    }
+}
+/// Outcome for a developer-instructions change sent on this turn. Only a
+/// `thread/settings/updated` echo whose text hashes to the desired hash proves
+/// application; an absent echo is unverified and a mismatched echo is rejected.
+fn instructions_outcome(desired: Option<&str>, echo_seen: bool, echo_matches: bool) -> SettingOutcome {
+    if echo_seen && echo_matches {
+        outcome(json!(desired), Some(true), EvidenceKind::ProviderEcho, Some(json!(desired)), None)
+    } else if echo_seen {
+        outcome(json!(desired), Some(false), EvidenceKind::None, None, Some("instructions_change_requires_new_thread".into()))
+    } else {
+        outcome(json!(desired), None, EvidenceKind::None, None, Some("instructions_sent_unverified".into()))
+    }
+}
+fn usage_report(last: Option<&Value>, model: Option<String>, success: bool) -> UsageReport {
+    if !success {
+        return UsageReport {
+            input_tokens: None,
+            output_tokens: None,
+            cache_read_tokens: None,
+            cache_write_tokens: None,
+            reasoning_tokens: None,
+            usage_status: "unreported".into(),
+            evidence_note: None,
+            provider_update_id: None,
+            context_used: None,
+            context_size: None,
+            model: None,
+            cost_minor: None,
+            cost_currency: None,
+            reported_cost_decimal: None,
+            cost_is_cumulative: false,
+        };
+    }
+    let usage = last.cloned().unwrap_or(Value::Null);
+    let wrapped = usage.get("last").is_some();
+    let u = if wrapped { &usage["last"] } else { &usage };
+    let input = u["inputTokens"].as_u64();
+    let cached = u["cachedInputTokens"].as_u64();
+    let write = u["cacheWriteInputTokens"].as_u64();
+    let adjusted = input
+        .zip(cached)
+        .zip(write)
+        .and_then(|((i, c), w)| i.checked_sub(c)?.checked_sub(w));
+    let note = if adjusted.is_none() && (input.is_some() || cached.is_some() || write.is_some()) {
+        Some("inputTokens retained as reported because cache buckets were incomplete or exceeded the reported input".into())
+    } else {
+        None
+    };
+    UsageReport {
+        input_tokens: adjusted.or(input),
+        output_tokens: u["outputTokens"].as_u64(),
+        cache_read_tokens: cached,
+        cache_write_tokens: write,
+        reasoning_tokens: u["reasoningOutputTokens"].as_u64(),
+        usage_status: if last.is_some() {
+            "reported"
+        } else {
+            "unreported"
+        }
+        .into(),
+        evidence_note: note,
+        provider_update_id: None,
+        context_used: if wrapped { u["totalTokens"].as_u64() } else { None },
+        context_size: if wrapped { usage["modelContextWindow"].as_u64() } else { None },
+        model,
+        cost_minor: None,
+        cost_currency: None,
+        reported_cost_decimal: None,
+        cost_is_cumulative: false,
+    }
+}
+
+fn context_window_from_token_usage(usage: &Value) -> (Option<u64>, Option<u64>) {
+    (
+        usage["last"]["totalTokens"].as_u64(),
+        usage["modelContextWindow"].as_u64(),
+    )
+}
+fn parse_catalog_model(m: &Value) -> Result<ModelInfo, AdapterError> {
+    let id = m["id"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| AdapterError::Protocol("Codex catalog model id missing".into()))?;
+    let efforts = m["supportedReasoningEfforts"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|v| v["reasoningEffort"].as_str().map(str::to_owned))
+        .collect();
+    let service_tiers = m["serviceTiers"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|v| {
+            Some(ServiceTier {
+                id: v["id"].as_str()?.into(),
+                name: v["name"].as_str().unwrap_or(v["id"].as_str()?).into(),
+            })
+        })
+        .collect();
+    Ok(ModelInfo {
+        id: id.into(),
+        display_name: m["displayName"].as_str().unwrap_or(id).into(),
+        provider_id: None,
+        supported_thinking: efforts,
+        default_thinking: m["defaultReasoningEffort"].as_str().map(str::to_owned),
+        service_tiers,
+        default_service_tier: m["defaultServiceTier"].as_str().map(str::to_owned),
+        variants: None,
+        host_dependent: true,
+        is_default: m["isDefault"].as_bool(),
+        group: None,
+        availability: None,
+        release_date: m["releaseDate"].as_str().map(str::to_owned),
+        context_window: m["contextWindow"].as_u64(),
+    })
+}
+async fn read_reply(
+    lines: &mut tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
+    id: u64,
+    timeout: std::time::Duration,
+) -> Result<Value, AdapterError> {
+    loop {
+        let line = tokio::time::timeout(timeout, lines.next_line())
+            .await
+            .map_err(|_| AdapterError::Process("Codex app-server request timed out".into()))?
+            .map_err(|e| AdapterError::Process(e.to_string()))?
+            .ok_or_else(|| AdapterError::Process("Codex app-server exited".into()))?;
+        let v: Value = serde_json::from_str(&line)
+            .map_err(|_| AdapterError::Protocol("Codex catalog returned malformed JSON".into()))?;
+        if v["id"].as_u64() == Some(id) {
+            if v.get("error").is_some() {
+                return Err(AdapterError::Protocol(
+                    "Codex app-server request failed".into(),
+                ));
+            }
+            return Ok(v["result"].clone());
+        }
+    }
+}
+async fn write_rpc(
+    stdin: &StdinWriter,
+    id: u64,
+    method: &str,
+    params: Value,
+) -> Result<(), AdapterError> {
+    let mut b =
+        serde_json::to_vec(&json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
+            .map_err(|e| AdapterError::Protocol(e.to_string()))?;
+    b.push(b'\n');
+    stdin
+        .write(&b)
+        .await
+        .map_err(|e| AdapterError::Process(e.to_string()))
+}
+async fn catalog_pages(r: &RuntimeSpec) -> Result<Vec<Value>, AdapterError> {
+    let mut cmd = Command::new(&r.executable);
+    prepare_command(&mut cmd);
+    cmd.args(&r.args)
+        .args(["app-server", "--listen", "stdio://"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    if let Some(cwd) = &r.cwd {
+        cmd.current_dir(cwd);
+    }
+    let mut child = cmd
+        .spawn()
+        .map_err(|_| AdapterError::Process("Codex app-server catalog could not start".into()))?;
+    let process_tree = ProcessTree::attach(&mut child).map_err(|e| AdapterError::Process(e.to_string()))?;
+    let result = async {
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| AdapterError::Process("catalog stdin unavailable".into()))?;
+        let stdin = StdinWriter::new(stdin);
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| AdapterError::Process("catalog stdout unavailable".into()))?;
+        let mut lines = BufReader::new(stdout).lines();
+        write_rpc(&stdin,1,"initialize",json!({"clientInfo":{"name":"Retinue","version":"0.1.0"},"capabilities":{"experimentalApi":true}})).await?;
+        let _ = read_reply(&mut lines, 1, CATALOG_TIMEOUT).await?;
+        let mut b =
+            serde_json::to_vec(&json!({"jsonrpc":"2.0","method":"initialized","params":{}}))
+                .unwrap();
+        b.push(b'\n');
+        stdin
+            .write(&b)
+            .await
+            .map_err(|e| AdapterError::Process(e.to_string()))?;
+        let mut cursor = Value::Null;
+        let mut seen = std::collections::HashSet::new();
+        let mut pages = Vec::new();
+        let mut id = 1;
+        loop {
+            id += 1;
+            write_rpc(
+                &stdin,
+                id,
+                "model/list",
+                json!({"cursor":cursor,"includeHidden":false,"limit":100}),
+            )
+            .await?;
+            let page = read_reply(&mut lines, id, CATALOG_TIMEOUT).await?;
+            let next = page["nextCursor"].clone();
+            pages.push(page);
+            if next.is_null() {
+                break;
+            }
+            if !seen.insert(next.to_string()) {
+                return Err(AdapterError::Protocol(
+                    "Codex model catalog cursor repeated".into(),
+                ));
+            }
+            cursor = next;
+        }
+        Ok(pages)
+    };
+    let result = tokio::time::timeout(CATALOG_TIMEOUT, result)
+        .await
+        .map_err(|_| AdapterError::Process("Codex model catalog timed out".into()))
+        .and_then(|v| v);
+    let _ = process_tree.terminate();
+    let _ = child.kill().await;
+    result
+}
+
+async fn account_rate_limits(r: &RuntimeSpec) -> Result<Value, AdapterError> {
+    let mut cmd = Command::new(&r.executable);
+    prepare_command(&mut cmd);
+    cmd.args(&r.args)
+        .args(["app-server", "--listen", "stdio://"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    if let Some(cwd) = &r.cwd { cmd.current_dir(cwd); }
+    let mut child = cmd.spawn().map_err(|_| AdapterError::Process("Codex quota app-server could not start".into()))?;
+    let process_tree = ProcessTree::attach(&mut child).map_err(|error| AdapterError::Process(error.to_string()))?;
+    let result = async {
+        let stdin = child.stdin.take().ok_or_else(|| AdapterError::Process("Codex quota stdin unavailable".into()))?;
+        let stdin = StdinWriter::new(stdin);
+        let stdout = child.stdout.take().ok_or_else(|| AdapterError::Process("Codex quota stdout unavailable".into()))?;
+        let mut lines = BufReader::new(stdout).lines();
+        write_rpc(&stdin, 1, "initialize", json!({"clientInfo":{"name":"Retinue","version":"0.1.0"},"capabilities":{"experimentalApi":true}})).await?;
+        let _ = read_reply(&mut lines, 1, std::time::Duration::from_secs(10)).await?;
+        let mut initialized = serde_json::to_vec(&json!({"jsonrpc":"2.0","method":"initialized","params":{}})).unwrap();
+        initialized.push(b'\n');
+        stdin.write(&initialized).await.map_err(|error| AdapterError::Process(error.to_string()))?;
+        write_rpc(&stdin, 2, "account/rateLimits/read", json!({"excludeResetCreditDetails":true})).await?;
+        read_reply(&mut lines, 2, std::time::Duration::from_secs(10)).await
+    };
+    let result = tokio::time::timeout(std::time::Duration::from_secs(10), result)
+        .await
+        .map_err(|_| AdapterError::Timeout)
+        .and_then(|result| result);
+    let _ = process_tree.terminate();
+    let _ = child.kill().await;
+    result
+}
+
+#[async_trait]
+impl AgentAdapter for CodexAdapter {
+    // Prompt for a live thread sends `p["model"]` in every `turn/start`
+    // (`prompt`, ~1561-1563), so the same thread carries the new model.
+    fn model_switch(&self) -> ModelSwitch { ModelSwitch::KeepsSession }
+    async fn model_catalog(&self, r: &RuntimeSpec) -> Result<ModelCatalog, AdapterError> {
+        let pages = catalog_pages(r).await?;
+        let mut models = Vec::new();
+        for page in pages {
+            let data = page["data"].as_array().ok_or_else(|| {
+                AdapterError::Protocol("Codex model catalog page missing data".into())
+            })?;
+            for item in data {
+                models.push(parse_catalog_model(item)?)
+            }
+        }
+        let now = Utc::now();
+        Ok(ModelCatalog {
+            models,
+            fetched_at: now.to_rfc3339(),
+            expires_at: (now + Duration::seconds(60)).to_rfc3339(),
+            fallback: false,
+            source: "live_query".into(),
+            validated: true,
+        })
+    }
+    async fn read_account_quota(&self, r: &RuntimeSpec) -> Result<Value, AdapterError> {
+        account_rate_limits(r).await
+    }
+    async fn preflight_exec_options(&self, options: &ExecOptions) -> Result<(), AdapterError> {
+        if options.service_tier.as_deref() == Some("fast") {
+            return Err(AdapterError::Unsupported(
+                "Codex speed selection must use a catalog tier id".into(),
+            ));
+        }
+        Ok(())
+    }
+    async fn set_instruction_hash_context(
+        &self,
+        sid: &str,
+        desired: Option<String>,
+        baseline: Option<String>,
+    ) {
+        self.instruction_context
+            .lock()
+            .await
+            .insert(sid.into(), (desired, baseline));
+    }
+    async fn probe(&self, r: &RuntimeSpec) -> Result<ProbeResult, AdapterError> {
+        let mut c = Command::new(&r.executable);
+        prepare_command(&mut c);
+        c.args(&r.args)
+            .args(["app-server", "--help"])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .kill_on_drop(true);
+        let mut child = c.spawn().map_err(|e| AdapterError::Process(e.to_string()))?;
+        let process_tree = ProcessTree::attach(&mut child).map_err(|e| AdapterError::Process(e.to_string()))?;
+        let o = tokio::time::timeout(std::time::Duration::from_secs(6), child.wait_with_output())
+            .await
+            .map_err(|_| { let _ = process_tree.terminate(); AdapterError::Process("Codex app-server probe timed out".into()) })?
+            .map_err(|e| AdapterError::Process(e.to_string()))?;
+        if !o.status.success() || !String::from_utf8_lossy(&o.stdout).contains("app-server") {
+            return Err(AdapterError::Unsupported(
+                "codex app-server is unavailable".into(),
+            ));
+        }
+        Ok(ProbeResult {
+            provider: "codex".into(),
+            version: None,
+            protocol: "codex_app_server".into(),
+            authenticated: None,
+            capabilities: AgentCapabilities {
+                resume: true,
+                cancel: true,
+                permissions: true,
+                usage: true,
+                files: true,
+            },
+        })
+    }
+    async fn new_session(
+        &self,
+        r: &RuntimeSpec,
+        q: NewSessionRequest,
+        events: EventSender,
+    ) -> Result<SessionHandle, AdapterError> {
+        let c = self.spawn(r, &q.session_id, &q.project_path, events, &q.exec_options).await?;
+        let t = match Self::startup_call(
+            &c,
+            "thread/start",
+            Self::start_params(&q.project_path, &q.exec_options),
+        )
+        .await {
+            Ok(thread) => thread,
+            Err(error) => { self.abandon_setup(&c).await; return Err(error); }
+        };
+        let Some(tid) = t["thread"]["id"]
+            .as_str()
+            .or(t["id"].as_str())
+            .map(str::to_owned)
+        else {
+            self.abandon_setup(&c).await;
+            return Err(AdapterError::Protocol(
+                "thread/start returned no thread id".into(),
+            ));
+        };
+        c.turn.lock().await.thread_id = Some(tid.clone());
+        c.process.routes.lock().await.insert(tid.clone(), Arc::downgrade(&c));
+        let hash = instruction_sha256(q.exec_options.instructions.as_deref().unwrap_or(""));
+        Self::set_thread_meta(&c, &t, hash.clone(), hash.clone(), true).await;
+        self.thread_instruction_hashes
+            .lock()
+            .await
+            .insert(q.session_id.clone(), hash);
+        self.sessions.lock().await.insert(q.session_id.clone(), c);
+        Ok(SessionHandle {
+            session_id: q.session_id,
+            provider_session_id: tid,
+            capabilities: AgentCapabilities {
+                resume: true,
+                cancel: true,
+                permissions: true,
+                usage: true,
+                files: true,
+            },
+        })
+    }
+    async fn resume_session(
+        &self,
+        r: &RuntimeSpec,
+        q: ResumeSessionRequest,
+        events: EventSender,
+    ) -> Result<SessionHandle, AdapterError> {
+        let (desired, baseline) = self
+            .instruction_context
+            .lock()
+            .await
+            .get(&q.session_id)
+            .cloned()
+            .unwrap_or((
+                instruction_sha256(q.exec_options.instructions.as_deref().unwrap_or("")),
+                None,
+            ));
+        let c = self.spawn(r, &q.session_id, &q.project_path, events, &q.exec_options).await?;
+        let t = match Self::startup_call(
+            &c,
+            "thread/resume",
+            Self::resume_params(&q.provider_session_id, &q.project_path, &q.exec_options, baseline.as_deref()),
+        )
+        .await {
+            Ok(thread) => thread,
+            Err(error) => { self.abandon_setup(&c).await; return Err(error); }
+        };
+        let id = t["thread"]["id"]
+            .as_str()
+            .unwrap_or(&q.provider_session_id)
+            .to_owned();
+        c.turn.lock().await.thread_id = Some(id.clone());
+        c.process.routes.lock().await.insert(id.clone(), Arc::downgrade(&c));
+        let installed = self
+            .thread_instruction_hashes
+            .lock()
+            .await
+            .get(&q.session_id)
+            .cloned()
+            .flatten()
+            .or_else(|| baseline.clone())
+            .or_else(|| desired.clone());
+        Self::set_thread_meta(&c, &t, desired, installed, baseline.is_none()).await;
+        self.sessions.lock().await.insert(q.session_id.clone(), c);
+        Ok(SessionHandle {
+            session_id: q.session_id,
+            provider_session_id: id,
+            capabilities: AgentCapabilities {
+                resume: true,
+                cancel: true,
+                permissions: true,
+                usage: true,
+                files: true,
+            },
+        })
+    }
+    async fn prompt(&self, h: &SessionHandle, q: PromptRequest) -> Result<(), AdapterError> {
+        let mut c = self
+            .sessions
+            .lock()
+            .await
+            .get(&h.session_id)
+            .cloned()
+            .ok_or_else(|| AdapterError::Process("Codex session is not active".into()))?;
+        if c.detached.load(Ordering::Acquire) || !c.process.alive.load(Ordering::Acquire) {
+            c = self.resume_after_crash(&h.session_id, &c, &q.exec_options).await?;
+        }
+        let provider_thread = c.turn.lock().await.thread_id.clone().ok_or_else(|| AdapterError::Process("Codex session has no provider thread".into()))?;
+        let requested_hash =
+            instruction_sha256(q.exec_options.instructions.as_deref().unwrap_or(""));
+        let mut meta = c.meta.lock().await.clone();
+        let changed = requested_hash != meta.baseline_hash;
+        meta.desired_hash = requested_hash.clone();
+        *c.meta.lock().await = meta;
+        // Images are passed by path; the app-server reads them itself.
+        let mut input = if q.text.is_empty() && !q.attachments.is_empty() { Vec::new() } else { vec![json!({"type":"text","text":q.text})] };
+        input.extend(q.attachments.iter().map(|attachment| json!({"type":"localImage","path":attachment.path})));
+        let mut p = json!({"threadId":provider_thread,"input":input});
+        if let Some(v) = &q.exec_options.model {
+            p["model"] = json!(v)
+        }
+        if let Some(v) = &q.exec_options.thinking {
+            p["effort"] = json!(v)
+        }
+        let in_plan = q.exec_options.plan_mode;
+        let was_plan = c.plan_active.load(Ordering::SeqCst);
+        let leaving_plan = was_plan && !in_plan;
+        let pending_change = changed && !in_plan;
+        let model = Self::turn_model(&c, q.exec_options.model.as_ref()).await;
+        // A pending instructions change on an existing thread is sent through
+        // the per-turn collaborationMode path. A plan turn keeps Codex's
+        // built-in instructions; leaving plan mode restores this blob's current
+        // text. A change with no known model cannot be sent, so it keeps the
+        // original "applies to new conversations" outcome.
+        let mut instruction_apply: Option<Option<String>> = None;
+        if in_plan || leaving_plan || pending_change {
+            match model {
+                Some(model) => {
+                    let developer = if in_plan { Value::Null } else { json!(q.exec_options.instructions) };
+                    p["collaborationMode"] = json!({"mode": if in_plan { "plan" } else { "default" }, "settings": {"model": model, "reasoning_effort": q.exec_options.thinking, "developer_instructions": developer}});
+                    c.plan_active.store(in_plan, Ordering::SeqCst);
+                    if !in_plan { instruction_apply = Some(requested_hash.clone()); }
+                }
+                None if pending_change => {
+                    let mut m = std::collections::BTreeMap::new();
+                    m.insert(
+                        "instructions".into(),
+                        outcome(
+                            json!(requested_hash),
+                            Some(false),
+                            EvidenceKind::None,
+                            None,
+                            Some("instructions_change_requires_new_thread".into()),
+                        ),
+                    );
+                    let _ = c
+                        .events
+                        .send(AgentEvent::ExecApplied {
+                            turn_id: q.turn_id.clone(),
+                            outcomes: m,
+                        })
+                        .await;
+                }
+                None => {}
+            }
+        }
+        if let Some(v) = q.exec_options.service_tier.as_ref() {
+            if v == "standard" {
+                p["serviceTierForTurn"] = json!("default")
+            } else if v != "fast" {
+                p["serviceTier"] = json!(v)
+            }
+        }
+        let request_options = q.exec_options.clone();
+        *c.turn.lock().await = TurnState {
+            id: None,
+            thread_id: Some(provider_thread.clone()),
+            replay_gate: true,
+            options: q.exec_options,
+            usage: None,
+            completed: false,
+            instruction_apply: instruction_apply.clone(),
+            instruction_echo_seen: false,
+            instruction_echo_hash: None,
+        };
+        *c.turn_id.lock().await = Some(q.turn_id);
+        c.process.active_turns.lock().await.insert(provider_thread.clone());
+        let result = match Self::call(&c, "turn/start", p).await {
+            Ok(result) => result,
+            Err(error) => {
+                c.process.active_turns.lock().await.remove(&provider_thread);
+                let mut rejected = std::collections::BTreeMap::new();
+                for (key, value) in [
+                    ("model", request_options.model.as_ref()),
+                    ("thinking", request_options.thinking.as_ref()),
+                    ("serviceTier", request_options.service_tier.as_ref()),
+                ] {
+                    if let Some(value) = value {
+                        rejected.insert(
+                            key.into(),
+                            outcome(
+                                json!(value),
+                                Some(false),
+                                EvidenceKind::None,
+                                None,
+                                Some("provider_rejected_before_turn".into()),
+                            ),
+                        );
+                    }
+                }
+                if let Some(desired) = &instruction_apply {
+                    rejected.insert(
+                        "instructions".into(),
+                        outcome(
+                            json!(desired),
+                            Some(false),
+                            EvidenceKind::None,
+                            None,
+                            Some("instructions_change_requires_new_thread".into()),
+                        ),
+                    );
+                }
+                if !rejected.is_empty() {
+                    let _ = c
+                        .events
+                        .send(AgentEvent::ExecApplied {
+                            turn_id: c.turn_id.lock().await.clone().unwrap_or_default(),
+                            outcomes: rejected,
+                        })
+                        .await;
+                }
+                return Err(error);
+            }
+        };
+        let _ = c.events.send(AgentEvent::PromptAccepted).await;
+        let id = result["turn"]["id"]
+            .as_str()
+            .or(result["turnId"].as_str())
+            .ok_or_else(|| AdapterError::Protocol("turn/start returned no turn id".into()))?
+            .to_owned();
+        {
+            let mut turn = c.turn.lock().await;
+            // `completed` was reset before the call: the reader may already have finished this turn.
+            turn.id = Some(id);
+        }
+        Ok(())
+    }
+    async fn steer(&self, h: &SessionHandle, q: SteerRequest) -> Result<SteerOutcome, AdapterError> {
+        let c = self
+            .sessions
+            .lock()
+            .await
+            .get(&h.session_id)
+            .cloned()
+            .ok_or_else(|| AdapterError::Process("Codex session is not active".into()))?;
+        let (thread_id, provider_turn) = {
+            let turn = c.turn.lock().await;
+            (turn.thread_id.clone(), turn.id.clone())
+        };
+        let thread_id = thread_id.ok_or_else(|| AdapterError::Process("Codex session has no provider thread".into()))?;
+        // `expectedTurnId` is the provider's own active turn id; the daemon's
+        // `q.turn_id` only names the turn in Retinue and is not sent.
+        let expected_turn = provider_turn.ok_or_else(|| AdapterError::Unsupported("there is no active Codex turn".into()))?;
+        let params = json!({
+            "threadId": thread_id,
+            "expectedTurnId": expected_turn,
+            "input": [{"type":"text","text":q.text}],
+        });
+        match Self::call(&c, "turn/steer", params).await {
+            Ok(_) => Ok(SteerOutcome::Accepted),
+            Err(AdapterError::Rejected(message)) if steer_stale_evidence(&message) => Ok(SteerOutcome::Stale),
+            Err(error) => Err(error),
+        }
+    }
+    async fn cancel(&self, h: &SessionHandle) -> Result<(), AdapterError> {
+        let c = self
+            .sessions
+            .lock()
+            .await
+            .get(&h.session_id)
+            .cloned()
+            .ok_or_else(|| AdapterError::Process("Codex session is not active".into()))?;
+        let t = c
+            .turn
+            .lock()
+            .await
+            .id
+            .clone()
+            .ok_or_else(|| AdapterError::Unsupported("there is no active Codex turn".into()))?;
+        let thread_id = c.turn.lock().await.thread_id.clone().ok_or_else(|| AdapterError::Process("Codex session has no provider thread".into()))?;
+        let interrupted = tokio::time::timeout(
+            std::time::Duration::from_secs(2),
+            Self::call(&c, "turn/interrupt", json!({"threadId":thread_id,"turnId":t})),
+        ).await;
+        if matches!(interrupted, Ok(Ok(_))) {
+            let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+            while !c.turn.lock().await.completed && tokio::time::Instant::now() < deadline {
+                tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            }
+        }
+        if !c.turn.lock().await.completed {
+            let (turn_id, usage) = {
+                let mut state = c.turn.lock().await;
+                state.completed = true;
+                state.replay_gate = true;
+                (c.turn_id.lock().await.clone().unwrap_or_default(), state.usage.take())
+            };
+            c.process.active_turns.lock().await.remove(&thread_id);
+            let model = c.meta.lock().await.model.clone();
+            let _ = c.events.enqueue(AgentEvent::UsageReport {
+                turn_id,
+                report: usage_report(usage.as_ref(), model, false),
+            });
+            let _ = c.events.enqueue(AgentEvent::TurnCancelled);
+            self.detach_route(&c, Some(&thread_id), true).await;
+        }
+        Ok(())
+    }
+    async fn answer_question(&self, id: &str, answers: Option<std::collections::BTreeMap<String, Vec<String>>>) -> Result<(), AdapterError> {
+        for c in self.sessions.lock().await.values().cloned().collect::<Vec<_>>() {
+            if let Some(request_id) = c.incoming.lock().await.remove(id) {
+                let answers = answers.unwrap_or_default().into_iter().map(|(key, values)| (key, json!({"answers": values}))).collect::<serde_json::Map<_, _>>();
+                let mut b = serde_json::to_vec(&json!({"jsonrpc":"2.0","id":request_id,"result":{"answers":answers}})).map_err(|e| AdapterError::Protocol(e.to_string()))?;
+                b.push(b'\n');
+                c.process.stdin.lock().await.write(&b).await.map_err(|e| AdapterError::Process(e.to_string()))?;
+                return Ok(());
+            }
+        }
+        Err(AdapterError::Unsupported("Codex question is unknown or already answered".into()))
+    }
+    async fn reply_permission(&self, id: &str, choice: &str) -> Result<(), AdapterError> {
+        for c in self
+            .sessions
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>()
+        {
+            if let Some(request_id) = c.incoming.lock().await.remove(id) {
+                if id.starts_with("elicitation:") {
+                    let response = elicitation_response(&request_id["params"], choice == "allow_once", false);
+                    let mut b = serde_json::to_vec(&json!({"jsonrpc":"2.0","id":request_id["rpcId"],"result":response})).map_err(|e| AdapterError::Protocol(e.to_string()))?;
+                    b.push(b'\n');
+                    c.process.stdin.lock().await.write(&b).await.map_err(|e| AdapterError::Process(e.to_string()))?;
+                    return Ok(());
+                }
+                let decision = match choice {
+                    "allow_once" => "accept",
+                    "deny" => "decline",
+                    _ => {
+                        return Err(AdapterError::Unsupported(
+                            "Codex supports only allow once or deny".into(),
+                        ))
+                    }
+                };
+                let mut b = serde_json::to_vec(
+                    &json!({"jsonrpc":"2.0","id":request_id,"result":{"decision":decision}}),
+                )
+                .map_err(|e| AdapterError::Protocol(e.to_string()))?;
+                b.push(b'\n');
+                c.process.stdin
+                    .lock()
+                    .await
+                    .write(&b)
+                    .await
+                    .map_err(|e| AdapterError::Process(e.to_string()))?;
+                return Ok(());
+            }
+        }
+        Err(AdapterError::Unsupported(
+            "Codex approval request not found".into(),
+        ))
+    }
+    async fn close_session(&self, h: &SessionHandle) -> Result<(), AdapterError> {
+        if let Some(c) = self.sessions.lock().await.remove(&h.session_id) {
+            let thread_id = c.turn.lock().await.thread_id.clone();
+            let became_idle = self.detach_route(&c, thread_id.as_deref(), false).await;
+            if became_idle { self.schedule_idle_shutdown(&c).await; }
+        }
+        Ok(())
+    }
+
+    async fn shutdown(&self) {
+        let processes = {
+            let mut map = self.processes.lock().await;
+            std::mem::take(&mut *map)
+        };
+        for process in processes.into_values() { process.shutdown().await; }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn activity_titles_keep_full_commands_out_of_the_row() {
+        assert_eq!(codex_item_title(&json!({"type":"commandExecution","command":"cargo test\necho complete"})), "Ran cargo test");
+        assert_eq!(codex_item_title(&json!({"type":"webSearch","action":{"query":"Rust docs"}})), "Searched Rust docs");
+    }
+    #[test]
+    fn reasoning_items_are_not_activity_and_other_items_get_readable_titles() {
+        assert!(map_notification("item/started", &json!({"item":{"type":"reasoning","id":"rs","summary":[],"content":[]}})).is_none());
+        assert!(map_notification("item/completed", &json!({"item":{"type":"reasoning","id":"rs"}})).is_none());
+        let title = |item: Value| match map_notification("item/started", &json!({"item":item})) { Some(AgentEvent::ToolStarted { title, .. }) => title, other => panic!("{other:?}") };
+        assert_eq!(title(json!({"type":"commandExecution","id":"c","command":"npm test"})), "Ran npm test");
+        assert_eq!(title(json!({"type":"mcpToolCall","id":"m","server":"retinue","tool":"message_blob"})), "retinue · message_blob");
+        assert_eq!(title(json!({"type":"dynamicToolCall","id":"d","namespace":"search","tool":"find_page"})), "search · find_page");
+        assert_eq!(title(json!({"type":"webSearch","id":"w","query":"tauri drag"})), "Searched tauri drag");
+        assert_eq!(title(json!({"type":"somethingNew","id":"x"})), "Something new");
+    }
+
+    /// The completed image item names its file, and the tool row it leaves
+    /// behind carries no base64 image.
+    #[test]
+    fn a_completed_image_item_reports_its_path_and_stores_no_bytes() {
+        let item = json!({"type":"imageGeneration","id":"img-1","status":"completed","savedPath":"D:/out/cat.png","result":"iVBORw0KGgo=","revisedPrompt":"a cat"});
+        match map_notification("item/completed", &json!({"item":item})) {
+            Some(AgentEvent::ImageRequested { tool_call_id, stem, saved_path, inline_base64, failure }) => {
+                assert_eq!(tool_call_id, "img-1");
+                assert!(stem.is_none() && failure.is_none());
+                assert_eq!(saved_path.as_deref(), Some("D:/out/cat.png"));
+                assert_eq!(inline_base64.as_deref(), Some("iVBORw0KGgo="));
+            }
+            other => panic!("an image request was expected, not {other:?}"),
+        }
+        let clean = without_image_bytes(&item);
+        assert!(clean.get("result").is_none(), "no bytes in the tool row");
+        assert!(clean.get("savedPath").is_none(), "no path in the tool row either");
+        assert_eq!(clean["revisedPrompt"], "a cat", "the rest of the item is kept");
+        // The raw response item repeats the image; it maps to nothing.
+        assert!(map_notification("rawResponseItem/completed", &json!({"item":{"type":"image_generation_call","result":"iVBORw0KGgo="}})).is_none());
+    }
+
+    /// A failed image reports a one-line reason, and an item with nothing to
+    /// point at is not an image request.
+    #[test]
+    fn a_failed_image_item_reports_the_reason() {
+        match map_notification("item/completed", &json!({"item":{"type":"imageGeneration","id":"img-2","status":"failed","failure":{"message":"quota exhausted\ntry later"}}})) {
+            Some(AgentEvent::ImageRequested { saved_path, inline_base64, failure, .. }) => {
+                assert_eq!(failure.as_deref(), Some("quota exhausted"));
+                assert!(saved_path.is_none() && inline_base64.is_none());
+            }
+            other => panic!("a failed image was expected, not {other:?}"),
+        }
+        assert!(map_notification("item/completed", &json!({"item":{"type":"imageGeneration","id":"img-3","status":"inProgress"}})).is_none());
+    }
+
+    #[test]
+    fn codex_error_info_maps_to_recovery_hints_and_free_text_does_not() {
+        assert_eq!(recovery_hint_for_codex_error(&json!({"codexErrorInfo":"unauthorized"})), Some(RecoveryHintKind::AuthRequired));
+        assert_eq!(recovery_hint_for_codex_error(&json!({"codexErrorInfo":"rateLimitExceeded"})), Some(RecoveryHintKind::RateLimited));
+        assert_eq!(recovery_hint_for_codex_error(&json!({"codexErrorInfo":"serverOverloaded"})), Some(RecoveryHintKind::Overloaded));
+        assert_eq!(recovery_hint_for_codex_error(&json!({"message":"fake failure"})), None);
+        assert_eq!(recovery_hint_for_codex_error(&json!({"codexErrorInfo":"usageLimitExceeded"})), Some(RecoveryHintKind::RateLimited));
+        assert_eq!(recovery_hint_for_codex_error(&json!({"codexErrorInfo":{"httpConnectionFailed":{"httpStatusCode":500}}})), Some(RecoveryHintKind::Overloaded));
+    }
+
+    #[test]
+    fn modern_codex_command_mcp_and_output_delta_items_map_to_activity() {
+        let command = json!({"threadId":"thread","turnId":"turn","item":{"type":"commandExecution","id":"cmd-1","command":"cargo test -p retinue-storage","commandActions":[],"cwd":"D:/project","status":"inProgress"}});
+        assert!(matches!(map_notification("item/started", &command), Some(AgentEvent::ToolStarted { tool_call_id, title, raw, .. }) if tool_call_id == "cmd-1" && title == "Ran cargo test -p retinue-storage" && raw["cwd"] == "D:/project"));
+        let mcp = json!({"threadId":"thread","turnId":"turn","item":{"type":"mcpToolCall","id":"mcp-1","server":"retinue","tool":"message_blob","arguments":{"blob":"Gogo"},"status":"completed","result":{"content":[{"type":"text","text":"Sent to Gogo."}]},"error":null}});
+        assert!(matches!(map_notification("item/completed", &mcp), Some(AgentEvent::ToolCompleted { tool_call_id, raw, .. }) if tool_call_id == "mcp-1" && raw["arguments"]["blob"] == "Gogo" && raw["result"]["content"][0]["text"] == "Sent to Gogo."));
+        let delta = json!({"threadId":"thread","turnId":"turn","itemId":"cmd-1","delta":"first chunk"});
+        assert!(matches!(map_notification("item/commandExecution/outputDelta", &delta), Some(AgentEvent::ToolUpdated { tool_call_id, raw }) if tool_call_id == "cmd-1" && raw["outputDelta"] == "first chunk"));
+        let progress = json!({"threadId":"thread","turnId":"turn","itemId":"mcp-1","message":"Fetched 4 pages"});
+        assert!(matches!(map_notification("item/mcpToolCall/progress", &progress), Some(AgentEvent::ToolUpdated { tool_call_id, raw }) if tool_call_id == "mcp-1" && raw["progress"] == "Fetched 4 pages"));
+        assert!(map_notification("item/commandExecution/outputDelta", &json!({"itemId":"cmd-1"})).is_none());
+    }
+
+    #[test]
+    fn coalesced_command_output_deltas_append_with_a_hard_cap() {
+        let mut queued = AgentEvent::ToolUpdated { tool_call_id: "cmd".into(), raw: json!({"outputDelta":"first "}) };
+        assert!(merge_stream_event(&mut queued, AgentEvent::ToolUpdated { tool_call_id: "cmd".into(), raw: json!({"outputDelta":"second"}) }).is_ok());
+        assert!(matches!(queued, AgentEvent::ToolUpdated { raw, .. } if raw["outputDelta"] == "first second"));
+        let mut cap = AgentEvent::ToolUpdated { tool_call_id: "cmd".into(), raw: json!({"outputDelta":"x".repeat(4_000)}) };
+        assert!(merge_stream_event(&mut cap, AgentEvent::ToolUpdated { tool_call_id: "cmd".into(), raw: json!({"outputDelta":"y".repeat(1_000)}) }).is_ok());
+        assert!(matches!(cap, AgentEvent::ToolUpdated { raw, .. } if raw["outputDelta"].as_str().unwrap().chars().count() == 4_000));
+    }
+
+    #[test]
+    fn inherited_environment_fingerprint_handles_empty_environment() {
+        assert_eq!(sha256_fingerprint(""), SHA256_EMPTY);
+    }
+
+    #[tokio::test]
+    async fn session_relay_coalesces_streams_but_keeps_critical_events() {
+        let (target, mut receiver) = tokio::sync::mpsc::channel(1);
+        target.try_send(AgentEvent::SessionIdle).unwrap();
+        let sink = SessionEventSink::new(target);
+        let stream_count = SESSION_FORWARD_QUEUE_COALESCE_CAP * 4;
+        sink.enqueue(AgentEvent::ToolUpdated { tool_call_id: "tool".into(), raw: json!({"progress":1}) }).unwrap();
+        for _ in 0..(SESSION_FORWARD_QUEUE_COALESCE_CAP / 2 - 1) {
+            sink.enqueue(AgentEvent::AssistantDelta { text: "x".into() }).unwrap();
+            sink.enqueue(AgentEvent::ThinkingDelta { text: "y".into() }).unwrap();
+        }
+        for _ in 0..stream_count {
+            sink.enqueue(AgentEvent::AssistantDelta { text: "x".into() }).unwrap();
+            sink.enqueue(AgentEvent::ThinkingDelta { text: "y".into() }).unwrap();
+        }
+        sink.enqueue(AgentEvent::ToolUpdated { tool_call_id: "tool".into(), raw: json!({"progress":2}) }).unwrap();
+        for event in [
+            AgentEvent::PermissionRequested {
+                provider_request_id: "permission".into(),
+                title: "Approval".into(), detail: None,
+                choices: vec!["allow_once".into()], raw: json!({}),
+            },
+            AgentEvent::UsageReport { turn_id: "turn".into(), report: usage_report(None, None, false) },
+            AgentEvent::ToolCompleted { tool_call_id: "tool".into(), raw: json!({}), parent_tool_call_id: None },
+            AgentEvent::Error { message: "provider failed".into() },
+            AgentEvent::TurnCompleted,
+        ] { sink.enqueue(event).unwrap(); }
+        assert!(sink.0.events.lock().unwrap().len() <= SESSION_FORWARD_QUEUE_COALESCE_CAP + 8);
+        let drain = tokio::spawn(async move {
+            let mut events = Vec::new();
+            let mut chars = 0;
+            let mut thinking_chars = 0;
+            let mut merged = false;
+            let mut merged_thinking = false;
+            let mut progress_updates = 0;
+            loop {
+                let event = receiver.recv().await.expect("relay channel stays open");
+                match &event {
+                    AgentEvent::AssistantDelta { text } => { chars += text.len(); merged |= text.len() > 1; }
+                    AgentEvent::ThinkingDelta { text } => { thinking_chars += text.len(); merged_thinking |= text.len() > 1; }
+                    AgentEvent::ToolUpdated { raw, .. } => { progress_updates += 1; assert_eq!(raw["progress"], 2); }
+                    _ => {}
+                }
+                let terminal = matches!(&event, AgentEvent::TurnCompleted);
+                events.push(event);
+                if terminal { break (events, chars, thinking_chars, merged, merged_thinking, progress_updates); }
+            }
+        });
+        let (events, chars, thinking_chars, merged, merged_thinking, progress_updates) = tokio::time::timeout(std::time::Duration::from_secs(5), drain).await.unwrap().unwrap();
+        assert_eq!(chars, stream_count + SESSION_FORWARD_QUEUE_COALESCE_CAP / 2 - 1);
+        assert_eq!(thinking_chars, stream_count + SESSION_FORWARD_QUEUE_COALESCE_CAP / 2 - 1);
+        assert!(merged);
+        assert!(merged_thinking);
+        assert_eq!(progress_updates, 1);
+        assert!(events.iter().any(|event| matches!(event, AgentEvent::PermissionRequested { .. })));
+        assert!(events.iter().any(|event| matches!(event, AgentEvent::UsageReport { .. })));
+        assert!(events.iter().any(|event| matches!(event, AgentEvent::ToolCompleted { .. })));
+        assert!(events.iter().any(|event| matches!(event, AgentEvent::Error { .. })));
+    }
+
+    #[tokio::test]
+    async fn relay_closes_after_target_is_dropped_and_later_enqueues_fail() {
+        let (target, receiver) = tokio::sync::mpsc::channel(1);
+        let sink = SessionEventSink::new(target);
+        drop(receiver);
+        assert!(sink.send(AgentEvent::SessionIdle).await.is_err());
+        assert!(sink.enqueue(AgentEvent::AssistantDelta { text: "late".into() }).is_err());
+    }
+
+    #[tokio::test]
+    async fn stalled_relay_bounds_alternating_streams_and_tool_start_flood() {
+        let (target, mut receiver) = tokio::sync::mpsc::channel(1);
+        target.try_send(AgentEvent::SessionIdle).unwrap();
+        let sink = SessionEventSink::new(target);
+        for _ in 0..SESSION_FORWARD_QUEUE_COALESCE_CAP / 2 {
+            sink.enqueue(AgentEvent::AssistantDelta { text: "a".into() }).unwrap();
+            sink.enqueue(AgentEvent::ThinkingDelta { text: "t".into() }).unwrap();
+        }
+        for _ in 0..SESSION_FORWARD_QUEUE_COALESCE_CAP * 8 {
+            sink.enqueue(AgentEvent::AssistantDelta { text: "a".into() }).unwrap();
+            sink.enqueue(AgentEvent::ThinkingDelta { text: "t".into() }).unwrap();
+        }
+        {
+            let events = sink.0.events.lock().unwrap();
+            assert!(events.len() <= SESSION_FORWARD_QUEUE_COALESCE_CAP);
+            assert!(events.iter().any(|item| matches!(item.event, AgentEvent::AssistantDelta { ref text } if text.len() > 1)));
+            assert!(events.iter().any(|item| matches!(item.event, AgentEvent::ThinkingDelta { ref text } if text.len() > 1)));
+        }
+        const TOOL_STARTED_FLOOD: usize = SESSION_FORWARD_QUEUE_COALESCE_CAP * 8;
+        for index in 0..TOOL_STARTED_FLOOD {
+            sink.enqueue(AgentEvent::ToolStarted { tool_call_id: format!("tool-{index}"), kind: "exec".into(), title: "progress".into(), raw: json!({}), parent_tool_call_id: None }).unwrap();
+        }
+        assert_eq!(sink.0.events.lock().unwrap().iter().filter(|item| matches!(item.event, AgentEvent::ToolStarted { .. })).count(), TOOL_STARTED_FLOOD);
+        assert!(matches!(receiver.recv().await, Some(AgentEvent::SessionIdle)));
+        let delivered = tokio::time::timeout(std::time::Duration::from_secs(15), async {
+            let mut started = 0;
+            while started < TOOL_STARTED_FLOOD {
+                if let Some(AgentEvent::ToolStarted { tool_call_id, .. }) = receiver.recv().await {
+                    assert_eq!(tool_call_id, format!("tool-{started}"));
+                    started += 1;
+                }
+            }
+            started
+        }).await.unwrap();
+        assert_eq!(delivered, TOOL_STARTED_FLOOD);
+    }
+
+    #[test] fn accept_edits_launches_like_ask(){let cwd=Path::new("C:/project");let ask=ExecOptions{approval_mode:ApprovalMode::Ask,..ExecOptions::default()};let accept=ExecOptions{approval_mode:ApprovalMode::AcceptEdits,..ExecOptions::default()};let (a,b)=(CodexAdapter::start_params(cwd,&ask),CodexAdapter::start_params(cwd,&accept));assert_eq!(a["approvalPolicy"],b["approvalPolicy"]);assert_eq!(a["sandbox"],b["sandbox"]);assert_eq!(b["approvalPolicy"],"on-request");assert_eq!(b["sandbox"],"workspace-write");let resume=CodexAdapter::resume_params("thread",cwd,&accept,None);assert_eq!(resume["approvalPolicy"],"on-request");assert_eq!(resume["sandbox"],"workspace-write");}
+    #[test] fn approval_policy_and_sandbox_are_typed_and_bypass_only_for_bypass(){let cwd=Path::new("C:/project");let start=CodexAdapter::start_params(cwd,&ExecOptions::default());assert_eq!(start["approvalPolicy"],"on-request");assert_eq!(start["sandbox"],"workspace-write");let auto=CodexAdapter::start_params(cwd,&ExecOptions{approval_mode:ApprovalMode::Auto,..ExecOptions::default()});assert_eq!(auto["approvalPolicy"],"on-request");assert_eq!(auto["sandbox"],"workspace-write");let bypass=ExecOptions{approval_mode:ApprovalMode::Bypass,..ExecOptions::default()};let start=CodexAdapter::start_params(cwd,&bypass);assert_eq!(start["approvalPolicy"],"never");assert_eq!(start["sandbox"],"danger-full-access");let resume=CodexAdapter::resume_params("thread",cwd,&bypass,None);assert_eq!(resume["approvalPolicy"],"never");assert_eq!(resume["sandbox"],"danger-full-access");}
+    #[test]
+    fn usage_subtraction_is_validated_and_keeps_reported_fallback() {
+        let a = usage_report(
+            Some(
+                &json!({"inputTokens":10,"cachedInputTokens":3,"cacheWriteInputTokens":2,"outputTokens":4,"reasoningOutputTokens":1}),
+            ),
+            Some("m".into()),
+            true,
+        );
+        assert_eq!(a.input_tokens, Some(5));
+        assert_eq!(a.reasoning_tokens, Some(1));
+        let b = usage_report(
+            Some(&json!({"inputTokens":2,"cachedInputTokens":3,"cacheWriteInputTokens":1})),
+            None,
+            true,
+        );
+        assert_eq!(b.input_tokens, Some(2));
+        assert!(b.evidence_note.is_some());
+        let c = usage_report(
+            Some(&json!({"inputTokens":4,"cachedInputTokens":1})),
+            None,
+            true,
+        );
+        assert_eq!(c.input_tokens, Some(4));
+        assert!(c.evidence_note.is_some());
+        let d = usage_report(None, None, true);
+        assert_eq!(d.input_tokens, None);
+        let e = usage_report(Some(&json!({"cachedInputTokens":2})), None, true);
+        assert_eq!(e.input_tokens, None);
+        assert!(e.evidence_note.is_some());
+        let c = usage_report(None, None, false);
+        assert_eq!(c.usage_status, "unreported");
+        assert_eq!(c.input_tokens, None);
+        let current = json!({
+            "last": {"inputTokens":8,"cachedInputTokens":5,"cacheWriteInputTokens":2,"totalTokens":413000},
+            "total": {"totalTokens":900000},
+            "modelContextWindow": 828000
+        });
+        assert_eq!(context_window_from_token_usage(&current), (Some(413000), Some(828000)));
+        let report = usage_report(Some(&current), None, true);
+        assert_eq!(report.context_used, Some(413000), "context uses last/current-turn total, never lifetime total");
+        assert_eq!(report.context_size, Some(828000));
+        assert!(matches!(
+            map_notification("thread/name/updated", &json!({"threadId":"thread","threadName":"Generated chat"})),
+            Some(AgentEvent::SessionTitle { title }) if title == "Generated chat"
+        ));
+        assert!(matches!(map_notification("thread/name/updated", &json!({"threadId":"thread","threadName":"Generated chat"})), Some(AgentEvent::SessionTitle { title }) if title == "Generated chat"));
+    }
+    #[test]
+    fn catalog_models_normalize_tiers_and_efforts() {
+        let m=parse_catalog_model(&json!({"id":"m","displayName":"Model","supportedReasoningEfforts":[{"reasoningEffort":"low"}],"defaultReasoningEffort":"low","serviceTiers":[{"id":"priority","name":"Fast"}]})).unwrap();
+        assert_eq!(m.supported_thinking, vec!["low"]);
+        assert_eq!(m.service_tiers[0].id, "priority");
+        assert!(m.host_dependent);
+    }
+    #[test]
+    fn codex_0161_catalog_efforts_remain_model_specific_raw_values() {
+        let full = ["low", "medium", "high", "xhigh", "max", "ultra"];
+        let luna = ["low", "medium", "high", "xhigh", "max"];
+        for (id, expected) in [
+            ("gpt-6.1-sol", full.as_slice()), ("gpt-6-astra", full.as_slice()),
+            ("gpt-6-sol", full.as_slice()), ("gpt-5.6-sol", full.as_slice()),
+            ("gpt-5.6-terra", full.as_slice()), ("gpt-6-luna", luna.as_slice()),
+            ("gpt-5.6-luna", luna.as_slice()),
+        ] {
+            let supported = expected.iter().map(|effort| json!({"reasoningEffort":effort,"description":"catalog description"})).collect::<Vec<_>>();
+            let model = parse_catalog_model(&json!({"id":id,"supportedReasoningEfforts":supported})).unwrap();
+            let expected = expected.iter().map(|effort| effort.to_string()).collect::<Vec<_>>();
+            assert_eq!(model.supported_thinking, expected, "wire effort values must stay attached to {id}");
+        }
+    }
+    #[test]
+    fn standard_speed_never_becomes_a_tier_id() {
+        let o = ExecOptions {
+            service_tier: Some("standard".into()),
+            ..ExecOptions::default()
+        };
+        assert_eq!(o.service_tier.as_deref(), Some("standard"));
+        let p = CodexAdapter::resume_params("thread", Path::new("."), &o, None);
+        assert!(p.get("serviceTier").is_none());
+        // The current text is sent on resume only when it differs from the
+        // stored thread hash.
+        let differing = CodexAdapter::resume_params("thread", Path::new("."), &o, Some("0000000000000000000000000000000000000000000000000000000000000000"));
+        assert!(differing.get("developerInstructions").is_none(), "no instructions were requested");
+        let with_text = ExecOptions { instructions: Some("restored text".into()), ..o.clone() };
+        assert_eq!(CodexAdapter::resume_params("thread", Path::new("."), &with_text, None)["developerInstructions"], "restored text");
+        let same = instruction_sha256("restored text").unwrap();
+        assert!(CodexAdapter::resume_params("thread", Path::new("."), &with_text, Some(&same)).get("developerInstructions").is_none());
+    }
+}

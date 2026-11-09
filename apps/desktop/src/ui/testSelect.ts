@@ -1,0 +1,71 @@
+// Test helpers for the custom Select dropdown (not a test file itself).
+import { act } from 'react'
+
+export function selectTrigger(root: ParentNode, label: string) {
+  return [...root.querySelectorAll<HTMLButtonElement>('.select-trigger[aria-label]')].find((button) => {
+    const name = button.getAttribute('aria-label') ?? ''
+    return name === label || name.startsWith(`${label}, `)
+  }) ?? null
+}
+
+export function selectValue(root: ParentNode, label: string) {
+  return selectTrigger(root, label)?.getAttribute('data-value') ?? null
+}
+
+export async function openSelect(root: ParentNode, label: string) {
+  const trigger = selectTrigger(root, label)
+  if (!trigger) throw new Error(`No dropdown labelled ${label}`)
+  if (trigger.getAttribute('aria-expanded') !== 'true') await act(async () => { trigger.click() })
+  // A Select inside a dialog floats its list in a portal on the page body, so find it by the id the trigger names.
+  const listId = trigger.getAttribute('aria-controls')
+  const list = (listId ? document.getElementById(listId) : null) ?? trigger.parentElement?.querySelector<HTMLElement>('[role="listbox"]')
+  if (!list) throw new Error(`Dropdown ${label} did not open`)
+  return list
+}
+
+/** Opens the dropdown, reads its options and closes it again. */
+export async function selectOptions(root: ParentNode, label: string) {
+  const list = await openSelect(root, label)
+  const options = [...list.querySelectorAll<HTMLElement>('[role="option"]')].map((option) => ({ value: option.getAttribute('data-value') ?? '', label: option.textContent ?? '', disabled: option.getAttribute('aria-disabled') === 'true' }))
+  await act(async () => { selectTrigger(root, label)?.click() })
+  return options
+}
+
+export async function chooseOption(root: ParentNode, label: string, value: string) {
+  const list = await openSelect(root, label)
+  const option = [...list.querySelectorAll<HTMLElement>('[role="option"]')].find((item) => item.getAttribute('data-value') === value)
+  if (!option) throw new Error(`Dropdown ${label} has no option ${value}`)
+  await act(async () => { option.click() })
+}
+
+export async function chooseOptionByLabel(root: ParentNode, label: string, text: string) {
+  const list = await openSelect(root, label)
+  const option = [...list.querySelectorAll<HTMLElement>('[role="option"]')].find((item) => item.textContent === text)
+  if (!option) throw new Error(`Dropdown ${label} has no option labelled ${text}`)
+  await act(async () => { option.click() })
+}
+
+/**
+ * The text of the "?" explanation inside `scope`. Tooltip bubbles render in a
+ * portal on document.body, so the trigger's `aria-describedby` is what links
+ * back to the bubble's text.
+ */
+export function helpTipBubble(scope: ParentNode | null | undefined) {
+  const trigger = scope?.querySelector('.help-tip-trigger') ?? scope?.querySelector('[aria-describedby]')
+  const id = trigger?.getAttribute('aria-describedby')
+  return id ? document.getElementById(id) : null
+}
+
+/** The text of the "?" explanation inside `scope` (its bubble portals to document.body). */
+export function helpTipText(scope: ParentNode | null | undefined) {
+  return helpTipBubble(scope)?.textContent ?? null
+}
+
+/**
+ * A mounted view's text plus its tooltip bubbles, which portal to
+ * document.body and so are not inside the host element.
+ */
+export function viewText(root: ParentNode) {
+  const bubbles = [...document.body.querySelectorAll('[role="tooltip"]')].map((node) => node.textContent ?? '')
+  return [root.textContent ?? '', ...bubbles].join(' ')
+}

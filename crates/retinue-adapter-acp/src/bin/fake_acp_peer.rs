@@ -1,0 +1,671 @@
+//! Test-only ACP peer and `models --verbose` stub. Not a production entrypoint.
+use retinue_adapter_acp::sha256_hex;
+use serde_json::{json, Value};
+use std::{
+    collections::BTreeSet,
+    env, fs,
+    io::{BufRead, Write},
+    path::PathBuf,
+    thread,
+    time::Duration,
+};
+
+#[path = "wire_support/wire_replay.rs"]
+mod wire_replay;
+
+const FIXTURE: &str = include_str!("../../tests/fixtures/models-verbose.txt");
+const ISOLATION_MARKER: &str = "retinue-oc-catalog";
+
+fn main() {
+    wire_replay::init("opencode", "1.18.34");
+    if let Some(path) = wire_replay::replay_path_from_args() {
+        std::process::exit(wire_replay::run_replay(&path));
+    }
+    let args: Vec<String> = env::args().skip(1).collect();
+    let flags = Flags::parse(&args);
+    if let Some(path) = &flags.pid_log {
+        let role = if args.iter().any(|arg| arg == "models") { "verbose" } else { "acp" };
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(file, "{} {role}", std::process::id());
+        }
+    }
+    // OpenCode 2 removed `acp --cwd`. Reproduce it: the flag prints help on
+    // stdout and never answers JSON-RPC, so a caller that still passes it fails.
+    if args.iter().any(|arg| arg == "--cwd") {
+        write_record(&flags, &[], None);
+        println!("Usage: opencode acp [--login]");
+        let _ = std::io::stdout().flush();
+        std::process::exit(2);
+    }
+    if args.iter().any(|arg| arg == "models") {
+        catalog_main(&flags);
+        return;
+    }
+    if args.iter().any(|arg| arg == "--hang") {
+        thread::sleep(Duration::from_secs(30));
+        return;
+    }
+    if args.iter().any(|arg| arg == "--fail") {
+        std::process::exit(2);
+    }
+    acp_main(&args, &flags);
+}
+
+struct Flags {
+    record: Option<PathBuf>,
+    models: Vec<String>,
+    variant_models: BTreeSet<String>,
+    efforts: Vec<String>,
+    effort_id: String,
+    reject_effort: Option<String>,
+    stale_effort: u32,
+    reject_load: bool,
+    fail_load: Option<String>,
+    usage: String,
+    permission: bool,
+    v2: bool,
+    v2_all_answer: bool,
+    v2_stop_after: Option<u32>,
+    pid_log: Option<PathBuf>,
+    image_stem: Option<String>,
+}
+
+impl Flags {
+    fn parse(args: &[String]) -> Self {
+        let mut record = None;
+        let mut models = "opencode/big-pickle,opencode-go/deepseek-v4.1-flash".to_owned();
+        let mut variant_models = "opencode-go/deepseek-v4.1-flash".to_owned();
+        let mut efforts = "low,high,max,default".to_owned();
+        let mut effort_id = "effort".to_owned();
+        let mut reject_effort = None;
+        let mut stale_effort = 0u32;
+        let mut reject_load = false;
+        let mut fail_load = None;
+        let mut usage = "sequence".to_owned();
+        let mut permission = false;
+        let mut v2 = false;
+        let mut v2_all_answer = false;
+        let mut v2_stop_after = None;
+        let mut pid_log = None;
+        let mut image_stem = None;
+        let mut index = 0;
+        while index < args.len() {
+            let arg = &args[index];
+            let next = args.get(index + 1).map(String::as_str);
+            match arg.as_str() {
+                "--record" => record = next.map(PathBuf::from),
+                "--models" => models = next.unwrap_or("").to_owned(),
+                "--variant-models" => variant_models = next.unwrap_or("").to_owned(),
+                "--efforts" => efforts = next.unwrap_or("").to_owned(),
+                "--effort-id" => effort_id = next.unwrap_or("effort").to_owned(),
+                "--reject-effort" => reject_effort = next.map(str::to_owned),
+                "--stale-effort" => stale_effort = next.and_then(|value| value.parse().ok()).unwrap_or(0),
+                "--reject-load" => reject_load = true,
+                "--fail-load" => fail_load = next.map(str::to_owned),
+                "--usage" => usage = next.unwrap_or("sequence").to_owned(),
+                "--permission-request" => permission = true,
+                "--v2" => v2 = true,
+                "--v2-all-answer" => v2_all_answer = true,
+                "--v2-stop-after" => v2_stop_after = next.and_then(|value| value.parse().ok()),
+                "--pid-log" => pid_log = next.map(PathBuf::from),
+                "--image-stem" => image_stem = next.map(str::to_owned),
+                _ => {}
+            }
+            index += if matches!(arg.as_str(), "--record" | "--models" | "--variant-models" | "--efforts" | "--effort-id" | "--reject-effort" | "--stale-effort" | "--fail-load" | "--usage" | "--v2-stop-after" | "--pid-log" | "--image-stem") {
+                2
+            } else {
+                1
+            };
+        }
+        Self {
+            record,
+            models: csv(&models),
+            variant_models: csv(&variant_models).into_iter().collect(),
+            efforts: csv(&efforts),
+            effort_id,
+            reject_effort,
+            stale_effort,
+            reject_load,
+            fail_load,
+            usage,
+            permission,
+            v2,
+            v2_all_answer,
+            v2_stop_after,
+            pid_log,
+            image_stem,
+        }
+    }
+}
+
+fn csv(value: &str) -> Vec<String> {
+    value
+        .split(',')
+        .filter(|part| !part.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+fn catalog_main(flags: &Flags) {
+    write_record(flags, &[], None);
+    if env::args().any(|arg| arg == "--verbose-invalid") {
+        std::process::exit(2);
+    }
+    if env::args().any(|arg| arg == "--hang") {
+        thread::sleep(Duration::from_secs(30));
+        return;
+    }
+    if env::args().any(|arg| arg == "--fail") {
+        std::process::exit(2);
+    }
+    println!("{FIXTURE}");
+    let _ = std::io::stdout().flush();
+}
+
+struct Session {
+    model: String,
+    models: Vec<String>,
+    mode: String,
+    modes: Vec<String>,
+    effort: Option<String>,
+    efforts: Vec<String>,
+    effort_id: String,
+    reject_effort: Option<String>,
+    stale_effort: u32,
+    variant_models: BTreeSet<String>,
+    prompt_id: Option<Value>,
+    permission_pending: Option<(Value, Value)>,
+    turns: u32,
+    v2_model_calls: u32,
+    v2: bool,
+}
+
+/// The `--v2` model that rejects `session/set_config_option` unless
+/// `--v2-all-answer` is given, so tests can exercise a provider error mid-walk.
+const V2_REJECT_MODEL: &str = "opencode-go/model-004";
+
+/// OpenCode 2's `session/new` lists every gateway model with a current choice
+/// and already publishes the current model's `thought_level` levels.
+fn v2_models() -> Vec<String> {
+    (1..=115).map(|index| format!("opencode-go/model-{index:03}")).collect()
+}
+
+/// OpenCode 2 rebuilds the `effort` select for the newly selected model after
+/// `session/set_config_option {configId:"model"}`. This stands in for the
+/// provider's per-model answer. `None` means the model genuinely has no
+/// `effort` option; `default` stays in the option list because that is what the
+/// provider sends, and the catalog walk is expected to drop it.
+fn v2_efforts_for(model: &str) -> Option<Vec<String>> {
+    let levels: &[&str] = match model {
+        "opencode-go/model-001" => &["low", "medium", "high", "default"],
+        "opencode-go/model-002" => &["low", "high", "max", "default"],
+        "opencode-go/model-003" => return None,
+        "opencode-go/model-004" => &["max", "default"],
+        "opencode-go/model-005" => &["minimal", "none", "thinking", "default"],
+        _ => &["low", "high", "max", "default"],
+    };
+    Some(levels.iter().map(|level| (*level).to_owned()).collect())
+}
+
+impl Session {
+    fn from_flags(flags: &Flags) -> Self {
+        let models = if flags.v2 { v2_models() } else { flags.models.clone() };
+        let variant_models = if flags.v2 { models.iter().cloned().collect() } else { flags.variant_models.clone() };
+        let model = if flags.v2 {
+            "opencode-go/model-007".to_owned()
+        } else {
+            flags.models.first().cloned().unwrap_or_else(|| "opencode/big-pickle".into())
+        };
+        let effort = if flags.v2 { Some("default".to_owned()) } else { None };
+        let efforts = if flags.v2 { v2_efforts_for(&model).unwrap_or_default() } else { flags.efforts.clone() };
+        Self {
+            model,
+            models,
+            mode: "build".into(),
+            modes: mode_list(),
+            effort,
+            efforts,
+            effort_id: flags.effort_id.clone(),
+            reject_effort: flags.reject_effort.clone(),
+            stale_effort: flags.stale_effort,
+            variant_models,
+            prompt_id: None,
+            permission_pending: None,
+            turns: 0,
+            v2_model_calls: 0,
+            v2: flags.v2,
+        }
+    }
+
+    fn options(&self) -> Value {
+        let mut options = vec![select("model", "model", &self.model, &self.models), select("mode", "mode", &self.mode, &self.modes)];
+        if let Some(efforts) = self.efforts_for() {
+            let current = self.effort.as_deref().unwrap_or("default");
+            options.push(select(&self.effort_id, "thought_level", current, &efforts));
+        }
+        Value::Array(options)
+    }
+
+    /// The `effort` levels to publish for the current model: a per-model table
+    /// on the `--v2` shape, otherwise the flat `--efforts` set when the model
+    /// offers one.
+    fn efforts_for(&self) -> Option<Vec<String>> {
+        if self.v2 {
+            v2_efforts_for(&self.model)
+        } else if self.effort.is_some() {
+            Some(self.efforts.clone())
+        } else {
+            None
+        }
+    }
+}
+
+fn mode_list() -> Vec<String> {
+    let mut modes = vec!["build".into(), "plan".into()];
+    if config_has_retinue_agent() {
+        modes.push("retinue".into());
+    }
+    modes
+}
+
+fn config_has_retinue_agent() -> bool {
+    let Ok(raw) = env::var("OPENCODE_CONFIG_CONTENT") else {
+        return false;
+    };
+    serde_json::from_str::<Value>(&raw)
+        .ok()
+        .and_then(|value| value["agent"]["retinue"].as_object().map(|_| ()))
+        .is_some()
+}
+
+fn select(id: &str, category: &str, current: &str, values: &[String]) -> Value {
+    json!({
+        "id": id,
+        "category": category,
+        "currentValue": current,
+        "options": values.iter().map(|value| json!({"value": value, "name": value})).collect::<Vec<_>>()
+    })
+}
+
+fn acp_main(_args: &[String], flags: &Flags) {
+    let mut session = Session::from_flags(flags);
+    let mut rpc = Vec::new();
+    write_record(flags, &rpc, Some(&session));
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
+    for line in stdin.lock().lines() {
+        let Ok(line) = line else { break };
+        let Ok(message) = serde_json::from_str::<Value>(&line) else { continue };
+        wire_replay::input(&message);
+        let method = message.get("method").and_then(Value::as_str).unwrap_or("");
+        if method.is_empty() {
+            if let Some((request_id, prompt_id)) = session.permission_pending.clone() {
+                if message.get("id") == Some(&request_id) && message.get("result").is_some() {
+                    session.permission_pending = None;
+                    finish_prompt(&mut stdout, &prompt_id, "end_turn", false);
+                }
+            }
+            continue;
+        }
+        let mut entry = json!({"method": method});
+        if method == "session/new" { entry["cwd"] = message["params"]["cwd"].clone(); }
+        if method == "session/load" { entry["sessionId"] = message["params"]["sessionId"].clone(); }
+        if method == "session/set_config_option" {
+            entry["configId"] = message["params"]["configId"].clone();
+            entry["value"] = message["params"]["value"].clone();
+        }
+        rpc.push(entry);
+        write_record(flags, &rpc, Some(&session));
+        if method == "initialized" {
+            let _ = writeln!(std::io::stderr(), "Method not found");
+            continue;
+        }
+        if method == "session/cancel" {
+            if let Some(id) = session.prompt_id.take() {
+                finish_prompt(&mut stdout, &id, "cancelled", true);
+            }
+            continue;
+        }
+        let Some(id) = message.get("id").cloned() else { continue };
+        match method {
+            "initialize" => {
+                respond(
+                    &mut stdout,
+                    &id,
+                    json!({"protocolVersion": 1, "agentCapabilities": {"loadSession": true}, "agentInfo": {"name": "fake-opencode", "version": "test"}}),
+                );
+            }
+            "session/new" | "session/load" => {
+                // `--fail-load` returns a non-resume provider error (the
+                // reconnect must surface it); `--reject-load` returns the
+                // "session not found" evidence that lets the adapter fall back
+                // to `session/new`.
+                if method == "session/load" {
+                    if let Some(message) = &flags.fail_load {
+                        error(&mut stdout, &id, -32000, message);
+                        continue;
+                    }
+                    if flags.reject_load {
+                        error(&mut stdout, &id, -32000, "session not found");
+                        continue;
+                    }
+                }
+                let session_id = message["params"]["sessionId"].as_str().unwrap_or("native-session");
+                let mut result = json!({"sessionId": session_id});
+                if !env::args().any(|arg| arg == "--catalog-no-config-options") {
+                    result["configOptions"] = session.options();
+                }
+                respond(&mut stdout, &id, result);
+            }
+            "session/set_config_option" => {
+                let config_id = message["params"]["configId"].as_str().unwrap_or("");
+                let value = message["params"]["value"].as_str().unwrap_or("");
+                if session.v2 && config_id == "model" {
+                    session.v2_model_calls += 1;
+                    // Stop answering to exercise the client's per-call budget.
+                    if flags.v2_stop_after.is_some_and(|limit| session.v2_model_calls > limit) {
+                        continue;
+                    }
+                    // One model rejects the change, as a provider can, without
+                    // failing the whole session.
+                    if !flags.v2_all_answer && value == V2_REJECT_MODEL {
+                        error(&mut stdout, &id, -32602, "model is not selectable");
+                        write_record(flags, &rpc, Some(&session));
+                        continue;
+                    }
+                }
+                if !apply_option(&mut session, config_id, value) {
+                    error(&mut stdout, &id, -32602, "option value is not offered");
+                } else {
+                    respond(&mut stdout, &id, json!({"configOptions": session.options()}));
+                }
+                write_record(flags, &rpc, Some(&session));
+            }
+            "session/prompt" => handle_prompt(&mut stdout, flags, &mut session, &id),
+            "session/close" => respond(&mut stdout, &id, json!({})),
+            _ => error(&mut stdout, &id, -32601, "method not found"),
+        }
+    }
+}
+
+fn apply_option(session: &mut Session, config_id: &str, value: &str) -> bool {
+    match config_id {
+        "model" if session.models.iter().any(|model| model == value) => {
+            session.model = value.to_owned();
+            if session.v2 {
+                session.effort = v2_efforts_for(value).map(|_| "default".to_owned());
+            } else {
+                session.effort = if session.variant_models.contains(value) {
+                    Some(session.effort.clone().unwrap_or_else(|| session.efforts.first().cloned().unwrap_or_else(|| "low".into())))
+                } else {
+                    None
+                };
+            }
+            true
+        }
+        // `<model>/<effort>`: OpenCode accepts the variant attached to the model.
+        "model" if config_id_is_combined(session, value) => {
+            let (base, variant) = value.rsplit_once('/').unwrap_or((value, ""));
+            session.model = base.to_owned();
+            session.effort = Some(next_effort(session, variant));
+            true
+        }
+        "mode" if session.modes.iter().any(|mode| mode == value) => {
+            session.mode = value.to_owned();
+            true
+        }
+        id if id == session.effort_id
+            && session.effort.is_some()
+            && session.efforts.iter().any(|effort| effort == value)
+            && session.reject_effort.as_deref() != Some(value) =>
+        {
+            session.effort = Some(next_effort(session, value));
+            true
+        }
+        _ => false,
+    }
+}
+
+fn config_id_is_combined(session: &Session, value: &str) -> bool {
+    let Some((base, variant)) = value.rsplit_once('/') else { return false };
+    let offered = if session.v2 {
+        v2_efforts_for(base).is_some_and(|levels| levels.iter().any(|level| level == variant))
+    } else {
+        session.variant_models.contains(base) && session.efforts.iter().any(|effort| effort == variant)
+    };
+    session.models.iter().any(|model| model == base) && offered && session.reject_effort.as_deref() != Some(variant)
+}
+
+/// A stale reply models OpenCode losing the variant to a late agent switch:
+/// the call is accepted but the echoed effort stays `default`.
+fn next_effort(session: &mut Session, wanted: &str) -> String {
+    if session.stale_effort > 0 {
+        session.stale_effort -= 1;
+        "default".to_owned()
+    } else {
+        wanted.to_owned()
+    }
+}
+
+fn handle_prompt(stdout: &mut impl Write, flags: &Flags, session: &mut Session, id: &Value) {
+    prompt_delay();
+    session.turns += 1;
+    let turn = session.turns;
+    if flags.permission {
+        let request_id = json!(format!("permission-{turn}"));
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": request_id,
+            "method": "session/request_permission",
+            "params": {
+                "sessionId": "native-session",
+                "toolCall": {"title": "Run command", "rawInput": "echo safe"},
+                "options": [
+                    {"optionId": "allow_once", "kind": "allow_once", "name": "Allow once"},
+                    {"optionId": "reject_once", "kind": "reject_once", "name": "Reject once"}
+                ]
+            }
+        });
+        notify(stdout, &serde_json::to_string(&request).unwrap_or_default());
+        session.permission_pending = Some((request_id, id.clone()));
+        return;
+    }
+    if flags.usage == "cancel" {
+        session.prompt_id = Some(id.clone());
+        notify(stdout, &chunk("fixture response"));
+        return;
+    }
+    if turn == 1 {
+        if let Some(stem) = flags.image_stem.as_deref() {
+            for line in image_tool_updates(stem) {
+                notify(stdout, &line);
+            }
+        }
+    }
+    match flags.usage.as_str() {
+        "partial" => notify(stdout, &usage_line(4000, 200000, "0.0015894")),
+        "none" => {}
+        "failed" => notify(stdout, &usage_line(0, 200000, "0")),
+        "error" => {
+            error(stdout, id, -32000, "provider failed");
+            return;
+        }
+        "busy" => {
+            error(stdout, id, -32000, "Session is busy");
+            return;
+        }
+        _ => {
+            if turn == 1 {
+                notify(stdout, &usage_line(4000, 200000, "0.0015894"));
+            } else {
+                notify(stdout, &usage_line(4030, 200000, "0.001637988"));
+            }
+        }
+    }
+    notify(stdout, &chunk("fixture response"));
+    let result = match flags.usage.as_str() {
+        "partial" | "none" => json!({"stopReason": "end_turn"}),
+        "failed" => json!({"stopReason": "error", "usage": {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0, "thoughtTokens": 0, "cachedReadTokens": 0}}),
+        _ if turn >= 2 => json!({"stopReason": "end_turn", "usage": {"inputTokens": 30, "outputTokens": 12, "totalTokens": 132, "thoughtTokens": 2, "cachedReadTokens": 90}}),
+        _ => json!({"stopReason": "end_turn", "usage": {"inputTokens": 120, "outputTokens": 30, "totalTokens": 150, "thoughtTokens": 23}}),
+    };
+    respond(stdout, id, result);
+}
+
+fn finish_prompt(stdout: &mut impl Write, id: &Value, stop_reason: &str, zeros: bool) {
+    if zeros {
+        notify(stdout, &usage_line(0, 200000, "0"));
+    }
+    let result = if zeros {
+        json!({"stopReason": stop_reason, "usage": {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0, "thoughtTokens": 0, "cachedReadTokens": 0}})
+    } else {
+        json!({"stopReason": stop_reason})
+    };
+    respond(stdout, id, result);
+}
+
+fn usage_line(used: u64, size: u64, amount: &str) -> String {
+    format!(
+        r#"{{"jsonrpc":"2.0","method":"session/update","params":{{"sessionId":"native-session","update":{{"sessionUpdate":"usage_update","used":{used},"size":{size},"cost":{{"amount":{amount},"currency":"USD"}}}}}}}}"#
+    )
+}
+
+fn chunk(text: &str) -> String {
+    serde_json::to_string(&json!({
+        "jsonrpc": "2.0",
+        "method": "session/update",
+        "params": {"sessionId": "native-session", "update": {"sessionUpdate": "agent_message_chunk", "content": {"type": "text", "text": text}}}
+    }))
+    .unwrap_or_default()
+}
+
+/// Exactly the two updates OpenCode 2.2.2 sends for its image tool: the started
+/// update names the tool in `title` (no `name`, no path), and the finished one
+/// carries `{path, model, jobID}` in `rawOutput.metadata` and no tool name at
+/// all. Read from `opencode.exe` 2.2.2: `yt(...)` builds the first, `hn(...)`
+/// the second.
+fn image_tool_updates(stem: &str) -> Vec<String> {
+    let started = json!({
+        "jsonrpc": "2.0",
+        "method": "session/update",
+        "params": {
+            "sessionId": "native-session",
+            "update": {
+                "sessionUpdate": "tool_call",
+                "toolCallId": "tool_img_1",
+                "status": "in_progress",
+                "kind": "other",
+                "title": "experimental_image_generate",
+                "locations": [],
+                "rawInput": {"prompt": "a cat", "path": null}
+            }
+        }
+    });
+    let finished = json!({
+        "jsonrpc": "2.0",
+        "method": "session/update",
+        "params": {
+            "sessionId": "native-session",
+            "update": {
+                "sessionUpdate": "tool_call_update",
+                "toolCallId": "tool_img_1",
+                "status": "completed",
+                "locations": [],
+                "content": [{"type": "content", "content": {"type": "text", "text": "Image job started."}}],
+                "rawOutput": {"metadata": {"path": stem, "model": "opencode-go/image-model", "jobID": "img_job_1"}}
+            }
+        }
+    });
+    vec![serde_json::to_string(&started).unwrap_or_default(), serde_json::to_string(&finished).unwrap_or_default()]
+}
+
+fn respond(stdout: &mut impl Write, id: &Value, result: Value) {
+    write_json(stdout, &json!({"jsonrpc": "2.0", "id": id, "result": result}));
+}
+
+fn error(stdout: &mut impl Write, id: &Value, code: i64, message: &str) {
+    write_json(stdout, &json!({"jsonrpc": "2.0", "id": id, "error": {"code": code, "message": message}}));
+}
+
+fn notify(stdout: &mut impl Write, line: &str) {
+    if let Ok(value) = serde_json::from_str::<Value>(line) {
+        wire_replay::out(&value);
+    }
+    let _ = writeln!(stdout, "{line}");
+    let _ = stdout.flush();
+}
+
+fn write_json(stdout: &mut impl Write, value: &Value) {
+    if let Ok(line) = serde_json::to_string(value) {
+        notify(stdout, &line);
+    }
+}
+
+fn write_record(flags: &Flags, rpc: &[Value], _session: Option<&Session>) {
+    let Some(path) = &flags.record else { return };
+    let mut keys = env::vars().map(|(key, _)| key).collect::<Vec<_>>();
+    keys.sort();
+    let mut allow = serde_json::Map::new();
+    for key in ["LANG", "LC_ALL", "TZ", "NO_COLOR", "TERM"] {
+        if let Ok(value) = env::var(key) {
+            allow.insert(key.into(), json!(value));
+        }
+    }
+    let isolated = ["XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "OPENCODE_CONFIG_DIR", "OPENCODE_DATA_DIR", "OPENCODE_CACHE_DIR", "OPENCODE_STATE_DIR"]
+        .into_iter()
+        .filter(|key| env::var(key).ok().is_some_and(|value| value.contains(ISOLATION_MARKER)))
+        .collect::<Vec<_>>();
+    let config = config_shape();
+    let body = json!({
+        "pid": std::process::id(),
+        "cwd": env::current_dir().ok().map(|path| path.to_string_lossy().into_owned()),
+        "cwd_entries": env::current_dir().ok().and_then(|path| fs::read_dir(path).ok()).map(|entries| entries.count()),
+        "argv": env::args().skip(1).collect::<Vec<_>>(),
+        "env_keys": keys,
+        "allow": allow,
+        "config": config,
+        "isolated_dirs": isolated,
+        "rpc": rpc,
+    });
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let tmp = path.with_extension("tmp");
+    if fs::write(&tmp, serde_json::to_vec_pretty(&body).unwrap_or_default()).is_ok() {
+        let _ = fs::rename(&tmp, path);
+    }
+}
+
+fn config_shape() -> Value {
+    let Ok(raw) = env::var("OPENCODE_CONFIG_CONTENT") else {
+        return json!({"ok": false});
+    };
+    let Ok(value) = serde_json::from_str::<Value>(&raw) else {
+        return json!({"ok": false});
+    };
+    let keys = value.as_object().map(|map| map.keys().cloned().collect::<Vec<_>>()).unwrap_or_default();
+    let agent = &value["agent"]["retinue"];
+    let prompt = agent["prompt"].as_str().unwrap_or("");
+    json!({
+        "ok": true,
+        "keys": keys,
+        "schema": value["$schema"],
+        "model": value.get("model").cloned().unwrap_or(Value::Null),
+        "agent_ids": value["agent"].as_object().map(|map| map.keys().cloned().collect::<Vec<_>>()).unwrap_or_default(),
+        "retinue_mode": agent["mode"],
+        "retinue_model": agent.get("model").cloned().unwrap_or(Value::Null),
+        "prompt_present": !prompt.is_empty(),
+        "prompt_sha256": if prompt.is_empty() { Value::Null } else { json!(sha256_hex(prompt.as_bytes())) },
+    })
+}
+
+/// `--prompt-delay-ms N`: answer a prompt after N milliseconds, so a test can model a long turn.
+fn prompt_delay() {
+    let args: Vec<String> = env::args().collect();
+    if let Some(ms) = args.iter().position(|arg| arg == "--prompt-delay-ms").and_then(|at| args.get(at + 1)).and_then(|value| value.parse::<u64>().ok()) {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
+    }
+}

@@ -1,0 +1,17 @@
+[package]
+name = "retinue-adapter-codex"
+version.workspace = true
+edition.workspace = true
+[dependencies]
+async-trait.workspace = true
+retinue-agent-core = { path = "../retinue-agent-core" }
+retinue-process = { path = "../retinue-process" }
+chrono.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+
+[[bin]]
+name = "codex-cli-recorder"
+path = "src/bin/codex_cli_recorder.rs"
+test = false
+bench = false

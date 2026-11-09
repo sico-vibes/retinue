@@ -1,0 +1,117 @@
+/* Settings > Remote */
+.remote-preview-note { margin: 0 0 14px; padding: 8px 12px; color: var(--text-2); font-size: var(--fs-xs); border: 1px dashed var(--line-strong); border-radius: var(--radius-md); }
+.remote-hero { margin: 0 4px; display: flex; gap: 12px; align-items: center; }
+.remote-hero h3 { margin: 0 0 6px; font-size: var(--fs-md); font-weight: 600; }
+.remote-hero p { margin: 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.5; text-wrap: pretty; }
+.remote-hero-art { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; color: var(--text-3); }
+.remote-hero-art svg { flex: 0 0 auto; }
+/* One even dashed link between the two devices; it moves only while Remote is on. */
+.remote-hero-art i { width: 16px; height: 2px; flex: 0 0 auto; border-radius: 1px; background: repeating-linear-gradient(90deg, var(--text-3) 0 4px, transparent 4px 7px); }
+.remote-hero-art.live i { background-image: repeating-linear-gradient(90deg, var(--status-ok, var(--text-1)) 0 4px, transparent 4px 7px); animation: remote-link 1.2s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .remote-hero-art.live i { animation: none; } }
+@keyframes remote-link { to { background-position-x: 6px; } }
+
+.remote-status { margin: 0; padding: 12px 16px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--line); }
+.remote-status strong { display: block; font-size: var(--fs-sm); font-weight: 500; }
+.remote-status small { color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+
+.remote-pair { padding: 16px; display: flex; gap: 20px; align-items: center; }
+.qr-glyph { flex: 0 0 auto; color: #111; padding: 8px; background: #fff; border-radius: 10px; }
+.remote-pair-copy { min-width: 0; display: grid; gap: 6px; }
+.remote-pair-copy small { color: var(--text-3); font-size: var(--fs-2xs); letter-spacing: .08em; text-transform: uppercase; }
+.remote-pair-copy p { margin: 0; color: var(--text-2); font-size: var(--fs-xs); line-height: 1.5; }
+.remote-code { display: block; font: 600 26px/1.1 var(--font-mono); letter-spacing: .12em; color: var(--text-1); font-variant-numeric: tabular-nums; }
+.remote-pair-actions { margin-top: 4px; display: flex; flex-wrap: wrap; gap: 6px; }
+.remote-simulate { color: var(--text-3); }
+.remote-simulate svg { margin-right: 4px; }
+
+.remote-paired { padding: 14px 16px; display: flex; align-items: center; gap: 12px; background: color-mix(in srgb, var(--status-success) 10%, transparent); animation: remote-pop 260ms cubic-bezier(.2, .8, .2, 1) both; }
+.remote-paired-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; color: var(--status-success); background: color-mix(in srgb, var(--status-success) 16%, transparent); }
+.remote-paired > div { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.remote-paired strong { font-size: var(--fs-sm); font-weight: 600; }
+.remote-paired small { color: var(--text-2); font-size: var(--fs-xs); }
+@keyframes remote-pop { from { opacity: 0; transform: translateY(4px) scale(.99); } to { opacity: 1; transform: none; } }
+
+.remote-device { padding: 12px 16px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--line); }
+.remote-device:first-of-type { border-top: 0; }
+.remote-device-icon { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; color: var(--text-2); border-radius: var(--radius-md); background: var(--surface-selected); }
+.remote-device-copy { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.remote-device-copy strong { overflow: hidden; font-size: var(--fs-sm); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.remote-device-copy small { color: var(--text-3); font-size: var(--fs-xs); }
+.remote-online { display: inline-flex; align-items: center; gap: 5px; color: var(--status-success); }
+.remote-online i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.remote-tier-hint { margin: 0; padding: 10px 16px 14px; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.5; border-top: 1px solid var(--line); }
+
+.remote-activity { margin: 0; padding: 4px 16px 8px; list-style: none; display: grid; }
+.remote-activity li { padding: 8px 0; display: flex; justify-content: space-between; gap: 12px; color: var(--text-2); font-size: var(--fs-xs); border-top: 1px solid var(--line); }
+.remote-activity li:first-child { border-top: 0; }
+.remote-activity time { flex: 0 0 auto; color: var(--text-3); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 640px) { .remote-pair { flex-direction: column; align-items: flex-start; } }
+@media (prefers-reduced-motion: reduce) { .remote-hero-art i { animation: none; } .remote-paired { animation: none; } }
+
+/* Tailscale not ready: what to do, as numbered steps. */
+.remote-fix { margin: 0; padding: 14px 16px; display: grid; gap: 8px; justify-items: start; border-bottom: 1px solid var(--line); background: var(--surface-warning); }
+.remote-fix strong { font-size: var(--fs-sm); font-weight: 600; }
+.remote-fix ol { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--text-2); font-size: var(--fs-xs); line-height: 1.5; }
+.remote-fix button { display: inline-flex; align-items: center; gap: 6px; }
+.remote-status > div { min-width: 0; flex: 1; }
+.remote-address { min-width: 0; max-width: 55%; height: 28px; padding: 0 10px; display: inline-flex; align-items: center; gap: 8px; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: transparent; font: 12px/1 var(--font-mono); cursor: pointer; }
+.remote-address span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.remote-address svg { flex: 0 0 auto; }
+.remote-address:hover { color: var(--text-1); background: var(--surface-hover); }
+.remote-address:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+/* A device asking to pair: the owner picks a tier and approves here. */
+.remote-request { padding: 14px 16px; display: flex; align-items: flex-start; gap: 12px; background: color-mix(in srgb, var(--user-accent, var(--text-1)) 8%, transparent); animation: remote-pop 260ms cubic-bezier(.2, .8, .2, 1) both; }
+.remote-request .remote-paired-icon { color: var(--text-1); background: var(--surface-selected); }
+.remote-request-copy { min-width: 0; flex: 1; display: grid; gap: 4px; }
+.remote-request-copy strong { font-size: var(--fs-sm); font-weight: 600; }
+.remote-request-copy small { color: var(--text-2); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.remote-request-actions { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.remote-request-actions .select-root, .remote-request-actions > :first-child { min-width: 170px; }
+.remote-rename { width: 100%; height: 26px; padding: 0 8px; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: transparent; font: inherit; font-size: var(--fs-sm); }
+.remote-rename:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (prefers-reduced-motion: reduce) { .remote-request { animation: none; } }
+
+/* How devices connect: Tailscale or Direct. */
+.remote-method { padding: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.remote-method-option { min-width: 0; padding: 12px; display: flex; align-items: flex-start; gap: 10px; color: var(--text-2); text-align: left; border: 1px solid var(--line); border-radius: var(--radius-md); background: transparent; cursor: pointer; }
+.remote-method-option:hover:not(:disabled) { border-color: var(--line-strong); background: var(--surface-hover); }
+.remote-method-option.on { color: var(--text-1); border-color: var(--line-strong); background: var(--surface-selected); }
+.remote-method-option:disabled { opacity: .5; cursor: default; }
+.remote-method-option:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.remote-method-icon { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 8px; background: var(--surface-raised); }
+.remote-method-copy { min-width: 0; display: grid; gap: 3px; }
+.remote-method-copy strong { font-size: var(--fs-sm); font-weight: 600; }
+.remote-method-copy small { color: var(--text-3); font-size: var(--fs-xs); line-height: 1.45; }
+.remote-method-note { grid-column: 1 / -1; margin: 0; color: var(--text-3); font-size: var(--fs-xs); }
+/* Native: sign-in, addresses and certificate. */
+.remote-account { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); }
+.remote-account-form { padding: 14px 16px; display: grid; gap: 10px; }
+.remote-account-intro, .remote-native-note { margin: 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.5; }
+.remote-native-note { padding: 10px 16px 0; }
+.remote-native-addresses { padding: 14px 16px; display: flex; gap: 18px; align-items: flex-start; border-top: 1px solid var(--line); }
+.remote-native-copy { min-width: 0; flex: 1; display: grid; gap: 8px; }
+.remote-native-copy > strong { font-size: var(--fs-sm); }
+.remote-native-urls { display: grid; gap: 6px; justify-items: start; }
+.remote-native-urls .remote-address { max-width: 100%; }
+.remote-native-fingerprint { display: grid; gap: 4px; }
+.remote-native-fingerprint > span { display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); font-size: var(--fs-xs); }
+.remote-native-fingerprint code { overflow-wrap: anywhere; color: var(--text-3); font-size: var(--fs-2xs); line-height: 1.5; }
+.remote-native-fingerprint button { justify-self: start; display: inline-flex; align-items: center; gap: 5px; }
+.remote-steps { margin: 0; padding: 4px 0; list-style: none; }
+.remote-step { padding: 10px 16px; display: grid; grid-template-columns: 22px minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+.remote-step + .remote-step { border-top: 1px solid var(--line); }
+.remote-step-icon { width: 22px; height: 22px; margin-top: 1px; display: grid; place-items: center; border-radius: 50%; color: var(--text-3); background: var(--surface-raised); }
+.remote-step.ok .remote-step-icon { color: var(--status-success); background: color-mix(in srgb, var(--status-success) 14%, transparent); }
+.remote-step.warn .remote-step-icon { color: var(--status-working); background: color-mix(in srgb, var(--status-working) 16%, transparent); }
+.remote-step-copy { min-width: 0; display: grid; gap: 3px; }
+.remote-step-copy strong { font-size: var(--fs-sm); font-weight: 600; }
+.remote-step-copy small { color: var(--text-2); font-size: var(--fs-xs); line-height: 1.5; overflow-wrap: anywhere; }
+.remote-step-copy .remote-step-aside { color: var(--text-3); }
+.remote-step-copy .remote-step-problem { color: var(--danger-ink); }
+.remote-step-action { align-self: center; }
+.remote-step-form { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.remote-step-form .text-input { width: 180px; font-family: var(--font-mono); }
+.remote-port-input { width: 96px; text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .remote-method { grid-template-columns: 1fr; } .remote-native-addresses { flex-direction: column; } }

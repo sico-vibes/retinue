@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 540 540" fill="none">
+  <defs><linearGradient id="codex" x1="270" y1="0" x2="270" y2="540" gradientUnits="userSpaceOnUse"><stop stop-color="#ADA7FF"/><stop offset=".5" stop-color="#7C9BFF"/><stop offset="1" stop-color="#3B4BFF"/></linearGradient></defs>
+  <path fill="url(#codex)" d="M101 102C119 41 173 0 234 0C272 0 306 16 332 41C343 37 355 35 367 35C443 35 505 97 505 174C505 187 503 199 500 210C525 235 540 269 540 307C540 368 498 420 439 437C421 496 367 540 303 540C266 540 232 525 207 500C196 503 184 505 172 505C96 505 35 444 35 368C35 355 37 343 40 332C15 306 0 272 0 235C0 172 43 118 101 102Z"/>
+  <path d="M147 198L191 272L147 346M288 346H398" stroke="white" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,447 @@
+// @vitest-environment happy-dom
+import { StrictMode, act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const h = vi.hoisted(() => ({
+  rpc: vi.fn(), fetchSnapshot: vi.fn(), ensureDaemon: vi.fn(), startDaemonEventStream: vi.fn(),
+  getActiveSession: vi.fn(), getActiveRuntime: vi.fn(), setActiveSession: vi.fn(), setActiveRuntime: vi.fn(),
+  setCompanionMode: vi.fn(), setCompanionVisibility: vi.fn(), showMainWindow: vi.fn(), showMainSettings: vi.fn(),
+  companionMonitorOptions: vi.fn(), currentCompanionMonitor: vi.fn(), setCompanionMonitor: vi.fn(), refreshTrayMenu: vi.fn(),
+  listenForDaemonEvents: vi.fn(), listenForDaemonConnection: vi.fn(), listenForActiveSession: vi.fn(),
+  listenForActiveRuntime: vi.fn(), listenForOpenSettings: vi.fn(), directListen: vi.fn(), emit: vi.fn(),
+  getCurrentWindow: vi.fn(), playCompanionCue: vi.fn(), unlockCompanionAudioFromGesture: vi.fn(),
+  setCompanionSoundsEnabled: vi.fn(), setCompanionSoundVolume: vi.fn(), disposeCompanionAudio: vi.fn(), daemonEventHandlers: [] as Array<(event: any) => void>,
+}))
+
+vi.mock('../desktopIntegrations', () => ({ autostartEnabled: async () => false, setAutostartEnabled: async () => undefined, sendDesktopNotification: async () => undefined, flashMainWindow: async () => undefined }))
+vi.mock('../tauri', () => ({
+  inDesktop: true,
+  listenForDaemonSupervisor: async () => () => undefined,
+  daemonSupervisorState: async () => ({ state: 'running', attempt: 0, nextRetryMs: null, lastExitCode: null }),
+  restartDaemonNow: async () => ({ state: 'running', attempt: 0, nextRetryMs: null, lastExitCode: null }),
+  listenForTerminalOutput: async () => () => undefined,
+  listenForTerminalExit: async () => () => undefined,
+  setApprovalBadge: async () => undefined,
+  previewMode: false,
+  rpc: h.rpc,
+  permissionsPolicyGet: async () => ({ defaultMode: 'ask', perAgent: [] }),
+  fetchSnapshot: h.fetchSnapshot,
+  ensureDaemon: h.ensureDaemon,
+  startDaemonEventStream: h.startDaemonEventStream,
+  getActiveSession: h.getActiveSession,
+  getActiveRuntime: h.getActiveRuntime,
+  setActiveSession: h.setActiveSession,
+  setActiveRuntime: h.setActiveRuntime,
+  companionMonitorOptions: h.companionMonitorOptions,
+  currentCompanionMonitor: h.currentCompanionMonitor,
+  setCompanionMonitor: h.setCompanionMonitor,
+  refreshTrayMenu: h.refreshTrayMenu,
+  setCompanionMode: h.setCompanionMode,
+  setCompanionVisibility: h.setCompanionVisibility,
+  showMainWindow: h.showMainWindow,
+  showMainSettings: h.showMainSettings,
+  listenForDaemonEvents: h.listenForDaemonEvents,
+  listenForDaemonConnection: h.listenForDaemonConnection,
+  listenForActiveSession: h.listenForActiveSession,
+  listenForActiveRuntime: h.listenForActiveRuntime,
+  listenForOpenSettings: h.listenForOpenSettings,
+  openProjectFolder: vi.fn(), selectLocalFile: vi.fn(), inspectLocalFile: vi.fn(),
+  openInEditor: vi.fn(), revealInExplorer: vi.fn(), resolveProjectFile: vi.fn(),
+  quitRetinue: vi.fn(), setCloseToTray: vi.fn(),
+  updatesGetState: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
+  updatesSetPreferences: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
+  updatesCheck: async () => ({ status: 'up_to_date' as const, checkedAt: '2026-10-02T00:00:00.000Z' }),
+  updatesInstall: async () => undefined,
+  listenForUpdateAvailable: async () => () => undefined,
+  listenForUpdateProgress: async () => () => undefined,
+}))
+
+vi.mock('@tauri-apps/api/event', () => ({ listen: h.directListen, emit: h.emit }))
+vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: h.getCurrentWindow }))
+vi.mock('../blob/soundCues', () => ({
+  playCompanionCue: h.playCompanionCue,
+  unlockCompanionAudioFromGesture: h.unlockCompanionAudioFromGesture,
+  setCompanionSoundsEnabled: h.setCompanionSoundsEnabled,
+  setCompanionSoundVolume: h.setCompanionSoundVolume,
+  disposeCompanionAudio: h.disposeCompanionAudio,
+}))
+vi.mock('../blob/BlobCanvas', async () => {
+  const ReactModule = await import('react')
+  return {
+    BlobCanvas: (props: Record<string, any>) => ReactModule.createElement(
+      'span',
+      { 'data-testid': 'blob-canvas', 'data-sound-cues': String(props.soundCues === true), 'data-greeting': String(props.greeting === true) },
+      props.greeting ? ReactModule.createElement('button', { type: 'button', 'aria-label': 'Complete greeting fixture', onClick: props.onGreetingComplete }, 'finish') : null,
+    ),
+  }
+})
+// This boundary mock lets the App-level stale-time guard receive a late click;
+// PermissionChoiceButton's own live/deadline guard has a separate mounted test.
+vi.mock('./PermissionChoiceButton', async () => {
+  const ReactModule = await import('react')
+  return {
+    PermissionChoiceButton: (props: Record<string, any>) => ReactModule.createElement(
+      'button', { type: 'button', className: props.className, onClick: () => props.onReply(props.choice) }, props.children,
+    ),
+  }
+})
+
+import { App } from './App'
+import type { Snapshot } from '../types'
+
+const runtimeA = { id: 'runtime-a', provider: 'codex', status: 'online', protocolFamily: 'app-server' }
+const runtimeB = { id: 'runtime-b', provider: 'claude', status: 'online', protocolFamily: 'stream-json' }
+const sessionA = { id: 'session-a', runtimeId: 'runtime-a', agentId: 'agent-a', title: 'Alpha task', projectPath: 'C:/work/alpha', state: 'idle', messages: [] }
+const sessionB = { id: 'session-b', runtimeId: 'runtime-b', agentId: 'agent-b', title: 'Beta task', projectPath: 'C:/work/beta', state: 'idle', messages: [] }
+
+// With no blobs the main window shows its create-your-first-blob state instead of a
+// stray conversation, so tests of the conversation view need at least one blob.
+const someBlob = { id: 'agent-a', name: 'Alpha blob', description: '', instructions: '', color: 'blue', runtimeId: 'runtime-a', sortOrder: 0, model: null, thinking: null, serviceTier: null, customArgs: [], customEnv: {}, maxConcurrency: 1, defaultProject: null, archived: false, createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z' }
+
+const otherBlob = { ...someBlob, id: 'agent-b', name: 'Beta blob', runtimeId: 'runtime-b', sortOrder: 1 }
+
+function snapshot(overrides: Partial<Snapshot> = {}): Snapshot {
+  return { sequence: 20, runtimes: [runtimeA, runtimeB], sessions: [sessionA, sessionB], permissions: [], usage: [], budgets: [], ...overrides }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => { resolve = done })
+  return { promise, resolve }
+}
+
+async function settleMicrotasks() {
+  for (let index = 0; index < 16; index++) await Promise.resolve()
+}
+
+function mountApp(search = '') {
+  window.history.replaceState({}, '', `/${search}`)
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root: Root = createRoot(host)
+  let unmounted = false
+  act(() => root.render(<StrictMode><App /></StrictMode>))
+  return {
+    host,
+    async settle() { await act(async () => { await settleMicrotasks(); await vi.advanceTimersByTimeAsync(40); await settleMicrotasks() }) },
+    unmount() { if (unmounted) return; unmounted = true; act(() => root.unmount()); host.remove() },
+  }
+}
+
+let mounted: ReturnType<typeof mountApp>[] = []
+
+function startApp(search = '') {
+  const view = mountApp(search)
+  mounted.push(view)
+  return view
+}
+
+function configure(snapshotValue = snapshot(), options: { activeSession?: string | null; activeRuntime?: string | null; soundsEnabled?: boolean } = {}) {
+  h.fetchSnapshot.mockResolvedValue(snapshotValue)
+  h.ensureDaemon.mockResolvedValue(undefined)
+  h.startDaemonEventStream.mockResolvedValue(undefined)
+  h.getActiveSession.mockResolvedValue(options.activeSession ?? 'session-a')
+  h.getActiveRuntime.mockResolvedValue(options.activeRuntime ?? 'runtime-a')
+  h.setActiveSession.mockResolvedValue(undefined)
+  h.setActiveRuntime.mockResolvedValue(undefined)
+  h.setCompanionMode.mockResolvedValue(undefined)
+  h.setCompanionVisibility.mockResolvedValue(undefined)
+  h.companionMonitorOptions.mockResolvedValue([])
+  h.currentCompanionMonitor.mockResolvedValue(null)
+  h.setCompanionMonitor.mockResolvedValue(undefined)
+  h.refreshTrayMenu.mockResolvedValue(undefined)
+  h.rpc.mockImplementation(async (method: string) => {
+    if (method === 'events.replay') return { replayAvailable: true, events: [] }
+    if (method === 'settings.get') return { settings: { 'companion.soundsEnabled': options.soundsEnabled === true } }
+    return {}
+  })
+  const stop = vi.fn()
+  h.listenForDaemonEvents.mockImplementation(async (handler: (event: any) => void) => { h.daemonEventHandlers.push(handler); return () => { h.daemonEventHandlers = h.daemonEventHandlers.filter((item) => item !== handler); stop() } })
+  h.listenForDaemonConnection.mockResolvedValue(stop)
+  h.listenForActiveSession.mockResolvedValue(stop)
+  h.listenForActiveRuntime.mockResolvedValue(stop)
+  h.listenForOpenSettings.mockResolvedValue(stop)
+  h.directListen.mockResolvedValue(stop)
+  h.getCurrentWindow.mockReturnValue({ onDragDropEvent: vi.fn().mockResolvedValue(stop) })
+}
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-10-01T12:00:00.000Z'))
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.stubGlobal('localStorage', { getItem: vi.fn((key: string) => key === 'retinue.profile.name' ? 'Ada' : null), setItem: vi.fn(), removeItem: vi.fn(), clear: vi.fn() })
+  vi.spyOn(window, 'matchMedia').mockImplementation(() => ({
+    matches: true, media: '(prefers-reduced-motion: reduce)', onchange: null,
+    addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(() => true),
+  }) as unknown as MediaQueryList)
+  h.daemonEventHandlers = []
+  for (const mock of Object.values(h)) if (typeof mock === 'function' && 'mockReset' in mock) (mock as ReturnType<typeof vi.fn>).mockReset()
+  h.playCompanionCue.mockReturnValue(true)
+  h.unlockCompanionAudioFromGesture.mockResolvedValue(true)
+  configure()
+})
+
+afterEach(() => {
+  for (const view of mounted.splice(0)) view.unmount()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  window.history.replaceState({}, '', '/')
+})
+
+/** Every live listener hears the event, as with the real event bus: App is not the only one. */
+const broadcast = (event: any) => { for (const listener of [...h.daemonEventHandlers]) listener(event) }
+
+describe('App mounted lifecycle', () => {
+  it('keeps scanning out of the profile menu and starts it from quick-switcher Agents settings', async () => {
+    const originalRpc = h.rpc.getMockImplementation()!
+    const pending = deferred<{ runtimes: typeof runtimeA[] }>()
+    h.rpc.mockImplementation((method: string, params?: Record<string, unknown>) => method === 'runtime.refresh' ? pending.promise : originalRpc(method, params))
+    const view = startApp()
+    await view.settle()
+    act(() => view.host.querySelector<HTMLButtonElement>('[aria-label="Account and settings"]')?.click())
+    expect(view.host.querySelector('[role="menu"]')?.textContent).not.toContain('Find coding agents')
+    act(() => view.host.querySelector('[role="menu"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true })))
+    await view.settle()
+    const action = view.host.querySelector<HTMLButtonElement>('[data-result-id="find-agents"]')
+    expect(action).not.toBeNull()
+    await act(async () => { action!.click(); await settleMicrotasks(); await vi.advanceTimersByTimeAsync(40) })
+    expect(view.host.querySelector('.settings-sheet h2')?.textContent).toBe('Coding agents')
+    const scan = [...view.host.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Scanning…')
+    expect(scan?.disabled).toBe(true)
+    expect(h.rpc.mock.calls.filter(([method]) => method === 'runtime.refresh')).toHaveLength(1)
+    await act(async () => { pending.resolve({ runtimes: [runtimeA] }); await settleMicrotasks() })
+    expect(view.host.querySelector('.settings-scan-status')?.textContent).toContain('Found 1 coding agent · just now')
+  })
+
+  it('announces automatic recovery, removes the discovery banner and briefly confirms success', async () => {
+    const originalRpc = h.rpc.getMockImplementation()!
+    let scans = 0
+    h.rpc.mockImplementation((method: string, params?: Record<string, unknown>) => {
+      if (method !== 'runtime.refresh') return originalRpc(method, params)
+      scans += 1
+      return scans === 1 ? Promise.reject(new Error('PRIVATE_PROVIDER_OUTPUT')) : Promise.resolve({ runtimes: [runtimeA] })
+    })
+    const view = startApp()
+    await view.settle()
+    act(() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true })))
+    await view.settle()
+    await act(async () => { view.host.querySelector<HTMLButtonElement>('[data-result-id="find-agents"]')!.click(); await settleMicrotasks() })
+    expect(view.host.querySelector('.launch-warning-notice')?.textContent).toContain('Finding coding agents again…')
+    expect(view.host.textContent).not.toContain('PRIVATE_PROVIDER_OUTPUT')
+    expect(view.host.querySelector('.settings-scan-status')?.textContent).toContain('Retrying automatically')
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); await settleMicrotasks() })
+    expect(scans).toBe(2)
+    expect(view.host.querySelector('.launch-warning-notice')).toBeNull()
+    expect(view.host.querySelector('.launch-scan-confirmation')?.textContent).toBe('Found 1 coding agent')
+    await act(async () => { await vi.advanceTimersByTimeAsync(4000) })
+    expect(view.host.querySelector('.launch-scan-confirmation')).toBeNull()
+  })
+
+  it('keeps the short app fade class and duration under reduced motion', async () => {
+    const view = startApp()
+    await view.settle()
+    const shell = view.host.querySelector<HTMLElement>('.app-shell')
+    expect(shell?.classList.contains('reduced-launch-fade')).toBe(true)
+    expect(shell?.style.getPropertyValue('--launch-fade-duration')).toBe('180ms')
+  })
+
+  it('links the sidebar brand to the imported PNG logo asset', async () => {
+    const view = startApp()
+    await view.settle()
+    const logo = view.host.querySelector<HTMLImageElement>('.brand-lockup img')
+    expect(logo).not.toBeNull()
+    expect(logo?.getAttribute('alt')).toBe('Retinue logo')
+    const logoUrl = logo?.getAttribute('src') ?? ''
+    expect(logoUrl.length).toBeGreaterThan(0)
+    expect(logoUrl.endsWith('.png')).toBe(true)
+    expect(logo?.getAttribute('class')).toBe('brand-logo theme-on-dark')
+    expect(logoUrl).toContain('retinue-tile-dark')
+    // The light theme has its own tile, hidden from assistive tech beside the first.
+    const light = view.host.querySelector<HTMLImageElement>('.brand-lockup img.theme-on-light')
+    expect(light?.getAttribute('src')).toContain('retinue-tile-light')
+    expect(light?.getAttribute('alt')).toBe('')
+  })
+
+  it('unlistens when a StrictMode registration resolves after cleanup', async () => {
+    const registrations: Array<ReturnType<typeof deferred<() => void>>> = []
+    h.listenForActiveRuntime.mockImplementation(() => {
+      const registration = deferred<() => void>()
+      registrations.push(registration)
+      return registration.promise
+    })
+    const view = startApp()
+    await view.settle()
+    expect(registrations).toHaveLength(2)
+
+    view.unmount()
+    const stops = [vi.fn(), vi.fn()]
+    await act(async () => {
+      registrations.forEach((registration, index) => registration.resolve(stops[index]!))
+      await settleMicrotasks()
+    })
+    expect(stops.map((stop) => stop.mock.calls.length)).toEqual([1, 1])
+  })
+
+  it('invites you to create your first blob instead of opening a leftover conversation', async () => {
+    // Conversations exist (for example from blobs that were removed) but no blob does.
+    configure(snapshot(), { activeSession: 'session-b', activeRuntime: 'runtime-b' })
+    const view = startApp()
+    await view.settle()
+    expect(view.host.querySelector('.empty-conversation h1')?.textContent).toBe('Create your first employee')
+    expect(view.host.querySelector('.empty-conversation button')?.textContent).toContain('Create your first employee')
+    expect(view.host.querySelector('.message-list')).toBeNull()
+    expect(view.host.querySelector('.header-actions')?.hasAttribute('hidden')).toBe(true)
+  })
+
+  it('hydrates the stored runtime/session and does not let an unrelated session update steal selection', async () => {
+    configure(snapshot({ agents: [someBlob, otherBlob] as never }), { activeSession: 'session-b', activeRuntime: 'runtime-b' })
+    const view = startApp()
+    await view.settle()
+    expect(view.host.querySelector('.context-pane')?.textContent).toContain('Beta task')
+
+    const handler = broadcast
+    act(() => handler({ sequence: 21, type: 'session.changed', payload: { session: { ...sessionA, title: 'Alpha updated', state: 'working' } } }))
+    expect(view.host.querySelector('.context-pane')?.textContent).toContain('Beta task')
+    expect(view.host.querySelector('.context-pane')?.textContent).not.toContain('Alpha updated')
+    expect(h.setActiveSession.mock.calls.some(([id]) => id === 'session-a')).toBe(false)
+  })
+
+  it('expires and unpins an approval even while its session remains waiting_permission', async () => {
+    const expiresAt = new Date(Date.now() + 5000).toISOString()
+    const pending = { id: 'permission-1', sessionId: 'session-a', runtimeId: 'runtime-a', status: 'pending', expiresAt, title: 'Run shell command', command: 'npm test', choices: ['allow_once', 'deny'] }
+    configure(snapshot({ sessions: [{ ...sessionA, state: 'waiting_permission' }, sessionB], permissions: [pending] }))
+    const view = startApp('?companion')
+    await view.settle()
+    expect(view.host.querySelector('.companion-root')?.getAttribute('data-mode')).toBe('home')
+    expect(view.host.querySelector('.companion-collapse')?.hasAttribute('disabled')).toBe(true)
+    expect(view.host.textContent).toContain('Run shell command')
+    // The island also opens with its own cue; the approval cue plays exactly once.
+    expect(h.playCompanionCue.mock.calls.filter(([cue]) => cue === 'approval')).toHaveLength(1)
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(5001); await settleMicrotasks() })
+    expect(view.host.querySelector('.companion-root')?.getAttribute('data-mode')).toBe('petit')
+    expect(view.host.textContent).not.toContain('Run shell command')
+    expect(view.host.querySelector('.companion-collapse')?.hasAttribute('disabled')).toBe(false)
+    expect(view.host.querySelector('.companion-root')?.textContent).toContain('Approval needed')
+  })
+
+  it('rejects a stale approval click in the mounted App without sending permission.reply', async () => {
+    const expiresAt = new Date(Date.now() + 5000).toISOString()
+    const pending = { id: 'permission-stale', sessionId: 'session-a', runtimeId: 'runtime-a', status: 'pending', expiresAt, title: 'Confirm operation', choices: ['allow_once'] }
+    configure(snapshot({ sessions: [{ ...sessionA, state: 'waiting_permission' }, sessionB], permissions: [pending] }))
+    const view = startApp()
+    await view.settle()
+    const choice = view.host.querySelector<HTMLButtonElement>('.permission-choice')!
+    expect(choice.disabled).toBe(false)
+    const snapshotCallsBeforeClick = h.fetchSnapshot.mock.calls.length
+
+    vi.setSystemTime(new Date(expiresAt).getTime() + 1)
+    act(() => choice.click())
+    await view.settle()
+    expect(h.rpc.mock.calls.filter(([method]) => method === 'permission.reply')).toHaveLength(0)
+    expect(h.fetchSnapshot.mock.calls.length).toBeGreaterThan(snapshotCallsBeforeClick)
+    expect(view.host.querySelector('.inline-error')?.textContent).toContain('No reply was sent')
+  })
+
+  it('focuses the approval and keeps the composer open for queueing while it waits', async () => {
+    configure(snapshot({ agents: [someBlob, otherBlob] as never }))
+    const view = startApp()
+    await view.settle()
+    const composer = view.host.querySelector<HTMLTextAreaElement>('.composer-box textarea')!
+    composer.focus()
+    expect(document.activeElement).toBe(composer)
+
+    const permission = { id: 'permission-focus', sessionId: 'session-a', runtimeId: 'runtime-a', status: 'pending', title: 'Confirm operation', choices: ['allow_once', 'deny'] }
+    act(() => broadcast({ sequence: 21, type: 'permission.requested', payload: { sessionId: 'session-a', permission } }))
+    await view.settle()
+
+    const approval = view.host.querySelector<HTMLElement>('[data-permission-card]')
+    expect(composer.disabled).toBe(false)
+    expect(composer.placeholder).toContain('Answer the request above, or queue a message')
+    expect(approval).not.toBeNull()
+    expect(document.activeElement).toBe(approval)
+  })
+
+  it('refreshes the applied model on exec.options.changed while the session remains working', async () => {
+    const workingSession = { ...sessionA, state: 'working' }
+    configure(snapshot({ sessions: [workingSession, sessionB], agents: [someBlob, otherBlob] as never }))
+    let latestModel = 'model-before'
+    let useDeferredSnapshot = false
+    const nextSnapshot = deferred<unknown>()
+    const execSnapshot = (model: string) => ({
+      id: 'snapshot-a', sessionId: 'session-a', status: 'partial',
+      requested: { model }, applied: { model: { applied: true, value: model } },
+    })
+    h.rpc.mockImplementation(async (method: string) => {
+      if (method === 'events.replay') return { replayAvailable: true, events: [] }
+      if (method === 'settings.get') return { settings: {} }
+      if (method === 'exec.snapshot.latest') return useDeferredSnapshot ? nextSnapshot.promise : execSnapshot(latestModel)
+      return {}
+    })
+    const view = startApp()
+    await view.settle()
+    // The session rail's Environment card shows the model the coding agent reported using.
+    const modelRow = () => view.host.querySelector<HTMLElement>('.session-rail .rail-row-main[title="The model the coding agent reported using"]')
+    expect(modelRow()?.textContent).toContain('model-before')
+
+    latestModel = 'model-after'
+    useDeferredSnapshot = true
+    act(() => broadcast({ sequence: 21, type: 'exec.options.changed', payload: { sessionId: 'session-a', turnId: 'turn-a' } }))
+    await view.settle()
+    expect(modelRow()?.textContent).toContain('model-before')
+    expect(view.host.querySelector('.working-indicator')?.textContent).toContain('is working')
+
+    await act(async () => { nextSnapshot.resolve(execSnapshot(latestModel)); await settleMicrotasks() })
+    await view.settle()
+    expect(modelRow()?.textContent).toContain('model-after')
+    expect(view.host.querySelector('.working-indicator')?.textContent).toContain('is working')
+  })
+
+  it('keeps one opt-in companion sound owner in compact and home, and unlocks only on gesture', async () => {
+    configure(snapshot(), { activeSession: 'session-a', activeRuntime: 'runtime-a', soundsEnabled: true })
+    const view = startApp('?companion')
+    await view.settle()
+    expect(view.host.querySelectorAll('[data-testid="blob-canvas"][data-sound-cues="true"]')).toHaveLength(1)
+    expect(view.host.querySelector('.companion-root')?.getAttribute('data-mode')).toBe('petit')
+    expect(h.unlockCompanionAudioFromGesture).not.toHaveBeenCalled()
+    expect(h.playCompanionCue).not.toHaveBeenCalled()
+
+    act(() => view.host.querySelector<HTMLButtonElement>('[aria-label="Open companion home"]')!.click())
+    await view.settle()
+    expect(view.host.querySelector('.companion-root')?.getAttribute('data-mode')).toBe('home')
+    expect(view.host.querySelectorAll('[data-testid="blob-canvas"][data-sound-cues="true"]')).toHaveLength(1)
+    expect(h.unlockCompanionAudioFromGesture).not.toHaveBeenCalled()
+
+    act(() => view.host.querySelector<HTMLButtonElement>('[aria-label="Mute companion sounds"]')!.click())
+    await view.settle()
+    act(() => view.host.querySelector<HTMLButtonElement>('[aria-label="Enable companion sounds"]')!.click())
+    await view.settle()
+    expect(h.unlockCompanionAudioFromGesture).toHaveBeenCalledExactlyOnceWith()
+    expect(view.host.querySelectorAll('[data-testid="blob-canvas"][data-sound-cues="true"]')).toHaveLength(1)
+
+    const active = view.host.querySelector('[data-testid="blob-canvas"][data-greeting="false"]')
+    expect(active).not.toBeNull()
+    const completionEvent = { sequence: 21, type: 'session.changed', payload: { session: { ...sessionA, state: 'completed' } } }
+    act(() => broadcast(completionEvent))
+    expect(h.playCompanionCue.mock.calls.filter(([cue]) => cue === 'finish')).toHaveLength(1)
+  })
+
+  it('does not unlock audio while hydrating the main Settings surface', async () => {
+    configure(snapshot(), { soundsEnabled: false })
+    const view = startApp()
+    await view.settle()
+    act(() => view.host.querySelector<HTMLButtonElement>('.profile-button')!.click())
+    act(() => [...view.host.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === 'Settings')!.click())
+    await view.settle()
+    act(() => [...view.host.querySelectorAll<HTMLButtonElement>('.settings-nav button')].find((item) => item.textContent === 'Companion')!.click())
+    const sounds = [...view.host.querySelectorAll<HTMLButtonElement>('[role="switch"]')].find((button) => button.getAttribute('aria-label') === 'Companion sounds')!
+    act(() => sounds.click())
+    await view.settle()
+    expect(h.unlockCompanionAudioFromGesture).not.toHaveBeenCalled()
+    expect(h.playCompanionCue).not.toHaveBeenCalled()
+    expect(h.setCompanionSoundsEnabled).not.toHaveBeenCalled()
+  })
+})

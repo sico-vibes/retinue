@@ -1,0 +1,74 @@
+/* Projects tree (8 November 2026). Spacing comes from the density tokens in
+   density.css, so Compact, Default and Roomy all apply here in every look. */
+.projects-sidebar { display: grid; gap: var(--dn-group-gap, 10px); padding: 4px 6px 10px; }
+.ps-project { display: grid; gap: 2px; }
+.ps-project-head { display: flex; align-items: center; gap: 2px; min-height: 32px; }
+.ps-fold { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 8px; border: 0; border-radius: var(--radius-sm, 6px); background: none; color: var(--text-2); font: inherit; font-size: var(--fs-sm); font-weight: 500; text-align: left; cursor: pointer; transition: background-color 120ms ease, color 120ms ease; }
+.ps-fold:hover { color: var(--text-1); background: var(--surface-hover); }
+.ps-fold:focus-visible { box-shadow: var(--focus-ring); }
+.ps-fold > svg, .ps-fold > :nth-child(2) { flex: 0 0 auto; }
+.ps-project-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-count { flex: 0 0 auto; color: var(--text-3); font-size: var(--fs-2xs); }
+.ps-add { opacity: 0; transition: opacity 120ms ease; }
+.ps-project-head:hover .ps-add, .ps-project-head:focus-within .ps-add { opacity: 1; }
+.ps-bots, .ps-convos { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--dn-row-gap, 3px); }
+.ps-bots { padding: 2px 0 2px 8px; }
+.ps-empty { padding: 4px 10px; color: var(--text-3); font-size: var(--fs-xs); }
+.ps-empty-hire { padding: 0; border: 0; background: none; color: var(--text-2); font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.ps-empty-hire:hover { color: var(--text-1); }
+
+/* An employee: two lines next to a 28px portrait. */
+.ps-bot { display: flex; align-items: center; gap: 2px; border-radius: var(--radius-md, 10px); transition: background-color 140ms ease; }
+.ps-bot.selected { background: var(--surface-selected, var(--surface-hover)); }
+.ps-bot-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: var(--dn-person-h, 46px); padding: var(--dn-row-pad-y, 6px) 8px; border: 0; border-radius: var(--radius-md, 10px); background: none; color: var(--text-1); font: inherit; text-align: left; cursor: pointer; transition: background-color 140ms ease; }
+.ps-bot:not(.selected) .ps-bot-main:hover { background: var(--surface-hover); }
+.ps-bot-main:focus-visible, .ps-convo:focus-visible { box-shadow: var(--focus-ring); }
+.ps-bot-main > :first-child { flex: 0 0 auto; }
+.ps-bot-copy { min-width: 0; flex: 1; display: grid; gap: 1px; }
+.ps-bot-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.ps-bot-name { flex: 1 1 auto; font-weight: 500; font-size: var(--fs-sm); }
+.ps-bot-sub { color: var(--text-3); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-bot time, .ps-convo time { flex: 0 0 auto; color: var(--text-3); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.ps-bot-line .convo-dot { flex: 0 0 auto; align-self: center; }
+.ps-more { flex: 0 0 auto; margin-right: 2px; }
+
+/* Its conversations: two-line cards, indented under the portrait. */
+.ps-convos { padding: var(--dn-nest-gap, 4px) 0 4px 44px; }
+/* Branch lines (owner, 9 November 2026), as the Conversations column draws them:
+   a trunk from under the employee's picture (its centre is 26px in) down to each
+   card, with a rounded elbow into the card's middle. */
+.ps-convos > li { position: relative; }
+.ps-convos > li::before { position: absolute; top: calc(-1 * var(--dn-row-gap, 3px)); bottom: 0; left: -18px; border-left: 1px solid var(--line-strong); content: ""; pointer-events: none; }
+.ps-convos > li:first-child::before { top: calc(-1 * var(--dn-nest-gap, 4px) - 4px); }
+.ps-convos > li:last-child::before { display: none; }
+.ps-convos > li::after { position: absolute; top: calc(-1 * var(--dn-row-gap, 3px)); left: -18px; width: 14px; height: calc(50% + var(--dn-row-gap, 3px)); border-left: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); border-bottom-left-radius: 8px; content: ""; pointer-events: none; }
+.ps-convos > li:first-child::after { top: calc(-1 * var(--dn-nest-gap, 4px) - 4px); height: calc(50% + var(--dn-nest-gap, 4px) + 4px); }
+.ps-convo { width: 100%; display: grid; gap: 2px; padding: var(--dn-card-pad-y, 6px) 10px; border: 0; border-radius: var(--radius-md, 10px); background: none; color: var(--text-2); font: inherit; text-align: left; cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
+.ps-convo-title { font-size: var(--fs-sm); }
+.ps-convo-meta { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--text-3); font-size: var(--fs-2xs); white-space: nowrap; }
+.ps-convo:hover { color: var(--text-1); background: var(--surface-hover); }
+.ps-convo.selected { color: var(--text-1); background: var(--surface-selected, var(--surface-hover)); }
+
+/* Status in words; colour only when something is happening. */
+.ps-state { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--fs-2xs); }
+.ps-state.working { color: var(--status-working, var(--text-2)); }
+.ps-state.needs { color: var(--status-working-text, var(--status-working)); font-weight: 500; }
+.ps-state.limited { color: var(--text-2); }
+.ps-state.bad { color: var(--status-danger-text, var(--status-danger)); }
+.ps-state > svg { flex: 0 0 auto; }
+/* Working: a soft light sweeps across the word (owner, 8 November 2026). */
+.ps-shimmer { background: linear-gradient(100deg, var(--status-working) 0 38%, color-mix(in srgb, var(--status-working) 35%, var(--text-1)) 50%, var(--status-working) 62% 100%); background-size: 260% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: ps-shimmer 1.9s linear infinite; }
+@keyframes ps-shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+
+/* Projects | Team switch (Projects first since 8 November 2026). */
+.sidebar-view-switch { display: flex; gap: 2px; margin: 8px 8px 4px; padding: 2px; border-radius: var(--radius-md, 10px); background: var(--surface-hover); }
+.sidebar-view-switch button { flex: 1; height: 28px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: var(--radius-sm, 7px); background: none; color: var(--text-2); font: inherit; font-size: var(--fs-xs); cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
+.sidebar-view-switch button:hover { color: var(--text-1); }
+.sidebar-view-switch button[aria-pressed="true"] { color: var(--text-1); background: var(--surface-selected, var(--surface-1, transparent)); }
+.sidebar-view-switch button:focus-visible { box-shadow: var(--focus-ring); }
+.sidebar-view-switch small { color: var(--text-3); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.team-hire-button { height: 22px; padding: 0 8px; font-size: var(--fs-2xs); }
+@media (prefers-reduced-motion: reduce) {
+  .ps-shimmer { animation: none; background: none; color: var(--status-working); }
+  .ps-fold, .ps-add, .ps-bot, .ps-bot-main, .ps-convo, .sidebar-view-switch button { transition: none; }
+}

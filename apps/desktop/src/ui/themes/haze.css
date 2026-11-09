@@ -1,0 +1,311 @@
+/* Haze: smoky glass over a misty backdrop, one cohesive shell (flush panels
+   split by hairlines, no floating cards). Bots show a logo or a portrait; a
+   bot's status is a plain word at the end of its row. */
+
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) {
+  --haze-base: #1a1b1d;
+  /* Frosted glass for sheets, dialogs and bars: a light tint that blurs the haze behind it. */
+  --haze-glass: rgb(30 31 34 / .62);
+  --haze-d1: #8794a3; --haze-d2: #8d939b; --haze-d3: #6b7884; --haze-d4: #b4b8bd;
+  --surface-app: transparent;
+  --surface-sidebar: rgb(16 17 19 / .08);
+  --surface-panel: rgb(34 35 38 / .97);
+  --surface-raised: rgb(255 255 255 / .055);
+  --surface-overlay: rgb(36 37 40 / .96);
+  --surface-input: rgb(0 0 0 / .22);
+  --surface-hover: rgb(255 255 255 / .06);
+  --surface-selected: rgb(255 255 255 / .085);
+  --surface-selected-strong: rgb(255 255 255 / .12);
+  --surface-avatar: rgb(255 255 255 / .07);
+  --text-1: #f3f3f2;
+  --text-2: rgb(243 243 242 / .70);
+  --text-3: rgb(243 243 242 / .50);
+  --line: rgb(255 255 255 / .08);
+  --line-strong: rgb(255 255 255 / .14);
+  --accent: var(--user-accent, #f3f3f2);
+  --blue: var(--user-accent, #6ea8ff);
+  --bubble-user: var(--user-accent-soft, rgb(255 255 255 / .085));
+  --status-working: #ffae42;
+  --status-success: #3ddc97;
+  --status-danger: #ff6b6b;
+  --status-info: #6ea8ff;
+  --shadow-pop: 0 18px 40px -14px rgb(0 0 0 / .5);
+  --font-ui: Inter, "Segoe UI", system-ui, sans-serif;
+  color: var(--text-1);
+  background: transparent;
+}
+:root[data-style="haze"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) {
+  color-scheme: light;
+  --haze-base: #f1efeb;
+  --haze-glass: rgb(250 249 247 / .64);
+  --haze-d1: #a9b4c0; --haze-d2: #c3c8ce; --haze-d3: #aab6c0; --haze-d4: #dcdee1;
+  --surface-sidebar: rgb(255 255 255 / .08);
+  --surface-panel: rgb(250 249 247 / .97);
+  --surface-raised: rgb(255 255 255 / .55);
+  --surface-overlay: rgb(252 251 250 / .97);
+  --surface-input: rgb(255 255 255 / .6);
+  --surface-hover: rgb(20 20 20 / .045);
+  --surface-selected: rgb(20 20 20 / .07);
+  --surface-selected-strong: rgb(20 20 20 / .1);
+  --surface-avatar: rgb(20 20 20 / .06);
+  --text-1: #1b1b1a;
+  --text-2: rgb(27 27 26 / .68);
+  --text-3: rgb(27 27 26 / .50);
+  --text-inverse: #fff;
+  --line: rgb(20 20 20 / .08);
+  --line-strong: rgb(20 20 20 / .14);
+  --accent: var(--user-accent, #1b1b1a);
+  --blue: var(--user-accent, #2f6bd6);
+  --bubble-user: var(--user-accent-soft, rgb(20 20 20 / .07));
+  --status-working: #a86a00;
+  --status-success: #14875f;
+  --status-danger: #d23a52;
+  --status-info: #2f6bd6;
+  --shadow-pop: 0 18px 40px -16px rgb(40 40 40 / .28);
+}
+
+/* The backdrop's colour is the accent (owner, 31 October 2026): with no accent chosen the mist is neutral grey, and with one
+   every blob leans towards it, strongest in the blob at the right. The rest of the window stays monochrome. */
+:root[data-style="haze"][data-accent="custom"]:not(.companion-surface):not(.dictation-surface) {
+  --haze-d1: color-mix(in oklab, var(--user-accent) 40%, #8794a3);
+  --haze-d2: color-mix(in oklab, var(--user-accent) 75%, #8d939b);
+  --haze-d3: color-mix(in oklab, var(--user-accent) 55%, #6b7884);
+  --haze-d4: color-mix(in oklab, var(--user-accent) 35%, #b4b8bd);
+}
+:root[data-style="haze"][data-accent="custom"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) {
+  --haze-d1: color-mix(in oklab, var(--user-accent) 30%, #a9b4c0);
+  --haze-d2: color-mix(in oklab, var(--user-accent) 55%, #c3c8ce);
+  --haze-d3: color-mix(in oklab, var(--user-accent) 40%, #aab6c0);
+  --haze-d4: color-mix(in oklab, var(--user-accent) 25%, #dcdee1);
+}
+
+/* The misty backdrop (owner, 26 October 2026, corrected: the background is about 80% OPAQUE, 20% transparent; blobs large and blended).
+   .haze-backdrop is non-interactive and paints an opaque composition: a neutral dark or light base (--haze-base)
+   under four broad blended colour blobs, and `opacity: .8` on this element only, so the whole backdrop composes to
+   about 0.8 and the native transparent window (tauri.conf.json) lets about 20% of the desktop through. Text,
+   controls, menus and dialogs are separate elements with their own surfaces and are not affected. No backdrop
+   CSS blur (backdrop-filter): it cannot reach the desktop; see the frosted-glass rule below for the native blur. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .haze-backdrop {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .8;
+  background:
+    radial-gradient(110vw 105vh at 10% 6%, color-mix(in srgb, var(--haze-d1) 46%, transparent), color-mix(in srgb, var(--haze-d1) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d1) 12%, transparent) 66%, transparent 100%),
+    radial-gradient(100vw 110vh at 100% 62%, color-mix(in srgb, var(--haze-d2) 46%, transparent), color-mix(in srgb, var(--haze-d2) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d2) 12%, transparent) 66%, transparent 100%),
+    radial-gradient(125vw 90vh at 38% 114%, color-mix(in srgb, var(--haze-d3) 46%, transparent), color-mix(in srgb, var(--haze-d3) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d3) 12%, transparent) 66%, transparent 100%),
+    radial-gradient(80vw 75vh at 54% 32%, color-mix(in srgb, var(--haze-d4) 36%, transparent), color-mix(in srgb, var(--haze-d4) 18%, transparent) 45%, transparent 100%),
+    linear-gradient(var(--haze-base), var(--haze-base));
+}
+/* Frosted glass (owner, 27 October 2026): transparency alone is not frost. CSS backdrop-filter cannot blur the desktop,
+   so the shell asks Windows to blur it (acrylic, or plain blur on older builds; src-tauri/src/backdrop.rs) and sets
+   data-backdrop on <html> only while that blur is really drawn (ui/windowBackdrop.ts). Then the backdrop stops being
+   an opaque composition: a thin neutral veil plus the same large blended blobs sit OVER the native blur as a
+   translucent tint, so the blurred desktop stays visible and legible. If the effect is unavailable, refused or
+   switched off by Windows, data-backdrop is absent and the opaque 80% composition above applies unchanged. The values
+   below are a starting point toward the old 80% visual density (system acrylic plus this tint); they were not measured. */
+:root[data-style="haze"][data-backdrop]:not(.companion-surface):not(.dictation-surface) .haze-backdrop {
+  --haze-veil: color-mix(in srgb, var(--haze-base) 34%, transparent);
+  opacity: .85;
+  background:
+    radial-gradient(110vw 105vh at 10% 6%, color-mix(in srgb, var(--haze-d1) 46%, transparent), color-mix(in srgb, var(--haze-d1) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d1) 12%, transparent) 66%, transparent 100%),
+    radial-gradient(100vw 110vh at 100% 62%, color-mix(in srgb, var(--haze-d2) 46%, transparent), color-mix(in srgb, var(--haze-d2) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d2) 12%, transparent) 66%, transparent 100%),
+    radial-gradient(125vw 90vh at 38% 114%, color-mix(in srgb, var(--haze-d3) 46%, transparent), color-mix(in srgb, var(--haze-d3) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d3) 12%, transparent) 66%, transparent 100%),
+    radial-gradient(80vw 75vh at 54% 32%, color-mix(in srgb, var(--haze-d4) 36%, transparent), color-mix(in srgb, var(--haze-d4) 18%, transparent) 45%, transparent 100%),
+    linear-gradient(var(--haze-veil), var(--haze-veil));
+}
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) body { background: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell { position: relative; z-index: 1; background: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar { background: var(--surface-sidebar); border-right: 1px solid var(--line); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .session-first-state .haze-mark { width: 72px !important; height: 72px !important; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversations-panel,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .session-rail,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .context-pane { background: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet { background: var(--surface-overlay); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .menu-surface,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) [role="menu"],
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) [role="listbox"],
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) [role="tooltip"],
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .tip-portal,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .runtime-mark-tooltip-portal,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .composer-menu,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .slash-menu,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .team-menu,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quick-switcher { background: var(--surface-overlay); border: 1px solid var(--line-strong); box-shadow: var(--shadow-pop); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .primary-button { background: var(--user-accent, var(--text-1)); color: var(--user-accent-ink, var(--text-inverse, #161616)); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .composer-box { background: var(--surface-input); border-color: var(--line); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .composer-box:focus-within { border-color: var(--line-focus); }
+
+/* Sidebar rows: one line, the mark, the name and the status in words. */
+:root[data-style="haze"] .team-row { position: relative; isolation: isolate; overflow: hidden; min-height: var(--dn-team-row-h, 36px); padding-block: 0; padding-left: 10px; gap: 11px; border-radius: 11px; }
+:root[data-style="haze"] .team-row.selected { box-shadow: none; }
+:root[data-style="haze"][data-theme="light"] .team-row.selected { background: var(--surface-selected); box-shadow: none; }
+:root[data-style="haze"] .team-row .bot-row-line + .bot-row-line { display: none; }
+:root[data-style="haze"] .team-row .team-row-name strong { font-weight: 500; font-size: 13.5px; }
+:root[data-style="haze"] .team-row .role-chip { display: none; }
+:root[data-style="haze"] .team-row time { color: var(--text-3); }
+:root[data-style="haze"] .team-row .leader-badge { right: -5px; bottom: -4px; width: 11px; height: 11px; }
+:root[data-style="haze"] .team-row .leader-badge svg { width: 7px; height: 7px; }
+:root[data-style="haze"] .team-row .lock-badge { right: -5px; bottom: -4px; transform: scale(.8); }
+:root[data-style="haze"] .team-row .unread-dot { z-index: 1; }
+.haze-row-state { flex: 0 0 auto; font-size: var(--fs-xs, 12px); white-space: nowrap; }
+.haze-row-state.needs { color: var(--status-working); }
+.haze-row-state.failed { color: var(--status-danger); }
+.haze-row-state.working { color: var(--text-2); }
+
+/* The sidebar's companion switch: a flat foot row, mark, label and toggle aligned. */
+:root[data-style="haze"]:not(.companion-surface) .companion-sidebar-card > .haze-mark { flex: 0 0 auto; width: 20px !important; height: 20px !important; }
+:root[data-style="haze"]:not(.companion-surface) .companion-sidebar-card > span:not(.haze-mark) { text-align: left; }
+
+/* ── Companion and dictation windows ─────────────────────────────────────
+   Transparent Tauri windows have no native blur: keep them opaque smoke. */
+:root[data-style="haze"].companion-surface,
+:root[data-style="haze"].dictation-surface {
+  --surface-app: #202124; --surface-sidebar: #242528; --surface-panel: #242528;
+  --surface-raised: #2a2b2f; --surface-overlay: #2c2d31; --surface-input: #2f3034;
+  --surface-hover: #35363b; --surface-selected: #3c3d42; --surface-selected-strong: #46474d;
+  --text-1: #f3f3f2; --text-2: #c9c9c7; --text-3: #a9a9a6; --text-inverse: #202124;
+  --line: #3a3b40; --line-strong: #5a5b61; --accent: var(--user-accent, #f3f3f2);
+  --blue: var(--user-accent, #6ea8ff); --bubble-user: #3a3b40; --status-working: #ffae42;
+  --status-success: #3ddc97; --status-danger: #ff6b6b; --status-info: #6ea8ff;
+  --font-ui: Inter, "Segoe UI", system-ui, sans-serif;
+  --companion-surface-card: var(--surface-raised); --companion-surface-flat: var(--surface-app);
+  --companion-surface-tab: var(--surface-selected); --companion-text-bright: var(--text-1);
+  --companion-text-muted: var(--text-2); --c-font: var(--font-ui);
+  --companion-alpha-04: color-mix(in srgb, var(--text-1) 4%, transparent);
+  --companion-alpha-05: color-mix(in srgb, var(--text-1) 7%, transparent);
+  --companion-alpha-06: color-mix(in srgb, var(--text-1) 8%, transparent);
+  --companion-alpha-07: color-mix(in srgb, var(--text-1) 9%, transparent);
+  --companion-alpha-09: color-mix(in srgb, var(--text-1) 12%, transparent);
+  --companion-alpha-10: color-mix(in srgb, var(--text-1) 13%, transparent);
+  --companion-alpha-12: color-mix(in srgb, var(--text-1) 15%, transparent);
+  --companion-alpha-18: color-mix(in srgb, var(--text-1) 22%, transparent);
+  color-scheme: dark; color: var(--text-1);
+}
+:root[data-style="haze"].companion-surface[data-surface-theme="light"],
+:root[data-style="haze"].dictation-surface[data-surface-theme="light"] {
+  --surface-app: #f4f2ee; --surface-sidebar: #eeebe6; --surface-panel: #eeebe6;
+  --surface-raised: #fbfaf8; --surface-overlay: #fff; --surface-input: #e9e6e1;
+  --surface-hover: #e6e3de; --surface-selected: #dedad4; --surface-selected-strong: #d3cfc8;
+  --text-1: #1b1b1a; --text-2: #4d4c49; --text-3: #5c5b57; --text-inverse: #fff;
+  --line: #d2cec7; --line-strong: #b3afa8; --accent: var(--user-accent, #1b1b1a);
+  --bubble-user: #e6e3de; --status-working: #7a4d00; --status-success: #17613f; --status-danger: #a82d43;
+  --companion-text-bright: var(--text-1); --companion-text-muted: var(--text-2);
+  --companion-text-tags: var(--text-2); --companion-text-activity: var(--text-1); --companion-text-settings: var(--text-1);
+  --companion-shimmer-edge: var(--text-1); --companion-shimmer-center: var(--text-1);
+  --companion-status-alert: #7a4d00; --companion-status-error: #a82d43; --companion-status-success: #17613f;
+  --companion-white: var(--text-1); --companion-black: #000;
+  --companion-alpha-04: color-mix(in srgb, var(--text-1) 4%, transparent);
+  --companion-alpha-05: color-mix(in srgb, var(--text-1) 7%, transparent);
+  --companion-alpha-06: color-mix(in srgb, var(--text-1) 8%, transparent);
+  --companion-alpha-07: color-mix(in srgb, var(--text-1) 9%, transparent);
+  --companion-alpha-08: color-mix(in srgb, var(--text-1) 10%, transparent);
+  --companion-alpha-09: color-mix(in srgb, var(--text-1) 12%, transparent);
+  --companion-alpha-10: color-mix(in srgb, var(--text-1) 13%, transparent);
+  --companion-alpha-12: color-mix(in srgb, var(--text-1) 15%, transparent);
+  --companion-alpha-13: color-mix(in srgb, var(--text-1) 17%, transparent);
+  --companion-alpha-15: color-mix(in srgb, var(--text-1) 20%, transparent);
+  --companion-alpha-18: color-mix(in srgb, var(--text-1) 22%, transparent);
+  color-scheme: light; color: var(--text-1);
+}
+:root[data-style="haze"].companion-surface .companion-capsule { background: var(--surface-app); box-shadow: inset 0 0 0 1px var(--line); }
+:root[data-style="haze"].companion-surface .island-card { background: var(--surface-raised); border-color: var(--line); box-shadow: none; }
+:root[data-style="haze"].companion-surface .island-header .tab.on { color: var(--text-1); background: var(--surface-selected); }
+:root[data-style="haze"].companion-surface .btn.primary { color: var(--user-accent-ink, var(--text-inverse)); background: var(--accent); }
+:root[data-style="haze"].companion-surface .focus-glow { display: none; }
+:root[data-style="haze"].companion-surface .island-card.focus,
+:root[data-style="haze"].companion-surface .companion-compact,
+:root[data-style="haze"].companion-surface .peer { position: relative; isolation: isolate; overflow: hidden; }
+:root[data-style="haze"].companion-surface .island-card.wash::before { opacity: .5; }
+/* The Haze stack: teammates as one column of rows. */
+:root[data-style="haze"].companion-surface .peer-grid { display: flex; flex-direction: column; gap: 2px; }
+:root[data-style="haze"].companion-surface .peer { justify-content: flex-start; min-height: 30px; padding: 0 10px; border-radius: 10px; background: transparent; }
+:root[data-style="haze"].companion-surface .peer:hover { background: var(--surface-hover); }
+:root[data-style="haze"].companion-surface .peer-state-dot { display: none; }
+:root[data-style="haze"].companion-surface .peer-line { margin-left: auto; color: var(--text-3); font-size: var(--fs-2xs, 11px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+:root[data-style="haze"].companion-surface .mini-grid { display: flex; gap: 3px; width: auto; height: auto; }
+:root[data-style="haze"].dictation-surface .dictation-island,
+:root[data-style="haze"].companion-surface .dictation-island { color: var(--text-1); border-color: var(--line); background: var(--surface-panel); box-shadow: none; backdrop-filter: none; }
+
+/* The compact bar: the focused bot, teammates as small tiles. */
+:root[data-style="haze"].companion-surface .companion-capsule.petit { border-radius: 14px; }
+:root[data-style="haze"].companion-surface .companion-compact { gap: 10px; padding: 0 8px 0 12px; }
+:root[data-style="haze"].companion-surface .compact-bot { width: 30px; height: 30px; border-radius: 9px; background: var(--surface-raised); }
+:root[data-style="haze"].companion-surface .compact-bot .haze-mark { width: 20px !important; height: 20px !important; }
+:root[data-style="haze"].companion-surface .compact-name strong { font-weight: 600; font-size: 13px; }
+:root[data-style="haze"].companion-surface .compact-name .role-chip,
+:root[data-style="haze"].companion-surface .compact-name .companion-role { display: none; }
+:root[data-style="haze"].companion-surface .mini-grid { gap: 4px; }
+:root[data-style="haze"].companion-surface .mini-grid > .haze-mark { width: 22px !important; height: 22px !important; padding: 3px; border-radius: 7px; background: var(--surface-raised); }
+:root[data-style="haze"].companion-surface .companion-collapse { border-radius: 8px; }
+/* Room for the name: no approval chip, the waiting count as a dot, at most three teammates. */
+:root[data-style="haze"].companion-surface .companion-compact .approval-pill { display: none; }
+:root[data-style="haze"].companion-surface .companion-compact .needs-you > span { display: none; }
+:root[data-style="haze"].companion-surface .companion-compact .needs-you { padding: 0 7px; min-width: 0; }
+:root[data-style="haze"].companion-surface .companion-compact .mini-grid > :nth-child(n+4) { display: none; }
+:root[data-style="haze"].companion-surface .compact-status.shimmer { animation: none; background: none; -webkit-text-fill-color: currentColor; color: var(--text-2); }
+:root[data-style="haze"].companion-surface .cs-brand .needs-you { height: 20px; padding: 0 6px; font-size: 10.5px; }
+
+/* Size the OUTER layout, not its already-constrained inner column. */
+:root[data-style="haze"] .blob-page-layout { width: min(880px, calc(100% - 48px)); max-width: none; }
+:root[data-style="haze"] .blob-page-layout .blob-page-column { width: 100%; max-width: none; }
+:root[data-style="haze"] .haze-look-editor { grid-template-columns: 260px minmax(0, 1fr); }
+:root[data-style="haze"] .team-row { min-height: var(--dn-team-row-h, 36px); }
+:root[data-style="haze"] .team-row-avatar > .haze-mark.is-character { width: 26px !important; height: 26px !important; }
+:root[data-style="haze"] .chat-header .haze-mark.is-character { width: 26px !important; height: 26px !important; }
+@media (max-width: 760px) {
+  :root[data-style="haze"] .blob-page-layout { width: calc(100% - 32px); }
+  :root[data-style="haze"] .haze-look-editor { grid-template-columns: 1fr; }
+}
+
+/* Owner, 28 October 2026: no flat grey blocks in Haze. Sheets, dialogs, the save bar, the first-run
+   prompt and the terminal are frosted glass over the haze, like the rest of the shell. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .blob-dialog,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .bot-savebar,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .first-run-prompt,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .terminal-dock {
+  background: var(--haze-glass);
+  -webkit-backdrop-filter: blur(28px) saturate(1.15);
+  backdrop-filter: blur(28px) saturate(1.15);
+}
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .bot-savebar { border-top-color: var(--line); }
+
+/* Haze's controls (owner, 1 November 2026, after MonoCode): small squared corners, hairline borders, a flat selected state.
+   Stone keeps its own. The companion and dictation windows have their own control classes. */
+:root[data-style="haze"]:not(.dictation-surface) { --radius-pill: 7px; --radius-sm: 7px; --radius-md: 10px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.primary-button, .secondary-button, .ghost-button) { height: 30px; padding: 0 11px; gap: 6px; border-radius: 6px; font-size: var(--fs-xs); font-weight: 500; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.primary-button, .secondary-button, .ghost-button).small { height: 26px; padding: 0 9px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .secondary-button { color: var(--text-2); border: 1px solid var(--line-strong); background: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .secondary-button:hover:not(:disabled) { color: var(--text-1); background: var(--surface-selected); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .secondary-button.danger { color: var(--status-danger); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .secondary-button.danger:hover:not(:disabled) { color: var(--status-danger); border-color: color-mix(in srgb, var(--status-danger) 40%, transparent); background: color-mix(in srgb, var(--status-danger) 10%, transparent); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.density-control, .segmented, .analytics-switch) { padding: 2px; gap: 2px; border: 1px solid var(--line-strong); border-radius: 6px; background: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.density-control, .segmented, .analytics-switch) button { min-height: 24px; height: 24px; padding: 0 10px; color: var(--text-3); border-radius: 5px; background: transparent; font-size: var(--fs-xs); font-weight: 400; box-shadow: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.density-control, .segmented, .analytics-switch) button:hover { color: var(--text-1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.density-control button.active, .segmented button.on, .analytics-switch button[aria-pressed="true"]) { color: var(--text-1); background: var(--surface-selected-strong); }
+/* The switch: a pill, as in MonoCode, with a white knob. The accent fills it when one is chosen. */
+:root[data-style="haze"]:not(.dictation-surface) .toggle { width: 36px; height: 20px; border-radius: 999px; background: color-mix(in srgb, var(--text-1) 18%, transparent); }
+:root[data-style="haze"]:not(.dictation-surface) .toggle > :is(i, b) { width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+:root[data-style="haze"]:not(.dictation-surface) .toggle.on { background: var(--user-accent, color-mix(in srgb, var(--text-1) 55%, transparent)); }
+:root[data-style="haze"]:not(.dictation-surface) .toggle.on > :is(i, b) { transform: translateX(16px); background: #fff; }
+:root[data-style="haze"]:not(.dictation-surface) .rail-remote .toggle.small { width: 28px; height: 16px; }
+:root[data-style="haze"]:not(.dictation-surface) .rail-remote .toggle.small > i { width: 12px; height: 12px; }
+:root[data-style="haze"]:not(.dictation-surface) .rail-remote .toggle.small.on > i { transform: translateX(12px); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-row .select.muted .select-trigger { height: 26px; padding: 0 6px 0 9px; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: 6px; font-size: var(--fs-xs); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .text-input { height: 30px; border-color: var(--line-strong); border-radius: 6px; font-size: var(--fs-xs); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) input[type="range"]:not(.look-slider input) { height: 16px; margin: 0; appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) input[type="range"]:not(.look-slider input)::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--text-1) 18%, transparent); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) input[type="range"]:not(.look-slider input)::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: -4px; appearance: none; -webkit-appearance: none; border: 0; border-radius: 50%; background: #fff; }
+
+/* Colour pass (owner, 8 November 2026: "blend more beautifully and more
+   seamless"). Scrollbars are a faint mist that brightens while the pointer is
+   over their scroller; the usage bar sits on the backdrop instead of a band of
+   its own; meters use the mist, with status colour only when a limit is near. */
+:root[data-style="haze"] { --scroll-thumb: rgb(255 255 255 / .10); --scroll-thumb-hover: rgb(255 255 255 / .24); }
+:root[data-style="haze"][data-theme="light"] { --scroll-thumb: rgb(20 20 20 / .12); --scroll-thumb-hover: rgb(20 20 20 / .26); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) *:hover { scrollbar-color: var(--scroll-thumb-hover) transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-bar { border-top-color: transparent; background: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-meter { background: var(--surface-selected); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-meter > b { background: color-mix(in srgb, var(--text-1) 46%, transparent); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-meter.tone-warning > b { background: var(--status-working); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-meter.tone-critical > b { background: var(--status-danger); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversations-panel { border-right-color: var(--line); }

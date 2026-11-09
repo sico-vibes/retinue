@@ -1,0 +1,1657 @@
+{
+  "version": 1,
+  "methods": [
+    {
+      "method": "app.snapshot",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "The authoritative state every remote view is built from; it is redacted before it leaves the host.",
+      "params": null
+    },
+    {
+      "method": "events.replay",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Replays retained events after a cursor so a reconnecting device can catch up.",
+      "params": null
+    },
+    {
+      "method": "daemon.health",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Daemon version, uptime and heartbeat; it carries no user data.",
+      "params": null
+    },
+    {
+      "method": "session.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists conversations so the device can show what is running.",
+      "params": null
+    },
+    {
+      "method": "session.get",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads one conversation and its history.",
+      "params": null
+    },
+    {
+      "method": "session.environment",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Shows where a conversation works.",
+      "params": null
+    },
+    {
+      "method": "session.repository",
+      "class": "never",
+      "minTier": null,
+      "why": "Raw repository diffs can contain environment values and credentials from files on the host, and the remote redaction keeps diff text as it is, so they stay on the host. The desktop rail reads them locally.",
+      "params": null
+    },
+    {
+      "method": "runtime.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists the coding agents installed on the host.",
+      "params": null
+    },
+    {
+      "method": "runtime.capabilities",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Describes which execution settings a runtime supports.",
+      "params": null
+    },
+    {
+      "method": "runtime.models",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists the models a runtime offers so the device can show the choices.",
+      "params": "runtimeModels"
+    },
+    {
+      "method": "exec.snapshot.*",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads recorded execution snapshots, which already exclude instruction text and environment values.",
+      "params": null
+    },
+    {
+      "method": "usage.*",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads token and cost summaries.",
+      "params": null
+    },
+    {
+      "method": "quota.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads the provider quota windows the host has recorded.",
+      "params": null
+    },
+    {
+      "method": "search.messages",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Searches conversation text on the host.",
+      "params": null
+    },
+    {
+      "method": "memory.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists memory records the person can review.",
+      "params": null
+    },
+    {
+      "method": "memory.get",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads a single memory record for review.",
+      "params": null
+    },
+    {
+      "method": "skills.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists the shared skill pool.",
+      "params": null
+    },
+    {
+      "method": "skills.get",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads one shared skill for review.",
+      "params": null
+    },
+    {
+      "method": "skills.forAgent",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists the shared skills switched on for one bot, which the composer needs to offer them; it carries no more than skills.list already does.",
+      "params": null
+    },
+    {
+      "method": "automation.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists scheduled automations.",
+      "params": null
+    },
+    {
+      "method": "automation.get",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads one scheduled automation.",
+      "params": null
+    },
+    {
+      "method": "automation.runs",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists an automation run history.",
+      "params": null
+    },
+    {
+      "method": "automation.preview",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Previews the next run times of a schedule; it changes nothing.",
+      "params": null
+    },
+    {
+      "method": "agent.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists bots so a device can pick one.",
+      "params": null
+    },
+    {
+      "method": "agent.get",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads one bot's settings.",
+      "params": null
+    },
+    {
+      "method": "manager.get",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads the one built-in Manager (or null); it is the same agent shape every remote view already shows.",
+      "params": null
+    },
+    {
+      "method": "manager.profile.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads the facts the Manager keeps about the user; they are the user's own notes.",
+      "params": null
+    },
+    {
+      "method": "manager.playbook.get",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads the current Manager playbook.",
+      "params": null
+    },
+    {
+      "method": "manager.playbook.history",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads the playbook's version history.",
+      "params": null
+    },
+    {
+      "method": "project.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists known projects so a device can pick one.",
+      "params": null
+    },
+    {
+      "method": "preset.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "The preset employees Retinue ships: id, nickname, portrait, role, department, tags and description, plus which bot each one made. The same list a window shows, and it names no folder or setting.",
+      "params": null
+    },
+    {
+      "method": "project.members",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Which employees a project has hired, with the hire time and order; the device joins the ids with the bot list it already reads.",
+      "params": null
+    },
+    {
+      "method": "project.hire",
+      "class": "never",
+      "minTier": null,
+      "why": "Hiring can create an employee, and creating a bot is never remote.",
+      "params": null
+    },
+    {
+      "method": "project.release",
+      "class": "never",
+      "minTier": null,
+      "why": "Hiring and releasing change a project's team, which is a desktop decision.",
+      "params": null
+    },
+    {
+      "method": "permissions.policy.get",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads the approval policy.",
+      "params": null
+    },
+    {
+      "method": "account.*",
+      "class": "never",
+      "minTier": null,
+      "why": "Accounts are sign-ins on the host; only the owner changes them, at the desktop.",
+      "params": null
+    },
+    {
+      "method": "model.custom.*",
+      "class": "never",
+      "minTier": null,
+      "why": "The owner's model list is changed at the desktop.",
+      "params": null
+    },
+    {
+      "method": "settings.get",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads local preferences; the response is filtered before it leaves the host.",
+      "params": null
+    },
+    {
+      "method": "automation.webhook.enable",
+      "class": "never",
+      "minTier": null,
+      "why": "Turning a webhook on hands back its signing secret once; only the desktop may do that.",
+      "params": null
+    },
+    {
+      "method": "automation.webhook.rotate",
+      "class": "never",
+      "minTier": null,
+      "why": "Replacing a webhook secret is a desktop action.",
+      "params": null
+    },
+    {
+      "method": "automation.webhook.update",
+      "class": "never",
+      "minTier": null,
+      "why": "Changing whether a webhook body reaches the prompt stays at the desktop.",
+      "params": null
+    },
+    {
+      "method": "automation.webhook.disable",
+      "class": "never",
+      "minTier": null,
+      "why": "Turning a webhook off, and deleting its secret, is a desktop action.",
+      "params": null
+    },
+    {
+      "method": "secret.list",
+      "class": "never",
+      "minTier": null,
+      "why": "Secret names and which bots use them stay at the desktop; no device sees them.",
+      "params": null
+    },
+    {
+      "method": "secret.set",
+      "class": "never",
+      "minTier": null,
+      "why": "Saving a secret is a desktop action; the value is typed at the desktop and never travels.",
+      "params": null
+    },
+    {
+      "method": "secret.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "Deleting a secret is a desktop action.",
+      "params": null
+    },
+    {
+      "method": "secret.request.list",
+      "class": "never",
+      "minTier": null,
+      "why": "The secure form for a bot's request exists only at the desktop.",
+      "params": null
+    },
+    {
+      "method": "secret.request.answer",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the desktop gives a secret; a device never can.",
+      "params": null
+    },
+    {
+      "method": "secret.request.decline",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the desktop answers a secret request.",
+      "params": null
+    },
+    {
+      "method": "runtime.profile.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists saved runtime profiles.",
+      "params": null
+    },
+    {
+      "method": "agent.conversation",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Reads a bot's conversation for viewing.",
+      "params": null
+    },
+    {
+      "method": "agent.conversations",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists a bot's conversations so a device can pick one.",
+      "params": null
+    },
+    {
+      "method": "agent.projects",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Lists the projects a bot has worked in, so a device can show which project a conversation is in.",
+      "params": null
+    },
+    {
+      "method": "session.prompt",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Starts a turn in an existing conversation.",
+      "params": "stagedAttachments"
+    },
+    {
+      "method": "session.steer",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Sends guidance into a running turn.",
+      "params": null
+    },
+    {
+      "method": "session.cancel",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Stops a running turn.",
+      "params": null
+    },
+    {
+      "method": "session.queue.*",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Manages the queued prompts of a conversation.",
+      "params": "stagedAttachments"
+    },
+    {
+      "method": "session.rename",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Renames a conversation.",
+      "params": null
+    },
+    {
+      "method": "session.archive",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Hides or restores a conversation.",
+      "params": null
+    },
+    {
+      "method": "message.reaction.toggle",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Adds or removes an emoji reaction.",
+      "params": null
+    },
+    {
+      "method": "message.image",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Serves one image the owner sent, from that message's own record in that conversation. The caller names a message and an image position, never a file path, and remote clients do not send attachments in v1.",
+      "params": null
+    },
+    {
+      "method": "turn.retry.cancel",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Cancels a pending automatic retry.",
+      "params": null
+    },
+    {
+      "method": "session.resume",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Resumes a resumable conversation.",
+      "params": null
+    },
+    {
+      "method": "session.warm",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Starts a conversation's coding agent ahead of a message.",
+      "params": null
+    },
+    {
+      "method": "session.close",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Closes a managed adapter process.",
+      "params": null
+    },
+    {
+      "method": "agent.conversation.create",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Starts a new conversation with a bot.",
+      "params": null
+    },
+    {
+      "method": "permission.reply",
+      "class": "approve",
+      "minTier": "operator",
+      "why": "Answers a pending approval; only when the host allows approvals from remote.",
+      "params": "permissionReply"
+    },
+    {
+      "method": "proposal.decide",
+      "class": "approve",
+      "minTier": "operator",
+      "why": "Approves or rejects a Manager proposal; only when the host allows approvals from remote.",
+      "params": null
+    },
+    {
+      "method": "settings.set",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not change the host's preferences.",
+      "params": null
+    },
+    {
+      "method": "agent.create",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not create bots.",
+      "params": null
+    },
+    {
+      "method": "manager.ensure",
+      "class": "never",
+      "minTier": null,
+      "why": "Creating or adopting the built-in Manager is a host-only decision; a device may read it with manager.get.",
+      "params": null
+    },
+    {
+      "method": "manager.profile.set",
+      "class": "never",
+      "minTier": null,
+      "why": "Writing what the Manager knows about the user happens at the computer; a device may only read it.",
+      "params": null
+    },
+    {
+      "method": "manager.profile.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "Deleting a profile fact happens at the computer; a device may only read it.",
+      "params": null
+    },
+    {
+      "method": "manager.playbook.set",
+      "class": "never",
+      "minTier": null,
+      "why": "Editing the Manager's playbook is a host decision; a device may read it.",
+      "params": null
+    },
+    {
+      "method": "manager.playbook.revert",
+      "class": "never",
+      "minTier": null,
+      "why": "Reverting the Manager's playbook is a host decision; a device may read it.",
+      "params": null
+    },
+    {
+      "method": "agent.update",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not edit bots.",
+      "params": null
+    },
+    {
+      "method": "agent.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not archive bots.",
+      "params": null
+    },
+    {
+      "method": "agent.restore",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not restore bots.",
+      "params": null
+    },
+    {
+      "method": "agent.reorder",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not reorder bots.",
+      "params": null
+    },
+    {
+      "method": "agent.team.update",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not change bot teams.",
+      "params": null
+    },
+    {
+      "method": "agent.lock.set",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not lock or unlock a bot.",
+      "params": null
+    },
+    {
+      "method": "project.create",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not create projects.",
+      "params": null
+    },
+    {
+      "method": "project.update",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not edit projects.",
+      "params": null
+    },
+    {
+      "method": "project.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not delete projects.",
+      "params": null
+    },
+    {
+      "method": "runtime.profile.save",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not save runtime profiles.",
+      "params": null
+    },
+    {
+      "method": "runtime.profile.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not delete runtime profiles.",
+      "params": null
+    },
+    {
+      "method": "runtime.refresh",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not trigger a coding agent scan on the host.",
+      "params": null
+    },
+    {
+      "method": "runtime.auth.clear",
+      "class": "never",
+      "minTier": null,
+      "why": "Clearing a sign-in failure re-runs coding agent discovery on the host; a remote device must not do that.",
+      "params": null
+    },
+    {
+      "method": "session.new",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote client picks an existing bot and project through a higher-level call, not a session with an arbitrary path.",
+      "params": null
+    },
+    {
+      "method": "session.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not permanently delete a conversation.",
+      "params": null
+    },
+    {
+      "method": "session.delete.*",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not schedule or cancel a conversation deletion.",
+      "params": null
+    },
+    {
+      "method": "file.revert",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not revert files in the host's project.",
+      "params": null
+    },
+    {
+      "method": "automation.create",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not create scheduled automations.",
+      "params": null
+    },
+    {
+      "method": "automation.update",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not edit scheduled automations.",
+      "params": null
+    },
+    {
+      "method": "automation.pause",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not pause a scheduled automation.",
+      "params": null
+    },
+    {
+      "method": "automation.resume",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not resume a scheduled automation.",
+      "params": null
+    },
+    {
+      "method": "automation.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not delete a scheduled automation.",
+      "params": null
+    },
+    {
+      "method": "automation.run_now",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not start an unattended run on the host.",
+      "params": null
+    },
+    {
+      "method": "memory.create",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not write memory records.",
+      "params": null
+    },
+    {
+      "method": "memory.update",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not edit memory records.",
+      "params": null
+    },
+    {
+      "method": "memory.approve",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not approve agent-written memory.",
+      "params": null
+    },
+    {
+      "method": "memory.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not delete memory records.",
+      "params": null
+    },
+    {
+      "method": "memory.restore",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not restore memory records.",
+      "params": null
+    },
+    {
+      "method": "skills.scan",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not scan the host's coding-agent skill folders.",
+      "params": null
+    },
+    {
+      "method": "skills.import",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not import skills onto the host.",
+      "params": null
+    },
+    {
+      "method": "skills.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not delete a shared skill.",
+      "params": null
+    },
+    {
+      "method": "skills.toggle",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not change which shared skills are on.",
+      "params": null
+    },
+    {
+      "method": "daemon.shutdown",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not stop the host daemon.",
+      "params": null
+    },
+    {
+      "method": "hook.event",
+      "class": "never",
+      "minTier": null,
+      "why": "Hook events come from local coding agents, not from a paired device.",
+      "params": null
+    },
+    {
+      "method": "outside.status",
+      "class": "never",
+      "minTier": null,
+      "why": "Watching outside sessions changes Claude Code's settings on the host; its status is the owner's at the computer.",
+      "params": null
+    },
+    {
+      "method": "outside.preview",
+      "class": "never",
+      "minTier": null,
+      "why": "The preview shows the host's Claude Code settings file, which stays at the computer.",
+      "params": null
+    },
+    {
+      "method": "outside.enable",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may let Retinue change Claude Code's settings.",
+      "params": null
+    },
+    {
+      "method": "outside.disable",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may change Claude Code's settings.",
+      "params": null
+    },
+    {
+      "method": "outside.sessions",
+      "class": "never",
+      "minTier": null,
+      "why": "Sessions started outside Retinue are the computer's own terminals; they stay on the host in this slice.",
+      "params": null
+    },
+    {
+      "method": "external.status",
+      "class": "never",
+      "minTier": null,
+      "why": "The Retinue MCP lets a Claude Code session on the host drive the app; its status, command and file paths are the owner's at the computer.",
+      "params": null
+    },
+    {
+      "method": "external.enable",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may let an outside Claude Code session drive Retinue.",
+      "params": null
+    },
+    {
+      "method": "external.disable",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may change who can drive Retinue from outside.",
+      "params": null
+    },
+    {
+      "method": "external.setTier",
+      "class": "never",
+      "minTier": null,
+      "why": "The level an outside Claude Code session has is the owner's choice at the computer.",
+      "params": null
+    },
+    {
+      "method": "external.setFullAccess",
+      "class": "never",
+      "minTier": null,
+      "why": "Whether an outside Claude Code session may give bots Full access is the owner's choice at the computer.",
+      "params": null
+    },
+    {
+      "method": "external.rotate",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may replace the Retinue MCP's token.",
+      "params": null
+    },
+    {
+      "method": "mcp.*",
+      "class": "never",
+      "minTier": null,
+      "why": "The MCP bridge is the local agent tool surface, not a remote device surface.",
+      "params": null
+    },
+    {
+      "method": "ext.*",
+      "class": "never",
+      "minTier": null,
+      "why": "The Retinue MCP is a local stdio server for the owner's own Claude Code session; its token is not a remote device credential.",
+      "params": null
+    },
+    {
+      "method": "session.handoff.draft",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not draft a handoff between conversations.",
+      "params": null
+    },
+    {
+      "method": "session.model.update",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not change a conversation's model, effort or approval mode.",
+      "params": null
+    },
+    {
+      "method": "session.model.plan",
+      "class": "never",
+      "minTier": null,
+      "why": "It only exists to prepare a model change, and a remote device must not change a conversation's model.",
+      "params": null
+    },
+    {
+      "method": "session.permissions.set",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not change a conversation's permission mode.",
+      "params": null
+    },
+    {
+      "method": "backup.export",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not read the host's backup file (it would carry bots, memory and skills off the host).",
+      "params": null
+    },
+    {
+      "method": "backup.preview",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not read a backup file the host selected.",
+      "params": null
+    },
+    {
+      "method": "backup.import",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not restore a backup onto the host.",
+      "params": null
+    },
+    {
+      "method": "diagnostics.preview",
+      "class": "never",
+      "minTier": null,
+      "why": "The local log and settings listing is the owner's at the computer, not a paired device's.",
+      "params": null
+    },
+    {
+      "method": "diagnostics.export",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not pull the host's diagnostics zip off the computer.",
+      "params": null
+    },
+    {
+      "method": "fanout.start",
+      "class": "never",
+      "minTier": null,
+      "why": "Comparing bots is a desktop feature; it starts several conversations on the host.",
+      "params": null
+    },
+    {
+      "method": "fanout.get",
+      "class": "never",
+      "minTier": null,
+      "why": "Comparison records are the owner's, read at the desktop.",
+      "params": null
+    },
+    {
+      "method": "fanout.list",
+      "class": "never",
+      "minTier": null,
+      "why": "Comparison records are the owner's, read at the desktop.",
+      "params": null
+    },
+    {
+      "method": "fanout.pick",
+      "class": "never",
+      "minTier": null,
+      "why": "Choosing a comparison's answer is the owner's, at the desktop.",
+      "params": null
+    },
+    {
+      "method": "fanout.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "Removing a comparison record is the owner's, at the desktop.",
+      "params": null
+    },
+    {
+      "method": "stash.add",
+      "class": "never",
+      "minTier": null,
+      "why": "The prompt stash holds the owner's drafts and images; it is never sent to a remote device.",
+      "params": null
+    },
+    {
+      "method": "stash.list",
+      "class": "never",
+      "minTier": null,
+      "why": "The prompt stash holds the owner's drafts and images; it is never sent to a remote device.",
+      "params": null
+    },
+    {
+      "method": "stash.update",
+      "class": "never",
+      "minTier": null,
+      "why": "The prompt stash holds the owner's drafts and images; it is never sent to a remote device.",
+      "params": null
+    },
+    {
+      "method": "stash.image",
+      "class": "never",
+      "minTier": null,
+      "why": "Stashed images are the owner's files; they are never sent to a remote device.",
+      "params": null
+    },
+    {
+      "method": "stash.restore",
+      "class": "never",
+      "minTier": null,
+      "why": "The prompt stash holds the owner's drafts and images; it is never sent to a remote device.",
+      "params": null
+    },
+    {
+      "method": "stash.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "The prompt stash holds the owner's drafts and images; it is never sent to a remote device.",
+      "params": null
+    },
+    {
+      "method": "project.scaffold.status",
+      "class": "never",
+      "minTier": null,
+      "why": "Creating a project is a desktop action; it checks the host's git and GitHub installation.",
+      "params": null
+    },
+    {
+      "method": "project.scaffold.login",
+      "class": "never",
+      "minTier": null,
+      "why": "It asks the host's GitHub CLI who is signed in, which is a desktop action on the owner's account.",
+      "params": null
+    },
+    {
+      "method": "project.scaffold",
+      "class": "never",
+      "minTier": null,
+      "why": "Creating a project makes folders, runs git and can publish a repository on the host; the owner confirms it at the desktop.",
+      "params": null
+    },
+    {
+      "method": "project.findByIdentity",
+      "class": "never",
+      "minTier": null,
+      "why": "It matches a repository identity against the host's project folders, which is a desktop action.",
+      "params": null
+    },
+    {
+      "method": "project.sharedSettings.get",
+      "class": "never",
+      "minTier": null,
+      "why": "A repository file is the owner's to read and trust at the desktop; a device never sees it.",
+      "params": null
+    },
+    {
+      "method": "project.sharedSettings.trust",
+      "class": "never",
+      "minTier": null,
+      "why": "Trusting a repository file decides what runs on the host, so only the owner at the desktop may do it.",
+      "params": null
+    },
+    {
+      "method": "project.sharedSettings.untrust",
+      "class": "never",
+      "minTier": null,
+      "why": "It withdraws the owner's trust in a repository file, a desktop action.",
+      "params": null
+    },
+    {
+      "method": "project.sharedSettings.write",
+      "class": "never",
+      "minTier": null,
+      "why": "It writes a file into the host's project folder, which only the owner at the desktop may do.",
+      "params": null
+    },
+    {
+      "method": "worktree.abandoned",
+      "class": "never",
+      "minTier": null,
+      "why": "It lists the host's folders and branches, which belong to the owner at the desktop.",
+      "params": null
+    },
+    {
+      "method": "worktree.removeAbandoned",
+      "class": "never",
+      "minTier": null,
+      "why": "Removing a worktree deletes folders and can delete a branch, so it is never a remote action.",
+      "params": null
+    },
+    {
+      "method": "project.clone",
+      "class": "never",
+      "minTier": null,
+      "why": "Cloning writes a folder on the host and may use the host's git sign-in.",
+      "params": null
+    },
+    {
+      "method": "project.clone.cancel",
+      "class": "never",
+      "minTier": null,
+      "why": "It stops a clone that is writing to the host's disk.",
+      "params": null
+    },
+    {
+      "method": "project.clone.list",
+      "class": "never",
+      "minTier": null,
+      "why": "A clone job names folders on the host.",
+      "params": null
+    },
+    {
+      "method": "project.discover",
+      "class": "never",
+      "minTier": null,
+      "why": "It lists the folders of the host's disk.",
+      "params": null
+    },
+    {
+      "method": "project.files.search",
+      "class": "never",
+      "minTier": null,
+      "why": "It names the files of the host's project folders, which stay on the host.",
+      "params": null
+    },
+    {
+      "method": "project.content.search",
+      "class": "never",
+      "minTier": null,
+      "why": "File lines can hold environment values and credentials, so they never leave the host.",
+      "params": null
+    },
+    {
+      "method": "project.icon.set",
+      "class": "never",
+      "minTier": null,
+      "why": "A project's icon is a project setting, and a remote device must not edit projects.",
+      "params": null
+    },
+    {
+      "method": "project.favicon",
+      "class": "never",
+      "minTier": null,
+      "why": "It reads a file from the host's project folder, which stays on the host.",
+      "params": null
+    },
+    {
+      "method": "diagnostics.issueDraft",
+      "class": "never",
+      "minTier": null,
+      "why": "The problem report is built from the host's diagnostics and is the owner's at the computer.",
+      "params": null
+    },
+    {
+      "method": "diagnostics.issuePost",
+      "class": "never",
+      "minTier": null,
+      "why": "Posting a problem report uses the owner's GitHub sign-in on the host; only the owner at the desktop may send it.",
+      "params": null
+    },
+    {
+      "method": "pricing.*",
+      "class": "never",
+      "minTier": null,
+      "why": "Monetary valuation controls are retired and never remote.",
+      "params": null
+    },
+    {
+      "method": "subscription.*",
+      "class": "never",
+      "minTier": null,
+      "why": "Subscription controls are retired and never remote.",
+      "params": null
+    },
+    {
+      "method": "budget.*",
+      "class": "never",
+      "minTier": null,
+      "why": "Budget controls are retired and never remote.",
+      "params": null
+    },
+    {
+      "method": "quota.refresh",
+      "class": "never",
+      "minTier": null,
+      "why": "A remote device must not trigger a provider quota poll on the host; it only needs to read quota.list.",
+      "params": null
+    },
+    {
+      "method": "remote.status",
+      "class": "never",
+      "minTier": null,
+      "why": "The remote controls are for the owner at the computer, never for a paired device.",
+      "params": null
+    },
+    {
+      "method": "remote.enable",
+      "class": "never",
+      "minTier": null,
+      "why": "A paired device must not turn the host's remote access on.",
+      "params": null
+    },
+    {
+      "method": "remote.disable",
+      "class": "never",
+      "minTier": null,
+      "why": "A paired device must not turn the host's remote access off.",
+      "params": null
+    },
+    {
+      "method": "remote.pair.begin",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may start a pairing offer.",
+      "params": null
+    },
+    {
+      "method": "remote.pair.cancel",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may cancel a pairing offer.",
+      "params": null
+    },
+    {
+      "method": "remote.pair.confirm",
+      "class": "never",
+      "minTier": null,
+      "why": "Approving a device with a tier is the owner's decision at the computer.",
+      "params": null
+    },
+    {
+      "method": "remote.devices.list",
+      "class": "never",
+      "minTier": null,
+      "why": "The paired-device list is for the owner at the computer, not for a device.",
+      "params": null
+    },
+    {
+      "method": "remote.devices.update",
+      "class": "never",
+      "minTier": null,
+      "why": "A paired device must not rename another device or raise its own tier.",
+      "params": null
+    },
+    {
+      "method": "remote.devices.revoke",
+      "class": "never",
+      "minTier": null,
+      "why": "A paired device must not remove another device's pairing.",
+      "params": null
+    },
+    {
+      "method": "remote.security.get",
+      "class": "never",
+      "minTier": null,
+      "why": "Remote security options are host settings the owner reads at the computer.",
+      "params": null
+    },
+    {
+      "method": "remote.security.set",
+      "class": "never",
+      "minTier": null,
+      "why": "A paired device must not switch approvals from remote on for itself.",
+      "params": null
+    },
+    {
+      "method": "remote.push.get",
+      "class": "never",
+      "minTier": null,
+      "why": "Whether notices go through a push service is the owner's, at the desktop.",
+      "params": null
+    },
+    {
+      "method": "remote.push.set",
+      "class": "never",
+      "minTier": null,
+      "why": "Whether notices go through a push service is the owner's, at the desktop.",
+      "params": null
+    },
+    {
+      "method": "remote.activity.list",
+      "class": "never",
+      "minTier": null,
+      "why": "The activity list is the owner's audit view at the computer.",
+      "params": null
+    },
+    {
+      "method": "push.key",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "A paired device needs the VAPID public key to subscribe to pushes. It is public and holds no secret.",
+      "params": null
+    },
+    {
+      "method": "push.subscribe",
+      "class": "chat",
+      "minTier": "viewer",
+      "why": "Subscribing stores this device's own push endpoint, so it needs a device that may talk to the host.",
+      "params": null
+    },
+    {
+      "method": "push.unsubscribe",
+      "class": "chat",
+      "minTier": "viewer",
+      "why": "Removing a subscription changes this device's own row, so it needs the same tier as subscribing.",
+      "params": null
+    },
+    {
+      "method": "remote.method.set",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may choose the Remote method.",
+      "params": null
+    },
+    {
+      "method": "remote.native.account.set",
+      "class": "never",
+      "minTier": null,
+      "why": "The Native username and password are set by the owner at the computer.",
+      "params": null
+    },
+    {
+      "method": "remote.native.cert.regenerate",
+      "class": "never",
+      "minTier": null,
+      "why": "A paired device must not replace the host's TLS certificate.",
+      "params": null
+    },
+    {
+      "method": "remote.native.port.set",
+      "class": "never",
+      "minTier": null,
+      "why": "The Native port is a host setting the owner changes at the computer.",
+      "params": null
+    },
+    {
+      "method": "remote.native.upnp.set",
+      "class": "never",
+      "minTier": null,
+      "why": "Consent to map the port on the router is the owner's decision at the computer.",
+      "params": null
+    },
+    {
+      "method": "remote.native.externalIp.set",
+      "class": "never",
+      "minTier": null,
+      "why": "The external address the host advertises is set by the owner at the computer.",
+      "params": null
+    },
+    {
+      "method": "remote.native.firewall.add",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may raise the firewall prompt; a device must never add a rule.",
+      "params": null
+    },
+    {
+      "method": "remote.native.firewall.remove",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may raise the firewall prompt; a device must never remove a rule.",
+      "params": null
+    },
+    {
+      "method": "task.create",
+      "class": "never",
+      "minTier": null,
+      "why": "Tasks are owner-only in this slice; a device may not create board work.",
+      "params": null
+    },
+    {
+      "method": "task.list",
+      "class": "never",
+      "minTier": null,
+      "why": "Task content is not projected to remote devices in this slice.",
+      "params": null
+    },
+    {
+      "method": "task.get",
+      "class": "never",
+      "minTier": null,
+      "why": "Task content is not projected to remote devices in this slice.",
+      "params": null
+    },
+    {
+      "method": "task.update",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the desktop owner edits task drafts.",
+      "params": null
+    },
+    {
+      "method": "task.dispatch",
+      "class": "never",
+      "minTier": null,
+      "why": "Dispatching starts provider work; only the owner at the computer may drop a task on a bot.",
+      "params": null
+    },
+    {
+      "method": "task.unassign",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the desktop owner assigns or unassigns board work.",
+      "params": null
+    },
+    {
+      "method": "task.reorder",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the desktop owner orders the queue.",
+      "params": null
+    },
+    {
+      "method": "task.cancel",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the desktop owner cancels board work.",
+      "params": null
+    },
+    {
+      "method": "task.stop",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the desktop owner stops a running task.",
+      "params": null
+    },
+    {
+      "method": "task.review",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the desktop owner reviews evidence and closes a task.",
+      "params": null
+    },
+    {
+      "method": "task.runs",
+      "class": "never",
+      "minTier": null,
+      "why": "Run history is not projected to remote devices in this slice.",
+      "params": null
+    },
+    {
+      "method": "task.image",
+      "class": "never",
+      "minTier": null,
+      "why": "Task images are the owner's files; they are never sent to a remote device.",
+      "params": null
+    },
+    {
+      "method": "agent.purge",
+      "class": "never",
+      "minTier": null,
+      "why": "Permanent bot and conversation deletion is local-only.",
+      "params": null
+    },
+    {
+      "method": "delegation.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Shows what a Manager's teammates are doing so a phone can catch up; the workspace folder is reduced to its last two segments and the isolated copy's repository and path are removed before it leaves.",
+      "params": null
+    },
+    {
+      "method": "subbot.list",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "Shows a conversation's or a bot's sub-bots (name, model, status) so a phone can see the fleet; what each is doing and any error are removed before it leaves, so it carries no paths, tool output or message text.",
+      "params": null
+    },
+    {
+      "method": "delegation.cancel",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Stops an assignment (a teammate's running turn or a queued brief), like stopping a running turn from the phone.",
+      "params": null
+    },
+    {
+      "method": "delegation.cancelGroup",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Stops an assignment (a teammate's running turn or a queued brief), like stopping a running turn from the phone.",
+      "params": null
+    },
+    {
+      "method": "session.workspace",
+      "class": "never",
+      "minTier": null,
+      "why": "The workspace report carries the host's absolute folder, repository and worktree paths, which the remote redaction does not reduce, so it stays on the host.",
+      "params": null
+    },
+    {
+      "method": "media.preview",
+      "class": "never",
+      "minTier": null,
+      "why": "It returns file bytes from the host's project folder (images, audio, video, PDFs, text); attachments and file content stay off remote in this version.",
+      "params": null
+    },
+    {
+      "method": "media.reveal",
+      "class": "never",
+      "minTier": null,
+      "why": "It opens the host's own file manager at a generated image, which only makes sense at the computer and names a host path to do it.",
+      "params": null
+    },
+    {
+      "method": "session.checkpoints",
+      "class": "never",
+      "minTier": null,
+      "why": "The per-turn change report lists file paths and diff counts from the host's repository, which the remote redaction does not reduce, so it stays on the host.",
+      "params": null
+    },
+    {
+      "method": "machine.info",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "The other machine's own daemon asks it for its id, name and version when it links; it carries no conversation, path or credential.",
+      "params": null
+    },
+    {
+      "method": "machine.*",
+      "class": "never",
+      "minTier": null,
+      "why": "Machine links are the owner's, set up at the computer. A paired device must not link, rename or remove machines, or read another machine through this one.",
+      "params": null
+    },
+    {
+      "method": "handoff.*",
+      "class": "handoff",
+      "minTier": "operator",
+      "why": "Moving a conversation to another computer commits and pushes its own task branch, so it needs an operator device, and only a paired Retinue machine may ask; a phone or browser is always refused. It carries no host path, environment value, thinking or tool output.",
+      "params": null
+    },
+    {
+      "method": "session.git.diff",
+      "class": "never",
+      "minTier": null,
+      "why": "It returns a file's whole diff from the host's repository, which can hold environment values and credentials from files on the host, so it stays on the host.",
+      "params": null
+    },
+    {
+      "method": "session.git.stage",
+      "class": "never",
+      "minTier": null,
+      "why": "It changes what is staged in the host's repository, which only the owner at the computer may do.",
+      "params": null
+    },
+    {
+      "method": "session.git.revert",
+      "class": "never",
+      "minTier": null,
+      "why": "It discards a file's changes in the host's repository, which destroys work; only the owner at the computer may do that.",
+      "params": null
+    },
+    {
+      "method": "session.git.revertUndo",
+      "class": "never",
+      "minTier": null,
+      "why": "It writes a kept copy of a file back into the host's project folder, which only the owner at the computer may do.",
+      "params": null
+    },
+    {
+      "method": "session.pr.draft",
+      "class": "never",
+      "minTier": null,
+      "why": "It reads the host's repository and the GitHub CLI's sign-in to propose a pull request, which names branches and commits from the host.",
+      "params": null
+    },
+    {
+      "method": "session.pr.create",
+      "class": "never",
+      "minTier": null,
+      "why": "It commits, pushes and opens a pull request with the owner's own git and GitHub sign-in, which only the owner at the computer may do.",
+      "params": null
+    },
+    {
+      "method": "permission.rules.list",
+      "class": "never",
+      "minTier": null,
+      "why": "Remembered approvals name the owner's own commands and project paths, so the list stays at the computer.",
+      "params": null
+    },
+    {
+      "method": "permission.rules.update",
+      "class": "never",
+      "minTier": null,
+      "why": "Moving a remembered approval between one project and every project changes what the bot may do unattended; only the owner at the desktop may do that.",
+      "params": null
+    },
+    {
+      "method": "permission.rules.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "Deleting a remembered approval changes what the bot may do unattended; only the owner at the desktop may do that.",
+      "params": null
+    },
+    {
+      "method": "doctor.run",
+      "class": "never",
+      "minTier": null,
+      "why": "The Doctor reports the host's executable paths, database file and installed models, which are the owner's at the computer.",
+      "params": null
+    }
+  ],
+  "events": {
+    "message.delta": "allow",
+    "message.completed": "allow",
+    "session.changed": "allow",
+    "session.deleted": "allow",
+    "skills.changed": "allow",
+    "turn.completed": "allow",
+    "turn.cancelled": "allow",
+    "turn.error": "allow",
+    "permission.requested": "allow",
+    "permission.resolved": "allow",
+    "proposal.changed": "allow",
+    "agent.changed": "allow",
+    "queue.changed": "allow",
+    "usage.updated": "allow",
+    "quota.updated": "allow",
+    "daemon.health": "allow",
+    "events.replay.complete": "allow",
+    "replay.gap": "allow",
+    "runtime.models.changed": "allow",
+    "machine.changed": "drop",
+    "secret.request.changed": "drop",
+    "machine.pair.changed": "drop",
+    "machine.takeOver.changed": "drop",
+    "backup.imported": "drop",
+    "automation.changed": "drop",
+    "automation.deleted": "drop",
+    "automation.run.changed": "drop",
+    "automation.run.finished": "drop",
+    "exec.options.changed": "drop",
+    "exec.options.rejected": "drop",
+    "file.changed": "drop",
+    "hook.observed": "drop",
+    "manager.playbook.changed": "drop",
+    "manager.profile.changed": "drop",
+    "memory.changed": "drop",
+    "memory.deleted": "drop",
+    "permission.auto_denied": "drop",
+    "permission.auto_resolved": "drop",
+    "permission.rules.changed": "drop",
+    "permission.bypass_active": "drop",
+    "project.clone.changed": "drop",
+    "project.members.changed": "drop",
+    "runtime.changed": "drop",
+    "session.context.reset": "drop",
+    "session.context.updated": "drop",
+    "session.context_exhausted": "drop",
+    "session.replaced": "drop",
+    "session.resume_rejected": "drop",
+    "settings.changed": "drop",
+    "tool.changed": "drop",
+    "turn.retry_declined": "drop",
+    "turn.retry_scheduled": "drop",
+    "remote.changed": "drop",
+    "remote.device.changed": "drop",
+    "remote.pairing.requested": "drop",
+    "remote.pairing.completed": "drop",
+    "remote.activity": "drop",
+    "task.changed": "drop",
+    "task.run.changed": "drop",
+    "task.run.finished": "drop",
+    "delegation.updated": "allow",
+    "subbot.changed": "allow",
+    "outside.sessions.changed": "drop",
+    "external.changed": "drop",
+    "media.generated": "drop",
+    "fanout.changed": "drop",
+    "stash.changed": "drop"
+  },
+  "settingsAllowlist": [
+    "appearance.style",
+    "appearance.wallpaper",
+    "appearance.glass",
+    "appearance.font",
+    "appearance.monoFont",
+    "appearance.accent",
+    "appearance.theme",
+    "appearance.textSize",
+    "appearance.density",
+    "notifications.enabled",
+    "permissions.default_mode",
+    "experimental.memory"
+  ],
+  "sensitiveKeyPattern": "token|secret|password|credential|capability|api[-_]?key|private[-_]?key|authorization|bearer|cookie"
+}

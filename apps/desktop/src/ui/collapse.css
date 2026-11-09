@@ -1,0 +1,10 @@
+/* Collapse: see Collapse.tsx. */
+.collapse { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 180ms cubic-bezier(.2, .7, .2, 1), opacity 140ms ease; }
+.collapse.open { grid-template-rows: 1fr; opacity: 1; }
+.collapse-inner { min-height: 0; overflow: hidden; }
+/* A chevron that turns instead of swapping icons. */
+.fold-chevron { flex: 0 0 auto; transition: transform 160ms cubic-bezier(.2, .7, .2, 1); }
+.fold-chevron.open { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) {
+  .collapse, .fold-chevron { transition: none; }
+}

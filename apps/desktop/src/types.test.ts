@@ -1,0 +1,189 @@
+import { describe, expect, it } from 'vitest'
+import { applyEvent, isPermissionReplyAllowed, type DaemonEvent, type Snapshot } from './types'
+
+const base = (): Snapshot => ({
+  sequence: 4,
+  runtimes: [{ id: 'rt-a', provider: 'codex' }],
+  sessions: [{
+    id: 's-a', runtimeId: 'rt-a', state: 'working',
+    messages: [{ id: 'm-a', role: 'assistant', content: 'Hello', turnId: 't-a' }],
+    files: [{ id: 'f-a', path: 'src/a.ts' }],
+    tools: [{ id: 'tool-a', state: 'running' }],
+  }],
+  permissions: [], usage: [],
+})
+
+const event = (type: string, sequence: number, payload: Record<string, unknown>): DaemonEvent => ({ v: 1, type, sequence, payload })
+
+describe('daemon event reconciliation', () => {
+  it('updates a generated image in place, and two notices of one turn stay separate', () => {
+    const notice = (sequence: number, id: string, status: string) => event('message.completed', sequence, { sessionId: 's-a', messageId: id, role: 'notice', message: { id, role: 'notice', turnId: 't-a', content: status, meta: { kind: 'generated_image', mediaId: id, status } } })
+    let next = applyEvent(base(), notice(5, 'img-1', 'pending'))
+    next = applyEvent(next, notice(6, 'img-2', 'pending'))
+    expect(next.sessions?.[0]?.messages?.map((item) => item.id)).toEqual(['m-a', 'img-1', 'img-2'])
+    next = applyEvent(next, notice(7, 'img-1', 'ready'))
+    const messages = next.sessions?.[0]?.messages ?? []
+    expect(messages.map((item) => item.id)).toEqual(['m-a', 'img-1', 'img-2'])
+    expect(messages[1]?.meta?.status).toBe('ready')
+    expect(messages[2]?.meta?.status).toBe('pending')
+  })
+
+  it('replaces the runtime roster when background discovery completes', () => {
+    const next = applyEvent(base(), event('runtime.changed', 5, {
+      runtimes: [{ id: 'rt-claude', provider: 'claude' }],
+    }))
+    expect(next.runtimes).toEqual([{ id: 'rt-claude', provider: 'claude' }])
+  })
+
+  it('stores only the normalized provider quota snapshot from an update event', () => {
+    const next = applyEvent(base(), event('quota.updated', 5, {
+      provider: 'codex',
+      quota: { runtimeId: 'rt-a', fetchedAt: '2026-10-05T10:00:00Z', limits: [{ label: 'Codex', primary: { usedPercent: 72, remainingPercent: 28, resetsAt: null, windowDurationMins: 300 }, secondary: null }] },
+    }))
+    expect(next.quotas).toHaveLength(1)
+    expect(next.quotas?.[0].provider).toBe('codex')
+    expect(next.quotas?.[0].snapshot).toMatchObject({ limits: [{ label: 'Codex', primary: { usedPercent: 72, remainingPercent: 28 } }] })
+    expect(JSON.stringify(next.quotas)).not.toMatch(/accountId|credits|upsell/i)
+  })
+
+  it('updates session context only with provider-reported fields and keeps missing fields unknown', () => {
+    const unknown = applyEvent(base(), event('session.context.updated', 5, { sessionId: 's-a', contextUsed: 413000, contextSize: null }))
+    expect(unknown.sessions?.[0]).toMatchObject({ contextUsed: 413000 })
+    expect(unknown.sessions?.[0].contextSize).toBeNull()
+    const known = applyEvent(unknown, event('session.context.updated', 6, { sessionId: 's-a', contextUsed: 413000, contextSize: 828000 }))
+    expect(known.sessions?.[0]).toMatchObject({ contextUsed: 413000, contextSize: 828000 })
+    const reset = applyEvent(known, event('session.context.reset', 7, { sessionId:'s-a' }))
+    expect(reset.sessions?.[0]).toMatchObject({ contextUsed:null, contextSize:null })
+  })
+
+  it('keeps the prompt queue per session from queue.changed and ignores malformed items', () => {
+    const item = { id: 'q1', sessionId: 's-a', text: 'next', kind: 'user', dueAt: null, status: 'queued', error: null, position: 0 }
+    const first = applyEvent(base(), event('queue.changed', 8, { sessionId: 's-a', paused: true, items: [item, { id: 'bad' }, null] }))
+    expect(first.queues?.['s-a']).toEqual({ paused: true, items: [item] })
+    const replaced = applyEvent(first, event('queue.changed', 9, { sessionId: 's-a', items: [] }))
+    expect(replaced.queues?.['s-a']).toEqual({ paused: false, items: [] })
+    expect(applyEvent(replaced, event('queue.changed', 10, { items: [item] })).queues?.['s-a']).toEqual({ paused: false, items: [] })
+    const deleted = applyEvent({ ...replaced, deletedSessionIds: ['s-z'] }, event('queue.changed', 11, { sessionId: 's-z', items: [{ ...item, sessionId: 's-z' }] }))
+    expect(deleted.queues?.['s-z']).toBeUndefined()
+  })
+
+  it('clears explicit null context fields while omitted fields preserve current values', () => {
+    const measured = applyEvent(base(), event('session.context.updated', 5, { sessionId:'s-a', contextUsed:420, contextSize:1000, contextModel:'claude-sonnet-5-5' }))
+    const partial = applyEvent(measured, event('session.context.updated', 6, { sessionId:'s-a', contextUsed:null, contextModel:'claude-opus-5-5' }))
+    expect(partial.sessions?.[0]).toMatchObject({ contextUsed:null, contextSize:1000, contextModel:'claude-opus-5-5' })
+  })
+
+  it('applies a model-only context update by clearing prior counts and attribution', () => {
+    const measured = applyEvent(base(), event('session.context.updated', 5, { sessionId:'s-a', contextUsed:420, contextSize:1000, contextModel:'claude-sonnet-5-5', contextEstimated:true }))
+    const unknown = applyEvent(measured, event('session.context.updated', 6, { sessionId:'s-a', contextUsed:null, contextSize:null, contextModel:null, contextEstimated:false }))
+    expect(unknown.sessions?.[0]).toMatchObject({ contextUsed:null, contextSize:null, contextModel:null, contextEstimated:false })
+  })
+
+  it('replaces estimated provenance when a fresh measured context count arrives', () => {
+    const estimated = applyEvent(base(), event('session.context.updated', 5, { sessionId:'s-a', contextUsed:500, contextSize:1000, contextModel:'claude-sonnet-5-5', contextEstimated:true }))
+    expect(estimated.sessions?.[0].contextEstimated).toBe(true)
+    const measured = applyEvent(estimated, event('session.context.updated', 6, { sessionId:'s-a', contextUsed:600, contextSize:1000, contextModel:'claude-sonnet-5-5', contextEstimated:false }))
+    expect(measured.sessions?.[0]).toMatchObject({ contextUsed:600, contextEstimated:false })
+  })
+
+  it('appends message deltas by stable message ID and ignores duplicate sequences', () => {
+    const first = applyEvent(base(), event('message.delta', 5, { sessionId: 's-a', messageId: 'm-a', role: 'assistant', delta: ' there' }))
+    expect(first.sessions?.[0].messages?.[0].content).toBe('Hello there')
+    const duplicate = applyEvent(first, event('message.delta', 5, { sessionId: 's-a', messageId: 'm-a', delta: ' there' }))
+    expect(duplicate.sessions?.[0].messages?.[0].content).toBe('Hello there')
+  })
+
+  it('finalizes the streamed assistant bubble from daemon DTOs without invented IDs', () => {
+    const delta = applyEvent(base(), event('message.delta', 6, { sessionId: 's-a', turnId: 't-a', role: 'assistant', delta: 'hello' }))
+    const completed = applyEvent(delta, event('message.completed', 7, { sessionId: 's-a', turnId: 't-a', role: 'assistant', content: 'hello world' }))
+    expect(completed.sessions?.[0].messages).toHaveLength(1)
+    expect(completed.sessions?.[0].messages?.[0].content).toBe('hello world')
+  })
+
+  it('places a notice above the message it names, and appends one that names nothing', () => {
+    const streamed = applyEvent(base(), event('message.delta', 6, { sessionId: 's-a', turnId: 't-a', messageId: 'm-text', role: 'assistant', delta: 'I asked them.' }))
+    const above = applyEvent(streamed, event('message.completed', 7, { sessionId: 's-a', messageId: 'n-sent', role: 'notice', beforeMessageId: 'm-text', message: { id: 'n-sent', role: 'notice', content: 'Messaged Mate' } }))
+    const ids = above.sessions?.[0].messages?.map((item) => item.id) ?? []
+    expect(ids.indexOf('n-sent')).toBeGreaterThanOrEqual(0)
+    expect(ids.indexOf('n-sent')).toBeLessThan(ids.indexOf('m-text'))
+    const below = applyEvent(above, event('message.completed', 8, { sessionId: 's-a', messageId: 'n-reply', role: 'notice', message: { id: 'n-reply', role: 'notice', content: 'Message from Mate' } }))
+    const after = below.sessions?.[0].messages?.map((item) => item.id) ?? []
+    expect(after[after.length - 1]).toBe('n-reply')
+    expect(after.indexOf('n-sent')).toBeLessThan(after.indexOf('m-text'))
+  })
+
+  it('attaches provider failure detail to its turn without losing the failure class', () => {
+    const initial = base()
+    initial.sessions![0]!.turns = [{ id: 't-a', state: 'working' }]
+    const failed = applyEvent(initial, event('turn.error', 5, {
+      sessionId: 's-a', turnId: 't-a', failureClass: 'provider_error', detail: '429 rate limit exceeded; retry later',
+    }))
+    expect(failed.sessions?.[0].turns?.[0]).toMatchObject({
+      id: 't-a', state: 'error', failureClass: 'provider_error', detail: '429 rate limit exceeded; retry later',
+    })
+  })
+
+  it('merges session changes without dropping previously hydrated activity', () => {
+    const next = applyEvent(base(), event('session.changed', 5, { session: { id: 's-a', runtimeId: 'rt-a', title: 'Updated', state: 'idle', modelLock:{ model:'new-model', thinking:'high' } } }))
+    expect(next.sessions?.[0]).toMatchObject({ title: 'Updated', state: 'idle' })
+    expect(next.sessions?.[0].modelLock).toEqual({ model:'new-model', thinking:'high' })
+    expect(next.sessions?.[0].messages).toHaveLength(1)
+    expect(next.sessions?.[0].files).toHaveLength(1)
+    expect(next.sessions?.[0].tools).toHaveLength(1)
+  })
+
+  it('does not resurrect a session after a later session.changed event', () => {
+    const deleted = applyEvent(base(), event('session.deleted', 5, { sessionId: 's-a' }))
+    const late = applyEvent(deleted, event('session.changed', 6, { id: 's-a', runtimeId: 'rt-a', title: 'Late provider output', state: 'idle' }))
+    expect(late.sessions).toEqual([])
+    expect(late.deletedSessionIds).toContain('s-a')
+  })
+
+  it('merges only allowlisted local message reactions into the matching session message', () => {
+    const reacted = applyEvent(base(), event('message.reactions.changed', 5, { sessionId:'s-a', messageId:'m-a', reactions:['❤️', '🔥', '👍'] }))
+    expect(reacted.sessions?.[0].messages?.[0].reactions).toEqual(['❤️', '👍'])
+    const other = applyEvent(reacted, event('message.reactions.changed', 6, { sessionId:'other', messageId:'m-a', reactions:[] }))
+    expect(other.sessions?.[0].messages?.[0].reactions).toEqual(['❤️', '👍'])
+  })
+
+  it('upserts tool and file activity and records token usage only', () => {
+    let next = applyEvent(base(), event('tool.changed', 5, { sessionId: 's-a', tool: { id: 'tool-a', state: 'completed' } }))
+    next = applyEvent(next, event('file.changed', 6, { sessionId: 's-a', file: { id: 'f-b', path: 'src/b.ts', addedLines: 4 } }))
+    next = applyEvent(next, event('usage.updated', 7, { sessionId: 's-a', usage: { id: 'u-a', inputTokens: 30 } }))
+    expect(next.sessions?.[0].tools?.[0].state).toBe('completed')
+    expect(next.sessions?.[0].files).toHaveLength(2)
+    expect(next.usage?.[0]).toEqual({ id: 'u-a', inputTokens: 30 })
+    expect('budgets' in next).toBe(false)
+  })
+
+  it('adds and resolves permissions that have no session reference', () => {
+    let next = applyEvent(base(), event('permission.requested', 5, { permission: { id: 'p-a', choices: ['allow_once', 'deny'], status: 'pending' } }))
+    expect(next.permissions).toHaveLength(1)
+    expect(isPermissionReplyAllowed(next.permissions![0], 'allow_once')).toBe(true)
+    expect(isPermissionReplyAllowed(next.permissions![0], 'allow_session')).toBe(false)
+    next = applyEvent(next, event('permission.resolved', 6, { permissionId: 'p-a', choice: 'deny' }))
+    expect(next.permissions).toHaveLength(0)
+  })
+
+  it('preserves the authoritative view when an event type is unknown', () => {
+    const original = base()
+    const next = applyEvent(original, event('provider.raw_payload', 5, { secret: 'must not be rendered' }))
+    expect(next).toEqual({ ...original, sequence: 5 })
+  })
+
+  it('projects agent changes, keeps archived rows, and deduplicates their sequence', () => {
+    const initial = { ...base(), agents: [{ id: 'agent-a', name: 'A', description: '', instructions: '', color: 'mint', runtimeId: 'rt-a', model: null, thinking: null, serviceTier: null, customArgs: [], customEnv: {}, maxConcurrency: 1, defaultProject: null, sortOrder: 0, archived: false, createdAt: 't0', updatedAt: 't0' }] }
+    const changed = applyEvent(initial, event('agent.changed', 5, { action: 'archived', agentId: 'agent-a', runtimeId: 'rt-a', updatedAt: 't1', archived: true, sortOrder: 0 }))
+    expect(changed.agents?.[0]).toMatchObject({ id: 'agent-a', archived: true, updatedAt: 't1' })
+    expect(applyEvent(changed, event('agent.changed', 5, { agentId: 'agent-a', archived: false })).agents).toEqual(changed.agents)
+    const inserted = applyEvent(changed, event('agent.changed', 6, { action: 'created', agentId: 'agent-b', runtimeId: 'rt-a', updatedAt: 't2', archived: false, sortOrder: 1 }))
+    expect(inserted.agents?.map((agent) => agent.id)).toEqual(['agent-a', 'agent-b'])
+  })
+
+  it('takes the limited state and the recovery flag from a turn.error payload', () => {
+    const initial: Snapshot = { ...base(), sessions: [{ id: 's-a', runtimeId: 'rt-a', state: 'working', turns: [{ id: 't-a', state: 'working' }] }] }
+    const next = applyEvent(initial, event('turn.error', 5, { sessionId: 's-a', turnId: 't-a', state: 'limited', failureClass: 'provider_error', recoveryHandled: true }))
+    expect(next.sessions?.[0].state).toBe('limited')
+    expect(next.sessions?.[0].turns?.[0]).toMatchObject({ state: 'error', recoveryHandled: true })
+  })
+})

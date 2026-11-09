@@ -1,0 +1,11 @@
+/* The sidebar foot: flat rows that share one height and one icon column, with no cards or borders (owner, 31 October 2026). */
+.foot-row { width: calc(100% - 16px); height: 36px; margin: 0 8px; padding: 0 10px; display: flex; align-items: center; gap: 10px; color: var(--text-2); border: 0; border-radius: var(--radius-sm); background: transparent; font: inherit; font-size: var(--fs-sm); text-align: left; cursor: pointer; transition: color 120ms ease, background 120ms ease; }
+.foot-row:hover, .foot-row[aria-expanded="true"] { color: var(--text-1); background: var(--surface-hover); }
+.foot-row-icon { width: 20px; height: 20px; flex: 0 0 20px; display: grid; place-items: center; }
+.foot-row-label { min-width: 0; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.sidebar-usage-root { min-width: 0; }
+.sidebar-usage .quota-meter { min-width: 24px; flex: 1 1 auto; width: auto; }
+.sidebar-usage-value { flex: 0 0 auto; color: var(--text-1); font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; }
+.sidebar-usage-value.tone-critical { color: var(--status-danger-text, var(--status-danger)); }
+@media (prefers-reduced-motion: reduce) { .foot-row { transition: none; } }

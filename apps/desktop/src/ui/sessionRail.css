@@ -1,0 +1,116 @@
+/* The right-hand rail: stacked cards for the open conversation. */
+.session-rail { min-height: 0; flex: 1; padding: 4px 12px 20px; display: grid; align-content: start; gap: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+.rail-empty { margin: 16px 20px; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.5; text-align: center; }
+.rail-card { min-width: 0; border-top: 1px solid var(--line); }
+.rail-card:has(.schedule-overview-note) { display: none; }
+.rail-card-head { min-height: 36px; padding: 0 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.rail-card-toggle { height: 28px; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; color: var(--text-1); border: 0; border-radius: var(--radius-sm); background: transparent; font-size: var(--fs-xs); font-weight: 600; cursor: pointer; }
+.rail-card-toggle svg { color: var(--text-3); opacity: 0; transition: opacity 100ms ease; }
+.rail-card-toggle[aria-expanded="false"] svg, .rail-card-toggle:hover svg, .rail-card-toggle:focus-visible svg { opacity: 1; }
+.rail-card-toggle { padding: 0; color: var(--text-2); }
+.rail-card-toggle:hover { color: var(--text-1); background: transparent; }
+.rail-card-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.rail-card-body { padding: 0 12px 12px; display: grid; gap: 7px; }
+.rail-row { min-width: 0; min-height: 24px; display: flex; align-items: center; gap: 8px; color: var(--text-2); font-size: var(--fs-xs); }
+.rail-row > svg { flex: 0 0 auto; color: var(--text-3); }
+.rail-row-main { min-width: 0; flex: 1; overflow: hidden; color: var(--text-1); text-overflow: ellipsis; white-space: nowrap; }
+.rail-tag { padding: 1px 6px; color: var(--text-3); border: 1px solid var(--line-strong); border-radius: var(--radius-pill); font-size: var(--fs-2xs); }
+.rail-link { padding: 0; color: var(--text-2); border: 0; background: transparent; font-size: var(--fs-2xs); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; justify-self: start; }
+.rail-link:hover { color: var(--text-1); }
+.rail-note { margin: 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.5; }
+.rail-context-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: var(--fs-xs); }
+.rail-context-line b { color: var(--text-1); font-weight: 600; }
+.rail-context-line span { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.rail-meter { height: 4px; display: block; overflow: hidden; border-radius: 2px; background: color-mix(in srgb, var(--text-1) 12%, transparent); }
+.rail-meter > b { height: 100%; display: block; border-radius: inherit; background: var(--text-2); }
+.rail-meter.warning > b { background: var(--status-working); }
+.rail-meter.critical > b { background: var(--status-danger); }
+.rail-split { margin: 2px 0 0; display: grid; gap: 4px; }
+.rail-split div { display: flex; justify-content: space-between; gap: 8px; font-size: var(--fs-xs); }
+.rail-split dt { color: var(--text-3); }
+.rail-split dd { margin: 0; color: var(--text-1); font-variant-numeric: tabular-nums; }
+.rail-files { margin: 0; padding: 0; display: grid; gap: 2px; list-style: none; }
+.rail-file { min-width: 0; min-height: 28px; display: flex; align-items: center; gap: 6px; color: var(--text-2); font-size: var(--fs-xs); border-radius: var(--radius-sm); }
+.rail-file > svg { flex: 0 0 auto; color: var(--text-3); }
+.rail-file:hover { background: var(--surface-hover); }
+.rail-file-open { min-width: 0; flex: 1; height: 28px; padding: 0 4px; display: flex; align-items: center; gap: 6px; color: inherit; border: 0; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.rail-file-open:disabled { cursor: default; }
+.rail-file-open:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.rail-file-name { min-width: 0; flex: 1; overflow: hidden; color: var(--text-1); text-overflow: ellipsis; white-space: nowrap; }
+.rail-add, .rail-diffstat em { color: var(--status-ok, #5fd38d); font-style: normal; font-variant-numeric: tabular-nums; }
+.rail-del, .rail-diffstat i { color: var(--status-danger-text); font-style: normal; font-variant-numeric: tabular-nums; }
+.rail-diffstat { font-size: var(--fs-2xs); }
+.rail-file-actions { flex: 0 0 auto; display: flex; gap: 1px; opacity: 0; transition: opacity 100ms ease; }
+.rail-file:hover .rail-file-actions, .rail-file:focus-within .rail-file-actions { opacity: 1; }
+.rail-file-actions button { width: 22px; height: 22px; padding: 0; display: grid; place-items: center; color: var(--text-3); border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.rail-file-actions button:hover { color: var(--text-1); background: var(--surface-selected-strong); }
+.context-pane .context-head.compact { padding: 18px 16px 10px; }
+@media (prefers-reduced-motion: reduce) { .rail-file-actions { transition: none; } }
+/* Remote on/off in the Environment card: a compact switch. */
+.rail-remote .toggle.small { width: 28px; height: 16px; }
+.rail-remote .toggle.small i { width: 12px; height: 12px; }
+.rail-remote .toggle.small.on i { transform: translateX(12px); }
+
+/* Changes card: the repository's own state (FIX45). */
+.rail-card-aside { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.rail-pr { height: 24px; padding: 0 10px; flex: 0 0 auto; color: var(--text-1); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-selected); font-size: var(--fs-2xs); font-weight: 600; cursor: pointer; transition: background 120ms ease, border-color 120ms ease; }
+.rail-pr:hover:not(:disabled) { border-color: var(--line-strong); background: var(--surface-selected-strong); }
+.rail-pr:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.rail-pr:disabled { color: var(--text-3); cursor: default; opacity: .7; }
+.rail-context { margin: 0; display: flex; align-items: flex-start; gap: 6px; color: var(--text-3); font-size: var(--fs-2xs); line-height: 1.45; }
+.rail-context > svg { flex: 0 0 auto; margin-top: 2px; }
+.rail-context b { color: var(--text-1); font-weight: 600; overflow-wrap: anywhere; }
+.rail-problem { display: flex; align-items: flex-start; gap: 6px; color: var(--text-2); }
+.rail-problem > svg { flex: 0 0 auto; margin-top: 3px; color: var(--status-danger-text); }
+.rail-subhead { margin: 6px 0 0; color: var(--text-3); font-size: var(--fs-2xs); font-weight: 600; }
+.rail-loading { min-width: 0; }
+.rail-file-open .rail-tag { flex: 0 0 auto; }
+.rail-file-open:disabled .rail-file-name { color: var(--text-2); }
+/* The pull request review sits in the shared dialog frame; its facts line up under the heading. */
+.blob-dialog.pr-dialog > .pr-dialog-facts { grid-column: 2; margin: 4px 0 0; display: grid; gap: 4px; }
+.pr-dialog-facts > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font-size: var(--fs-sm); }
+.pr-dialog-facts dt { color: var(--text-3); }
+.pr-dialog-facts dd { min-width: 0; margin: 0; overflow: hidden; color: var(--text-1); text-align: right; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.blob-dialog.pr-dialog > .pr-dialog-note { font-size: var(--fs-xs); color: var(--text-3); }
+@media (prefers-reduced-motion: reduce) { .rail-pr { transition: none; } }
+
+/* Workspace and changes by turn (daemon-reported only). */
+.rail-turns { margin: 0; padding: 0; display: grid; gap: 10px; list-style: none; }
+.rail-turn { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--line); }
+.rail-turn:first-child { padding-top: 0; border-top: 0; }
+.rail-turn-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; min-width: 0; }
+.rail-turn-title { display: grid; min-width: 0; color: var(--text-1); font-size: var(--fs-xs); font-weight: 600; }
+.rail-turn-title small { overflow: hidden; color: var(--text-3); font-size: var(--fs-2xs); font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.rail-file-open.static { cursor: default; }
+.rail-file[data-state="reverted"] .rail-file-name, .rail-file[data-state="blocked"] .rail-file-name { color: var(--text-3); }
+.rail-block-reasons { margin: 0; padding: 0 0 0 4px; list-style: none; color: var(--text-3); font-size: var(--fs-2xs); line-height: 1.45; }
+.rail-undo { display: inline-flex; align-items: center; gap: 5px; margin-top: 2px; }
+.rail-confirm { display: grid; gap: 8px; padding: 8px 10px; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: var(--radius-md); font-size: var(--fs-xs); line-height: 1.45; }
+.rail-confirm-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.rail-turn .rail-file { flex-wrap: wrap; }
+.rail-turn .rail-file .rail-confirm { flex: 1 0 100%; margin-bottom: 4px; }
+.rail-turn .rail-file .rail-undo { margin: 0 4px 0 auto; }
+.rail-more { margin-top: 6px; align-self: flex-start; }
+.rail-diffstat { flex: 0 0 auto; white-space: nowrap; }
+.rail-tag { padding: 0; border: 0; white-space: nowrap; }
+.rail-file-name { flex: 1 1 auto; min-width: 72px; }
+.rail-file-open { flex: 1 1 0; min-width: 0; }
+.rail-file-open > svg { flex: 0 0 auto; }
+.rail-add, .rail-del { flex: 0 0 auto; }
+.rail-card-head { gap: 4px; }
+.rail-card-aside { gap: 5px; }
+/* Changes: the count in the heading, then the two actions, then the files in tidy columns. Deleted reads as struck through; the rarer notes are in the row's tooltip. */
+.rail-changes-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.rail-changes-actions .rail-pr { height: 26px; padding: 0 8px; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: 6px; background: transparent; font: inherit; font-size: var(--fs-xs); font-weight: 500; }
+.rail-changes-actions .rail-pr:hover:not(:disabled) { color: var(--text-1); border-color: var(--line-strong); background: var(--surface-selected); }
+.rail-scope { margin: 0; color: var(--text-3); font-size: var(--fs-2xs); line-height: 1.4; }
+.rail-file { position: relative; min-height: 26px; gap: 8px; padding: 0 2px; }
+.rail-file > .rail-file-open > svg { display: none; }
+.rail-file-open { min-height: 26px; padding: 0; gap: 0; }
+.rail-file[data-change="deleted"] .rail-file-name { color: var(--text-3); text-decoration: line-through; }
+.rail-file .rail-add, .rail-file .rail-del { min-width: 0; font-size: var(--fs-xs); }
+.rail-file-actions { position: absolute; top: 2px; right: 0; padding-left: 8px; background: var(--surface-overlay); border-radius: 6px; }
+.rail-file:not(:hover):not(:focus-within) .rail-file-actions { pointer-events: none; }
+.rail-file-open { justify-content: flex-start; gap: 8px; }
+.rail-file-open .rail-file-name { flex: 0 1 auto; }
+.rail-file-open .rail-tag { flex: 0 0 auto; margin-left: auto; font-size: var(--fs-2xs); }

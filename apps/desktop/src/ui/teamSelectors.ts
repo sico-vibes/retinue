@@ -1,0 +1,488 @@
+// Pure helpers for the project-first team layout: one main conversation per
+// blob, side conversations between blobs, and project grouping.
+import type { Agent, ChatMessage, Project, Session } from '../types'
+import { presentedModelName } from './modelPresentation'
+import { labelizeEffort } from './effortLabels'
+
+const BUSY = ['starting', 'working', 'cancelling', 'waiting_permission']
+
+export function isSideSession(session: Session | null | undefined) {
+  return session?.link?.kind === 'side'
+}
+
+/** Conversations a schedule started. They belong to the blob but are never its main conversation. */
+export function isAutomationSession(session: Session | null | undefined) {
+  return session?.link?.kind === 'automation'
+}
+
+/** A blob's main conversation: its newest open session that is neither a side conversation nor a scheduled run. */
+export function mainSessionFor(sessions: readonly Session[], agentId: string): Session | null {
+  return sessions
+    .filter((session) => session.agentId === agentId && !session.archived && !isSideSession(session) && !isAutomationSession(session))
+    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))[0] ?? null
+}
+
+/** Side conversations a blob takes part in, as either side, newest first. */
+export function sideSessionsFor(sessions: readonly Session[], agentId: string): Session[] {
+  return sessions
+    .filter((session) => isSideSession(session) && !session.archived && (session.agentId === agentId || session.link?.peerAgentId === agentId))
+    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
+}
+
+export function sessionIsBusy(session: Session | null | undefined) {
+  return BUSY.includes(String(session?.state ?? '').toLowerCase())
+}
+
+/**
+ * FIX39 item 18: the conversation's last message is a delegation notice saying
+ * the delivery is queued behind the global limit. A delegated conversation in
+ * this state must not render the bot's empty "Ready when you are" screen.
+ */
+export function isWaitingDelegation(messages: readonly ChatMessage[] | undefined): boolean {
+  const last = messages?.length ? messages[messages.length - 1] : undefined
+  if (String(last?.role ?? '') !== 'notice') return false
+  const meta = last?.meta
+  return meta?.kind === 'delegation' && (meta as Record<string, unknown>).state === 'queued'
+}
+
+function messageText(message: ChatMessage) {
+  const raw = typeof message.content === 'string' ? message.content : typeof message.text === 'string' ? message.text : ''
+  return raw.replace(/```[\s\S]*?```/g, ' ').replace(/[*_`#>]/g, '').replace(/\s+/g, ' ').trim()
+}
+
+/** One-line preview of the latest meaningful message, or null when there is none. */
+export function conversationPreview(session: Session | null | undefined): string | null {
+  const messages = session?.messages ?? []
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    const role = String(message.role ?? '')
+    if (role === 'thinking') continue
+    if (role === 'notice' && message.meta?.kind === 'delegation') return `Messaged ${message.meta.peerName ?? 'a teammate'}`
+    if (role === 'notice' && message.meta?.kind === 'blob_created') return `Created ${typeof message.meta.name === 'string' ? message.meta.name : 'a teammate'}`
+    if (role === 'notice') continue
+    if (message.meta?.kind === 'blob_update') return `${message.meta.fromName ?? 'A teammate'} is waiting for you`
+    if (message.meta?.kind === 'blob_reply') return `Message from ${message.meta.fromName ?? 'a teammate'}`
+    const text = messageText(message)
+    if (text) return role === 'user' && !message.meta ? `You: ${text}` : text
+  }
+  return null
+}
+
+/**
+ * FIX39 item 12: the line under a bot's name when the model-line experiment is
+ * on. It shows the bot's own model and effort (idle bots only; a busy bot still
+ * shows its status). No model reads "Default model". The catalog supplies the
+ * friendly name; without it the saved id is shown unchanged.
+ */
+export function sidebarSubtitle(
+  agent: Pick<Agent, 'model' | 'thinking'>,
+  provider: string | null | undefined,
+  models: readonly { id: string; displayName: string }[] | null | undefined,
+): string {
+  const wanted = typeof agent.model === 'string' && agent.model.trim() ? agent.model.trim() : null
+  if (!wanted) return 'Default model'
+  const match = models?.find((model) => model.id === wanted)
+  const label = presentedModelName(provider ?? '', match ?? { id: wanted, displayName: wanted })
+  const effort = typeof agent.thinking === 'string' && agent.thinking.trim() ? labelizeEffort(agent.thinking.trim(), provider ?? '') : null
+  return effort ? `${label} · ${effort}` : label
+}
+
+/** True for Retinue's own per-bot folder (`<data>/workspaces/<id>`), which is not a name people know. */
+export function isBotWorkspacePath(path: string) {
+  return /[\\/]workspaces[\\/][^\\/]+[\\/]?$/i.test(path)
+}
+
+/**
+ * Where a conversation works, as a name people recognise: the daemon's label,
+ * else the bot's project, else the folder name of a real project folder.
+ * Null for a casual bot working in its own Retinue workspace.
+ */
+export function conversationPlaceName(session: Session | null | undefined, agents: readonly Agent[], projects: readonly Project[]): string | null {
+  if (!session) return null
+  const label = typeof session.workspaceLabel === 'string' ? session.workspaceLabel.trim() : ''
+  if (label) return label
+  const projectId = typeof session.projectId === 'string' ? session.projectId : agents.find((agent) => agent.id === session.agentId)?.projectId
+  const project = projectId ? projects.find((item) => item.id === projectId) : undefined
+  if (project?.name) return project.name
+  const path = typeof session.projectPath === 'string' ? session.projectPath : ''
+  if (!path || isBotWorkspacePath(path)) return null
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? null
+}
+
+export type ProjectGroup = { project: Project | null; agents: Agent[] }
+
+/** Projects in their saved order, then casual blobs; hidden blobs only when asked for. */
+/** The built-in Manager: the one bot that works across every project. */
+export function isManager(agent: Pick<Agent, 'systemRole'> | null | undefined): boolean {
+  return agent?.systemRole === 'manager'
+}
+
+export function managerOf(agents: readonly Agent[]): Agent | null {
+  return agents.find((agent) => isManager(agent) && !agent.archived) ?? null
+}
+
+export function groupAgentsByProject(agents: readonly Agent[], projects: readonly Project[], showHidden = false): ProjectGroup[] {
+  // The CEO is pinned above every project, never inside one.
+  const visible = agents.filter((agent) => !agent.archived && !isManager(agent) && !agent.parentAgentId && (showHidden || agent.hidden !== true))
+  const known = new Set(projects.map((project) => project.id))
+  const groups: ProjectGroup[] = [...projects]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+    .map((project) => ({ project, agents: visible.filter((agent) => agent.projectId === project.id) }))
+  // Within a group, blobs keep the daemon's order (runtime, then saved position).
+  groups.push({ project: null, agents: visible.filter((agent) => !agent.projectId || !known.has(agent.projectId)) })
+  return groups
+}
+
+/** Phase 1A: bots are no longer filed under projects. The roster is one list in the daemon's order; the CEO is pinned separately. */
+export function rosterAgents(agents: readonly Agent[], showHidden = false): Agent[] {
+  return agents.filter((agent) => !agent.archived && !isManager(agent) && !agent.parentAgentId && (showHidden || agent.hidden !== true))
+}
+
+/** The project a conversation works in: its stamp, else a project whose folder is the conversation's folder. */
+export function projectOfSession(session: Session, projects: readonly Project[]): Project | null {
+  if (typeof session.projectId === 'string') return projects.find((project) => project.id === session.projectId) ?? null
+  const path = typeof session.projectPath === 'string' ? session.projectPath.replace(/[\\/]+$/, '').toLowerCase() : ''
+  return path ? projects.find((project) => project.path && project.path.replace(/[\\/]+$/, '').toLowerCase() === path) ?? null : null
+}
+
+/** Where a new conversation with this bot starts: its last project, then its default, when that project still exists. */
+export function defaultProjectFor(agent: Pick<Agent, 'projectId' | 'lastProjectId'>, projects: readonly Project[]): Project | null {
+  for (const id of [agent.lastProjectId, agent.projectId]) {
+    const project = id ? projects.find((item) => item.id === id) : undefined
+    if (project) return project
+  }
+  return null
+}
+
+export type ProjectConversations = { key: string; project: Project | null; nodes: ConversationNode[] }
+
+/** The projects whose name or tag matches what was typed after `#`, best match
+ * first: an exact name, then a name that starts with it, then a name that holds
+ * it, then a tag. Owner decision, 1 November 2026: `#` names a project, and a
+ * tag is one of the ways to name it (the daemon resolves the same three). */
+export function projectMatches(projects: readonly Project[], query: string): Project[] {
+  const needle = query.trim().toLowerCase()
+  const scored: Array<{ project: Project; score: number }> = []
+  for (const project of projects) {
+    const name = project.name.trim().toLowerCase()
+    if (!needle) { scored.push({ project, score: 0 }); continue }
+    const score = name === needle ? 3 : name.startsWith(needle) ? 2 : name.includes(needle) ? 1 : (project.tags ?? []).some((tag) => tag.toLowerCase().includes(needle)) ? 0 : -1
+    if (score >= 0) scored.push({ project, score })
+  }
+  return scored.sort((a, b) => b.score - a.score).slice(0, 6).map((entry) => entry.project)
+}
+
+/** The project a message names with `#`, read from the text itself so the words on
+ * screen and the folder the work lands in cannot disagree: deleting `#Board` drops
+ * the project, and a draft left and reopened keeps it. Same rules as the daemon's
+ * `team::project_named`: an exact name (the longest wins, for "Retinue site"), else
+ * a tag only one project carries; `ambiguous` holds the words that fit several. */
+export function projectNamedInText(text: string, projects: readonly Project[]): { project: Project } | { ambiguous: string } | null {
+  const lower = text.toLowerCase()
+  for (const match of lower.matchAll(/(?:^|\s)#/g)) {
+    const start = match.index + match[0].length
+    const named = projects.filter((project) => {
+      const name = project.name.trim().toLowerCase()
+      if (!name || !lower.startsWith(name, start)) return false
+      const after = lower[start + name.length]
+      return after === undefined || !/[\p{L}\p{N}_-]/u.test(after)
+    })
+    const longest = Math.max(0, ...named.map((project) => project.name.trim().length))
+    const best = named.filter((project) => project.name.trim().length === longest)
+    if (best.length === 1) return { project: best[0]! }
+    if (best.length > 1) return { ambiguous: best[0]!.name.trim() }
+    const word = /^[\p{L}\p{N}_-]+/u.exec(lower.slice(start))?.[0]
+    if (!word) continue
+    const tagged = projects.filter((project) => (project.tags ?? []).some((tag) => tag.toLowerCase() === word))
+    if (tagged.length === 1) return { project: tagged[0]! }
+    if (tagged.length > 1) return { ambiguous: word }
+  }
+  return null
+}
+
+/** The composer after the `#` an `@` pick added is left behind: what is typed next
+ * starts with a space, or fits no project, so it is the message and not a project.
+ * `null` while the words can still name one. Only a `#` the person did not type
+ * themselves ever comes here. */
+export function leaveProjectStep(value: string, caret: number, start: number, projects: readonly Project[]): { text: string; caret: number } | null {
+  if (value[start] !== '#' || caret <= start) return null
+  const query = value.slice(start + 1, caret)
+  if (!query || (!/^\s/.test(query) && projectMatches(projects, query).length > 0)) return null
+  const kept = query.trimStart()
+  return { text: `${value.slice(0, start)}${kept}${value.slice(caret)}`, caret: start + kept.length }
+}
+
+/** A bot's conversations grouped by the project each one works in; the most recently active project comes first. */
+export function conversationsByProject(nodes: readonly ConversationNode[], projects: readonly Project[]): ProjectConversations[] {
+  const groups = new Map<string, ProjectConversations>()
+  for (const node of nodes) {
+    const project = projectOfSession(node.session, projects)
+    const key = project?.id ?? 'none'
+    const group = groups.get(key) ?? { key, project, nodes: [] }
+    group.nodes.push(node)
+    groups.set(key, group)
+  }
+  const latest = (group: ProjectConversations) => group.nodes.reduce((best, node) => { const at = updatedAtOf(node.session); return at > best ? at : best }, '')
+  return [...groups.values()].sort((a, b) => latest(b).localeCompare(latest(a)))
+}
+
+export function leaderOf(agents: readonly Agent[]) {
+  return agents.find((agent) => agent.leader === true && !agent.archived) ?? null
+}
+
+/** Names mentioned with @ in a prompt, matched against the team (longest names first). */
+export function mentionedAgents(text: string, agents: readonly Agent[]): Agent[] {
+  const lower = text.toLowerCase()
+  return [...agents]
+    .filter((agent) => !agent.archived)
+    .sort((a, b) => b.name.length - a.name.length)
+    .filter((agent) => {
+      const index = lower.indexOf(`@${agent.name.toLowerCase()}`)
+      if (index < 0) return false
+      const after = lower[index + agent.name.length + 1]
+      return after === undefined || !/[\p{L}\p{N}_]/u.test(after)
+    })
+}
+
+/** The `@query` being typed at the caret, if any. */
+export function mentionQuery(text: string, caret: number): { start: number; query: string } | null {
+  const before = text.slice(0, caret)
+  const match = /(^|\s)@([\p{L}\p{N}_ .\-/\\]{0,80})$/u.exec(before)
+  if (!match) return null
+  const query = match[2]
+  if (/\s{2,}|\s$/.test(query) && query.trim().split(/\s+/).length > 2) return null
+  return { start: before.length - query.length - 1, query }
+}
+
+export type MentionSegment = { text: string; agent?: undefined } | { text: string; agent: Agent }
+
+/** Splits a prompt into plain text and `@Name` mentions of team blobs (longest names win). */
+export function splitMentions(text: string, agents: readonly Agent[]): MentionSegment[] {
+  const team = agents.filter((agent) => !agent.archived && agent.name.trim()).sort((a, b) => b.name.length - a.name.length)
+  const lower = text.toLowerCase()
+  const segments: MentionSegment[] = []
+  let plainStart = 0
+  let index = 0
+  while (index < text.length) {
+    const at = text.indexOf('@', index)
+    if (at < 0) break
+    const before = at === 0 ? '' : text[at - 1]
+    const agent = /[\p{L}\p{N}_]/u.test(before) ? undefined : team.find((candidate) => {
+      const name = candidate.name.toLowerCase()
+      if (!lower.startsWith(name, at + 1)) return false
+      const after = text[at + 1 + name.length]
+      return after === undefined || !/[\p{L}\p{N}_]/u.test(after)
+    })
+    if (!agent) { index = at + 1; continue }
+    if (at > plainStart) segments.push({ text: text.slice(plainStart, at) })
+    const end = at + 1 + agent.name.length
+    segments.push({ text: text.slice(at, end), agent })
+    plainStart = index = end
+  }
+  if (plainStart < text.length) segments.push({ text: text.slice(plainStart) })
+  return segments
+}
+
+/** The `#query` being typed at the caret, if any: a project being named. */
+export function hashQuery(text: string, caret: number): { start: number; query: string } | null {
+  const before = text.slice(0, caret)
+  const match = /(^|\s)#([^\n#@]{0,60})$/u.exec(before)
+  if (!match) return null
+  const query = match[2]
+  if (query.trim().split(/\s+/).length > 6) return null
+  return { start: before.length - query.length - 1, query }
+}
+
+export type ReferenceSegment = { text: string; reference?: { id: string; title: string } }
+
+/** Splits a sent prompt into plain text and the `#Title` references it carried (longest titles first). */
+export function splitReferences(text: string, references: ReadonlyArray<{ id: string; title: string }> | null | undefined): ReferenceSegment[] {
+  const refs = [...(references ?? [])].filter((ref) => ref.title.trim()).sort((a, b) => b.title.length - a.title.length)
+  if (!refs.length) return [{ text }]
+  const segments: ReferenceSegment[] = []
+  let plainStart = 0
+  let index = 0
+  while (index < text.length) {
+    const hash = text.indexOf('#', index)
+    if (hash < 0) break
+    const reference = refs.find((ref) => text.startsWith(ref.title, hash + 1))
+    if (!reference) { index = hash + 1; continue }
+    if (hash > plainStart) segments.push({ text: text.slice(plainStart, hash) })
+    segments.push({ text: `#${reference.title}`, reference })
+    index = hash + 1 + reference.title.length
+    plainStart = index
+  }
+  if (plainStart < text.length) segments.push({ text: text.slice(plainStart) })
+  return segments
+}
+
+/** The topic a side conversation was given, if any (older ones are titled by the pair). */
+export function sideTopic(session: Session): string | null {
+  const topic = typeof session.link?.topic === 'string' ? session.link.topic.trim() : ''
+  if (topic) return topic
+  const title = typeof session.title === 'string' ? session.title.trim() : ''
+  return title && !title.includes('⇄') ? title : null
+}
+
+/** A side conversation's title: its topic, or the pair for older conversations. */
+export function sideTitle(session: Session, agents: readonly Agent[]) {
+  const topic = sideTopic(session)
+  if (topic) return topic
+  const peer = agents.find((agent) => agent.id === session.link?.peerAgentId)?.name ?? session.link?.peerName ?? 'Teammate'
+  const target = agents.find((agent) => agent.id === session.agentId)?.name ?? 'Teammate'
+  return `${peer} and ${target}`
+}
+
+export type ConversationRole = 'sender' | 'receiver' | null
+export interface ConversationNode {
+  session: Session
+  kind: 'main' | 'side'
+  /** For bot-to-bot conversations: whether this bot asked (sender) or was asked (receiver). */
+  role: ConversationRole
+  children: ConversationNode[]
+}
+
+const updatedAtOf = (session: Session) => String(session.updatedAt ?? session.createdAt ?? '')
+
+/**
+ * Every conversation a bot had in its project, as a tree: its own
+ * conversations at the top, and each bot-to-bot conversation under the
+ * conversation that started it (both when this bot asked and when it was
+ * asked). Mirrors the daemon's `agent.conversations`, but from the live session
+ * list so it updates with events and needs no round trip. Newest first.
+ */
+export function conversationTree(sessions: readonly Session[], agentId: string, projectId?: string | null): ConversationNode[] {
+  const rows = sessions.filter((session) => {
+    if (session.archived) return false
+    const kind = String(session.link?.kind ?? '')
+    const mine = session.agentId === agentId && kind !== 'automation' && kind !== 'handoff'
+    const asked = kind === 'side' && session.link?.peerAgentId === agentId
+    if (!mine && !asked) return false
+    // A conversation stamped for another project belongs to that project's view.
+    return !projectId || !session.projectId || session.projectId === projectId
+  })
+  const ids = new Set(rows.map((session) => session.id))
+  const nodes = new Map<string, ConversationNode>(rows.map((session) => {
+    const side = session.link?.kind === 'side'
+    const role: ConversationRole = !side ? null : session.link?.peerAgentId === agentId ? 'sender' : 'receiver'
+    return [session.id, { session, kind: side ? 'side' : 'main', role, children: [] }]
+  }))
+  const roots: ConversationNode[] = []
+  for (const node of nodes.values()) {
+    const link = node.session.link
+    const parentId = node.kind === 'side' ? (link?.spawnedFromSessionId ?? link?.originSessionId) : undefined
+    const parent = parentId && parentId !== node.session.id && ids.has(parentId) ? nodes.get(parentId) : undefined
+    if (parent) parent.children.push(node)
+    else roots.push(node)
+  }
+  const sort = (list: ConversationNode[]) => {
+    list.sort((a, b) => updatedAtOf(b.session).localeCompare(updatedAtOf(a.session)))
+    for (const node of list) sort(node.children)
+  }
+  sort(roots)
+  return roots
+}
+
+/** Ids of every conversation above `sessionId` in the tree, so its branch can be opened. */
+export function ancestorIds(tree: readonly ConversationNode[], sessionId: string | null | undefined): string[] {
+  if (!sessionId) return []
+  const walk = (nodes: readonly ConversationNode[], trail: string[]): string[] | null => {
+    for (const node of nodes) {
+      if (node.session.id === sessionId) return trail
+      const found = walk(node.children, [...trail, node.session.id])
+      if (found) return found
+    }
+    return null
+  }
+  return walk(tree, []) ?? []
+}
+
+/** How many conversations load in the background at the same time. */
+export const HYDRATE_AT_ONCE = 4
+
+/**
+ * How many of the selected bot's newest conversations are fetched ahead of the
+ * one on screen. Small on purpose: a whole conversation carries every tool
+ * payload, so a tool-heavy one still costs about 100 ms to read (2026-11-01),
+ * and only the list's previews need them.
+ */
+export const PREFETCH_CONVERSATIONS = 2
+
+/**
+ * Conversations still to load in full, in the order they should load: the
+ * selected bot's first, newest first within each group. Archived ones and
+ * ones already loaded are left out.
+ */
+export function hydrationOrder(sessions: readonly Session[], selectedAgentId: string | null, openSessionIds: readonly (string | null | undefined)[] = []): Session[] {
+  const time = (session: Session) => Date.parse(session.updatedAt ?? session.createdAt ?? '') || 0
+  const open = (session: Session) => Number(openSessionIds.includes(session.id))
+  return sessions
+    // Wave 13: a lazy snapshot's `partial` conversation carries only its last messages, so it still needs loading.
+    .filter((session) => !session.archived && (session.partial === true || (!Array.isArray(session.messages) && !Array.isArray(session.turns))))
+    .sort((a, b) => open(b) - open(a) || Number(b.agentId === selectedAgentId && !!selectedAgentId) - Number(a.agentId === selectedAgentId && !!selectedAgentId) || time(b) - time(a))
+}
+
+/**
+ * Which conversations load now (2026-11-01). A conversation loads when it is
+ * opened; the main window also fetches its selected bot's newest `prefetch`
+ * ones so the list's previews stay warm. Nothing else loads: before this, every
+ * partial conversation was fetched in the background, and each read returns
+ * every tool payload the conversation holds.
+ *
+ * `open` is what the window is showing. `ahead` is bounded by recency, so it
+ * cannot keep sliding into more work as conversations finish loading, and it is
+ * empty in the companion and when no bot is selected.
+ */
+export function conversationsToLoad(sessions: readonly Session[], selectedAgentId: string | null, openSessionIds: readonly (string | null | undefined)[], options: { companion?: boolean; prefetch?: number } = {}): { open: Session[]; ahead: Session[] } {
+  const open = openSessionIds.filter((id): id is string => !!id)
+  const needed = hydrationOrder(sessions, selectedAgentId, open)
+  const opened = needed.filter((session) => open.includes(session.id))
+  const prefetch = options.companion ? 0 : options.prefetch ?? PREFETCH_CONVERSATIONS
+  if (prefetch <= 0 || !selectedAgentId) return { open: opened, ahead: [] }
+  const newest = sessions
+    .filter((session) => !session.archived && session.agentId === selectedAgentId && !open.includes(session.id))
+    .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
+    .slice(0, prefetch)
+  const ahead = needed.filter((session) => newest.some((item) => item.id === session.id))
+  return { open: opened, ahead }
+}
+
+/**
+ * A conversation nothing has been said in yet: not a bot-to-bot or scheduled
+ * one, not running, and its loaded messages hold no user or bot message. When
+ * its messages are not loaded yet it is not treated as empty.
+ */
+export function isEmptyConversation(session: Session | null | undefined): boolean {
+  if (!session || isSideSession(session) || isAutomationSession(session) || session.archived) return false
+  if (['working', 'starting', 'waiting_permission', 'cancelling'].includes(String(session.state ?? ''))) return false
+  if (!Array.isArray(session.messages)) return false
+  return !session.messages.some((message) => message.role === 'user' || message.role === 'assistant')
+}
+
+/** The id a locally drafted conversation carries: it is never a daemon session id. */
+export const DRAFT_SESSION_PREFIX = 'draft:'
+
+/** True for the local stand-in shown before a bot's first message is sent. */
+export function isDraftSession(session: Session | null | undefined): boolean {
+  return !!session && typeof session.id === 'string' && session.id.startsWith(DRAFT_SESSION_PREFIX)
+}
+
+/**
+ * A local stand-in for a bot's first conversation, so the composer is ready the
+ * moment the bot is picked. It is never sent to the daemon and has no row: the
+ * real conversation is created with the first message.
+ */
+export function draftSessionFor(agent: Agent): Session {
+  return {
+    id: `${DRAFT_SESSION_PREFIX}${agent.id}`,
+    runtimeId: agent.runtimeId,
+    agentId: agent.id,
+    title: 'New conversation',
+    state: 'idle',
+    messages: [],
+  }
+}
+
+export function sessionIsLimited(session: Session | null | undefined) {
+  return session?.state === 'limited' || session?.state === 'rate_limited'
+}

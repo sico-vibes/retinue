@@ -1,0 +1,77 @@
+import type { Agent } from '../types'
+import { agentColorHex } from './agentColor'
+import { agentLook, normalizeLook, type BlobLook } from '../blob/look'
+import { entityNoun } from './vocabulary'
+import { themeStyle } from '../blob/retinue'
+
+export const BLOB_SHARE_FORMAT = 'retinue.blob.v1'
+export const BLOB_SHARE_MAX_BYTES = 64 * 1024
+
+export interface SharedBlob {
+  format: typeof BLOB_SHARE_FORMAT
+  name: string
+  description: string
+  colour: string
+  instructions: string
+  model: string | null
+  thinking: string | null
+  speed: string | null
+  look: BlobLook
+  defaultApprovalMode?: 'ask' | 'accept_edits' | 'auto'
+  providerId?: string
+}
+
+export function serializeBlob(agent: Agent, providerId: string): string {
+  const defaultApprovalMode = agent.approvalMode === 'ask' || agent.approvalMode === 'accept_edits' || agent.approvalMode === 'auto' ? agent.approvalMode : undefined
+  const blob: SharedBlob = {
+    format: BLOB_SHARE_FORMAT,
+    name: agent.name,
+    description: agent.description,
+    colour: agentColorHex(agent.color),
+    instructions: agent.instructions,
+    model: boundedOptional(agent.model, 160),
+    thinking: boundedOptional(agent.thinking, 80),
+    speed: boundedOptional(agent.serviceTier, 80),
+    look: agentLook(agent),
+    ...(defaultApprovalMode ? { defaultApprovalMode } : {}),
+    providerId,
+  }
+  return `${JSON.stringify(blob, null, 2)}\n`
+}
+
+export function parseSharedBlob(text: string): SharedBlob {
+  const noun = entityNoun(themeStyle())
+  if (new TextEncoder().encode(text).byteLength > BLOB_SHARE_MAX_BYTES) throw new Error(`This ${noun} file is too large.`)
+  let parsed: unknown
+  try { parsed = JSON.parse(text) } catch { throw new Error(`This ${noun} file is not valid JSON.`) }
+  if (!isRecord(parsed)) throw new Error(`This ${noun} file must contain an object.`)
+  if (parsed.format === 'retinue.backup') throw new Error(`This is a full ${noun} file with its notes and schedules. Import it in Settings › Backup.`)
+  if (parsed.format !== BLOB_SHARE_FORMAT) throw new Error(`This ${noun} file uses an unsupported format version.`)
+  const name = requiredText(parsed.name, 60, 'name')
+  const description = optionalText(parsed.description, 255, 'description')
+  const colour = typeof parsed.colour === 'string' && /^#[0-9a-fA-F]{6}$/.test(parsed.colour) ? parsed.colour.toLowerCase() : null
+  if (!colour) throw new Error(`The ${noun} colour must use #RRGGBB format.`)
+  const instructions = optionalText(parsed.instructions, 20_000, 'instructions')
+  const model = nullableText(parsed.model, 160, 'model')
+  const thinking = nullableText(parsed.thinking, 80, 'thinking')
+  const speed = nullableText(parsed.speed, 80, 'speed')
+  const look = parsed.look === undefined ? { shape: 'circle' as const, seed: name } : normalizeLook(parsed.look)
+  if (!look) throw new Error(`The ${noun} look is not valid.`)
+  let providerId: string | undefined
+  if (parsed.providerId !== undefined && parsed.providerId !== null) {
+    providerId = optionalText(parsed.providerId, 100, 'provider').trim() || undefined
+  }
+  if (parsed.defaultApprovalMode !== undefined && parsed.defaultApprovalMode !== 'ask' && parsed.defaultApprovalMode !== 'accept_edits' && parsed.defaultApprovalMode !== 'auto') throw new Error('Only Ask, Auto-accept edits or Auto approval can be imported.')
+  return {
+    format: BLOB_SHARE_FORMAT, name, description, colour, instructions, model, thinking, speed, look,
+    ...(parsed.defaultApprovalMode === 'ask' || parsed.defaultApprovalMode === 'accept_edits' || parsed.defaultApprovalMode === 'auto' ? { defaultApprovalMode: parsed.defaultApprovalMode } : {}),
+    ...(providerId ? { providerId } : {}),
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> { return !!value && typeof value === 'object' && !Array.isArray(value) }
+function requiredText(value: unknown, max: number, field: string) { if (typeof value !== 'string' || !value.trim() || scalarLength(value) > max || value.includes('\0')) throw new Error(`Enter a valid ${field} (up to ${max} characters).`); return value.trim() }
+function optionalText(value: unknown, max: number, field: string) { if (typeof value !== 'string' || scalarLength(value) > max || value.includes('\0')) throw new Error(`The ${field} is too long or contains an invalid character.`); return value }
+function nullableText(value: unknown, max: number, field: string): string | null { if (value === null) return null; return optionalText(value, max, field) }
+function scalarLength(value: string) { return [...value].length }
+function boundedOptional(value: unknown, max: number): string | null { return typeof value === 'string' && scalarLength(value) <= max ? value : null }

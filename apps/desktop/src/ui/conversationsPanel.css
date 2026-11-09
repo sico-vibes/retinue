@@ -1,0 +1,101 @@
+/* The per-bot conversations column between the sidebar and the chat.
+   One set of tree numbers, shared by both looks: the Retinue look only swaps the
+   stroke (colour, dotted, square corner) and the row border that insets it. */
+.conversations-panel { --convo-indent: 14px; --convo-row-edge: 0px; --convo-line: var(--line-strong); --convo-line-style: solid; --convo-radius: 6px; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); background: var(--surface-panel); }
+.app-shell:not(.convos-open) .conversations-panel { border-right-color: transparent; visibility: hidden; }
+.convo-head { height: 52px; flex: 0 0 auto; padding: 0 8px 0 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.convo-head strong { font-size: var(--fs-sm); font-weight: 600; }
+.convo-head-actions { display: flex; align-items: center; gap: 2px; }
+.convo-scroll { min-height: 0; flex: 1; padding: 0 6px 10px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
+.convo-group { margin: var(--dn-group-gap, 10px) 8px 4px; color: var(--text-3); font-size: var(--fs-2xs); font-weight: 500; }
+.convo-list, .convo-children { margin: 0; padding: 0; list-style: none; }
+.convo-empty { margin: 12px 8px; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.5; }
+
+.convo-row { position: relative; min-height: var(--dn-card-h, 40px); margin-bottom: var(--dn-row-gap, 3px); padding-left: calc(var(--depth, 0) * 14px); display: flex; align-items: center; gap: 2px; border-radius: var(--radius-sm); }
+.convo-row { transition: background-color 140ms ease; }
+.convo-row:hover { background: var(--surface-hover); }
+.convo-row.active { background: var(--surface-selected); }
+.convo-twisty, .convo-twisty-space { width: 18px; height: 18px; flex: 0 0 18px; }
+.convo-twisty { position: relative; z-index: 1; padding: 0; display: grid; place-items: center; color: var(--text-3); border: 0; border-radius: 4px; background: transparent; cursor: pointer; }
+.convo-twisty svg { transition: transform 120ms ease; }
+.convo-twisty.open svg { transform: rotate(90deg); }
+.convo-twisty:hover { color: var(--text-1); }
+.convo-open { min-width: 0; flex: 1; min-height: var(--dn-card-h, 40px); padding: var(--dn-card-pad-y, 6px) 8px var(--dn-card-pad-y, 6px) 2px; display: flex; align-items: center; gap: 7px; color: var(--text-2); border: 0; background: transparent; text-align: left; cursor: pointer; }
+.convo-row.active .convo-open { color: var(--text-1); }
+.convo-copy { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.convo-meta { display: flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+.convo-title { overflow: hidden; font-size: var(--fs-sm); text-overflow: ellipsis; white-space: nowrap; }
+.convo-sub { overflow: hidden; color: var(--text-3); font-size: var(--fs-2xs); text-overflow: ellipsis; white-space: nowrap; }
+.convo-time { flex: 0 0 auto; color: var(--text-3); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.convo-dot { width: 7px; height: 7px; flex: 0 0 auto; border-radius: 50%; background: var(--status-working); }
+.convo-pair { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 2px; color: var(--text-3); }
+.convo-face-dot { width: 16px; height: 16px; display: inline-grid; place-items: center; color: var(--text-1); border-radius: 50%; background: var(--surface-selected-strong); font-size: 9px; font-weight: 600; }
+.convo-row.side .convo-title { font-size: var(--fs-xs); }
+.convo-actions { position: absolute; right: 4px; top: 50%; display: flex; gap: 1px; opacity: 0; transform: translateY(-50%); pointer-events: none; transition: opacity 100ms ease; }
+.convo-row:hover .convo-actions, .convo-row:focus-within .convo-actions { opacity: 1; pointer-events: auto; }
+/* While the actions show, the time steps aside and the title stops short of them. */
+.convo-row.main:hover .convo-time, .convo-row.main:focus-within .convo-time { visibility: hidden; }
+.convo-row.main:hover .convo-open, .convo-row.main:focus-within .convo-open { padding-right: 82px; }
+
+/* Branches drawn like a file tree: one guide down from under the parent's card and a
+   rounded elbow into each child. --parent-depth is the parent row's depth. */
+.convo-children { --convo-guide-x: calc(var(--parent-depth, 0) * var(--convo-indent) + 9px); margin-top: 3px; }
+.convo-children > .convo-item { position: relative; z-index: 0; }
+/* The guide runs the whole item and sits above a row's hover or selected
+   background, so the line is never broken over them. The last child hands over
+   to its elbow instead of carrying the line further down. */
+.convo-children > .convo-item::before { position: absolute; z-index: 1; top: 0; bottom: 0; left: var(--convo-guide-x); border-left: 1px var(--convo-line-style) var(--convo-line); content: ""; pointer-events: none; }
+.convo-children > .convo-item:last-child::before { display: none; }
+/* The elbow hangs off the child row itself, from its top to its middle, so a
+   taller (two-line) row still meets the guide, and it runs one indent across to
+   the child's own guide column. `--convo-row-edge` is the row border that
+   insets the row's padding box in the Retinue look. */
+.convo-children > .convo-item > .convo-row::before { position: absolute; z-index: 1; top: 0; bottom: 50%; left: calc(var(--convo-guide-x) - var(--convo-row-edge)); width: var(--convo-indent); border-left: 1px var(--convo-line-style) var(--convo-line); border-bottom: 1px var(--convo-line-style) var(--convo-line); border-bottom-left-radius: var(--convo-radius); content: ""; pointer-events: none; }
+/* A row with no arrow of its own has no guide column to meet, so the elbow runs
+   on to the row's first content: the avatars of a bot-to-bot conversation. */
+.convo-children > .convo-item > .convo-row:not(.branch)::before { width: calc(var(--convo-indent) + 11px); }
+/* The trunk starts below the parent card, not inside it: nothing is drawn in a branch row, and the list of children
+   starts a few pixels under it (FIX43, as in Claude Code's branch tree), so the line runs from the card's bottom edge down to each child. */
+.convo-action { width: 24px; height: 24px; padding: 0; display: grid; place-items: center; color: var(--text-3); border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
+.convo-action:hover:not(:disabled) { color: var(--text-1); background: var(--surface-selected-strong); }
+.convo-action.danger:hover:not(:disabled) { color: var(--danger-ink); }
+.convo-action:disabled { opacity: .4; cursor: default; }
+.convo-rename { min-width: 0; flex: 1; height: 28px; margin: 3px 4px 3px 0; padding: 0 8px; color: var(--text-1); border: 1px solid var(--line-focus); border-radius: var(--radius-sm); outline: none; background: var(--surface-input); font: inherit; font-size: var(--fs-sm); }
+.convo-open:focus-visible, .convo-twisty:focus-visible, .convo-action:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (prefers-reduced-motion: reduce) { .convo-twisty svg, .convo-actions { transition: none; } }
+
+/* Finding and starting conversations (27 October 2026): a labelled New chat button, a filter once the list is long, and plain words for states that need the owner. */
+.convo-new-row { flex: 0 0 auto; padding: 0 10px 8px; display: flex; justify-content: center; }
+.convo-new { width: 100%; height: 32px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; color: var(--text-2); border: 1px dashed var(--line-strong); border-radius: 10px; background: transparent; font: inherit; font-size: var(--fs-xs); font-weight: 500; white-space: nowrap; cursor: pointer; }
+.convo-new:hover:not(:disabled) { color: var(--text-1); border-style: solid; background: var(--surface-hover); }
+.convo-new:disabled { cursor: default; opacity: .5; }
+.convo-new:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.convo-filter { margin: 0 10px 8px; padding: 0 9px; height: 30px; display: flex; align-items: center; gap: 7px; color: var(--text-3); border: 1px solid var(--line); border-radius: var(--radius-sm); background: transparent; }
+.convo-filter:focus-within { border-color: var(--line-focus); }
+.convo-filter input { min-width: 0; flex: 1; color: var(--text-1); border: 0; outline: 0; background: transparent; font: inherit; font-size: var(--fs-xs); }
+.convo-filter input::placeholder { color: var(--text-3); }
+.convo-flag { flex: 0 0 auto; font-size: var(--fs-2xs); font-weight: 600; }
+.convo-flag.needs { color: var(--status-working-text, var(--status-working)); }
+.convo-flag.failed { color: var(--danger-ink); }
+.convo-row.main:hover .convo-flag, .convo-row.main:focus-within .convo-flag { visibility: hidden; }
+
+/* Phase 1A: a new conversation picks its project, and conversations are grouped by project. */
+.convo-new-row { flex-direction: column; align-items: stretch; gap: 4px; }
+.convo-new-split { display: flex; min-width: 0; }
+.convo-new-split .convo-new { flex: 1 1 auto; min-width: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.convo-new-pick { flex: 0 0 30px; height: 32px; padding: 0; display: grid; place-items: center; color: var(--text-3); border: 1px dashed var(--line-strong); border-left: 0; border-radius: 0 10px 10px 0; background: transparent; cursor: pointer; }
+.convo-new-pick:hover:not(:disabled) { color: var(--text-1); border-style: solid; background: var(--surface-hover); }
+.convo-new-pick:disabled { cursor: default; opacity: .5; }
+.convo-new-pick:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.convo-project + .convo-project { margin-top: 6px; }
+.convo-project-head { display: flex; align-items: center; gap: 5px; min-width: 0; margin-right: 4px; }
+.convo-project-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.convo-project-tools { display: flex; gap: 1px; opacity: 0; transition: opacity 100ms ease; }
+.convo-project-head:hover .convo-project-tools, .convo-project-head:focus-within .convo-project-tools { opacity: 1; }
+.convo-project-tools .convo-action { width: 20px; height: 20px; }
+@media (prefers-reduced-motion: reduce) { .convo-project-tools { transition: none; } }
+.convo-project-head > :first-child { flex: 0 0 auto; }
+.convo-project-head > .convo-project-fold { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 5px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-sm, 6px); }
+.convo-project-fold:focus-visible { box-shadow: var(--focus-ring); }
+.convo-project-fold > svg { flex: 0 0 auto; }
+.convo-project-count { flex: 0 0 auto; color: var(--text-2); font-size: var(--fs-2xs); }

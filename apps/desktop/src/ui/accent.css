@@ -1,0 +1,24 @@
+/* User accent colour.
+   The setting sets --user-accent and friends on <html> (see blob/retinue.ts) and
+   data-accent="custom". Retinue reads them through its own --bb-accent tokens in
+   retinue.css, so this file covers the Stone look and the few shared pieces.
+   With no accent chosen nothing here applies and the app stays monochrome. */
+
+:root[data-accent="custom"] {
+  --accent: var(--user-accent);
+  --focus-ring: 0 0 0 2px var(--user-accent);
+  --line-focus: var(--user-accent);
+  --surface-primary-hover: var(--user-accent-pressed);
+}
+
+:root[data-accent="custom"] .primary-button { color: var(--user-accent-ink); background: var(--user-accent); }
+:root[data-accent="custom"] .primary-button:hover:not(:disabled) { background: var(--user-accent-pressed); }
+:root[data-accent="custom"] .send-button:not(:disabled):not(.cancel) { color: var(--user-accent-ink); background: var(--user-accent); }
+:root[data-accent="custom"] .toggle.on { background: var(--user-accent); }
+:root[data-accent="custom"] .toggle.on i { background: var(--user-accent-ink); }
+:root[data-accent="custom"] .switch.on { background: var(--user-accent); }
+:root[data-accent="custom"] .segmented button.on,
+:root[data-accent="custom"] .usage-density button.active { color: var(--user-accent-ink); background: var(--user-accent); }
+:root[data-accent="custom"] .onboarding-progress span.active { background: var(--user-accent); }
+:root[data-accent="custom"] ::selection { color: var(--user-accent-ink); background: var(--user-accent); }
+:root[data-accent="custom"] .density-control button.active { color: var(--user-accent-ink); background: var(--user-accent); }

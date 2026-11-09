@@ -1,0 +1,50 @@
+[package]
+name = "retinue-desktop"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+build = "build.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+arboard = "3.7"
+base64.workspace = true
+chrono.workspace = true
+retinue-speech = { path = "../../../crates/retinue-speech", features = ["native"] }
+futures-util.workspace = true
+image = { version = "0.25", default-features = false, features = ["png"] }
+portable-pty = "0.9"
+reqwest = { version = "0.12", features = ["json", "blocking"] }
+semver = "1"
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-single-instance = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-process = "=2.3.1"
+tauri-plugin-updater = "=2.10.1"
+tauri-plugin-window-state = "2"
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+url = "2"
+uuid.workspace = true
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+# Windows only: the frosted-glass backdrop of the main window. `window-vibrancy`
+# calls the DWM backdrop directly and reports whether it applied, which
+# `WebviewWindow::set_effects` does not; `windows-sys` reads the
+# `EnableTransparency` preference so the UI can fall back honestly.
+[target.'cfg(windows)'.dependencies]
+window-vibrancy = "0.8"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_Storage_Packaging_Appx"] }
+# The Microsoft Store copy's startup task (`src/distribution.rs`). Already in the tree through Tauri.
+windows = { version = "0.62.2", features = ["ApplicationModel", "Foundation"] }
