@@ -6,9 +6,11 @@
 
 pub mod approvals;
 pub mod bots;
+pub mod changes;
 pub mod composer;
 pub mod conversation;
 pub mod conversations;
+pub mod delegation;
 pub mod dialogs;
 pub mod guards;
 pub mod markdown;
@@ -16,11 +18,15 @@ pub mod menu;
 pub mod message;
 pub mod motion;
 pub mod proposal;
+pub mod pull_request;
 pub mod root;
+pub mod schedules;
 pub mod search;
 pub mod settings_page;
 pub mod sidebar;
+pub mod tasks;
 pub mod team;
+pub mod terminal;
 pub mod text_input;
 pub mod usage;
 

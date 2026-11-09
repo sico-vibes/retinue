@@ -37,6 +37,10 @@ pub enum Page {
     Conversation,
     Team,
     Settings,
+    /// Slice 4: the task board.
+    Tasks,
+    /// Slice 4: the schedules page.
+    Schedules,
 }
 
 /// The Team page's two tabs.
@@ -339,6 +343,16 @@ pub struct Root {
     /// The question whose free-text answer is being typed in the composer:
     /// `(permission id, question id)`.
     pub(crate) question_target: Option<(String, String)>,
+    /// Slice 4: the task board's own state.
+    pub(crate) tasks: crate::ui::tasks::TasksState,
+    /// Slice 4: the schedules page and its editor.
+    pub(crate) schedules: crate::ui::schedules::SchedulesState,
+    /// Slice 4: the session rail, the review screen and the pull request dialog.
+    pub(crate) changes: crate::ui::changes::ChangesState,
+    /// Slice 4: the terminal dock.
+    pub(crate) terminal: crate::ui::terminal::TerminalState,
+    /// Slice 4: the manager's delegations for the open conversation.
+    pub(crate) delegations: crate::ui::delegation::DelegationsState,
 }
 
 impl Root {
@@ -560,6 +574,11 @@ impl Root {
             question_choices: BTreeMap::new(),
             question_other: BTreeMap::new(),
             question_target: None,
+            tasks: crate::ui::tasks::TasksState::default(),
+            schedules: crate::ui::schedules::SchedulesState::default(),
+            changes: crate::ui::changes::ChangesState::default(),
+            terminal: crate::ui::terminal::TerminalState::default(),
+            delegations: crate::ui::delegation::DelegationsState::default(),
         }
     }
 
@@ -700,6 +719,14 @@ impl Root {
     /// One answer to a `Command::Rpc`, by the tag the window sent with it. A tag
     /// nobody recognises is ignored: an old daemon cannot invent a shape.
     fn on_rpc(&mut self, tag: String, value: serde_json::Value, cx: &mut Context<Self>) {
+        // Slice 4's own calls first: tasks, schedules, the rail and the review
+        // screen each read only the tags they sent.
+        if self.slice4_rpc(&tag, &value, cx) {
+            return;
+        }
+        if self.delegations_rpc(&tag, &value, cx) {
+            return;
+        }
         match tag.as_str() {
             "catalog" => {
                 let runtime_id = value
@@ -1115,6 +1142,8 @@ impl Root {
                     }
                 }
                 self.watch_notifications(cx);
+                self.slice4_event(&event, cx);
+                self.delegation_event(&event, cx);
             }
             Update::SessionLoaded(session) => {
                 if let Some(snapshot) = self.snapshot.as_mut() {
@@ -1218,6 +1247,9 @@ impl Root {
             }
             Update::Rpc { tag, value } => self.on_rpc(tag, value, cx),
             Update::RpcFailed { tag, message } => match tag.as_str() {
+                // Slice 4 answers for its own tags, inline, the way the React
+                // pages do (a board error, a diff error, a dialog error).
+                _ if self.slice4_rpc_failed(&tag, &message, cx) || self.delegations_rpc_failed(&tag, &message, cx) => {}
                 // A picture the daemon no longer has shows its placeholder, as
                 // the app does, and says nothing over the conversation.
                 "image" => crate::trace::log(format!("message image unavailable: {message}")),
@@ -1311,6 +1343,12 @@ impl Root {
 
     fn select_session(&mut self, session_id: Option<String>, cx: &mut Context<Self>) {
         self.session_id = session_id;
+        // Slice 4: the rail, the review screen and the ledger all belong to the
+        // conversation that was open.
+        self.changes_select_session(cx);
+        self.delegations.origin = None;
+        self.delegations.loaded = false;
+        self.request_delegations(cx);
         self.renaming = None;
         self.sync_list(cx);
         self.load_queue(cx);
@@ -2048,7 +2086,7 @@ impl Render for Root {
             }
         }
         let sidebar = self.render_sidebar(colors, window, cx);
-        let conversations = if self.page == Page::Settings {
+        let conversations = if matches!(self.page, Page::Settings | Page::Tasks | Page::Schedules) {
             div().into_any_element()
         } else {
             self.render_conversations(colors, cx)
@@ -2057,8 +2095,34 @@ impl Render for Root {
             Page::Conversation => self.render_conversation_pane(colors, window, cx),
             Page::Team => self.render_team_page(colors, window, cx),
             Page::Settings => self.render_settings_page(colors, cx),
+            Page::Tasks => self.render_tasks_page(colors, cx),
+            Page::Schedules => self.render_schedules_page(colors, cx),
+        };
+        // Slice 4: the conversation view's own slots - the change strip above the
+        // pane, the session rail beside it, and the terminal dock under both.
+        let pane = if self.page == Page::Conversation {
+            let banner = self.render_change_banner(colors, cx);
+            let row = {
+                let mut row = div().flex_1().min_w(px(0.0)).w_full().flex().overflow_hidden().child(pane);
+                if self.changes.rail_open {
+                    row = row.child(self.render_session_rail(colors, cx));
+                }
+                row
+            };
+            let mut column = div().flex_1().min_w(px(0.0)).h_full().flex().flex_col().overflow_hidden();
+            if let Some(banner) = banner {
+                column = column.child(banner);
+            }
+            column = column.child(row);
+            if self.terminal.open {
+                column = column.child(self.render_terminal_dock(colors, window, cx));
+            }
+            column.into_any_element()
+        } else {
+            pane
         };
         let dialogs = self.render_dialogs(colors, cx);
+        let slice4 = self.render_slice4_overlays(colors, cx);
         let menu = self.render_menu_layer(colors, cx);
         let quick = self.render_quick_switcher(colors, cx);
         let shortcuts = self.render_shortcut_sheet(colors, cx);
@@ -2120,6 +2184,7 @@ impl Render for Root {
             .when_some(needs, |this, element| this.child(element))
             .when_some(usage, |this, element| this.child(element))
             .when_some(dialogs, |this, element| this.child(element))
+            .when_some(slice4, |this, element| this.child(element))
             .when_some(bots, |this, element| this.child(element))
             .when_some(file_preview, |this, element| this.child(element))
             .when_some(viewer, |this, element| this.child(element))
@@ -2138,6 +2203,12 @@ impl Root {
         let ctrl = keystroke.modifiers.control || keystroke.modifiers.platform;
         let alt = keystroke.modifiers.alt;
         let key = keystroke.key.to_lowercase();
+        // Slice 4: the terminal dock takes a keystroke when the shell has the
+        // caret, and Ctrl+` shows or hides it. This runs before the window's own
+        // shortcuts so a shell never gets a key that also moved a page.
+        if self.slice4_key(event, window, cx) {
+            return;
+        }
         if self.quick.is_some() && self.quick_key(event, window, cx) {
             return;
         }
@@ -2193,7 +2264,8 @@ impl Root {
                     | self.renaming.take().is_some()
                     | std::mem::take(&mut self.shortcuts_open)
                     | std::mem::take(&mut self.needs_open)
-                    | std::mem::take(&mut self.usage_open);
+                    | std::mem::take(&mut self.usage_open)
+                    | self.changes_close_overlay(cx);
                 if !closed {
                     self.focus_composer(window, cx);
                 }

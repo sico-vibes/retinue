@@ -795,14 +795,13 @@ impl Root {
             "Enter sends · Shift+Enter adds a line · paste an image"
         };
 
-        let mut controls = div().flex().items_center().gap(px(4.0)).flex_wrap();
+        let mut controls = div().flex_none().flex().items_center().gap(px(4.0));
         if let Some(session) = session {
             controls = controls
                 .child(self.model_pill(session, colors, cx))
                 .child(self.effort_pill(session, colors, cx))
                 .child(self.permission_pill(session, colors, cx));
         }
-        controls = controls.child(div().flex_1());
         controls = controls.child(
             // The app's round send button: an arrow, or a clock while the
             // message would wait for the running turn.
@@ -846,10 +845,12 @@ impl Root {
                             .items_center()
                             .gap(px(8.0))
                             .child(
+                                // The hint gives way first: it shrinks to nothing
+                                // before the controls wrap.
                                 div()
-                                    .flex_none()
+                                    .flex_1()
+                                    .min_w(px(0.0))
                                     .truncate()
-                                    .max_w(px(260.0))
                                     .text_size(px(theme::FS_2XS))
                                     .text_color(colors.text_3)
                                     .child(SharedString::from(hint.to_owned())),

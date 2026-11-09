@@ -77,6 +77,7 @@ impl Root {
             .child(gpui::img(art::brand_mark()).size(px(20.0)).flex_none().rounded(px(5.0)))
             .child(div().flex_1().text_size(px(theme::FS_SM)).font_weight(gpui::FontWeight::SEMIBOLD).child("Bitbots"))
             .child(bell)
+            .child(icon_button("brand-tasks", Glyph::LIST_CHECKS, matches!(self.page, crate::ui::root::Page::Tasks), colors, |root, _window, cx| root.open_tasks(cx), cx))
             .child(
                 div()
                     .id("brand-new-conversation")
@@ -280,6 +281,7 @@ impl Root {
                             .child("New project")
                             .on_click(cx.listener(|root, _: &gpui::ClickEvent, _window, cx| root.open_new_project(cx))),
                     )
+                    .child(icon_button("open-schedules", Glyph::CALENDAR_CLOCK, matches!(self.page, crate::ui::root::Page::Schedules), colors, |root, _window, cx| root.open_schedules(cx), cx))
                     .child(
                         div()
                             .id("open-settings")
@@ -955,6 +957,34 @@ pub(crate) fn short_time(stamp: &str) -> String {
 #[allow(dead_code)]
 fn unused(_: &BTreeSet<String>) {}
 
+/// A 28px square icon button (`.icon-button`): no fill until hovered, filled
+/// while `active`. The brand row, the sidebar footer and the conversation
+/// header all use it.
+pub(crate) fn icon_button(
+    id: &str,
+    glyph: Glyph,
+    active: bool,
+    colors: Colors,
+    on_press: impl Fn(&mut Root, &mut Window, &mut Context<Root>) + 'static,
+    cx: &mut Context<Root>,
+) -> AnyElement {
+    div()
+        .id(SharedString::from(id.to_owned()))
+        .size(px(28.0))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(theme::RADIUS_SM))
+        .when(active, |this| this.bg(colors.selected))
+        .cursor_pointer()
+        .hover(move |style| style.bg(colors.hover))
+        .active(move |style| style.bg(colors.selected))
+        .child(art::glyph(glyph, 15.0, if active { colors.text_1 } else { colors.text_2 }))
+        .on_click(cx.listener(move |root, _: &gpui::ClickEvent, window, cx| on_press(root, window, cx)))
+        .into_any_element()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -968,3 +998,4 @@ mod tests {
         assert_eq!(short_time("not a date"), "");
     }
 }
+

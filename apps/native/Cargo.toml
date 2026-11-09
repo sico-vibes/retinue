@@ -44,6 +44,13 @@ cpal = "0.15"
 # front (the React app hands every transcript to the window that owns Ctrl+E;
 # this window-less path needs somewhere to put it).
 arboard = "3.7"
+# Slice 4: the terminal dock runs the user's own shell in the project folder
+# through Windows ConPTY. `src-tauri/src/pty.rs` uses the same crate, so the
+# shells, the size limits and the process-tree kill behave the same way.
+portable-pty = "0.9"
+# Slice 4: a schedule stores its zone as an IANA name, and this is the machine's
+# own (chrono already depends on it, so this adds no build).
+iana-time-zone = "0.1"
 # The companion and dictation windows are frameless, always-on-top and hidden on
 # demand, and GPUI at the pinned revision has no API for any of those: it hands
 # out its window handles through this trait, and the HWND goes to Win32.

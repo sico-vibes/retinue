@@ -192,15 +192,15 @@ impl Root {
                 .or_else(|| self.selected_session().and_then(|session| self.snapshot().and_then(|snapshot| snapshot.project_name(session.project_id.as_deref()).map(str::to_owned))));
             let busy = session.as_ref().map(Session::is_busy).unwrap_or(false);
             let title = session.as_ref().map(|session| session.title_or_default().to_owned());
+            // `.chat-header`: 52px, 16px in from the left, no rule under it.
             let mut row = div()
-                .h(px(44.0))
+                .h(px(52.0))
                 .flex_none()
-                .px(px(14.0))
+                .pl(px(16.0))
+                .pr(px(10.0))
                 .flex()
                 .items_center()
-                .gap(px(8.0))
-                .border_b_1()
-                .border_color(colors.line);
+                .gap(px(8.0));
             if let Some(agent) = agent.as_ref() {
                 let provider = self.provider_of(agent);
                 row = row.child(
@@ -232,6 +232,12 @@ impl Root {
                     .child(div().flex_1().min_w(px(0.0)).truncate().text_size(px(theme::FS_XS)).text_color(colors.text_3).child(SharedString::from(title)));
             } else {
                 row = row.child(div().flex_1());
+            }
+            // The terminal dock and the details rail, as the React header has them.
+            if session.is_some() {
+                row = row
+                    .child(crate::ui::sidebar::icon_button("toggle-terminal", crate::art::Glyph::TERMINAL, self.terminal.open, colors, |root, window, cx| root.toggle_terminal(window, cx), cx))
+                    .child(crate::ui::sidebar::icon_button("toggle-rail", crate::art::Glyph::PANEL_RIGHT, self.changes.rail_open, colors, |root, _window, cx| root.toggle_rail(cx), cx));
             }
             if busy {
                 row = row.child(

@@ -13,9 +13,12 @@ and permission controls, `/commands`, the queue, pasted and dropped images,
 history), approvals, questions and every proposal kind, message actions and rich
 markdown, conversation rename/pin/archive with branch lines, the sidebar search,
 the quick switcher and its shortcuts, the bot wizard and settings with archived
-bots, the plan-usage line, "Needs you" and Windows notifications. Later slices
-add Tasks and schedules, diffs, the terminal, the companion and dictation, and
-the rest of Settings.
+bots, the plan-usage line, "Needs you" and Windows notifications. Slice 4 (8
+November 2026) adds work away from the conversation: the task board and its form,
+schedules with the "when" editor, the session rail with the review screen and
+diffs, the change strip, the terminal dock, the pull request dialog, and the
+manager's delegations in the rail. Later slices add the companion and dictation,
+and the rest of Settings.
 Lane: Gogo; the Director reviews, runs the gates and commits.
 
 ## Pinning GPUI
@@ -376,3 +379,68 @@ pins one, exactly as the React pill does.
 
   Measure with `getComputedStyle` in the browser preview before changing a size.
 - **Capturing the native window for review:** use `PrintWindow(hwnd, dc, 2)` on the process's largest *visible* window. `CopyFromScreen` captures whatever is on screen at those coordinates, including the owner's other windows; don't use it.
+
+## Tasks, schedules, the rail, diffs and the terminal (slice 4)
+
+- **The native snapshot has no `Session.files`.** The React rail's "edited earlier
+  in this conversation" list comes from `session.files`, which this window's
+  `Session` does not carry. The rail's Changes card therefore reads Git
+  (`session.repository`, the truth about the repository) and its "Changes by turn"
+  card reads `session.checkpoints`; the change strip is built from the newest
+  checkpoint turn rather than from `files`. Adding `files` to `Session` is the way
+  to get React's fallback list back, and it belongs in a slice that owns
+  `state/mod.rs`.
+- **A terminal needs `portable-pty`, not `std::process`.** `apps/native` now
+  depends on `portable-pty` 0.9 (the same crate `src-tauri/src/pty.rs` uses):
+  `native_pty_system().openpty(..)`, `slave.spawn_command(..)`,
+  `master.try_clone_reader()` and `take_writer()`, `master.resize(..)`. Only the
+  three fixed shells are offered, the folder must canonicalise inside the
+  conversation's project, `BLOBLEX_*`/`BITBOTS_*` are removed from the child's
+  environment, and no output is ever logged.
+- **`files::spawn_guard` forbids `taskkill`.** The guard fails the build if
+  anything outside `files.rs`'s `explorer /select,`, `notify.rs`'s `reg` and
+  `supervisor.rs`'s `bitbotsd` starts a program, which rules out the installed
+  app's `taskkill /T /F`. A closed tab now kills the shell itself through
+  `portable_pty::Child::kill`; a command the shell started can outlive it. A job
+  object (kill-on-close) is the way to take the whole tree down without starting
+  a program.
+- **The pty's size comes from the window, not from a measured element.** A
+  custom `Element` that reports its own bounds needs `Style { position:
+  Absolute, inset }` to sit inside a flex column, and `gpui` does not re-export
+  the taffy `Position` enum. The dock instead computes its grid from
+  `window.bounds().size.width` minus `theme::SIDEBAR_WIDTH`,
+  `theme::CONVERSATIONS_WIDTH` and the rail's 288, and from its own height. Those
+  are the numbers to update if a column's width changes.
+- **A terminal takes the keyboard only through the window's focus.** Keys for
+  the shell are dispatched from the root view's `on_key_down`, so the shell
+  captures them only while `window.focused(cx) == Some(root_focus)`: clicking the
+  grid (or showing the dock) focuses the root, and clicking the composer moves
+  focus away. Guessing from a flag alone would type every message twice.
+- **The terminal draws text runs, not cells.** `ansi::Screen` keeps a grid,
+  scrollback and a cursor; the dock paints one `div` per run of one style, so a
+  100x25 screen is tens of divs rather than 2,500. 256-colour and true-colour
+  values are kept as they arrive (`Colour::Indexed(n)`, `Colour::Rgb`), with the
+  first sixteen drawn from the look's own palette.
+- **A tint on a diff line is an `Rgba`, not an `Hsla`.** `Rgba` has `blend` only;
+  `opacity` is on `Hsla`. `Rgba::from(Hsla::from(color).opacity(0.14))` is the
+  shape, and `.bg()` takes the `Rgba`.
+- **A long diff wants `gpui::list` with `ListAlignment::Top`.** One row per diff
+  line, with the `ListState` kept in the review screen's state and `reset` when
+  the row count or the layout mode changes. The side-by-side view is a plain
+  column, capped at 1,200 rows, because pairing two files' lines is what it is
+  for and a short diff is the normal case.
+- **Dragging a card onto a bot is not worth `on_drag` here.** GPUI's internal
+  drag-and-drop needs a `DragSource` per card and a `Drag` type the drop target
+  can name; the board gives every draft one row of "→ Bot" buttons instead, which
+  sends the same single `task.dispatch` a drop would. If cards must drag, that is
+  the machinery to build.
+- **A static, not a const, for anything a closure keeps.** The schedule editor
+  keeps the idea a new schedule started from; `pub static TEMPLATES: [Template;
+  N]` gives `&'static Template`, while a `const` array's address is a fresh
+  temporary at each use.
+- **`Root` fields for a slice are one block, and the hooks are one line each.**
+  Slice 4 added five fields (`tasks`, `schedules`, `changes`, `terminal`,
+  `delegations`), two `Page` variants, and five one-line hooks in `root.rs`
+  (`slice4_rpc` in `on_rpc`, `slice4_rpc_failed` in `RpcFailed`, `slice4_event`
+  in `Event`, `changes_select_session` in `select_session`, `slice4_key` and
+  `changes_close_overlay` in `window_key`).

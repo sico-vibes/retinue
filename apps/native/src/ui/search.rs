@@ -234,6 +234,9 @@ pub fn actions() -> Vec<QuickItem> {
     vec![
         action("new-conversation", "New conversation", "Start a new conversation with this bot"),
         action("new-bot", "New bot", "Create your own employee"),
+        action("tasks", "Tasks", "Work you handed to a bot, and its drafts"),
+        action("schedules", "Schedules", "Things a bot does by itself, on a timer"),
+        action("details", "The conversation's details", "Where it works, its context and what it changed"),
         action("settings", "Open Settings", "Appearance, data and about"),
         action("usage", "Usage", "Plan limits for every coding agent"),
         action("needs", "What needs you", "Approvals, questions and proposals waiting"),
@@ -306,6 +309,9 @@ impl Root {
                     }
                 }
                 "new-bot" => self.open_bot_wizard(cx),
+                "tasks" => self.open_tasks(cx),
+                "schedules" => self.open_schedules(cx),
+                "details" => self.toggle_rail(cx),
                 "settings" => self.open_settings(cx),
                 "usage" => {
                     self.set_usage_bar(true, cx);

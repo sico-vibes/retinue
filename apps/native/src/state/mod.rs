@@ -5,9 +5,11 @@
 //! unknown fields and event types are ignored rather than refused.
 
 pub mod bot;
+pub mod changes;
 pub mod projects;
 pub mod quota;
 pub mod slash;
+pub mod tasks;
 pub mod team;
 
 use serde::Deserialize;
