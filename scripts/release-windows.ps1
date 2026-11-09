@@ -7,7 +7,9 @@ param(
     [switch]$DryRun,
     [string]$Repo = 'sico-vibes/bloblex',
     [switch]$SkipBuild,
-    [string]$BundleDir = ''
+    [string]$BundleDir = '',
+    # The installer downloaded from the "Release build" workflow, already code signed by SignPath.
+    [string]$SignedInstaller = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -326,7 +328,32 @@ if ([string]::IsNullOrWhiteSpace($BundleDir)) {
 
 Suspend-CallerSigningEnv
 try {
-    if ($SkipBuild) {
+    if (-not [string]::IsNullOrWhiteSpace($SignedInstaller)) {
+        # An installer built and code signed by the release workflow (docs/operations/code-signing.md).
+        # Its updater signature is made here, where the updater key lives, and bound to the version
+        # as the bundler's own signatures are.
+        $source = [System.IO.Path]::GetFullPath($SignedInstaller)
+        if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { throw "Signed installer not found: $source" }
+        $authenticode = (Get-AuthenticodeSignature -LiteralPath $source).Status
+        Assert-OrWarn -Ok ($authenticode -eq 'Valid') -Message "The installer's code signature is not valid ($authenticode)."
+        $BundleDir = Join-Path ([System.IO.Path]::GetTempPath()) ('retinue-signed-' + [guid]::NewGuid().ToString('n'))
+        New-Item -ItemType Directory -Path $BundleDir | Out-Null
+        $staged = Join-Path $BundleDir (Split-Path -Leaf $source)
+        Copy-Item -LiteralPath $source -Destination $staged
+        try {
+            Enable-SigningEnvForBuild
+            Push-Location (Join-Path $repoRoot 'apps\desktop')
+            try {
+                & npx tauri signer sign --app-version $Version $staged | Out-Null
+                if ($LASTEXITCODE -ne 0) { throw "tauri signer sign failed with exit code $LASTEXITCODE." }
+            } finally {
+                Pop-Location
+            }
+        } finally {
+            Disable-SigningEnv
+        }
+        Write-Host "Updater signature made for the code-signed installer $(Split-Path -Leaf $source)."
+    } elseif ($SkipBuild) {
         Write-Host 'Build skipped (-SkipBuild).'
     } else {
         try {

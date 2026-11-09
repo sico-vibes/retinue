@@ -1,5 +1,5 @@
 import Image from 'next/image'
-import { footerColumns, site } from '@/content/site'
+import { codeSigningPolicyUrl, footerColumns, site } from '@/content/site'
 import { Container } from './layout'
 import { Logo } from './Nav'
 
@@ -27,7 +27,10 @@ export function Footer() {
             </nav>
           ))}
         </div>
-        <p className="mt-16 border-t border-line pt-6 text-[13px] text-ink-3">© 2026 Retinue. Inter is used under the <a href="/LICENSE-Inter.txt" className="underline underline-offset-2">SIL Open Font License</a>.</p>
+        <div className="mt-16 grid gap-2 border-t border-line pt-6 text-[13px] text-ink-3">
+          <p>© 2026 Retinue. Open source under the <a href={`${site.repoUrl}/blob/main/LICENSE`} className="underline underline-offset-2">MIT License</a>. Inter is used under the <a href="/LICENSE-Inter.txt" className="underline underline-offset-2">SIL Open Font License</a>.</p>
+          <p>Free code signing provided by <a href="https://about.signpath.io" className="underline underline-offset-2">SignPath.io</a>, certificate by <a href="https://signpath.org" className="underline underline-offset-2">SignPath Foundation</a>. <a href={codeSigningPolicyUrl} className="underline underline-offset-2">Code signing policy</a>.</p>
+        </div>
       </Container>
     </footer>
   )

@@ -1,0 +1,190 @@
+name: Release build
+
+# Builds the Windows installer on a GitHub-hosted runner and, once SignPath is set up, has
+# SignPath Foundation sign it (free signing for open-source projects). The owner then
+# publishes the downloaded installer with `scripts/release-windows.ps1 -SignedInstaller`,
+# which adds the updater signature locally. The updater key never enters CI.
+#
+# Signing is two requests, each approved by the owner on signpath.io:
+#   1. the app's own executables (the main window, the daemon and the hook), and
+#   2. the installer built from those signed executables.
+# Tauri writes a bundle-type marker into the main executable while bundling, which would
+# break a signature made before it. So the marker is written first
+# (`scripts/patch-bundle-type.mjs`) and bundling runs with `--no-binary-patching`.
+#
+# Setup: docs/operations/code-signing.md. Until the SIGNPATH_API_TOKEN secret exists the
+# workflow still builds, and uploads the installer unsigned.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-build
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: '0'
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      SIGNING: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Read the version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Building Retinue $version"
+          # The updater artifacts are made locally, where the updater key lives.
+          '{"bundle":{"createUpdaterArtifacts":false}}' | Set-Content -Encoding utf8NoBOM (Join-Path $env:RUNNER_TEMP 'release.conf.json')
+
+      - name: Build the daemon and the hook
+        run: cargo build -p retinue-daemon --bin retinued -p retinue-hook --bin retinue-hook --release
+
+      - name: Stage them beside the app
+        run: node scripts/stage-daemon.mjs --release
+
+      - name: Build the app without bundling
+        shell: pwsh
+        working-directory: apps/desktop
+        run: npx tauri build --no-bundle --config (Join-Path $env:RUNNER_TEMP 'release.conf.json')
+
+      - name: Mark the main executable as the NSIS build
+        run: node scripts/patch-bundle-type.mjs target/release/Retinue.exe nsis
+
+      - name: Collect the executables to sign
+        id: binaries
+        shell: pwsh
+        run: |
+          $triple = (rustc -vV | Select-String '^host: (.+)$').Matches[0].Groups[1].Value
+          $dir = Join-Path $env:RUNNER_TEMP 'unsigned-binaries'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item target/release/Retinue.exe $dir
+          Copy-Item "apps/desktop/src-tauri/binaries/retinued-$triple.exe" (Join-Path $dir 'retinued.exe')
+          Copy-Item "apps/desktop/src-tauri/binaries/retinue-hook-$triple.exe" (Join-Path $dir 'retinue-hook.exe')
+          "triple=$triple" >> $env:GITHUB_OUTPUT
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+
+      - name: Upload the executables for signing
+        id: upload-binaries
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-binaries
+          path: ${{ steps.binaries.outputs.dir }}
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Sign the executables (SignPath)
+        if: env.SIGNING == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: app-binaries
+          github-artifact-id: ${{ steps.upload-binaries.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: ${{ runner.temp }}/signed-binaries
+
+      - name: Put the signed executables back
+        if: env.SIGNING == 'true'
+        shell: pwsh
+        run: |
+          $signed = Join-Path $env:RUNNER_TEMP 'signed-binaries'
+          $triple = '${{ steps.binaries.outputs.triple }}'
+          Copy-Item (Join-Path $signed 'Retinue.exe') target/release/Retinue.exe -Force
+          foreach ($name in 'retinued', 'retinue-hook') {
+            Copy-Item (Join-Path $signed "$name.exe") "apps/desktop/src-tauri/binaries/$name-$triple.exe" -Force
+            Copy-Item (Join-Path $signed "$name.exe") "target/release/$name.exe" -Force
+          }
+          foreach ($file in Get-ChildItem $signed -Filter *.exe) {
+            $status = (Get-AuthenticodeSignature $file.FullName).Status
+            Write-Host "$($file.Name): $status"
+            if ($status -ne 'Valid') { throw "$($file.Name) is not validly signed ($status)." }
+          }
+
+      - name: Bundle the installer
+        shell: pwsh
+        working-directory: apps/desktop
+        run: npx tauri bundle --bundles nsis --no-binary-patching --config (Join-Path $env:RUNNER_TEMP 'release.conf.json')
+
+      - name: Collect the installer
+        id: installer
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $found = @(Get-ChildItem target/release/bundle/nsis -Filter "*_${version}_*-setup.exe")
+          if ($found.Count -ne 1) { throw "Expected one installer for $version, found $($found.Count)." }
+          $dir = Join-Path $env:RUNNER_TEMP 'unsigned-installer'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          Copy-Item $found[0].FullName $dir
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+          "name=$($found[0].Name)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload the installer for signing
+        id: upload-installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: unsigned-installer
+          path: ${{ steps.installer.outputs.dir }}
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Sign the installer (SignPath)
+        if: env.SIGNING == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.upload-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: ${{ runner.temp }}/signed-installer
+
+      - name: Check the installer and record its digest
+        id: final
+        shell: pwsh
+        run: |
+          $dir = if ($env:SIGNING -eq 'true') { Join-Path $env:RUNNER_TEMP 'signed-installer' } else { '${{ steps.installer.outputs.dir }}' }
+          $file = Join-Path $dir '${{ steps.installer.outputs.name }}'
+          $status = (Get-AuthenticodeSignature $file).Status
+          Write-Host "Installer signature: $status"
+          if ($env:SIGNING -eq 'true' -and $status -ne 'Valid') { throw "The installer is not validly signed ($status)." }
+          $hash = (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  ${{ steps.installer.outputs.name }}" | Set-Content -Encoding utf8NoBOM (Join-Path $dir 'SHA256SUMS.txt')
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+          $label = if ($env:SIGNING -eq 'true') { 'signed' } else { 'UNSIGNED' }
+          "### Retinue ${{ steps.version.outputs.version }} installer ($label)`n`nSHA-256: ``$hash``" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: retinue-${{ steps.version.outputs.version }}-installer
+          path: ${{ steps.final.outputs.dir }}
+          if-no-files-found: error
+          retention-days: 30

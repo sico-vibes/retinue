@@ -6,7 +6,13 @@ export const site = {
     'Retinue is a Windows app that runs like a company: a CEO, specialists hired into your projects, and you as the owner. It runs on the coding agents you already use.',
   /** The Windows installer. While empty, download buttons go to the download section. */
   downloadUrl: '',
+  /** The open-source repository (MIT). */
+  repoUrl: 'https://github.com/sico-vibes/bloblex',
 }
+
+/** SignPath Foundation's terms ask for this policy to be linked from the home and download pages. */
+export const codeSigningPolicyUrl = `${site.repoUrl}#code-signing-policy`
+export const privacyUrl = `${site.repoUrl}/blob/main/PRIVACY.md`
 
 export const downloadHref = site.downloadUrl || '/#download'
 
@@ -48,6 +54,9 @@ export const footerColumns: { title: string; links: LinkItem[] }[] = [
       { label: 'Privacy and control', href: '/#control' },
       { label: 'Questions', href: '/#questions' },
       { label: 'Download', href: downloadHref },
+      { label: 'Source code', href: site.repoUrl },
+      { label: 'Code signing policy', href: codeSigningPolicyUrl },
+      { label: 'Privacy', href: privacyUrl },
     ],
   },
 ]

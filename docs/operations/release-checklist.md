@@ -181,7 +181,9 @@ Use `-DryRun` first. A dry run still needs the updater signing key if it is allo
 
 ## Code-signing certificate
 
-Status: **needs user**
+Status: **needs user** (2026-11-09: the SignPath Foundation path is ready in the repository; the owner applies and sets it up, see [code-signing.md](code-signing.md))
+
+Once SignPath is set up, a signed release is built by the **Release build** workflow and published with `scripts/release-windows.ps1 -SignedInstaller <installer>`. Authenticode status should then be `Valid`, with SignPath Foundation as the publisher. The paragraph below describes the state before that.
 
 `apps/desktop/src-tauri/tauri.conf.json` has no `bundle.windows.certificateThumbprint` and no `signCommand`. No certificate or Store identity is in the repo. The updater minisign key does not replace this certificate. An unsigned installer can be produced once bundling is configured; a trusted Windows install still needs a certificate or Store submission supplied by the user. Until then, Windows may show a SmartScreen warning on a first manual install. `docs/operations/implementation-status.md` (WP-16) and `docs/guides/windows-development.md` record the same certificate gap.
 

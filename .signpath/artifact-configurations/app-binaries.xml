@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration "app-binaries": Retinue's own executables, signed before
+     they are bundled. Paste into the SignPath project (slug: app-binaries).
+     The artifact is the ZIP that actions/upload-artifact makes of the unsigned-binaries folder.
+     retinued.exe and retinue-hook.exe carry no version resource yet, so only Retinue.exe has
+     metadata restrictions (docs/operations/code-signing.md, "Open items"). -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="Retinue.exe" product-name="Retinue">
+      <authenticode-sign />
+    </pe-file>
+    <pe-file path="retinued.exe">
+      <authenticode-sign />
+    </pe-file>
+    <pe-file path="retinue-hook.exe">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

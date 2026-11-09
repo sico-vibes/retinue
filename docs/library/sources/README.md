@@ -4,8 +4,6 @@
 > **Status:** current. The release figures in this file are set at v0.1.0-beta.36; `main` is ahead of that release with unreleased work.
 > **Last updated:** 2026-10-22
 
-Retinue (formerly Retinue)
-
 Local Windows desktop control plane for Claude Code, Codex, and OpenCode. A React/Tauri shell and a companion window share state from the `retinued` daemon. Each provider CLI keeps its own login.
 
 **Status: `v0.1.0-beta.36`** (the version in `Cargo.toml` and `package.json`), published as an NSIS installer that is not Authenticode-signed but is signed for the updater (new key) and offered on the beta update channel; beta.32 and later update themselves; older versions install by hand once. Full native acceptance and a clean-machine install remain open ([docs/operations/release-checklist.md](docs/operations/release-checklist.md)). Release notes: [docs/releases/0.1.0-beta.36.md](docs/releases/0.1.0-beta.36.md). History and dated records: [docs/operations/session-handoff.md](docs/operations/session-handoff.md) and [docs/operations/implementation-status.md](docs/operations/implementation-status.md). The hub for every document is [docs/README.md](docs/README.md).
@@ -69,6 +67,21 @@ This is the local NSIS path (`bundle.targets` is `nsis` only in `apps/desktop/sr
 | `crates/retinue-usage/`, `retinue-budget/`, `retinue-wsl/` | Usage helpers and the official price table (`crates/retinue-usage/data/official-prices.json`); `retinue-budget` is a workspace member that no crate depends on (budgets are retired); WSL helpers |
 | `tools/retinue-hook/` | Bounded Claude hook helper |
 | `scripts/` | Windows dev, sidecar staging, and installer entry points |
+
+## License
+
+Retinue is open source under the [MIT License](LICENSE). The coding agents' logos in the app and on the website are trademarks of their owners and are used only to name those agents. They are not covered by the MIT License.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [the repository's collaborators](https://github.com/sico-vibes/bloblex/graphs/contributors). Every change from outside the team is reviewed before it is merged.
+- Approvers: [Bassem Hesham](https://github.com/sico-vibes), the owner. Every signing request is approved by hand.
+- Only Retinue's own executables and its installer are signed. They are built from this repository by the [Release build](.github/workflows/release.yml) workflow on GitHub-hosted runners. Upstream libraries are never signed under this certificate.
+- Every team member uses multi-factor authentication for GitHub and SignPath.
+
+Privacy: [PRIVACY.md](PRIVACY.md). Retinue sends nothing to its author and goes online only for the purposes listed there, such as update checks, which you can turn off. How releases are signed: [docs/operations/code-signing.md](docs/operations/code-signing.md).
 
 ## References
 
