@@ -169,7 +169,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
           </button>}
         {node.kind === 'main' && renaming !== session.id && <span className="convo-actions">
           <button type="button" className="convo-action" aria-label={`Rename ${title}`} title="Rename" onClick={() => setRenaming(session.id)}><Pencil size={12} aria-hidden="true" /></button>
-          {onArchive && <button type="button" className="convo-action" aria-label={`Archive ${title}`} title="Archive (restore it from the bot's page)" disabled={busy} onClick={() => onArchive(session)}><Archive size={12} aria-hidden="true" /></button>}
+          {onArchive && <button type="button" className="convo-action" aria-label={`Archive ${title}`} title="Archive (restore it from the employee's page)" disabled={busy} onClick={() => onArchive(session)}><Archive size={12} aria-hidden="true" /></button>}
           <button type="button" className="convo-action danger" aria-label={`Delete ${title}`} title="Delete" disabled={busy} onClick={() => onDelete(session)}><Trash2 size={12} aria-hidden="true" /></button>
         </span>}
       </div>

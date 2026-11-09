@@ -20,7 +20,7 @@ export function visualFence(language: string, code: string): { start: 'preview' 
 }
 
 export function VisualFrame({ code }: { code: string }) {
-  return <iframe className="visual-frame" title="Picture from the bot" sandbox="" srcDoc={visualDocument(code)} referrerPolicy="no-referrer" />
+  return <iframe className="visual-frame" title="Picture from the employee" sandbox="" srcDoc={visualDocument(code)} referrerPolicy="no-referrer" />
 }
 
 export function VisualReply({ code, start, renderCode }: { code: string; start: 'preview' | 'code'; renderCode: () => React.ReactNode }) {

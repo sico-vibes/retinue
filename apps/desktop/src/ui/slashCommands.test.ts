@@ -22,7 +22,7 @@ describe('slash query detection', () => {
 })
 
 describe('slash menu rows', () => {
-  it('lists the actions, this bot skills, then the Manager commands', () => {
+  it('lists the actions, this employee skills, then the Manager commands', () => {
     const rows = slashItems('', { skills, isManager: true })
     const groups = [...new Set(rows.map((row) => row.group))]
     expect(groups).toEqual(['Actions', 'Skills', 'Manager'])
@@ -31,7 +31,7 @@ describe('slash menu rows', () => {
     expect(rows.some((row) => row.name === 'interview' && row.kind === 'manager')).toBe(true)
   })
 
-  it('hides the Manager commands for an ordinary bot', () => {
+  it('hides the Manager commands for an ordinary employee', () => {
     const rows = slashItems('', { skills, isManager: false })
     expect(rows.some((row) => row.kind === 'manager')).toBe(false)
     expect(rows.some((row) => row.kind === 'skill')).toBe(true)

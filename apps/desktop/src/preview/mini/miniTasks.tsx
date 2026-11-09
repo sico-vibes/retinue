@@ -25,7 +25,7 @@ export function TasksScreen({ light }: { light: boolean }) {
       <h1>Tasks</h1>
       <div className="seg" role="tablist" aria-label="Tasks view">{views.map((view) => <button key={view.id} role="tab" aria-selected={state.tasksView === view.id} className={state.tasksView === view.id ? 'on' : ''} onClick={() => act.setTasksView(view.id)}>{view.label}</button>)}</div>
       <div className="tasks-counts">
-        <span>{bots.length} bots</span>
+        <span>{bots.length} employees</span>
         {running > 0 && <span className="c-run">{running} running</span>}
         {needs > 0 && <span className="c-needs">{needs} need you</span>}
         {failed > 0 && <span className="c-fail">{failed} failed</span>}
@@ -121,7 +121,7 @@ function Board({ light, onToast }: { light: boolean; onToast: (text: string) => 
       </div>
     </section>
     <section className="lanes">
-      <div className="col-head"><span>Bots</span><span className="lanes-cost" title="Estimate from each bot's recent rate">≈ {money(queued)} in queues</span></div>
+      <div className="col-head"><span>Employees</span><span className="lanes-cost" title="Estimate from each employee's recent rate">≈ {money(queued)} in queues</span></div>
       <div className="lane-list">
         {bots.map((bot) => {
           const info = laneInfo(bot, state.tasks, state.sessions, state.now)
@@ -229,7 +229,7 @@ function TaskSheet({ light, onToast }: { light: boolean; onToast: (text: string)
         {draft ? <>
           <button className="danger" onClick={() => { act.removeTask(task.id); onToast('Draft deleted.') }}><Trash2 size={13} />Delete</button>
           <span className="fill" />
-          <select value={assignee} onChange={(event) => setAssignee(event.target.value)} aria-label="Bot">{state.bots.filter((item) => !item.manager).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+          <select value={assignee} onChange={(event) => setAssignee(event.target.value)} aria-label="Employee">{state.bots.filter((item) => !item.manager).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
           <button onClick={() => { act.updateTask(task.id, form); onToast(act.dispatch(task.id, assignee)); act.openTask(null) }}>Assign</button>
           <button className="primary" onClick={save}>Save</button>
         </> : <>
@@ -378,7 +378,7 @@ function Tree({ light }: { light: boolean }) {
           <span className="tnode-task">{rootId === 't-root' ? root?.title : 'Tasks you assigned from the board'}</span>
           <span className="tnode-foot"><span>{rootId === 't-root' ? `≈${money(total)} · ${rootSession ? duration(state.now - rootSession.startMs) : ''}` : `${board.length} tasks`}</span><span className="tnode-kids">{top.length}<ChevronDown size={12} /></span></span>
         </button>
-        {top.length > 0 ? <div className="tkids">{top.map((task) => <div key={task.id} className="tbranch">{node(task)}</div>)}</div> : <p className="empty-note">Nothing assigned from the board yet. Drag a task onto a bot on the Board.</p>}
+        {top.length > 0 ? <div className="tkids">{top.map((task) => <div key={task.id} className="tbranch">{node(task)}</div>)}</div> : <p className="empty-note">Nothing assigned from the board yet. Drag a task onto an employee on the Board.</p>}
       </div>
     </div>
     {focusTask && <Conversation task={focusTask} light={light} onClose={() => setFocus(null)} onOpen={(bot) => { act.select(bot.id); act.setScreen('chat') }} />}

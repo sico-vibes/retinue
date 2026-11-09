@@ -34,7 +34,7 @@ describe('instruction history', () => {
     expect(instructionVersions('agent-1')[0].text).toHaveLength(INSTRUCTION_TEXT_LIMIT)
   })
 
-  it('keeps each bot separate and ignores an empty id', () => {
+  it('keeps each employee separate and ignores an empty id', () => {
     recordInstructionVersion('agent-1', 'one')
     recordInstructionVersion('agent-2', 'two')
     recordInstructionVersion('', 'ignored')

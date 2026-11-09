@@ -95,7 +95,7 @@ describe('composer preview RPC behavior', () => {
     } finally { window.history.replaceState({}, '', new URL(original).pathname + new URL(original).search) }
   })
 
-  it('lists a bot\'s skills and accepts a skill or Manager command on session.prompt', async () => {
+  it('lists an employee\'s skills and accepts a skill or Manager command on session.prompt', async () => {
     const listed = await rpc<{ skills: Array<{ name: string }> }>('skills.forAgent', { agentId: 'agent-codex' })
     expect(listed.skills.some((skill) => skill.name === 'pdf')).toBe(true)
     expect(listed.skills.some((skill) => skill.name === 'figma-to-react')).toBe(false)

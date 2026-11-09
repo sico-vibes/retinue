@@ -30,7 +30,7 @@ const STYLES: { id: StyleId; letter: string; name: string; note: string; mode: M
   { id: 'pop', letter: 'A', name: 'Pop', note: 'Retro colour, outlined cards, sticker labels', mode: 'light' },
   { id: 'dot', letter: 'B', name: 'Dot', note: 'Monochrome widgets, dot-matrix numbers, one red', mode: 'dark' },
   { id: 'frost', letter: 'C', name: 'Frost', note: 'A see-through window over your desktop, flat and quiet', mode: 'dark' },
-  { id: 'blob', letter: 'D', name: 'Blobots', note: 'The current alternative look, with hand-painted bots', mode: 'dark' },
+  { id: 'blob', letter: 'D', name: 'Blobots', note: 'The current alternative look, with hand-painted employees', mode: 'dark' },
 ]
 const SCREENS: { id: Screen; label: string }[] = [
   { id: 'chat', label: 'Conversation' },
@@ -42,7 +42,7 @@ const SCREENS: { id: Screen; label: string }[] = [
 
 interface BotData { id: string; name: string; role: string; color: string; line: string; mood: Mood; time: string; group: string; paint: PaintedShape; classic: BlobShape; manager?: boolean; status?: 'waiting' | 'working' }
 const BOTS: BotData[] = [
-  { id: 'manager', paint: 'star', classic: 'circle', name: 'Manager', role: 'Manager', color: '#f5a25b', line: 'Runs your team and knows every bot', mood: 'idle', time: '', group: '', manager: true },
+  { id: 'manager', paint: 'star', classic: 'circle', name: 'Manager', role: 'Manager', color: '#f5a25b', line: 'Runs your team and knows every employee', mood: 'idle', time: '', group: '', manager: true },
   { id: 'codex', paint: 'cube', classic: 'squircle', name: 'Codex', role: 'CTO', color: '#8db7f5', line: 'Waiting for you', mood: 'waiting', time: '10:59', group: 'Board', status: 'waiting' },
   { id: 'invoice', paint: 'pear', classic: 'droplet', name: 'Invoice helper', role: 'Finance', color: '#f4c84f', line: 'Typing…', mood: 'working', time: '10:19', group: 'Board', status: 'working' },
   { id: 'pololo', paint: 'flower', classic: 'cloud', name: 'Pololo', role: 'UI/UX Designer', color: '#7fd3ae', line: 'Sol 6.1 · High', mood: 'idle', time: '9:42', group: 'Board' },
@@ -183,9 +183,9 @@ function Sidebar({ screen, setScreen, selected, setSelected }: { screen: Screen;
     <div className="rd-brand">
       <Logo />
       <strong>Bitbots</strong>
-      <button type="button" className="rd-icon-btn" aria-label="New bot"><Plus size={16} /></button>
+      <button type="button" className="rd-icon-btn" aria-label="New employee"><Plus size={16} /></button>
     </div>
-    <label className="rd-search"><Search size={15} /><input placeholder="Search bots and chats" /><kbd>Ctrl K</kbd></label>
+    <label className="rd-search"><Search size={15} /><input placeholder="Search employees and chats" /><kbd>Ctrl K</kbd></label>
     <div className="rd-botlist">
       {row(bot('manager'))}
       {groups.map((group) => <div key={group} className="rd-group">
@@ -203,7 +203,7 @@ function Sidebar({ screen, setScreen, selected, setSelected }: { screen: Screen;
         <button type="button" className={screen === 'companion' ? 'on' : ''} onClick={() => setScreen('companion')}><Monitor size={16} />Companion</button>
         <button type="button" className={screen === 'settings' ? 'on' : ''} onClick={() => setScreen('settings')}><Settings size={16} />Settings</button>
       </nav>
-      <button type="button" className="rd-profile"><span className="rd-initials">BH</span><span><strong>Bassem</strong><small>Owner · 6 bots</small></span><ChevronDown size={14} /></button>
+      <button type="button" className="rd-profile"><span className="rd-initials">BH</span><span><strong>Bassem</strong><small>Owner · 6 employees</small></span><ChevronDown size={14} /></button>
     </div>
   </aside>
 }
@@ -212,7 +212,7 @@ function Sidebar({ screen, setScreen, selected, setSelected }: { screen: Screen;
 
 const CONVERSATIONS = [
   { day: 'Today', items: [
-    { title: 'Effort picker research', meta: 'Board · 2 bots', state: 'waiting' as const, on: true },
+    { title: 'Effort picker research', meta: 'Board · 2 employees', state: 'waiting' as const, on: true },
     { title: 'Invoice parser tests', meta: 'Board', state: 'working' as const },
     { title: 'Preview: composer controls', meta: '4m' },
   ] },
@@ -336,8 +336,8 @@ type SettingsPage = 'general' | 'appearance' | 'agents' | 'remote'
 const SETTINGS_NAV: { id: SettingsPage; label: string; icon: ReactNode; group: string }[] = [
   { id: 'general', label: 'General', icon: <SlidersHorizontal size={15} />, group: 'App' },
   { id: 'appearance', label: 'Appearance', icon: <Palette size={15} />, group: 'App' },
-  { id: 'agents', label: 'Coding agents', icon: <Terminal size={15} />, group: 'Bots' },
-  { id: 'remote', label: 'Remote', icon: <Smartphone size={15} />, group: 'Bots' },
+  { id: 'agents', label: 'Coding agents', icon: <Terminal size={15} />, group: 'Employees' },
+  { id: 'remote', label: 'Remote', icon: <Smartphone size={15} />, group: 'Employees' },
 ]
 const ACCENTS = ['#f2694a', '#f4c84f', '#7fd3ae', '#8db7f5', '#c2b0f0', '#f2958a', '#ececec']
 
@@ -346,7 +346,7 @@ function SettingsScreen({ mode, setMode }: { mode: Mode; setMode: (mode: Mode) =
   return <div className="rd-settings">
     <nav className="rd-settings-nav" aria-label="Settings pages">
       <div className="rd-settings-search"><Search size={14} /><input placeholder="Search settings" /></div>
-      {['App', 'Bots'].map((group) => <div key={group} className="rd-settings-group">
+      {['App', 'Employees'].map((group) => <div key={group} className="rd-settings-group">
         <div className="rd-eyebrow">{group}</div>
         {SETTINGS_NAV.filter((item) => item.group === group).map((item) => <button key={item.id} type="button" className={page === item.id ? 'on' : ''} onClick={() => setPage(item.id)}>{item.icon}{item.label}</button>)}
       </div>)}
@@ -383,7 +383,7 @@ function AppearancePage({ mode, setMode }: { mode: Mode; setMode: (mode: Mode) =
   const [motion, setMotion] = useState(true)
   const [sounds, setSounds] = useState(false)
   return <>
-    <PageHead title="Appearance" sub="How Bitbots looks on this device: the bots, the colours and the density." />
+    <PageHead title="Appearance" sub="How Bitbots looks on this device: the employees, the colours and the density." />
     <div className="rd-card-label">Look</div>
     {style === 'blob' ? <BlobLooks skin={skin} setSkin={setSkin} /> : <div className="rd-looks">
       {(['bitbots', 'blobots'] as const).map((id) => <button key={id} type="button" className={`rd-look${look === id ? ' on' : ''}`} onClick={() => setLook(id)}>
@@ -407,8 +407,8 @@ function AppearancePage({ mode, setMode }: { mode: Mode; setMode: (mode: Mode) =
     </div>
     <div className="rd-card-label">Motion and sound</div>
     <div className="rd-card">
-      <Row title="Animate bots" sub="Blinking, looking around and the working wiggle."><Toggle label="Animate bots" on={motion} onChange={setMotion} /></Row>
-      <Row title="Sound cues" sub="A short chirp when a bot finishes or needs you."><Toggle label="Sound cues" on={sounds} onChange={setSounds} /></Row>
+      <Row title="Animate employees" sub="Blinking, looking around and the working wiggle."><Toggle label="Animate employees" on={motion} onChange={setMotion} /></Row>
+      <Row title="Sound cues" sub="A short chirp when an employee finishes or needs you."><Toggle label="Sound cues" on={sounds} onChange={setSounds} /></Row>
     </div>
   </>
 }
@@ -421,19 +421,19 @@ function GeneralPage() {
     <PageHead title="General" sub="Your name, start-up and what Bitbots does in the background." />
     <div className="rd-card-label">You</div>
     <div className="rd-card">
-      <Row title="Your name" sub="Bots use it when they talk to you."><input className="rd-input" defaultValue="Bassem" /></Row>
+      <Row title="Your name" sub="Employees use it when they talk to you."><input className="rd-input" defaultValue="Bassem" /></Row>
       <Row title="Open on start" sub="The page Bitbots shows first."><button type="button" className="rd-select">Last conversation<ChevronDown size={14} /></button></Row>
     </div>
     <div className="rd-card-label">System</div>
     <div className="rd-card">
       <Row title="Launch at sign-in"><Toggle label="Launch at sign-in" on={startup} onChange={setStartup} /></Row>
-      <Row title="Keep awake while bots work" sub="Stops Windows sleeping during a long task."><Toggle label="Keep awake" on={awake} onChange={setAwake} /></Row>
-      <Row title="Notifications" sub="When a bot finishes, fails or needs approval."><Toggle label="Notifications" on={notify} onChange={setNotify} /></Row>
+      <Row title="Keep awake while employees work" sub="Stops Windows sleeping during a long task."><Toggle label="Keep awake" on={awake} onChange={setAwake} /></Row>
+      <Row title="Notifications" sub="When an employee finishes, fails or needs approval."><Toggle label="Notifications" on={notify} onChange={setNotify} /></Row>
     </div>
     <div className="rd-card-label">Danger zone</div>
     <div className="rd-card">
       <Row title="Reset onboarding" sub="Shows the first-run steps again."><button type="button" className="rd-btn">Reset</button></Row>
-      <Row title="Quit Bitbots" sub="Running bots stop after their current step."><button type="button" className="rd-btn danger">Quit</button></Row>
+      <Row title="Quit Bitbots" sub="Running employees stop after their current step."><button type="button" className="rd-btn danger">Quit</button></Row>
     </div>
   </>
 }
@@ -446,12 +446,12 @@ function AgentsPage() {
     { name: 'Gemini CLI', version: '—', state: 'Not found', tone: 'plain' as const, bots: 0, icon: 'GM' },
   ]
   return <>
-    <PageHead title="Coding agents" sub="Command line tools Bitbots found on this device, and the bots that use them." />
+    <PageHead title="Coding agents" sub="Command line tools Bitbots found on this device, and the employees that use them." />
     <div className="rd-card-label rd-label-row"><span>Detected</span><button type="button" className="rd-btn small"><RefreshCw size={13} />Scan again</button></div>
     <div className="rd-card">
       {agents.map((agent) => <div key={agent.name} className="rd-agent">
         <span className="rd-agent-mark">{agent.icon}</span>
-        <span className="rd-row-text"><strong>{agent.name}</strong><span>v{agent.version} · {agent.bots} {agent.bots === 1 ? 'bot' : 'bots'}</span></span>
+        <span className="rd-row-text"><strong>{agent.name}</strong><span>v{agent.version} · {agent.bots} {agent.bots === 1 ? 'employee' : 'employees'}</span></span>
         <Chip tone={agent.tone} icon={agent.tone === 'ok' ? <Check size={12} /> : agent.tone === 'warn' ? <Download size={12} /> : <X size={12} />}>{agent.state}</Chip>
         <ChevronRight size={15} className="rd-row-chev" />
       </div>)}
@@ -473,7 +473,7 @@ function AgentsPage() {
 function RemotePage() {
   const [on, setOn] = useState(true)
   return <>
-    <PageHead title="Remote" sub="Reach your bots from a paired phone or laptop." />
+    <PageHead title="Remote" sub="Reach your employees from a paired phone or laptop." />
     <div className="rd-card">
       <Row title="Remote access" sub="Off by default. Each new device needs your approval."><Toggle label="Remote access" on={on} onChange={setOn} /></Row>
       <Row title="Method"><Segmented label="Method" value="tailscale" onChange={() => undefined} options={[{ id: 'tailscale', label: 'Tailscale' }, { id: 'native', label: 'Native' }]} /></Row>
@@ -495,7 +495,7 @@ function UsageScreen() {
   const style = useContext(StyleContext)
   return <div className="rd-usage">
     <header className="rd-usage-head">
-      <div><div className="rd-eyebrow">Usage</div><h1>This week with your bots</h1></div>
+      <div><div className="rd-eyebrow">Usage</div><h1>This week with your employees</h1></div>
       <Segmented label="Range" value={range} onChange={setRange} options={[{ id: 'today', label: 'Today' }, { id: 'week', label: 'Week' }, { id: 'month', label: 'Month' }]} />
     </header>
     <div className="rd-tiles">
@@ -513,7 +513,7 @@ function UsageScreen() {
       <article className="rd-tile tile-c">
         <div className="rd-tile-top"><span className="rd-eyebrow">Active time</span><Clock size={15} /></div>
         <div className="rd-num">4<small>h</small> 20<small>m</small></div>
-        <span className="rd-tile-sub">across 5 bots</span>
+        <span className="rd-tile-sub">across 5 employees</span>
       </article>
       <article className="rd-tile tile-d">
         <div className="rd-tile-top"><span className="rd-eyebrow">Approvals</span><ShieldCheck size={15} /></div>
@@ -529,7 +529,7 @@ function UsageScreen() {
         ].map((limit) => <div key={limit.name} className="rd-limit-row"><span className="rd-limit-name">{limit.name}</span><Meter value={limit.value} tone={limit.tone} /><b>{limit.value}%</b><time>{limit.reset}</time></div>)}
       </article>
       <article className="rd-tile tall tile-f">
-        <div className="rd-tile-top"><span className="rd-eyebrow">By bot</span><ChevronRight size={15} /></div>
+        <div className="rd-tile-top"><span className="rd-eyebrow">By employee</span><ChevronRight size={15} /></div>
         {[['codex', 38], ['pololo', 26], ['invoice', 18], ['claude', 11], ['opencode', 7]].map(([id, share]) => <div key={id} className="rd-share">
           <Bot data={bot(id as string)} size={26} mood="idle" /><span className="rd-share-name">{bot(id as string).name}</span><span className="rd-share-bar"><i style={{ width: `${share}%`, background: bot(id as string).color }} /></span><b>{share}%</b>
         </div>)}
@@ -578,7 +578,7 @@ function CharactersScreen() {
   const tint = (index: number) => colour === 'mixed' ? PALETTE[index % PALETTE.length] : colour
   return <div className="rd-usage rd-characters">
     <header className="rd-usage-head">
-      <div><div className="rd-eyebrow">Blobots · design study</div><h1>Hand-painted bots</h1></div>
+      <div><div className="rd-eyebrow">Blobots · design study</div><h1>Hand-painted employees</h1></div>
       <Segmented label="Mood" value={mood} onChange={setMood} options={[{ id: 'idle', label: 'Idle' }, { id: 'working', label: 'Working' }, { id: 'waiting', label: 'Waiting' }, { id: 'sleeping', label: 'Sleeping' }]} />
     </header>
     <div className="rd-colour-row" role="radiogroup" aria-label="Colour">
@@ -592,7 +592,7 @@ function CharactersScreen() {
         <figcaption>{paintedLabel(shape)}</figcaption>
       </figure>)}
     </div>
-    <div className="rd-card-label">Next to the glossy bots you have now</div>
+    <div className="rd-card-label">Next to the glossy employees you have now</div>
     <div className="rd-card rd-pairs">
       {PAIRS.map(([classic, painted], index) => <div key={painted} className="rd-pair">
         <BlobCanvas decorative style="blobots" color={tint(index)} size={64} mood={BLOB_MOOD[mood]} look={{ shape: classic, seed: classic }} />
@@ -733,7 +733,7 @@ function Preview() {
           <div className="rd-switcher-group" role="radiogroup" aria-label="Glass">
             {GLASS.map((item) => <button key={item.id} type="button" role="radio" aria-checked={glass === item.id} className={glass === item.id ? 'on' : ''} onClick={() => setGlass(item.id)}>{item.label}</button>)}
           </div>
-        </> : style === 'blob' ? <div className="rd-switcher-group" role="radiogroup" aria-label="Bots">
+        </> : style === 'blob' ? <div className="rd-switcher-group" role="radiogroup" aria-label="Employees">
           {([['painted', 'Hand-painted'], ['glossy', 'Glossy (now)']] as const).map(([id, label]) => <button key={id} type="button" role="radio" aria-checked={skin === id} className={skin === id ? 'on' : ''} onClick={() => setSkin(id)}>{label}</button>)}
         </div> : <span className="rd-switcher-note">{STYLES.find((item) => item.id === style)!.note}</span>}
         <span className="rd-flex" />

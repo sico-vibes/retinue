@@ -54,7 +54,7 @@ describe('visual replies', () => {
   })
 })
 
-describe("the bot's commands", () => {
+describe("the employee's commands", () => {
   const session = (tools: unknown[]) => ({ id: 's', state: 'idle', messages: [], turns: [], tools }) as unknown as Session
   it('lists commands only, and hides what the step view hides', () => {
     const rows = botCommands(session([

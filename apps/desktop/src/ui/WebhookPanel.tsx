@@ -50,7 +50,7 @@ export function WebhookPanel({ automationId, name, webhook, onChanged }: { autom
         {secret
           ? <div role="status"><CopyLine label="Secret" value={secret} /><small className="project-settings-note">Copy this now. It won't be shown again. Sign each request with HMAC-SHA-256 over <code>timestamp.body</code>, in <code>X-Bitbots-Timestamp</code> and <code>X-Bitbots-Signature: sha256=…</code>.</small></div>
           : <small className="project-settings-note">The secret was shown when it was made. Rotate it if you've lost it, and senders using the old one stop working.</small>}
-        <label className="new-project-check"><input type="checkbox" checked={state.includeBody} disabled={busy} onChange={(event) => void call('automation.webhook.update', { includeBody: event.target.checked })} /><span>Give the bot the request's body, as data. Whoever sends it chooses what it says, so leave this off unless you need it.</span></label>
+        <label className="new-project-check"><input type="checkbox" checked={state.includeBody} disabled={busy} onChange={(event) => void call('automation.webhook.update', { includeBody: event.target.checked })} /><span>Give the employee the request's body, as data. Whoever sends it chooses what it says, so leave this off unless you need it.</span></label>
         <div className="webhook-actions">
           <button type="button" className="secondary-button small" disabled={busy} onClick={() => setConfirm('rotate')}>Rotate the secret</button>
           <button type="button" className="ghost-button small" disabled={busy} onClick={() => { setSecret(null); void call('automation.webhook.disable', {}) }}>Turn off</button>

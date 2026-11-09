@@ -6,7 +6,7 @@ export const THEME_STYLES: readonly ThemeStyle[] = ['haze', 'blobots']
 /** The look a new install starts in, and where every retired look lands. */
 export const DEFAULT_THEME_STYLE: ThemeStyle = 'haze'
 export const THEME_LOOKS: ReadonlyArray<{ id: ThemeStyle; label: string; family: 'primary' | 'alternative'; description: string }> = [
-  { id: 'haze', label: 'Haze', family: 'primary', description: 'Smoky glass. Bots show a logo or a character.' },
+  { id: 'haze', label: 'Haze', family: 'primary', description: 'Smoky glass. Employees show a logo or a character.' },
   { id: 'blobots', label: 'Stone', family: 'alternative', description: 'Soft, quiet and monochrome.' },
 ]
 

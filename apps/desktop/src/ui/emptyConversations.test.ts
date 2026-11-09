@@ -15,7 +15,7 @@ describe('fresh-session notices', () => {
 
 describe('empty conversations', () => {
   const base = (extra: Partial<Session>): Session => ({ id: 's', runtimeId: 'rt', agentId: 'a', ...extra })
-  it('counts only loaded conversations with no user or bot message', () => {
+  it('counts only loaded conversations with no user or employee message', () => {
     expect(isEmptyConversation(base({ messages: [] }))).toBe(true)
     expect(isEmptyConversation(base({ messages: [notice('n') as never] }))).toBe(true)
     expect(isEmptyConversation(base({ messages: [msg('u', 'user') as never] }))).toBe(false)

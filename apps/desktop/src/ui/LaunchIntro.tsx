@@ -1,29 +1,21 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { BlobCanvas } from '../blob/BlobCanvas'
-import { hexToRGB } from '../blob/blobEngine'
-import { drawGreetingScene, GREETING_BODY, GREETING_END_MS, GREETING_GROWN_MS, GREETING_REFERENCE } from '../blob/greetingScene'
-import { agentColorHex } from './agentColor'
-import { agentLook, type BlobLook } from '../blob/look'
 import type { Agent, Runtime } from '../types'
 import { type LaunchCheck } from './launchChecks'
 import { friendlyError } from './errorCopy'
 import { ProviderLogo } from './providerBrand'
 import { PixelClouds } from './PixelClouds'
-import { useLegacyPixel, useThemeStyle } from '../blob/bitbots'
-import { resolveArt } from '../blob/art/art'
-
-/** The working mascot's canvas size; the greeting is scaled so the body matches it. */
-const STAGE_SIZE = 150
-const GREETING_SCALE = (STAGE_SIZE * 0.4) / GREETING_BODY.radius
+import markWhite from '../assets/brand/retinue-mark-white.png'
+import markBlack from '../assets/brand/retinue-mark-black.png'
+import { useLegacyPixel } from '../blob/bitbots'
 
 type Phase = 'scanning' | 'greeting' | 'ready'
 
 /**
- * Startup checks. The mascot works while Bitbots looks for coding agents,
- * then waves hello once everything is ready; the checks scroll inside a fixed
+ * Startup checks. The mark breathes while Bitbots looks for coding agents,
+ * then settles once everything is ready; the checks scroll inside a fixed
  * window whose edges fade into the background.
  */
-export function LaunchIntro({ checks, runtimes, agent = null, onComplete, onRetry, onContinueOffline, serviceDown, autoComplete = true }: {
+export function LaunchIntro({ checks, runtimes, agent: _agent = null, onComplete, onRetry, onContinueOffline, serviceDown, autoComplete = true }: {
   checks: LaunchCheck[]; runtimes: Runtime[]; agent?: Agent | null; onComplete: () => void; onRetry: () => void; onContinueOffline: () => void; serviceDown: boolean; autoComplete?: boolean
 }) {
   const completed = useRef(false)
@@ -33,10 +25,6 @@ export function LaunchIntro({ checks, runtimes, agent = null, onComplete, onRetr
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const [phase, setPhase] = useState<Phase>('scanning')
   const bitbots = useLegacyPixel()
-  const style = useThemeStyle()
-  const look = agent ? agentLook(agent) : null
-  const greetingArt = resolveArt(look, style)
-  const color = agent ? agentColorHex(agent.color) : '#b7a7f4'
   useEffect(() => { onCompleteRef.current = onComplete }, [onComplete])
 
   const complete = () => {
@@ -88,13 +76,9 @@ export function LaunchIntro({ checks, runtimes, agent = null, onComplete, onRetr
   return <main className={`launch-intro${reducedMotion ? ' reduced-motion' : ''}`} data-phase={phase} aria-label="Bitbots launch checks" onPointerDown={() => { if (phase === 'greeting' && autoComplete) complete() }}>
     <PixelClouds className="launch-clouds" />
     <section className="launch-intro-content">
-      {!reducedMotion && <div className="launch-blob-stage">
-        {phase === 'greeting'
-          ? bitbots ? <BitbotWelcome color={color} look={look} onDone={greetingDone} /> : greetingArt !== 'blob'
-            ? <BlobCanvas color={color} size={STAGE_SIZE} mood="idle" look={look} label={agent?.name ?? 'Bitbots'} greeting onGreetingComplete={greetingDone} />
-            : <LaunchGreeting color={color} onDone={greetingDone} />
-          : <BlobCanvas color={color} size={STAGE_SIZE} mood={serviceDown ? 'error' : phase === 'ready' ? 'idle' : 'working'} label={agent?.name ?? 'Bitbots'} />}
-      </div>}
+      <div className="launch-blob-stage">
+        <LaunchLogo state={serviceDown ? 'error' : phase === 'greeting' ? 'greeting' : phase === 'ready' ? 'ready' : 'working'} onGreeted={greetingDone} />
+      </div>
       {bitbots && !reducedMotion && phase === 'scanning' && !serviceDown && <PixelScan />}
       <p className="launch-status" role="status" aria-live="polite">{status}</p>
       <LaunchChecklist checks={checks} names={names} />
@@ -147,55 +131,6 @@ function PixelScan() {
   return <div className="launch-pixel-scan" aria-hidden="true">{Array.from({ length: 14 }, (_, index) => <i key={index} style={{ ['--i' as string]: index }} />)}</div>
 }
 
-/** Bitbots welcome: the working robot hops with one sudden full spin, then the app opens. */
-function BitbotWelcome({ color, look, onDone }: { color: string; look: BlobLook | null; onDone: () => void }) {
-  const frame = useRef<HTMLSpanElement>(null)
-  const doneRef = useRef(onDone)
-  useEffect(() => { doneRef.current = onDone }, [onDone])
-  useEffect(() => {
-    const spin = window.setTimeout(() => frame.current?.querySelector<HTMLElement>('[role="img"]')?.click(), 420)
-    const end = window.setTimeout(() => doneRef.current(), 2300)
-    return () => { window.clearTimeout(spin); window.clearTimeout(end) }
-  }, [])
-  return <span ref={frame} className="launch-bitbot-welcome"><BlobCanvas color={color} size={STAGE_SIZE} mood="idle" look={look} label="Bitbots" /></span>
-}
-
-/** The companion's welcome wave, without its island card, continuing from the full-size mascot. */
-function LaunchGreeting({ color, onDone }: { color: string; onDone: () => void }) {
-  const canvas = useRef<HTMLCanvasElement>(null)
-  const doneRef = useRef(onDone)
-  useEffect(() => { doneRef.current = onDone }, [onDone])
-  // Three reference heights tall, so the halo has room to fade out instead of meeting the canvas edge.
-  const width = GREETING_REFERENCE.width * GREETING_SCALE
-  const height = GREETING_REFERENCE.height * GREETING_SCALE * 3
-  const bodyTop = (height - GREETING_REFERENCE.height * GREETING_SCALE) / 2 + GREETING_BODY.y * GREETING_SCALE
-  useEffect(() => {
-    const element = canvas.current
-    const ctx = element?.getContext('2d')
-    if (!element || !ctx) { const timer = window.setTimeout(() => doneRef.current(), GREETING_END_MS - GREETING_GROWN_MS); return () => window.clearTimeout(timer) }
-    const ratio = Math.min(window.devicePixelRatio || 1, 2)
-    element.width = Math.round(width * ratio)
-    element.height = Math.round(height * ratio)
-    ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
-    const rgb = hexToRGB(color)
-    const start = performance.now()
-    let frame = 0
-    const draw = (now: number) => {
-      const age = Math.min(GREETING_END_MS, GREETING_GROWN_MS + now - start)
-      drawGreetingScene(ctx, width, height, age, rgb, { bare: true })
-      if (age >= GREETING_END_MS) { doneRef.current(); return }
-      frame = requestAnimationFrame(draw)
-    }
-    frame = requestAnimationFrame(draw)
-    return () => cancelAnimationFrame(frame)
-  }, [color, width, height])
-  return <canvas ref={canvas} className="launch-greeting" aria-label="Bitbots waves hello" role="img" style={{
-    width, height,
-    left: `calc(50% - ${GREETING_BODY.x * GREETING_SCALE}px)`,
-    top: `calc(50% - ${bodyTop}px)`,
-  }} />
-}
-
 export function LaunchWarnings({ warnings, details, retrying = false, onSettings, onDismiss }: { warnings: string[]; details?: string; retrying?: boolean; onSettings: () => void; onDismiss: () => void }) {
   const [open, setOpen] = useState(false)
   if (!warnings.length && !retrying) return null
@@ -220,4 +155,20 @@ function providerFromWarning(warning: string) {
   if (lower.startsWith('codex:')) return 'codex'
   if (lower.startsWith('opencode:')) return 'opencode'
   return undefined
+}
+
+/** The app's mark on the loading screen: it fades in for the greeting, breathes
+ *  while the checks run and rests when ready. White on dark, ink on light. */
+function LaunchLogo({ state, onGreeted }: { state: 'greeting' | 'working' | 'ready' | 'error'; onGreeted: () => void }) {
+  const done = useRef(onGreeted)
+  done.current = onGreeted
+  useEffect(() => {
+    if (state !== 'greeting') return
+    const timer = window.setTimeout(() => done.current(), 900)
+    return () => window.clearTimeout(timer)
+  }, [state])
+  return <span className={`launch-logo is-${state}`} role="img" aria-label="Retinue">
+    <img className="launch-logo-on-dark" src={markWhite} alt="" draggable={false} />
+    <img className="launch-logo-on-light" src={markBlack} alt="" draggable={false} />
+  </span>
 }

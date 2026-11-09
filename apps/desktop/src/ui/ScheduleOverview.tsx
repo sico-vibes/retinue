@@ -24,7 +24,7 @@ function minutes(secs: number | undefined | null) {
 export type ScheduleScope = { agentId: string | null; projectId: string | null }
 
 export function scheduleRows(automations: readonly Automation[], tasks: readonly BoardTask[], agents: readonly Agent[], nowMs: number, scope: ScheduleScope | null = null): Row[] {
-  const name = (id: string | null | undefined) => agents.find((agent) => agent.id === id)?.name ?? 'A bot'
+  const name = (id: string | null | undefined) => agents.find((agent) => agent.id === id)?.name ?? 'An employee'
   const mineAutomation = (automation: Automation) => !scope || (!!scope.agentId && automation.agentId === scope.agentId)
   const mineTask = (task: BoardTask) => !scope || (!!scope.agentId && task.scheduleAgentId === scope.agentId) || (!!scope.projectId && task.projectId === scope.projectId)
   const rows: Row[] = automations.filter(mineAutomation).map((automation) => {
@@ -78,7 +78,7 @@ export function ScheduleOverview({ agents, connected, onOpenSession, scope = nul
     {!compact && <h3 id="schedule-overview-title">Schedules</h3>}
     {problem && <p className="schedule-overview-note" role="alert">{problem}</p>}
     {!automations && !problem && <p className="schedule-overview-note">Reading schedules…</p>}
-    {automations && !rows.length && <p className="schedule-overview-note">{scope ? 'Nothing is scheduled for this bot or project.' : 'Nothing is scheduled.'}</p>}
+    {automations && !rows.length && <p className="schedule-overview-note">{scope ? 'Nothing is scheduled for this employee or project.' : 'Nothing is scheduled.'}</p>}
     {compact && onOpenSchedules && <button type="button" className="rail-link" onClick={onOpenSchedules}>Open schedules</button>}
     {rows.length > 0 && <ul>{rows.map((row) => <li key={row.key} data-state={row.state}>
       <div className="schedule-overview-main"><strong>{row.name}</strong><small>{row.agent} · {row.when || 'No time set'}{row.limit ? ` · ${row.limit}` : ''}</small></div>

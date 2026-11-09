@@ -54,7 +54,7 @@ export const PROJECT_ICONS: ReadonlyArray<{ id: string; Icon: LucideIcon; words:
 
 export const PROJECT_EMOJI: ReadonlyArray<{ emoji: string; words: string }> = [
   { emoji: '🚀', words: 'rocket launch' }, { emoji: '⚡', words: 'zap fast' }, { emoji: '🔥', words: 'fire hot' }, { emoji: '✨', words: 'sparkle' }, { emoji: '🎯', words: 'target goal' }, { emoji: '💡', words: 'idea light' },
-  { emoji: '🧠', words: 'brain ai' }, { emoji: '🤖', words: 'robot bot' }, { emoji: '🛠️', words: 'tools fix' }, { emoji: '⚙️', words: 'gear settings' }, { emoji: '🧪', words: 'test science' }, { emoji: '🔒', words: 'lock security' },
+  { emoji: '🧠', words: 'brain ai' }, { emoji: '🤖', words: 'robot employee' }, { emoji: '🛠️', words: 'tools fix' }, { emoji: '⚙️', words: 'gear settings' }, { emoji: '🧪', words: 'test science' }, { emoji: '🔒', words: 'lock security' },
   { emoji: '💻', words: 'laptop code' }, { emoji: '📱', words: 'phone mobile app' }, { emoji: '🌐', words: 'web globe' }, { emoji: '☁️', words: 'cloud' }, { emoji: '📦', words: 'package box' }, { emoji: '🗂️', words: 'folder files' },
   { emoji: '📝', words: 'notes write' }, { emoji: '📚', words: 'books docs' }, { emoji: '📊', words: 'chart data' }, { emoji: '💰', words: 'money finance' }, { emoji: '🛒', words: 'shop cart' }, { emoji: '💼', words: 'work business' },
   { emoji: '🎨', words: 'art design' }, { emoji: '🎮', words: 'game' }, { emoji: '🎵', words: 'music' }, { emoji: '🎬', words: 'film movie' }, { emoji: '📷', words: 'camera photo' }, { emoji: '✈️', words: 'travel plane' },

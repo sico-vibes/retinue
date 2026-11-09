@@ -51,7 +51,7 @@ export function QuickSwitcher({ items, onChoose, onClose }: { items: QuickSwitch
   }, [activeIndex, results])
   const groupLabel = (item: QuickSwitcherItem) => {
     const category = categoryOf(item)
-    return category === 'Bots' ? Nouns : !query.trim() && category === 'Conversations' ? 'Recent conversations' : category
+    return category === 'Employees' ? Nouns : !query.trim() && category === 'Conversations' ? 'Recent conversations' : category
   }
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {

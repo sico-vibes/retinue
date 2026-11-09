@@ -5,7 +5,7 @@ import type { ConversationItem } from './conversation'
 const step = (tool: string, input?: unknown) => ({ kind: 'activity', activity: { kind: 'tool', detail: { tool: `bloblex · ${tool}`, input } } }) as unknown as ConversationItem
 
 describe('skill tool steps', () => {
-  it('names the skill a bot loaded, from an object or JSON input', () => {
+  it('names the skill an employee loaded, from an object or JSON input', () => {
     expect(loadedSkillName({ name: 'pdf' })).toBe('pdf')
     expect(loadedSkillName('{"name":"release-notes"}')).toBe('release-notes')
     expect(loadedSkillName('not json')).toBeNull()

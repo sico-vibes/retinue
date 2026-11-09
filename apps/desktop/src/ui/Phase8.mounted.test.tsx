@@ -45,7 +45,7 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => { root?.unmount() }); root = null; host.remove() })
 
 describe('what the daemon reports', () => {
-  it('leaves out a row with no bot or an unknown status, and never guesses', () => {
+  it('leaves out a row with no employee or an unknown status, and never guesses', () => {
     expect(normalizeSubbots({ subbots: [{ status: 'running' }, { agentId: 'a', status: 'nonsense' }, { agentId: 'b', status: 'queued' }] }).map((item) => item.agentId)).toEqual(['b'])
     expect(normalizeSubbots(null)).toEqual([])
   })
@@ -100,7 +100,7 @@ describe("a provider's own sub-agents", () => {
 })
 
 describe('in the sidebar', () => {
-  it('never files a sub-bot under a project, even with hidden bots shown', () => {
+  it('never files a sub-bot under a project, even with hidden employees shown', () => {
     const list = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B', hidden: true, parentAgentId: 'a' }] as unknown as Agent[]
     expect(groupAgentsByProject(list, [], true).flatMap((group) => group.agents).map((agent) => agent.id)).toEqual(['a'])
   })

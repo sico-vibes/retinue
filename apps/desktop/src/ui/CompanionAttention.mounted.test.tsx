@@ -23,12 +23,12 @@ describe('waiting agents', () => {
   const agents = [agent('a', 'Atlas'), agent('b', 'Pixel'), agent('c', 'Nova')]
   const sessions = [waitingSession('a'), idleSession('b'), waitingSession('c')]
 
-  it('lists the bots that are waiting for the person, in roster order', () => {
+  it('lists the employees that are waiting for the person, in roster order', () => {
     expect(waitingAgentsOf(agents, sessions, [runtime], true).map((item) => item.id)).toEqual(['a', 'c'])
     expect(waitingAgentsOf(agents, sessions, [runtime], false)).toEqual([])
   })
 
-  it('picks the next waiting bot after the focused one and wraps', () => {
+  it('picks the next waiting employee after the focused one and wraps', () => {
     const waiting = waitingAgentsOf(agents, sessions, [runtime], true)
     expect(nextWaitingAgent(waiting, 'a')?.id).toBe('c')
     expect(nextWaitingAgent(waiting, 'c')?.id).toBe('a')

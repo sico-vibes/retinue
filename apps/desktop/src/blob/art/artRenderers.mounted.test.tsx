@@ -26,42 +26,42 @@ afterEach(() => {
 
 describe('painted blob renderer', () => {
   it('draws a uniquely identified SVG and scales the body to the mood class', () => {
-    const first = mount(<PaintedBlob color="#ff9bd0" size={44} mood="idle" look={{ shape: 'circle' }} label="Bot" />)
-    const second = mount(<PaintedBlob color="#ff9bd0" size={44} mood="idle" look={{ shape: 'circle' }} label="Bot" />)
+    const first = mount(<PaintedBlob color="#ff9bd0" size={44} mood="idle" look={{ shape: 'circle' }} label="Employee" />)
+    const second = mount(<PaintedBlob color="#ff9bd0" size={44} mood="idle" look={{ shape: 'circle' }} label="Employee" />)
     expect(first.querySelector('svg.art-svg')?.classList.contains('art-mood-idle')).toBe(true)
     expect(first.querySelector('[data-art="painted"]')).toBeTruthy()
     expect(first.querySelector('svg')!.getAttribute('id')).not.toBe(second.querySelector('svg')!.getAttribute('id'))
   })
 
   it('shows a badge for state and a plain dot on mini avatars', () => {
-    const working = mount(<PaintedBlob color="#ff9bd0" size={44} mood="working" look={{ shape: 'circle' }} label="Bot" />)
+    const working = mount(<PaintedBlob color="#ff9bd0" size={44} mood="working" look={{ shape: 'circle' }} label="Employee" />)
     expect(working.querySelector('.pb-badge.on')).toBeTruthy()
     expect(working.querySelectorAll('.pb-badge-dot').length).toBe(3)
-    const mini = mount(<PaintedBlob color="#ff9bd0" size={18} mini mood="working" look={{ shape: 'circle' }} label="Bot" />)
+    const mini = mount(<PaintedBlob color="#ff9bd0" size={18} mini mood="working" look={{ shape: 'circle' }} label="Employee" />)
     expect(mini.querySelector('.pb-badge.on')).toBeTruthy()
     expect(mini.querySelectorAll('.pb-badge-dot').length).toBe(0)
   })
 
   it('hides the highlight on mini avatars and keeps it on full ones', () => {
-    const mini = mount(<PaintedBlob color="#ff9bd0" size={18} mini mood="idle" look={{ shape: 'circle' }} label="Bot" />)
+    const mini = mount(<PaintedBlob color="#ff9bd0" size={18} mini mood="idle" look={{ shape: 'circle' }} label="Employee" />)
     expect(mini.querySelector('[data-art="painted"]')?.getAttribute('data-mini')).toBe('true')
     expect(mini.querySelectorAll('.pb-light')).toHaveLength(0)
-    const full = mount(<PaintedBlob color="#ff9bd0" size={44} mood="idle" look={{ shape: 'circle' }} label="Bot" />)
+    const full = mount(<PaintedBlob color="#ff9bd0" size={44} mood="idle" look={{ shape: 'circle' }} label="Employee" />)
     expect(full.querySelectorAll('.pb-light')).toHaveLength(1)
   })
 
   it('has no badge while idle or offline, and a z while sleeping', () => {
-    const idle = mount(<PaintedBlob color="#ff9bd0" size={44} mood="idle" look={{ shape: 'circle' }} label="Bot" />)
+    const idle = mount(<PaintedBlob color="#ff9bd0" size={44} mood="idle" look={{ shape: 'circle' }} label="Employee" />)
     expect(idle.querySelector('.pb-badge.on')).toBeNull()
-    const offline = mount(<PaintedBlob color="#ff9bd0" size={44} mood="offline" look={{ shape: 'circle' }} label="Bot" />)
+    const offline = mount(<PaintedBlob color="#ff9bd0" size={44} mood="offline" look={{ shape: 'circle' }} label="Employee" />)
     expect(offline.querySelector('.pb-badge.on')).toBeNull()
-    const sleeping = mount(<PaintedBlob color="#ff9bd0" size={44} mood="sleeping" look={{ shape: 'circle' }} label="Bot" />)
+    const sleeping = mount(<PaintedBlob color="#ff9bd0" size={44} mood="sleeping" look={{ shape: 'circle' }} label="Employee" />)
     expect(sleeping.querySelector('.pb-badge.on text')?.textContent).toBe('z')
   })
 
   it('still shows a still pose under reduced motion', () => {
     vi.stubGlobal('matchMedia', vi.fn(() => reduced(true)))
-    const host = mount(<PaintedBlob color="#ff9bd0" size={44} mood="idle" look={{ shape: 'circle' }} label="Bot" />)
+    const host = mount(<PaintedBlob color="#ff9bd0" size={44} mood="idle" look={{ shape: 'circle' }} label="Employee" />)
     expect(host.querySelector('svg.art-svg')?.classList.contains('art-still')).toBe(true)
     expect(host.querySelector('svg.art-svg')?.classList.contains('art-mood-idle')).toBe(true)
   })

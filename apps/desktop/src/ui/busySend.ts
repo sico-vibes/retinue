@@ -54,7 +54,7 @@ export function busyDelivery(mode: BusySendMode, opposite: boolean, state: strin
   const wanted = opposite ? mode === 'steer' ? 'queue' : 'steer' : mode
   if (wanted === 'queue') return { mode: 'queue', reason: null }
   if (!supported) return { mode: 'queue', reason: 'Steering is unavailable for this coding agent. Your message waits for the turn to end.' }
-  if (state !== 'working') return { mode: 'queue', reason: 'Steering waits until the bot is working. Your message is queued.' }
+  if (state !== 'working') return { mode: 'queue', reason: 'Steering waits until the employee is working. Your message is queued.' }
   if (hasContext) return { mode: 'queue', reason: 'Messages with attachments, commands or references are queued to keep their context.' }
   return { mode: 'steer', reason: null }
 }

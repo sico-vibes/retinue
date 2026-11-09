@@ -137,7 +137,7 @@ function TerminalView({ tab, active, onExit, onFocusLost }: { tab: Tab; active: 
  * Real shells in the selected project's folder (Windows ConPTY through the desktop shell). The dock stays mounted
  * while hidden, so closing it does not end a running command; closing a tab does.
  */
-export function TerminalDock({ open, projectPath, onHide, onError, session, botName = 'The bot' }: { open: boolean; projectPath: string | null; onHide: () => void; onError: (message: string) => void; session?: Session | null; botName?: string }) {
+export function TerminalDock({ open, projectPath, onHide, onError, session, botName = 'The employee' }: { open: boolean; projectPath: string | null; onHide: () => void; onError: (message: string) => void; session?: Session | null; botName?: string }) {
   const [tabs, setTabs] = useState<Tab[]>([])
   const [botView, setBotView] = useState(false)
   const commandCount = botCommands(session).length

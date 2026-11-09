@@ -14,19 +14,19 @@ beforeEach(() => { vi.useFakeTimers(); now = 1_000_000; storage = new MemoryStor
 afterEach(() => { vi.useRealTimers(); resetDraftStoreForTests() })
 
 describe('draft store', () => {
-  it('keeps each conversation and each bot\'s new chat apart, and restores them after a reload', () => {
+  it('keeps each conversation and each employee\'s new chat apart, and restores them after a reload', () => {
     setDraft('session-a', 'first thought')
     setDraft('session-b', 'second thought')
-    setDraft('draft:agent-1', 'a new chat for bot one')
+    setDraft('draft:agent-1', 'a new chat for employee one')
     expect(getDraft('session-a')).toBe('first thought')
     expect(getDraft('session-b')).toBe('second thought')
-    expect(getDraft('draft:agent-1')).toBe('a new chat for bot one')
+    expect(getDraft('draft:agent-1')).toBe('a new chat for employee one')
     expect(getDraft('draft:agent-2')).toBe('')
     flushDraftsForTests()
     boot() // the app was closed and opened again: same storage, new memory
     expect(getDraft('session-a')).toBe('first thought')
     expect(getDraft('session-b')).toBe('second thought')
-    expect(getDraft('draft:agent-1')).toBe('a new chat for bot one')
+    expect(getDraft('draft:agent-1')).toBe('a new chat for employee one')
   })
 
   it('writes after a short pause and on flush, as one versioned record', () => {

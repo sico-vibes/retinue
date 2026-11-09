@@ -52,7 +52,7 @@ export function NeedsYouBell({ permissions, sessions, agents, now, onOpen }: { p
     </button>
     {open && <section className="menu-surface needs-bell-panel" role="dialog" aria-label={label}>
       {items.length === 0 ? <p className="needs-bell-empty">Nothing needs you.</p> : <ul>{items.map((item) => {
-        const name = item.agent?.name ?? 'A bot'
+        const name = item.agent?.name ?? 'An employee'
         const kind = item.kind === 'question' ? 'Question' : item.kind === 'proposal' ? 'Proposal' : 'Approval'
         const age = waited(item.since, now)
         return <li key={item.permission.id}>

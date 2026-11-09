@@ -64,7 +64,7 @@ const choose = async (trigger: string, option: string) => {
 const last = (method: string) => [...calls].reverse().find((call) => call.method === method)
 
 describe('Tasks page forms', () => {
-  it('saves a repeating task with its bot, an image and a time limit, and shows the missed-run note', async () => {
+  it('saves a repeating task with its employee, an image and a time limit, and shows the missed-run note', async () => {
     await mount()
     act(() => button('New task', host).click())
     await flush()
@@ -77,8 +77,8 @@ describe('Tasks page forms', () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 450)) })
     expect(dialog().textContent).toContain('Next: ')
     expect(button('Add task', dialog()).disabled).toBe(true)
-    expect(dialog().textContent).toContain('Choose the bot that runs this task.')
-    await choose('Bot', 'Claude')
+    expect(dialog().textContent).toContain('Choose the employee that runs this task.')
+    await choose('Employee', 'Claude')
     await choose('Stop a run after', '2 hours')
     const form = dialog().querySelector('.task-form')!
     const paste = new Event('paste', { bubbles: true, cancelable: true }) as Event & { clipboardData?: unknown }
@@ -96,13 +96,13 @@ describe('Tasks page forms', () => {
 
   // 2026-11-01: the drop shows on the board at once. The card reads "Starting"
   // before `task.dispatch` answers, and the daemon's own row replaces it.
-  it('shows a task as starting on the bot lane before the dispatch answers', async () => {
+  it('shows a task as starting on the employee lane before the dispatch answers', async () => {
     hangDispatch = true
     await mount()
     act(() => button('New task', host).click())
     await flush()
     type(dialog().querySelector<HTMLInputElement>('input[data-dialog-initial-focus]')!, 'Start me now')
-    await choose('Bot', 'Codex')
+    await choose('Employee', 'Codex')
     act(() => button('Add and start', dialog()).click())
     await flush()
     expect(last('task.dispatch')).toBeTruthy()
@@ -112,12 +112,12 @@ describe('Tasks page forms', () => {
     expect(host.querySelectorAll('.delegate-draft')).toHaveLength(0)
   })
 
-  it('creates and starts a task straight away when "Now" and a bot are chosen', async () => {
+  it('creates and starts a task straight away when "Now" and an employee are chosen', async () => {
     await mount()
     act(() => button('New task', host).click())
     await flush()
     type(dialog().querySelector<HTMLInputElement>('input[data-dialog-initial-focus]')!, 'Do it now')
-    await choose('Bot', 'Codex')
+    await choose('Employee', 'Codex')
     expect(button('Add and start', dialog())).toBeTruthy()
     act(() => button('Add and start', dialog()).click())
     await flush()

@@ -63,7 +63,7 @@ function normalizeBot(raw: unknown): MachineBot | null {
   if (!item || !id) return null
   return {
     id,
-    name: text(item.name) ?? 'Bot',
+    name: text(item.name) ?? 'Employee',
     color: text(item.color),
     outfit: item.outfit as Agent['outfit'],
     look: item.look as Agent['look'],

@@ -92,7 +92,7 @@ export function StashMenu({ disabled, canStash, textOnly = false, onStash, onRes
     {open && <div ref={menuRef} className="composer-menu stash-menu" role="menu" aria-label="Stash" onKeyDown={(event) => { if (moveMenuFocus(menuRef.current, event.key)) event.preventDefault() }}>
       <button type="button" role="menuitem" className="composer-menu-item stash-save" disabled={!canStash || working} onClick={() => void stash()}><Archive size={14} aria-hidden="true" /><span>Stash this draft</span></button>
       {items.length > 0 && <div className="composer-menu-heading">Saved drafts</div>}
-      {items.length === 0 && <p className="stash-empty">Nothing saved yet. A stashed draft keeps its images, and you can use it with any bot.</p>}
+      {items.length === 0 && <p className="stash-empty">Nothing saved yet. A stashed draft keeps its images, and you can use it with any employee.</p>}
       <div className="stash-list">{items.map((item) => <div key={item.id} className="stash-row">
         <button type="button" role="menuitem" className="stash-restore" disabled={working || (textOnly && item.attachments.length > 0)} title={textOnly && item.attachments.length > 0 ? 'This draft has images. Open it in the full app.' : 'Put this draft in the message box'} aria-label={`Use draft: ${excerpt(item)}`} onClick={() => void restore(item)}>
           <ArchiveRestore size={14} aria-hidden="true" />

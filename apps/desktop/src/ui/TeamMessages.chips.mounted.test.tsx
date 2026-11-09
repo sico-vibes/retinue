@@ -22,7 +22,7 @@ function mount(node: React.ReactNode) {
 }
 
 describe('delegation and reply chips', () => {
-  it('opens the conversation between the two bots in one click', async () => {
+  it('opens the conversation between the two employees in one click', async () => {
     const onOpen = vi.fn()
     const view = mount(<DelegationChip peer={null} name="Codex" topic="the header" text="Please review the header spacing." onOpenConversation={onOpen} />)
     const chip = view.querySelector<HTMLButtonElement>('.team-chip')!
@@ -47,13 +47,13 @@ describe('delegation and reply chips', () => {
 })
 
 describe('created-bot chip', () => {
-  it('shows the new bot by name with its role and opens it', async () => {
+  it('shows the new employee by name with its role and opens it', async () => {
     const onOpen = vi.fn()
     const view = mount(<CreatedBotChip agent={null} name="Dex" detail="Engineer · crewspan" onOpen={onOpen} />)
     const chip = view.querySelector<HTMLButtonElement>('.team-chip.created')!
     expect(chip.textContent).toContain('Dex')
     expect(chip.textContent).toContain('Engineer · crewspan')
-    expect(chip.getAttribute('aria-label')).toBe('Created bot Dex, Engineer · crewspan. Open Dex')
+    expect(chip.getAttribute('aria-label')).toBe('Created employee Dex, Engineer · crewspan. Open Dex')
     await act(async () => { chip.click() })
     expect(onOpen).toHaveBeenCalledOnce()
   })
@@ -73,7 +73,7 @@ describe('usage limit handoff', () => {
     expect(view.querySelector('.usage-limit-continue')).toBeNull()
   })
 
-  it('lists bots on another coding agent first and marks the same limit', () => {
+  it('lists employees on another coding agent first and marks the same limit', () => {
     const agents = [bot('me', 'Lead', 'rt-claude'), bot('c2', 'Writer', 'rt-claude'), bot('x1', 'Builder', 'rt-codex')]
     const view = mount(<HandoffDialog agents={agents} sourceAgentId="me" busy={false} error={null} onPick={vi.fn()} onClose={vi.fn()} limitedProvider="claude" providerOf={(agent) => providers[agent.runtimeId] ?? null} />)
     const names = [...view.querySelectorAll('.handoff-choice strong')].map((node) => node.textContent)

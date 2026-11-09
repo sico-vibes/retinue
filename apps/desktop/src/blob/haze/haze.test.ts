@@ -33,7 +33,7 @@ describe('Haze icons', () => {
     expect(agentLook({ id: 'a', look: { shape: 'circle', icon: 'logo-tint' } }).icon).toBe('logo-tint')
   })
 
-  it('uses the logo by default, and the logo in the bot colour for a retired pixel icon', () => {
+  it('uses the logo by default, and the logo in the employee colour for a retired pixel icon', () => {
     expect(resolveHazeIcon(null)).toBe('logo')
     expect(resolveHazeIcon({ icon: 'logo-mono' })).toBe('logo-mono')
     expect(resolveHazeIcon({ icon: 'px-frog' })).toBe('logo-tint')

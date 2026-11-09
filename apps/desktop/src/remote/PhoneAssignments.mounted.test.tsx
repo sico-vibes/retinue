@@ -42,7 +42,7 @@ describe('PhoneAssignments', () => {
   it('offers no Stop to a view-only device, and shows nothing without assignments', async () => {
     rpc.mockResolvedValue({ delegations: [row('d2', 'a2', 'queued', { queueReason: 'busy' })] })
     const view = await mount(false)
-    expect(view.querySelector('.rm-assignments li')?.textContent).toBe('Builder · Topic d2Queued · bot is busy')
+    expect(view.querySelector('.rm-assignments li')?.textContent).toBe('Builder · Topic d2Queued · employee is busy')
     expect(view.querySelector('.rm-assignments button')).toBeNull()
     act(() => root!.unmount()); root = null; host?.remove(); host = null
     rpc.mockResolvedValue({ delegations: [] })

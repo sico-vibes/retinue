@@ -39,7 +39,7 @@ const SHAPES: Record<PaintedShape, ShapeDef> = {
   },
   cat: { label: 'Cat', eye: [54, 62, .95], light: [34, 46, 9, 5, -30], body: <g fill="currentColor"><polygon points="21,52 25,19 46,38" strokeWidth="8" {...round} /><polygon points="54,38 75,19 79,52" strokeWidth="8" {...round} /><ellipse cx="50" cy="62" rx="33" ry="28" /></g> },
   saucer: { label: 'Saucer', eye: [54, 56, .72], light: [40, 47, 6, 3, -30], body: <g fill="currentColor"><ellipse cx="50" cy="69" rx="44" ry="13" /><path d="M27 67 C27 39 73 39 73 67 Z" /></g> },
-  bot: { label: 'Bot', eye: [55, 60, .95], light: [32, 44, 8, 4, -25], body: <g fill="currentColor"><rect x="19" y="36" width="63" height="48" rx="15" /><rect x="48" y="19" width="5" height="19" rx="2" /><circle cx="50.5" cy="18" r="7" /></g> },
+  bot: { label: 'Employee', eye: [55, 60, .95], light: [32, 44, 8, 4, -25], body: <g fill="currentColor"><rect x="19" y="36" width="63" height="48" rx="15" /><rect x="48" y="19" width="5" height="19" rx="2" /><circle cx="50.5" cy="18" r="7" /></g> },
   tile: { label: 'Tile', eye: [56, 55, .95], light: [28, 40, 9, 4.5, -38], body: <rect x="13" y="28" width="76" height="54" rx="15" fill="currentColor" transform="rotate(-11 50 55)" /> },
 }
 

@@ -150,7 +150,7 @@ function Sheet() {
       <Row label="Empty"><p className="settings-empty" style={{ margin: 0 }}>Nothing here yet.</p></Row>
     </Section>
 
-    <Section id="art" title="Bot art">
+    <Section id="art" title="Employee art">
       <Row label="Moods">{ART_MOODS.map((mood) => <div key={mood} style={{ display: 'grid', justifyItems: 'center', gap: 3 }}><BlobCanvas color="#7db6ff" size={48} mood={ART_MOOD_SAMPLE[mood]} look={{ ...MASCOT_LOOK }} label={mood} /><small style={{ color: 'var(--text-3)', fontSize: 10 }}>{mood}</small></div>)}</Row>
       <Row label="Sizes">{[16, 22, 32, 44, 64, 96].map((size) => <BlobCanvas key={size} color="#ff9bd0" size={size} mood="idle" look={{ ...MASCOT_LOOK }} label={`${size} pixels`} />)}</Row>
     </Section>

@@ -14,7 +14,7 @@ const runtime = { id: 'rt', provider: 'codex', authState: 'authenticated' } as u
 
 function Harness({ onCreate, errors = {} as FieldErrors, ready = true }: { onCreate: () => void; errors?: FieldErrors; ready?: boolean }) {
   const [draft, setDraft] = useState<AgentDraft>(() => createDraft([runtime], 'rt'))
-  return <BotWizard draft={draft} errors={errors} noun="bot" ready={ready} saving={false} providerName="Codex" onDraftChange={setDraft}
+  return <BotWizard draft={draft} errors={errors} noun="employee" ready={ready} saving={false} providerName="Codex" onDraftChange={setDraft}
     renderSections={(sections) => <div data-testid="sections">{sections.join(',')}</div>} onCreate={onCreate} onAdvanced={vi.fn()} onCancel={vi.fn()} />
 }
 function mount(ui: React.ReactElement) {
@@ -39,7 +39,7 @@ describe('BotWizard', () => {
     click(view, 'Next')
     expect(view.querySelector('h2')?.textContent).toBe('Review')
     expect(view.querySelector('.bot-wizard-review')?.textContent).toContain('Codex')
-    click(view, 'Create bot')
+    click(view, 'Create employee')
     expect(create).toHaveBeenCalledOnce()
   })
 

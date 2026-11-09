@@ -66,8 +66,8 @@ export function WorkingBotsPanel({ sessions, agents, selectedId, onOpen }: { ses
       <span className="working-bot-copy"><span className="working-bot-line"><strong>{name}</strong><span className="working-bot-status">{status}<span aria-hidden="true"> · </span><time aria-label="Elapsed time">{taskElapsed(session, status, now)}</time></span></span><span className="working-bot-title">{title}</span></span>
     </button></li>
   }
-  return <section className="working-bots" aria-label="Working bots">
-    {active.length > 0 && <button type="button" className="working-bots-heading" aria-expanded={expanded} onClick={() => setExpanded(v => !v)}><ChevronRight size={12} className={expanded ? 'open' : ''} aria-hidden="true" /><strong>Working bots</strong><span>{active.length}</span></button>}
+  return <section className="working-bots" aria-label="Working employees">
+    {active.length > 0 && <button type="button" className="working-bots-heading" aria-expanded={expanded} onClick={() => setExpanded(v => !v)}><ChevronRight size={12} className={expanded ? 'open' : ''} aria-hidden="true" /><strong>Working employees</strong><span>{active.length}</span></button>}
     {(expanded || !active.length) && <>{active.length > 0 && <ul>{active.map(row)}</ul>}{finished.length > 0 && <div className="working-bots-finished"><button type="button" className="working-bots-finished-toggle" aria-expanded={showFinished} onClick={() => setShowFinished((value) => !value)}><ChevronRight size={12} aria-hidden="true" className={`fold-chevron${showFinished ? ' open' : ''}`} /><span>{finished.length} finished</span></button><Collapse open={showFinished}><ul>{finished.map(row)}</ul></Collapse></div>}</>}
   </section>
 }

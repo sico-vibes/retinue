@@ -63,7 +63,7 @@ const NAV: Array<{ label: string; tabs: SettingsTab[] }> = [
     { label: 'Chat', icon: MessageSquare, pages: [{ id: 'Chat', label: 'Messages' }, { id: 'Speech', label: 'Dictation' }, { id: 'Keyboard', label: 'Keyboard' }] },
     { label: 'Companion', icon: Sparkles, pages: [{ id: 'Companion', label: 'Companion' }] },
   ] },
-  { label: 'Bots', tabs: [
+  { label: 'Employees', tabs: [
     { label: 'Coding agents', icon: Bot, pages: [{ id: 'Agents', label: 'Agents' }, { id: 'Accounts', label: 'Accounts' }] },
     { label: 'CEO', icon: BriefcaseBusiness, pages: [{ id: 'Manager', label: 'CEO' }] },
     { label: 'Approvals', icon: ShieldCheck, pages: [{ id: 'Approvals', label: 'Approvals' }] },
@@ -581,8 +581,8 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
               </SettingsRow>}
             </SettingsGroup>}
             <SettingsGroup title="Notifications">
-              <SettingsRow label={`Notify when a ${noun} finishes or needs approval`}>
-                <button type="button" className={`toggle ${notificationsEnabled ? 'on' : ''}`} role="switch" aria-label={`Notify when a ${noun} finishes or needs approval`} aria-checked={notificationsEnabled} onClick={() => void setNotifications(!notificationsEnabled)} disabled={saving}><i /></button>
+              <SettingsRow label={`Notify when an ${noun} finishes or needs approval`}>
+                <button type="button" className={`toggle ${notificationsEnabled ? 'on' : ''}`} role="switch" aria-label={`Notify when an ${noun} finishes or needs approval`} aria-checked={notificationsEnabled} onClick={() => void setNotifications(!notificationsEnabled)} disabled={saving}><i /></button>
               </SettingsRow>
               {featureRow('approvalBadge')}
             </SettingsGroup>
@@ -615,11 +615,11 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
 
           {!loading && page === 'Chat' && <>
             <SettingsGroup title="Sending">
-              <SettingsRow label="Send a message with" hint={`The other Enter keys add a new line. ${oppositeKeys(sendShortcut)} sends the other way while a bot is working.`}>
+              <SettingsRow label="Send a message with" hint={`The other Enter keys add a new line. ${oppositeKeys(sendShortcut)} sends the other way while an employee is working.`}>
                 <Select ariaLabel="Send a message with" variant="muted" value={sendShortcut} disabled={saving} onChange={(value) => { const next = normalizeSendShortcut(value); void saveSetting('composer.sendShortcut', next).then((failure) => { if (!failure) { setSendShortcut(next); onSendShortcutChange?.(next) } }) }} options={SEND_SHORTCUTS.map((item) => ({ value: item.value, label: item.label }))} />
               </SettingsRow>
-              <SettingsRow label="When you send while a bot is working" hint="Steer reaches the running turn where the coding agent allows it. Queue waits for it to end.">
-                <Select ariaLabel="When you send while a bot is working" variant="muted" value={busyMode} disabled={saving} onChange={(value) => { const next = value === 'queue' ? 'queue' : 'steer'; void saveSetting('composer.busySendMode', next).then((failure) => { if (!failure) setBusyMode(next) }) }} options={[{ value: 'steer', label: 'Steer' }, { value: 'queue', label: 'Queue' }]} />
+              <SettingsRow label="When you send while an employee is working" hint="Steer reaches the running turn where the coding agent allows it. Queue waits for it to end.">
+                <Select ariaLabel="When you send while an employee is working" variant="muted" value={busyMode} disabled={saving} onChange={(value) => { const next = value === 'queue' ? 'queue' : 'steer'; void saveSetting('composer.busySendMode', next).then((failure) => { if (!failure) setBusyMode(next) }) }} options={[{ value: 'steer', label: 'Steer' }, { value: 'queue', label: 'Queue' }]} />
               </SettingsRow>
               <SettingsRow label="Steer a running Codex turn" hint="If the turn has ended, your message queues instead.">{pageSwitch('Steer a running Codex turn', steerGate, 'exec_gate.codex.steer', setSteerGate)}</SettingsRow>
             </SettingsGroup>
@@ -657,7 +657,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
               </SettingsRow>
             </SettingsGroup>
             <SettingsGroup title="Attention">
-              <SettingsRow label="Sounds" hint={`Short cues when a ${noun} finishes, fails or needs approval.`}>
+              <SettingsRow label="Sounds" hint={`Short cues when an ${noun} finishes, fails or needs approval.`}>
                 <button type="button" className={`toggle ${soundsEnabled ? 'on' : ''}`} role="switch" aria-label="Companion sounds" aria-checked={soundsEnabled} onClick={() => void setSounds(!soundsEnabled)} disabled={saving}><i /></button>
               </SettingsRow>
               {soundsEnabled && <SettingsRow label="Volume">
@@ -672,7 +672,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
 
           {!loading && page === 'Appearance' && <>
             <AppearancePage />
-            {style !== 'haze' && <SettingsGroup title="Bot list">
+            {style !== 'haze' && <SettingsGroup title="Employee list">
               <SettingsRow label="Coding agent logos" hint={`The logo of the coding agent each ${noun} runs on, beside its name.`}>{pageSwitch('Coding agent logos', runtimeLogos, 'experimental.runtimeLogos', (next) => onRuntimeLogosChange?.(next))}</SettingsRow>
               {featureRow('sidebarModel')}
             </SettingsGroup>}
@@ -751,7 +751,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
 
           {!loading && page === 'Approvals' && <>
             <SettingsGroup title="Defaults">
-              <SettingsRow label="Default approval" hint="For bots without their own setting. Scheduled work always stays on safe actions.">
+              <SettingsRow label="Default approval" hint="For employees without their own setting. Scheduled work always stays on safe actions.">
                 {policyError
                   ? <span className="settings-unavailable"><span className="settings-value">Unavailable</span><Select ariaLabel="Default approval mode" variant="muted" value="ask" disabled onChange={() => undefined} options={[{ value: 'ask', label: 'Ask' }]} /></span>
                   : <Select ariaLabel="Default approval mode" variant="muted" value={defaultMode} disabled={saving} onChange={(value) => void saveDefaultMode(value)} options={[{ value: 'ask', label: 'Ask' }, { value: 'accept_edits', label: 'Auto-accept edits' }, { value: 'auto', label: 'Auto-approve' }, { value: 'bypass', label: 'Full access' }]} />}

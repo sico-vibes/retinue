@@ -86,7 +86,7 @@ describe('DiffBody', () => {
     }
   })
 
-  it('tells the bot where each comment belongs', () => {
+  it('tells the employee where each comment belongs', () => {
     const text = commentsMessage([
       { id: '1', path: 'a.ts', line: 7, removed: false, quote: 'const a = 1', text: 'Rename this' },
       { id: '2', path: 'a.ts', line: 2, removed: true, quote: '', text: 'Why is this gone?' },
@@ -158,13 +158,13 @@ describe('ChangesView', () => {
   })
 
   it('keeps a refused discard on screen', async () => {
-    answers({ 'session.git.revert': new Error('A bot is working in this folder. Stop it or wait, then try again.') })
+    answers({ 'session.git.revert': new Error('An employee is working in this folder. Stop it or wait, then try again.') })
     await render(view())
     await flush()
     await act(async () => { button('Discard').click() })
     await act(async () => { [...document.querySelectorAll<HTMLButtonElement>('.changes-confirm button')].find((item) => item.textContent === 'Discard')!.click() })
     await flush()
-    expect(document.querySelector('.changes-error')?.textContent).toContain('A bot is working')
+    expect(document.querySelector('.changes-error')?.textContent).toContain('An employee is working')
     expect(pushUndoToast).not.toHaveBeenCalled()
   })
 
@@ -240,7 +240,7 @@ describe('PullRequestDialog', () => {
     expect(document.querySelector('.scaffold-steps')?.textContent).toContain('Permission denied.')
   })
 
-  it('gives the reason and offers the bot when it can not do it itself', async () => {
+  it('gives the reason and offers the employee when it can not do it itself', async () => {
     const onSend = vi.fn(async () => undefined)
     rpc.mockImplementation(async () => ({ ...draft, ready: false, reason: "The GitHub CLI isn't signed in." }))
     await render(dialog(onSend))
@@ -252,7 +252,7 @@ describe('PullRequestDialog', () => {
     expect(called('session.pr.create')).toHaveLength(0)
   })
 
-  it('offers the bot when the draft can not be read, and points at an open one', async () => {
+  it('offers the employee when the draft can not be read, and points at an open one', async () => {
     rpc.mockRejectedValue(new Error('nope'))
     await render(dialog())
     await flush()
@@ -396,7 +396,7 @@ describe('project search', () => {
     expect([...host.querySelectorAll('b')].map((item) => item.textContent)).toEqual(['ap'])
   })
 
-  it('numbers file options after the bots, for the keyboard', async () => {
+  it('numbers file options after the employees, for the keyboard', async () => {
     const pick = vi.fn()
     const hover = vi.fn()
     await render(<FileMentionOptions files={[{ path: 'a.ts', name: 'a.ts', score: 1, matches: [] }]} firstIndex={2} activeIndex={2} onPick={pick} onHover={hover} />)

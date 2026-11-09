@@ -31,7 +31,7 @@ const SLEEPY = new Set(['offline', 'sleeping', 'rate_limited'])
 
 const GREETING_MS = 1200
 
-export function HazeMark({ color, size = 24, mood = 'idle', look, label = 'Bot', decorative = false, className = '', dragRegion = false, greeting = false, onGreetingComplete }: BlobCanvasProps) {
+export function HazeMark({ color, size = 24, mood = 'idle', look, label = 'Employee', decorative = false, className = '', dragRegion = false, greeting = false, onGreetingComplete }: BlobCanvasProps) {
   const provider = useLookProvider(look)
   // No wave to play: the launch greeting fades the mark in and finishes on time.
   const done = useRef(onGreetingComplete)

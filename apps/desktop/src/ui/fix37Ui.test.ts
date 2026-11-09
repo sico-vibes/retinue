@@ -7,7 +7,7 @@ import { placeTooltip } from './tooltipPosition'
 
 const css = (name: string) => readFileSync(resolve(process.cwd(), 'src/ui', name), 'utf8')
 
-describe('sidebar bot row runtime logo', () => {
+describe('sidebar employee row runtime logo', () => {
   const team = css('team.css')
   it('centres the logo on the name line in both looks', () => {
     expect(team).toMatch(/\.team-row-name \{[^}]*gap: 5px/)

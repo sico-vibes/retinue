@@ -38,7 +38,7 @@ export interface SlashCommand {
 
 export const SLASH_ACTIONS: readonly SlashItem[] = [
   { kind: 'action', name: 'plan', group: 'Actions', description: 'Turn plan mode on or off for this conversation', action: 'plan' },
-  { kind: 'action', name: 'new', group: 'Actions', description: 'Start a new conversation with this bot', action: 'new' },
+  { kind: 'action', name: 'new', group: 'Actions', description: 'Start a new conversation here', action: 'new' },
   { kind: 'action', name: 'model', group: 'Actions', description: 'Choose the model for this conversation', action: 'model' },
   { kind: 'action', name: 'effort', group: 'Actions', description: 'Choose the effort level for this conversation', action: 'effort' },
   { kind: 'action', name: 'rename', group: 'Actions', description: 'Rename this conversation', action: 'rename' },
@@ -49,7 +49,7 @@ export const SLASH_ACTIONS: readonly SlashItem[] = [
 export const MANAGER_SLASH_COMMANDS: readonly SlashItem[] = [
   { kind: 'manager', name: 'interview', group: 'Manager', description: 'Run or continue the personalisation interview' },
   { kind: 'manager', name: 'onboard', group: 'Manager', description: 'Onboard a project and propose a team' },
-  { kind: 'manager', name: 'team', group: 'Manager', description: 'Propose a team of bots for a project' },
+  { kind: 'manager', name: 'team', group: 'Manager', description: 'Propose a team of employees for a project' },
   { kind: 'manager', name: 'status', group: 'Manager', description: "Summarise every project's state and open work" },
   { kind: 'manager', name: 'playbook', group: 'Manager', description: 'Review its own playbook and propose improvements' },
   { kind: 'manager', name: 'remember', group: 'Manager', description: 'Save what follows as a fact about you' },

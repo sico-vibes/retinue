@@ -63,7 +63,7 @@ describe('RemoteChip', () => {
     const view = await mount()
     const chip = view.host.querySelector('.remote-chip')!
     expect(chip).not.toBeNull()
-    expect(chipText()).toBe('Off · Use your bots from your phone')
+    expect(chipText()).toBe('Off · Use your employees from your phone')
     expect(chip.getAttribute('data-tour')).toBe('remote')
     expect(chip.classList.contains('tone-off')).toBe(true)
   })
@@ -89,7 +89,7 @@ describe('RemoteChip', () => {
 
   it('re-reads the status when a remote event arrives', async () => {
     const view = await mount()
-    expect(chipText()).toBe('Off · Use your bots from your phone')
+    expect(chipText()).toBe('Off · Use your employees from your phone')
     h.rpc.mockImplementation(async () => status({ enabled: true, link: 'online', deviceCount: 3 }))
     act(() => { for (const listener of h.listeners) listener({ type: 'remote.changed' }) })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 60)) })

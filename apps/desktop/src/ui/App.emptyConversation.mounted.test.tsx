@@ -256,8 +256,8 @@ async function send(view: ReturnType<typeof mountApp>) {
   await view.settle()
 }
 
-describe('FIX38 H2 clicking a bot with no conversation', () => {
-  it('selects the bot at once and stays on it across settles', async () => {
+describe('FIX38 H2 clicking an employee with no conversation', () => {
+  it('selects the employee at once and stays on it across settles', async () => {
     const view = startApp()
     await view.settle()
     expect(selectedBot(view.host)).toBe('Coco')
@@ -268,7 +268,7 @@ describe('FIX38 H2 clicking a bot with no conversation', () => {
     expect(selectedBot(view.host)).toBe('Manager')
   })
 
-  it('does not bounce to the first bot when the companion round-trips the active session', async () => {
+  it('does not bounce to the first employee when the companion round-trips the active session', async () => {
     // Models the native active-session bridge: every window receives what any
     // window publishes. A companion that loses the session falls back to another
     // conversation and announces it back. Opening a bot with no conversation must
@@ -306,7 +306,7 @@ describe('FIX38 H2 clicking a bot with no conversation', () => {
     expect(rpcMethods()).not.toContain('session.new')
   })
 
-  it('does not leave a conversation row titled with the bot name before a message', async () => {
+  it('does not leave a conversation row titled with the employee name before a message', async () => {
     const view = startApp()
     await view.settle()
     await click(view.host.querySelector('.team-row[data-agent-id="agent-manager"]'))
@@ -315,7 +315,7 @@ describe('FIX38 H2 clicking a bot with no conversation', () => {
     expect(conversationRowTitles(view.host)).not.toContain('Manager')
   })
 
-  it('leaving the bot without sending leaves nothing behind', async () => {
+  it('leaving the employee without sending leaves nothing behind', async () => {
     const view = startApp()
     await view.settle()
     await click(view.host.querySelector('.team-row[data-agent-id="agent-manager"]'))
@@ -348,7 +348,7 @@ describe('FIX38 H2 clicking a bot with no conversation', () => {
     expect(conversationRowTitles(view.host)).not.toContain('Manager')
   })
 
-  it('treats the Manager like any other bot with no conversation', async () => {
+  it('treats the Manager like any other employee with no conversation', async () => {
     // Start with the Manager selected by picking it, then confirm its draft and
     // its first-message behaviour match the other bots.
     const view = startApp()
@@ -359,7 +359,7 @@ describe('FIX38 H2 clicking a bot with no conversation', () => {
     expect(view.host.querySelector('[aria-label="Message Manager"]')).not.toBeNull()
     expect(conversationRowTitles(view.host)).not.toContain('Manager')
   })
-  it('keeps a new bot selected when an old runtime selection is echoed', async () => {
+  it('keeps a new employee selected when an old runtime selection is echoed', async () => {
     const handlers: Array<(id: string | null) => void> = []
     h.listenForActiveRuntime.mockImplementation(async (handler: (id: string | null) => void) => { handlers.push(handler); return vi.fn() })
     const view = startApp()

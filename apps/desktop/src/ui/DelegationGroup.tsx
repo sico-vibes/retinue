@@ -35,8 +35,8 @@ function Workspace({ row, active }: { row: DelegationRowModel; active: boolean }
   const place = !folder ? 'Not recorded' : own ? `Own copy of ${row.worktree!.repo ? baseName(row.worktree!.repo) : 'the project'}` : `Shared folder ${folder}`
   return <dl className="delegation-facts">
     <div><dt>Workspace</dt><dd title={row.workspacePath ?? undefined}>{place}</dd></div>
-    <div><dt>Branch</dt><dd>{branch ? <code>{branch}</code> : data && !data.gitRepo ? 'Not a Git folder' : repository.loading ? 'Reading…' : 'Unknown'}{branch && !own && <span className="delegation-note"> · the folder's current branch</span>}{branch && own && <span className="delegation-note"> · this bot's own branch</span>}</dd></div>
-    {changed !== null && <div><dt>Changes</dt><dd title={own ? undefined : 'Git reports the whole folder, so these changes are not attributed to this bot.'}>{changed === 0 ? 'None' : `${changed} file${changed === 1 ? '' : 's'}`}{changed > 0 && data && <span className="delegation-note"> · +{data.addedLines} −{data.removedLines}{own ? '' : ' · whole folder, not only this bot'}</span>}</dd></div>}
+    <div><dt>Branch</dt><dd>{branch ? <code>{branch}</code> : data && !data.gitRepo ? 'Not a Git folder' : repository.loading ? 'Reading…' : 'Unknown'}{branch && !own && <span className="delegation-note"> · the folder's current branch</span>}{branch && own && <span className="delegation-note"> · this employee's own branch</span>}</dd></div>
+    {changed !== null && <div><dt>Changes</dt><dd title={own ? undefined : 'Git reports the whole folder, so these changes are not attributed to this employee.'}>{changed === 0 ? 'None' : `${changed} file${changed === 1 ? '' : 's'}`}{changed > 0 && data && <span className="delegation-note"> · +{data.addedLines} −{data.removedLines}{own ? '' : ' · whole folder, not only this employee'}</span>}</dd></div>}
   </dl>
 }
 

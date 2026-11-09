@@ -24,9 +24,9 @@ export type ExternalStatus = {
 }
 
 const TIERS: Array<{ value: ExternalTier; name: string; sentence: string; Icon: typeof Eye }> = [
-  { value: 'viewer', name: 'View', sentence: 'Sees your bots, projects, conversations and how long turns take. Changes nothing.', Icon: Eye },
-  { value: 'chat', name: 'Chat', sentence: 'Also messages, steers and stops bots, and starts conversations.', Icon: MessageSquare },
-  { value: 'operator', name: 'Operator', sentence: 'Also creates and edits bots, answers approvals and starts work in a new git worktree.', Icon: Wrench },
+  { value: 'viewer', name: 'View', sentence: 'Sees your employees, projects, conversations and how long turns take. Changes nothing.', Icon: Eye },
+  { value: 'chat', name: 'Chat', sentence: 'Also messages, steers and stops employees, and starts conversations.', Icon: MessageSquare },
+  { value: 'operator', name: 'Operator', sentence: 'Also creates and edits employees, answers approvals and starts work in a new git worktree.', Icon: Wrench },
 ]
 
 const text = (value: unknown) => typeof value === 'string' && value ? value : null
@@ -111,7 +111,7 @@ export function ConnectionsPage({ connected }: { connected: boolean }) {
     } finally { setBusy(false) }
   }
   const enable = async (tier: ExternalTier) => { if (await run('external.enable', { tier, confirm: true })) setConsent(null) }
-  const allowFull = async () => { if (await run('external.setFullAccess', { allow: true, confirm: true }, 'Outside sessions can now give bots Full access.')) setFullConsent(false) }
+  const allowFull = async () => { if (await run('external.setFullAccess', { allow: true, confirm: true }, 'Outside sessions can now give employees Full access.')) setFullConsent(false) }
   const copy = async () => {
     if (!status?.command) return
     try { await navigator.clipboard.writeText(status.command); setCopied(true); window.setTimeout(() => setCopied(false), 1600) } catch { setProblem('The command could not be copied. Select it and copy it yourself.') }
@@ -119,7 +119,7 @@ export function ConnectionsPage({ connected }: { connected: boolean }) {
   const on = !!status?.enabled
   const ago = usedAgo(status?.lastCallAt ?? null)
   return <>
-    <p className="settings-intro">Let a Claude Code session work with your bots. It uses its own key, never your sign-ins.</p>
+    <p className="settings-intro">Let a Claude Code session work with your employees. It uses its own key, never your sign-ins.</p>
     <SettingsGroup title="Access">
       <SettingsRow label="Let outside sessions use Bitbots" hint="Sessions you connect can do what the level below allows. Turning this off cuts them off at once.">
         <button type="button" className={`toggle ${on ? 'on' : ''}`} role="switch" aria-label="Let outside sessions use Bitbots" aria-checked={on} disabled={!connected || busy || !status} onClick={() => on ? void run('external.disable', {}, 'Off. Connected sessions can no longer reach Bitbots.') : setConsent(status?.tier ?? 'chat')}><i /></button>
@@ -129,8 +129,8 @@ export function ConnectionsPage({ connected }: { connected: boolean }) {
           <TierChoices value={status.tier} disabled={busy} onPick={(tier) => { if (tier !== status.tier) void run('external.setTier', { tier }) }} />
         </SettingsRow>
         {/* 30 October 2026: an Operator session may edit bots; giving one Full access stays behind this switch. */}
-        {status.tier === 'operator' && <SettingsRow label="Let them give bots Full access" hint="A bot on Full access runs commands and edits files without asking you. Turning the MCP off turns this off too.">
-          <button type="button" className={`toggle ${status.allowFullAccess ? 'on' : ''}`} role="switch" aria-label="Let outside sessions give bots Full access" aria-checked={status.allowFullAccess} disabled={busy} onClick={() => status.allowFullAccess ? void run('external.setFullAccess', { allow: false }, 'Outside sessions can no longer give bots Full access.') : setFullConsent(true)}><i /></button>
+        {status.tier === 'operator' && <SettingsRow label="Let them give employees Full access" hint="An employee on Full access runs commands and edits files without asking you. Turning the MCP off turns this off too.">
+          <button type="button" className={`toggle ${status.allowFullAccess ? 'on' : ''}`} role="switch" aria-label="Let outside sessions give employees Full access" aria-checked={status.allowFullAccess} disabled={busy} onClick={() => status.allowFullAccess ? void run('external.setFullAccess', { allow: false }, 'Outside sessions can no longer give employees Full access.') : setFullConsent(true)}><i /></button>
         </SettingsRow>}
         <SettingsRow stacked label="Connect Claude Code" detail={status.command ? 'Run this once in a terminal. Claude Code then lists Bitbots under /mcp.' : 'The connection program is still being prepared. Check again in a moment.'}>
           {status.command && <div className="connect-command">
@@ -156,8 +156,8 @@ function FullAccessConsentDialog({ busy, onCancel, onConfirm }: { busy: boolean;
   const { ref, close } = useDialogAccessibility(onCancel, () => !busy)
   return <div className={`sheet-backdrop blob-dialog-backdrop ${entered ? 'is-entered' : ''}`}>
     <section ref={ref} className="blob-dialog connect-consent full-access-consent" role="dialog" aria-modal="true" aria-labelledby="full-access-consent-title" tabIndex={-1}>
-      <h2 id="full-access-consent-title"><ShieldAlert size={18} aria-hidden="true" />Let outside sessions give bots Full access?</h2>
-      <p>A connected session such as Claude Code could then switch any unlocked bot to Full access, and that bot would run commands and edit files without asking you. Lock a bot to keep its settings as they are. Turning the MCP off turns this off too.</p>
+      <h2 id="full-access-consent-title"><ShieldAlert size={18} aria-hidden="true" />Let outside sessions give employees Full access?</h2>
+      <p>A connected session such as Claude Code could then switch any unlocked employee to Full access, and that employee would run commands and edit files without asking you. Lock an employee to keep its settings as they are. Turning the MCP off turns this off too.</p>
       <div className="blob-dialog-actions">
         <button type="button" className="secondary-button" data-dialog-initial-focus="" disabled={busy} onClick={close}>Cancel</button>
         <button type="button" className="secondary-button danger-button" disabled={busy} onClick={onConfirm}>{busy ? 'Allowing…' : 'Allow Full access'}</button>
@@ -172,7 +172,7 @@ function ConnectConsentDialog({ tier, busy, onPick, onCancel, onConfirm }: { tie
   return <div className={`sheet-backdrop blob-dialog-backdrop ${entered ? 'is-entered' : ''}`}>
     <section ref={ref} className="blob-dialog connect-consent" role="dialog" aria-modal="true" aria-labelledby="connect-consent-title" tabIndex={-1}>
       <h2 id="connect-consent-title">Let outside sessions use Bitbots?</h2>
-      <p>Any MCP client you connect on this computer, such as Claude Code, can use your bots at the level you pick. Messages it sends show who sent them. It never gets your coding agents’ sign-ins or Bitbots’ own key, and it cannot reach Bitbots from another device.</p>
+      <p>Any MCP client you connect on this computer, such as Claude Code, can use your employees at the level you pick. Messages it sends show who sent them. It never gets your coding agents’ sign-ins or Bitbots’ own key, and it cannot reach Bitbots from another device.</p>
       <TierChoices value={tier} disabled={busy} onPick={onPick} />
       <div className="blob-dialog-actions">
         <button type="button" className="secondary-button" disabled={busy} onClick={close}>Cancel</button>

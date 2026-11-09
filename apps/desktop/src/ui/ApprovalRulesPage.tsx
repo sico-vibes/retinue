@@ -42,11 +42,11 @@ export function ApprovalRulesPage({ agents, projects = [] }: { agents: Agent[]; 
     catch { setProblem('That approval could not be changed. Try again.') }
     finally { setRemoving(null) }
   }
-  const nameOf = (agentId: string) => agents.find((agent) => agent.id === agentId)?.name ?? 'A removed bot'
+  const nameOf = (agentId: string) => agents.find((agent) => agent.id === agentId)?.name ?? 'A removed employee'
   const byBot = new Map<string, ApprovalRule[]>()
   for (const rule of rules ?? []) byBot.set(rule.agentId, [...(byBot.get(rule.agentId) ?? []), rule])
   return <div className="approval-rules-page">
-    <SettingsGroup title="Always allowed" action={<HelpTip align="end" text="A bot can do these again without asking, in its own conversations. Never in Plan mode or scheduled runs." />}>
+    <SettingsGroup title="Always allowed" action={<HelpTip align="end" text="An employee can do these again without asking, in its own conversations. Never in Plan mode or scheduled runs." />}>
       {problem && <p className="settings-empty" role="alert">{problem}</p>}
       {rules === null ? <p className="settings-empty" role="status">Reading saved approvals…</p>
         : rules.length === 0 ? <p className="settings-empty">Nothing yet. Choose Always allow on an approval to add it here.</p>

@@ -37,7 +37,7 @@ export function normalizeSubbots(raw: unknown): Subbot[] {
       agentId,
       parentAgentId: text(item.parentAgentId) ?? '',
       originSessionId: text(item.originSessionId),
-      name: text(item.name) ?? 'Sub-bot',
+      name: text(item.name) ?? 'Helper',
       role: text(item.role),
       provider: text(item.provider),
       model: text(item.model),

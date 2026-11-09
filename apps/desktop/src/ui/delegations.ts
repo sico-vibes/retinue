@@ -232,7 +232,7 @@ export const BUCKET_LABEL: Record<DelegationBucket, string> = {
 
 /** A queued assignment says what it waits for, when the daemon recorded it. */
 export function queuedLabel(reason: DelegationRecord['queueReason']): string {
-  return reason === 'busy' ? 'Queued · bot is busy' : reason === 'slots' ? 'Queued · no free slot' : BUCKET_LABEL.queued
+  return reason === 'busy' ? 'Queued · employee is busy' : reason === 'slots' ? 'Queued · no free slot' : BUCKET_LABEL.queued
 }
 
 const LEGACY_BUCKET: Record<string, DelegationBucket> = { Working: 'working', Starting: 'working', 'Waiting for you': 'approval', Waiting: 'queued', Done: 'done', Failed: 'failed', Cancelled: 'cancelled' }

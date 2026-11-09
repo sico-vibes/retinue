@@ -222,7 +222,7 @@ async function activeSessionHandlers() {
 }
 
 describe('FIX37 G3 selection after delete or archive', () => {
-  it('deleting the selected conversation picks the next bot once and stays there', async () => {
+  it('deleting the selected conversation picks the next employee once and stays there', async () => {
     const view = startApp()
     await view.settle()
     expect(selectedBot(view.host)).toBe('Claude')
@@ -239,7 +239,7 @@ describe('FIX37 G3 selection after delete or archive', () => {
     expect(h.setActiveSession.mock.calls.map(([id]) => id)).not.toContain('session-claude')
   })
 
-  it('archiving the selected bot picks one other bot once and stays there', async () => {
+  it('archiving the selected employee picks one other employee once and stays there', async () => {
     const view = startApp()
     await view.settle()
     await act(async () => { emit({ type: 'agent.changed', sequence: 21, payload: { agentId: 'agent-claude', runtimeId: 'runtime-claude', updatedAt: stamp, archived: true, sortOrder: 0 } }); await settleMicrotasks() })
@@ -267,7 +267,7 @@ describe('FIX37 G3 selection after delete or archive', () => {
     expect(h.setActiveSession.mock.calls.map(([id]) => id)).not.toContain('session-claude')
   })
 
-  it('ignores an active-session event naming a conversation of an archived bot', async () => {
+  it('ignores an active-session event naming a conversation of an archived employee', async () => {
     const handlers = await activeSessionHandlers()
     const view = startApp()
     await view.settle()
@@ -292,7 +292,7 @@ describe('FIX37 G3 selection after delete or archive', () => {
     expect(unreadDots(view.host)).toBe(0)
   })
 
-  it('does not gain an unread dot from archiving a bot', async () => {
+  it('does not gain an unread dot from archiving an employee', async () => {
     const view = startApp()
     await view.settle()
     expect(unreadDots(view.host)).toBe(0)

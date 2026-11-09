@@ -89,7 +89,7 @@ describe('what the daemon reports', () => {
     expect(canTakeOver(machine({ state: 'offline' }))).toBe(false)
   })
 
-  it('lists working bots with their machine, and none from a removed link', () => {
+  it('lists working employees with their machine, and none from a removed link', () => {
     const working = machine({ bots: [bot({ busy: true }), bot({ id: 'tom', name: 'Tom' })] })
     expect(machineBusyBots([working, machine({ id: 'gone', state: 'revoked', bots: [bot({ busy: true })] })]).map((item) => `${item.machine.id}/${item.bot.id}`)).toEqual(['laptop/rae'])
   })
@@ -174,7 +174,7 @@ describe('Settings, Machines', () => {
   })
 })
 
-describe('another machine\'s bots', () => {
+describe('another machine\'s employees', () => {
   it('lists them under its name and opens one', async () => {
     const onOpen = vi.fn()
     const laptop = machine({ bots: [bot({ busy: true })] })
@@ -255,7 +255,7 @@ describe('Take over', () => {
     expect(button('Take over').disabled).toBe(true)
   })
 
-  it('says a new bot comes without Full access', async () => {
+  it('says a new employee comes without Full access', async () => {
     replies({ 'machine.takeOver.preview': preview({ bot: { id: 'rae', name: 'Rae', provider: 'claude', model: null, agentId: null, willCreate: true } }) })
     await render(<TakeOverDialog machine={machine()} sessionId="s1" onClose={vi.fn()} onMoved={vi.fn()} />)
     await flush()
@@ -284,7 +284,7 @@ describe('Take over', () => {
 })
 
 describe('the companion', () => {
-  it('shows a bot working elsewhere with its machine\'s name, and opens the full app', async () => {
+  it('shows an employee working elsewhere with its machine\'s name, and opens the full app', async () => {
     replies({ 'machine.list': { machines: [machine({ bots: [bot({ busy: true }), bot({ id: 'tom', name: 'Tom' })] })] }, 'machine.self': { id: 'me' } })
     const post = vi.fn()
     vi.stubGlobal('BroadcastChannel', class { postMessage = post; close() {} })

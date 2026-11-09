@@ -156,7 +156,7 @@ export function ProjectsSidebar({ agents, projects, sessions, members = null, se
               return <li key={agent.id} role="none" className="ps-bot-item">
                 <div className={`ps-bot marquee-host${holdsSelection ? ' selected' : ''}`}>
                   <button type="button" role="treeitem" aria-expanded={recent.length ? expanded : undefined} className="ps-bot-main" onClick={() => { if (!latest) { onStartInProject(agent, block.project?.id ?? null); return } if (!expanded) setOpenFor(rowKey, true); onOpenConversation(agent, latest) }} title={latest ? undefined : `Start a conversation with ${agent.name}`}>
-                    <BlobCanvas decorative color={agentColorHex(agent.color)} size={28} mini mood={working ? 'working' : 'idle'} look={agentLook(agent)} label={agent.name} />
+                    <BlobCanvas decorative color={agentColorHex(agent.color)} size={36} mood={working ? 'working' : 'idle'} look={agentLook(agent)} label={agent.name} />
                     <span className="ps-bot-copy">
                       <span className="ps-bot-line">
                         <Marquee className="ps-bot-name" text={agent.name} active={holdsSelection} />

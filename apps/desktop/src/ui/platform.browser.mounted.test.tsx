@@ -61,7 +61,7 @@ describe('browser platform', () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 
     // The page itself still renders.
-    expect(host.textContent).toContain('Bots working at once')
+    expect(host.textContent).toContain('Employees working at once')
     expect(host.textContent).not.toContain('Experimental')
     // Nowhere to go for a companion that can't exist here.
     expect(host.querySelector('.settings-nav')?.textContent).not.toContain('Companion')

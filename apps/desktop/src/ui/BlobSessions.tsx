@@ -49,7 +49,7 @@ export function BlobSessions({ agent, sessions, legacyCount, canCreate, onOpenSe
         <span className="settings-row-copy"><strong>{formatUnknownSafe(session.title, 'New session')}</strong><small>{projectFolderName(session.projectPath)}</small></span>
         <span className="settings-row-control"><button type="button" className="ghost-button small" onClick={() => { void rpc('session.archive', { sessionId: session.id, archived: false }).then(() => setArchived((items) => items.filter((item) => item.id !== session.id))) }}>Restore</button></span>
       </div>)}
-      {legacyCount > 0 && <p className="settings-empty">Conversations not linked to a {noun} stay in the header list.</p>}
+      {legacyCount > 0 && <p className="settings-empty">Conversations not linked to an {noun} stay in the header list.</p>}
     </div>
   </section>
 }

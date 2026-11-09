@@ -17,7 +17,7 @@ function draft(partial: Partial<AgentDraft> = {}): AgentDraft {
   }
 }
 
-describe('bot templates', () => {
+describe('employee templates', () => {
   it('offers each named starter exactly once', () => {
     expect(BOT_TEMPLATES.map((template) => template.name)).toEqual(NAMES)
     expect(new Set(BOT_TEMPLATES.map((template) => template.id)).size).toBe(BOT_TEMPLATES.length)

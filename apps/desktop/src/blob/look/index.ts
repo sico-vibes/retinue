@@ -13,7 +13,7 @@ import {
   type BotArt, type PaintedShape,
 } from '../art/art'
 import { isHazeIcon, type HazeIcon } from '../haze/icons'
-import { isProfilePhoto, type ProfilePhoto } from '../photos'
+import { isProfilePhoto, type PhotoValue } from '../photos'
 import { rememberLookRuntime } from '../haze/runtimeRegistry'
 
 export * from './bot'
@@ -35,8 +35,8 @@ export interface BlobLook {
   paint?: PaintedShape
   /** The Haze look's mark: the runtime logo or a character. Omitted, it is the logo. */
   icon?: HazeIcon
-  /** A round profile picture (`blob/photos.ts`). Set, it wins over the art and the icon in every look. */
-  photo?: ProfilePhoto['id']
+  /** The employee's round profile picture (`blob/photos.ts`): a preset id or an uploaded picture. Omitted, a blank silhouette. */
+  photo?: PhotoValue
 }
 
 export const SHAPE_LABELS: Record<BlobShape, string> = {

@@ -21,7 +21,7 @@ function mount(ui: React.ReactElement) {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)
   act(() => root!.render(ui))
 }
-const steps = tourSteps('bot', 'bots')
+const steps = tourSteps('employee', 'employees')
 const flush = async (ms = 0) => { await act(async () => { await new Promise((resolve) => setTimeout(resolve, ms)) }) }
 afterEach(() => {
   if (root) act(() => root?.unmount())
@@ -50,7 +50,7 @@ describe('GuidedTour', () => {
     mount(<GuidedTour steps={steps} step={0} onStep={onStep} onFinish={onFinish} />)
     await flush()
     const card = document.querySelector('.coach-card')!
-    expect(card.textContent).toContain('Your bots live here')
+    expect(card.textContent).toContain('Your employees live here')
     expect(card.textContent).toContain('1 of 6')
     expect(card.textContent).not.toContain('Back')
     await act(async () => { [...card.querySelectorAll('button')].find((button) => button.textContent === 'Next')!.click() })
@@ -88,9 +88,9 @@ describe('GuidedTour', () => {
 describe('TourInvite', () => {
   it('offers the tour with a way out', () => {
     const onStart = vi.fn(); const onDismiss = vi.fn()
-    mount(<TourInvite plural="bots" onStart={onStart} onDismiss={onDismiss} />)
+    mount(<TourInvite plural="employees" onStart={onStart} onDismiss={onDismiss} />)
     const aside = document.querySelector('.tour-invite')!
-    expect(aside.textContent).toContain('your bots')
+    expect(aside.textContent).toContain('your employees')
     act(() => { [...aside.querySelectorAll('button')].find((button) => button.textContent === 'Start tour')!.click() })
     act(() => { [...aside.querySelectorAll('button')].find((button) => button.textContent === 'Not now')!.click() })
     expect(onStart).toHaveBeenCalledOnce()

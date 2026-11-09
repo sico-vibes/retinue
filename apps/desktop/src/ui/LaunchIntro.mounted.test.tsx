@@ -44,16 +44,16 @@ describe('LaunchIntro', () => {
   })
 
   // Both looks default to Glossy (the wave greeting); a bot with its own art greets with that art.
-  it('uses the bot art for its greeting and completes through the canvas callback', () => {
-    setThemeStyle('blobots')
-    const agent = { id: 'agent-a', name: 'Ada', runtimeId: 'rt', color: 'violet', look: { shape: 'circle', art: 'painted' } } as unknown as Agent
-    const { host: mounted, complete } = mount([{ id: 'service', label: 'Connecting', state: 'ok', detail: 'Connected' }], false, agent)
-    const canvas = mounted.querySelector<HTMLCanvasElement>('.launch-blob-stage canvas.blob-canvas')
-    expect(canvas?.dataset.greeting).toBe('true')
-    expect(canvasMock.latest?.greeting).toBe(true)
-    expect((canvasMock.latest?.look as { art?: string } | null)?.art).toBe('painted')
-    act(() => (canvasMock.latest?.onGreetingComplete as (() => void) | undefined)?.())
+  it('greets with the Retinue mark and completes when the greeting ends', async () => {
+    vi.useFakeTimers()
+    const { host: mounted, complete } = mount([{ id: 'service', label: 'Connecting', state: 'ok', detail: 'Connected' }], false)
+    const logo = mounted.querySelector('.launch-blob-stage .launch-logo')
+    expect(logo?.getAttribute('aria-label')).toBe('Retinue')
+    expect(logo?.classList.contains('is-greeting')).toBe(true)
+    expect(mounted.querySelector('canvas.blob-canvas')).toBeNull()
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
     expect(complete).toHaveBeenCalledOnce()
+    vi.useRealTimers()
   })
 
   it('offers retry and continue offline when the service is unavailable', () => {
@@ -64,21 +64,20 @@ describe('LaunchIntro', () => {
     expect(offline).toHaveBeenCalledOnce()
   })
 
-  it('works while scanning, waves when ready, completes after the wave, and cancels when going offline', async () => {
+  it('breathes while scanning, greets when ready, completes after the greeting, and cancels when going offline', async () => {
     vi.useFakeTimers()
     const { host: mounted, complete, update } = mount([{ id: 'service', label: 'Connecting', state: 'running', detail: 'Checking' }])
-    const canvas = mounted.querySelector<HTMLCanvasElement>('.launch-blob-stage canvas.blob-canvas')
-    expect(canvas?.width).toBe(canvas?.height)
+    expect(mounted.querySelector('.launch-logo.is-working')).not.toBeNull()
     expect(mounted.querySelector('.launch-checklist-window .launch-checklist')).not.toBeNull()
     update([{ id: 'service', label: 'Connecting', state: 'ok', detail: 'Connected' }], false)
     expect(mounted.querySelector('.launch-intro')?.getAttribute('data-phase')).toBe('greeting')
-    expect(mounted.querySelector('.launch-greeting')).not.toBeNull()
+    expect(mounted.querySelector('.launch-logo.is-greeting')).not.toBeNull()
     await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
     expect(complete).toHaveBeenCalledOnce()
 
     const second = mount([{ id: 'service', label: 'Connecting', state: 'ok', detail: 'Connected' }])
     second.update([{ id: 'service', label: 'Connecting', state: 'failed', detail: 'Unavailable' }], true)
-    expect(second.host.querySelector('.launch-greeting')).toBeNull()
+    expect(second.host.querySelector('.launch-logo.is-greeting')).toBeNull()
     act(() => [...second.host.querySelectorAll('button')].find((item) => item.textContent === 'Continue offline')?.click())
     await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
     expect(second.offline).toHaveBeenCalledOnce()

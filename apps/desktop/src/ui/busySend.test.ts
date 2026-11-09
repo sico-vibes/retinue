@@ -64,7 +64,7 @@ describe('assigned task presentation', () => {
   })
 })
 
-it('starts every new template with Full access and preserves existing bot modes', () => {
+it('starts every new template with Full access and preserves existing employee modes', () => {
   for (const template of BOT_TEMPLATES) {
     const draft = applyTemplate(createDraft([{ id: 'rt', provider: 'codex' }], 'rt'), template)
     expect(createParams(draft).approvalMode).toBe('bypass')

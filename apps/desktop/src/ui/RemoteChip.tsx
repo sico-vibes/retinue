@@ -4,7 +4,7 @@ import './remoteChip.css'
 
 /** The words the sidebar banner shows for a Remote status. */
 export function remoteBannerCopy(status: { enabled: boolean; link: string; deviceCount: number; connectedCount?: number }): { state: string; detail: string; tone: 'live' | 'waiting' | 'off' } {
-  if (!status.enabled) return { state: 'Off', detail: 'Use your bots from your phone', tone: 'off' }
+  if (!status.enabled) return { state: 'Off', detail: 'Use your employees from your phone', tone: 'off' }
   if (status.link !== 'online') return { state: status.link === 'error' ? 'Problem' : 'Starting', detail: status.link === 'error' ? 'Open to see what to fix' : 'Connecting…', tone: 'waiting' }
   const connected = status.connectedCount ?? 0
   if (connected > 0) return { state: 'On', detail: `${connected} ${connected === 1 ? 'device' : 'devices'} connected`, tone: 'live' }

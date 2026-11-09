@@ -33,7 +33,16 @@
 .ps-more { flex: 0 0 auto; margin-right: 2px; }
 
 /* Its conversations: two-line cards, indented under the portrait. */
-.ps-convos { padding: var(--dn-nest-gap, 4px) 0 4px 26px; }
+.ps-convos { padding: var(--dn-nest-gap, 4px) 0 4px 44px; }
+/* Branch lines (owner, 9 November 2026), as the Conversations column draws them:
+   a trunk from under the employee's picture (its centre is 26px in) down to each
+   card, with a rounded elbow into the card's middle. */
+.ps-convos > li { position: relative; }
+.ps-convos > li::before { position: absolute; top: calc(-1 * var(--dn-row-gap, 3px)); bottom: 0; left: -18px; border-left: 1px solid var(--line-strong); content: ""; pointer-events: none; }
+.ps-convos > li:first-child::before { top: calc(-1 * var(--dn-nest-gap, 4px) - 4px); }
+.ps-convos > li:last-child::before { display: none; }
+.ps-convos > li::after { position: absolute; top: calc(-1 * var(--dn-row-gap, 3px)); left: -18px; width: 14px; height: calc(50% + var(--dn-row-gap, 3px)); border-left: 1px solid var(--line-strong); border-bottom: 1px solid var(--line-strong); border-bottom-left-radius: 8px; content: ""; pointer-events: none; }
+.ps-convos > li:first-child::after { top: calc(-1 * var(--dn-nest-gap, 4px) - 4px); height: calc(50% + var(--dn-nest-gap, 4px) + 4px); }
 .ps-convo { width: 100%; display: grid; gap: 2px; padding: var(--dn-card-pad-y, 6px) 10px; border: 0; border-radius: var(--radius-md, 10px); background: none; color: var(--text-2); font: inherit; text-align: left; cursor: pointer; transition: background-color 140ms ease, color 140ms ease; }
 .ps-convo-title { font-size: var(--fs-sm); }
 .ps-convo-meta { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--text-3); font-size: var(--fs-2xs); white-space: nowrap; }

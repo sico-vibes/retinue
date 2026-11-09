@@ -152,7 +152,7 @@ export function SchedulesView(props: SchedulesViewProps) {
       {connected && visible.length === 0 && <div className="schedules-empty">
         <CalendarClock size={22} aria-hidden="true" />
         <strong>No automations yet</strong>
-        <p>An automation is something a {noun} does by itself, on a schedule: check your email every morning, brief you on the news, run the tests overnight. Start from an idea or write your own.</p>
+        <p>An automation is something an {noun} does by itself, on a schedule: check your email every morning, brief you on the news, run the tests overnight. Start from an idea or write your own.</p>
         <ul className="schedules-templates" aria-label="Ideas to start from">{TEMPLATES.map((template) => <li key={template.id}>
           <button type="button" className="schedules-template" disabled={agents.filter((a) => !a.archived).length === 0} onClick={() => { setStartFrom(template); setEditing('new') }}>
             <template.icon size={16} aria-hidden="true" /><span><strong>{template.title}</strong><small>{template.hint}</small></span>
@@ -239,7 +239,7 @@ function ScheduleCard({ automation, agent, nowMs, busy, onToggle, onRunNow, onEd
         <button type="button" className={`queue-icon schedule-expand${open ? ' open' : ''}`} aria-expanded={open} aria-label={`Run history for ${automation.name}`} title="Run history" onClick={() => setOpen((value) => !value)}><ChevronDown size={14} /></button>
       </div>
     </div>
-    {proposal && <p className="schedule-proposal">{agent?.name ?? `A ${noun}`} proposed this. It runs in read-only mode until you approve it.</p>}
+    {proposal && <p className="schedule-proposal">{agent?.name ?? `An ${noun}`} proposed this. It runs in read-only mode until you approve it.</p>}
     {last && !open && <p className="schedule-last"><i className={`run-dot ${statusDot(last.status)}`} aria-hidden="true" />Last run {stamp(last.startedAt)} · {RUN_STATUS_LABEL[last.status] ?? last.status}{runReasonText(last.reason) ? ` · ${runReasonText(last.reason)}` : ''}
       {needsManualRetry(last) && !automation.running && <button type="button" className="queue-link" disabled={busy} onClick={onRunNow}>Retry now</button>}</p>}
     {open && <div className="schedule-history">

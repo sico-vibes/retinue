@@ -85,7 +85,7 @@ function type(view: HTMLElement, selector: string, value: string, index = 0) {
 }
 
 describe('RemoteApp', () => {
-  it('pairs: formats the code, waits for the owner, then lists the bots', async () => {
+  it('pairs: formats the code, waits for the owner, then lists the employees', async () => {
     const device = fakeDevice('unpaired', ['pending', 'pending', 'pending', 'pending', 'pending', 'pending', 'approved'])
     const view = await mount(device)
     expect(view.querySelector('.rm-ribbon')).toBeNull()
@@ -184,7 +184,7 @@ describe('RemoteApp', () => {
     expect(view.querySelector('.rm-notice')?.textContent).toContain('removed on the computer')
   })
 
-  it('Direct: signs in with a username and password, waits for approval, then lists the bots', async () => {
+  it('Direct: signs in with a username and password, waits for approval, then lists the employees', async () => {
     const device = fakeDevice('unpaired', ['pending', 'pending', 'pending', 'pending', 'approved'], 'native')
     const view = await mount(device)
     expect(view.textContent).toContain('Sign in to your computer')
@@ -248,7 +248,7 @@ describe('RemoteApp', () => {
     expect(view.querySelector<HTMLTextAreaElement>('.rm-composer textarea')?.value).toBe('Ship it')
   })
 
-  it('lists a bot\'s conversations and loads an older one when chosen', async () => {
+  it('lists an employee\'s conversations and loads an older one when chosen', async () => {
     h.rpc.mockImplementation(async (method: string, params: { sessionId?: string }) => method === 'session.get' && params.sessionId === 's3'
       ? { id: 's3', agentId: 'a2', runtimeId: 'rt', title: 'Logo ideas', messages: [{ id: 'm9', role: 'assistant', content: 'Three logo sketches.' }] }
       : {})

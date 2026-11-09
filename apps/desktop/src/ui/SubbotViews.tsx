@@ -24,8 +24,8 @@ function Art({ parent, name, status }: { parent?: Agent; name: string; status: S
 export function SubbotRows({ parent, onOpen, selectedSessionId }: { parent: Agent; onOpen: (sessionId: string) => void; selectedSessionId?: string | null }) {
   const { subbots } = useSubbots({ agentId: parent.id })
   if (!subbots.length) return null
-  return <div className="subbot-rows" role="group" aria-label={`${parent.name}'s sub-bots`}>
-    {orderFleet(subbots).map((subbot) => <button type="button" key={subbot.agentId} className={`subbot-row ${subbot.status}`} aria-current={subbot.sessionId && subbot.sessionId === selectedSessionId ? 'true' : undefined} disabled={!subbot.sessionId} title={subbot.model ?? undefined} aria-label={`${subbot.name}, sub-bot of ${parent.name}, ${SUBBOT_WORD[subbot.status]}`} onClick={() => { if (subbot.sessionId) onOpen(subbot.sessionId) }}>
+  return <div className="subbot-rows" role="group" aria-label={`${parent.name}'s helpers`}>
+    {orderFleet(subbots).map((subbot) => <button type="button" key={subbot.agentId} className={`subbot-row ${subbot.status}`} aria-current={subbot.sessionId && subbot.sessionId === selectedSessionId ? 'true' : undefined} disabled={!subbot.sessionId} title={subbot.model ?? undefined} aria-label={`${subbot.name}, helper of ${parent.name}, ${SUBBOT_WORD[subbot.status]}`} onClick={() => { if (subbot.sessionId) onOpen(subbot.sessionId) }}>
       <Art parent={parent} name={subbot.name} status={subbot.status} />
       <span className="subbot-row-copy"><strong>{subbot.name}</strong><small>{subbotLine(subbot)}</small></span>
     </button>)}
@@ -62,11 +62,11 @@ export function SubbotFleet({ sessionId, parent, onOpen }: { sessionId: string; 
   const count = fleetCount(subbots)
   const stopAll = async () => {
     setStopping(true); setProblem(null)
-    try { await rpc('delegation.cancelGroup', { originSessionId: sessionId, delegationIds: active.flatMap((item) => item.delegationId ?? []) }) } catch (reason) { setProblem(messageOf(reason, 'The sub-bots could not be stopped.')) } finally { setStopping(false) }
+    try { await rpc('delegation.cancelGroup', { originSessionId: sessionId, delegationIds: active.flatMap((item) => item.delegationId ?? []) }) } catch (reason) { setProblem(messageOf(reason, 'The helpers could not be stopped.')) } finally { setStopping(false) }
   }
-  return <section className="subbot-fleet" aria-label="Sub-bots in this conversation">
+  return <section className="subbot-fleet" aria-label="Helpers in this conversation">
     <header>
-      <button type="button" className="fleet-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}><strong>Sub-bots</strong><small>{count ?? `${subbots.length} finished`}</small></button>
+      <button type="button" className="fleet-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}><strong>Helpers</strong><small>{count ?? `${subbots.length} finished`}</small></button>
       {active.length > 1 && <button type="button" className="ghost-button small" disabled={stopping} onClick={() => void stopAll()}>Stop all</button>}
     </header>
     {open && <ul>{orderFleet(subbots).map((subbot) => <FleetRow key={subbot.agentId} subbot={subbot} parent={parent} onOpen={onOpen} onProblem={setProblem} />)}</ul>}
@@ -99,7 +99,7 @@ export function SubbotComposer({ sessionId, name, onClose }: { sessionId: string
 export function SubbotCount({ agentId }: { agentId: string }) {
   const { subbots } = useSubbots({ agentId })
   const count = fleetCount(subbots)
-  return count ? <small className="subbot-count" title={`Sub-bots: ${count}`}>{count.split(' ')[0]}</small> : null
+  return count ? <small className="subbot-count" title={`Helpers: ${count}`}>{count.split(' ')[0]}</small> : null
 }
 
 /** The companion: the fleet at a glance, opening it in the full app. */

@@ -61,8 +61,8 @@ export function PushCard() {
     unsupported: 'This browser can\'t show notifications. On iPhone, add Bitbots to your Home Screen first.',
     'off-at-computer': 'Turn them on first at the computer, in Settings › Remote.',
     blocked: 'Notifications are blocked for this site. Allow them in your browser\'s settings.',
-    off: 'Get a notice when a bot needs you. It says only the bot\'s name, never what it\'s doing.',
-    on: 'On. A notice says only the bot\'s name, never what it\'s doing.',
+    off: 'Get a notice when an employee needs you. It says only the employee\'s name, never what it\'s doing.',
+    on: 'On. A notice says only the employee\'s name, never what it\'s doing.',
   }
   return <div className="rm-card">
     <span className="rm-card-icon">{state === 'on' ? <Bell size={18} aria-hidden="true" /> : <BellOff size={18} aria-hidden="true" />}</span>

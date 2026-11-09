@@ -47,7 +47,7 @@ function useStore() {
     unassign: (taskId) => setTasks((list) => list.map((task) => task.id === taskId && task.state === 'queued' ? { ...task, state: 'unassigned', assigneeId: null } : task)),
     dispatch: (taskId, botId) => {
       const bot = botById(bots, botId), task = tasks.find((item) => item.id === taskId)
-      if (!bot || !task || bot.manager) return 'The Manager drafts tasks; drop them on a bot.'
+      if (!bot || !task || bot.manager) return 'The Manager drafts tasks; drop them on an employee.'
       const busy = bot.status !== 'idle' && bot.status !== 'done' || tasks.some((item) => item.assigneeId === botId && (item.state === 'running' || item.state === 'needs_you'))
       if (busy || paused) {
         setTasks((list) => [...list.filter((item) => item.id !== taskId), { ...task, state: 'queued', assigneeId: botId }])
@@ -121,7 +121,7 @@ function ControlBar({ mode, setMode, surface, setSurface, logoMode, setLogoMode,
     <div className="controls-group">
       <Seg label="Surface" value={surface} onChange={setSurface} options={[{ id: 'app', label: 'Main window' }, { id: 'companion', label: 'Companion' }]} />
       <button className="icon-toggle" onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')} aria-label={mode === 'dark' ? 'Switch to light' : 'Switch to dark'}>{mode === 'dark' ? <Moon size={14} /> : <Sun size={14} />}</button>
-      <Seg label="Logo colour" value={logoMode} onChange={setLogoMode} options={[{ id: 'original', label: 'Original' }, { id: 'tint', label: 'Bot colour' }, { id: 'mono', label: 'Mono' }]} />
+      <Seg label="Logo colour" value={logoMode} onChange={setLogoMode} options={[{ id: 'original', label: 'Original' }, { id: 'tint', label: 'Employee colour' }, { id: 'mono', label: 'Mono' }]} />
     </div>
     {bot && <div className="controls-group">
       <span className="controls-label">{bot.name}</span>
@@ -179,10 +179,10 @@ function Sidebar({ light }: { light: boolean }) {
     </div>}
     <div className="side-scroll">
     <BotRow bot={manager} light={light} selected={state.selected === manager.id && state.screen === 'chat'} onPick={() => pick(manager.id)} onEdit={setEditing} />
-    <div className="side-label">Bots <ChevronDown size={12} /></div>
+    <div className="side-label">Employees <ChevronDown size={12} /></div>
     <div className="side-list">
       {bots.map((bot) => <BotRow key={bot.id} bot={bot} light={light} selected={state.selected === bot.id && state.screen === 'chat'} onPick={() => pick(bot.id)} onEdit={setEditing} />)}
-      <button className="bot-row connect"><span className="connect-icon"><Plus size={13} /></span><span className="bot-name">Connect a bot</span></button>
+      <button className="bot-row connect"><span className="connect-icon"><Plus size={13} /></span><span className="bot-name">Connect an employee</span></button>
     </div>
     <div className="side-label">Projects <ChevronDown size={12} /></div>
     <div className="side-list">
@@ -234,8 +234,8 @@ function BotEditor({ id, top, left, onClose, light }: { id: string; top: number;
       <div className="swatches">{SWATCHES.map((colour) => <button key={colour} className={bot.color === colour ? 'on' : ''} style={{ background: colour }} onClick={() => act.updateBot(bot.id, { color: colour })} aria-label={colour}>{bot.color === colour && <Check size={12} />}</button>)}</div>
       <label className="pop-label">Logo</label>
       <Seg label="Logo colour" value={bot.logo ?? 'default'} onChange={(value) => act.updateBot(bot.id, { logo: value === 'default' ? undefined : value as LogoMode })}
-        options={[{ id: 'default', label: 'Default' }, { id: 'original', label: 'Original' }, { id: 'tint', label: 'Bot colour' }, { id: 'mono', label: 'Mono' }]} />
-      <p className="pop-note">The colour also drives this bot’s status gradient.</p>
+        options={[{ id: 'default', label: 'Default' }, { id: 'original', label: 'Original' }, { id: 'tint', label: 'Employee colour' }, { id: 'mono', label: 'Mono' }]} />
+      <p className="pop-note">The colour also drives this employee’s status gradient.</p>
     </div>
   </>
 }
@@ -247,7 +247,7 @@ function Chat({ light }: { light: boolean }) {
   const bot = botById(state.bots, state.selected)
   const [draft, setDraft] = useState('')
   const [extra, setExtra] = useState<Record<string, string[]>>({})
-  if (!bot) return <div className="empty">Pick a bot to start.</div>
+  if (!bot) return <div className="empty">Pick an employee to start.</div>
   const messages = SESSION_MESSAGES[bot.id] ?? [{ from: 'bot' as const, text: `Hi, I am ${bot.name}. What should I work on?` }]
   const send = (event: FormEvent) => { event.preventDefault(); if (!draft.trim()) return; setExtra((all) => ({ ...all, [bot.id]: [...(all[bot.id] ?? []), draft.trim()] })); setDraft(''); act.setStatus(bot.id, 'thinking'); window.setTimeout(() => act.setStatus(bot.id, 'working'), 1800) }
   return <div className="chat">
@@ -294,7 +294,7 @@ function Chat({ light }: { light: boolean }) {
 
 function CompanionDesk({ light }: { light: boolean }) {
   return <div className={`companion-desk c-${variant.companion}`}>
-    <p className="desk-hint">The companion floats over other apps. Click a bot to reply without opening Bitbots.</p>
+    <p className="desk-hint">The companion floats over other apps. Click an employee to reply without opening Bitbots.</p>
     <Companion light={light} />
   </div>
 }

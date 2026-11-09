@@ -30,7 +30,7 @@ export function ManagerSetupCard({ runtimes, disabled, onCreate }: {
       <span className="manager-setup-icon" aria-hidden="true"><BriefcaseBusiness size={14} /></span>
       <strong>Meet your CEO</strong>
     </header>
-    <p>Plans the work with you across every bot. It has Full access on this device, and team changes need your approval.</p>
+    <p>Plans the work with you across every employee. It has Full access on this device, and team changes need your approval.</p>
     {!selectedRuntimeId && <p role="status">No coding agent is ready yet.</p>}
     {!open
       ? <button type="button" className="primary-button small" disabled={disabled || !selectedRuntimeId} onClick={() => setOpen(true)}>Set it up</button>

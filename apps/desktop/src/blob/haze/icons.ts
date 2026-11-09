@@ -9,7 +9,7 @@ export const LOGO_ICONS = ['logo', 'logo-tint', 'logo-mono'] as const
 export const HAZE_ICONS: readonly HazeIcon[] = [...LOGO_ICONS, ...HAZE_CHARACTERS.map(({ id }) => id)]
 
 export const ICON_LABELS: Record<HazeIcon, string> = {
-  logo: 'Logo', 'logo-tint': 'Logo in bot colour', 'logo-mono': 'Logo in one colour',
+  logo: 'Logo', 'logo-tint': 'Logo in employee colour', 'logo-mono': 'Logo in one colour',
   ...CHARACTER_LABELS,
 }
 

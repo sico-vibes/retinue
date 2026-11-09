@@ -125,7 +125,7 @@ describe('shortcuts', () => {
 describe('approval order', () => {
   const session: Session = { id: 's', runtimeId: 'r', messages: [] }
   const agent = { id: 'a', effectiveApprovalMode: 'auto' } as Agent
-  it('is the conversation, then the project, then the bot', () => {
+  it('is the conversation, then the project, then the employee', () => {
     expect(sessionApprovalMode(session, agent)).toEqual({ mode: 'auto', pinned: false })
     expect(sessionApprovalMode({ ...session, projectApprovalMode: 'accept_edits' }, agent)).toEqual({ mode: 'accept_edits', pinned: false, fromProject: true })
     expect(sessionApprovalMode({ ...session, projectApprovalMode: 'bypass', modelLock: { approvalMode: 'ask' } } as Session, agent)).toEqual({ mode: 'ask', pinned: true })

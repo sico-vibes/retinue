@@ -304,7 +304,7 @@ export function RemoteApp({ device: deviceProp, pollMs = PAIR_POLL_MS }: { devic
           {wide && activeAgent && <section className="rm-roster-conversations" aria-label={`${activeAgent.name}'s conversations`}><h2>{activeAgent.name}'s conversations</h2><ul className="rm-convos">{conversations.map((session) => <li key={session.id}><button type="button" className={session.id === activeSession?.id ? 'on' : ''} aria-current={session.id === activeSession?.id ? 'true' : undefined} onClick={() => { setConversationId(session.id); setScreen('chat') }}><span><strong>{session.title?.trim() || 'New conversation'}</strong><small>{shortWhen(session.updatedAt ?? session.createdAt)}</small></span></button></li>)}</ul></section>}
         </aside>}
         <main className="rm-main">
-          {wide && screen === 'bots' && <section className="rm-empty-chat"><h2>Choose a {noun}</h2><p>Open a conversation from the list.</p></section>}
+          {wide && screen === 'bots' && <section className="rm-empty-chat"><h2>Choose an {noun}</h2><p>Open a conversation from the list.</p></section>}
           {screen === 'chat' && activeAgent && <ChatScreen key={activeSession?.id ?? 'none'} agent={activeAgent} session={activeSession} permissions={snapshot?.permissions ?? []} hostName={hostName} online={online} tier={tier}
             canApprove={tier === 'operator' && me?.approvalsFromRemote === true} quiet={me?.quietHoursActive === true} agents={agents} />}
           {screen === 'device' && me && <DeviceScreen me={me} noun={noun} onLogout={() => void logout()} layoutOverride={override} onLayoutChange={changeOverride} />}
@@ -550,7 +550,7 @@ function DeviceScreen({ me, noun, onLogout, layoutOverride, onLayoutChange }: { 
       <div><strong>Install Bitbots on this device</strong><small>On iPhone choose Share, then “Add to Home Screen”. On Android choose “Install app” in the browser menu. It opens full screen like an app.</small></div>
     </div>
     <PushCard />
-    <p className="rm-hint rm-device-hint">What this device may do is set on the computer, in Settings › Remote. A {noun} that needs approval waits there unless this device may approve.</p>
+    <p className="rm-hint rm-device-hint">What this device may do is set on the computer, in Settings › Remote. An {noun} that needs approval waits there unless this device may approve.</p>
     <button type="button" className="rm-danger" onClick={onLogout}><LogOut size={16} aria-hidden="true" />Sign out of {me.host.name}</button>
   </section>
 }

@@ -110,7 +110,7 @@ describe('Bitbots MCP settings', () => {
       throw new Error(`unexpected ${method}`)
     })
     const view = await mount(<ConnectionsPage connected />)
-    const full = () => view.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Let outside sessions give bots Full access"]')
+    const full = () => view.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Let outside sessions give employees Full access"]')
     expect(full()!.getAttribute('aria-checked')).toBe('false')
     await act(async () => { full()!.click() }); await settle()
     // Nothing changes until the owner confirms.

@@ -252,7 +252,7 @@ const stored = () => JSON.parse(memory.get(DRAFT_STORAGE_KEY) ?? '{"v":1,"drafts
 const open = async (view: ReturnType<typeof mountApp>, agentId: string) => { await click(view.host.querySelector(`.team-row[data-agent-id="${agentId}"]`)); await view.settle() }
 
 describe('FIX45 drafts', () => {
-  it('keeps what you typed in each conversation and in each bot\'s new chat while you move around', async () => {
+  it('keeps what you typed in each conversation and in each employee\'s new chat while you move around', async () => {
     const view = startApp()
     await view.settle()
     expect(selectedBot(view.host)).toBe('Coco')

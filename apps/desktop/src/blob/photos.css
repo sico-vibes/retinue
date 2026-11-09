@@ -25,6 +25,12 @@
   user-select: none;
 }
 .profile-photo-mark.is-resting { opacity: .62; filter: saturate(.55); }
+.profile-photo-mark.is-greeting { animation: profile-photo-in 600ms cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes profile-photo-in { from { opacity: 0; transform: scale(.88); } to { opacity: 1; transform: none; } }
+
+/* The blank picture: the employee's colour, softened, behind a quiet silhouette. */
+.profile-photo-clip.is-blank { background: color-mix(in srgb, var(--photo-tint, #8794a3) 30%, var(--surface-panel, #222326)); }
+.profile-photo-blank { width: 100%; height: 100%; display: block; fill: color-mix(in srgb, var(--photo-tint, #8794a3) 55%, var(--text-1, #f3f3f2)); opacity: .82; }
 
 /* The coding agent's logo, a small round badge sitting on the photo's lower
    right edge, ringed in the panel colour so it reads on any picture. */
@@ -56,12 +62,20 @@
 .profile-photo-grid .profile-photo-option.selected { border-color: color-mix(in srgb, var(--look-accent, var(--line-strong)) 55%, var(--line-strong)); background: color-mix(in srgb, var(--look-accent, transparent) 9%, var(--surface-selected)); }
 .profile-photo-grid .profile-photo-option:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .profile-photo-grid .profile-photo-option:disabled { opacity: .35; cursor: default; }
+.profile-photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 6px; }
+.profile-photo-grid .profile-photo-option > .profile-photo-mark { width: 40px !important; height: 40px !important; }
+.profile-photo-upload { color: var(--text-2); border: 1px dashed var(--line-strong) !important; }
+.profile-photo-upload:hover { color: var(--text-1); }
+.profile-photo-error { margin: 8px 0 0; display: flex; align-items: center; gap: 6px; color: var(--status-danger); font-size: var(--fs-xs); }
+.profile-photo-hint { margin: 8px 0 0; color: var(--text-3); font-size: var(--fs-2xs); }
+.photo-look-hero { display: grid; place-items: center; min-height: 180px; }
+.photo-look-row { display: flex; align-items: center; gap: 10px; font-weight: 500; }
 .profile-photo-grid .profile-photo-option img {
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   display: block;
   object-fit: cover;
   border-radius: 50%;
   pointer-events: none;
 }
-@media (prefers-reduced-motion: reduce) { .profile-photo-mark { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .profile-photo-mark { transition: none; } .profile-photo-mark.is-greeting { animation: none; } }

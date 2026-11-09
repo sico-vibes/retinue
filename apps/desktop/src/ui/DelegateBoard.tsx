@@ -131,8 +131,8 @@ export function DelegateBoard({ tasks, agents, projects, nowMs, connected, busy,
     </section>
 
     <section className="delegate-bots" aria-labelledby="delegate-bots-title">
-      <header className="delegate-head"><h2 id="delegate-bots-title">{noun === 'bot' ? 'Bots' : `${noun[0].toUpperCase()}${noun.slice(1)}s`}</h2><span className="delegate-hint">{dragging ? `Drop on a ${noun} to start the task or queue it` : `Drag a task onto a ${noun}`}</span></header>
-      {bots.length === 0 ? <p className="delegate-empty">Create a {noun} first, then give it work here.</p> : <ul className="delegate-lanes">{bots.map((agent) => {
+      <header className="delegate-head"><h2 id="delegate-bots-title">Employees</h2><span className="delegate-hint">{dragging ? `Drop on an ${noun} to start the task or queue it` : `Drag a task onto an ${noun}`}</span></header>
+      {bots.length === 0 ? <p className="delegate-empty">Create an {noun} first, then give it work here.</p> : <ul className="delegate-lanes">{bots.map((agent) => {
         const lane = laneTasks(tasks, agent.id)
         const availability = laneAvailability(lane, nowMs)
         const over = overId === agent.id

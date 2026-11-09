@@ -45,7 +45,7 @@ function CommentComposer({ line, onSave, onCancel }: { line: number; onSave: (te
   const [text, setText] = useState('')
   const save = () => { if (text.trim()) onSave(text.trim()) }
   return <div className="diff-comment-composer">
-    <textarea autoFocus rows={2} value={text} aria-label={`Comment on line ${line}`} placeholder="What should the bot change here?" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => {
+    <textarea autoFocus rows={2} value={text} aria-label={`Comment on line ${line}`} placeholder="What should the employee change here?" onChange={(event) => setText(event.target.value)} onKeyDown={(event) => {
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onCancel() }
       if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); save() }
     }} />
@@ -70,7 +70,7 @@ export function DiffBody({ content, mode, path, comments = [], onAddComment, onR
   if (parsed.empty) return <p className="diff-empty">No diff content was reported.</p>
   if (parsed.binary) return <p className="diff-empty">Binary file change. Text lines are unavailable.</p>
   const commentButton = (line: DiffLine, key: string): ReactNode => onAddComment && lineNumber(line) !== null
-    ? <button type="button" className="diff-comment-add" aria-label={`Comment on line ${lineNumber(line)}`} title="Comment for the bot" onClick={() => setDrafting(key)}><MessageSquarePlus size={12} aria-hidden="true" /></button>
+    ? <button type="button" className="diff-comment-add" aria-label={`Comment on line ${lineNumber(line)}`} title="Comment for the employee" onClick={() => setDrafting(key)}><MessageSquarePlus size={12} aria-hidden="true" /></button>
     : null
   /** Comments and the open comment box belonging to these lines, shown below them. */
   const below = (lines: Array<DiffLine | null>, key: string): ReactNode => {

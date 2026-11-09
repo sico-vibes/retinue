@@ -169,10 +169,10 @@ describe('hold button keeps one footprint', () => {
     vi.spyOn(HTMLButtonElement.prototype, 'setPointerCapture').mockImplementation(() => undefined)
     const host = document.createElement('div'); document.body.append(host)
     const root = createRoot(host); mounted.push({ root, host })
-    act(() => root.render(<ConfirmDialog title="Permanently delete Vex?" body="x" confirmLabel="Delete bot and conversations" cancelLabel="Keep bot" holdToConfirm onConfirm={() => undefined} onCancel={vi.fn()} />))
+    act(() => root.render(<ConfirmDialog title="Permanently delete Vex?" body="x" confirmLabel="Delete employee and conversations" cancelLabel="Keep employee" holdToConfirm onConfirm={() => undefined} onCancel={vi.fn()} />))
     const label = () => host.querySelector<HTMLElement>('.hold-confirm-label')!
     const idle = label().dataset.sizer
-    expect(idle).toBe('Hold to delete bot and conversations')
+    expect(idle).toBe('Hold to delete employee and conversations')
     expect(label().textContent).toBe(idle)
     const button = host.querySelector<HTMLButtonElement>('.hold-confirm-button')!
     const pointer = (type: string) => { const event = new Event(type, { bubbles: true }); Object.defineProperty(event, 'pointerId', { value: 2 }); return event }

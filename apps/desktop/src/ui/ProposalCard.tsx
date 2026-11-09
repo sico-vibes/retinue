@@ -24,11 +24,11 @@ type Decision = 'approve' | 'reject'
 
 const KIND_LABEL: Record<string, { title: string; Icon: typeof Bot }> = {
   project: { title: 'Create a project', Icon: FolderPlus },
-  bot: { title: 'Create a bot', Icon: Bot },
+  bot: { title: 'Create an employee', Icon: Bot },
   task: { title: 'Assign a task', Icon: ListChecks },
   playbook: { title: 'Update its playbook', Icon: BookOpen },
   profile: { title: 'Change something it knows about you', Icon: UserCog },
-  permission: { title: 'Change a bot\'s permission', Icon: ShieldCheck },
+  permission: { title: 'Change an employee\'s permission', Icon: ShieldCheck },
   merge: { title: 'Merge a task', Icon: GitMerge },
   hire: { title: 'Hire an employee', Icon: UserPlus },
 }
@@ -103,7 +103,7 @@ export function ProposalCard({ request, managerName = 'The CEO', projects, runti
   const hiring = kind === 'hire'
   const mergeFiles = Array.isArray(draft.files) ? draft.files.map(text).filter(Boolean) : []
   const { title, Icon } = updating
-    ? { title: kind === 'bot' ? 'Update a bot' : 'Update a project', Icon: Pencil }
+    ? { title: kind === 'bot' ? 'Update an employee' : 'Update a project', Icon: Pencil }
     : opening ? { title: 'Open a conversation', Icon: ListChecks }
       : KIND_LABEL[kind] ?? { title: 'Do something', Icon: Pencil }
   const set = (key: string, value: unknown) => setDraft((current) => ({ ...current, [key]: value }))
@@ -240,7 +240,7 @@ export function ProposalCard({ request, managerName = 'The CEO', projects, runti
         {field('reportBack', 'Report back', { multiline: true, max: 4000 })}
       </>}
       {updating && <>
-        <div className="proposal-field"><span>{kind === 'bot' ? 'Bot' : 'Project'}</span><p className="proposal-value">{text(draft.targetName) || text(draft.blob) || text(draft.project)}</p></div>
+        <div className="proposal-field"><span>{kind === 'bot' ? 'Employee' : 'Project'}</span><p className="proposal-value">{text(draft.targetName) || text(draft.blob) || text(draft.project)}</p></div>
         {Object.entries(draft).filter(([key]) => !['action', 'blob', 'project', 'targetName'].includes(key)).map(([key, value]) => {
           const label = ({ name: 'Name', description: 'What it is for', role: 'Role', instructions: 'Instructions', model: 'Model', thinking: 'Effort', approvalMode: 'Permission', tags: 'Tags', look: 'Look' } as Record<string, string>)[key] ?? key
           if (key === 'look') return <div key={key}>{lookPreview(value)}</div>
@@ -271,12 +271,12 @@ export function ProposalCard({ request, managerName = 'The CEO', projects, runti
           <div className="proposal-field"><span>Conversation</span><p className="proposal-value mono">{text(draft.conversation)}</p></div>
           <div className="proposal-field"><span>Permission</span><p className="proposal-value">{text(draft.mode) === 'auto' ? 'Auto' : 'Ask first'}</p></div>
         </div>
-        <p className="proposal-hint">Changes this bot's permission for all its conversations, from their next turn. Full access can never be set this way.</p>
+        <p className="proposal-hint">Changes this employee's permission for all its conversations, from their next turn. Full access can never be set this way.</p>
       </>}
       {merging && <>
         <div className="proposal-row">
           <div className="proposal-field"><span>Task</span><p className="proposal-value">{text(draft.taskTitle) || text(draft.botName) || 'A task'}</p></div>
-          {text(draft.botName) && <div className="proposal-field"><span>Bot</span><p className="proposal-value">{text(draft.botName)}</p></div>}
+          {text(draft.botName) && <div className="proposal-field"><span>Employee</span><p className="proposal-value">{text(draft.botName)}</p></div>}
         </div>
         <div className="proposal-row">
           <div className="proposal-field"><span>Branch</span><p className="proposal-value mono">{text(draft.branch)}</p></div>

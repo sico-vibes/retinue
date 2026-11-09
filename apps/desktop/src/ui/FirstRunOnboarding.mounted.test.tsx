@@ -125,7 +125,7 @@ describe('FirstRunOnboarding', () => {
     expect(codex?.querySelector('[aria-label="Copy Codex version command"]')).toBeNull()
   })
 
-  it('introduces the Manager and says "bot" in both looks', async () => {
+  it('introduces the Manager and says "employee" in both looks', async () => {
     mocks.rpc.mockResolvedValue({ runtimeId: 'runtime-codex', provider: 'codex', validated: true, fallback: false, models: [
       { id: 'gpt-6-sol', displayName: 'GPT-6 Sol', supportedThinking: [], serviceTiers: [], isDefault: true },
     ] })

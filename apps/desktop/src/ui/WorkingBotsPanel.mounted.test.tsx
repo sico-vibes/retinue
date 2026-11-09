@@ -8,7 +8,7 @@ import type { Agent, Session } from '../types'
 vi.mock('../blob/BlobCanvas', () => ({ BlobCanvas: () => <span data-face="" /> }))
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-it('lists assigned work across bots, opens it and folds finished work', async () => {
+it('lists assigned work across employees, opens it and folds finished work', async () => {
   const host = document.createElement('div'); document.body.append(host)
   const root = createRoot(host)
   const agents = [{ id: 'manager', name: 'Manager', color: 'violet' }, { id: 'worker', name: 'Researcher', color: 'blue' }] as Agent[]
@@ -17,7 +17,7 @@ it('lists assigned work across bots, opens it and folds finished work', async ()
   const open = vi.fn()
   try {
     await act(async () => root.render(<WorkingBotsPanel agents={agents} sessions={sessions} selectedId={null} onOpen={open} />))
-    const panel = host.querySelector('[aria-label="Working bots"]')!
+    const panel = host.querySelector('[aria-label="Working employees"]')!
     expect(panel).not.toBeNull()
     expect(panel.textContent).toContain('Working')
     expect(panel.textContent).toContain('Waiting')
@@ -44,11 +44,11 @@ it('keeps an unhydrated side session out until its finished turn arrives', async
   try {
     // A list row has no turns yet: it must not appear as an active task with a ticking clock.
     await act(async () => root.render(<WorkingBotsPanel agents={agents} sessions={[thin]} selectedId={null} onOpen={open} />))
-    expect(host.querySelector('[aria-label="Working bots"]')).toBeNull()
+    expect(host.querySelector('[aria-label="Working employees"]')).toBeNull()
     expect(host.querySelector('[data-task-id="old-task"]')).toBeNull()
     const hydrated: Session = { ...thin, messages: [], turns: [{ id: 't', state: 'completed', completedAt: new Date(at - 3_600_000).toISOString() }] }
     await act(async () => root.render(<WorkingBotsPanel agents={agents} sessions={[hydrated]} selectedId={null} onOpen={open} />))
-    const panel = host.querySelector('[aria-label="Working bots"]')!
+    const panel = host.querySelector('[aria-label="Working employees"]')!
     expect(panel.textContent).toContain('1 finished')
     expect(panel.textContent).not.toContain('Waiting')
     // The finished list is folded (and not mounted) until it is opened.

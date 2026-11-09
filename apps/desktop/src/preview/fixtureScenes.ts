@@ -91,7 +91,7 @@ Get-ChildItem -Recurse | Where-Object { $_.Length -gt 1MB }
 A code block with no language at all.
 \`\`\``
 
-const RICH = `A bar chart, a line chart and a data table, as a bot can send them:
+const RICH = `A bar chart, a line chart and a data table, as an employee can send them:
 
 \`\`\`bitbots-chart
 { "type": "bar", "title": "Tests by package", "data": [{ "label": "daemon", "value": 949 }, { "label": "storage", "value": 151 }, { "label": "ui", "value": 1682 }, { "label": "adapters", "value": 120 }] }
@@ -108,7 +108,7 @@ const RICH = `A bar chart, a line chart and a data table, as a bot can send them
 CSV and JSON that can be flipped between code and a table:
 
 \`\`\`csv
-bot,turns,cost
+employee,turns,cost
 Rae,12,0.41
 Tom,3,0.07
 \`\`\``
@@ -126,7 +126,7 @@ And an SVG:
 \`\`\``
 
 const LONG_WORD = 'a'.repeat(400)
-const LONG_PARAGRAPH = Array.from({ length: 14 }, (_, index) => `Sentence ${index + 1} of a long paragraph, which keeps going so you can judge the line length, the spacing and how the bubble grows when a bot writes a lot in one breath.`).join(' ')
+const LONG_PARAGRAPH = Array.from({ length: 14 }, (_, index) => `Sentence ${index + 1} of a long paragraph, which keeps going so you can judge the line length, the spacing and how the bubble grows when an employee writes a lot in one breath.`).join(' ')
 const LONG_CODE = Array.from({ length: 120 }, (_, index) => `const line${index + 1} = compute(${index + 1}) // A comment that makes this line noticeably wider than the bubble it sits in, so it has to scroll`).join('\n')
 const WIDE_TABLE = `| ${Array.from({ length: 14 }, (_, index) => `Column ${index + 1}`).join(' | ')} |\n| ${Array.from({ length: 14 }, () => '---').join(' | ')} |\n${Array.from({ length: 12 }, (_, row) => `| ${Array.from({ length: 14 }, (_, cell) => `Row ${row + 1} cell ${cell + 1}`).join(' | ')} |`).join('\n')}`
 
@@ -234,14 +234,14 @@ const SCENES: Record<string, () => Scene> = {
     { id: 'q2', header: 'Tests', question: 'Should I add tests?', options: [{ label: 'Yes' }, { label: 'No' }], multiSelect: false, allowOther: true },
     { id: 'q3', header: 'Notes', question: 'Anything else I should know? This question is long on purpose, to show how a question wraps when it has much more to say than usual.', options: [], multiSelect: false, allowOther: true },
   ])] }),
-  'proposal-bot': () => ({ title: 'Proposal: a bot', state: 'waiting_permission', messages: lead(), permissions: [proposal('bot', { name: 'Scout', role: 'Research', description: 'Finds references and open-source options.', instructions: 'Search first. Answer concisely, with sources.', provider: 'opencode', model: 'opencode-go/preview', thinking: 'high', approvalMode: 'ask', project: 'project-board', tags: ['research', 'ui'], look: { shape: 'cloud', seed: 'scout' } }, 'Create the bot "Scout"')] }),
+  'proposal-bot': () => ({ title: 'Proposal: an employee', state: 'waiting_permission', messages: lead(), permissions: [proposal('bot', { name: 'Scout', role: 'Research', description: 'Finds references and open-source options.', instructions: 'Search first. Answer concisely, with sources.', provider: 'opencode', model: 'opencode-go/preview', thinking: 'high', approvalMode: 'ask', project: 'project-board', tags: ['research', 'ui'], look: { shape: 'cloud', seed: 'scout' } }, 'Create the employee "Scout"')] }),
   'proposal-project': () => ({ title: 'Proposal: a project', state: 'waiting_permission', messages: lead(), permissions: [proposal('project', { name: 'Marketing site', description: 'The public site and its copy.', folder: { mode: 'new', path: '' }, tags: ['web'] }, 'Create the project "Marketing site"')] }),
   'proposal-task': () => ({ title: 'Proposal: a task', state: 'waiting_permission', messages: lead(), permissions: [proposal('task', { bot: 'agent-pololo', botName: 'Pololo', project: 'project-board', projectName: 'Board', topic: 'Effort picker research', brief: 'Find an open-source effort picker like the 21st.dev one, and report the best three.', doneGoal: 'Three ranked options, each with a licence.', reportBack: 'A short list with links.' }, 'Assign "Effort picker research"')] }),
   'proposal-merge': () => ({ title: 'Proposal: merge', state: 'waiting_permission', messages: lead(), permissions: [proposal('merge', { action: 'merge', worktree: 'C:/work/korus-bitbots/task', repo: 'C:/work/korus', branch: 'bitbots/effort-picker', baseBranch: 'main', baseCommit: 'abc1234', conversation: SCENE_SESSION_ID, botName: 'Pololo', taskTitle: 'Effort picker research', files: ['src/ui/effort/Dropdown.tsx', 'src/ui/effort/dropdown.css', 'docs/effort-picker.md'], diffSummary: '3 files changed, 212 insertions, 4 deletions' }, 'Merge "Effort picker research"')] }),
-  'proposal-update': () => ({ title: 'Proposal: update a bot', state: 'waiting_permission', messages: lead(), permissions: [proposal('bot', { action: 'update', blob: 'agent-pololo', targetName: 'Pololo', role: 'Lead designer', thinking: 'max', approvalMode: 'auto', instructions: 'Lead the design work, and ask before changing tokens.' }, 'Update Pololo')] }),
-  'proposal-playbook': () => ({ title: 'Proposal: the playbook', state: 'waiting_permission', messages: lead(), permissions: [proposal('playbook', { reason: 'You asked me to always check licences first.', text: '# How I work\n\nI am the Manager. I check licences before suggesting a library.\n\n## Proposing a team\n\nOne bot per responsibility.' }, 'Change the playbook')] }),
+  'proposal-update': () => ({ title: 'Proposal: update an employee', state: 'waiting_permission', messages: lead(), permissions: [proposal('bot', { action: 'update', blob: 'agent-pololo', targetName: 'Pololo', role: 'Lead designer', thinking: 'max', approvalMode: 'auto', instructions: 'Lead the design work, and ask before changing tokens.' }, 'Update Pololo')] }),
+  'proposal-playbook': () => ({ title: 'Proposal: the playbook', state: 'waiting_permission', messages: lead(), permissions: [proposal('playbook', { reason: 'You asked me to always check licences first.', text: '# How I work\n\nI am the Manager. I check licences before suggesting a library.\n\n## Proposing a team\n\nOne employee per responsibility.' }, 'Change the playbook')] }),
   'proposal-profile': () => ({ title: 'Proposal: your profile', state: 'waiting_permission', messages: lead(), permissions: [proposal('profile', { category: 'style', key: 'tone', value: 'Direct, plain English. No filler.' }, 'Remember your tone')] }),
-  'proposal-permission': () => ({ title: 'Proposal: permission', state: 'waiting_permission', messages: lead(), permissions: [proposal('permission', { conversation: 'Invoice parser tests', mode: 'auto' }, 'Change this bot to Auto')] }),
+  'proposal-permission': () => ({ title: 'Proposal: permission', state: 'waiting_permission', messages: lead(), permissions: [proposal('permission', { conversation: 'Invoice parser tests', mode: 'auto' }, 'Change this employee to Auto')] }),
   'proposal-open': () => ({ title: 'Proposal: open a conversation', state: 'waiting_permission', messages: lead(), permissions: [proposal('task', { action: 'open', title: 'Effort picker research', conversation: 'session-team-side' }, 'Open a conversation')] }),
 
   team: () => ({ title: 'Assignments in every state', state: 'idle', messages: [
@@ -266,7 +266,7 @@ const SCENES: Record<string, () => Scene> = {
   chips: () => ({ title: 'Team messages', state: 'idle', messages: [
     user('Ask the team.'),
     notice('Find an effort picker.', { kind: 'delegation', direction: 'sent', peerAgentId: 'agent-pololo', peerName: 'Pololo', topic: 'Effort picker', sideSessionId: 'session-team-side' }),
-    notice('Could not reach Pololo: that bot is archived.', { kind: 'delegation', direction: 'failed', peerAgentId: 'agent-pololo', peerName: 'Pololo', topic: 'Effort picker' }),
+    notice('Could not reach Pololo: that employee is archived.', { kind: 'delegation', direction: 'failed', peerAgentId: 'agent-pololo', peerName: 'Pololo', topic: 'Effort picker' }),
     user('[Update from Pololo]\nWaiting for your approval.', { meta: { kind: 'blob_update', fromAgentId: 'agent-pololo', fromName: 'Pololo', sideSessionId: 'session-team-side', requestKind: 'approval', title: 'Run npm test' } }),
     user('[Update from Pololo]\nHas a question for you.', { meta: { kind: 'blob_update', fromAgentId: 'agent-pololo', fromName: 'Pololo', sideSessionId: 'session-team-side', requestKind: 'question', title: 'Which direction?' } }),
     user('[Reply from Pololo]\nNothing pixel-exact exists as a package. Closest: a PostHog dropdown, and a model selector on 21st.dev.', { meta: { kind: 'blob_reply', fromAgentId: 'agent-pololo', fromName: 'Pololo', sideSessionId: 'session-team-side' } }),

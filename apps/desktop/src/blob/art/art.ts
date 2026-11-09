@@ -36,7 +36,7 @@ export const PAINTED_LABELS: Record<PaintedShape, string> = {
   bunny: 'Bunny',
   kitty: 'Kitty',
   ufo: 'UFO',
-  boxbot: 'Box bot',
+  boxbot: 'Box employee',
   tile: 'Tile',
 }
 

@@ -29,7 +29,7 @@ const KINDS: Array<{ value: MemoryRecord['kind']; label: string }> = [
 
 export function scopeLabel(record: Pick<MemoryRecord, 'scope' | 'scopeId'>, agents: readonly Agent[], projects: readonly Project[]): string {
   if (record.scope === 'shared') return 'Everyone'
-  if (record.scope === 'blob') return agents.find((agent) => agent.id === record.scopeId)?.name ?? `A ${entityNoun(themeStyle())}`
+  if (record.scope === 'blob') return agents.find((agent) => agent.id === record.scopeId)?.name ?? `An ${entityNoun(themeStyle())}`
   return projects.find((project) => project.id === record.scopeId)?.name ?? 'A project'
 }
 
@@ -91,7 +91,7 @@ export function MemoryPage({ agents, projects, enabled, sharedWrites, about, con
     <div className="memory-main">
       <strong className="memory-title">{record.pinned && <span className="memory-pin" title="Pinned"><Pin size={12} aria-hidden="true" /></span>}{record.title}</strong>
       <span className="memory-meta">
-        {KINDS.find((kind) => kind.value === record.kind)?.label ?? record.kind} · {scopeLabel(record, agents, projects)} · {record.origin === 'agent' ? `Saved by a ${noun}` : 'Written by you'}
+        {KINDS.find((kind) => kind.value === record.kind)?.label ?? record.kind} · {scopeLabel(record, agents, projects)} · {record.origin === 'agent' ? `Saved by an ${noun}` : 'Written by you'}
       </span>
       <p className="memory-body">{record.body}</p>
     </div>

@@ -85,8 +85,8 @@ describe('General settings mounted controls', () => {
     host = document.createElement('div'); document.body.append(host); root = createRoot(host)
     await act(async () => root.render(<SettingsSheet snapshot={null} initialPage="Chat" onClose={vi.fn()} onRefresh={vi.fn()} onError={vi.fn()} onOpenAgent={vi.fn()} />))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    expect(selectValue(host, 'When you send while a bot is working')).toBe('queue')
-    await chooseOption(host, 'When you send while a bot is working', 'steer')
+    expect(selectValue(host, 'When you send while an employee is working')).toBe('queue')
+    await chooseOption(host, 'When you send while an employee is working', 'steer')
     expect(mocks.rpc).toHaveBeenCalledWith('settings.set', { key: 'composer.busySendMode', value: 'steer' })
   })
 
@@ -168,7 +168,7 @@ describe('General settings mounted controls', () => {
     host = document.createElement('div'); document.body.append(host); root = createRoot(host)
     await act(async () => root.render(<SettingsSheet snapshot={null} initialPage="Appearance" onClose={vi.fn()} onRefresh={vi.fn()} onError={vi.fn()} onOpenAgent={vi.fn()} />))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    expect([...host.querySelectorAll('.settings-nav-label')].map((label) => label.textContent)).toEqual(['App', 'Bots', 'Connections', 'System'])
+    expect([...host.querySelectorAll('.settings-nav-label')].map((label) => label.textContent)).toEqual(['App', 'Employees', 'Connections', 'System'])
     expect(host.querySelector('.settings-nav')?.textContent).not.toContain('Experimental')
     expect(host.querySelector('[aria-label="Model and effort under the name"]')).toBeNull()
     act(() => setThemeStyle('blobots'))
@@ -197,7 +197,7 @@ describe('General settings mounted controls', () => {
     expect(host.querySelector('[aria-label="Show/hide with Ctrl+Alt+B"]')).not.toBeNull()
   })
 
-  it('offers the global "Bots working at once" limit and saves it', async () => {
+  it('offers the global "Employees working at once" limit and saves it', async () => {
     mocks.invoke.mockResolvedValue(true)
     mocks.rpc.mockImplementation(async (method: string) => method === 'settings.get' ? { settings: { 'concurrency.botsAtOnce': 4 } } : {})
     setThemeStyle('haze')
@@ -205,10 +205,10 @@ describe('General settings mounted controls', () => {
     await act(async () => root.render(<SettingsSheet snapshot={null} initialPage="General" onClose={vi.fn()} onRefresh={vi.fn()} onError={vi.fn()} onOpenAgent={vi.fn()} />))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     // FIX39 item 18: this is the only concurrency limit, shown as a General setting.
-    expect(selectValue(host, 'bots working at once')).toBe('4')
-    const options = await selectOptions(host, 'bots working at once')
+    expect(selectValue(host, 'employees working at once')).toBe('4')
+    const options = await selectOptions(host, 'employees working at once')
     expect(options.map((option) => option.value)).toEqual(Array.from({ length: 16 }, (_, index) => String(index + 1)))
-    await chooseOption(host, 'bots working at once', '2')
+    await chooseOption(host, 'employees working at once', '2')
     expect(mocks.rpc).toHaveBeenCalledWith('settings.set', { key: 'concurrency.botsAtOnce', value: 2 })
   })
 
@@ -230,10 +230,10 @@ describe('General settings mounted controls', () => {
     host = document.createElement('div'); document.body.append(host); root = createRoot(host)
     await act(async () => root.render(<SettingsSheet snapshot={null} initialPage="General" onClose={vi.fn()} onRefresh={vi.fn()} onError={vi.fn()} onOpenAgent={vi.fn()} />))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    expect(host.querySelector('[aria-label="Notify when a bot finishes or needs approval"]')).not.toBeNull()
-    // The characters are bots in both looks.
+    expect(host.querySelector('[aria-label="Notify when an employee finishes or needs approval"]')).not.toBeNull()
+    // The characters are employees in both looks.
     act(() => setThemeStyle('blobots'))
-    expect(host.querySelector('[aria-label="Notify when a bot finishes or needs approval"]')).not.toBeNull()
+    expect(host.querySelector('[aria-label="Notify when an employee finishes or needs approval"]')).not.toBeNull()
     expect(host.querySelector('[aria-label="Notify when a blob finishes or needs approval"]')).toBeNull()
     act(() => setThemeStyle('haze'))
   })

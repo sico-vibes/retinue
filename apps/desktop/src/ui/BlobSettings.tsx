@@ -234,7 +234,7 @@ export function BlobSettings({ draft, runtimes, projects = [], errors, execution
     onDraftChange({ ...draft, approvalMode: mode })
   }
 
-  return <fieldset className="blob-settings-body" disabled={locked} aria-label={locked ? 'Locked bot settings' : undefined}>
+  return <fieldset className="blob-settings-body" disabled={locked} aria-label={locked ? 'Locked employee settings' : undefined}>
     {show('look') && <EditGroup id="look" title="Look" label="Appearance">
       <LookEditor
         look={draftLook(draft, agentId)}
@@ -548,7 +548,7 @@ function concurrencyText(capabilities: RuntimeCapabilities | null, stored: numbe
   // record but no longer enforced.
   const global = capabilities?.globalConcurrency
   if (!global) return `Saved cap ${stored}, no longer enforced. Global limit not reported.`
-  return `Up to ${global.limit} bot conversations at once · ${global.active} running`
+  return `Up to ${global.limit} employee conversations at once · ${global.active} running`
 }
 
 function envNote(setting: CapabilitySetting) {

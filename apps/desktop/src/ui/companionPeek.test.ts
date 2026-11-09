@@ -5,11 +5,11 @@ describe('detectFinished', () => {
   const cases: Array<{ name: string; prev: Array<{ id: string; state: string }>; next: Array<{ id: string; state: string }>; focused: string | null; expected: string[] }> = [
     { name: 'working to idle', prev: [{ id: 'a', state: 'working' }], next: [{ id: 'a', state: 'idle' }], focused: null, expected: ['a'] },
     { name: 'starting to completed', prev: [{ id: 'a', state: 'starting' }], next: [{ id: 'a', state: 'completed' }], focused: null, expected: ['a'] },
-    { name: 'never reports the focused bot', prev: [{ id: 'a', state: 'working' }], next: [{ id: 'a', state: 'idle' }], focused: 'a', expected: [] },
+    { name: 'never reports the focused employee', prev: [{ id: 'a', state: 'working' }], next: [{ id: 'a', state: 'idle' }], focused: 'a', expected: [] },
     { name: 'ignores a failed turn', prev: [{ id: 'a', state: 'working' }], next: [{ id: 'a', state: 'error' }], focused: null, expected: [] },
-    { name: 'ignores a bot that was already idle', prev: [{ id: 'a', state: 'idle' }], next: [{ id: 'a', state: 'idle' }], focused: null, expected: [] },
+    { name: 'ignores an employee that was already idle', prev: [{ id: 'a', state: 'idle' }], next: [{ id: 'a', state: 'idle' }], focused: null, expected: [] },
     { name: 'ignores waiting for permission', prev: [{ id: 'a', state: 'working' }], next: [{ id: 'a', state: 'waiting_permission' }], focused: null, expected: [] },
-    { name: 'ignores a new bot with no previous state', prev: [], next: [{ id: 'a', state: 'idle' }], focused: null, expected: [] },
+    { name: 'ignores a new employee with no previous state', prev: [], next: [{ id: 'a', state: 'idle' }], focused: null, expected: [] },
     { name: 'reports several in next order', prev: [{ id: 'a', state: 'working' }, { id: 'b', state: 'starting' }], next: [{ id: 'a', state: 'completed' }, { id: 'b', state: 'idle' }], focused: null, expected: ['a', 'b'] },
     { name: 'state compare is case-insensitive', prev: [{ id: 'a', state: 'Working' }], next: [{ id: 'a', state: 'Completed' }], focused: null, expected: ['a'] },
   ]
@@ -39,10 +39,10 @@ describe('nextPeek', () => {
 })
 
 describe('peekText', () => {
-  it('names one bot and counts several', () => {
-    expect(peekText([], 'bots')).toBe('')
-    expect(peekText(['Claude'], 'bots')).toBe('Claude finished.')
-    expect(peekText(['Claude', 'Codex'], 'bots')).toBe('2 bots finished.')
+  it('names one employee and counts several', () => {
+    expect(peekText([], 'employees')).toBe('')
+    expect(peekText(['Claude'], 'employees')).toBe('Claude finished.')
+    expect(peekText(['Claude', 'Codex'], 'employees')).toBe('2 employees finished.')
     expect(peekText(['Claude', 'Codex', 'Ops'], 'blobs')).toBe('3 blobs finished.')
   })
 })

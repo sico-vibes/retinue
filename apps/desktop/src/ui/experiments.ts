@@ -10,14 +10,14 @@ export const EXPERIMENTS = [
   { name: 'messageActions', label: 'Message actions', help: () => 'Reaction, Reply and Copy on a message, and Retry or Edit on a right-click.' },
   { name: 'search', label: 'Search all conversations', help: () => 'Search messages from the quick switcher. Archived conversations are left out.' },
   { name: 'autoTitles', label: 'Automatic titles', help: () => 'Name a conversation from its first prompt. Titles you set are kept.' },
-  { name: 'undo', label: 'Undo', help: () => `Eight seconds to undo archiving a ${entityNoun(themeStyle())} or deleting a conversation.` },
+  { name: 'undo', label: 'Undo', help: () => `Eight seconds to undo archiving an ${entityNoun(themeStyle())} or deleting a conversation.` },
   { name: 'shortcuts', label: 'Shortcut list', help: () => 'Opens with Ctrl+/ and from the profile menu.' },
   { name: 'resumeAfterUsageLimits', label: 'Resume after usage limits', help: () => 'Pick up a limited conversation once, when the provider\'s next window opens.' },
   { name: 'autoRetry', label: 'Automatic retry', help: () => 'After a temporary failure, send "Please continue." up to three times. Your message is never resent.' },
   { name: 'memory', label: 'Memory', help: () => `${entityNoun(themeStyle(), { plural: true, capital: true })} save and recall short notes across conversations. Shared notes wait for your approval.` },
   { name: 'approvalBadge', label: 'Taskbar badge', help: () => `Show waiting ${entityNoun(themeStyle(), { plural: true })} on the Windows taskbar and tray.` },
   { name: 'sidebarModel', label: 'Model and effort under the name', help: () => 'Shown in place of the last message while nothing is running.' },
-  { name: 'botLock', label: 'Lock a bot', help: () => `Adds Lock to a ${entityNoun(themeStyle())}'s right-click menu. Nobody can change a locked ${entityNoun(themeStyle())}, the CEO included, until you unlock it.` },
+  { name: 'botLock', label: 'Lock an employee', help: () => `Adds Lock to an ${entityNoun(themeStyle())}'s right-click menu. Nobody can change a locked ${entityNoun(themeStyle())}, the CEO included, until you unlock it.` },
 ] as const
 export type ExperimentName = typeof EXPERIMENTS[number]['name']
 export type Experiments = Record<ExperimentName, boolean>

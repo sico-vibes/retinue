@@ -35,7 +35,7 @@ describe('conversation permission mode', () => {
     expect(sessionApprovalMode(session, { ...agent, effectiveApprovalMode:'bypass' }).mode).toBe('bypass')
   })
 
-  it('writes the bot and clears the conversation pin, confirming full access', async () => {
+  it('writes the employee and clears the conversation pin, confirming full access', async () => {
     const updated = vi.fn()
     const agentUpdated = vi.fn()
     rpc.mockImplementation(async (method: string, params: Record<string, unknown>) => method === 'agent.update'
@@ -44,12 +44,12 @@ describe('conversation permission mode', () => {
     const host = mount(<PermissionModeControl session={session} agent={agent} disabled={false} onSessionUpdated={updated} onAgentUpdated={agentUpdated} onError={() => undefined} />)
     const trigger = host.querySelector<HTMLButtonElement>('.permission-pill')!
     expect(trigger.textContent).toContain('Ask first')
-    expect(trigger.getAttribute('aria-label')).toContain('bot default')
+    expect(trigger.getAttribute('aria-label')).toContain('employee default')
 
     await act(async () => { trigger.click() })
     const items = [...host.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
     expect(items.map((item) => item.getAttribute('aria-checked'))).toEqual(['true', 'false', 'false', 'false'])
-    expect(items[0].textContent).toContain('Bot default')
+    expect(items[0].textContent).toContain('Employee default')
     // Choosing Auto writes the bot, not the conversation, and drops the pin.
     await act(async () => { items[2].click() })
     await flush()
@@ -77,7 +77,7 @@ describe('conversation permission mode', () => {
     expect(rpc).toHaveBeenCalledWith('agent.update', { agentId: 'agent', approvalMode: null })
   })
 
-  it('writes the bot directly for a bot with no conversation open', async () => {
+  it('writes the employee directly for an employee with no conversation open', async () => {
     const updated = vi.fn()
     const agentUpdated = vi.fn()
     rpc.mockImplementation(async (method: string) => method === 'agent.update' ? { agent } : { session })
@@ -131,7 +131,7 @@ describe('conversation permission mode', () => {
   it('restores the previous mode when the write fails', async () => {
     const updated = vi.fn()
     const onError = vi.fn()
-    rpc.mockImplementation(async () => { throw new Error('conflict: The bot is locked.') })
+    rpc.mockImplementation(async () => { throw new Error('conflict: The employee is locked.') })
     const host = mount(<PermissionModeControl session={session} agent={agent} disabled={false} onSessionUpdated={updated} onAgentUpdated={() => undefined} onError={onError} />)
     await act(async () => { host.querySelector<HTMLButtonElement>('.permission-pill')!.click() })
     await act(async () => { host.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')[1].click() })
@@ -146,7 +146,7 @@ describe('conversation permission mode', () => {
     const host = mount(<PermissionModeControl session={session} agent={agent} disabled locked onSessionUpdated={() => undefined} onError={() => undefined} />)
     const trigger = host.querySelector<HTMLButtonElement>('.permission-pill')!
     expect(trigger.disabled).toBe(true)
-    expect(trigger.getAttribute('title')).toBe('This bot is locked. Unlock it to change its settings.')
+    expect(trigger.getAttribute('title')).toBe('This employee is locked. Unlock it to change its settings.')
     // Unlocked, the pill keeps its own explanation.
     const open = mount(<PermissionModeControl session={session} agent={agent} disabled={false} onSessionUpdated={() => undefined} onError={() => undefined} />)
     expect(open.querySelector<HTMLButtonElement>('.permission-pill')?.getAttribute('title')).toBe('You approve each command and file change.')

@@ -89,10 +89,10 @@ function SecretRequestDialog({ request, onDone }: { request: SecretRequest; onDo
     <form ref={ref as unknown as React.RefObject<HTMLFormElement>} className="blob-dialog secret-request" role="dialog" aria-modal="true" aria-labelledby="secret-request-title" tabIndex={-1} autoComplete="off" onSubmit={(event) => { event.preventDefault(); if (value) void send('secret.request.answer') }}>
       <h2 id="secret-request-title">{request.botName} is asking for {request.name}</h2>
       <p className="secret-reason">{request.reason}</p>
-      {left !== null && <small className="project-settings-note" role="timer">{left > 0 ? `Answer within ${left} second${left === 1 ? '' : 's'}. The bot is waiting.` : 'This request has run out of time.'}</small>}
+      {left !== null && <small className="project-settings-note" role="timer">{left > 0 ? `Answer within ${left} second${left === 1 ? '' : 's'}. The employee is waiting.` : 'This request has run out of time.'}</small>}
       <label className="new-project-field"><span>{request.name}</span>
         <input ref={input} className="text-input" type="password" value={value} autoComplete="new-password" onChange={(event) => setValue(event.target.value)} />
-        <small className="project-settings-note">For this turn only. It goes to a private file that's deleted when the turn ends, and it isn't saved in the conversation. {request.botName} can read it, so what happens to it after that is up to the bot.</small>
+        <small className="project-settings-note">For this turn only. It goes to a private file that's deleted when the turn ends, and it isn't saved in the conversation. {request.botName} can read it, so what happens to it after that is up to the employee.</small>
       </label>
       {problem && <p className="new-project-error" role="alert">{problem}</p>}
       <div className="blob-dialog-actions">

@@ -13,7 +13,7 @@ export const DEFAULT_AVATAR_COLOUR = '#b7a7f4'
 
 /** Kept for the expanded onboarding preview below the look cards. */
 export function LookAvatar({ look, size = 56, mood = 'idle', greeting = false, mini = false }: { look: ThemeStyle; size?: number; mood?: BlobMood; greeting?: boolean; mini?: boolean }) {
-  return <BlobCanvas style={look} color={DEFAULT_AVATAR_COLOUR} size={size} mood={mood} greeting={greeting} mini={mini} decorative label={look === 'haze' ? 'Haze bot' : 'Stone bot'} />
+  return <BlobCanvas style={look} color={DEFAULT_AVATAR_COLOUR} size={size} mood={mood} greeting={greeting} mini={mini} decorative label={look === 'haze' ? 'Haze employee' : 'Stone employee'} />
 }
 
 /**

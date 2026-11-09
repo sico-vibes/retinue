@@ -240,7 +240,7 @@ describe('rail Create PR', () => {
     expect(calls().some(([method]) => method === 'session.prompt' || method === 'session.queue.add')).toBe(false)
   })
 
-  it('is disabled, with the reason, when there is nothing to put in a pull request or the bot cannot take a message', async () => {
+  it('is disabled, with the reason, when there is nothing to put in a pull request or the employee cannot take a message', async () => {
     replies['session.repository'] = repo({ files: [], addedLines: 0, removedLines: 0 })
     await mount(session())
     const clean = card('changes').querySelector<HTMLButtonElement>('.rail-pr')!

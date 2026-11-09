@@ -36,7 +36,7 @@ export function normalizeFanout(raw: unknown): Fanout | null {
     const row = part as Record<string, unknown>
     if (typeof row.agentId !== 'string') return []
     const worktree = row.worktree && typeof row.worktree === 'object' ? row.worktree as { path?: unknown; branch?: unknown } : null
-    return [{ agentId: row.agentId, agentName: text(row.agentName) ?? 'A removed bot', sessionId: text(row.sessionId), state: text(row.state) ?? 'failed', reply: text(row.reply), error: text(row.error), durationMs: count(row.durationMs), tokens: count(row.tokens), worktree: worktree && typeof worktree.path === 'string' && typeof worktree.branch === 'string' ? { path: worktree.path, branch: worktree.branch } : null }]
+    return [{ agentId: row.agentId, agentName: text(row.agentName) ?? 'A removed employee', sessionId: text(row.sessionId), state: text(row.state) ?? 'failed', reply: text(row.reply), error: text(row.error), durationMs: count(row.durationMs), tokens: count(row.tokens), worktree: worktree && typeof worktree.path === 'string' && typeof worktree.branch === 'string' ? { path: worktree.path, branch: worktree.branch } : null }]
   })
   return { id: item.id, title: text(item.title) ?? 'Comparison', text: typeof item.text === 'string' ? item.text : '', projectName: text(item.projectName), createdAt: text(item.createdAt), chosenSessionId: text(item.chosenSessionId), rows }
 }
@@ -96,9 +96,9 @@ export function FanoutDialog({ agents, projects, runtimes, initialAgent, onCance
   }
   return <div className={`sheet-backdrop blob-dialog-backdrop ${entered ? 'is-entered' : ''}`}>
     <section ref={ref} className="blob-dialog fanout-dialog" role="dialog" aria-modal="true" aria-labelledby="fanout-title" tabIndex={-1}>
-      <h2 id="fanout-title">Ask several bots</h2>
-      <p>Each bot gets the same message in its own new conversation, and you compare the answers side by side.</p>
-      <div className="fanout-bots" role="group" aria-label={`Choose ${MIN_FANOUT_BOTS} to ${MAX_FANOUT_BOTS} bots`}>
+      <h2 id="fanout-title">Ask several employees</h2>
+      <p>Each employee gets the same message in its own new conversation, and you compare the answers side by side.</p>
+      <div className="fanout-bots" role="group" aria-label={`Choose ${MIN_FANOUT_BOTS} to ${MAX_FANOUT_BOTS} employees`}>
         {roster.map((agent) => {
           const on = picked.includes(agent.id)
           const available = usable(agent)
@@ -112,12 +112,12 @@ export function FanoutDialog({ agents, projects, runtimes, initialAgent, onCance
       <label className="fanout-field"><span>Project</span>
         <Select ariaLabel="Project" variant="muted" value={projectValue} onChange={setProjectValue} options={[...projects.filter((project) => !!project.path).map((project) => ({ value: project.id, label: project.name })), { value: '', label: 'No project' }]} />
       </label>
-      {projectValue !== '' && <label className="fanout-copy"><input type="checkbox" checked={worktrees} onChange={(event) => setWorktrees(event.target.checked)} /><span>Give each bot its own copy of the repository<small>So their edits can't clash. Applies to git projects. Uncommitted changes aren't copied.</small></span></label>}
-      <textarea className="fanout-prompt" rows={4} value={prompt} maxLength={100_000} data-dialog-initial-focus="" aria-label="The message for every bot" placeholder="What should they all answer?" onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void start() } }} />
+      {projectValue !== '' && <label className="fanout-copy"><input type="checkbox" checked={worktrees} onChange={(event) => setWorktrees(event.target.checked)} /><span>Give each employee its own copy of the repository<small>So their edits can't clash. Applies to git projects. Uncommitted changes aren't copied.</small></span></label>}
+      <textarea className="fanout-prompt" rows={4} value={prompt} maxLength={100_000} data-dialog-initial-focus="" aria-label="The message for every employee" placeholder="What should they all answer?" onChange={(event) => setPrompt(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void start() } }} />
       {problem && <p className="fanout-problem" role="alert">{problem}</p>}
       <div className="blob-dialog-actions">
         <button type="button" className="secondary-button" disabled={busy} onClick={close}>Cancel</button>
-        <button type="button" className="primary-button" disabled={!ready} onClick={() => void start()}>{busy ? 'Sending…' : picked.length >= MIN_FANOUT_BOTS ? `Ask ${picked.length} bots` : `Choose ${MIN_FANOUT_BOTS} or more`}</button>
+        <button type="button" className="primary-button" disabled={!ready} onClick={() => void start()}>{busy ? 'Sending…' : picked.length >= MIN_FANOUT_BOTS ? `Ask ${picked.length} employees` : `Choose ${MIN_FANOUT_BOTS} or more`}</button>
       </div>
     </section>
   </div>
@@ -179,7 +179,7 @@ export function CompareView({ initialId, agents, connected, onBack, onOpenSessio
       <strong className="blob-page-heading">{open ? open.title : 'Comparisons'}</strong>
       <span className="compare-header-end">
         {open && <button type="button" className="ghost-button small" title="Removes this comparison. The conversations stay." onClick={() => void remove(open)}><Trash2 size={13} aria-hidden="true" />Remove</button>}
-        {!open && <button type="button" className="primary-button small" disabled={!connected} onClick={onStartNew}><Split size={14} aria-hidden="true" />Ask several bots</button>}
+        {!open && <button type="button" className="primary-button small" disabled={!connected} onClick={onStartNew}><Split size={14} aria-hidden="true" />Ask several employees</button>}
       </span>
     </header>
     {problem && <p className="fanout-problem compare-problem" role="alert">{problem}</p>}
@@ -219,7 +219,7 @@ export function CompareView({ initialId, agents, connected, onBack, onOpenSessio
       </div>
       : <div className="compare-list-wrap">
         {list === null ? <p className="compare-waiting" role="status">Reading comparisons…</p>
-          : list.length === 0 ? <div className="compare-empty"><Split size={22} aria-hidden="true" /><p>Ask several bots the same thing and read their answers side by side.</p></div>
+          : list.length === 0 ? <div className="compare-empty"><Split size={22} aria-hidden="true" /><p>Ask several employees the same thing and read their answers side by side.</p></div>
           : <ul className="compare-list">{list.map((item) => <li key={item.id}><button type="button" onClick={() => setOpenId(item.id)}>
             <strong>{item.title}</strong>
             <small>{[item.rows.map((row) => row.agentName).join(', '), item.projectName, item.createdAt ? new Date(item.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' }) : null].filter(Boolean).join(' · ')}</small>

@@ -95,7 +95,7 @@ describe('tags (FIX39 item 21)', () => {
     expect(view.querySelector('.tag-editor')).toBeNull()
   })
 
-  it('disables Tags on a locked bot', async () => {
+  it('disables Tags on a locked employee', async () => {
     const view = mount(actions())
     const menu = await openBlobMenu(view, 'agent-locked')
     // FIX39 item 13: a locked bot keeps its tags, so the entry is disabled.

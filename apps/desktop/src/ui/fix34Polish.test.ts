@@ -54,7 +54,7 @@ describe('remote banner', () => {
 
 describe('companion conversations', () => {
   const s = (id: string, extra: Partial<Session>): Session => ({ id, runtimeId: 'rt', agentId: 'a', ...extra })
-  it('lists the bot’s own conversations newest first, skipping empty ones except the open one', () => {
+  it('lists the employee’s own conversations newest first, skipping empty ones except the open one', () => {
     const sessions = [
       s('old', { updatedAt: '2026-10-10', messages: [{ id: 'm', role: 'user', content: 'x' }] }),
       s('new', { updatedAt: '2026-10-16', messages: [{ id: 'm', role: 'user', content: 'x' }] }),

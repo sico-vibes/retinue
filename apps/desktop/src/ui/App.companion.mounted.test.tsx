@@ -302,8 +302,8 @@ describe('companion drag and usage labels', () => {
     const rows = [...view.host.querySelectorAll('.cs-bot')]
     expect(rows.length).toBeGreaterThan(0)
     for (const row of rows) {
-      expect(row.hasAttribute(DRAG), 'bot row').toBe(false)
-      for (const canvas of row.querySelectorAll('canvas')) expect(canvas.hasAttribute(DRAG), 'bot row face').toBe(false)
+      expect(row.hasAttribute(DRAG), 'employee row').toBe(false)
+      for (const canvas of row.querySelectorAll('canvas')) expect(canvas.hasAttribute(DRAG), 'employee row face').toBe(false)
     }
     assertIsland(view.host, 'home')
 
@@ -356,7 +356,7 @@ describe('companion drag and usage labels', () => {
     assertIsland(approval.host, 'approval')
   })
 
-  it('names the project in the pill while the bot works in it, and not when it rests (Phase 1A)', async () => {
+  it('names the project in the pill while the employee works in it, and not when it rests (Phase 1A)', async () => {
     const board = { id: 'project-board', name: 'Board', path: 'C:/work/board', sortOrder: 0 }
     configure(snapshot({ projects: [board], sessions: [session({ ...claudeSession, state: 'working', projectId: board.id, projectName: board.name })] }))
     const view = startApp('?companion')
@@ -469,9 +469,9 @@ describe('companion drag and usage labels', () => {
     await press(companion.host, 'Activity')
     await companion.settle()
     const glance = companion.host.querySelector('.cs-glance')
-    expect(glance?.textContent?.replace(/\s+/g, ' ')).toContain('All bots: Tokens')
+    expect(glance?.textContent?.replace(/\s+/g, ' ')).toContain('All employees: Tokens')
     expect(glance?.textContent).not.toContain('Cost')
-    expect(glance?.getAttribute('title')).toContain('Reported tokens across all bots')
+    expect(glance?.getAttribute('title')).toContain('Reported tokens across all employees')
     const figures = [...(glance?.querySelectorAll('b') ?? [])].map((node) => node.textContent)
     const tokens = new Intl.NumberFormat(undefined, { notation: 'standard', maximumFractionDigits: 1 }).format(150)
     expect(figures).toEqual([tokens])

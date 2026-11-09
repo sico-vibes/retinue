@@ -128,7 +128,7 @@ describe('user accent colours', () => {
     expect(isThemeStyle('')).toBe(false)
     expect(isThemeStyle(undefined)).toBe(false)
     expect(THEME_LOOKS.map((look) => look.id)).toEqual(THEME_STYLES)
-    expect(THEME_LOOKS[0]?.description).toBe('Smoky glass. Bots show a logo or a character.')
+    expect(THEME_LOOKS[0]?.description).toBe('Smoky glass. Employees show a logo or a character.')
     expect(THEME_LOOKS[1]?.description).toBe('Soft, quiet and monochrome.')
   })
 

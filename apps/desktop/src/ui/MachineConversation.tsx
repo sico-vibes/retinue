@@ -16,7 +16,7 @@ import './machines.css'
 
 const messageOf = (reason: unknown, fallback: string) => reason instanceof Error && reason.message ? reason.message : typeof reason === 'string' && reason ? reason : fallback
 const POLL_MS = 3000
-const STEP_WORD: Record<string, string> = { prepare: 'Saved the work on the other machine', code: 'Got the code', bot: 'Matched the bot', import: 'Copied the conversation', commit: 'Handed over', open: 'Opened it here' }
+const STEP_WORD: Record<string, string> = { prepare: 'Saved the work on the other machine', code: 'Got the code', bot: 'Matched the employee', import: 'Copied the conversation', commit: 'Handed over', open: 'Opened it here' }
 
 type Conversation = { id: string; title?: string | null; updatedAt?: string | null; projectName?: string | null; state?: string | null; link?: Session['link'] }
 

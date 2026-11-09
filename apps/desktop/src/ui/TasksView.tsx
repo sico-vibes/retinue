@@ -138,7 +138,7 @@ function TaskDetailDialog({ task, agents, projects, connected, nowMs, board, onC
       <header className="task-dialog-head"><h2 id="task-detail-title">{task.title}</h2><span className={`task-state tone-${state}`}>{taskStateLabel(task)}</span></header>
       <div className="task-detail-content">
       <dl className="task-facts">
-        {assignee && <><dt>Bot</dt><dd>{assignee.name}</dd></>}
+        {assignee && <><dt>Employee</dt><dd>{assignee.name}</dd></>}
         {project && <><dt>Project</dt><dd>{project.name}</dd></>}
         {task.startedAt && <><dt>Started</dt><dd>{when(task.startedAt)}</dd></>}
         {took && <><dt>{task.completedAt ? 'Took' : 'Running for'}</dt><dd>{took}</dd></>}
@@ -151,8 +151,8 @@ function TaskDetailDialog({ task, agents, projects, connected, nowMs, board, onC
       {task.doneGoal && <section className="task-text"><h3>Done when</h3><SafeMarkdown text={task.doneGoal} onOpenLink={(url) => void openSafeLink(url)} /></section>}
       {task.reportBack && <section className="task-text"><h3>Report back</h3><SafeMarkdown text={task.reportBack} onOpenLink={(url) => void openSafeLink(url)} /></section>}
       {!!task.images?.length && <section className="task-text"><h3>Images</h3><TaskImageStrip taskId={task.id} images={task.images} load={board.image} /></section>}
-      {state === 'awaiting_review' && <p className="task-note">The bot finished its turn. Check the result, then mark the task done or not done. Finishing a turn does not count as done.</p>}
-      {runs.length > 1 && <ul className="task-runs" aria-label="Attempts">{runs.slice().sort((a, b) => b.attempt - a.attempt).map((item) => <li key={item.id}><span>Attempt {item.attempt}</span><span>{item.assigneeAgentName ?? 'Bot'}</span><span>{TASK_STATE_LABEL[item.state as keyof typeof TASK_STATE_LABEL] ?? item.state}</span></li>)}</ul>}
+      {state === 'awaiting_review' && <p className="task-note">The employee finished its turn. Check the result, then mark the task done or not done. Finishing a turn does not count as done.</p>}
+      {runs.length > 1 && <ul className="task-runs" aria-label="Attempts">{runs.slice().sort((a, b) => b.attempt - a.attempt).map((item) => <li key={item.id}><span>Attempt {item.attempt}</span><span>{item.assigneeAgentName ?? 'Employee'}</span><span>{TASK_STATE_LABEL[item.state as keyof typeof TASK_STATE_LABEL] ?? item.state}</span></li>)}</ul>}
       {failure && <p className="tasks-problem" role="alert">{failure}</p>}
       </div>
       <div className="blob-dialog-actions task-actions">

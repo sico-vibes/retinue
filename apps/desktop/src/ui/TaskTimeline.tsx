@@ -66,7 +66,7 @@ export function TaskTimeline({ tasks, runsByTask, agents, nowMs, onOpen }: TaskT
       <div className="segmented" role="radiogroup" aria-label="Time range">{TIMELINE_RANGES.map((option, index) => <button key={option.minutes} type="button" role="radio" aria-checked={index === rangeIndex} className={index === rangeIndex ? 'on' : undefined} onClick={() => setRangeIndex(index)}>{option.label}</button>)}</div>
     </div>
     {lanes.length === 0
-      ? <p className="delegate-empty">Nothing was recorded in the last {range.label}. Bars appear here when a bot starts or queues a task.</p>
+      ? <p className="delegate-empty">Nothing was recorded in the last {range.label}. Bars appear here when an employee starts or queues a task.</p>
       : <div className="timeline-grid">
         <div className="timeline-axis" aria-hidden="true"><span className="timeline-axis-spacer" /><div className="timeline-axis-track">{ticks.map((minutes) => <span key={minutes} className="timeline-tick" style={{ left: `${(1 - minutes / range.minutes) * 100}%` }}>{tickLabel(minutes)}</span>)}</div></div>
         {lanes.map(({ agent, bars, rows }) => <div key={agent.id} className="timeline-lane">

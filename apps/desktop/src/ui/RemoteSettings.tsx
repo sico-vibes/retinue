@@ -76,8 +76,8 @@ export function PushSetting() {
   }
   if (enabled === null) return null
   return <SettingsGroup title="Phone notifications">
-    <SettingsRow label="Tell my phone when a bot needs me" hint="A notice says only the bot's name, never what it's doing. It goes through Google's, Apple's, Microsoft's or Mozilla's push service, whichever your phone or browser uses. Each device then turns it on for itself.">
-      <button type="button" role="switch" aria-checked={enabled} aria-label="Tell my phone when a bot needs me" className={`toggle ${enabled ? 'on' : ''}`} onClick={() => { if (enabled) void change(false); else setConsent(true) }}><i /></button>
+    <SettingsRow label="Tell my phone when an employee needs me" hint="A notice says only the employee's name, never what it's doing. It goes through Google's, Apple's, Microsoft's or Mozilla's push service, whichever your phone or browser uses. Each device then turns it on for itself.">
+      <button type="button" role="switch" aria-checked={enabled} aria-label="Tell my phone when an employee needs me" className={`toggle ${enabled ? 'on' : ''}`} onClick={() => { if (enabled) void change(false); else setConsent(true) }}><i /></button>
     </SettingsRow>
     {problem && <p className="settings-banner error" role="alert">{problem}</p>}
     {consent && <ConfirmDialog title="Send notices through a push service?" body="Your phone's push service carries each notice. It sees that one arrived for your device, and the text is encrypted so that only your device can read it. No message text, tool names or project names are ever in one." confirmLabel="Turn on" cancelLabel="Not now" onConfirm={() => { setConsent(false); void change(true) }} onCancel={() => setConsent(false)} />}
@@ -179,7 +179,7 @@ export function RemoteSettings({ onOpenPower }: { onOpenPower?: () => void }) {
       </div>}
       {needsAccount && !on && <p className="remote-native-note" role="note">Set a username and password above first.</p>}
       {native && nativeStatus?.loginPaused && <p className="settings-banner error" role="alert">Too many wrong passwords. Sign-ins are paused{nativeStatus.pausedUntil ? ` until ${new Date(nativeStatus.pausedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}. If that wasn’t you, change the password.</p>}
-      <SettingsRow label="Allow remote devices" hint={native ? 'Devices that sign in and that you approve can reach this computer’s bots. Turn it off and every device is disconnected at once.' : 'Paired devices on your Tailscale network can reach this computer’s bots. Turn it off and every device is disconnected at once.'}>
+      <SettingsRow label="Allow remote devices" hint={native ? 'Devices that sign in and that you approve can reach this computer’s employees. Turn it off and every device is disconnected at once.' : 'Paired devices on your Tailscale network can reach this computer’s employees. Turn it off and every device is disconnected at once.'}>
         <button type="button" role="switch" aria-checked={on} aria-label="Allow remote devices" className={`toggle ${on ? 'on' : ''}`} disabled={state.busy || status?.link === 'starting' || (!on && (!!fix || needsAccount))}
           onClick={() => { if (on) void remote.disable(); else setConsent(true) }}><i /></button>
       </SettingsRow>
@@ -254,7 +254,7 @@ export function RemoteSettings({ onOpenPower }: { onOpenPower?: () => void }) {
     {on && <PushSetting />}
 
     {on && <SettingsGroup title="Safety">
-      <SettingsRow label="Approve requests from remote devices" hint={`A message sent from a phone can make a ${noun} run commands on this computer. Leave this off to approve on this computer only.`}>
+      <SettingsRow label="Approve requests from remote devices" hint={`A message sent from a phone can make an ${noun} run commands on this computer. Leave this off to approve on this computer only.`}>
         <button type="button" role="switch" aria-checked={approvalsOn} aria-label="Approve requests from remote devices" className={`toggle ${approvalsOn ? 'on' : ''}`} disabled={state.busy}
           onClick={() => void remote.setSecurity({ approvalsFromRemote: !approvalsOn })}><i /></button>
       </SettingsRow>
@@ -278,7 +278,7 @@ export function RemoteSettings({ onOpenPower }: { onOpenPower?: () => void }) {
     {state.error && <p className="settings-banner error" role="alert">{state.error}</p>}
 
     {consent && <ConfirmDialog title="Turn on Remote?" confirmLabel="Turn on" cancelLabel="Not now"
-      body={native ? `Bitbots will listen on this computer’s network addresses. Anyone who can reach the port sees a sign-in page; only someone with your password, and a device you then approve here, gets in. Wrong passwords are slowed down and locked out. A message from an approved device can make a ${noun} work on this computer, within the approval mode you have set. You can turn this off at any time.` : `Bitbots will be published on your private Tailscale network. Only devices signed in to your Tailscale can reach it, and each one must be paired and approved by you here. A message from a paired device can make a ${noun} work on this computer, within the approval mode you have set. You can turn this off at any time.`}
+      body={native ? `Bitbots will listen on this computer’s network addresses. Anyone who can reach the port sees a sign-in page; only someone with your password, and a device you then approve here, gets in. Wrong passwords are slowed down and locked out. A message from an approved device can make an ${noun} work on this computer, within the approval mode you have set. You can turn this off at any time.` : `Bitbots will be published on your private Tailscale network. Only devices signed in to your Tailscale can reach it, and each one must be paired and approved by you here. A message from a paired device can make an ${noun} work on this computer, within the approval mode you have set. You can turn this off at any time.`}
       onConfirm={() => { setConsent(false); void remote.enable() }} onCancel={() => setConsent(false)} />}
     {revoking && <ConfirmDialog title={`Remove ${revoking.name}?`} confirmLabel="Remove" cancelLabel="Keep" tone="danger"
       body="It is signed out now and has to pair again to come back. Conversations stay on this computer."

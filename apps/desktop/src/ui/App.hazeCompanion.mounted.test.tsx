@@ -258,7 +258,7 @@ async function press(host: ParentNode, label: string) {
 }
 
 describe('Haze companion', () => {
-  it('keeps the compact bar draggable and shows the focused bot by name', async () => {
+  it('keeps the compact bar draggable and shows the focused employee by name', async () => {
     const view = startApp('?companion=1')
     await view.settle()
     expect(view.host.querySelector('.companion-root')?.getAttribute('data-mode')).toBe('petit')
@@ -266,7 +266,7 @@ describe('Haze companion', () => {
     assertIsland(view.host, 'haze petit')
   })
 
-  it('opens as a small copy of the main window: every bot on the left, the conversation on the right', async () => {
+  it('opens as a small copy of the main window: every employee on the left, the conversation on the right', async () => {
     const view = startApp('?companion=1')
     await view.settle()
     await press(view.host, 'Open companion home')
@@ -281,7 +281,7 @@ describe('Haze companion', () => {
     expect(view.host.querySelector('.cs-head .cs-title b')?.textContent).toBe('Claude')
     expect(view.host.querySelector('.cs-chat .chat-log')?.textContent).toContain('Hello from the test')
     expect(view.host.querySelector('.cs-chat textarea[aria-label="Message agent"]')).not.toBeNull()
-    for (const row of rows) expect(row.hasAttribute(DRAG), 'bot row').toBe(false)
+    for (const row of rows) expect(row.hasAttribute(DRAG), 'employee row').toBe(false)
     assertIsland(view.host, 'haze home')
   })
 
@@ -350,7 +350,7 @@ describe('Haze companion', () => {
 describe.each(['blobots'] as const)('The same companion layout in %s', (look) => {
   beforeEach(() => { setThemeStyle(look) })
 
-  it('shows the bot list and conversation, with no Haze gradient and no island tabs', async () => {
+  it('shows the employee list and conversation, with no Haze gradient and no island tabs', async () => {
     const view = startApp('?companion=1')
     await view.settle()
     await press(view.host, 'Open companion home')
@@ -367,7 +367,7 @@ describe.each(['blobots'] as const)('The same companion layout in %s', (look) =>
 })
 
 // FIX43 item 7: the main window opens a bot with no conversation into a local draft (FIX38 H2); the companion does the same.
-describe.each(['haze', 'blobots'] as const)('A bot without a conversation in the %s companion', (look) => {
+describe.each(['haze', 'blobots'] as const)('An employee without a conversation in the %s companion', (look) => {
   beforeEach(() => { setThemeStyle(look) })
 
   it('shows a ready composer, stores nothing on the click, and the first message creates the conversation', async () => {

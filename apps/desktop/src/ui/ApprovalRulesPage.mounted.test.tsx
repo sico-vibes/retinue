@@ -25,14 +25,14 @@ async function mount(node: React.ReactNode) {
 describe('Settings → Approvals', () => {
   const agents = [{ id: 'a1', name: 'Codex' }] as Agent[]
 
-  it('lists the saved rules per bot and removes one', async () => {
+  it('lists the saved rules per employee and removes one', async () => {
     h.rpc.mockImplementation(async (method: string) => method === 'permission.rules.list'
       ? { rules: [{ id: 'r1', agentId: 'a1', kind: 'command', label: 'Run `npm test`' }, { id: 'r2', agentId: 'gone', kind: 'edit', label: 'Edit src/a.ts' }] }
       : { deleted: true })
     await mount(<ApprovalRulesPage agents={agents} />)
     expect(host.textContent).toContain('Codex')
     expect(host.textContent).toContain('Run `npm test`')
-    expect(host.textContent).toContain('A removed bot')
+    expect(host.textContent).toContain('A removed employee')
     await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label="Stop always allowing Run `npm test` for Codex"]')!.click(); await Promise.resolve() })
     expect(h.rpc).toHaveBeenCalledWith('permission.rules.delete', { id: 'r1' })
     expect(host.textContent).not.toContain('Run `npm test`')

@@ -29,15 +29,15 @@ describe('agent draft validation', () => {
 
   it('maps every daemon code row to the stable sentence', () => {
     const cases: Array<[string, DaemonFailureKind, { archived?: boolean; sentName?: boolean } | undefined, string]> = [
-      ['conflict', 'agent.create', undefined, 'Another bot already uses this name.'],
-      ['conflict', 'agent.update', { sentName: true }, 'Another bot already uses this name.'],
-      ['conflict', 'agent.update', { archived: true, sentName: true }, 'This bot is archived and cannot be edited.'],
-      ['conflict', 'session.new', undefined, 'This bot is archived, so a new session cannot be started.'],
+      ['conflict', 'agent.create', undefined, 'Another employee already uses this name.'],
+      ['conflict', 'agent.update', { sentName: true }, 'Another employee already uses this name.'],
+      ['conflict', 'agent.update', { archived: true, sentName: true }, 'This employee is archived and cannot be edited.'],
+      ['conflict', 'session.new', undefined, 'This employee is archived, so a new session cannot be started.'],
       ['not_found', 'agent.create', undefined, 'That runtime is no longer available. Refresh and choose another.'],
-      ['not_found', 'agent.get', undefined, 'That bot is no longer available. Refresh and try again.'],
-      ['not_found', 'agent.update', undefined, 'That bot is no longer available. Refresh and try again.'],
-      ['not_found', 'agent.delete', undefined, 'That bot is no longer available. Refresh and try again.'],
-      ['not_found', 'session.new', undefined, 'That bot is no longer available. Refresh and try again.'],
+      ['not_found', 'agent.get', undefined, 'That employee is no longer available. Refresh and try again.'],
+      ['not_found', 'agent.update', undefined, 'That employee is no longer available. Refresh and try again.'],
+      ['not_found', 'agent.delete', undefined, 'That employee is no longer available. Refresh and try again.'],
+      ['not_found', 'session.new', undefined, 'That employee is no longer available. Refresh and try again.'],
       ['not_found', 'agent.reorder', undefined, 'That runtime is no longer available.'],
       ['invalid_argument', 'agent.create', undefined, 'Check the name, description, colour, and runtime, then try again.'],
       ['invalid_argument', 'agent.update', undefined, 'Check the name, description, colour, and runtime, then try again.'],

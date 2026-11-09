@@ -485,7 +485,7 @@ describe('effort availability', () => {
 
 // FIX39 item 13 / P5 audit S2: a locked bot's composer controls are disabled
 // and say why.
-describe('locked bot execution controls', () => {
+describe('locked employee execution controls', () => {
   it('disables the model, effort and fast controls and puts the lock sentence on them', async () => {
     rpc.mockImplementation(async (method: string) => method === 'runtime.models' ? catalog : {})
     const host = document.createElement('div'); document.body.append(host)
@@ -493,7 +493,7 @@ describe('locked bot execution controls', () => {
     act(() => root.render(<SessionExecutionControls session={session} agent={{ ...agent, locked: true }} locked onSessionUpdated={() => undefined} onError={() => undefined} />))
     mounted.push({ root, host })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
-    const lock = 'This bot is locked. Unlock it to change its settings.'
+    const lock = 'This employee is locked. Unlock it to change its settings.'
     const model = host.querySelector<HTMLButtonElement>('.model-pill')!
     expect(model.disabled).toBe(true)
     expect(model.getAttribute('title')).toBe(lock)
@@ -522,10 +522,10 @@ describe('locked bot execution controls', () => {
 
 // FIX39 item 16: a bot's first conversation is a local draft, so the composer
 // writes the bot and never sends the draft id to the daemon.
-describe('draft conversation writes the bot', () => {
+describe('draft conversation writes the employee', () => {
   const draft: Session = { id: 'draft:agent', runtimeId: 'runtime', agentId: 'agent', state: 'idle', messages: [] }
 
-  it('writes the bot without a confirmation dialog and never calls session.model.update', async () => {
+  it('writes the employee without a confirmation dialog and never calls session.model.update', async () => {
     rpc.mockImplementation(async (method: string, params: Record<string, unknown>) => method === 'runtime.models' ? catalog : method === 'agent.update' ? { agent: { ...agent, model: params.model } } : {})
     const onAgentUpdated = vi.fn()
     const host = document.createElement('div'); document.body.append(host)

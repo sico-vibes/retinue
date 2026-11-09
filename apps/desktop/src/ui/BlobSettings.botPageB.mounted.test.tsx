@@ -164,9 +164,9 @@ describe('B7 folder wording and recent folders', () => {
     const view = mount(<Harness />)
     await view.settle()
     expect(view.host.textContent).toContain('Team project')
-    expect(viewText(view.host)).toContain('Which project this bot belongs to on the team.')
+    expect(viewText(view.host)).toContain('Which project this employee belongs to on the team.')
     expect(view.host.textContent).toContain('Working folder')
-    expect(viewText(view.host)).toContain('Where this bot works when you start a conversation.')
+    expect(viewText(view.host)).toContain('Where this employee works when you start a conversation.')
     expect(selectTrigger(view.host, 'Team project')).not.toBeNull()
     expect(view.host.textContent).not.toContain('Default project')
   })
@@ -282,27 +282,25 @@ describe('B11 sections prop', () => {
 // FIX39 item 13 / P5 audit S3: the read-only editor is one disabled fieldset,
 // and the look controls are inert on their own too (the fieldset does not reach
 // a canvas-based control in every engine).
-describe('locked bot editor (FIX39 item 13)', () => {
+describe('locked employee editor (FIX39 item 13)', () => {
   it('disables the whole settings body and the look controls', async () => {
     const view = mount(<Harness locked sections={['look']} />)
     await view.settle()
     const body = view.host.querySelector<HTMLFieldSetElement>('fieldset.blob-settings-body')!
     expect(body).not.toBeNull()
     expect(body.disabled).toBe(true)
-    expect(body.getAttribute('aria-label')).toBe('Locked bot settings')
+    expect(body.getAttribute('aria-label')).toBe('Locked employee settings')
     const look = view.host.querySelector('#bot-section-look')!
-    const styles = [...look.querySelectorAll<HTMLButtonElement>('.look-style-option')]
-    expect(styles.length).toBeGreaterThan(0)
-    expect(styles.every((button) => button.disabled)).toBe(true)
-    const moods = [...look.querySelectorAll<HTMLButtonElement>('.look-moods button')]
-    expect(moods.length).toBeGreaterThan(0)
-    expect(moods.every((button) => button.disabled)).toBe(true)
+    // The look is a profile photo (9 November 2026): every photo tile and the upload are inert.
+    const photos = [...look.querySelectorAll<HTMLButtonElement>('.profile-photo-option')]
+    expect(photos.length).toBeGreaterThan(1)
+    expect(photos.every((button) => button.disabled)).toBe(true)
     const swatches = [...look.querySelectorAll<HTMLButtonElement>('button.bot-swatch, button.swatch')]
     expect(swatches.length).toBeGreaterThan(0)
     expect(swatches.every((button) => button.disabled)).toBe(true)
   })
 
-  it('leaves the editor alone when the bot is not locked', async () => {
+  it('leaves the editor alone when the employee is not locked', async () => {
     const view = mount(<Harness sections={['look']} />)
     await view.settle()
     const body = view.host.querySelector<HTMLFieldSetElement>('fieldset.blob-settings-body')!

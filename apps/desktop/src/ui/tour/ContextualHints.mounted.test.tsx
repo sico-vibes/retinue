@@ -37,7 +37,7 @@ describe('ContextualHints', () => {
     expect(titles()).toEqual(['This is the plan'])
     await act(async () => { document.querySelector<HTMLButtonElement>('.coach.hint button')!.click() })
     await flush()
-    expect(titles()).toEqual(['Bots can work together'])
+    expect(titles()).toEqual(['Employees can work together'])
   })
 
   it('shows nothing when disabled or when the tour is on screen', async () => {

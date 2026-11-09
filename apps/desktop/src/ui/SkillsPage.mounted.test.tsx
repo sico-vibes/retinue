@@ -54,15 +54,15 @@ describe('skills helpers', () => {
     expect([...defaultPicks(candidates)]).toEqual([candidateKey(candidates[0]), candidateKey(candidates[2])])
   })
 
-  it('a bot sees a skill only when the pool has it on and the bot has not opted out', () => {
+  it('an employee sees a skill only when the pool has it on and the employee has not opted out', () => {
     expect(skillOnForBot(skill('a'), 'bot-1')).toBe(true)
     expect(skillOnForBot(skill('a', { disabledFor: ['bot-1'] }), 'bot-1')).toBe(false)
     expect(skillOnForBot(skill('a', { enabled: false }), 'bot-1')).toBe(false)
   })
 
   it('describes backup counts in words and keeps rename as the default resolution', () => {
-    expect(statsSentence({ bots: 1, memory: 3, skills: 0, automations: 0, settings: 2 }, ['bot', 'bots'])).toBe('1 bot, 3 notes and 2 settings')
-    expect(statsSentence({ bots: 0, memory: 0, skills: 0, automations: 0, settings: 0 }, ['bot', 'bots'])).toBe('nothing')
+    expect(statsSentence({ bots: 1, memory: 3, skills: 0, automations: 0, settings: 2 }, ['employee', 'employees'])).toBe('1 employee, 3 notes and 2 settings')
+    expect(statsSentence({ bots: 0, memory: 0, skills: 0, automations: 0, settings: 0 }, ['employee', 'employees'])).toBe('nothing')
     expect(importResolutions({ x: 'replace' }, { pdf: 'skip' })).toEqual({ bots: { x: 'replace' }, skills: { pdf: 'skip' }, default: 'rename' })
   })
 })
@@ -92,14 +92,14 @@ describe('Skills page', () => {
     expect(h.rpc).toHaveBeenCalledWith('skills.toggle', { name: 'pdf', enabled: false })
   })
 
-  it('the bot page switch opts this bot out without touching the pool switch', async () => {
+  it('the employee page switch opts this employee out without touching the pool switch', async () => {
     h.rpc.mockImplementation(async (method: string) => {
       if (method === 'skills.list') return { skills: [skill('pdf')] }
       if (method === 'settings.get') return { settings: {} }
       return {}
     })
     const host = await mount(<BotSkillsGroup agentId="bot-1" />)
-    await click(button(host, 'Let this bot use pdf'))
+    await click(button(host, 'Let this employee use pdf'))
     expect(h.rpc).toHaveBeenCalledWith('skills.toggle', { name: 'pdf', enabled: false, agentId: 'bot-1' })
   })
 })
@@ -111,12 +111,12 @@ describe('Backup page', () => {
       previewId: 'p1',
       counts: { bots: 2, memory: 1, skills: 1, automations: 0, settings: 0 },
       conflicts: { bots: [{ exportId: 'e1', name: 'Mochi', existingAgentId: 'a1' }], skills: [{ name: 'pdf', same: false }], memory: [], settings: [] },
-      warnings: ['One bot used Bypass approvals; it is restored as Ask.'],
+      warnings: ['One employee used Bypass approvals; it is restored as Ask.'],
     })
     h.rpc.mockResolvedValue({ imported: { bots: 2, memory: 1, skills: 0, automations: 0, settings: 0 }, skipped: { bots: 0, memory: 0, skills: 1, automations: 0, settings: 0 }, renamed: [{ from: 'Mochi', to: 'Mochi (2)' }] })
     const host = await mount(<BackupPage connected />)
     await click(button(host, 'Choose a backup…'))
-    expect(host.textContent).toContain('This backup holds 2 bots, 1 note and 1 skill.')
+    expect(host.textContent).toContain('This backup holds 2 employees, 1 note and 1 skill.')
     expect(host.textContent).toContain('restored as Ask')
     await click(button(host, 'Restore'))
     expect(h.rpc).toHaveBeenCalledWith('backup.import', { previewId: 'p1', resolutions: { bots: { e1: 'rename' }, skills: { pdf: 'skip' }, default: 'rename' } })

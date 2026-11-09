@@ -130,7 +130,7 @@ export function TagEditor({ target, onClose }: { target: TagTarget; onClose: () 
   return <div className="tag-editor-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
     <section className="tag-editor" role="dialog" aria-modal="true" aria-label={`Tags for ${target.name}`}>
       <header className="tag-editor-head"><strong>Tags for {target.name}</strong><button type="button" className="icon-button tiny" aria-label="Close" onClick={onClose}><X size={15} /></button></header>
-      <p className="tag-editor-hint">Tags help the CEO pick the right bot and project for a job. Up to 8, one or two words each.</p>
+      <p className="tag-editor-hint">Tags help the CEO pick the right employee and project for a job. Up to 8, one or two words each.</p>
       <div className="tag-chips">
         {tags.map((tag) => <span key={tag} className="tag-chip">{tag}<button type="button" aria-label={`Remove ${tag}`} onClick={() => setTags((current) => current.filter((item) => item !== tag))}><X size={11} /></button></span>)}
         {tags.length === 0 && <span className="tag-empty">No tags yet.</span>}
@@ -297,7 +297,7 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
       ...(locked || botLock ? [
         { label: locked ? `Unlock ${noun}` : `Lock ${noun}`, icon: locked ? <LockOpen size={15} /> : <Lock size={15} />, onSelect: () => actions.onToggleLock(agent) },
       ] as MenuItem[] : []),
-      ...(actions.onDeleteBot ? [{ label: 'Delete bot…', icon: <Trash2 size={15} />, danger: true, disabled: locked || isManager(agent), onSelect: () => actions.onDeleteBot?.(agent) }] : []),
+      ...(actions.onDeleteBot ? [{ label: 'Delete employee…', icon: <Trash2 size={15} />, danger: true, disabled: locked || isManager(agent), onSelect: () => actions.onDeleteBot?.(agent) }] : []),
       { label: 'Archive', icon: <Archive size={15} />, danger: true, disabled: locked, onSelect: () => actions.onArchive(agent) },
     ]
   }
@@ -400,7 +400,7 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
         }
       }}>
       <span className="team-row-avatar">
-        <BlobCanvas color={agentColorHex(agent.color)} size={haze ? 20 : 50} mood={status.mood} look={agentLook(agent)} label={agent.name} track={selected} />
+        <BlobCanvas color={agentColorHex(agent.color)} size={haze ? 32 : 50} mood={status.mood} look={agentLook(agent)} label={agent.name} track={selected} />
         {isManager(agent) && <span className="leader-badge" title="CEO" aria-hidden="true"><Star size={10} fill="currentColor" strokeWidth={0} /></span>}
         {agent.locked === true && <span className="lock-badge" title="Locked" aria-hidden="true"><Lock size={9} /></span>}
       </span>

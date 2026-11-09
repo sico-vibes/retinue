@@ -1,7 +1,7 @@
 export type QuickSwitcherKind = 'blob' | 'conversation' | 'project' | 'action'
 
 /** Groups in the order the palette shows them. */
-export const QUICK_SWITCHER_CATEGORIES = ['Conversations', 'Bots', 'Projects', 'Create', 'Go to', 'Settings', 'Help'] as const
+export const QUICK_SWITCHER_CATEGORIES = ['Conversations', 'Employees', 'Projects', 'Create', 'Go to', 'Settings', 'Help'] as const
 export type QuickSwitcherCategory = typeof QUICK_SWITCHER_CATEGORIES[number]
 
 /** Icon names the palette knows how to draw. */
@@ -25,7 +25,7 @@ export interface QuickSwitcherItem {
 
 export function categoryOf(item: QuickSwitcherItem): QuickSwitcherCategory {
   if (item.category) return item.category
-  return item.kind === 'blob' ? 'Bots' : item.kind === 'conversation' ? 'Conversations' : item.kind === 'project' ? 'Projects' : 'Go to'
+  return item.kind === 'blob' ? 'Employees' : item.kind === 'conversation' ? 'Conversations' : item.kind === 'project' ? 'Projects' : 'Go to'
 }
 
 function rank(item: QuickSwitcherItem, words: string[]) {

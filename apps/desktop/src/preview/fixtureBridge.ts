@@ -120,7 +120,7 @@ conventions, design taste and references. Save each answer with
 
 ## Proposing a team
 
-One bot per responsibility, two to six bots, each role explained in a sentence.
+One employee per responsibility, two to six employees, each role explained in a sentence.
 `
 const fixturePlaybookVersions: Array<Record<string, unknown>> = [
   { version: 1, text: fixturePlaybookSeed, author: 'default', createdAt: '2026-10-16T08:00:00Z' },
@@ -222,8 +222,8 @@ agents = agents.map((agent) => ({ projectId: null, role: '', leader: false, hidd
 agents.push({ id: 'agent-pololo', name: 'Pololo', look: { shape: 'cloud', seed: 'pololo' }, description: 'UI/UX designer: finds and adapts component references.', instructions: '', color: '#2fbf9b', runtimeId: 'runtime-opencode', model: null, thinking: null, serviceTier: null, customArgs: [], customEnv: {}, maxConcurrency: 1, defaultProject: null, sortOrder: 2, archived: false, createdAt: minutesAgo(900), updatedAt: minutesAgo(900), projectId: 'project-board', role: 'UI/UX Designer', leader: false, hidden: false })
 // FIX36: the one built-in Manager previews as an ordinary bot that carries
 // systemRole "manager" and works across every project (projectId null).
-const managerDescription = 'Runs your team: knows every project and bot, plans the work and asks before it acts.'
-const managerInstructions = "You are the Manager. You work across all of the user's projects and know every bot on the team. Ask the user before consequential actions: creating a project, creating a bot, assigning a task, or changing your own playbook."
+const managerDescription = 'Runs your team: knows every project and employee, plans the work and asks before it acts.'
+const managerInstructions = "You are the Manager. You work across all of the user's projects and know every employee on the team. Ask the user before consequential actions: creating a project, creating an employee, assigning a task, or changing your own playbook."
 agents.push({ id: 'agent-manager', name: 'Manager', look: { shape: 'hexagon', seed: 'manager' }, description: managerDescription, instructions: managerInstructions, color: 'mint', runtimeId: 'runtime-opencode', model: null, thinking: null, serviceTier: null, customArgs: [], customEnv: {}, maxConcurrency: 1, defaultProject: null, sortOrder: 0, archived: false, createdAt: minutesAgo(5000), updatedAt: minutesAgo(2), projectId: null, role: 'Manager', leader: false, hidden: false, approvalMode: 'ask', effectiveApprovalMode: 'ask', systemRole: 'manager' })
 const teamMainId = 'session-team-leader'
 const teamSideId = 'session-team-side'
@@ -290,7 +290,7 @@ if (flags().has('clean')) {
 const teamQuestion: PermissionRequest = { id: 'perm-question', sessionId: teamMainId, runtimeId: 'runtime-codex', status: 'pending', kind: 'question', title: 'Codex has a question', choices: ['answer', 'dismiss'], questions: [{ id: 'q-direction', header: 'Direction', question: 'Which direction should the effort picker follow?', options: [{ label: 'PostHog fork', description: 'Closest behaviour, MIT licensed' }, { label: '21st.dev model select', description: 'One popover for effort, context and fast' }, { label: 'Build our own' }], multiSelect: false, allowOther: true }] }
 // FIX36 D2: a Manager proposal surfaces as a `kind: "proposal"` permission card.
 let fixtureProposalPending = true
-const teamProposal: PermissionRequest = { id: 'perm-proposal', sessionId: teamMainId, runtimeId: 'runtime-opencode', status: 'pending', kind: 'proposal', title: 'Create the bot "Scout"', detail: 'Research · opencode', choices: ['approve', 'reject'], proposal: { id: 'perm-proposal', kind: 'bot', payload: { name: 'Scout', role: 'Research', provider: 'opencode' } } }
+const teamProposal: PermissionRequest = { id: 'perm-proposal', sessionId: teamMainId, runtimeId: 'runtime-opencode', status: 'pending', kind: 'proposal', title: 'Create the employee "Scout"', detail: 'Research · opencode', choices: ['approve', 'reject'], proposal: { id: 'perm-proposal', kind: 'bot', payload: { name: 'Scout', role: 'Research', provider: 'opencode' } } }
 
 let sequence = 1
 let agentSerial = 6
@@ -694,11 +694,11 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   }
   if (method === 'agent.purge') {
     const index = agents.findIndex((agent) => agent.id === params.agentId)
-    if (index < 0) throw rpcError('not_found', 'Bot not found.')
+    if (index < 0) throw rpcError('not_found', 'Employee not found.')
     const agent = agents[index]
-    if (params.confirm !== true || agent.locked || agent.systemRole === 'manager') throw rpcError('conflict', 'This bot cannot be deleted.')
+    if (params.confirm !== true || agent.locked || agent.systemRole === 'manager') throw rpcError('conflict', 'This employee cannot be deleted.')
     const related = sessions.filter((session) => session.agentId === agent.id || session.link?.kind === 'side' && session.link.peerAgentId === agent.id)
-    if (related.some((session) => ['starting', 'working', 'cancelling', 'waiting_permission'].includes(String(session.state)))) throw rpcError('conflict', 'Stop the bot first.')
+    if (related.some((session) => ['starting', 'working', 'cancelling', 'waiting_permission'].includes(String(session.state)))) throw rpcError('conflict', 'Stop the employee first.')
     for (const session of related) { const i = sessions.findIndex((item) => item.id === session.id); sessions.splice(i, 1); notifyFixtureDaemon('session.deleted', { sessionId: session.id }) }
     agents.splice(index, 1)
     notifyFixtureDaemon('agent.changed', { agentId: agent.id, action: 'deleted' })
@@ -976,7 +976,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   }
   // Phase 1B: comparisons, the stash, new projects and issue reports.
   if (method.startsWith('fanout.')) {
-    const nameOf = (id: string) => agents.find((item) => item.id === id)?.name ?? 'A removed bot'
+    const nameOf = (id: string) => agents.find((item) => item.id === id)?.name ?? 'A removed employee'
     const view = (record: typeof fixtureFanouts[number]) => {
       const age = Date.now() - Date.parse(record.createdAt)
       return { ...record, rows: record.rows.map((row, index) => {
@@ -986,7 +986,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     }
     if (method === 'fanout.start') {
       const ids = Array.isArray(params.agentIds) ? params.agentIds as string[] : []
-      if (ids.length < 2 || ids.length > 6) throw rpcError('invalid_argument', 'Choose 2 to 6 bots.')
+      if (ids.length < 2 || ids.length > 6) throw rpcError('invalid_argument', 'Choose 2 to 6 employees.')
       const text = String(params.text ?? '')
       const project = typeof params.projectId === 'string' ? projects.find((item) => item.id === params.projectId) : undefined
       const record = { id: `fanout-${fixtureFanouts.length + 1}`, title: text.slice(0, 60), text, projectId: project?.id ?? null, projectName: project?.name ?? null, createdAt: new Date().toISOString(), chosenSessionId: null as string | null, rows: ids.map((agentId, index) => ({ agentId, sessionId: `session-compare-${fixtureFanouts.length + 1}-${index}` })) }
@@ -1062,7 +1062,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     if (method === 'external.disable') { fixtureExternal.enabled = false; fixtureExternal.allowFullAccess = false; return changed() }
     if (method === 'external.setFullAccess') {
       if (!fixtureExternal.enabled) throw rpcError('conflict', 'Turn the Bitbots MCP on first.')
-      if (params.allow === true && params.confirm !== true) throw rpcError('invalid_argument', 'Confirm letting outside sessions give bots Full access first.')
+      if (params.allow === true && params.confirm !== true) throw rpcError('invalid_argument', 'Confirm letting outside sessions give employees Full access first.')
       fixtureExternal.allowFullAccess = params.allow === true
       return changed()
     }
@@ -1175,7 +1175,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       if (kind === 'skill') {
         const skill = fixtureSkills.find((item) => item.name === name)
         const off = !skill || skill.enabled === false || (skill.disabledFor as string[]).includes(String(session.agentId ?? ''))
-        if (off) throw rpcError('invalid_argument', `The skill "${name}" is not available to this bot.`)
+        if (off) throw rpcError('invalid_argument', `The skill "${name}" is not available to this employee.`)
       } else if (kind === 'manager') {
         if (owner?.systemRole !== 'manager') throw rpcError('invalid_argument', 'That command is only for the Manager.')
       } else throw rpcError('invalid_argument', 'command.kind must be "skill" or "manager"')
@@ -1645,7 +1645,7 @@ export async function previewBackupImport(_selectionToken: string) {
       memory: [],
       settings: [{ key: 'appearance.theme', current: 'dark', incoming: 'light' }],
     },
-    warnings: ['This backup contains a leader, but a leader is already set; the restored bot will not lead.', 'One bot used Bypass approvals; it is restored as Ask.'],
+    warnings: ['This backup contains a leader, but a leader is already set; the restored employee will not lead.', 'One employee used Bypass approvals; it is restored as Ask.'],
   }
 }
 export async function inspectLocalFile(path: string) { return { path, fileName: path.split(/[\\/]/).pop() ?? path, sizeBytes: 2048 } }

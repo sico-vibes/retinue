@@ -228,7 +228,7 @@ describe('C5 companion keyboard access', () => {
     }
   })
 
-  it('focuses the bot rows with Ctrl+1..9 and the next waiting one with N', async () => {
+  it('focuses the employee rows with Ctrl+1..9 and the next waiting one with N', async () => {
     const opsSession = session({ id: 'session-ops', runtimeId: 'runtime-claude', agentId: 'agent-ops', title: 'Deploy', state: 'waiting_permission' })
     configure(snapshot({ agents: [claude, codex, ops], sessions: [claudeSession, opsSession] }))
     const view = startApp('?companion=1')

@@ -11,12 +11,12 @@
   --dn-group-gap: 10px;     /* space between groups (projects) */
   --dn-nest-gap: 4px;       /* space between a row and the cards nested under it */
   --dn-card-pad-y: 6px;     /* vertical padding inside a two-line card */
-  --dn-team-row-h: 36px;    /* Haze one-line bot rows */
-  --dn-person-h: 46px;      /* an employee row in the Projects tree */
+  --dn-team-row-h: 44px;    /* Haze one-line employee rows (32px pictures) */
+  --dn-person-h: 54px;      /* an employee row in the Projects tree (36px pictures) */
   --dn-card-h: 40px;        /* a conversation card or row */
 }
-:root[data-density="compact"] { --dn-row-pad-y: 3px; --dn-row-gap: 1px; --dn-group-gap: 6px; --dn-nest-gap: 2px; --dn-card-pad-y: 4px; --dn-team-row-h: 30px; --dn-person-h: 38px; --dn-card-h: 34px; }
-:root[data-density="roomy"] { --dn-row-pad-y: 9px; --dn-row-gap: 6px; --dn-group-gap: 16px; --dn-nest-gap: 6px; --dn-card-pad-y: 9px; --dn-team-row-h: 44px; --dn-person-h: 54px; --dn-card-h: 48px; }
+:root[data-density="compact"] { --dn-row-pad-y: 3px; --dn-row-gap: 1px; --dn-group-gap: 6px; --dn-nest-gap: 2px; --dn-card-pad-y: 4px; --dn-team-row-h: 38px; --dn-person-h: 46px; --dn-card-h: 34px; }
+:root[data-density="roomy"] { --dn-row-pad-y: 9px; --dn-row-gap: 6px; --dn-group-gap: 16px; --dn-nest-gap: 6px; --dn-card-pad-y: 9px; --dn-team-row-h: 52px; --dn-person-h: 62px; --dn-card-h: 48px; }
 
 /* ── Compact ─────────────────────────────────────────────────────────── */
 :root[data-density="compact"] .bot-row,

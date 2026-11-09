@@ -31,7 +31,7 @@ function ThisMachine() {
     catch (reason) { setProblem(messageOf(reason, 'That name could not be saved.')) }
   }
   return <SettingsGroup title="This machine">
-    <SettingsRow label={editing ? 'Name' : self?.name ?? 'This machine'} hint="Other machines show your bots under this name.">
+    <SettingsRow label={editing ? 'Name' : self?.name ?? 'This machine'} hint="Other machines show your employees under this name.">
       {editing
         ? <input className="text-input machine-name-input" aria-label="This machine's name" value={draft} maxLength={60} autoFocus onChange={(event) => setDraft(event.target.value)} onBlur={() => void save()} onKeyDown={(event) => { if (event.key === 'Enter') void save(); if (event.key === 'Escape') setEditing(false) }} />
         : <button type="button" className="secondary-button small" disabled={!self} onClick={() => { setDraft(self?.name ?? ''); setEditing(true) }}><Pencil size={13} aria-hidden="true" />Rename</button>}

@@ -78,7 +78,7 @@ export function QueueBanner({ items, paused, sessionBusy, nowMs, disabled, onSen
             : <span className="queue-text" title={item.text || text}>{text}</span>}
           {confirming === item.id
             ? <span className="queue-confirm" role="alertdialog" aria-label="Send this message again?">
-                <span>It may already have reached the bot. Send it again?</span>
+                <span>It may already have reached the employee. Send it again?</span>
                 <button type="button" className="queue-link" disabled={disabled} onClick={() => { setConfirming(null); onSendNow(item.id, true) }}>Send again</button>
                 <button type="button" className="queue-link" onClick={() => setConfirming(null)}>Keep it here</button>
               </span>
@@ -140,7 +140,7 @@ export function ComposerStatus({ items, paused, sessionBusy, notice, nowMs, disa
             <ChevronDown size={12} aria-hidden="true" className={`composer-status-chevron${expanded ? ' open' : ''}`} />
           </button>
         : null}
-      {sessionBusy && onInterrupt && <button type="button" className="queue-link composer-status-interrupt" disabled={disabled} onClick={onInterrupt} title="Stops what the bot is doing now, then sends this message as a new one. Work already done is kept.">Stop and send instead</button>}
+      {sessionBusy && onInterrupt && <button type="button" className="queue-link composer-status-interrupt" disabled={disabled} onClick={onInterrupt} title="Stops what the employee is doing now, then sends this message as a new one. Work already done is kept.">Stop and send instead</button>}
       {paused && <span className="composer-status-paused" role="status">{failed ? 'Paused: a message could not be sent' : 'Paused until you resume'}<button type="button" className="queue-link" disabled={disabled} onClick={onResume}>Resume</button></span>}
       {retrying && <span className="composer-status-retry" role="status">Retrying automatically{onCancelRetry && <button type="button" className="queue-link" disabled={disabled} onClick={onCancelRetry}>Cancel</button>}</span>}
       {notice && <span className="composer-status-note" title={notice}>{notice}</span>}

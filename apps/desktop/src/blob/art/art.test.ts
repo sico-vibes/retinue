@@ -7,7 +7,7 @@ import {
 
 const MOODS: BlobMood[] = ['idle', 'online', 'thinking', 'working', 'tool_activity', 'file_activity', 'file_drop', 'file_preparing', 'file_ready', 'file_sending', 'file_error', 'permission', 'success', 'error', 'offline', 'listening', 'rate_limited', 'sleeping']
 
-describe('bot art', () => {
+describe('employee art', () => {
   // The 2D robot (with the flat and dot robots it absorbed) was retired on 27 October 2026.
   it('offers the three arts under two groups with labels', () => {
     expect([...BOT_ARTS]).toEqual(['robot', 'blob', 'painted'])

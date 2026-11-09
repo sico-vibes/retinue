@@ -1,14 +1,13 @@
 // @vitest-environment happy-dom
-import { act, useState } from 'react'
+import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BlobLook } from '../blob/look'
-import { CHARACTER_ASSETS } from '../blob/haze/characters'
-import { setThemeStyle } from '../blob/bitbots'
+import { PROFILE_PHOTOS } from '../blob/photos'
 import { LookEditor } from './LookEditor'
 
 vi.mock('../blob/BlobCanvas', () => ({
-  BlobCanvas: ({ look, mood, label, art }: { look?: BlobLook; mood?: string; label?: string; art?: string }) => <span data-shape={look?.shape} data-art={art ?? look?.art} data-mood={mood ?? 'idle'} data-label={label} />,
+  BlobCanvas: ({ look, label }: { look?: BlobLook; label?: string }) => <span data-photo={look?.photo ?? 'blank'} data-label={label} />,
 }))
 
 const mounted: Array<{ root: Root; host: HTMLDivElement }> = []
@@ -17,237 +16,65 @@ function mount(look: BlobLook, locked = false) {
   const root = createRoot(host)
   const onLookChange = vi.fn()
   const onColorChange = vi.fn()
-  const render = (next: BlobLook) => root.render(<LookEditor look={next} color="mint" colorHex="#9be7c4" name="Pololo" locked={locked} onLookChange={onLookChange} onColorChange={onColorChange} />)
-  act(() => render(look))
+  act(() => root.render(<LookEditor look={look} color="mint" colorHex="#9be7c4" name="Pololo" locked={locked} onLookChange={onLookChange} onColorChange={onColorChange} />))
   mounted.push({ root, host })
-  return { host, render, onLookChange, onColorChange }
+  return { host, onLookChange, onColorChange }
 }
 const click = (element: Element | null | undefined) => act(() => { (element as HTMLElement).click() })
 
-beforeEach(() => { setThemeStyle('blobots'); vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true) })
-afterEach(() => { for (const { root, host } of mounted.splice(0)) { act(() => root.unmount()); host.remove() } act(() => setThemeStyle('blobots')); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+beforeEach(() => { vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true) })
+afterEach(() => { for (const { root, host } of mounted.splice(0)) { act(() => root.unmount()); host.remove() } vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
-describe('look editor', () => {
-  it('shows Haze character choices only in Haze and preserves the selected portrait when locked', () => {
-    act(() => setThemeStyle('haze'))
-    const { host } = mount({ shape: 'circle', icon: 'char-kratos' }, true)
-    const character = host.querySelector<HTMLButtonElement>('[aria-label="Kratos"]')!
-    expect(character.getAttribute('aria-checked')).toBe('true')
-    expect(character.disabled).toBe(true)
-    expect(character.querySelector('.haze-character-image')?.getAttribute('src')).toBe(CHARACTER_ASSETS['char-kratos'].static)
-    act(() => setThemeStyle('blobots'))
-    const other = mount({ shape: 'circle', icon: 'char-kratos' })
-    expect(other.host.querySelector('.haze-character-grid')).toBeNull()
-    expect(other.host.querySelector('[aria-label="Kratos"]')).toBeNull()
+describe('look editor (profile photos)', () => {
+  it('offers no photo, every portrait and an upload, and nothing else', () => {
+    const { host } = mount({ shape: 'circle' })
+    const options = [...host.querySelectorAll<HTMLButtonElement>('.profile-photo-option')]
+    expect(options[0]?.getAttribute('aria-label')).toBe('No photo')
+    expect(options.filter((option) => option.getAttribute('aria-label')?.startsWith('Profile photo '))).toHaveLength(PROFILE_PHOTOS.length)
+    expect(host.querySelector('[aria-label="Upload a photo"]')).not.toBeNull()
+    expect(host.querySelector('input[type="file"]')?.getAttribute('accept')).toContain('image/png')
+    // The mascot and art controls are gone.
+    expect(host.querySelector('.look-style-option, .haze-character-grid, .look-moods')).toBeNull()
   })
 
-  it('selects and arrow-navigates provider-null characters with one reachable tab stop', () => {
-    act(() => setThemeStyle('haze'))
-    let queuedFrame: FrameRequestCallback | undefined
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => { queuedFrame = callback; return 1 })
-    const { host, render, onLookChange } = mount({ shape: 'circle', icon: 'char-albert-einstein' })
-    const panel = host.querySelector<HTMLElement>('[role="radiogroup"][aria-label="Icon"]')!
-    const radios = [...panel.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+  it('starts on no photo with the colour shown, and picks a portrait', () => {
+    const { host, onLookChange } = mount({ shape: 'circle', seed: 'a' })
+    expect(host.querySelector('[aria-label="No photo"]')?.getAttribute('aria-checked')).toBe('true')
+    expect(host.querySelector('.look-colour')).not.toBeNull()
+    click(host.querySelector('[aria-label="Profile photo 2"]'))
+    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'circle', seed: 'a', photo: PROFILE_PHOTOS[1]!.id })
+  })
+
+  it('marks the chosen portrait, hides the colour, and goes back to no photo', () => {
+    const photo = PROFILE_PHOTOS[0]!.id
+    const { host, onLookChange } = mount({ shape: 'circle', photo })
+    expect(host.querySelector('[aria-label="Profile photo 1"]')?.getAttribute('aria-checked')).toBe('true')
+    expect(host.querySelector('.look-colour')).toBeNull()
+    click(host.querySelector('[aria-label="No photo"]'))
+    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'circle' })
+  })
+
+  it('keeps one tab stop in the photo grid', () => {
+    const { host } = mount({ shape: 'circle', photo: PROFILE_PHOTOS[2]!.id })
+    const radios = [...host.querySelectorAll<HTMLButtonElement>('.profile-photo-grid [role="radio"]')]
     expect(radios.filter((radio) => radio.tabIndex === 0)).toHaveLength(1)
-    const selected = host.querySelector<HTMLButtonElement>('[aria-label="Albert Einstein"]')!
-    expect(selected.disabled).toBe(false)
-    click(selected)
-    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'circle', icon: 'char-albert-einstein' })
-    act(() => selected.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
-    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'circle', icon: 'char-nikola-tesla' })
-    act(() => queuedFrame?.(0))
-    act(() => render({ shape: 'circle', icon: 'char-nikola-tesla' }))
-    expect(document.activeElement).toBe(host.querySelector('[aria-label="Nikola Tesla"]'))
   })
 
-  it('previews every shape in the blob and picks one by click or arrow keys', () => {
-    const { host, onLookChange } = mount({ shape: 'circle', seed: 'pololo' })
-    const radios = [...host.querySelectorAll<HTMLButtonElement>('[role="radiogroup"][aria-label="Bot shape"] [role="radio"]')]
-    expect(radios).toHaveLength(8)
-    expect(radios[0].getAttribute('aria-checked')).toBe('true')
-    expect(radios.map((radio) => radio.querySelector('span[data-shape]')?.getAttribute('data-shape'))).toEqual(['circle', 'pebble', 'squircle', 'capsule', 'triangle', 'hexagon', 'cloud', 'droplet'])
-    click(radios[5])
-    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'hexagon', seed: 'pololo' })
-    act(() => radios[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
-    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'triangle', seed: 'pololo' })
+  it('shows an uploaded photo as its own chosen tile', () => {
+    const uploaded = 'data:image/webp;base64,UklGRg=='
+    const { host } = mount({ shape: 'circle', photo: uploaded })
+    const tile = host.querySelector<HTMLButtonElement>('[aria-label="Your photo"]')
+    expect(tile?.getAttribute('aria-checked')).toBe('true')
+    expect(tile?.querySelector('img')?.getAttribute('src')).toBe(uploaded)
   })
 
-  it('previews moods on the stage without changing the look', () => {
-    const { host, onLookChange } = mount({ shape: 'pebble', seed: 'a' })
-    const stage = () => host.querySelector('.look-stage span[data-shape]')
-    expect(stage()?.getAttribute('data-mood')).toBe('idle')
-    click([...host.querySelectorAll('[aria-label="Preview mood"] [role="radio"]')].find((item) => item.textContent === 'Asleep'))
-    expect(stage()?.getAttribute('data-mood')).toBe('sleeping')
-    expect(onLookChange).not.toHaveBeenCalled()
-  })
-
-  it('pins a trait from a slider, shows the count and resets back to the seed', () => {
-    const { host, render, onLookChange } = mount({ shape: 'hexagon', seed: 'a' })
-    click([...host.querySelectorAll('[role="tab"]')].find((tab) => tab.textContent?.startsWith('Fine-tune')))
-    const labels = [...host.querySelectorAll('.look-slider label')].map((label) => label.textContent)
-    expect(labels).toContain('Size')
-    expect(labels).toContain('Squareness')
-    expect(labels).not.toContain('Roundness')
-    expect(labels).not.toContain('Tilt')
-    const sizeSlider = host.querySelector<HTMLInputElement>(`#${CSS.escape([...host.querySelectorAll('.look-slider label')].find((label) => label.textContent === 'Size')!.getAttribute('for')!)}`)!
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
-      setter.call(sizeSlider, '0.8')
-      sizeSlider.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'hexagon', seed: 'a', traits: { 'eye.rx': 0.8 } })
-    act(() => render({ shape: 'hexagon', seed: 'a', traits: { 'eye.rx': 0.8 } }))
-    expect(host.querySelector('.look-tab-count')?.textContent).toBe('1')
-    click(host.querySelector('[aria-label="Reset size"]'))
-    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'hexagon', seed: 'a', traits: undefined })
-    click([...host.querySelectorAll('button')].find((button) => button.textContent?.includes('Reset tweaks')))
-    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'hexagon', seed: 'a' })
-  })
-
-  it('counts only pins read by visible controls and still lets Reset tweaks clear legacy pins', () => {
-    const legacyTraits = { 'eye.lean': 0.1, 'eye.scale': 0.3, 'body.rot': 0.8, 'sun.n': 0.6 }
-    const { host, render, onLookChange } = mount({ shape: 'cloud', seed: 'saved', traits: { ...legacyTraits, 'eye.rx': 0.8, 'eye.n': 0.4 } })
-    expect(host.querySelector('.look-tab-count')?.textContent).toBe('2')
-    expect(host.querySelector('.look-tab-count')?.getAttribute('aria-label')).toBe('2 adjusted')
-    click([...host.querySelectorAll('[role="tab"]')].find((tab) => tab.textContent?.startsWith('Fine-tune')))
-    expect(host.querySelectorAll('.look-slider.pinned')).toHaveLength(2)
-    click(host.querySelector('[aria-label="Reset squareness"]'))
-    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'cloud', seed: 'saved', traits: { ...legacyTraits, 'eye.rx': 0.8 } })
-    act(() => render({ shape: 'cloud', seed: 'saved', traits: legacyTraits }))
-    expect(host.querySelector('.look-tab-count')).toBeNull()
-    expect(host.querySelectorAll('.look-slider.pinned')).toHaveLength(0)
-    const reset = [...host.querySelectorAll('button')].find((button) => button.textContent?.includes('Reset tweaks'))!
-    expect(reset.disabled).toBe(false)
-    click(reset)
-    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'cloud', seed: 'saved' })
-  })
-
-  it('surprises with new eyes and colour while keeping the selected shape', () => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.5)
-    const original: BlobLook = { shape: 'hexagon', seed: 'a', traits: { 'eye.rx': 0.1 }, bot: { shape: 'square' } }
-    const { host, render, onLookChange } = mount(original)
-    click([...host.querySelectorAll('button')].find((button) => button.textContent?.includes('Surprise me')))
-    const next = onLookChange.mock.lastCall?.[0] as BlobLook
-    expect(next.shape).toBe('hexagon')
-    expect(next.seed).not.toBe('a')
-    expect(next.traits).toBeUndefined()
-    expect(next.bot).toEqual(original.bot)
-    expect(onLookChange.mock.lastCall?.[1]).toEqual(expect.not.stringMatching(/^mint$/))
-    act(() => render(next))
-    expect(host.querySelector('.look-shape[aria-checked="true"]')?.getAttribute('data-shape')).toBe('hexagon')
-  })
-
-  it('updates eyes and colour together in a parent draft without overwriting either', () => {
-    function DraftEditor() {
-      const [draft, setDraft] = useState({ look: { shape: 'circle', seed: 'original' } as BlobLook, color: 'mint' })
-      return <>
-        <LookEditor look={draft.look} color={draft.color} colorHex="#89D6B3" name="Draft"
-          onLookChange={(look, color) => setDraft({ ...draft, look, color: color ?? draft.color })}
-          onColorChange={(color) => setDraft({ ...draft, color })} />
-        <output>{JSON.stringify(draft)}</output>
-      </>
-    }
-    const host = document.createElement('div'); document.body.append(host)
-    const root = createRoot(host); mounted.push({ root, host })
-    act(() => root.render(<DraftEditor />))
-    click([...host.querySelectorAll('button')].find((button) => button.textContent?.includes('Surprise me')))
-    const saved = JSON.parse(host.querySelector('output')!.textContent!)
-    expect(saved.look.seed).not.toBe('original')
-    expect(saved.color).not.toBe('mint')
-    expect(saved.look.shape).toBe('circle')
-  })
-
-  it.each([undefined, 'hexagon'] as const)('keeps the inferred or explicit robot outline (%s) on Surprise me', (outline) => {
-    vi.spyOn(Math, 'random').mockReturnValue(0.5)
-    const { host, render, onLookChange } = mount({ shape: 'squircle', seed: 'a', art: 'robot', ...(outline ? { bot: { shape: outline } } : {}) })
-    click([...host.querySelectorAll('button')].find((button) => button.textContent?.includes('Surprise me')))
-    const next = onLookChange.mock.lastCall?.[0] as BlobLook
-    expect(next.shape).toBe('squircle')
-    expect(next.art).toBe('robot')
-    expect(next.bot?.shape).toBe(outline ?? 'square')
-    act(() => render(next))
-    expect(host.querySelector('.bot-shape[aria-checked="true"]')?.getAttribute('data-bot-shape')).toBe(outline ?? 'square')
-  })
-
-  it('sets and clears the art style from the Style control', () => {
-    const explicit = mount({ shape: 'circle', seed: 'a', art: 'painted', paint: 'ufo' })
-    const styleOptions = [...explicit.host.querySelectorAll('[data-style-option]')]
-    // Automatic, 3D robot, Glossy and Hand-painted (the 2D robot was retired on 27 October 2026).
-    expect(styleOptions).toHaveLength(4)
-    expect(explicit.host.querySelector('[data-style-option="painted"][aria-checked="true"]')).toBeTruthy()
-    click(explicit.host.querySelector('[data-style-option="robot"]'))
-    expect(explicit.onLookChange).toHaveBeenLastCalledWith({ shape: 'circle', seed: 'a', art: 'robot', paint: 'ufo' })
-    click(explicit.host.querySelector('[data-style-option="auto"]'))
-    expect(explicit.onLookChange).toHaveBeenLastCalledWith({ shape: 'circle', seed: 'a', paint: 'ufo' })
-
-    const automatic = mount({ shape: 'circle', seed: 'a' })
-    expect(automatic.host.querySelector('[data-style-option="auto"][aria-checked="true"]')).toBeTruthy()
-    click(automatic.host.querySelector('[data-style-option="robot"]'))
-    expect(automatic.onLookChange).toHaveBeenLastCalledWith({ shape: 'circle', seed: 'a', art: 'robot' })
-  })
-
-  it('shows the twelve painted bodies and writes the chosen one', () => {
-    const { host, onLookChange } = mount({ shape: 'circle', seed: 'a', art: 'painted' })
-    const radios = [...host.querySelectorAll<HTMLButtonElement>('[role="radiogroup"][aria-label="Painted shape"] [role="radio"]')]
-    expect(radios).toHaveLength(12)
-    expect(radios.map((radio) => radio.getAttribute('data-paint'))).toEqual(['classic', 'cube', 'star', 'flower', 'pear', 'peanut', 'ghost', 'bunny', 'kitty', 'ufo', 'boxbot', 'tile'])
-    expect(host.querySelector('[data-paint="classic"][aria-checked="true"]')).toBeTruthy()
-    click(radios[9])
-    expect(onLookChange).toHaveBeenLastCalledWith({ shape: 'circle', seed: 'a', art: 'painted', paint: 'ufo' })
-  })
-
-  it('opens the 3D robot editor for a stored retired robot art', () => {
-    const { host } = mount({ shape: 'circle', seed: 'a', art: 'robot-flat' as never })
-    expect(host.querySelector('[data-style-option="robot"][aria-checked="true"]')).toBeTruthy()
-    expect(host.querySelector('[aria-label="Painted shape"]')).toBeNull()
-    expect(host.querySelectorAll('.swatch').length).toBeGreaterThan(0)
-  })
-
-  it('makes the Style control and painted grid inert while the bot is locked', () => {
-    const { host, onLookChange } = mount({ shape: 'circle', seed: 'a', art: 'painted' }, true)
-    expect([...host.querySelectorAll<HTMLButtonElement>('.look-style-option')]).toHaveLength(4)
-    expect([...host.querySelectorAll<HTMLButtonElement>('.look-style-option')].every((button) => button.disabled)).toBe(true)
-    expect([...host.querySelectorAll<HTMLButtonElement>('[aria-label="Painted shape"] [role="radio"]')].every((button) => button.disabled)).toBe(true)
-    click(host.querySelector('.look-style-option'))
-    click(host.querySelector('[data-paint="ufo"]'))
-    expect(onLookChange).not.toHaveBeenCalled()
-  })
-
-  it('shuffles the face, keeps the shape, and credits the shape source', () => {
-    const { host, onLookChange } = mount({ shape: 'hexagon', seed: 'a', traits: { 'eye.rx': 0.1 } })
-    click([...host.querySelectorAll('button')].find((button) => button.textContent?.includes('Shuffle')))
-    const next = onLookChange.mock.lastCall?.[0] as BlobLook
-    expect(next.shape).toBe('hexagon')
-    expect(next.seed).not.toBe('a')
-    expect(next.traits).toBeUndefined()
-    expect(host.querySelector('.look-credit')?.textContent).toContain('blobatar')
-  })
-
-  // FIX39 item 13 / P5 audit F3-adjacent: the read-only editor must be inert,
-  // not merely covered by the disabled fieldset around it.
-  it('makes every control inert while the bot is locked', () => {
-    const { host, onLookChange, onColorChange } = mount({ shape: 'circle', seed: 'pololo' }, true)
-    const shapes = [...host.querySelectorAll<HTMLButtonElement>('.look-shape')]
-    expect(shapes).toHaveLength(8)
-    expect(shapes.every((button) => button.disabled)).toBe(true)
-    expect([...host.querySelectorAll<HTMLButtonElement>('.look-moods button')].every((button) => button.disabled)).toBe(true)
-    expect([...host.querySelectorAll<HTMLButtonElement>('.look-stage-actions button')].every((button) => button.disabled)).toBe(true)
-    expect([...host.querySelectorAll<HTMLButtonElement>('.look-tabs button')].every((button) => button.disabled)).toBe(true)
-    expect([...host.querySelectorAll<HTMLButtonElement>('.swatch')].every((button) => button.disabled)).toBe(true)
-    // Clicking a disabled control changes nothing.
-    click(shapes[5])
-    click(host.querySelector('.swatch'))
+  it('makes every control inert while the employee is locked', () => {
+    const { host, onLookChange, onColorChange } = mount({ shape: 'circle' }, true)
+    const buttons = [...host.querySelectorAll<HTMLButtonElement>('.profile-photo-option')]
+    expect(buttons.length).toBeGreaterThan(2)
+    expect(buttons.every((button) => button.disabled)).toBe(true)
+    click(host.querySelector('[aria-label="Profile photo 1"]'))
     expect(onLookChange).not.toHaveBeenCalled()
     expect(onColorChange).not.toHaveBeenCalled()
-  })
-
-  it('cannot even open the fine-tune tab while the bot is locked, and its sliders stay inert', () => {
-    const { host, onLookChange } = mount({ shape: 'circle', seed: 'pololo', traits: { 'eye.rx': 0.4 } }, true)
-    const tabs = [...host.querySelectorAll<HTMLButtonElement>('.look-tabs button')]
-    expect(tabs).toHaveLength(2)
-    expect(tabs.every((button) => button.disabled)).toBe(true)
-    click(tabs[1])
-    expect(host.querySelector('.look-slider input[type="range"]')).toBeNull()
-    expect(onLookChange).not.toHaveBeenCalled()
   })
 })

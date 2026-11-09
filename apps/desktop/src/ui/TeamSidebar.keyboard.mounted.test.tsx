@@ -63,39 +63,39 @@ function row(view: HTMLElement, id: string) {
   return view.querySelector<HTMLButtonElement>(`.team-row[data-agent-id="${id}"]`)!
 }
 
-describe('bot lock (FIX39 item 13)', () => {
+describe('employee lock (FIX39 item 13)', () => {
   const openMenu = async (view: HTMLElement, id: string) => {
     await act(async () => { row(view, id).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })) })
     return view.querySelector<HTMLElement>('.team-menu')!
   }
 
-  it('offers Lock bot only while the feature is on, and calls the action', async () => {
+  it('offers Lock employee only while the feature is on, and calls the action', async () => {
     const list = actions()
     const view = mount(list, { botLock: true })
     const menu = await openMenu(view, 'agent-alpha')
-    const item = [...menu.querySelectorAll<HTMLButtonElement>('.team-menu-item')].find((button) => button.textContent === 'Lock bot')
+    const item = [...menu.querySelectorAll<HTMLButtonElement>('.team-menu-item')].find((button) => button.textContent === 'Lock employee')
     expect(item).toBeTruthy()
     await act(async () => { item!.click() })
     expect(list.onToggleLock).toHaveBeenCalledWith(alpha)
   })
 
-  it('always offers Unlock for a locked bot, even when the switch is off, and freezes its settings', async () => {
+  it('always offers Unlock for a locked employee, even when the switch is off, and freezes its settings', async () => {
     const list = actions()
     const lockedAlpha = agent({ ...alpha, locked: true })
     const view = mount(list, { agents: [lockedAlpha, beta, gamma] })
     expect(row(view, 'agent-alpha').querySelector('.lock-badge')).not.toBeNull()
     const menu = await openMenu(view, 'agent-alpha')
     const labels = [...menu.querySelectorAll<HTMLButtonElement>('.team-menu-item')]
-    expect(labels.find((button) => button.textContent === 'Unlock bot')).toBeTruthy()
+    expect(labels.find((button) => button.textContent === 'Unlock employee')).toBeTruthy()
     // Rename, Edit, Archive and Default project are refused while locked.
-    for (const label of ['Rename bot', 'Edit bot', 'Archive', 'Default project']) {
+    for (const label of ['Rename employee', 'Edit employee', 'Archive', 'Default project']) {
       expect(labels.find((button) => button.textContent === label)?.disabled, label).toBe(true)
     }
     // Placement the owner expects to keep working stays enabled.
     expect(labels.find((button) => button.textContent === 'Pin')?.disabled).toBe(false)
   })
 
-  it('shows the model and effort line for an idle bot when the model-line experiment is on', () => {
+  it('shows the model and effort line for an idle employee when the model-line experiment is on', () => {
     const view = mount(actions(), { sidebarModel: true, runtimes: [{ id: 'rt', provider: 'codex', status: 'ready' }] })
     const preview = row(view, 'agent-beta').querySelector('.bot-row-preview')
     expect(preview?.textContent).toBe('Default model')
@@ -116,7 +116,7 @@ describe('bot lock (FIX39 item 13)', () => {
     expect(row(view, 'agent-modelled').querySelector('.bot-row-preview')?.textContent).toBe('Sonnet 5.5 · High')
   })
 
-  it('does not start a drag for a locked bot', async () => {
+  it('does not start a drag for a locked employee', async () => {
     const list = actions()
     const lockedAlpha = agent({ ...alpha, locked: true })
     const view = mount(list, { agents: [lockedAlpha, beta, gamma] })

@@ -160,7 +160,7 @@ describe('sidebarSubtitle (FIX39 item 12)', () => {
     expect(sidebarSubtitle({ model: 'claude-sonnet-5-5', thinking: null }, 'claude', models)).toBe('Sonnet 5.5')
     expect(sidebarSubtitle({ model: 'gpt-6-luna', thinking: 'high' }, 'codex', null)).toBe('Luna 6 · High')
   })
-  it('reads as a default when the bot has no model of its own', () => {
+  it('reads as a default when the employee has no model of its own', () => {
     expect(sidebarSubtitle({ model: null, thinking: 'high' }, 'claude', models)).toBe('Default model')
     expect(sidebarSubtitle({ model: '  ', thinking: null }, null, models)).toBe('Default model')
   })

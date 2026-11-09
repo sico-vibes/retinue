@@ -43,7 +43,7 @@ export const APPROVAL_MODE_COPY: Record<ApprovalMode, { label: string; title: st
 }
 
 /** FIX39 item 13: the one sentence a locked bot's disabled composer controls show. */
-export const LOCKED_CONTROL_TOOLTIP = 'This bot is locked. Unlock it to change its settings.'
+export const LOCKED_CONTROL_TOOLTIP = 'This employee is locked. Unlock it to change its settings.'
 
 /** Order: the conversation's own choice, then its project's, then the bot's (which already includes the default). */
 export function sessionApprovalMode(session: Session, agent: Agent | null): { mode: ApprovalMode; pinned: boolean; fromProject?: boolean } {
@@ -113,7 +113,7 @@ export function PermissionModeControl({ session, agent, disabled, locked = false
   const apply = async (write: ApprovalMode | null) => {
     const before = session
     setSaving(true)
-    if (!agent) { setSaving(false); onError(new Error('Choose a bot first.')); return }
+    if (!agent) { setSaving(false); onError(new Error('Choose an employee first.')); return }
     // The project's own setting would override the bot's, so here the choice stays on this conversation.
     if (session.projectApprovalMode && !before.id.startsWith('draft:')) {
       try {
@@ -224,7 +224,7 @@ export function AttachMenu({ imagesSupported, imagesDisabled, imageCount, fileDi
         <div className="composer-menu-separator" role="separator" />
         <button type="button" role="menuitem" className="composer-menu-item rich" onClick={() => { close(false); onGenerateImage() }}>
           <span className="composer-menu-icon"><Sparkles size={15} aria-hidden="true" /></span>
-          <span className="composer-menu-text"><strong>Generate an image</strong><small>Asks the bot to use its own image tool. You describe the picture.</small></span>
+          <span className="composer-menu-text"><strong>Generate an image</strong><small>Asks the employee to use its own image tool. You describe the picture.</small></span>
         </button>
       </>}
     </div>}

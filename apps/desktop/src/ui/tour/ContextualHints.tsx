@@ -63,12 +63,12 @@ export function ContextualHints({ enabled }: { enabled: boolean }) {
   const active = enabled && !tourActive ? HINT_PRIORITY.find((id) => present[id] && !seen[id]) ?? null : null
   return <>
     <Hint anchor={ANCHORS['approval.first']} when={active === 'approval.first'} seen={approvalSeen} onDismiss={markApproval} placement="top"
-      title={`A ${noun} is asking permission`} body="Press Enter to allow this one request or Esc to deny it. Nothing runs until you choose." />
+      title={`An ${noun} is asking permission`} body="Press Enter to allow this one request or Esc to deny it. Nothing runs until you choose." />
     <Hint anchor={ANCHORS['plan.first']} when={active === 'plan.first'} seen={planSeen} onDismiss={markPlan} placement="top"
       title="This is the plan" body="Read the steps first. Nothing changes until you approve, and you can reply with edits instead." />
     <Hint anchor={ANCHORS['context.high']} when={active === 'context.high'} seen={contextSeen} onDismiss={markContext} placement="top"
       title="Context is getting full" body="Long conversations get slower and cost more. Start a new conversation to keep answers sharp." />
     <Hint anchor={ANCHORS['team.first']} when={active === 'team.first'} seen={teamSeen} onDismiss={markTeam} placement="top"
-      title={`${noun === 'bot' ? 'Bots' : 'Blobs'} can work together`} body={`This marks a message between ${noun}s. Open it to see what was asked and what came back.`} />
+      title="Employees can work together" body={`This marks a message between ${noun}s. Open it to see what was asked and what came back.`} />
   </>
 }

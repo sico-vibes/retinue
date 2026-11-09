@@ -219,7 +219,7 @@ async function deliver(view: ReturnType<typeof startApp>, event: DaemonEvent) {
 
 // ── C7: completion peek and Focus mode ───────────────────────────────────
 describe('C7 completion peek', () => {
-  it('peeks when another bot finishes, plays blip, and Open selects and expands', async () => {
+  it('peeks when another employee finishes, plays blip, and Open selects and expands', async () => {
     configure(snapshot({ sessions: [claudeSession, { ...codexSession, state: 'working' }] }))
     const view = startApp('?companion=1')
     await view.settle()
@@ -238,7 +238,7 @@ describe('C7 completion peek', () => {
     expect(view.host.querySelector('.companion-peek')).toBeNull()
   })
 
-  it('never peeks for the focused bot or a failed turn', async () => {
+  it('never peeks for the focused employee or a failed turn', async () => {
     configure(snapshot({ sessions: [{ ...claudeSession, state: 'working' }, codexSession] }))
     const view = startApp('?companion=1')
     await view.settle()
@@ -261,7 +261,7 @@ describe('C7 completion peek', () => {
     await view.settle()
     await deliver(view, { sequence: 21, type: 'session.changed', payload: { session: { ...codexSession, state: 'idle' } } } as DaemonEvent)
     await deliver(view, { sequence: 22, type: 'session.changed', payload: { session: { ...opsSession, state: 'completed' } } } as DaemonEvent)
-    expect(view.host.querySelector('.companion-peek-text')?.textContent).toBe('2 bots finished.')
+    expect(view.host.querySelector('.companion-peek-text')?.textContent).toBe('2 employees finished.')
   })
 
   it('suppresses the peek and its cue in Focus mode, but keeps approvals', async () => {
@@ -303,7 +303,7 @@ describe('C7/C8 companion settings controls', () => {
 
 // ── C9: the live Activity tab ────────────────────────────────────────────
 describe('C9 live activity summary', () => {
-  it('lists each working bot with its step, status dot and elapsed time', async () => {
+  it('lists each working employee with its step, status dot and elapsed time', async () => {
     const working = session({ ...claudeSession, state: 'working', tools: [{ id: 't1', title: 'npm test', state: 'running', command: 'npm test', sequence: 1 }] })
     configure(snapshot({ sessions: [working, codexSession] }))
     const view = startApp('?companion=1')
@@ -316,7 +316,7 @@ describe('C9 live activity summary', () => {
     expect(row.querySelector('.companion-elapsed')?.textContent).toBe('0s')
   })
 
-  it('shows "Nothing is running." when no bot is working', async () => {
+  it('shows "Nothing is running." when no employee is working', async () => {
     const view = startApp('?companion=1')
     await openHome(view)
     await press(view.host, 'Activity')

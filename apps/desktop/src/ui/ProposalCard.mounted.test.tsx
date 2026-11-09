@@ -49,10 +49,10 @@ describe('proposal helpers', () => {
 })
 
 describe('proposal card', () => {
-  it('approves a bot with the owner’s edit', async () => {
+  it('approves an employee with the owner’s edit', async () => {
     await mount(proposal('bot', { name: 'Scout', role: 'Research', description: 'Finds things', instructions: 'Be brief', provider: 'opencode' }))
     expect(host!.textContent).toContain('Max proposes')
-    expect(host!.textContent).toContain('Create a bot')
+    expect(host!.textContent).toContain('Create an employee')
     await act(async () => { button('Edit').click() })
     const role = [...host!.querySelectorAll('input')][1]!
     act(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(role, 'Researcher'); role.dispatchEvent(new Event('input', { bubbles: true })) })
@@ -84,7 +84,7 @@ describe('proposal card', () => {
   // mode, and never offers full access.
   it('shows a conversation permission change without offering full access', async () => {
     await mount(proposal('permission', { conversation: 'side-7', mode: 'auto' }))
-    expect(host!.textContent).toContain("Change a bot's permission")
+    expect(host!.textContent).toContain("Change an employee's permission")
     expect(host!.textContent).toContain('side-7')
     expect(host!.textContent).toContain('Auto')
     expect(host!.textContent).toContain('Full access can never be set this way.')
@@ -137,9 +137,9 @@ describe('task folder line (FIX39 risk 7)', () => {
 
 // P7: the owner reviews the Manager's actual change and task contract.
 describe('P7 tool proposals', () => {
-  it('shows every proposed bot field', async () => {
+  it('shows every proposed employee field', async () => {
     await mount(proposal('bot', { action: 'update', blob: 'Scout', name: 'Sage', tags: ['researcher'], model: 'm1', thinking: 'high', approvalMode: 'auto', look: { shape: 'circle' } }))
-    expect(host!.textContent).toContain('Update a bot')
+    expect(host!.textContent).toContain('Update an employee')
     for (const value of ['Scout', 'Sage', 'researcher', 'm1', 'high', 'Auto', 'circle']) expect(host!.textContent).toContain(value)
     expect(host!.textContent).not.toContain('Coding agent')
     await act(async () => { button('Approve').click() })

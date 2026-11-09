@@ -31,7 +31,7 @@ const dragStart = (card: HTMLElement) => act(() => { card.dispatchEvent(withTran
 const drop = (lane: HTMLElement, id: string) => act(() => { lane.dispatchEvent(withTransfer('drop', { getData: () => id, dropEffect: 'move' })) })
 
 describe('DelegateBoard', () => {
-  it('lists drafts on the left and one lane per live bot', () => {
+  it('lists drafts on the left and one lane per live employee', () => {
     board([task('d1', 'unassigned'), task('r1', 'running', { estimateMinutes: 30, startedAt: '2026-10-21T11:48:00Z' }), task('q1', 'queued', { queuePosition: 0 }), task('x', 'done')])
     expect(all('.delegate-draft')).toHaveLength(1)
     expect(all('.delegate-draft')[0].textContent).toContain('Task d1')
@@ -42,7 +42,7 @@ describe('DelegateBoard', () => {
     expect(all('.delegate-done')).toHaveLength(1)
   })
 
-  it('runs the single assign action when a draft is dropped on a bot, and ignores work that is not a draft', () => {
+  it('runs the single assign action when a draft is dropped on an employee, and ignores work that is not a draft', () => {
     const { onAssign } = board([task('d1', 'unassigned'), task('r1', 'running')])
     dragStart(all('.delegate-draft')[0])
     const lanes = all('.delegate-lane')

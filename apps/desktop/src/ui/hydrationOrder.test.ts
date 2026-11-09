@@ -5,7 +5,7 @@ import { conversationsToLoad, hydrationOrder } from './teamSelectors'
 const s = (id: string, agentId: string, updatedAt: string, extra: Partial<Session> = {}): Session => ({ id, agentId, runtimeId: 'rt', updatedAt, ...extra })
 
 describe('background conversation loading order', () => {
-  it('loads the selected bot first, newest first, and skips loaded or archived ones', () => {
+  it('loads the selected employee first, newest first, and skips loaded or archived ones', () => {
     const sessions = [
       s('a-old', 'a', '2026-10-10T00:00:00Z'),
       s('b-new', 'b', '2026-10-16T00:00:00Z'),

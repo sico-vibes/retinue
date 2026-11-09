@@ -67,7 +67,7 @@ export const SESSION_MESSAGES: Record<string, Message[]> = {
   claude: [
     { from: 'you', text: 'Write the copy for the three plans. Keep it short and plain.' },
     { from: 'step', text: 'Read pricing/plans.md and the competitor table' },
-    { from: 'bot', text: 'Here is a first pass. Free: everything you need to try it. Pro: for daily work, with unlimited bots. Team: shared bots, one bill.' },
+    { from: 'bot', text: 'Here is a first pass. Free: everything you need to try it. Pro: for daily work, with unlimited employees. Team: shared employees, one bill.' },
     { from: 'step', text: 'Editing site/pricing/copy.ts' },
   ],
   doop: [
@@ -87,7 +87,7 @@ export const SESSION_MESSAGES: Record<string, Message[]> = {
   ],
   manager: [
     { from: 'you', text: 'Launch the new pricing page by Friday.' },
-    { from: 'bot', text: 'I split it into four tasks and drafted briefs. Drag them onto bots on the Tasks board when you are ready, or tell me who should take each one.' },
+    { from: 'bot', text: 'I split it into four tasks and drafted briefs. Drag them onto employees on the Tasks board when you are ready, or tell me who should take each one.' },
   ],
 }
 

@@ -13,7 +13,7 @@ export interface TourStep {
 
 /**
  * The six stops of the first-run tour. Copy is a function of the look's
- * noun so Bitbots says "bot" and Blobots says "blob". Steps whose anchor is
+ * noun so it says "employee". Steps whose anchor is
  * not on screen (a panel closed, a narrow window, a build with no remote
  * support) are skipped by the tour.
  */
@@ -43,8 +43,8 @@ export function tourSteps(noun: string, plural: string): TourStep[] {
     },
     {
       id: 'companion', anchor: 'companion', placement: 'right',
-      title: `Keep a ${noun} on your desktop`,
-      body: `The companion floats above your other windows and shows when a ${noun} needs you. Ctrl+Alt+B shows or hides it.`,
+      title: `Keep an ${noun} on your desktop`,
+      body: `The companion floats above your other windows and shows when an ${noun} needs you. Ctrl+Alt+B shows or hides it.`,
       tip: 'Change the look and accent colour any time in Settings > Appearance.',
     },
     {

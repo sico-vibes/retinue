@@ -156,7 +156,7 @@ describe('settings modal', () => {
     await view.settle()
     expect(start.getAttribute('aria-checked')).toBe('true')
     expect(view.host.textContent).not.toContain('Not available yet')
-    const notifications = view.host.querySelector<HTMLButtonElement>('[aria-label="Notify when a bot finishes or needs approval"]')!
+    const notifications = view.host.querySelector<HTMLButtonElement>('[aria-label="Notify when an employee finishes or needs approval"]')!
     expect(notifications.getAttribute('aria-checked')).toBe('true')
     await act(async () => { notifications.click() })
     await view.settle()
@@ -190,7 +190,7 @@ describe('settings modal', () => {
     expect(runtimeHead.getAttribute('aria-expanded')).toBe('false')
     expect(runtimeHead.textContent).toContain('Codex')
     expect(runtimeHead.textContent).toContain('Signed in')
-    expect(runtimeHead.textContent).toContain('2 bots')
+    expect(runtimeHead.textContent).toContain('2 employees')
     await act(async () => { runtimeHead.click() })
     expect(view.host.querySelector('.settings-facts')?.textContent).toContain('C:\\Tools\\codex.exe')
     expect(view.host.textContent).toContain('Bypass approvals')

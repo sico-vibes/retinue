@@ -35,7 +35,7 @@ export function normalizeOverrides(raw: unknown): ProjectOverrides {
 }
 
 const MODE_OPTIONS = [
-  { value: '', label: 'Each bot’s own setting' },
+  { value: '', label: 'Each employee’s own setting' },
   { value: 'ask', label: 'Ask first' },
   { value: 'accept_edits', label: 'Auto-accept edits' },
   { value: 'auto', label: 'Auto-approve' },
@@ -46,7 +46,7 @@ const PROVIDER_NAMES: Record<string, string> = { claude: 'Claude Code', codex: '
 function ModelRow({ runtime, value, onChange }: { runtime: Runtime; value: string; onChange: (value: string) => void }) {
   const query = useCachedRpc('runtime.models', { runtimeId: runtime.id })
   const models = parseModelCatalog(query.value)?.models ?? []
-  const options = [{ value: '', label: 'Each bot’s own model' }, ...models.map((model) => ({ value: model.id, label: model.displayName || model.id }))]
+  const options = [{ value: '', label: 'Each employee’s own model' }, ...models.map((model) => ({ value: model.id, label: model.displayName || model.id }))]
   // A saved model the catalog no longer lists stays visible, so it isn't lost by opening this.
   if (value && !models.some((model) => model.id === value)) options.push({ value, label: value })
   const name = PROVIDER_NAMES[runtime.provider ?? ''] ?? runtime.provider ?? 'Coding agent'
@@ -79,12 +79,12 @@ export function SharedSettingsSection({ projectId, hasOwnSettings }: { projectId
   const asks = shared.settings ?? {}
   return <div className="project-shared" role="group" aria-label="Settings from the repository">
     <span className="project-settings-heading">Settings from the repository</span>
-    {shared.state === 'none' && <small className="project-settings-note">This repository has no <code>.bitbots.json</code>. Add one to share a setup script, default bot and approvals with your other machines.</small>}
+    {shared.state === 'none' && <small className="project-settings-note">This repository has no <code>.bitbots.json</code>. Add one to share a setup script, default employee and approvals with your other machines.</small>}
     {shared.state === 'invalid' && <small className="new-project-error" role="alert">The repository's <code>.bitbots.json</code> can't be read, so it's ignored.</small>}
     {(shared.state === 'untrusted' || shared.state === 'trusted') && <>
       <ul className="project-shared-list">
         {asks.setupScript && <li><span>Setup script</span><code>{asks.setupScript}</code></li>}
-        {asks.defaultBot && <li><span>Default bot</span><code>{asks.defaultBot}</code></li>}
+        {asks.defaultBot && <li><span>Default employee</span><code>{asks.defaultBot}</code></li>}
         {asks.approvalMode && <li><span>Approvals</span><code>{MODE_OPTIONS.find((option) => option.value === asks.approvalMode)?.label ?? asks.approvalMode}</code></li>}
       </ul>
       {shared.problems.map((item) => <small key={item} className="project-settings-note">{item}</small>)}
@@ -133,11 +133,11 @@ export function ProjectSettingsDialog({ project, runtimes, onClose, onSaved }: {
   return <div className={`sheet-backdrop blob-dialog-backdrop ${entered ? 'is-entered' : ''}`}>
     <section ref={ref} className="blob-dialog new-project project-settings" role="dialog" aria-modal="true" aria-labelledby="project-settings-title" tabIndex={-1}>
       <h2 id="project-settings-title">{project.name} settings</h2>
-      <p>For every bot in this project. A conversation you set yourself keeps its own choice.</p>
+      <p>For every employee in this project. A conversation you set yourself keeps its own choice.</p>
       <label className="new-project-field"><span>Approvals</span>
         <Select ariaLabel="Approvals in this project" variant="muted" value={mode} onChange={(value) => { setMode(value); setAccepted(false) }} options={MODE_OPTIONS} />
       </label>
-      {newlyFullAccess && <label className="new-project-check project-full-access"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} /><span>Every bot in this project may run commands and change files without asking. Scheduled work still stays on safe actions.</span></label>}
+      {newlyFullAccess && <label className="new-project-check project-full-access"><input type="checkbox" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} /><span>Every employee in this project may run commands and change files without asking. Scheduled work still stays on safe actions.</span></label>}
       <div className="project-settings-models" role="group" aria-label="Model for new conversations in this project">
         <span className="project-settings-heading">Model for new conversations</span>
         {providers.map((runtime) => <ModelRow key={runtime.provider} runtime={runtime} value={models[runtime.provider ?? ''] ?? ''} onChange={(value) => setModels((current) => ({ ...current, [runtime.provider ?? '']: value }))} />)}

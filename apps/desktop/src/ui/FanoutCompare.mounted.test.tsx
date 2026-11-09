@@ -55,8 +55,8 @@ describe('fan-out helpers', () => {
   })
 })
 
-describe('asking several bots', () => {
-  it('needs two bots and a message, starts in the chosen project with its own copies, and reports the result', async () => {
+describe('asking several employees', () => {
+  it('needs two employees and a message, starts in the chosen project with its own copies, and reports the result', async () => {
     h.rpc.mockResolvedValue({ fanout: record() })
     const onStarted = vi.fn()
     const view = await mount(<FanoutDialog agents={bots} projects={projects} runtimes={runtimes} initialAgent={{ ...bots[0], projectId: 'p1' }} onCancel={vi.fn()} onStarted={onStarted} />)
@@ -64,9 +64,9 @@ describe('asking several bots', () => {
     expect(button(view, 'Offline')?.disabled).toBe(true)
     expect(button(view, 'Choose 2 or more')?.disabled).toBe(true)
     await act(async () => { button(view, 'Beta')!.click() })
-    expect(button(view, 'Ask 2 bots')?.disabled, 'still needs a message').toBe(true)
+    expect(button(view, 'Ask 2 employees')?.disabled, 'still needs a message').toBe(true)
     await type(view.querySelector<HTMLTextAreaElement>('.fanout-prompt')!, ' What should we do? ')
-    await act(async () => { button(view, 'Ask 2 bots')!.click() }); await settle()
+    await act(async () => { button(view, 'Ask 2 employees')!.click() }); await settle()
     expect(h.rpc).toHaveBeenCalledWith('fanout.start', { agentIds: ['a1', 'a2'], text: 'What should we do?', projectId: 'p1', worktrees: true })
     expect(onStarted).toHaveBeenCalledWith(expect.objectContaining({ id: 'f1' }))
   })
@@ -77,20 +77,20 @@ describe('asking several bots', () => {
     await act(async () => { button(view, 'Beta')!.click() })
     expect(view.querySelector('.fanout-copy'), 'no project has no repository to copy').toBeNull()
     await type(view.querySelector<HTMLTextAreaElement>('.fanout-prompt')!, 'Hello')
-    await act(async () => { button(view, 'Ask 2 bots')!.click() }); await settle()
+    await act(async () => { button(view, 'Ask 2 employees')!.click() }); await settle()
     expect(h.rpc).toHaveBeenCalledWith('fanout.start', { agentIds: ['a1', 'a2'], text: 'Hello', projectId: null, worktrees: false })
   })
 
-  it('stops at six bots and shows a refusal', async () => {
-    const many = [1, 2, 3, 4, 5, 6, 7].map((index) => agent(`b${index}`, `Bot${index}`))
-    h.rpc.mockRejectedValue(new Error('Choose 2 to 6 bots.'))
+  it('stops at six employees and shows a refusal', async () => {
+    const many = [1, 2, 3, 4, 5, 6, 7].map((index) => agent(`b${index}`, `Employee${index}`))
+    h.rpc.mockRejectedValue(new Error('Choose 2 to 6 employees.'))
     const view = await mount(<FanoutDialog agents={many} projects={[]} runtimes={runtimes} initialAgent={null} onCancel={vi.fn()} onStarted={vi.fn()} />)
-    for (const index of [1, 2, 3, 4, 5, 6]) await act(async () => { button(view, `Bot${index}`)!.click() })
-    expect(button(view, 'Bot7')?.disabled).toBe(true)
+    for (const index of [1, 2, 3, 4, 5, 6]) await act(async () => { button(view, `Employee${index}`)!.click() })
+    expect(button(view, 'Employee7')?.disabled).toBe(true)
     await type(view.querySelector<HTMLTextAreaElement>('.fanout-prompt')!, 'Hello')
-    await act(async () => { button(view, 'Ask 6 bots')!.click() }); await settle()
-    expect(view.querySelector('[role="alert"]')?.textContent).toBe('Choose 2 to 6 bots.')
-    expect(button(view, 'Ask 6 bots')?.disabled, 'can try again').toBe(false)
+    await act(async () => { button(view, 'Ask 6 employees')!.click() }); await settle()
+    expect(view.querySelector('[role="alert"]')?.textContent).toBe('Choose 2 to 6 employees.')
+    expect(button(view, 'Ask 6 employees')?.disabled, 'can try again').toBe(false)
   })
 })
 
@@ -153,7 +153,7 @@ describe('the compare view', () => {
 })
 
 describe('the companion summary', () => {
-  it('shows a comparison only while a bot is working or needs you, and opens its conversation', async () => {
+  it('shows a comparison only while an employee is working or needs you, and opens its conversation', async () => {
     h.rpc.mockResolvedValue({ fanouts: [record({ rows: [row('a1', 'Alpha', { state: 'working', reply: null }), row('a2', 'Beta')] })] })
     const onOpen = vi.fn()
     const view = await mount(<CompanionFanoutSummary connected onOpen={onOpen} />); await settle()

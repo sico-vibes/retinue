@@ -53,9 +53,9 @@ export function WorkspaceBody({ session, active }: { session: Session; active: b
   const own = data.mode === 'isolated' && data.worktree
   return <>
     <div className="rail-row"><GitBranch size={13} aria-hidden="true" /><span className="rail-row-main">{own ? 'Its own copy of the project' : data.mode === 'unknown' ? 'No project folder' : 'Shared project folder'}</span><span className="rail-tag">{own ? 'isolated' : data.mode === 'unknown' ? 'unknown' : 'shared'}</span></div>
-    {own && data.worktree && <p className="rail-note">Branch <b>{data.worktree.branch}</b>, taken from {data.worktree.base}{short(data.worktree.baseCommit) ? ` at ${short(data.worktree.baseCommit)}` : ''}. Changes here are this bot's alone and are offered for merge when the task ends.</p>}
-    {!own && data.mode === 'shared' && <p className="rail-note">{data.isGit && data.branch ? <>Branch <b>{data.branch}</b>{short(data.head) ? ` at ${short(data.head)}` : ''}. </> : null}Changes in a shared folder belong to the folder, not to one bot: anyone working here, or you, may have made them.</p>}
-    {data.isolationFailure && <p className="rail-note rail-problem" role="alert"><CircleAlert size={12} aria-hidden="true" /><span>Bitbots could not give this bot its own copy: {data.isolationFailure} It is working in the shared folder.</span></p>}
+    {own && data.worktree && <p className="rail-note">Branch <b>{data.worktree.branch}</b>, taken from {data.worktree.base}{short(data.worktree.baseCommit) ? ` at ${short(data.worktree.baseCommit)}` : ''}. Changes here are this employee's alone and are offered for merge when the task ends.</p>}
+    {!own && data.mode === 'shared' && <p className="rail-note">{data.isGit && data.branch ? <>Branch <b>{data.branch}</b>{short(data.head) ? ` at ${short(data.head)}` : ''}. </> : null}Changes in a shared folder belong to the folder, not to one employee: anyone working here, or you, may have made them.</p>}
+    {data.isolationFailure && <p className="rail-note rail-problem" role="alert"><CircleAlert size={12} aria-hidden="true" /><span>Bitbots could not give this employee its own copy: {data.isolationFailure} It is working in the shared folder.</span></p>}
     {(data.sharedWith?.length ?? 0) > 0 && <p className="rail-note"><Users size={12} aria-hidden="true" /> {data.sharedWith.length} other {data.sharedWith.length === 1 ? 'conversation is' : 'conversations are'} working in this folder right now, so changes can overlap.</p>}
   </>
 }

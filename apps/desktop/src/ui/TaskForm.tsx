@@ -106,7 +106,7 @@ export function TaskForm({ task, agents, projects, connected, heading, headingId
   const estimateNumber = estimate.trim() ? Number(estimate) : null
   const estimateOk = estimateNumber === null || (Number.isInteger(estimateNumber) && estimateNumber >= 1 && estimateNumber <= 10080)
   const valid = title.trim().length > 0 && title.trim().length <= 120 && brief.length <= 12000 && estimateOk && (!timed || (!!schedule && !!bot)) && !staging && !brokenImage
-  const hint = !title.trim() ? null : staging ? 'Preparing your images…' : brokenImage ? 'Remove the image that could not be attached.' : timed && !bot ? 'Choose the bot that runs this task.' : timed && !schedule ? 'Choose a valid time.' : !estimateOk ? 'Estimate is a whole number of minutes.' : null
+  const hint = !title.trim() ? null : staging ? 'Preparing your images…' : brokenImage ? 'Remove the image that could not be attached.' : timed && !bot ? 'Choose the employee that runs this task.' : timed && !schedule ? 'Choose a valid time.' : !estimateOk ? 'Estimate is a whole number of minutes.' : null
   const limitOptions = TIME_LIMIT_CHOICES.some((choice) => String(choice.value) === limit) ? TIME_LIMIT_CHOICES : [...TIME_LIMIT_CHOICES, { value: Number(limit), label: `${Math.round(Number(limit) / 60)} minutes` }]
 
   const submit = async () => {
@@ -142,11 +142,11 @@ export function TaskForm({ task, agents, projects, connected, heading, headingId
     </div>
     <div className="task-field-row">
       <div className="blob-field"><span>Project</span><Select ariaLabel="Project" variant="field" value={projectId} placeholder="No project" onChange={setProjectId} options={[{ value: '', label: 'No project' }, ...projects.map((project) => ({ value: project.id, label: project.name }))]} /></div>
-      <div className="blob-field"><span>Bot</span><Select ariaLabel="Bot" variant="field" value={botId} placeholder="Choose later" onChange={setBotId} options={[...(timed ? [] : [{ value: '', label: 'Choose later' }]), ...bots.map((agent) => ({ value: agent.id, label: agent.name }))]} /></div>
+      <div className="blob-field"><span>Employee</span><Select ariaLabel="Employee" variant="field" value={botId} placeholder="Choose later" onChange={setBotId} options={[...(timed ? [] : [{ value: '', label: 'Choose later' }]), ...bots.map((agent) => ({ value: agent.id, label: agent.name }))]} /></div>
     </div>
     <div className="blob-field"><span>When</span>
       <div className="segmented" role="radiogroup" aria-label="When it runs">{WHEN_OPTIONS.map((option) => <button key={option.value} type="button" role="radio" aria-checked={when === option.value} className={when === option.value ? 'on' : undefined} onClick={() => switchWhen(option.value)}>{option.label}</button>)}</div>
-      {when === 'now' ? <small className="task-hint">Runs when you give it to a bot{bot ? `, which is right away for ${bot.name}` : ''}.</small>
+      {when === 'now' ? <small className="task-hint">Runs when you give it to an employee{bot ? `, which is right away for ${bot.name}` : ''}.</small>
         : <ScheduleWhen draft={draft} onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))} schedule={schedule} onPreview={previewSchedule} presets={when === 'once' ? ['once'] : REPEAT_PRESETS} />}
       {timed && <small className="task-disclaimer">{SCHEDULE_DISCLAIMER}</small>}
       {timed && task?.scheduleLastOutcome && <small className="task-hint">Last time: {SCHEDULE_OUTCOME_LABEL[task.scheduleLastOutcome] ?? task.scheduleLastOutcome}.</small>}
