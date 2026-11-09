@@ -4,7 +4,7 @@
 > **Status:** current
 > **Last updated:** 2026-10-15
 
-Goal: any release published to the Bitbots repository (stable or beta) can be found, downloaded and installed from inside the app.
+Goal: any release published to the Retinue repository (stable or beta) can be found, downloaded and installed from inside the app.
 
 ## Decisions
 
@@ -28,7 +28,7 @@ Manifest format (Tauri updater static JSON): `{ "version", "notes", "pub_date", 
 ## App behaviour
 
 - Preferences (persisted on the device, in the same place the existing `closeToTray`/companion preferences live): `channel` (`stable`|`beta`, default `beta`) and `autoCheck` (bool, default true).
-- Background checker (Rust): first check about 15 s after start, then every 6 hours, only when `autoCheck` is true. A found update emits `bloblex-update-available`. Never installs on its own; the user chooses Install.
+- Background checker (Rust): first check about 15 s after start, then every 6 hours, only when `autoCheck` is true. A found update emits `retinue-update-available`. Never installs on its own; the user chooses Install.
 - Manual "Check now" works regardless of `autoCheck`.
 - Install: downloads with progress events, then runs the passive installer which closes and relaunches the app. The UI warns before installing when any session is running or waiting for approval (the daemon and running turns end when the app exits) and requires an explicit confirm.
 - Failure handling: network failure, bad signature, missing manifest and no-stable-release are shown as short safe messages, never raw error text, and never block the app. A downgrade is never offered (the plugin compares versions).
@@ -45,12 +45,12 @@ Commands (invoke names, camelCase arguments, JSON results):
 
 `UpdateInfo = { version: string, notes: string|null, pubDate: string|null, channel: "stable"|"beta" }`.
 
-Events (listen names): `bloblex-update-available` (payload `UpdateInfo`), `bloblex-update-progress` (payload `{ phase: "downloading"|"installing", downloadedBytes: number, totalBytes: number|null }`).
+Events (listen names): `retinue-update-available` (payload `UpdateInfo`), `retinue-update-progress` (payload `{ phase: "downloading"|"installing", downloadedBytes: number, totalBytes: number|null }`).
 
 ## Release process (scripts/release-windows.ps1)
 
 1. Verify a clean working tree on `main`, matching versions everywhere, the given tag does not exist, and `gh` is authenticated.
-2. Read the updater private key and password from outside the repo (`%USERPROFILE%\.bloblex-release\updater.key` and `updater.pass`, or the `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` environment variables). Never print them, never write them into the repo or logs.
+2. Read the updater private key and password from outside the repo (`%USERPROFILE%\.retinue-release\updater.key` and `updater.pass`, or the `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` environment variables). Never print them, never write them into the repo or logs.
 3. Run the existing bundle build (daemon and hook in release, stage the daemon, `tauri build` with updater artifacts), producing the NSIS installer and its `.sig`.
 4. Generate `latest.json` for the version, release notes taken from `docs/releases/<version>.md` (or a default line).
 5. Create the GitHub release (`--prerelease` when the version has a pre-release part) with the installer, its `.sig` and `latest.json`; then create-or-update the `channel-beta` pre-release and upload `latest.json` to it with `--clobber`.

@@ -51,7 +51,7 @@ vi.mock('../tauri', () => ({
   openProjectFolder: vi.fn(), stagePromptAttachment: vi.fn(),
   selectLocalFile: vi.fn(), inspectLocalFile: vi.fn(),
   openInEditor: vi.fn(), revealInExplorer: vi.fn(), resolveProjectFile: vi.fn(),
-  quitBloblex: vi.fn(), setCloseToTray: vi.fn(),
+  quitRetinue: vi.fn(), setCloseToTray: vi.fn(),
   updatesGetState: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesSetPreferences: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesCheck: async () => ({ status: 'up_to_date' as const, checkedAt: '2026-10-02T00:00:00.000Z' }),
@@ -76,7 +76,7 @@ vi.mock('../blob/BlobCanvas', async () => {
 })
 
 import { App } from './App'
-import { setThemeStyle } from '../blob/bitbots'
+import { setThemeStyle } from '../blob/retinue'
 import { resetDraftStoreForTests } from './draftStore'
 import { clearRepositoryCache } from './sessionRepository'
 import type { Agent, Runtime, Session, Snapshot } from '../types'
@@ -208,7 +208,7 @@ beforeEach(() => {
   h.daemonEventHandlers = []
   createdSessions = []
   for (const mock of Object.values(h)) if (typeof mock === 'function' && 'mockReset' in mock) (mock as ReturnType<typeof vi.fn>).mockReset()
-  setThemeStyle('blobots')
+  setThemeStyle('stone')
   configure()
 })
 
@@ -241,7 +241,7 @@ function configureRepository(reply: () => unknown) {
 const createPrButton = (host: Element) => [...host.querySelectorAll<HTMLButtonElement>('.rail-pr')].find((item) => item.textContent === 'Create PR') ?? null
 
 describe('FIX45 Create PR from the rail', () => {
-  beforeEach(() => memory.set('bloblex.inspector.open', '1'))
+  beforeEach(() => memory.set('retinue.inspector.open', '1'))
 
   it('shows the repository\'s changes, asks for review, and sends one ordinary message only after the owner confirms', async () => {
     configureRepository(() => repository())

@@ -10,7 +10,7 @@ already merged here and this change builds on it. No `git commit` was run.
 
 ## What changed, by file and function
 
-### `crates/bloblex-storage/src/lib.rs`
+### `crates/retinue-storage/src/lib.rs`
 
 - `ensure_session_project_backfill` (new, private `ensure_*`): one-off,
   idempotent backfill of `sessions.data.projectId` from the projects table by
@@ -47,7 +47,7 @@ already merged here and this change builds on it. No `git commit` was run.
   `settings.changed` for `conversations.*` window preferences.
 - `memory_tests::session_project_backfill_is_idempotent` (new test).
 
-### `crates/bloblex-daemon/src/team.rs`
+### `crates/retinue-daemon/src/team.rs`
 
 - `workspace_for`: a pathless bot keeps an existing `<data>/workspaces/<agentId>`
   folder (never moves it, so provider resume keeps its working directory);
@@ -70,7 +70,7 @@ already merged here and this change builds on it. No `git commit` was run.
   move; the panel filters by project instead. `main_session`/`session_busy`
   imports are unchanged (both still used elsewhere).
 
-### `crates/bloblex-daemon/src/main.rs`
+### `crates/retinue-daemon/src/main.rs`
 
 - `new_session`: stamps `data.projectId` (the bot's project, else inferred from
   the project path) on every new session. A new `lazy: true` parameter persists
@@ -94,7 +94,7 @@ already merged here and this change builds on it. No `git commit` was run.
   `auto_title_rules` replaces the old `experimental_titles_are_opt_in_...`;
   the assertion in `leader_delegates...` gains `spawnedFromSessionId`.
 
-### `crates/bloblex-daemon/src/experiments.rs`
+### `crates/retinue-daemon/src/experiments.rs`
 
 - `automatic_title`: accepts `"New chat"` as well as the bot's own name as the
   default title; otherwise unchanged gating (never side, never after a user
@@ -152,10 +152,10 @@ as-is (`automation_sessions_never_replace_a_blobs_main_conversation`,
 All run in `C:\fx43` with the private `CARGO_TARGET_DIR=C:/fxtarget` and
 `RUST_MIN_STACK=33554432`.
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
   — exit 0. Every suite `ok`; 558 tests passed in total (daemon bin 187,
   storage 93).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — exit 0.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — exit 0.
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote` — exit 0;
   3 files, 47 tests passed (includes `remoteTiers.parity.test.ts`, which checks
   the two new dispatch methods have rules and that no rule is stale).

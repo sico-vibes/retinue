@@ -10,7 +10,7 @@ Package: P10, `docs/history/fix-39/decisions.md` decision 7, recommendation 13 i
 
 What it does: when a code-writing delegation targets a git project where another
 task is already working, the daemon runs it in its own linked git worktree (a
-sibling folder `<repo>-bitbots/<slug>` on a new `bitbots/<slug>` branch). When the
+sibling folder `<repo>-retinue/<slug>` on a new `retinue/<slug>` branch). When the
 task's turn finishes the Manager proposes merging it back with an approval card
 showing the branch, the files and a diff summary. On approval the daemon merges
 (fast-forward or merge commit, never forced) and removes the copy and branch; on
@@ -19,11 +19,11 @@ except the card and one line in the sub-conversation.
 
 ## Changes, by item
 
-### 1. New git helper — `crates/bloblex-daemon/src/worktree.rs` (new)
+### 1. New git helper — `crates/retinue-daemon/src/worktree.rs` (new)
 - `repo_root` (`:82`) — the repository root for a folder, or `None` if the folder
   is missing or is not a git repo. `normalize` (`:88`) is the case- and
   separator-insensitive key used to compare folders on Windows.
-- `create` (`:126`) — `<repo>-bitbots/<slug>` on `bitbots/<slug>` from `HEAD`.
+- `create` (`:126`) — `<repo>-retinue/<slug>` on `retinue/<slug>` from `HEAD`.
   `slug` (`:112`) lower-cases to `[a-z0-9-]`, at most 40 characters, never empty;
   the name is made unique (`-2`, `-3`, …) if a folder or branch already exists. A
   detached HEAD is refused (the merge-back would be ambiguous), so the caller
@@ -32,7 +32,7 @@ except the card and one line in the sub-conversation.
   an insertion/deletion count; `Summary::line` (`:54`) renders
   `"N files changed, +X −Y"`.
 - `commit_all` (`:172`) — stages and commits the task copy under a fixed
-  `Bitbots <bitbots@localhost>` identity, so a merge has something to carry. A
+  `Retinue <retinue@localhost>` identity, so a merge has something to carry. A
   clean copy is a no-op.
 - `merge` (`:204`) — verifies the copy, refuses a dirty main checkout, refuses a
   main checkout not on the stored base branch, does `--ff-only`, falls back to
@@ -42,13 +42,13 @@ except the card and one line in the sub-conversation.
   `worktree prune`, and delete the branch (`-d` after a merge, `-D` for an
   explicit discard).
 - `verify` (`:182`) bounds both merge and discard to a real linked worktree of the
-  named repo, checked out on a `bitbots/*` branch, living inside that repo's own
-  `<repo>-bitbots` family. A forged or edited proposal cannot name any other
+  named repo, checked out on a `retinue/*` branch, living inside that repo's own
+  `<repo>-retinue` family. A forged or edited proposal cannot name any other
   folder or branch.
 - Every git call is a plain argument list (never a shell) via the existing
   `experiments::git_command`; output is read only to branch on it and never logged.
 
-### 2. Decide and isolate in `crates/bloblex-daemon/src/team.rs`
+### 2. Decide and isolate in `crates/retinue-daemon/src/team.rs`
 - `is_research_agent` (`:162`) — there is no "writes code" field, so the signal is
   the routing tag/role the Manager already uses: a bot tagged or roled as a
   researcher/reader/viewer is treated as read-only and never gets a worktree.
@@ -64,17 +64,17 @@ except the card and one line in the sub-conversation.
   stored on the session link as `worktree` (`:549`) and the new session's
   `projectPath` is the worktree. The one visible line is posted to the
   sub-conversation (`:558`): *"Working in a separate copy of `<repo>` (branch
-  `bitbots/<slug>`) so
+  `retinue/<slug>`) so
   other work there isn't disturbed; the changes will be offered for merge when the
   task is done."*
 - `after_turn` (`:790`) — calls `proposals::after_task_turn` after every turn, so
   a finished worktree task is offered for merge and an empty one is cleaned up.
 
-### 3. New `merge` proposal kind — `crates/bloblex-daemon/src/proposals.rs`
-- `describe` (`:376`) — `"merge bitbots/<slug> into <base>"`, so the Manager's
+### 3. New `merge` proposal kind — `crates/retinue-daemon/src/proposals.rs`
+- `describe` (`:376`) — `"merge retinue/<slug> into <base>"`, so the Manager's
   handover and the decision notes name it.
 - `validate_merge` (`:578`) — re-checks every field before git runs, because a
-  decision may carry owner edits; the branch must be `bitbots/*`, files are capped
+  decision may carry owner edits; the branch must be `retinue/*`, files are capped
   at 50.
 - `apply_merge` (`:622`) — manager check, then commit the copy and merge it
   (off-runtime), remove the copy and branch, and clear the conversation's worktree
@@ -90,7 +90,7 @@ except the card and one line in the sub-conversation.
 - `decide` reject path (`:723`) — a rejected merge keeps the copy by default; with
   `discard: true` the copy and branch are discarded and the record cleared.
 
-### 4. Storage — `crates/bloblex-storage/src/lib.rs` (outside the package list)
+### 4. Storage — `crates/retinue-storage/src/lib.rs` (outside the package list)
 The `proposals.kind` column has a SQL `CHECK`, so a new kind is not just a Rust
 whitelist change. Minimal edits:
 - whitelist `insert_proposal` (`:1992`) accepts `merge`;
@@ -129,11 +129,11 @@ Rust, all in the throwaway temp repos/temp DB the brief allows:
   checkout is refused, nothing merged, the copy survives (the "say why" rule).
 - `worktree::tests::discard_removes_the_copy_and_branch` (`:328`).
 - `worktree::tests::a_copy_outside_the_task_folder_is_refused` (`:340`) — a copy
-  outside `<repo>-bitbots` is never merged or discarded.
+  outside `<repo>-retinue` is never merged or discarded.
 - `worktree::tests::a_forged_branch_is_refused` (`:357`).
 - `team::p10_tests::p10_isolates_a_code_task_when_another_runs_in_the_repo`
   (`team_p10_tests.rs:59`) — another live task in the repo makes the delegation
-  run under `<repo>-bitbots/add-login` on `bitbots/add-login`, with the one-line
+  run under `<repo>-retinue/add-login` on `retinue/add-login`, with the one-line
   note in the sub-conversation.
 - `team::p10_tests::p10_never_isolates_for_a_plain_folder_a_research_bot_or_no_clash`
   (`:79`) — no clash, non-git folder, and a research bot all stay in the shared
@@ -143,7 +143,7 @@ Rust, all in the throwaway temp repos/temp DB the brief allows:
   file into main, removes the copy and clears the record.
 - `team::p10_tests::p10_a_rejected_merge_keeps_the_copy_unless_discarded` (`:141`).
 - `team::p10_tests::p10_a_task_with_no_changes_cleans_up_without_a_card` (`:164`).
-- `bloblex-storage` migration test `a_pre_fix39_proposals_table_gains_the_permission_kind`
+- `retinue-storage` migration test `a_pre_fix39_proposals_table_gains_the_permission_kind`
   (`lib.rs:7189`) extended to require the rebuilt table to accept a `merge` kind.
 - UI: `ProposalCard.mounted.test.tsx` "merge card (P10)" — shows the branch,
   files and summary with no edit control and sends approve; "Keep branch" sends
@@ -155,13 +155,13 @@ is present, so they ran.
 
 ## Gates (run to completion)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
   — no `FAILED`/`panicked` lines. (A first run showed
   `phase2a_tests::session_environment_reports_a_git_branch` failing under
   full-workspace parallel load; it is the pre-existing 2-second git timeout in
   `main.rs:1956`, it passes alone and on both later full runs.)
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
-- `src-tauri` was not changed, so `cargo test -p bloblex-desktop --lib` was not
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
+- `src-tauri` was not changed, so `cargo test -p retinue-desktop --lib` was not
   required.
 - `npx tsc -b` — clean.
 - `npx vitest run --maxWorkers=3` — 172 files, 1280 tests passed.
@@ -186,15 +186,15 @@ is present, so they ran.
 
 ## Files touched outside the package list
 
-- `crates/bloblex-storage/src/lib.rs` — required: the `proposals.kind` CHECK and
+- `crates/retinue-storage/src/lib.rs` — required: the `proposals.kind` CHECK and
   whitelist rejected the new `merge` kind. Changes are the two CHECK lists, the
   migration condition and the whitelist, plus an extension of an existing
   migration test.
-- `crates/bloblex-daemon/src/main.rs` — `mod worktree;` (`:56`) and the test-only
+- `crates/retinue-daemon/src/main.rs` — `mod worktree;` (`:56`) and the test-only
   `TeamAdapter` made `pub(crate)` (`:4607`) so the P10 integration tests can open a
   delegated conversation without a real CLI. No production behaviour changed.
-- New: `crates/bloblex-daemon/src/worktree.rs`,
-  `crates/bloblex-daemon/src/team_p10_tests.rs` (registered in `team.rs:934`).
+- New: `crates/retinue-daemon/src/worktree.rs`,
+  `crates/retinue-daemon/src/team_p10_tests.rs` (registered in `team.rs:934`).
 - `apps/desktop/src/ui/ProposalCard.mounted.test.tsx` — tests for the merge card.
 
 ## Follow-up (audit)
@@ -207,9 +207,9 @@ confirmed all three fail on the pre-fix code (temporarily reverting only the fix
 logic) and pass after the fix.
 
 ### Finding 1 — a follow-up runs in an existing folder, never a deleted one
-- `crates/bloblex-storage/src/lib.rs:1868` — new `set_session_project_path(id,
+- `crates/retinue-storage/src/lib.rs:1868` — new `set_session_project_path(id,
   path)`, a small setter for a conversation's folder.
-- `crates/bloblex-daemon/src/proposals.rs:602` — `finish_worktree` replaces
+- `crates/retinue-daemon/src/proposals.rs:602` — `finish_worktree` replaces
   `clear_worktree_record`: it drops the `worktree` record from the link **and**
   points the conversation back at the repository root. It is called wherever the
   copy is gone: after a merge (`:657`), after a discard (`:763`), when the folder
@@ -220,7 +220,7 @@ logic) and pass after the fix.
   existing directory. Fails on the old code (the path was the deleted copy).
 
 ### Finding 2 — queued or not-yet-started tasks count as "working"
-- `crates/bloblex-daemon/src/team.rs:179` — `repo_is_busy_elsewhere` no longer
+- `crates/retinue-daemon/src/team.rs:179` — `repo_is_busy_elsewhere` no longer
   reads only `active_turns`. It walks the sessions and treats one as busy when
   `session_busy` is true (the DB states `starting`, `working`,
   `waiting_permission`, `cancelling`) **or** it still has a delivery waiting in the
@@ -240,7 +240,7 @@ logic) and pass after the fix.
 - `proposals.rs:743` (`decide`, reject path) — a discard request is refused the
   same way **before** the rejection is recorded, so the card stays pending; a plain
   reject (keep the branch) is always allowed.
-- `crates/bloblex-daemon/src/worktree.rs:233` `remove_after_merge` and `:245`
+- `crates/retinue-daemon/src/worktree.rs:233` `remove_after_merge` and `:245`
   `discard` now return whether the copy is actually gone. When it is not, the
   record is kept (never forgotten) and the note/summary says the copy could not be
   removed (`proposals.rs:661`, `:766`, `:698`). The empty-copy cleanup uses the
@@ -261,7 +261,7 @@ The audit marked this "no code change required". Recorded for the record: a merg
 card that lapses after 24 hours leaves the copy and record in place; the next
 completed turn re-offers a card, and a plain reject keeps the record so every later
 completed turn re-offers it — reasonable for "keep branch". A copy nobody touches
-again stays in `<repo>-bitbots` until the owner acts. The Manager's handover does
+again stays in `<repo>-retinue` until the owner acts. The Manager's handover does
 not yet list "worktrees awaiting merge"; that would be a Manager/UI change, not
 this package, and was deliberately left out.
 
@@ -269,7 +269,7 @@ this package, and was deliberately left out.
 `proposal.decide` has `params: null` in `apps/desktop/src/remote/tiers.json`, so an
 operator device, with "approvals from remote" on, can send `discard: true` and run
 `git branch -D`, the same authority as approving a merge; `worktree::verify` bounds
-it to this repo's own `<repo>-bitbots` copy and a `bitbots/*` branch. This was
+it to this repo's own `<repo>-retinue` copy and a `retinue/*` branch. This was
 accepted by the audit and is recorded here so the remote threat-model owner sees
 it. `tiers.json` is unchanged (P10 adds no daemon method or event).
 
@@ -288,7 +288,7 @@ Added, all in `worktree.rs:341` onwards, in throwaway temp repos:
 Two pre-existing test/production issues had to be fixed to make the diverged and
 round-trip tests deterministic on this machine:
 - `worktree.rs:221` — the `--no-ff` merge commit now runs under the same fixed
-  `Bitbots <bitbots@localhost>` identity as `commit_all`, so a machine with no
+  `Retinue <retinue@localhost>` identity as `commit_all`, so a machine with no
   global git identity can still merge. This was silently broken before (the
   conflict test never reached it).
 - `worktree.rs:307` (test) — the round-trip assertion compares against git's own
@@ -296,9 +296,9 @@ round-trip tests deterministic on this machine:
   8.3 short form (`SICOVI~1`) while git prints the long one.
 
 ### Gates (rerun after the audit fixes, `TEMP=C:/fxt/d3/tmp`)
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
   — no `FAILED`/`panicked` lines (428 daemon tests, all suites ok).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
 - `npx tsc -b` — clean.
 - `npx vitest run --maxWorkers=3` — 172 files, 1280 tests passed.
 - `npm run build` — ok.
@@ -314,7 +314,7 @@ round-trip tests deterministic on this machine:
   root, and the finding-1 test proves the follow-up runs in an existing folder.
 
 ### Files I touched outside the package list
-- `crates/bloblex-storage/src/lib.rs` — added `set_session_project_path` (the
+- `crates/retinue-storage/src/lib.rs` — added `set_session_project_path` (the
   previous implementer's CHECK/whitelist change stays).
 - No UI, remote, schema or `src-tauri` file was touched by this follow-up; the
   package's own `worktree.rs`, `team.rs`, `proposals.rs` and `team_p10_tests.rs`

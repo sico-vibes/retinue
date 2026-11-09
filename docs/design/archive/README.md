@@ -6,7 +6,7 @@
 
 | File | What it is |
 | --- | --- |
-| [bloblex-ui-concept.png](bloblex-ui-concept.png) | An old UI concept image from before the product was renamed to Bitbots. The file name keeps the old name. The current design rules are in [design-system.md](../design-system.md). |
+| [retinue-ui-concept.png](retinue-ui-concept.png) | An old UI concept image from before the product was renamed to Retinue. The file name keeps the old name. The current design rules are in [design-system.md](../design-system.md). |
 | [qa-frontend.png](qa-frontend.png) | An old QA screenshot of the frontend. No current check depends on it. |
 
-The app icon is not here. Its source image is [assets/icon/bitbots.png](../../../assets/icon/bitbots.png).
+The app icon is not here. Its source image is [assets/icon/retinue-master.png](../../../assets/icon/retinue-master.png).

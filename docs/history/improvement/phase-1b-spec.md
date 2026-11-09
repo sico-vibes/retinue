@@ -5,7 +5,7 @@
 > **Last updated:** 2026-10-12
 
 Owner: OpenCode lane (backend only). Reviewer: Director. Parent plan: `docs/plans/improvement-plan.md` Phase 1. Builds on Phase 1A (already committed in this branch: `finish_turn_failed`, `PromptAccepted`, `turns.data.delivery`).
-Scope: `crates/bloblex-agent-core`, `crates/bloblex-adapter-claude`, `crates/bloblex-adapter-codex`, `crates/bloblex-adapter-acp` (only if evidence exists), `crates/bloblex-daemon`, `crates/bloblex-storage` (only if needed). **Do not touch `apps/` (UI) or `Cargo.toml` dependencies.**
+Scope: `crates/retinue-agent-core`, `crates/retinue-adapter-claude`, `crates/retinue-adapter-codex`, `crates/retinue-adapter-acp` (only if evidence exists), `crates/retinue-daemon`, `crates/retinue-storage` (only if needed). **Do not touch `apps/` (UI) or `Cargo.toml` dependencies.**
 
 ## Rules
 - Work only in this worktree. **Never run `git commit`, `git push`, `git checkout`, `git stash`.** Leave changes uncommitted.
@@ -23,14 +23,14 @@ Sources you may use, read-only:
 If a situation is not evidenced, record it as `unknown` and implement nothing for it.
 
 ## B1: typed recovery hints (internal, no wire event)
-In `bloblex-agent-core` add a small enum `RecoveryHintKind { AuthRequired, RateLimited, Overloaded }` (serde `camelCase`; add more variants only if B0 evidences them) and `AgentEvent::RecoveryHint { kind: RecoveryHintKind, retry_after_secs: Option<u64> }`.
+In `retinue-agent-core` add a small enum `RecoveryHintKind { AuthRequired, RateLimited, Overloaded }` (serde `camelCase`; add more variants only if B0 evidences them) and `AgentEvent::RecoveryHint { kind: RecoveryHintKind, retry_after_secs: Option<u64> }`.
 - Adapters emit it immediately **before** the terminal `AgentEvent::Error` (or the error-ending `TurnCompleted` path) for the same failure, only for situations B0 marks `verified-in-source` or `fixture-only`.
 - `retry_after_secs` is set only when the provider states a wait or reset explicitly; never derived from text parsing of free prose. When absent it is `None`.
 - Daemon: on `RecoveryHint`, merge `{"hint":{"kind":"...","retryAfterSecs":N|null}}` into the active turn's `turns.data` via `merge_turn_data`; `continue` (no wire event, no UI change). If no turn is active, drop it.
 - The existing error message, `failureClass` mapping and sign-in hint behaviour are untouched.
 
 ## B2: context-change notices
-In `bloblex-agent-core` add `AgentEvent::ContextChanged { reason: ContextChangeReason, context_lost: bool }` where `ContextChangeReason` is `Compaction | FreshSession` (serde `snake_case`: `compaction`, `fresh_session`).
+In `retinue-agent-core` add `AgentEvent::ContextChanged { reason: ContextChangeReason, context_lost: bool }` where `ContextChangeReason` is `Compaction | FreshSession` (serde `snake_case`: `compaction`, `fresh_session`).
 Emitters:
 - Claude: at the existing `compact_boundary` site (where `AgentEvent::ContextReset` is sent today) keep sending `ContextReset` unchanged and send `ContextChanged { Compaction, context_lost: false }` right after it.
 - Codex: in the resume path that falls back from a rejected `thread/resume` to a fresh `thread/start` (search `AdapterError::ResumeRejected` with `fresh = true`, around the `SessionStarted` enqueue), send `ContextChanged { FreshSession, context_lost: true }` immediately after the `SessionStarted` event. Today this fallback is silent.
@@ -53,7 +53,7 @@ The notice must be persisted (so it survives reload) and use the same `message.c
 
 ## Gates (run and report real output)
 ```
-CARGO_TARGET_DIR=D:/b-p1 RUST_MIN_STACK=33554432 cargo test -p bloblex-agent-core -p bloblex-storage -p bloblex-adapter-claude -p bloblex-adapter-codex -p bloblex-adapter-acp -p bloblex-daemon
+CARGO_TARGET_DIR=D:/b-p1 RUST_MIN_STACK=33554432 cargo test -p retinue-agent-core -p retinue-storage -p retinue-adapter-claude -p retinue-adapter-codex -p retinue-adapter-acp -p retinue-daemon
 ```
 Clippy is already failing on the base commit; do not attempt to fix pre-existing findings, only avoid adding new ones.
 

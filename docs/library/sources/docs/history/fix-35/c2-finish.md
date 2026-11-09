@@ -12,8 +12,8 @@ Your C2 work (`docs/history/fix-35/c2-connectivity-spec.md`) is in this worktree
 
    Finish them if not.
 2. Run these in the foreground and **wait for each to finish** (do not background them):
-   - `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
-   - `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+   - `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
+   - `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
    - `cd apps/desktop && npx tsc -b && npx vitest run src/remote src/preview`
 
    Fix any failures.

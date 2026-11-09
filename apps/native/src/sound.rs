@@ -420,7 +420,7 @@ impl SoundEngine {
         let thread_enabled = Arc::clone(&enabled);
         let thread_volume = Arc::clone(&volume);
         let _ = std::thread::Builder::new()
-            .name("bitbots-sound".to_owned())
+            .name("retinue-sound".to_owned())
             .spawn(move || run(receiver, thread_enabled, thread_volume));
         Self { sender, enabled, volume }
     }

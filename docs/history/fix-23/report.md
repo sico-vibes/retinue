@@ -93,7 +93,7 @@ config (`vite.preview.config.ts`, a dev server) and is never referenced by the p
 config. I built it to confirm rather than assert from the file alone:
 
 ```
-npm run build --workspace @bloblex/desktop
+npm run build --workspace @retinue/desktop
 ls apps/desktop/dist/*.html   ->  apps/desktop/dist/index.html   (only)
 ```
 

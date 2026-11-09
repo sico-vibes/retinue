@@ -1,4 +1,4 @@
-# Bitbots documentation
+# Retinue documentation
 
 > **What this is:** the index of every Markdown document in the repository, grouped by purpose. Use it to find the current document for a task.
 > **Status:** current. Rewritten by the documentation library pass of 19 October 2026 (structure and index only; facts were not changed); updated 22 October 2026 for the merged phase 1, the expansion records and the documentation refresh of that day (see [history/expansion-v2/docs-refresh-2026-10-22.md](history/expansion-v2/docs-refresh-2026-10-22.md)).
@@ -58,8 +58,8 @@ These stay at the repository root. `AGENTS.md` is the owner directive and wins o
 
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
-| [Bitbots collaboration instructions](../AGENTS.md) | Owner directive: how Bitbots is built and delivered, with the dated amendments, newest first. | owner directive; wins on any conflict | 2026-10-22 |
-| [Bitbots](../README.md) | The front page of the repository: what Bitbots is, how to build and test it, and where the documentation starts. | current. The release figures in this file are set at v0.1.0-beta.36; `main` has unreleased work. | 2026-10-22 |
+| [Retinue collaboration instructions](../AGENTS.md) | Owner directive: how Retinue is built and delivered, with the dated amendments, newest first. | owner directive; wins on any conflict | 2026-10-22 |
+| [Retinue](../README.md) | The front page of the repository: what Retinue is, how to build and test it, and where the documentation starts. | current. The release figures in this file are set at v0.1.0-beta.36; `main` has unreleased work. | 2026-10-22 |
 
 ## Style
 
@@ -67,7 +67,7 @@ The documentation style guide.
 
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
-| [Documentation style guide](STYLE.md) | the rules for writing and maintaining Bitbots documents: tone, layout, naming, links and how to mark what is verified. | current. Applies to every document written from October 2026 on. Historical records were brought under the front block but keep their own body layout (see [Historical records](#historical-records)). | 2026-10-22 |
+| [Documentation style guide](STYLE.md) | the rules for writing and maintaining Retinue documents: tone, layout, naming, links and how to mark what is verified. | current. Applies to every document written from October 2026 on. Historical records were brought under the front block but keep their own body layout (see [Historical records](#historical-records)). | 2026-10-22 |
 
 ## Legal
 
@@ -75,7 +75,7 @@ Licences and attributions.
 
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
-| [Third-party notices](legal/third-party-notices.md) | the licences and attributions for third-party code, fonts and models that Bitbots bundles or adapts. | current | 2026-10-22 |
+| [Third-party notices](legal/third-party-notices.md) | the licences and attributions for third-party code, fonts and models that Retinue bundles or adapts. | current | 2026-10-22 |
 
 ## Reference
 
@@ -84,10 +84,10 @@ How the system works and the contracts it keeps.
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
 | [Approval modes contract: ask, auto-approve and bypass](reference/approval-modes.md) | The contract for the three permission modes (ask, auto and bypass): who decides, the safety rails and the RPC shape. | current; the budget clauses are historical (AGENTS.md, 12 October 2026 amendment) | 2026-10-15 |
-| [Architecture](reference/architecture.md) | how Bitbots is put together: the desktop shell, the local daemon, the provider adapters, storage and the Remote gateway, and where to start reading each part. | current; new in the documentation library pass of 19 October 2026. The claims were checked against the tree at `17bc277` on that date; line numbers may move. | 2026-10-19 |
+| [Architecture](reference/architecture.md) | how Retinue is put together: the desktop shell, the local daemon, the provider adapters, storage and the Remote gateway, and where to start reading each part. | current; new in the documentation library pass of 19 October 2026. The claims were checked against the tree at `17bc277` on that date; line numbers may move. | 2026-10-19 |
 | [Phase 5 contract: cost and usage analytics (daemon RPC + UI)](reference/phase-5-analytics-contract.md) | The contract for cost and usage analytics: the daemon RPC, the UI and the definitions. | superseded in part; the monetary, estimate and subscription sections are retired (AGENTS.md, 12 October 2026 amendment) | 2026-10-14 |
-| [Runtime capabilities of the installed CLIs](reference/runtime-capabilities.md) | The installed CLI capabilities Bitbots relies on, with the evidence for each: Claude Code, Codex and OpenCode. | current evidence record; the OpenCode 2.0.28 observations of 14 October 2026 are labelled in the OpenCode section | 2026-10-15 |
-| [Bitbots daemon IPC contract (v1)](ipc-contract.md) | The daemon IPC contract (v1): methods, events, and the rules for the capability and the local listeners. | current | 2026-10-22 |
+| [Runtime capabilities of the installed CLIs](reference/runtime-capabilities.md) | The installed CLI capabilities Retinue relies on, with the evidence for each: Claude Code, Codex and OpenCode. | current evidence record; the OpenCode 2.0.28 observations of 14 October 2026 are labelled in the OpenCode section | 2026-10-15 |
+| [Retinue daemon IPC contract (v1)](ipc-contract.md) | The daemon IPC contract (v1): methods, events, and the rules for the capability and the local listeners. | current | 2026-10-22 |
 
 ## Guides
 
@@ -97,7 +97,7 @@ Task-oriented runbooks.
 | --- | --- | --- | --- |
 | [Live CLI checks (Phase 2b entry gate)](guides/live-checks.md) | How the Director runs the live CLI checks against the signed-in provider CLIs. | current | 2026-10-15 |
 | [Native smoke tooling](guides/native-smoke.md) | How to run the native smoke tooling against an isolated database. | current | 2026-10-02 |
-| [Windows desktop development](guides/windows-development.md) | How to run, build and test Bitbots on Windows, using an isolated database. | current | 2026-10-19 |
+| [Windows desktop development](guides/windows-development.md) | How to run, build and test Retinue on Windows, using an isolated database. | current | 2026-10-19 |
 
 ## Design
 
@@ -106,9 +106,9 @@ The design system, the product brief, the polish waves and the archive of two ol
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
 | [Archived design images](design/archive/README.md) | the two images kept from earlier work when the repository root was tidied. Nothing in the app or in the documentation refers to them. | historical; archived on 19 October 2026 by the owner's root tidy-up. | 2026-10-19 |
-| [Bitbots theme spec: the pixel re-skin (CSS only)](design/bitbots-theme-spec.md) | The pixel re-skin theme spec for the experimental Bitbots theme (CSS only), 13 October 2026. | historical; superseded in part by [themes-spec.md](history/fix-40/themes-spec.md) (the Frost look became Bitbots) | 2026-10-22 |
-| [Bitbots Design System](design/design-system.md) | The visual design rules for Bitbots: the scene, tokens, layout, controls, companion, and the FIX39 and FIX40 rules. Read it before changing the UI. | current | 2026-10-22 |
-| [Bitbots Product](design/product.md) | The product purpose, users, brand personality, anti-references and design principles for Bitbots. | current | 2026-10-15 |
+| [Retinue theme spec: the pixel re-skin (CSS only)](design/retinue-theme-spec.md) | The pixel re-skin theme spec for the experimental Retinue theme (CSS only), 13 October 2026. | historical; superseded in part by [themes-spec.md](history/fix-40/themes-spec.md) (the Frost look became Retinue) | 2026-10-22 |
+| [Retinue Design System](design/design-system.md) | The visual design rules for Retinue: the scene, tokens, layout, controls, companion, and the FIX39 and FIX40 rules. Read it before changing the UI. | current | 2026-10-22 |
+| [Retinue Product](design/product.md) | The product purpose, users, brand personality, anti-references and design principles for Retinue. | current | 2026-10-15 |
 | [UI/UX polish wave (15 October 2026, unreleased)](design/ui-polish-wave.md) | The UI and UX polish waves of 15 October 2026, recorded as they were shipped, unreleased. | historical | 2026-10-22 |
 
 ## Plans
@@ -117,8 +117,8 @@ The current plan and the roadmap.
 
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
-| [Bitbots E2E plan: configurable blobs, sessions tree, token analytics, provider quota, release](plans/e2e-plan-v2.md) | The whole-product plan (E2E v2): the phases, the dated checkpoints and the open work. | current plan; its status section is dated 5 to 6 October 2026, and the release figure in the kept status paragraph (beta.23) is out of date; see [implementation-status.md](operations/implementation-status.md) | 2026-10-19 |
-| [Bitbots improvement plan v2: a BB-informed, companion-style roadmap](plans/improvement-plan.md) | The v2 improvement roadmap for Bitbots: a companion-style plan that builds on the E2E plan. | historical; a finished roadmap (phases 1 to 7 shipped in v0.1.0-beta.19), named by AGENTS.md (12 October 2026 amendment) | 2026-10-22 |
+| [Retinue E2E plan: configurable blobs, sessions tree, token analytics, provider quota, release](plans/e2e-plan-v2.md) | The whole-product plan (E2E v2): the phases, the dated checkpoints and the open work. | current plan; its status section is dated 5 to 6 October 2026, and the release figure in the kept status paragraph (beta.23) is out of date; see [implementation-status.md](operations/implementation-status.md) | 2026-10-19 |
+| [Retinue improvement plan v2: a BB-informed, companion-style roadmap](plans/improvement-plan.md) | The v2 improvement roadmap for Retinue: a companion-style plan that builds on the E2E plan. | historical; a finished roadmap (phases 1 to 7 shipped in v0.1.0-beta.19), named by AGENTS.md (12 October 2026 amendment) | 2026-10-22 |
 | [Expansion plan v2: tasks, desktop wins, providers, trusted access and phone relay](plans/expansion-plan-v2.md) | The approved expansion plan: the verdict on the first Codex draft, the features, five phases with gates, and 23 slices. | current; approved 21 October 2026; phase 1 is on `main` (22 October 2026, unreleased); phases 2 to 5 not started | 2026-10-22 |
 | [Accepted product expansion plan (20 and 21 October 2026)](plans/reference-expansion-plan.md) | The owner's accepted scope and constraints for the 20 and 21 October expansion. | historical record, superseded in part (see its 22 October update) | 2026-10-22 |
 
@@ -131,8 +131,8 @@ Process, release and status records.
 | [Implementation status](operations/implementation-status.md) | The implementation status: released versions, phase status, work after the plan and the open gaps. | current; latest release v0.1.0-beta.36; a 22 October 2026 section covers phase 1 on `main` | 2026-10-22 |
 | [Native smoke test results (Phase 2a + Phase 3)](operations/native-smoke-results.md) | Results of the native smoke test run on 2 October 2026 against an isolated database. | historical; a record of 2 October 2026 | 2026-10-15 |
 | [Operating model: a dated summary of the rules (14 October 2026)](operations/operating-model.md) | A summary, dated 14 October 2026, of the rules in AGENTS.md. AGENTS.md wins on any conflict. The amendments of 16 to 19 October 2026 are not all reflected here. | current; a dated summary (14 October 2026); section 2 is superseded by a 22 October note | 2026-10-22 |
-| [Release checklist](operations/release-checklist.md) | The checklist for each Bitbots release: gates, publishing, digests, clean-up and open release items. | current | 2026-10-19 |
-| [Bitbots session handoff](operations/session-handoff.md) | The session handoff: dated sections, newest first, with the current release and the open items. | current handoff with dated sections, newest first; the latest entry is 22 October 2026; the current release is v0.1.0-beta.36 | 2026-10-22 |
+| [Release checklist](operations/release-checklist.md) | The checklist for each Retinue release: gates, publishing, digests, clean-up and open release items. | current | 2026-10-19 |
+| [Retinue session handoff](operations/session-handoff.md) | The session handoff: dated sections, newest first, with the current release and the open items. | current handoff with dated sections, newest first; the latest entry is 22 October 2026; the current release is v0.1.0-beta.36 | 2026-10-22 |
 | [Product expansion pause handoff (21 October 2026)](operations/expansion-handoff-2026-10-21.md) | Lane status, exact evidence and image comparisons at the owner's pause. | historical record, superseded in part (see its 22 October update) | 2026-10-22 |
 | [Auto-update and release contract](operations/updater.md) | The auto-update contract: decisions, channels, app behaviour, commands and the release process. | current | 2026-10-15 |
 
@@ -154,7 +154,7 @@ Remote mode design, protocol and threat model. These paths are referenced by cod
 | [Draft amendment for AGENTS.md: Remote mode (for owner approval)](remote/AGENTS_AMENDMENT_DRAFT.md) | The draft amendment to AGENTS.md for Remote mode, as first written for owner approval. | historical; accepted into AGENTS.md (17 October 2026 amendment) | 2026-10-17 |
 | [Remote mode: architecture](remote/ARCHITECTURE.md) | The architecture of Remote mode over Tailscale. | current (Tailscale method); later amendments are in AGENTS.md | 2026-10-16 |
 | [Remote mode: phases](remote/PHASES.md) | The phases of the Remote mode work. | historical plan; see the status of each phase in docs/operations/session-handoff.md | 2026-10-16 |
-| [Bitbots remote protocol (v1)](remote/PROTOCOL.md) | The Remote mode protocol (v1): requests, events and the rules for each. | current; the design for the wire contract. Its own line "Design, not implemented" is out of date: the daemon contains the gateway (crates/bloblex-daemon/src/remote/). | 2026-10-22 |
+| [Retinue remote protocol (v1)](remote/PROTOCOL.md) | The Remote mode protocol (v1): requests, events and the rules for each. | current; the design for the wire contract. Its own line "Design, not implemented" is out of date: the daemon contains the gateway (crates/retinue-daemon/src/remote/). | 2026-10-22 |
 | [Remote mode: product specification](remote/REMOTE_MODE.md) | The product specification for Remote mode. | current | 2026-10-16 |
 | [Remote mode: independent review (FIX24)](remote/REVIEW_NOTES.md) | The independent review of the Remote mode design (FIX24). | historical record | 2026-10-16 |
 | [Remote mode: sequence diagrams](remote/SEQUENCES.md) | Sequence diagrams for Remote mode pairing, sign-in and requests. | current | 2026-10-16 |
@@ -167,7 +167,7 @@ Dated records that back claims. Their text is changed only by link repair and st
 
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
-| [Evidence: Bitbots pixel theme (CSS only) — 2026-10-13](evidence/bitbots-theme-2026-10-13.md) | Evidence for the Bitbots pixel theme (CSS only), 13 October 2026. | evidence; immutable record | 2026-10-13 |
+| [Evidence: Retinue pixel theme (CSS only) — 2026-10-13](evidence/retinue-theme-2026-10-13.md) | Evidence for the Retinue pixel theme (CSS only), 13 October 2026. | evidence; immutable record | 2026-10-13 |
 | [Cloud dictation: what the Cloudflare challenge actually keys on (14 October 2026)](evidence/cloud-dictation-client-shape-2026-10-14.md) | Evidence for what the Cloudflare challenge keys on in cloud dictation, 14 October 2026. | evidence; immutable record | 2026-10-15 |
 | [Cloud dictation diagnosis: "verification required" (Fix 1A)](evidence/cloud-dictation-diagnosis-2026-10-13.md) | Evidence for the cloud dictation diagnosis ("verification required"), 13 October 2026. | evidence; immutable record | 2026-10-15 |
 | [Cloud dictation: the TLS backend fix (14 October 2026)](evidence/cloud-dictation-tls-backend-2026-10-14.md) | Evidence for the TLS backend fix in cloud dictation, 14 October 2026. | evidence; immutable record | 2026-10-14 |
@@ -187,42 +187,42 @@ One note per release. The app reads these files at build time, so they keep thei
 
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
-| [Bloblex 0.1.0-beta.1](releases/0.1.0-beta.1.md) | Release notes for 0.1.0-beta.1. | release note (protected path) | 2026-10-02 |
-| [Bloblex 0.1.0-beta.10](releases/0.1.0-beta.10.md) | Release notes for 0.1.0-beta.10. | release note (protected path) | 2026-10-07 |
-| [Bloblex 0.1.0-beta.11](releases/0.1.0-beta.11.md) | Release notes for 0.1.0-beta.11. | release note (protected path) | 2026-10-08 |
-| [Bloblex 0.1.0-beta.12](releases/0.1.0-beta.12.md) | Release notes for 0.1.0-beta.12. | release note (protected path) | 2026-10-08 |
-| [Bloblex 0.1.0-beta.13](releases/0.1.0-beta.13.md) | Release notes for 0.1.0-beta.13. | release note (protected path) | 2026-10-10 |
-| [Bloblex 0.1.0-beta.14](releases/0.1.0-beta.14.md) | Release notes for 0.1.0-beta.14. | release note (protected path) | 2026-10-10 |
-| [Bloblex 0.1.0-beta.15](releases/0.1.0-beta.15.md) | Release notes for 0.1.0-beta.15. | release note (protected path) | 2026-10-11 |
-| [Bloblex 0.1.0-beta.16](releases/0.1.0-beta.16.md) | Release notes for 0.1.0-beta.16. | release note (protected path) | 2026-10-11 |
-| [Bloblex 0.1.0-beta.17](releases/0.1.0-beta.17.md) | Release notes for 0.1.0-beta.17. | release note (protected path) | 2026-10-11 |
-| [Bloblex 0.1.0-beta.18](releases/0.1.0-beta.18.md) | Release notes for 0.1.0-beta.18. | release note (protected path) | 2026-10-12 |
-| [Bloblex 0.1.0-beta.19](releases/0.1.0-beta.19.md) | Release notes for 0.1.0-beta.19. | release note (protected path) | 2026-10-19 |
-| [Bloblex 0.1.0-beta.2](releases/0.1.0-beta.2.md) | Release notes for 0.1.0-beta.2. | release note (protected path) | 2026-10-02 |
-| [Bloblex 0.1.0-beta.20](releases/0.1.0-beta.20.md) | Release notes for 0.1.0-beta.20. | release note (protected path) | 2026-10-13 |
-| [Bloblex 0.1.0-beta.21](releases/0.1.0-beta.21.md) | Release notes for 0.1.0-beta.21. | release note (protected path) | 2026-10-13 |
-| [Bloblex 0.1.0-beta.22](releases/0.1.0-beta.22.md) | Release notes for 0.1.0-beta.22. | release note (protected path) | 2026-10-14 |
-| [Bloblex 0.1.0-beta.23](releases/0.1.0-beta.23.md) | Release notes for 0.1.0-beta.23. | release note (protected path) | 2026-10-14 |
-| [Bloblex 0.1.0-beta.24](releases/0.1.0-beta.24.md) | Release notes for 0.1.0-beta.24. | release note (protected path) | 2026-10-14 |
-| [Bloblex 0.1.0-beta.25](releases/0.1.0-beta.25.md) | Release notes for 0.1.0-beta.25. | release note (protected path) | 2026-10-14 |
-| [Bloblex 0.1.0-beta.26](releases/0.1.0-beta.26.md) | Release notes for 0.1.0-beta.26. | release note (protected path) | 2026-10-14 |
-| [Bloblex 0.1.0-beta.27](releases/0.1.0-beta.27.md) | Release notes for 0.1.0-beta.27. | release note (protected path) | 2026-10-14 |
-| [Bloblex 0.1.0-beta.28](releases/0.1.0-beta.28.md) | Release notes for 0.1.0-beta.28. | release note (protected path) | 2026-10-14 |
-| [Bitbots 0.1.0-beta.29](releases/0.1.0-beta.29.md) | Release notes for 0.1.0-beta.29. | release note (protected path) | 2026-10-15 |
-| [Bloblex 0.1.0-beta.3](releases/0.1.0-beta.3.md) | Release notes for 0.1.0-beta.3. | release note (protected path) | 2026-10-03 |
-| [Bitbots 0.1.0-beta.30](releases/0.1.0-beta.30.md) | Release notes for 0.1.0-beta.30. | release note (protected path) | 2026-10-17 |
-| [Bitbots 0.1.0-beta.31](releases/0.1.0-beta.31.md) | Release notes for 0.1.0-beta.31. | release note (protected path) | 2026-10-17 |
-| [Bitbots 0.1.0-beta.32](releases/0.1.0-beta.32.md) | Release notes for 0.1.0-beta.32. | release note (protected path) | 2026-10-18 |
-| [Bitbots 0.1.0-beta.33](releases/0.1.0-beta.33.md) | Release notes for 0.1.0-beta.33. | release note (protected path) | 2026-10-18 |
-| [Bitbots 0.1.0-beta.34](releases/0.1.0-beta.34.md) | Release notes for 0.1.0-beta.34. | release note (protected path) | 2026-10-18 |
-| [Bitbots 0.1.0-beta.35](releases/0.1.0-beta.35.md) | Release notes for 0.1.0-beta.35. | release note (protected path) | 2026-10-19 |
-| [Bitbots 0.1.0-beta.36](releases/0.1.0-beta.36.md) | Release notes for 0.1.0-beta.36. | release note (protected path) | 2026-10-19 |
-| [Bloblex 0.1.0-beta.4](releases/0.1.0-beta.4.md) | Release notes for 0.1.0-beta.4. | release note (protected path) | 2026-10-04 |
-| [Bloblex 0.1.0-beta.5](releases/0.1.0-beta.5.md) | Release notes for 0.1.0-beta.5. | release note (protected path) | 2026-10-04 |
-| [Bloblex 0.1.0-beta.6](releases/0.1.0-beta.6.md) | Release notes for 0.1.0-beta.6. | release note (protected path) | 2026-10-04 |
-| [Bloblex 0.1.0-beta.7](releases/0.1.0-beta.7.md) | Release notes for 0.1.0-beta.7. | release note (protected path) | 2026-10-06 |
-| [Bloblex 0.1.0-beta.8](releases/0.1.0-beta.8.md) | Release notes for 0.1.0-beta.8. | release note (protected path) | 2026-10-06 |
-| [Bloblex 0.1.0-beta.9](releases/0.1.0-beta.9.md) | Release notes for 0.1.0-beta.9. | release note (protected path) | 2026-10-06 |
+| [Retinue 0.1.0-beta.1](releases/0.1.0-beta.1.md) | Release notes for 0.1.0-beta.1. | release note (protected path) | 2026-10-02 |
+| [Retinue 0.1.0-beta.10](releases/0.1.0-beta.10.md) | Release notes for 0.1.0-beta.10. | release note (protected path) | 2026-10-07 |
+| [Retinue 0.1.0-beta.11](releases/0.1.0-beta.11.md) | Release notes for 0.1.0-beta.11. | release note (protected path) | 2026-10-08 |
+| [Retinue 0.1.0-beta.12](releases/0.1.0-beta.12.md) | Release notes for 0.1.0-beta.12. | release note (protected path) | 2026-10-08 |
+| [Retinue 0.1.0-beta.13](releases/0.1.0-beta.13.md) | Release notes for 0.1.0-beta.13. | release note (protected path) | 2026-10-10 |
+| [Retinue 0.1.0-beta.14](releases/0.1.0-beta.14.md) | Release notes for 0.1.0-beta.14. | release note (protected path) | 2026-10-10 |
+| [Retinue 0.1.0-beta.15](releases/0.1.0-beta.15.md) | Release notes for 0.1.0-beta.15. | release note (protected path) | 2026-10-11 |
+| [Retinue 0.1.0-beta.16](releases/0.1.0-beta.16.md) | Release notes for 0.1.0-beta.16. | release note (protected path) | 2026-10-11 |
+| [Retinue 0.1.0-beta.17](releases/0.1.0-beta.17.md) | Release notes for 0.1.0-beta.17. | release note (protected path) | 2026-10-11 |
+| [Retinue 0.1.0-beta.18](releases/0.1.0-beta.18.md) | Release notes for 0.1.0-beta.18. | release note (protected path) | 2026-10-12 |
+| [Retinue 0.1.0-beta.19](releases/0.1.0-beta.19.md) | Release notes for 0.1.0-beta.19. | release note (protected path) | 2026-10-19 |
+| [Retinue 0.1.0-beta.2](releases/0.1.0-beta.2.md) | Release notes for 0.1.0-beta.2. | release note (protected path) | 2026-10-02 |
+| [Retinue 0.1.0-beta.20](releases/0.1.0-beta.20.md) | Release notes for 0.1.0-beta.20. | release note (protected path) | 2026-10-13 |
+| [Retinue 0.1.0-beta.21](releases/0.1.0-beta.21.md) | Release notes for 0.1.0-beta.21. | release note (protected path) | 2026-10-13 |
+| [Retinue 0.1.0-beta.22](releases/0.1.0-beta.22.md) | Release notes for 0.1.0-beta.22. | release note (protected path) | 2026-10-14 |
+| [Retinue 0.1.0-beta.23](releases/0.1.0-beta.23.md) | Release notes for 0.1.0-beta.23. | release note (protected path) | 2026-10-14 |
+| [Retinue 0.1.0-beta.24](releases/0.1.0-beta.24.md) | Release notes for 0.1.0-beta.24. | release note (protected path) | 2026-10-14 |
+| [Retinue 0.1.0-beta.25](releases/0.1.0-beta.25.md) | Release notes for 0.1.0-beta.25. | release note (protected path) | 2026-10-14 |
+| [Retinue 0.1.0-beta.26](releases/0.1.0-beta.26.md) | Release notes for 0.1.0-beta.26. | release note (protected path) | 2026-10-14 |
+| [Retinue 0.1.0-beta.27](releases/0.1.0-beta.27.md) | Release notes for 0.1.0-beta.27. | release note (protected path) | 2026-10-14 |
+| [Retinue 0.1.0-beta.28](releases/0.1.0-beta.28.md) | Release notes for 0.1.0-beta.28. | release note (protected path) | 2026-10-14 |
+| [Retinue 0.1.0-beta.29](releases/0.1.0-beta.29.md) | Release notes for 0.1.0-beta.29. | release note (protected path) | 2026-10-15 |
+| [Retinue 0.1.0-beta.3](releases/0.1.0-beta.3.md) | Release notes for 0.1.0-beta.3. | release note (protected path) | 2026-10-03 |
+| [Retinue 0.1.0-beta.30](releases/0.1.0-beta.30.md) | Release notes for 0.1.0-beta.30. | release note (protected path) | 2026-10-17 |
+| [Retinue 0.1.0-beta.31](releases/0.1.0-beta.31.md) | Release notes for 0.1.0-beta.31. | release note (protected path) | 2026-10-17 |
+| [Retinue 0.1.0-beta.32](releases/0.1.0-beta.32.md) | Release notes for 0.1.0-beta.32. | release note (protected path) | 2026-10-18 |
+| [Retinue 0.1.0-beta.33](releases/0.1.0-beta.33.md) | Release notes for 0.1.0-beta.33. | release note (protected path) | 2026-10-18 |
+| [Retinue 0.1.0-beta.34](releases/0.1.0-beta.34.md) | Release notes for 0.1.0-beta.34. | release note (protected path) | 2026-10-18 |
+| [Retinue 0.1.0-beta.35](releases/0.1.0-beta.35.md) | Release notes for 0.1.0-beta.35. | release note (protected path) | 2026-10-19 |
+| [Retinue 0.1.0-beta.36](releases/0.1.0-beta.36.md) | Release notes for 0.1.0-beta.36. | release note (protected path) | 2026-10-19 |
+| [Retinue 0.1.0-beta.4](releases/0.1.0-beta.4.md) | Release notes for 0.1.0-beta.4. | release note (protected path) | 2026-10-04 |
+| [Retinue 0.1.0-beta.5](releases/0.1.0-beta.5.md) | Release notes for 0.1.0-beta.5. | release note (protected path) | 2026-10-04 |
+| [Retinue 0.1.0-beta.6](releases/0.1.0-beta.6.md) | Release notes for 0.1.0-beta.6. | release note (protected path) | 2026-10-04 |
+| [Retinue 0.1.0-beta.7](releases/0.1.0-beta.7.md) | Release notes for 0.1.0-beta.7. | release note (protected path) | 2026-10-06 |
+| [Retinue 0.1.0-beta.8](releases/0.1.0-beta.8.md) | Release notes for 0.1.0-beta.8. | release note (protected path) | 2026-10-06 |
+| [Retinue 0.1.0-beta.9](releases/0.1.0-beta.9.md) | Release notes for 0.1.0-beta.9. | release note (protected path) | 2026-10-06 |
 
 ## History
 
@@ -233,10 +233,10 @@ Dated records of the work. Each FIX wave has its own folder with its specs, brie
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
 | [Fix 1A continuation: finish the dictation work (previous run stopped early)](history/fix-01/dictation-continue.md) | Instructions to finish the Fix 1A dictation work after an earlier run stopped early. | historical | 2026-10-13 |
-| [Fix 1A spec: why ChatGPT dictation says "verification required" (diagnose, then fix what is ours)](history/fix-01/dictation-spec.md) | Spec for Fix 1A: why ChatGPT dictation reports verification required, and what to change in Bitbots. | historical; line 12 is amended for cloud dictation by the AGENTS.md amendment of 14 October 2026 | 2026-10-15 |
+| [Fix 1A spec: why ChatGPT dictation says "verification required" (diagnose, then fix what is ours)](history/fix-01/dictation-spec.md) | Spec for Fix 1A: why ChatGPT dictation reports verification required, and what to change in Retinue. | historical; line 12 is amended for cloud dictation by the AGENTS.md amendment of 14 October 2026 | 2026-10-15 |
 | [Fix 1B spec: OpenCode effort levels for DeepSeek (and every OpenCode model that has variants)](history/fix-01/opencode-effort-spec.md) | Spec for Fix 1B: OpenCode effort levels for DeepSeek and other OpenCode models with variants. | historical | 2026-10-15 |
 | [Fix 1C continuation: finish the team/leader work (previous run stopped early)](history/fix-01/team-continue.md) | Instructions to finish the Fix 1C leader and team work after an earlier run stopped early. | superseded in part by [d1-manager-spec.md](history/fix-36/d1-manager-spec.md) | 2026-10-13 |
-| [Fix 1C spec: leader-only blob creation over the Bitbots MCP bridge, workflows default on, one reaction per message](history/fix-01/team-spec.md) | Spec for Fix 1C: leader-only blob creation over the Bitbots MCP bridge, with workflows on by default. | superseded in part by [d1-manager-spec.md](history/fix-36/d1-manager-spec.md) | 2026-10-15 |
+| [Fix 1C spec: leader-only blob creation over the Retinue MCP bridge, workflows default on, one reaction per message](history/fix-01/team-spec.md) | Spec for Fix 1C: leader-only blob creation over the Retinue MCP bridge, with workflows on by default. | superseded in part by [d1-manager-spec.md](history/fix-36/d1-manager-spec.md) | 2026-10-15 |
 
 ### FIX2: Codex team instructions, dictation TLS
 
@@ -281,33 +281,33 @@ Dated records of the work. Each FIX wave has its own folder with its specs, brie
 | --- | --- | --- | --- |
 | [FIX8: delegation chips appear below the reply that follows them](history/fix-08/delegation-timeline-order-spec.md) | Spec for FIX8: delegation chips appear below the reply that follows them. | historical | 2026-10-14 |
 
-### FIX9: Rename to Bitbots
+### FIX9: Rename to Retinue
 
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
-| [FIX9 rename report: Bloblex to Bitbots](history/fix-09/rename-report.md) | Report on FIX9: the rename from Bloblex to Bitbots. | historical | 2026-10-15 |
-| [FIX9: rename the product from Bloblex to Bitbots](history/fix-09/rename-spec.md) | Spec for FIX9: renaming the product from Bloblex to Bitbots. | historical | 2026-10-15 |
+| [FIX9 rename report: Retinue to Retinue](history/fix-09/rename-report.md) | Report on FIX9: the rename from Retinue to Retinue. | historical | 2026-10-15 |
+| [FIX9: rename the product from Retinue to Retinue](history/fix-09/rename-spec.md) | Spec for FIX9: renaming the product from Retinue to Retinue. | historical | 2026-10-15 |
 
 ### FIX10: Themes and style logic
 
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
-| [FIX10 report: theme style (Bitbots / Blobots) and user accent, logic layer](history/fix-10/report.md) | Report on FIX10: theme style (Bitbots and Blobots) and the user accent colour, logic layer. | historical | 2026-10-15 |
-| [FIX10: theme style (Bitbots / Blobots) and user accent colour, logic layer](history/fix-10/theme-style-spec.md) | Spec for FIX10: theme style (Bitbots and Blobots) and the user accent colour, logic layer. | superseded in part by [themes-spec.md](history/fix-40/themes-spec.md) | 2026-10-15 |
+| [FIX10 report: theme style (Retinue / Stone) and user accent, logic layer](history/fix-10/report.md) | Report on FIX10: theme style (Retinue and Stone) and the user accent colour, logic layer. | historical | 2026-10-15 |
+| [FIX10: theme style (Retinue / Stone) and user accent colour, logic layer](history/fix-10/theme-style-spec.md) | Spec for FIX10: theme style (Retinue and Stone) and the user accent colour, logic layer. | superseded in part by [themes-spec.md](history/fix-40/themes-spec.md) | 2026-10-15 |
 
 ### FIX11: Installed identity
 
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
-| [FIX11: Bitbots installed identity (installer, executables, data directory)](history/fix-11/identity-spec.md) | Spec for FIX11: the installed Bitbots identity (installer, executables and data directory). | historical | 2026-10-15 |
-| [FIX11 report: Bitbots installed identity (installer, executables, data directory)](history/fix-11/report.md) | Report on FIX11: the installed Bitbots identity (installer, executables and data directory). | historical | 2026-10-15 |
+| [FIX11: Retinue installed identity (installer, executables, data directory)](history/fix-11/identity-spec.md) | Spec for FIX11: the installed Retinue identity (installer, executables and data directory). | historical | 2026-10-15 |
+| [FIX11 report: Retinue installed identity (installer, executables, data directory)](history/fix-11/report.md) | Report on FIX11: the installed Retinue identity (installer, executables and data directory). | historical | 2026-10-15 |
 
 ### FIX12: Vocabulary (bots and blobs)
 
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
-| [FIX12 report — the characters are "bots" in Bitbots and "blobs" in Blobots](history/fix-12/report.md) | Report on FIX12: the characters are "bots" in Bitbots and "blobs" in Blobots. | historical | 2026-10-15 |
-| [FIX12: the characters are "bots" in Bitbots and "blobs" in Blobots](history/fix-12/vocabulary-spec.md) | Spec for FIX12: the characters are "bots" in Bitbots and "blobs" in Blobots. | historical | 2026-10-15 |
+| [FIX12 report — the characters are "bots" in Retinue and "blobs" in Stone](history/fix-12/report.md) | Report on FIX12: the characters are "bots" in Retinue and "blobs" in Stone. | historical | 2026-10-15 |
+| [FIX12: the characters are "bots" in Retinue and "blobs" in Stone](history/fix-12/vocabulary-spec.md) | Spec for FIX12: the characters are "bots" in Retinue and "blobs" in Stone. | historical | 2026-10-15 |
 
 ### FIX13: UI preferences and polish
 
@@ -421,8 +421,8 @@ Dated records of the work. Each FIX wave has its own folder with its specs, brie
 | --- | --- | --- | --- |
 | [FIX29 (WP6a): one remote policy for Rust and TypeScript](history/fix-29/wp6a-policy-spec.md) | Spec for FIX29 (WP6a): one remote policy for Rust and TypeScript. | historical | 2026-10-17 |
 | [FIX29 (WP6a): one remote policy for Rust and TypeScript — implementation report](history/fix-29/wp6a-report.md) | Implementation report for FIX29 (WP6a): one remote policy for Rust and TypeScript. | historical | 2026-10-17 |
-| [FIX29 (WP6b): the remote gateway in `bitbotsd` over Tailscale](history/fix-29/wp6b-gateway-spec.md) | Spec for FIX29 (WP6b): the remote gateway in the daemon over Tailscale. | historical | 2026-10-17 |
-| [FIX29 WP6b — the remote gateway in `bitbotsd` over Tailscale](history/fix-29/wp6b-report.md) | Report on FIX29 WP6b: the remote gateway in the daemon over Tailscale. | historical | 2026-10-17 |
+| [FIX29 (WP6b): the remote gateway in `retinued` over Tailscale](history/fix-29/wp6b-gateway-spec.md) | Spec for FIX29 (WP6b): the remote gateway in the daemon over Tailscale. | historical | 2026-10-17 |
+| [FIX29 WP6b — the remote gateway in `retinued` over Tailscale](history/fix-29/wp6b-report.md) | Report on FIX29 WP6b: the remote gateway in the daemon over Tailscale. | historical | 2026-10-17 |
 | [FIX29 (WP6c): the remote PWA build, transport and service worker](history/fix-29/wp6c-pwa-spec.md) | Spec for FIX29 (WP6c): the remote PWA build, transport and service worker. | historical | 2026-10-17 |
 | [FIX29 (WP6c) report: the remote PWA build, transport and service worker](history/fix-29/wp6c-report.md) | Report on FIX29 (WP6c): the remote PWA build, transport and service worker. | historical | 2026-10-17 |
 | [FIX29 (WP6c-1): the desktop crate builds before the remote app exists](history/fix-29/wp6c1-build-spec.md) | Spec for FIX29 (WP6c-1): the desktop crate builds before the remote app exists. | historical | 2026-10-17 |
@@ -455,7 +455,7 @@ Dated records of the work. Each FIX wave has its own folder with its specs, brie
 
 | Document | What it is | Status | Last updated |
 | --- | --- | --- | --- |
-| [FIX34 A1: the remote web app loads ("Bitbots Remote is not installed")](history/fix-34/a1-remote-web-spec.md) | Spec for FIX34 A1: the remote web app loads instead of reporting that Bitbots Remote is not installed. | historical | 2026-10-17 |
+| [FIX34 A1: the remote web app loads ("Retinue Remote is not installed")](history/fix-34/a1-remote-web-spec.md) | Spec for FIX34 A1: the remote web app loads instead of reporting that Retinue Remote is not installed. | historical | 2026-10-17 |
 | [FIX34 A1 report — the remote web app loads](history/fix-34/a1-report.md) | Report on FIX34 A1: the remote web app loads. | historical | 2026-10-17 |
 | [FIX34 A2: "Started a fresh session" must not repeat in existing conversations](history/fix-34/a2-fresh-session-spec.md) | Spec for FIX34 A2: the fresh-session notice must not repeat in existing conversations. | historical | 2026-10-17 |
 | [FIX34 A2: fresh-session notice on existing conversations](history/fix-34/a2-report.md) | Report on FIX34 A2: the fresh-session notice on existing conversations. | historical | 2026-10-17 |
@@ -549,7 +549,7 @@ Dated records of the work. Each FIX wave has its own folder with its specs, brie
 | [FIX39 P6 audit (Claude Sonnet 5.5)](history/fix-39/p6-audit.md) | Audit of FIX39 package P6 by Claude Sonnet 5.5. | historical | 2026-10-18 |
 | [FIX39 package P6 — orchestration: parallel conversations, context recovery, tags](history/fix-39/p6-report.md) | Report for FIX39 package P6: parallel conversations, context recovery and tags. | historical | 2026-10-18 |
 | [FIX39 P7 implementation audit (Claude Sonnet 5.5)](history/fix-39/p7-audit.md) | Implementation audit of FIX39 package P7 by Claude Sonnet 5.5. | historical | 2026-10-18 |
-| [FIX39 P7 implementation report](history/fix-39/p7-report.md) | Implementation report for FIX39 package P7: the Bitbots tool set for the Manager. | historical | 2026-10-18 |
+| [FIX39 P7 implementation report](history/fix-39/p7-report.md) | Implementation report for FIX39 package P7: the Retinue tool set for the Manager. | historical | 2026-10-18 |
 | [FIX39 P8 implementation audit (Claude Sonnet 5.5)](history/fix-39/p8-audit.md) | Implementation audit of FIX39 package P8 by Claude Sonnet 5.5. | historical | 2026-10-18 |
 | [FIX39 package P8 — watchdog (T3 recommendations 3 and 4)](history/fix-39/p8-report.md) | Report for FIX39 package P8: the watchdog (T3 recommendations 3 and 4). | historical | 2026-10-18 |
 | [FIX39 P9 audit (Claude Sonnet 5.5)](history/fix-39/p9-audit.md) | Audit of FIX39 package P9 by Claude Sonnet 5.5. | historical | 2026-10-18 |
@@ -566,11 +566,11 @@ Dated records of the work. Each FIX wave has its own folder with its specs, brie
 | --- | --- | --- | --- |
 | [FIX40 Characters lane: bot art styles (light robots, hand-painted blobs) and the bot editor](history/fix-40/characters-spec.md) | Spec for the FIX40 Characters lane: bot art styles, light robots, hand-painted blobs and the bot editor. | historical | 2026-10-19 |
 | [FIX40: look orbs instead of mini screenshots](history/fix-40/orbs-spec.md) | Spec for FIX40: look orbs instead of mini screenshots. | historical | 2026-10-19 |
-| [FIX40 report: Bitbots looks, bot art and look orbs](history/fix-40/report.md) | Report for FIX40: Bitbots looks, bot art and look orbs. | historical; a record as of 19 October 2026 | 2026-10-19 |
+| [FIX40 report: Retinue looks, bot art and look orbs](history/fix-40/report.md) | Report for FIX40: Retinue looks, bot art and look orbs. | historical; a record as of 19 October 2026 | 2026-10-19 |
 | [FIX40 round 2: the Pop and Dot looks across the whole app](history/fix-40/round2-spec.md) | Spec for FIX40 round 2: the Pop and Dot looks across the whole app. | historical | 2026-10-19 |
-| [FIX40 research brief: how T3 Code runs its agents, and what Bitbots should take from it](history/fix-40/t3-research-brief.md) | Brief for the FIX40 T3 Code research. | historical | 2026-10-18 |
-| [FIX40 research — how T3 Code runs its agents, and what Bitbots should take from it](history/fix-40/t3-research.md) | Research on how T3 Code runs its agents, and what Bitbots should take from it (FIX40). | historical | 2026-10-18 |
-| [FIX40 Themes lane: Frost becomes Bitbots, new looks, fonts, wallpapers, Appearance page](history/fix-40/themes-spec.md) | Spec for the FIX40 Themes lane: Frost becomes Bitbots, new looks, fonts, wallpapers and the Appearance page. | historical | 2026-10-19 |
+| [FIX40 research brief: how T3 Code runs its agents, and what Retinue should take from it](history/fix-40/t3-research-brief.md) | Brief for the FIX40 T3 Code research. | historical | 2026-10-18 |
+| [FIX40 research — how T3 Code runs its agents, and what Retinue should take from it](history/fix-40/t3-research.md) | Research on how T3 Code runs its agents, and what Retinue should take from it (FIX40). | historical | 2026-10-18 |
+| [FIX40 Themes lane: Frost becomes Retinue, new looks, fonts, wallpapers, Appearance page](history/fix-40/themes-spec.md) | Spec for the FIX40 Themes lane: Frost becomes Retinue, new looks, fonts, wallpapers and the Appearance page. | historical | 2026-10-19 |
 
 ### FIX41: Companion and dictation looks
 
@@ -591,11 +591,11 @@ Dated records of the work. Each FIX wave has its own folder with its specs, brie
 | [Phase 3A spec: safe automatic retry after overload and rate limits (backend)](history/improvement/phase-3a-spec.md) | Spec for phase 3A: safe automatic retry after overload and rate limits (backend). | historical | 2026-10-15 |
 | [Phase 3B spec: recorded-wire replay tests per CLI version (test infrastructure)](history/improvement/phase-3b-spec.md) | Spec for phase 3B: recorded-wire replay tests per CLI version (test infrastructure). | historical | 2026-10-13 |
 | [Phase 4A spec: scheduled automations for blobs (backend)](history/improvement/phase-4a-spec.md) | Spec for phase 4A: scheduled automations for blobs (backend). | historical | 2026-10-12 |
-| [Phase 4B spec: keep the computer awake while Bitbots has work (native)](history/improvement/phase-4b-spec.md) | Spec for phase 4B: keeping the computer awake while Bitbots has work (native). | historical | 2026-10-15 |
+| [Phase 4B spec: keep the computer awake while Retinue has work (native)](history/improvement/phase-4b-spec.md) | Spec for phase 4B: keeping the computer awake while Retinue has work (native). | historical | 2026-10-15 |
 | [Phase 5A spec: memory and "about you" (backend)](history/improvement/phase-5a-spec.md) | Spec for phase 5A: memory and "about you" (backend). | historical | 2026-10-12 |
 | [Phase 6A spec: ask-the-user tool for OpenCode, hand-off draft and notification level (backend)](history/improvement/phase-6a-spec.md) | Spec for phase 6A: an ask-the-user tool for OpenCode, hand-off draft and notification level (backend). | historical | 2026-10-15 |
 | [Phase 7 spec: opt-in cloud dictation through the Codex login (backend and native)](history/improvement/phase-7-spec.md) | Spec for phase 7: opt-in cloud dictation through the Codex login (backend and native). | historical | 2026-10-14 |
-| [Bitbots improvement plan: CLI connectivity, reasoning effort, and dictation](history/improvement/plan-v1-qa-draft.md) | Early improvement plan (CLI connectivity, reasoning effort and dictation), QA draft, 12 October 2026. | superseded by [improvement-plan.md](plans/improvement-plan.md) | 2026-10-15 |
+| [Retinue improvement plan: CLI connectivity, reasoning effort, and dictation](history/improvement/plan-v1-qa-draft.md) | Early improvement plan (CLI connectivity, reasoning effort and dictation), QA draft, 12 October 2026. | superseded by [improvement-plan.md](plans/improvement-plan.md) | 2026-10-15 |
 
 ### Phase specs
 

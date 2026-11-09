@@ -1,6 +1,6 @@
 /* Guided tour, one-time hints and the tour invitation.
    Everything here sits above the app (z 130). Rules that must beat the global
-   Bitbots reset (no radius, no shadow, stepped timing) are written with
+   Retinue reset (no radius, no shadow, stepped timing) are written with
    :root:root so the same markup is right in both looks. */
 
 .coach { position: fixed; inset: 0; z-index: 130; pointer-events: none; }

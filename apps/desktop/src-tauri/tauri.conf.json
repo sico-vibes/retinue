@@ -1,9 +1,9 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Bitbots",
-  "mainBinaryName": "Bitbots",
+  "productName": "Retinue",
+  "mainBinaryName": "Retinue",
   "version": "0.1.0-beta.50",
-  "identifier": "com.bitbots.desktop",
+  "identifier": "com.retinue.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1420",
@@ -15,7 +15,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Bitbots",
+        "title": "Retinue",
         "width": 1360,
         "height": 860,
         "minWidth": 1000,
@@ -40,11 +40,11 @@
     "shortDescription": "A local control plane for coding agents",
     "longDescription": "Manage local coding-agent runtimes and sessions from one desktop app.",
     "icon": [
-      "../../../assets/icon/bloblex.ico",
-      "../../../assets/icon/bloblex-master.png"
+      "../../../assets/icon/retinue.ico",
+      "../../../assets/icon/retinue-master.png"
     ],
     "resources": { "../dist-remote/": "remote-web/" },
-    "externalBin": ["binaries/bitbotsd", "binaries/bitbots-hook"],
+    "externalBin": ["binaries/retinued", "binaries/retinue-hook"],
     "targets": ["nsis"],
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },

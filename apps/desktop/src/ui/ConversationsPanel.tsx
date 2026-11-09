@@ -19,7 +19,7 @@ import { TagEditor, TeamMenu, type MenuItem, type TagTarget } from './TeamSideba
 import { ProjectIcon, ProjectIconPicker, type ProjectIconChoice } from './ProjectIcon'
 import './conversationsPanel.css'
 
-const COLLAPSED_KEY = 'bitbots.collapsedProjects'
+const COLLAPSED_KEY = 'retinue.collapsedProjects'
 
 function Face({ agent, name }: { agent: Agent | null | undefined; name: string }) {
   return agent

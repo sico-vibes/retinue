@@ -4,14 +4,14 @@
 > **Status:** historical
 > **Last updated:** 2026-10-18
 
-Lane: OpenCode `deepseek-v4.1-flash` (high), its own worktree. The owner has asked the lanes to do UI work in this wave. **Never run `git commit`.** Keep context small: grep, then read only the ranges you need. Read the section headings of `AGENTS.md`, then `docs/design/design-system.md`. Work only in `apps/desktop/src/ui/**` styles and the tooltip components named below; do not touch `App.tsx` beyond what item 3 strictly needs. Both looks (classic and Bitbots, `:root[data-bitbots="on"]`) and both themes must stay right.
+Lane: OpenCode `deepseek-v4.1-flash` (high), its own worktree. The owner has asked the lanes to do UI work in this wave. **Never run `git commit`.** Keep context small: grep, then read only the ranges you need. Read the section headings of `AGENTS.md`, then `docs/design/design-system.md`. Work only in `apps/desktop/src/ui/**` styles and the tooltip components named below; do not touch `App.tsx` beyond what item 3 strictly needs. Both looks (classic and Retinue, `:root[data-retinue="on"]`) and both themes must stay right.
 
 ## 1. Sidebar bot rows: provider logo alignment and spacing
 
 In the sidebar bot rows (`TeamSidebar.tsx`, `team.css`), the small provider logo before the bot name (Claude, Codex, OpenCode marks; the "runtime logos" setting) sits lower than the name's text line, and the gap between the logo and the name is too wide.
 
 - Centre the logo on the name's line box (the same vertical centre as the name text), in both looks.
-- Reduce the gap to about 4–5 px (classic) and the equivalent in the Bitbots look.
+- Reduce the gap to about 4–5 px (classic) and the equivalent in the Retinue look.
 - Check the row with and without a role chip, with a long name (ellipsis), and the Manager row.
 
 ## 2. Tooltips clipped by their container

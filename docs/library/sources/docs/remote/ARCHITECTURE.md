@@ -18,8 +18,8 @@ Tailscale. Wire details are in [PROTOCOL.md](PROTOCOL.md), risks in
 
 Facts from the code, each checked when this document was written:
 
-- The daemon `bitbotsd` binds `127.0.0.1:0` only and serves `POST /v1/rpc` and a WebSocket at
-  `/v1/events` (`crates/bloblex-daemon/src/main.rs`, transport near the router setup).
+- The daemon `retinued` binds `127.0.0.1:0` only and serves `POST /v1/rpc` and a WebSocket at
+  `/v1/events` (`crates/retinue-daemon/src/main.rs`, transport near the router setup).
 - One 256-bit capability token, created per daemon process and held in memory, authorises
   every call. It is passed as `Authorization: Bearer` and compared in constant time. The
   renderer never sees it; the Tauri shell proxies calls (`src-tauri/src/lib.rs`
@@ -40,13 +40,13 @@ Facts from the code, each checked when this document was written:
 ```
  Device (phone / browser on the tailnet)                 Host (the user's computer)
  +-----------------------------------+                   +----------------------------------------------+
- | Bitbots Remote (PWA, same UI kit)  |                   | tailscaled                                   |
+ | Retinue Remote (PWA, same UI kit)  |                   | tailscaled                                   |
  |  - remoteTransport: fetch + WS     |   WireGuard       |  serve: https://<host>.<tailnet>.ts.net:443  |
  |  - session cookie (HttpOnly)       | <===============> |         -> http://127.0.0.1:48620            |
  |  - service worker (shell only)     |   HTTPS (tailnet  +----------------------+-----------------------+
  +-----------------------------------+    certificate)                           | loopback only
                                                          +----------------------v-----------------------+
-                                                         | bitbotsd                                     |
+                                                         | retinued                                     |
                                                          |  +----------------------------------------+  |
                                                          |  | Remote gateway (listener 2, off by      |  |
                                                          |  | default): 127.0.0.1:<remote.port>       |  |
@@ -66,7 +66,7 @@ Facts from the code, each checked when this document was written:
 
 ### 2.1 Gateway (host)
 
-A module inside `bitbotsd` (`crates/bloblex-daemon/src/remote/`, files `mod`, `policy`,
+A module inside `retinued` (`crates/retinue-daemon/src/remote/`, files `mod`, `policy`,
 `tailscale`, `pairing` and `web`). It is compiled in but **inactive** until `remote.enable`.
 While Remote is on it:
 
@@ -88,7 +88,7 @@ do not change.
 
 ### 2.2 Tailscale (`tailscale.rs`)
 
-Tailscale is installed and signed in by the user. Bitbots does not bundle it and does not
+Tailscale is installed and signed in by the user. Retinue does not bundle it and does not
 create tailnets.
 
 - Find `tailscale.exe` and parse `tailscale status --json` for the backend state, the node's
@@ -96,7 +96,7 @@ create tailnets.
 - Publish with `tailscale serve --bg --https=443 http://127.0.0.1:<port>`. If port 443 is
   already served by something else, use `--https=8443` instead. The chosen port is stored as
   `remote.servePort`.
-- Turning Remote off removes only the handler Bitbots added. It never runs
+- Turning Remote off removes only the handler Retinue added. It never runs
   `tailscale serve reset`, which would remove other people's handlers.
 - It never runs `tailscale funnel`, and it checks that Funnel is off for our port. If Funnel is
   on, Remote refuses to start and says why.
@@ -115,7 +115,7 @@ with a cursor, back-off and gap recovery for events. Native features are hidden 
 window shrunk.
 
 The build ships inside the desktop installer as a Tauri resource (`remote-web/`). The shell
-passes its path to the daemon in `BITBOTS_REMOTE_WEB_DIR` from `start_daemon`
+passes its path to the daemon in `RETINUE_REMOTE_WEB_DIR` from `start_daemon`
 (`src-tauri/src/lib.rs`).
 
 A real service worker replaces the inert `remote-sw.js`: a versioned precache of the hashed
@@ -127,7 +127,7 @@ shell, network-first for `remote.html`, `/api/*` never cached, an "update ready"
 - **Network identity** comes from Tailscale. Only nodes on the owner's tailnet can reach the
   serve address, and traffic is WireGuard-encrypted end to end between the two nodes. HTTPS uses
   the tailnet's certificate for `<host>.<tailnet>.ts.net`.
-- **Device identity** is a Bitbots session cookie, issued only after the owner approves the
+- **Device identity** is a Retinue session cookie, issued only after the owner approves the
   device. There are no device key pairs.
 - **Pairing** (owner-confirmed):
   1. On the desktop, `remote.pair.begin` returns an 8-character code (two groups, for example
@@ -169,7 +169,7 @@ because host records live only on the device.
 | `src/remote/remoteTiers.ts` | Tier table, `authorizeRemoteCall`, redactors, event policy, parity test | P0 (done); P1 moves the tables to `remote/tiers.json` |
 | `src/preview/remoteFixture.ts` | Simulator for the web preview | P0 (done) |
 | Settings > Remote, `remote.html` | Host and device UI, mock | P0 (done) |
-| `crates/bloblex-daemon/src/remote/` | Second loopback listener, Tailscale control, pairing, cookie auth, policy, redaction, audit | P1 |
+| `crates/retinue-daemon/src/remote/` | Second loopback listener, Tailscale control, pairing, cookie auth, policy, redaction, audit | P1 |
 | `remote/tiers.json` | One tier table, event policy and settings allowlist read by Rust and TypeScript | P1 |
 | `vite.remote.config.ts`, `remote-public/`, service worker | PWA build shipped as the `remote-web/` resource | P1 |
 | Storage | Tables `remote_devices` and `remote_activity` (capped at 500 rows) | P1 |

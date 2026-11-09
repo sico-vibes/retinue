@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 const claudeExe = process.env.CLAUDE_EXE || (process.env.APPDATA + '\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe')
-const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bloblex-live-claude2-'))
+const work = fs.mkdtempSync(path.join(os.tmpdir(), 'retinue-live-claude2-'))
 const fileA = path.join(work, 'a.txt')
 const fileC = path.join(work, 'c.txt')
 fs.writeFileSync(fileA, 'Rule 1: when asked to say "hello", reply with exactly: HELLO-1111.\n')

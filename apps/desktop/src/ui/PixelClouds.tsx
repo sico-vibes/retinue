@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { useLegacyPixel } from '../blob/bitbots'
+import { useLegacyPixel } from '../blob/retinue'
 
 const CELL = 4
 const COLS = 160
@@ -16,16 +16,16 @@ function noise(x: number, y: number) {
 
 /**
  * A drifting dither of pixel clouds, like the sky on the reference site. It is
- * decoration only: it exists while Bitbots is on, sits behind the content and
+ * decoration only: it exists while Retinue is on, sits behind the content and
  * never takes the pointer.
  */
 export function PixelClouds({ className = '' }: { className?: string }) {
-  const bitbots = useLegacyPixel()
+  const retinue = useLegacyPixel()
   const canvas = useRef<HTMLCanvasElement>(null)
   useEffect(() => {
     const element = canvas.current
     const ctx = element?.getContext('2d')
-    if (!bitbots || !element || !ctx) return
+    if (!retinue || !element || !ctx) return
     ctx.clearRect(0, 0, element.width, element.height)
     for (let gy = 0; gy < ROWS; gy++) {
       for (let gx = 0; gx < COLS; gx++) {
@@ -39,7 +39,7 @@ export function PixelClouds({ className = '' }: { className?: string }) {
         ctx.fillRect(gx * CELL, gy * CELL, CELL - 1, CELL - 1)
       }
     }
-  }, [bitbots])
-  if (!bitbots) return null
+  }, [retinue])
+  if (!retinue) return null
   return <div className={`bb-clouds ${className}`} aria-hidden="true"><canvas ref={canvas} width={COLS * CELL} height={ROWS * CELL} /></div>
 }

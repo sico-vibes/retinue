@@ -11,8 +11,8 @@ Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort, own worktree, pri
 - The Manager needs the owner's approval for every consequential action (D2 builds the proposals; D1 only moves the tools and rules).
 
 ## Today (from the Director's exploration)
-- `agents.leader INTEGER` (`crates/bloblex-storage/src/lib.rs` `ensure_team_schema` ~399-421), one-leader rule only in `agent_set_team` (~1572), `leader_agent()` (~1582).
-- Leader-gated MCP tools in `crates/bloblex-daemon/src/team.rs` `tools()` (~200-228): `list_projects`, `create_blob`, `update_blob`; `is_leader` (~256). `<bloblex_team>` leader paragraph in `runtime_instructions` (~152-159).
+- `agents.leader INTEGER` (`crates/retinue-storage/src/lib.rs` `ensure_team_schema` ~399-421), one-leader rule only in `agent_set_team` (~1572), `leader_agent()` (~1582).
+- Leader-gated MCP tools in `crates/retinue-daemon/src/team.rs` `tools()` (~200-228): `list_projects`, `create_blob`, `update_blob`; `is_leader` (~256). `<retinue_team>` leader paragraph in `runtime_instructions` (~152-159).
 - `agent.delete` (`main.rs` ~716) archives with no leader check; import (`lib.rs` ~4156-4212) can carry the flag.
 
 ## Changes
@@ -23,7 +23,7 @@ Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort, own worktree, pri
    - The Manager cannot be archived or deleted (`agent.delete` → `conflict` "The Manager can't be removed; you can rename it or change its model"), cannot be demoted, and import never creates a second Manager (an imported manager row becomes an ordinary bot; backup import keeps the local Manager).
    - Its name, look, instructions, runtime, model and thinking can change through the normal update path.
 4. **Tools.** Replace `is_leader` with `is_manager` (session's agent has `system_role = 'manager'`). `list_projects` and `update_blob` move to manager-only; `create_blob` is **removed from the bridge** (D2 replaces it with `propose_bot`). Non-managers asking for these get the existing friendly error reworded to "Ask the Manager (@<name>)".
-5. **`<bloblex_team>` text.** The leader paragraph becomes a Manager paragraph: "You are <name>, the user's Manager. You work across all projects (list them with list_projects), know every bot (list_blobs), plan work, delegate with message_blob, and you ask the user before creating projects, bots or assigning tasks." Non-manager bots are told the Manager's name and to tag `@<name>` for new teammates or projects. This changes the instruction hash once (expected).
+5. **`<retinue_team>` text.** The leader paragraph becomes a Manager paragraph: "You are <name>, the user's Manager. You work across all projects (list them with list_projects), know every bot (list_blobs), plan work, delegate with message_blob, and you ask the user before creating projects, bots or assigning tasks." Non-manager bots are told the Manager's name and to tag `@<name>` for new teammates or projects. This changes the instruction hash once (expected).
 6. **DTOs / non-visual TS.** `Agent` DTO gains `systemRole: "manager" | null`; add `systemRole?: 'manager' | null` to `apps/desktop/src/types.ts` `Agent`. Add `manager.ensure` and `manager.get` to `apps/desktop/src/remote/tiers.json` (`manager.get` read/viewer; `manager.ensure` never) and to `apps/desktop/src/preview/fixtureBridge.ts` (a fixture Manager).
 7. **Snapshot.** `app.snapshot` includes the Manager like any agent (with `systemRole`).
 
@@ -32,12 +32,12 @@ Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort, own worktree, pri
 - `manager.ensure` creates exactly one; second call returns the same; partial unique index rejects a second manager row.
 - Manager can't be archived/deleted/given a project/demoted; can be renamed and change model.
 - Tools: manager sees `list_projects`, `update_blob`, not `create_blob`; a normal bot sees neither; the error text names the Manager.
-- `<bloblex_team>` text for manager vs bot (snapshot-style assertions on key sentences).
+- `<retinue_team>` text for manager vs bot (snapshot-style assertions on key sentences).
 - Backup/import: an incoming manager row becomes an ordinary bot; the local Manager stays.
 
 ## Gates
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote src/preview`
 
 ## Report

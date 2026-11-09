@@ -7,10 +7,10 @@
 Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort, own worktree, private `CARGO_TARGET_DIR`. **Do not run `git commit`.** Read `AGENTS.md` first (the 17 October Remote amendment and the Native Remote amendment above it). Keep your context small: grep and read only the ranges you need (`main.rs` and `remote/*.rs` are large); pipe long output through `tail`/`grep`. Do not edit `apps/desktop/src/ui/**` (the Director builds the UI).
 
 ## Goal
-A second Remote method, **Native**, that needs only Bitbots on the host and a browser on the device: the gateway listens on the host's own network interfaces with HTTPS from a built-in certificate, and devices sign in with a username and password **plus** the owner's approval of each new device on the desktop. Tailscale stays as the other method; **one method is active at a time** (`remote.method`, `"tailscale"` default or `"native"`).
+A second Remote method, **Native**, that needs only Retinue on the host and a browser on the device: the gateway listens on the host's own network interfaces with HTTPS from a built-in certificate, and devices sign in with a username and password **plus** the owner's approval of each new device on the desktop. Tailscale stays as the other method; **one method is active at a time** (`remote.method`, `"tailscale"` default or `"native"`).
 
 ## Reuse, don't fork
-`crates/bloblex-daemon/src/remote/web.rs` (router, `authenticate`, static files, cookies, sockets, audit), `pairing.rs` (pending requests, device tokens, constant-time hash compare), `policy.rs`, storage tables `remote_devices` / `remote_activity`. New code goes in `remote/native.rs` plus small, clearly marked hooks in `mod.rs` / `web.rs`.
+`crates/retinue-daemon/src/remote/web.rs` (router, `authenticate`, static files, cookies, sockets, audit), `pairing.rs` (pending requests, device tokens, constant-time hash compare), `policy.rs`, storage tables `remote_devices` / `remote_activity`. New code goes in `remote/native.rs` plus small, clearly marked hooks in `mod.rs` / `web.rs`.
 
 ## 1. Listener and TLS (`native.rs`)
 - Bind `0.0.0.0:<remote.nativePort>` (default **48621**) and, when the OS supports it, `[::]:<port>` — **only while Native is on**. Turning it off closes the listeners and every device socket. The Tailscale listener keeps binding `127.0.0.1` only.
@@ -26,7 +26,7 @@ A second Remote method, **Native**, that needs only Bitbots on the host and a br
 - `POST /api/login { username, password, name, kind, platform }` (Native only; 404 under Tailscale):
   - Wrong username or password → uniform `401 { code: "login_invalid" }` after a constant-time verify (verify against a dummy hash when the username is wrong).
   - Correct, **device cookie already valid** → `200 { state: "approved" }` (refresh `lastSeenAt`).
-  - Correct, **new device** → create a pending request through the same path as pairing (`remote.pairing.requested` with `method: "native"`, `login: null`), set the `__Host-bitbots_pair` cookie, respond `202 { state: "pending" }`; the device polls `GET /api/pair` exactly as today and gets its device cookie when the owner approves (tier chosen on the desktop).
+  - Correct, **new device** → create a pending request through the same path as pairing (`remote.pairing.requested` with `method: "native"`, `login: null`), set the `__Host-retinue_pair` cookie, respond `202 { state: "pending" }`; the device polls `GET /api/pair` exactly as today and gets its device cookie when the owner approves (tier chosen on the desktop).
   - The password is required again for a device whose cookie has expired (idle expiry) or been revoked.
 - `GET /api/me` adds `method: "tailscale" | "native"` (the client shows a sign-in screen for Native).
 - Pairing codes (`remote.pair.begin`) stay Tailscale-only; under Native, `remote.pair.begin` returns `conflict` ("Native Remote signs in with a password").
@@ -58,8 +58,8 @@ A second Remote method, **Native**, that needs only Bitbots on the host and a br
 - Parity: `npx vitest run src/remote` green with the new `tiers.json` rows.
 
 ## Gates
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote src/preview`
 
 ## Report

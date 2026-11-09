@@ -14,7 +14,7 @@ parity-table entry.
 
 ## What changed
 
-### New module `crates/bloblex-daemon/src/backup.rs`
+### New module `crates/retinue-daemon/src/backup.rs`
 - The document envelope (`format`/`version`/`createdAt`/`app`/`contents`/
   `checksum`) and the SHA-256 checksum over `serde_json::to_vec(&contents)`.
 - `BackupPreviews`: the parsed-document store behind `backup.preview` (at most
@@ -29,7 +29,7 @@ parity-table entry.
 - Unit tests for canonical serialisation, the allowlist, damaged/newer
   documents and preview eviction/TTL.
 
-### `crates/bloblex-daemon/src/main.rs`
+### `crates/retinue-daemon/src/main.rs`
 - `mod backup;`, `AppState.backup_previews`, dispatch arm
   `"backup.export" | "backup.preview" | "backup.import" => backup::rpc(...)`.
 - Extracted `settings.set`'s validation into
@@ -38,12 +38,12 @@ parity-table entry.
   (accent lower-casing and `profile.about` trimming included).
 - 15 integration tests (below).
 
-### `crates/bloblex-daemon/src/skills.rs`
+### `crates/retinue-daemon/src/skills.rs`
 - `pub(crate)` helpers for backups: `read_files`, `files_sha256`,
   `stage_files`, `commit_staged`, `discard_staged`, and `safe_relative` is now
   `pub(crate)`. The staging layout and cleanup match the existing importer.
 
-### `crates/bloblex-storage/src/lib.rs`
+### `crates/retinue-storage/src/lib.rs`
 - `set_setting` split into `validate_setting_value` + `write_setting(tx, …)` so
   an import can write settings inside its own transaction with the same
   validation and `settings.changed` events.
@@ -54,16 +54,16 @@ parity-table entry.
   `unique_agent_name` (name_key uniqueness, " (2)", " (3)"… up to 60 chars) and
   `memory_identical` (idempotent re-import).
 
-### `crates/bloblex-daemon/Cargo.toml` + `Cargo.lock`
+### `crates/retinue-daemon/Cargo.toml` + `Cargo.lock`
 - Added `base64.workspace = true` (already in the workspace via
-  `bloblex-speech`; the lockfile only gains `base64 0.22.1` in the daemon's
+  `retinue-speech`; the lockfile only gains `base64 0.22.1` in the daemon's
   dependency list).
 
 ### `apps/desktop/src-tauri/src/lib.rs`
 - `SelectedFilePurpose::{BackupExport, BackupImport}` — a token chosen for one
   purpose cannot be spent for another.
 - `select_backup_export_path` (save dialog, default
-  `bitbots-backup-YYYY-MM-DD.bitbots-backup.json`, `.json` filter),
+  `retinue-backup-YYYY-MM-DD.retinue-backup.json`, `.json` filter),
   `select_backup_import_path` (open dialog, `.json` filter),
   `backup_export_write(token, include)` (daemon `backup.export`, then a sibling
   temp file and rename; returns `{ path, stats }`) and
@@ -87,7 +87,7 @@ parity-table entry.
 ## The document
 
 ```json
-{ "format": "bitbots.backup", "version": 1, "createdAt": "…",
+{ "format": "retinue.backup", "version": 1, "createdAt": "…",
   "app": { "version": "0.1.0-beta.29" },
   "contents": { "bots": [...], "memory": [...], "skills": [...], "automations": [...], "settings": { } },
   "checksum": { "alg": "sha256", "value": "<hex of sha256(serde_json::to_vec(&contents))>" } }
@@ -176,14 +176,14 @@ with `companion.hotkey` allowed by name.
 
 ## Tests
 
-`crates/bloblex-daemon/src/backup.rs` (unit):
+`crates/retinue-daemon/src/backup.rs` (unit):
 - `contents_serialisation_is_canonical` — `to_vec` ignores insertion order, so
   the checksum is canonical (the build has no `preserve_order`).
 - `settings_allowlist_excludes_secrets_and_keeps_named_keys`.
 - `damaged_and_newer_documents_are_refused`.
 - `previews_expire_and_keep_at_most_two`.
 
-`crates/bloblex-daemon/src/main.rs` (integration):
+`crates/retinue-daemon/src/main.rs` (integration):
 - `backup_round_trip_restores_bots_memory_skills_automations_and_settings` —
   export from one database, import into a fresh one: counts match; look, role,
   instructions and approval mode survive; `customEnv` is empty and its keys
@@ -215,15 +215,15 @@ with `companion.hotkey` allowed by name.
 
 ## Gates
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
   — exit 0, **587 passed, 0 failed**.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote` — `tsc` clean;
   **47 passed** (3 files), including the remote-tier parity test with the three
   new `never` rules and the `backup.imported` `drop` entry.
-- `cargo test -p bloblex-desktop --lib` — **could not build as-is in this
+- `cargo test -p retinue-desktop --lib` — **could not build as-is in this
   worktree**: the gitignored sidecar binaries
-  (`apps/desktop/src-tauri/binaries/bitbotsd-*.exe`, `bitbots-hook-*.exe`) the
+  (`apps/desktop/src-tauri/binaries/retinued-*.exe`, `retinue-hook-*.exe`) the
   `externalBin` config needs are absent, and `frontendDist` (`apps/desktop/dist`)
   does not exist. To verify the new native code I created throwaway 2-byte
   sidecars and an empty `dist/index.html`, ran the test (**53 passed, 0
@@ -231,7 +231,7 @@ with `companion.hotkey` allowed by name.
   worktree contains none of those artifacts. The Director should run this gate
   on the merged result where the sidecar exists.
 - One pre-existing lint note (not from this change): `cargo clippy -p
-  bloblex-daemon --all-targets -- -D warnings` reports five `needless_borrow`
+  retinue-daemon --all-targets -- -D warnings` reports five `needless_borrow`
   errors in the FIX32 skills tests (`main.rs:8115-8123`). The gated clippy
   command does not use `--all-targets` and is clean.
 
@@ -259,7 +259,7 @@ with `companion.hotkey` allowed by name.
   typed wrappers only; no screen calls them yet, so the user-visible
   backup/restore journey is untested here.
 - **Not verified:** native backups against a real daemon. `cargo test -p
-  bloblex-desktop --lib` uses the dummy sidecar described above; no live daemon
+  retinue-desktop --lib` uses the dummy sidecar described above; no live daemon
   was contacted.
 - **Left stale on purpose:** `docs/remote/PROTOCOL.md`'s generated table was
   already out of date before this change (it still says "blob" where

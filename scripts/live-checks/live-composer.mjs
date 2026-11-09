@@ -5,7 +5,7 @@
 // sends two trivial prompts with a 64x64 solid-colour PNG, and prints verdicts
 // only (never raw provider payloads or credentials).
 //
-//   node scripts/live-checks/live-composer.mjs [path-to-bitbotsd.exe]
+//   node scripts/live-checks/live-composer.mjs [path-to-retinued.exe]
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
@@ -13,11 +13,11 @@ import path from 'node:path'
 import readline from 'node:readline'
 import zlib from 'node:zlib'
 
-const daemonExe = process.argv[2] || process.env.BLOBLEXD_EXE || 'C:/dev/bloblex-target/debug/bitbotsd.exe'
-const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bloblex-live-composer-'))
+const daemonExe = process.argv[2] || process.env.RETINUED_EXE || 'C:/dev/retinue-target/debug/retinued.exe'
+const work = fs.mkdtempSync(path.join(os.tmpdir(), 'retinue-live-composer-'))
 const project = path.join(work, 'project')
 fs.mkdirSync(project)
-const only = process.env.BLOBLEX_LIVE_ONLY // claude | codex | opencode
+const only = process.env.RETINUE_LIVE_ONLY // claude | codex | opencode
 
 function crc32(buffer) {
   let crc = ~0
@@ -40,13 +40,13 @@ function solidPng(size, [r, g, b]) {
 const image = path.join(work, 'swatch.png')
 fs.writeFileSync(image, solidPng(64, [220, 20, 30]))
 
-const runtimeExe = path.join(work, 'bitbotsd.exe')
+const runtimeExe = path.join(work, 'retinued.exe')
 fs.copyFileSync(daemonExe, runtimeExe)
-const child = spawn(runtimeExe, [], { env: { ...process.env, BLOBLEX_DB_PATH: path.join(work, 'live.db') }, stdio: ['ignore', 'pipe', 'ignore'] })
+const child = spawn(runtimeExe, [], { env: { ...process.env, RETINUE_DB_PATH: path.join(work, 'live.db') }, stdio: ['ignore', 'pipe', 'ignore'] })
 const ready = await new Promise((resolve, reject) => {
   const lines = readline.createInterface({ input: child.stdout })
   const timer = setTimeout(() => reject(new Error('daemon did not start')), 60_000)
-  lines.on('line', (line) => { try { const value = JSON.parse(line); if (value.type === 'bloblexd.ready') { clearTimeout(timer); resolve(value) } } catch { /* not JSON */ } })
+  lines.on('line', (line) => { try { const value = JSON.parse(line); if (value.type === 'retinued.ready') { clearTimeout(timer); resolve(value) } } catch { /* not JSON */ } })
 })
 let rpcId = 0
 async function rpc(method, params = {}) {
@@ -88,7 +88,7 @@ try {
     const fast = (catalog.models ?? []).filter((model) => (model.serviceTiers ?? []).some((tier) => /\bfast\b|priority/i.test(`${tier.id} ${tier.name}`)))
     verdict(provider, 'model catalog', (catalog.models ?? []).length > 0, `${catalog.models.length} models, ${fast.length} with fast mode`)
 
-    const session = await rpc('session.new', { runtimeId: runtime.id, projectPath: project, title: 'Bitbots composer live check' })
+    const session = await rpc('session.new', { runtimeId: runtime.id, projectPath: project, title: 'Retinue composer live check' })
     const sessionId = session.id
     try {
       // Mode-only update: keeps model/effort, pins permission mode for this conversation.

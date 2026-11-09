@@ -67,7 +67,7 @@ characters, `-`, `/`, `:` and `_`"), so `updates.state` would panic at the first
 Everything else matches the brief. `message` is always one of the fixed sentences in
 `install_message` — never raw error text.
 
-The existing `bloblex-update-available` and `bloblex-update-progress` events are unchanged,
+The existing `retinue-update-available` and `retinue-update-progress` events are unchanged,
 so the pre-existing "Update available / View / Later" banner and the Settings progress bar
 keep working.
 
@@ -101,8 +101,8 @@ follow-through, nothing in the companion window) and the phase parser tests in
 ## Gates (run in this worktree)
 
 ```
-cargo test -p bloblex-desktop --lib 2>&1 | grep "test result"
-cargo clippy -p bloblex-desktop --all-targets -- -D warnings
+cargo test -p retinue-desktop --lib 2>&1 | grep "test result"
+cargo clippy -p retinue-desktop --all-targets -- -D warnings
 cd apps/desktop && npx tsc -b && npx vitest run --maxWorkers=3
 cd apps/desktop && npm run build
 ```
@@ -111,9 +111,9 @@ Results are recorded below.
 
 ### Results
 
-- `cargo test -p bloblex-desktop --lib` → **test result: ok. 64 passed; 0 failed** (includes the
+- `cargo test -p retinue-desktop --lib` → **test result: ok. 64 passed; 0 failed** (includes the
   5 new `updates::tests`).
-- `cargo clippy -p bloblex-desktop -- -D warnings` (and `--all-targets`) → **no lint in the
+- `cargo clippy -p retinue-desktop -- -D warnings` (and `--all-targets`) → **no lint in the
   files this lane changed**. Eight lints remain, all pre-existing and outside this lane's work:
   - `clippy::too_many_arguments` (8/7) — `lib.rs:1377`; (10/7) — `lib.rs:1878`; (8/7) — `lib.rs:1895`.
   - `clippy::let_unit_value` — `lib.rs:2338`.
@@ -126,14 +126,14 @@ Results are recorded below.
 - `npm run build` → succeeded (Vite bundle written to `apps/desktop/dist`).
 
 Because `cargo test` needs `frontendDist` and the staged sidecars in a fresh worktree, the
-build was primed first with `cargo build -p bloblex-daemon --bin bitbotsd -p bloblex-hook
---bin bitbots-hook`, `node scripts/stage-daemon.mjs`, and `npm run build`.
+build was primed first with `cargo build -p retinue-daemon --bin retinued -p retinue-hook
+--bin retinue-hook`, `node scripts/stage-daemon.mjs`, and `npm run build`.
 
 
 ## Exact release commands for the Director
 
 The updater private key must be outside the repo, at
-`%USERPROFILE%\.bloblex-release\updater.key` and `updater.pass`, or in
+`%USERPROFILE%\.retinue-release\updater.key` and `updater.pass`, or in
 `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Never commit or print it.
 
 From a clean `main` checkout, with the version bumped in all four places
@@ -151,7 +151,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts/release-windows.ps1 
 ```
 
 Both were checked here with `-DryRun -SkipBuild -BundleDir <fake>` against a fake bundle
-directory (`Bitbots_0.1.0-beta.31_x64-setup.exe` + `.sig`). The dry run printed exactly the
+directory (`Retinue_0.1.0-beta.31_x64-setup.exe` + `.sig`). The dry run printed exactly the
 `gh release create v…`, `gh release view channel-beta`, `gh release create channel-beta`,
 and `gh release upload channel-beta latest.json --clobber` commands, then the release URL,
 installer name and SHA-256 — and ran nothing and touched no key material.

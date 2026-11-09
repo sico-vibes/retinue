@@ -1,7 +1,7 @@
 // The chat background: the layer behind a conversation, and its group in Settings › Appearance.
 import { useRef, useState, type CSSProperties } from 'react'
 import { ImagePlus } from 'lucide-react'
-import { useThemeStyle } from '../blob/bitbots'
+import { useThemeStyle } from '../blob/retinue'
 import { CHAT_BACKGROUND_OPACITY_MAX, CHAT_BACKGROUND_OPACITY_MIN, chooseChatBackground, removeChatBackground, updateChatBackgroundPrefs, useChatBackgroundPrefs, useChatBackgroundUrl, type ChatBackgroundScope } from './chatBackgroundStore'
 import { CHAT_BACKGROUND_EFFECTS, type ChatBackgroundEffect } from './chatBackgroundEffects'
 import { SegmentedControl } from './SegmentedControl'

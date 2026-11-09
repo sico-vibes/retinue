@@ -77,7 +77,7 @@ pub fn parse_ready(line: &str) -> Result<ReadyLine, ReadyError> {
 mod tests {
     use super::*;
 
-    const VALID: &str = r#"{"type":"bloblexd.ready","protocolVersion":1,"address":"127.0.0.1:49152","capability":"secret-value"}"#;
+    const VALID: &str = r#"{"type":"retinued.ready","protocolVersion":1,"address":"127.0.0.1:49152","capability":"secret-value"}"#;
 
     #[test]
     fn a_valid_bootstrap_line_is_accepted() {
@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn a_line_that_is_not_json_is_refused() {
-        assert_eq!(parse_ready("starting bloblexd…"), Err(ReadyError::InvalidLine));
+        assert_eq!(parse_ready("starting retinued…"), Err(ReadyError::InvalidLine));
         assert_eq!(parse_ready(""), Err(ReadyError::InvalidLine));
     }
 }

@@ -1,20 +1,20 @@
 export type ThemeChoice = 'system' | 'dark' | 'light'
 export type TextSizeChoice = 'small' | 'default' | 'large' | 'larger'
 
-export type ThemeStyle = 'haze' | 'blobots'
-export const THEME_STYLES: readonly ThemeStyle[] = ['haze', 'blobots']
+export type ThemeStyle = 'haze' | 'stone'
+export const THEME_STYLES: readonly ThemeStyle[] = ['haze', 'stone']
 /** The look a new install starts in, and where every retired look lands. */
 export const DEFAULT_THEME_STYLE: ThemeStyle = 'haze'
 export const THEME_LOOKS: ReadonlyArray<{ id: ThemeStyle; label: string; family: 'primary' | 'alternative'; description: string }> = [
   { id: 'haze', label: 'Haze', family: 'primary', description: 'Smoky glass. Employees show a logo or a character.' },
-  { id: 'blobots', label: 'Stone', family: 'alternative', description: 'Soft, quiet and monochrome.' },
+  { id: 'stone', label: 'Stone', family: 'alternative', description: 'Soft, quiet and monochrome.' },
 ]
 
 export function isThemeStyle(value: unknown): value is ThemeStyle {
   return THEME_STYLES.includes(value as ThemeStyle)
 }
 
-/** A stored look, with retired ones (Frost `bitbots`, Pop, Dot, Legacy) moved to Haze. */
+/** A stored look, with retired ones (Frost `frost`, Pop, Dot, Legacy) moved to Haze. */
 export function normalizeThemeStyle(value: unknown): ThemeStyle {
   return isThemeStyle(value) ? value : DEFAULT_THEME_STYLE
 }

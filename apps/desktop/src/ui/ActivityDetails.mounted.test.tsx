@@ -57,7 +57,7 @@ describe('readable activity from stored turns', () => {
   })
 
   it('keeps the full command behind expand and groups steps in stable order', () => {
-    const command = 'cargo test --workspace --exclude bloblex-desktop --no-fail-fast\nWrite-Output "complete"'
+    const command = 'cargo test --workspace --exclude retinue-desktop --no-fail-fast\nWrite-Output "complete"'
     const items = [step('Read', { path: 'src/main.ts' }), step('Bash', { command }), step('Glob', { pattern: '*.ts' })]
     const group = groupConversationActivity(items)[0] as ActivityGroup
     const host = document.createElement('div')

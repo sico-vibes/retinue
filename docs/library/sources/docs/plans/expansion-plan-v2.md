@@ -1,10 +1,10 @@
-# Bitbots expansion plan v2: tasks, desktop wins, providers, trusted access and phone relay
+# Retinue expansion plan v2: tasks, desktop wins, providers, trusted access and phone relay
 
-> **What this is:** The approved plan for restarting Bitbots product expansion after the first Codex draft: the verdict on that draft, the features and their difficulty, the five phases with their gates, the 23 slices, and the rules every slice follows.
+> **What this is:** The approved plan for restarting Retinue product expansion after the first Codex draft: the verdict on that draft, the features and their difficulty, the five phases with their gates, the 23 slices, and the rules every slice follows.
 > **Status:** owner directive; approved 21 October 2026. Phase 1 (the tasks board, tree, timeline and task backend) is on `main` (22 October 2026, not released). Slices 1B and 1C and phases 2 to 5 are not started. Progress is recorded in [status.md](../history/expansion-v2/status.md) (written before the merge) and [implementation-status.md](../operations/implementation-status.md).
 > **Last updated:** 2026-10-22
 
-**Update 22 October 2026.** The looks are now two: Bitbots (the Frost look) and Blobots. Pop, Dot and Legacy were retired (21 October 2026; AGENTS.md, 22 October amendment), so the places below that say "five looks" now mean the two that remain. The phase 1 checks in those places have not been repeated against the two looks.
+**Update 22 October 2026.** The looks are now two: Retinue (the Frost look) and Stone. Pop, Dot and Legacy were retired (21 October 2026; AGENTS.md, 22 October amendment), so the places below that say "five looks" now mean the two that remain. The phase 1 checks in those places have not been repeated against the two looks.
 
 ## Context
 
@@ -111,7 +111,7 @@ Phase 1 holds the Tasks, board, tree and timeline slices (4) and the schedules s
 
 - The owner's reference images are the design source for every board, tree, timeline and connector screen.
 - The Director checks each screen against its reference image in every look the slice touches.
-- The five looks are Bitbots (the Frost look), Blobots, Legacy, Pop and Dot.
+- The five looks are Retinue (the Frost look), Stone, Legacy, Pop and Dot.
 - In the board UI, a lane is one bot's column. The delivery term "lane" (see the names table in [the style guide](../STYLE.md)) is unchanged.
 
 ## Work items

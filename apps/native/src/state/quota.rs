@@ -2,7 +2,7 @@
 //!
 //! Values come only from the daemon's quota snapshots. A percentage or a reset
 //! time the provider did not report stays absent; nothing is inferred, so the
-//! usage bar never shows a number Bitbots made up.
+//! usage bar never shows a number Retinue made up.
 
 use serde_json::Value;
 

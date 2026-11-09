@@ -65,7 +65,7 @@ vi.mock('../tauri', () => ({
   openProjectFolder: vi.fn(), stagePromptAttachment: vi.fn(),
   selectLocalFile: vi.fn(), inspectLocalFile: vi.fn(),
   openInEditor: vi.fn(), revealInExplorer: vi.fn(), resolveProjectFile: vi.fn(),
-  quitBloblex: vi.fn(), setCloseToTray: vi.fn(),
+  quitRetinue: vi.fn(), setCloseToTray: vi.fn(),
   updatesGetState: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesSetPreferences: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesCheck: async () => ({ status: 'up_to_date' as const, checkedAt: '2026-10-02T00:00:00.000Z' }),
@@ -90,7 +90,7 @@ vi.mock('../blob/BlobCanvas', async () => {
 })
 
 import { App } from './App'
-import { setThemeStyle } from '../blob/bitbots'
+import { setThemeStyle } from '../blob/retinue'
 import type { Agent, Runtime, Session, Snapshot } from '../types'
 
 const MESSAGE_COUNT = 1000
@@ -157,7 +157,7 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.stubGlobal('localStorage', { getItem: vi.fn(() => null), setItem: vi.fn(), removeItem: vi.fn(), clear: vi.fn() })
   for (const mock of Object.values(h)) if (typeof mock === 'function' && 'mockReset' in mock) (mock as ReturnType<typeof vi.fn>).mockReset()
-  setThemeStyle('blobots')
+  setThemeStyle('stone')
   h.fetchSnapshot.mockResolvedValue(snapshot)
   h.ensureDaemon.mockResolvedValue(undefined)
   h.startDaemonEventStream.mockResolvedValue(undefined)
@@ -195,7 +195,7 @@ afterEach(() => {
 })
 
 // About a minute of work, so it runs in its own CI step and `npm run perf:render`, not in `npm test`.
-describe.skipIf(!process.env.BITBOTS_PERF_RENDER)('a long conversation mounts inside the render budget', () => {
+describe.skipIf(!process.env.RETINUE_PERF_RENDER)('a long conversation mounts inside the render budget', () => {
   it(`renders a ${MESSAGE_COUNT.toLocaleString('en-US')}-message conversation in ${budgets.renderMs} ms or less`, async () => {
     expect(perfSession.messages).toHaveLength(MESSAGE_COUNT)
     const times: number[] = []

@@ -229,14 +229,14 @@ fn shared_client() -> Result<reqwest::Client, String> {
 /// install had 18 of them, 557 MB, after a few weeks of restarts.
 fn reusable_daemon_copy(runtime_dir: &Path, executable: &Path) -> Result<PathBuf, String> {
     let source = fs::metadata(executable)
-        .map_err(|error| format!("Could not read bitbotsd.exe: {error}"))?;
+        .map_err(|error| format!("Could not read retinued.exe: {error}"))?;
     let stamp = source
         .modified()
         .ok()
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|since| since.as_secs())
         .unwrap_or(0);
-    let copy = runtime_dir.join(format!("bitbotsd-{}-{stamp}.exe", source.len()));
+    let copy = runtime_dir.join(format!("retinued-{}-{stamp}.exe", source.len()));
     if fs::metadata(&copy).map(|existing| existing.len() == source.len()).unwrap_or(false) {
         return Ok(copy);
     }
@@ -245,7 +245,7 @@ fn reusable_daemon_copy(runtime_dir: &Path, executable: &Path) -> Result<PathBuf
     if let Ok(entries) = fs::read_dir(runtime_dir) {
         for path in entries.flatten().map(|entry| entry.path()) {
             let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("");
-            if name.starts_with("bitbotsd-") && (name.ends_with(".exe") || name.ends_with(".partial")) && path != copy {
+            if name.starts_with("retinued-") && (name.ends_with(".exe") || name.ends_with(".partial")) && path != copy {
                 let _ = fs::remove_file(&path);
             }
         }
@@ -253,7 +253,7 @@ fn reusable_daemon_copy(runtime_dir: &Path, executable: &Path) -> Result<PathBuf
     // Written under another name, then renamed: Windows can give a file its full
     // size before the bytes arrive, so an interrupted copy under the final name
     // would pass the size check above and fail every later start.
-    let partial = runtime_dir.join(format!("bitbotsd-{}.partial", std::process::id()));
+    let partial = runtime_dir.join(format!("retinued-{}.partial", std::process::id()));
     fs::copy(executable, &partial).map_err(|error| {
         format!("Could not copy the daemon to its private run location: {error}")
     })?;
@@ -279,7 +279,7 @@ fn connection(state: &State<'_, AppState>) -> Result<DaemonConnection, String> {
         .lock()
         .map_err(|_| "Daemon state is unavailable.".to_string())?;
     let Some(daemon) = process.as_mut() else {
-        return Err("The local Bitbots daemon is not running.".to_string());
+        return Err("The local Retinue daemon is not running.".to_string());
     };
     if daemon
         .child
@@ -291,7 +291,7 @@ fn connection(state: &State<'_, AppState>) -> Result<DaemonConnection, String> {
         // same (see `reusable_daemon_copy`), so a crash does not pay for a 39 MB
         // copy on the way back up.
         *process = None;
-        return Err("The local Bitbots daemon stopped unexpectedly.".to_string());
+        return Err("The local Retinue daemon stopped unexpectedly.".to_string());
     }
     Ok(process
         .as_ref()
@@ -303,26 +303,26 @@ fn connection(state: &State<'_, AppState>) -> Result<DaemonConnection, String> {
 fn candidate_daemon_paths(app: &AppHandle) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     if let Ok(path) = app.path().resolve(
-        "binaries/bitbotsd-x86_64-pc-windows-msvc.exe",
+        "binaries/retinued-x86_64-pc-windows-msvc.exe",
         tauri::path::BaseDirectory::Resource,
     ) {
         candidates.push(path);
     }
     if let Ok(path) = app
         .path()
-        .resolve("bitbotsd.exe", tauri::path::BaseDirectory::Resource)
+        .resolve("retinued.exe", tauri::path::BaseDirectory::Resource)
     {
         candidates.push(path);
     }
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    candidates.push(manifest.join("binaries/bitbotsd-x86_64-pc-windows-msvc.exe"));
+    candidates.push(manifest.join("binaries/retinued-x86_64-pc-windows-msvc.exe"));
     if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
         let target_dir = PathBuf::from(target_dir);
-        candidates.push(target_dir.join("debug/bitbotsd.exe"));
-        candidates.push(target_dir.join("release/bitbotsd.exe"));
+        candidates.push(target_dir.join("debug/retinued.exe"));
+        candidates.push(target_dir.join("release/retinued.exe"));
     }
-    candidates.push(manifest.join("../../../target/debug/bitbotsd.exe"));
-    candidates.push(manifest.join("../../../target/release/bitbotsd.exe"));
+    candidates.push(manifest.join("../../../target/debug/retinued.exe"));
+    candidates.push(manifest.join("../../../target/release/retinued.exe"));
     candidates
 }
 
@@ -354,14 +354,14 @@ fn start_daemon(app: &AppHandle, state: &AppState) -> Result<(), String> {
         .into_iter()
         .find(|path| path.is_file())
         .ok_or_else(|| {
-            "bitbotsd.exe is missing. Build the workspace daemon first (npm run build:daemon)."
+            "retinued.exe is missing. Build the workspace daemon first (npm run build:daemon)."
                 .to_string()
         })?;
 
     let mut runtime_dir = app
         .path()
         .app_local_data_dir()
-        .map_err(|error| format!("Could not resolve Bitbots local data directory: {error}"))?;
+        .map_err(|error| format!("Could not resolve Retinue local data directory: {error}"))?;
     runtime_dir.push("runtime-processes");
     fs::create_dir_all(&runtime_dir)
         .map_err(|error| format!("Could not prepare the local daemon folder: {error}"))?;
@@ -369,14 +369,14 @@ fn start_daemon(app: &AppHandle, state: &AppState) -> Result<(), String> {
 
     let mut command = Command::new(&executable_copy);
     command
-        .env("BLOBLEX_PARENT_PID", std::process::id().to_string())
+        .env("RETINUE_PARENT_PID", std::process::id().to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     // The hook bridge is installed beside the daemon, not beside its private run
     // copy, so the daemon is told where it is (Health check, outside sessions).
-    if let Some(bridge) = executable.parent().map(|folder| folder.join(if cfg!(windows) { "bitbots-hook.exe" } else { "bitbots-hook" })).filter(|path| path.is_file()) {
-        command.env("BITBOTS_HOOK_BRIDGE", bridge);
+    if let Some(bridge) = executable.parent().map(|folder| folder.join(if cfg!(windows) { "retinue-hook.exe" } else { "retinue-hook" })).filter(|path| path.is_file()) {
+        command.env("RETINUE_HOOK_BRIDGE", bridge);
     }
     // When the packaged remote web app is installed beside the shell, hand its
     // folder to the daemon so the remote gateway can serve it (WP6c builds it).
@@ -385,14 +385,14 @@ fn start_daemon(app: &AppHandle, state: &AppState) -> Result<(), String> {
         .resolve("remote-web", tauri::path::BaseDirectory::Resource)
     {
         if remote_web.is_dir() {
-            command.env("BITBOTS_REMOTE_WEB_DIR", &remote_web);
+            command.env("RETINUE_REMOTE_WEB_DIR", &remote_web);
         }
     }
     #[cfg(windows)]
     command.creation_flags(0x08000000); // CREATE_NO_WINDOW
     let mut child = command.spawn().map_err(|error| {
         let _ = fs::remove_file(&executable_copy);
-        format!("Could not start bitbotsd.exe: {error}")
+        format!("Could not start retinued.exe: {error}")
     })?;
 
     let stdout = child
@@ -549,8 +549,8 @@ fn set_approval_badge(app: AppHandle, window: tauri::WebviewWindow, count: u32) 
     if window.label() != "main" { return Err("Only the main window can update the approval badge.".into()); }
     #[cfg(target_os = "windows")]
     window.set_overlay_icon(if count == 0 { None } else { Some(approval_overlay(count)) }).map_err(|_| "Could not update the taskbar badge.".to_string())?;
-    if let Some(tray) = app.tray_by_id("bloblex-tray") {
-        let tooltip = if count == 0 { "Bitbots".to_owned() } else { format!("Bitbots: {count} waiting") };
+    if let Some(tray) = app.tray_by_id("retinue-tray") {
+        let tooltip = if count == 0 { "Retinue".to_owned() } else { format!("Retinue: {count} waiting") };
         tray.set_tooltip(Some(tooltip)).map_err(|_| "Could not update the tray tooltip.".to_string())?;
     }
     Ok(())
@@ -600,8 +600,8 @@ async fn daemon_rpc(
 fn retry_startup_read(method: &str, error: &str) -> bool {
     matches!(method, "app.snapshot" | "runtime.refresh" | "runtime.models" | "runtime.capabilities" | "usage.summary" | "settings.get" | "message.image")
         && (error.starts_with("Daemon request failed:")
-            || error == "The local Bitbots daemon is not running."
-            || error == "The local Bitbots daemon stopped unexpectedly.")
+            || error == "The local Retinue daemon is not running."
+            || error == "The local Retinue daemon stopped unexpectedly.")
 }
 
 #[cfg(test)]
@@ -610,13 +610,13 @@ mod reusable_daemon_copy_tests {
 
     #[test]
     fn a_copy_is_reused_for_one_build_and_older_ones_are_removed() {
-        let root = std::env::temp_dir().join(format!("bitbots-copy-{}", Uuid::new_v4()));
+        let root = std::env::temp_dir().join(format!("retinue-copy-{}", Uuid::new_v4()));
         let runtime_dir = root.join("runtime");
         fs::create_dir_all(&runtime_dir).unwrap();
-        let source = root.join("bitbotsd.exe");
+        let source = root.join("retinued.exe");
         fs::write(&source, b"first build").unwrap();
-        let older = runtime_dir.join("bitbotsd-1-1.exe");
-        let interrupted = runtime_dir.join("bitbotsd-99.partial");
+        let older = runtime_dir.join("retinued-1-1.exe");
+        let interrupted = runtime_dir.join("retinued-99.partial");
         let unrelated = runtime_dir.join("other.exe");
         for path in [&older, &interrupted, &unrelated] { fs::write(path, b"x").unwrap(); }
 
@@ -690,8 +690,8 @@ fn ensure_daemon(app: AppHandle, state: State<'_, AppState>) -> Result<(), Strin
 /// Why a start from the window must wait, if it must.
 fn supervisor_blocks_start(payload: &DaemonSupervisor) -> Option<&'static str> {
     match payload.state.as_str() {
-        "gave_up" => Some("The Bitbots service keeps stopping, so it was not restarted again. Use Try again."),
-        "restarting" => Some("The Bitbots service is restarting."),
+        "gave_up" => Some("The Retinue service keeps stopping, so it was not restarted again. Use Try again."),
+        "restarting" => Some("The Retinue service is restarting."),
         _ => None,
     }
 }
@@ -1166,7 +1166,7 @@ fn read_blob_import(state: State<'_, AppState>, selection_token: String) -> Resu
     let path = take_selected_path(&state, &selection_token, SelectedFilePurpose::Import)?;
     // Wave 13: a bot exported with its notes and schedules is a backup file; the
     // backup import shows what it holds before anything changes.
-    if path.file_name().is_some_and(|name| name.to_string_lossy().to_ascii_lowercase().ends_with(".bitbots-backup.json")) {
+    if path.file_name().is_some_and(|name| name.to_string_lossy().to_ascii_lowercase().ends_with(".retinue-backup.json")) {
         return Err(FULL_BOT_FILE.to_string());
     }
     let metadata = fs::metadata(&path)
@@ -1182,7 +1182,7 @@ fn read_blob_import(state: State<'_, AppState>, selection_token: String) -> Resu
     String::from_utf8(bytes).map_err(|_| "This blob file is not UTF-8 text.".to_string())
 }
 
-/// Largest `.bitbots-backup.json` the native reader accepts.
+/// Largest `.retinue-backup.json` the native reader accepts.
 const MAX_BACKUP_BYTES: u64 = 64 * 1024 * 1024;
 
 #[tauri::command]
@@ -1191,15 +1191,15 @@ fn select_backup_export_path(app: AppHandle, state: State<'_, AppState>, suggest
     // A bot template suggests the bot's name; only plain file-name characters are kept.
     let template_name = suggested_name.map(|name| name.chars().filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_')).take(60).collect::<String>().trim().to_owned()).filter(|name| !name.is_empty());
     let suggested_name = match template_name {
-        Some(name) => format!("{name}.bitbots-backup.json"),
-        None => format!("bitbots-backup-{}.bitbots-backup.json", chrono::Utc::now().format("%Y-%m-%d")),
+        Some(name) => format!("{name}.retinue-backup.json"),
+        None => format!("retinue-backup-{}.retinue-backup.json", chrono::Utc::now().format("%Y-%m-%d")),
     };
     let Some(selected) = app
         .dialog()
         .file()
-        .set_title("Save a Bitbots backup")
+        .set_title("Save a Retinue backup")
         .set_file_name(suggested_name)
-        .add_filter("Bitbots backup", &["json"])
+        .add_filter("Retinue backup", &["json"])
         .blocking_save_file()
     else {
         return Ok(None);
@@ -1214,8 +1214,8 @@ fn select_backup_import_path(app: AppHandle, state: State<'_, AppState>) -> Resu
     let Some(selected) = app
         .dialog()
         .file()
-        .set_title("Choose a Bitbots backup")
-        .add_filter("Bitbots backup", &["json"])
+        .set_title("Choose a Retinue backup")
+        .add_filter("Retinue backup", &["json"])
         .blocking_pick_file()
     else {
         return Ok(None);
@@ -1224,20 +1224,20 @@ fn select_backup_import_path(app: AppHandle, state: State<'_, AppState>) -> Resu
     Ok(Some(remember_selected_path(&state, path, SelectedFilePurpose::BackupImport)?))
 }
 
-/// The Bitbots data folder the daemon uses: `%LOCALAPPDATA%\Bitbots` (or the
-/// parent of `BLOBLEX_DB_PATH` when a test or a portable install overrides it).
-fn bitbots_data_dir() -> Option<PathBuf> {
-    std::env::var_os("BLOBLEX_DB_PATH")
+/// The Retinue data folder the daemon uses: `%LOCALAPPDATA%\Retinue` (or the
+/// parent of `RETINUE_DB_PATH` when a test or a portable install overrides it).
+fn retinue_data_dir() -> Option<PathBuf> {
+    std::env::var_os("RETINUE_DB_PATH")
         .map(PathBuf::from)
         .and_then(|path| path.parent().map(Path::to_path_buf))
-        .or_else(|| std::env::var_os("LOCALAPPDATA").map(|local| PathBuf::from(local).join("Bitbots")))
+        .or_else(|| std::env::var_os("LOCALAPPDATA").map(|local| PathBuf::from(local).join("Retinue")))
 }
 
 /// FIX39 P12: the shell's own log file, beside the daemon's, under `logs/`.
 /// Only fixed messages and OS error text are written here, never user text,
 /// credentials, tokens or file contents.
 fn log_shell(level: &str, message: &str) {
-    let Some(dir) = bitbots_data_dir().map(|base| base.join("logs")) else { return };
+    let Some(dir) = retinue_data_dir().map(|base| base.join("logs")) else { return };
     if fs::create_dir_all(&dir).is_err() {
         return;
     }
@@ -1400,7 +1400,7 @@ async fn backup_export_write(state: State<'_, AppState>, selection_token: String
     }))
 }
 
-/// Reads a chosen `.bitbots-backup.json` (cap 64 MB, UTF-8, JSON) and sends it
+/// Reads a chosen `.retinue-backup.json` (cap 64 MB, UTF-8, JSON) and sends it
 /// to the daemon for validation. The file text never passes through the
 /// renderer; only the preview crosses back.
 #[tauri::command]
@@ -1414,7 +1414,7 @@ async fn backup_import_preview(state: State<'_, AppState>, selection_token: Stri
     if bytes.len() as u64 > MAX_BACKUP_BYTES {
         return Err("This backup file is too large.".to_string());
     }
-    let document: Value = serde_json::from_slice(&bytes).map_err(|_| "This is not a Bitbots backup file.".to_string())?;
+    let document: Value = serde_json::from_slice(&bytes).map_err(|_| "This is not a Retinue backup file.".to_string())?;
     let conn = connection(&state)?;
     rpc_call(&conn, "backup.preview", json!({ "document": document })).await
 }
@@ -1424,7 +1424,7 @@ async fn backup_import_preview(state: State<'_, AppState>, selection_token: Stri
 #[tauri::command]
 fn select_diagnostics_export_path(app: AppHandle, state: State<'_, AppState>) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
-    let suggested_name = format!("bitbots-diagnostics-{}.zip", chrono::Utc::now().format("%Y-%m-%d"));
+    let suggested_name = format!("retinue-diagnostics-{}.zip", chrono::Utc::now().format("%Y-%m-%d"));
     let Some(selected) = app
         .dialog()
         .file()
@@ -1507,7 +1507,7 @@ async fn save_generated_image(app: AppHandle, state: State<'_, AppState>, sessio
 const MAX_STAGED_ATTACHMENT_BYTES: usize = 10 * 1024 * 1024;
 const STAGED_ATTACHMENT_RETENTION: std::time::Duration = std::time::Duration::from_secs(30 * 24 * 60 * 60);
 
-/// Writes a pasted or picked image to Bitbots' local attachment folder so the
+/// Writes a pasted or picked image to Retinue's local attachment folder so the
 /// daemon can hand the provider a file path. The body is the raw image bytes;
 /// the extension comes from the file signature, not from the caller.
 #[tauri::command]
@@ -1572,7 +1572,7 @@ fn inspect_local_file(path: String) -> Result<LocalFileInspection, String> {
     }
     // Open only to verify access; file contents are never read here.
     let _access = fs::File::open(&canonical).map_err(|_| {
-        "Bitbots cannot read this file path with the current Windows account.".to_string()
+        "Retinue cannot read this file path with the current Windows account.".to_string()
     })?;
     let metadata =
         fs::metadata(&canonical).map_err(|_| "File metadata is unavailable.".to_string())?;
@@ -1734,7 +1734,7 @@ fn show_main_window(app: AppHandle, session_id: Option<String>) -> Result<(), St
 #[tauri::command]
 fn show_main_settings(app: AppHandle, session_id: Option<String>, page: Option<String>) -> Result<(), String> {
     show_main_window(app.clone(), session_id)?;
-    app.emit("bloblex-open-settings", page)
+    app.emit("retinue-open-settings", page)
         .map_err(|error| error.to_string())
 }
 
@@ -1786,7 +1786,7 @@ fn runtime_terminal_name(provider: &str) -> Result<&'static str, String> {
 /// user types `/login`, so it gets a one-line hint first.
 fn provider_login_script(provider: &str) -> Result<&'static str, String> {
     match provider {
-        "claude" => Ok("echo 'Bitbots: at the Claude Code prompt type /login, finish signing in, then retry here.'; claude"),
+        "claude" => Ok("echo 'Retinue: at the Claude Code prompt type /login, finish signing in, then retry here.'; claude"),
         "codex" => Ok("codex login"),
         "opencode" => Ok("opencode auth login"),
         _ => Err(format!("Unknown coding agent: {provider}")),
@@ -1843,7 +1843,7 @@ fn terminal_launch(provider: &str, action: &str, npm_available: bool, wt_availab
         "install" => provider_install_script(provider, npm_available)?,
         other => return Err(format!("Unknown terminal action: {other}")),
     };
-    let title = format!("Bitbots: {name} sign-in");
+    let title = format!("Retinue: {name} sign-in");
     if wt_available {
         // Windows Terminal parses its own argument list before PowerShell sees
         // the script, and an unescaped `;` there is wt's command separator: it
@@ -1911,11 +1911,11 @@ fn toggle_companion(app: AppHandle) -> Result<bool, String> {
         .ok_or_else(|| "The companion window is unavailable.".to_string())?;
     if window.is_visible().unwrap_or(false) {
         window.hide().map_err(|error| error.to_string())?;
-        let _ = app.emit("bloblex-companion-visible-changed", false);
+        let _ = app.emit("retinue-companion-visible-changed", false);
         Ok(false)
     } else {
         window.show().map_err(|error| error.to_string())?;
-        let _ = app.emit("bloblex-companion-visible-changed", true);
+        let _ = app.emit("retinue-companion-visible-changed", true);
         Ok(true)
     }
 }
@@ -2235,7 +2235,7 @@ fn set_companion_mode(
             if let Err(error) =
                 window.set_size(tauri::PhysicalSize::new(width as u32, height as u32))
             {
-                eprintln!("Bitbots companion resize: {error}");
+                eprintln!("Retinue companion resize: {error}");
                 log_shell("warn", &format!("companion resize failed: {error}"));
                 break;
             }
@@ -2245,7 +2245,7 @@ fn set_companion_mode(
             );
             let next_position=clamp_companion_position(next_position,width,height,&work_areas,initial_center);
             if let Err(error) = window.set_position(next_position) {
-                eprintln!("Bitbots companion anchor: {error}");
+                eprintln!("Retinue companion anchor: {error}");
                 log_shell("warn", &format!("companion anchor failed: {error}"));
                 break;
             }
@@ -2548,7 +2548,7 @@ async fn set_companion_visible(
     } else {
         window.hide().map_err(|error| error.to_string())?;
     }
-    let _ = app.emit("bloblex-companion-visible-changed", visible);
+    let _ = app.emit("retinue-companion-visible-changed", visible);
     Ok(())
 }
 
@@ -2640,7 +2640,7 @@ fn set_companion_monitor(app: AppHandle, monitor_name: String) -> Result<(), Str
 }
 
 #[tauri::command]
-fn quit_bloblex(app: AppHandle, state: State<'_, AppState>) {
+fn quit_retinue(app: AppHandle, state: State<'_, AppState>) {
     let conn = connection(&state).ok();
     let app = app.clone();
     let daemon = Arc::clone(&state.daemon);
@@ -2963,7 +2963,7 @@ fn make_companion(app: &AppHandle, start_at_last_position: bool) -> tauri::Resul
         "companion",
         WebviewUrl::App("index.html?companion=1".into()),
     )
-    .title("Bitbots Companion")
+    .title("Retinue Companion")
     .inner_size(344.0, 62.0)
     .position(400.0, 400.0)
     .decorations(false)
@@ -3030,7 +3030,7 @@ fn make_companion(app: &AppHandle, start_at_last_position: bool) -> tauri::Resul
             let _ = position_write.send(PositionWrite::Flush);
             api.prevent_close();
             let _ = window_for_event.hide();
-            let _ = app_handle.emit("bloblex-companion-visible-changed", false);
+            let _ = app_handle.emit("retinue-companion-visible-changed", false);
         }
     });
     Ok(window)
@@ -3078,7 +3078,7 @@ fn make_dictation(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         "dictation",
         WebviewUrl::App("index.html?dictation=1".into()),
     )
-    .title("Bitbots Dictation")
+    .title("Retinue Dictation")
     .inner_size(DICTATION_COMPACT.0, DICTATION_COMPACT.1)
     .position(500.0, 500.0)
     .decorations(false)
@@ -3118,7 +3118,7 @@ fn make_dictation(app: &AppHandle) -> tauri::Result<WebviewWindow> {
 }
 
 fn build_tray_menu(app: &AppHandle, sessions: &[Value]) -> tauri::Result<Menu<tauri::Wry>> {
-    let open = MenuItem::with_id(app, "open", "Open Bitbots", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "Open Retinue", true, None::<&str>)?;
     let companion = MenuItem::with_id(
         app,
         "companion",
@@ -3179,7 +3179,7 @@ fn build_tray_menu(app: &AppHandle, sessions: &[Value]) -> tauri::Result<Menu<ta
     )?;
     let pause_all = MenuItem::with_id(app, "pause-all", "Pause all agents…", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Bitbots", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit Retinue", true, None::<&str>)?;
     Menu::with_items(
         app,
         &[
@@ -3215,27 +3215,27 @@ fn refresh_tray_sessions(app: AppHandle) {
         let sessions = match load_tray_sessions(&app) {
             Ok(sessions) => sessions,
             Err(error) => {
-                let _ = app.emit("bloblex-tray-notice", error);
+                let _ = app.emit("retinue-tray-notice", error);
                 return;
             }
         };
         let app_for_menu = app.clone();
         let _ = app.run_on_main_thread(move || {
-            let Some(tray) = app_for_menu.tray_by_id("bloblex-tray") else {
+            let Some(tray) = app_for_menu.tray_by_id("retinue-tray") else {
                 return;
             };
             match build_tray_menu(&app_for_menu, &sessions) {
                 Ok(menu) => {
                     if let Err(error) = tray.set_menu(Some(menu)) {
                         let _ = app_for_menu.emit(
-                            "bloblex-tray-notice",
+                            "retinue-tray-notice",
                             format!("Could not update active sessions: {error}"),
                         );
                     }
                 }
                 Err(error) => {
                     let _ = app_for_menu.emit(
-                        "bloblex-tray-notice",
+                        "retinue-tray-notice",
                         format!("Could not update active sessions: {error}"),
                     );
                 }
@@ -3257,8 +3257,8 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         .to_rgba8();
     let (width, height) = decoded.dimensions();
     let icon = tauri::image::Image::new_owned(decoded.into_raw(), width, height);
-    TrayIconBuilder::with_id("bloblex-tray")
-        .tooltip("Bitbots")
+    TrayIconBuilder::with_id("retinue-tray")
+        .tooltip("Retinue")
         .icon(icon)
         .menu(&menu)
         .on_menu_event(|app, event| {
@@ -3293,14 +3293,14 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "refresh-sessions" => refresh_tray_sessions(app.clone()),
                 "pause-all" => {
                     let _ = show_main_window(app.clone(), None);
-                    let _ = app.emit("bloblex-pause-all-requested", ());
+                    let _ = app.emit("retinue-pause-all-requested", ());
                 }
                 "settings" => {
                     let _ = show_main_settings(app.clone(), None, None);
                 }
                 "quit" => {
                     if let Some(state) = app.try_state::<AppState>() {
-                        quit_bloblex(app.clone(), state);
+                        quit_retinue(app.clone(), state);
                     }
                 }
                 _ => {}
@@ -3324,7 +3324,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 pub fn run() {
-    // Move any Bloblex-era data to the Bitbots identity *before* the Tauri
+    // Move any Retinue-era data to the Retinue identity *before* the Tauri
     // builder creates the WebView2 profile under the new identifier.
     migrate::migrate_before_start();
     tauri::Builder::default()
@@ -3348,7 +3348,7 @@ pub fn run() {
             } else if shortcut == &dictation {
                 // One window dictates: the companion while it is on screen, else the main window.
                 let companion_shown = app.get_webview_window("companion").and_then(|window| window.is_visible().ok()).unwrap_or(false);
-                let _ = app.emit_to(if companion_shown { "companion" } else { "main" }, "bloblex-dictation-toggle", ());
+                let _ = app.emit_to(if companion_shown { "companion" } else { "main" }, "retinue-dictation-toggle", ());
             }
         }).build())
         .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, None))
@@ -3379,7 +3379,7 @@ pub fn run() {
             let mut hotkey_enabled = true;
             if let Some(state) = app.try_state::<AppState>() {
                 if let Err(error) = start_daemon(app.handle(), &state) {
-                    eprintln!("Bitbots daemon startup: {error}");
+                    eprintln!("Retinue daemon startup: {error}");
                     log_shell("warn", &format!("daemon startup failed: {error}"));
                 }
                 // Wave 12, part E: a crash now restarts the daemon without waiting
@@ -3408,7 +3408,7 @@ pub fn run() {
                 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut};
                 let shortcut = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyB);
                 if let Err(error) = app.global_shortcut().register(shortcut) {
-                    eprintln!("Bitbots companion shortcut unavailable: {error}");
+                    eprintln!("Retinue companion shortcut unavailable: {error}");
                     log_shell("warn", &format!("companion shortcut unavailable: {error}"));
                 }
             }
@@ -3417,7 +3417,7 @@ pub fn run() {
             // while dictation is off.
             let companion = make_companion(app.handle(), start_at_last_position)?;
             let _ = companion.hide();
-            let _ = app.emit("bloblex-companion-visible-changed", false);
+            let _ = app.emit("retinue-companion-visible-changed", false);
             let dictation = make_dictation(app.handle())?;
             let _ = dictation.hide();
             updates::start_background_checker(app.handle());
@@ -3433,7 +3433,7 @@ pub fn run() {
                             if state.close_to_tray.load(Ordering::SeqCst) {
                                 let _ = main_for_event.hide();
                             } else {
-                                quit_bloblex(app_for_event.clone(), state);
+                                quit_retinue(app_for_event.clone(), state);
                             }
                         } else {
                             let _ = main_for_event.hide();
@@ -3514,7 +3514,7 @@ pub fn run() {
             current_companion_monitor,
             set_companion_monitor,
             refresh_tray_menu,
-            quit_bloblex,
+            quit_retinue,
             speech::speech_models,
             speech::speech_model_status,
             speech::speech_cloud_status,
@@ -3544,7 +3544,7 @@ pub fn run() {
             pty::terminal_list
         ])
         .build(tauri::generate_context!())
-        .expect("Bitbots desktop application failed to start")
+        .expect("Retinue desktop application failed to start")
         .run(|app, event| {
             if let RunEvent::Exit = event {
                 if let Some(window) = app.get_webview_window("companion") {
@@ -3629,7 +3629,7 @@ mod markdown_export_tests {
         assert!(take_selected_path(&state, &diagnostics, SelectedFilePurpose::DiagnosticsExport).is_err());
 
         // The bytes land at the chosen path through a temp file and rename.
-        let dir = std::env::temp_dir().join(format!("bitbots-diagnostics-write-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("retinue-diagnostics-write-{}", uuid::Uuid::new_v4()));
         let path = dir.join("nested/diagnostics.zip");
         write_bytes_file(&path, b"PK\x03\x04diagnostics", "diagnostics file").unwrap();
         assert_eq!(fs::read(&path).unwrap(), b"PK\x03\x04diagnostics");
@@ -3670,9 +3670,9 @@ mod markdown_export_tests {
 
     #[test]
     fn backup_writes_through_a_temp_file_and_rename() {
-        let dir = std::env::temp_dir().join(format!("bitbots-backup-write-{}", uuid::Uuid::new_v4()));
+        let dir = std::env::temp_dir().join(format!("retinue-backup-write-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
-        let target = dir.join("backup.bitbots-backup.json");
+        let target = dir.join("backup.retinue-backup.json");
         write_backup_file(&target, b"{\"ok\":true}").unwrap();
         assert_eq!(std::fs::read(&target).unwrap(), b"{\"ok\":true}");
         // No temp file is left beside the target.
@@ -3715,21 +3715,21 @@ mod runtime_terminal_tests {
             vec![
                 "new-tab",
                 "--title",
-                "Bitbots: Claude Code sign-in",
+                "Retinue: Claude Code sign-in",
                 "powershell",
                 "-NoExit",
                 "-Command",
                 // wt's own `;` separator is escaped for wt, not for PowerShell.
-                "echo 'Bitbots: at the Claude Code prompt type /login, finish signing in, then retry here.'\\; claude",
+                "echo 'Retinue: at the Claude Code prompt type /login, finish signing in, then retry here.'\\; claude",
             ]
         );
         assert_eq!(
             argv("codex", "login", true, true),
-            vec!["new-tab", "--title", "Bitbots: Codex sign-in", "powershell", "-NoExit", "-Command", "codex login"]
+            vec!["new-tab", "--title", "Retinue: Codex sign-in", "powershell", "-NoExit", "-Command", "codex login"]
         );
         assert_eq!(
             argv("opencode", "login", true, true),
-            vec!["new-tab", "--title", "Bitbots: OpenCode sign-in", "powershell", "-NoExit", "-Command", "opencode auth login"]
+            vec!["new-tab", "--title", "Retinue: OpenCode sign-in", "powershell", "-NoExit", "-Command", "opencode auth login"]
         );
     }
 
@@ -3756,7 +3756,7 @@ mod runtime_terminal_tests {
     fn install_argv_chains_the_login_command() {
         assert_eq!(
             argv("claude", "install", true, true)[6],
-            "irm https://claude.ai/install.ps1 | iex\\; echo 'Bitbots: at the Claude Code prompt type /login, finish signing in, then retry here.'\\; claude"
+            "irm https://claude.ai/install.ps1 | iex\\; echo 'Retinue: at the Claude Code prompt type /login, finish signing in, then retry here.'\\; claude"
         );
         assert_eq!(
             argv("codex", "install", true, true)[6],

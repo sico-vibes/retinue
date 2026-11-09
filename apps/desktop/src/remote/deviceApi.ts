@@ -37,7 +37,7 @@ export function codeFromHash(hash: string): string {
   return match ? match[1].toUpperCase() : ''
 }
 
-const PREVIEW_KEY = 'bitbots.remote.preview.device'
+const PREVIEW_KEY = 'retinue.remote.preview.device'
 
 /** The preview's password: any username works, this is the password that does not. */
 export const PREVIEW_PASSPHRASE = 'preview-passphrase'

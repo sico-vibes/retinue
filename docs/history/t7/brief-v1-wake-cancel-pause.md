@@ -4,14 +4,14 @@ Worktree `D:\v1` (branch `lane/v1`), cut from `main` with the owner's dirty base
 
 ## Hard rules (owner, 27 October 2026; they override the repo gates)
 
-- **No tests of any kind.** No `cargo test`, `cargo check --tests`, `cargo clippy --all-targets`, `npm test`, vitest, app, browser, probe or screenshot. Do not add, edit or delete any test or `#[cfg(test)]` code. Allowed check: `cargo check -p bloblex-daemon -p bloblex-storage` (production targets). List in the report the existing tests (names only) that reference anything you changed.
+- **No tests of any kind.** No `cargo test`, `cargo check --tests`, `cargo clippy --all-targets`, `npm test`, vitest, app, browser, probe or screenshot. Do not add, edit or delete any test or `#[cfg(test)]` code. Allowed check: `cargo check -p retinue-daemon -p retinue-storage` (production targets). List in the report the existing tests (names only) that reference anything you changed.
 - **No git writes** (commit, add, stash, reset, checkout, rebase, push, branch). Touch no other worktree and no running process. Never print secrets or message content; events, logs and stored wake data carry ids, counts and short titles only.
 - Work log `target/lane/worklog.md` (update as you go); final report `target/lane/report.md`. Keep tool output small. Use this worktree's own `target`. `$env:RUST_MIN_STACK='33554432'`.
 - Daemon owns decisions; no fabricated success; no claim of exactly-once anywhere (say "at most once per id, durable, idempotent on replay" and only what the code proves). Approval rules unchanged: the Manager can never answer or approve. If a case is ambiguous and cannot be made safe, mark it **unknown** and do not duplicate.
 
 ## Files you own
 
-`crates/bloblex-daemon/src/delegations.rs`, `questions.rs`, `team.rs`, `proposals.rs`; in `main.rs` only `cancel_session_turn` (and a new sibling), the `validate_setting` arm for the new setting, and nothing else; in `crates/bloblex-storage/src/lib.rs` only the delegation, question and `permission_requests` functions and schema, plus the setting validation entry; `crates/bloblex-daemon/src/backup.rs` only for `SETTING_ALLOWLIST` (a fixed-size array: change its length constant too). **Do not edit** `queue.rs`, `retry.rs`, `session_prompt_impl`, `update_session_model`, adapters, `apps/`, `docs/`, `.claude/`.
+`crates/retinue-daemon/src/delegations.rs`, `questions.rs`, `team.rs`, `proposals.rs`; in `main.rs` only `cancel_session_turn` (and a new sibling), the `validate_setting` arm for the new setting, and nothing else; in `crates/retinue-storage/src/lib.rs` only the delegation, question and `permission_requests` functions and schema, plus the setting validation entry; `crates/retinue-daemon/src/backup.rs` only for `SETTING_ALLOWLIST` (a fixed-size array: change its length constant too). **Do not edit** `queue.rs`, `retry.rs`, `session_prompt_impl`, `update_session_model`, adapters, `apps/`, `docs/`, `.claude/`.
 
 ## Item 1 (first priority): the child-question wake to the Manager survives a restart
 
@@ -49,5 +49,5 @@ A global setting `delegation.paused` (boolean, default false). While true, a **n
 
 ## Acceptance and report
 
-- `cargo check -p bloblex-daemon -p bloblex-storage` clean, no new warnings.
+- `cargo check -p retinue-daemon -p retinue-storage` clean, no new warnings.
 - `target/lane/report.md`: per item evidence (`path:line`), the exact new contract (columns, states, events, error texts), an interleaving analysis for every concurrency point ("A does X while B does Y, therefore ..."), every decision this brief left open, **a list of cases left unknown or unverifiable, stated exactly**, existing tests that reference changed code (names only), last 15 lines of each `cargo check`. State nothing you did not read in code.

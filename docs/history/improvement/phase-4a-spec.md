@@ -5,7 +5,7 @@
 > **Last updated:** 2026-10-12
 
 Owner: OpenCode lane (backend only). Reviewer: Director. Parent plan: `docs/plans/improvement-plan.md` Phase 4. Builds on Phases 1-3 (turn-end path, durable queue and due loop, retry). The desktop UI is built by the Director against this contract; do not touch `apps/`.
-Scope: `crates/bloblex-storage`, `crates/bloblex-daemon` (new `src/automations.rs`; `main.rs`, `team.rs`, `queue.rs` as needed), `docs/`. One new dependency is allowed: a cron library with IANA time zone support (prefer `croner` with its chrono-tz support; `chrono-tz` is already a workspace dependency). If none builds offline, implement a minimal 5-field cron parser yourself (lists, ranges, steps, names optional) and say so.
+Scope: `crates/retinue-storage`, `crates/retinue-daemon` (new `src/automations.rs`; `main.rs`, `team.rs`, `queue.rs` as needed), `docs/`. One new dependency is allowed: a cron library with IANA time zone support (prefer `croner` with its chrono-tz support; `chrono-tz` is already a workspace dependency). If none builds offline, implement a minimal 5-field cron parser yourself (lists, ranges, steps, names optional) and say so.
 
 ## Rules
 - Work only in this worktree. **Never run `git commit`, `git push`, `git checkout`, `git stash`.** Leave changes uncommitted. Attach/read only files inside this worktree.
@@ -72,7 +72,7 @@ Storage CRUD and constraints; cron next-occurrence including DST spring-forward 
 
 ## Gates (run and report real output)
 ```
-CARGO_TARGET_DIR=D:/b-p1 RUST_MIN_STACK=33554432 cargo test -p bloblex-storage -p bloblex-daemon -p bloblex-agent-core -p bloblex-adapter-claude -p bloblex-adapter-codex -p bloblex-adapter-acp
+CARGO_TARGET_DIR=D:/b-p1 RUST_MIN_STACK=33554432 cargo test -p retinue-storage -p retinue-daemon -p retinue-agent-core -p retinue-adapter-claude -p retinue-adapter-codex -p retinue-adapter-acp
 ```
 
 ## Final report (plain text, last message)

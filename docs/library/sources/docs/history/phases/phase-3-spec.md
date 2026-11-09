@@ -8,7 +8,7 @@ Original status line, kept as written: historical spec. Files listed in the Phas
 
 This is the implementation contract for Phase 3 of [docs/plans/e2e-plan-v2.md](../../plans/e2e-plan-v2.md). Phase 3 replaces the runtime-per-row sidebar with one row per blob, and adds the blob editor. It depends only on Phase 2a, as specified in [docs/history/phases/phase-2a-spec.md](phase-2a-spec.md). Execution fields may be displayed. They must not be described as working.
 
-Line citations are the source this spec was written against. Phase 2a may land beside this document; where this spec names a type, RPC, or event, implement that shape from docs/history/phases/phase-2a-spec.md rather than from an older TypeScript file. Do not edit Rust. Do not copy another product's layout, labels, or assets ([docs/plans/e2e-plan-v2.md](../../plans/e2e-plan-v2.md) line 13). The shell to extend is the one already in the repo: Midnight chat chrome in [apps/desktop/src/ui/shell.css](../../../apps/desktop/src/ui/shell.css) lines 1–4, with Bitbots' own circular faces.
+Line citations are the source this spec was written against. Phase 2a may land beside this document; where this spec names a type, RPC, or event, implement that shape from docs/history/phases/phase-2a-spec.md rather than from an older TypeScript file. Do not edit Rust. Do not copy another product's layout, labels, or assets ([docs/plans/e2e-plan-v2.md](../../plans/e2e-plan-v2.md) line 13). The shell to extend is the one already in the repo: Midnight chat chrome in [apps/desktop/src/ui/shell.css](../../../apps/desktop/src/ui/shell.css) lines 1–4, with Retinue's own circular faces.
 
 ## 1. Scope and non-scope
 
@@ -137,7 +137,7 @@ One draft is shared by Overview and Settings. The header holds Back, the agent n
 - `BlobCanvas` at 96px, draft colour, mood from `deriveCompanionStatus` for the selected runtime and this agent's selected session (create mode: `idle` when connected, `offline` when not).
 - Name and description. Empty description renders the muted sentence "No description".
 - Runtime: provider label, status dot, status text.
-- Model: the label "Model" and the value "CLI default" when `model` is null, otherwise the stored string, plus the sentence "Bitbots does not send a model until a later update." Do not call this the applied snapshot. Phase 2a stores no execution snapshot ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 85).
+- Model: the label "Model" and the value "CLI default" when `model` is null, otherwise the stored string, plus the sentence "Retinue does not send a model until a later update." Do not call this the applied snapshot. Phase 2a stores no execution snapshot ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 85).
 - Status: the `deriveCompanionStatus` label.
 - Quick usage: the label "Usage" and the value "Not available yet." Do not read `usage.summary`, do not show token counts, and do not show `$0` ([docs/design/product.md](../../design/product.md) line 32).
 - The 12-swatch grid from section 4, no shapes ([docs/plans/e2e-plan-v2.md](../../plans/e2e-plan-v2.md) line 164). Choosing a swatch updates the draft and marks it dirty. It does not save by itself. A swatch is a profile edit, and Phase 3 has one save path, so Overview and Settings cannot diverge.
@@ -161,7 +161,7 @@ A single card: heading "Usage", body "Usage for this blob is not available yet."
 | Colour | `SwatchGrid` plus a custom hex text field | Section 4. The grid and the field edit the same draft colour |
 | Name | Single-line text | Trimmed, 1–60 Unicode scalar values, unique among other non-archived agents ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 132). No `maxLength` attribute, because it counts UTF-16 code units. Show the error under the field when invalid. No `0/60` counter |
 | Description | Text area | 0–255 Unicode scalar values, empty allowed. Counter `{n} / 255` with spaces around the slash, `n` from `scalarLength` below. At `n <= 255` the counter uses `var(--ink-3)`. Above 255 it uses `var(--bad)` from [apps/desktop/src/ui/styles.css](../../../apps/desktop/src/ui/styles.css) line 18 |
-| Instructions | Text area | Empty allowed. No length cap in 2a. Reject a NUL (`U+0000`). Helper, exact: "Saved with this blob. Bitbots does not send instructions to the CLI until a later update." |
+| Instructions | Text area | Empty allowed. No length cap in 2a. Reject a NUL (`U+0000`). Helper, exact: "Saved with this blob. Retinue does not send instructions to the CLI until a later update." |
 
 `scalarLength` is `Array.from(value).length`. That counts Unicode code points and matches Rust `chars().count()` for the well-formed text a browser puts in an input. Do not use `String.length`.
 
@@ -181,7 +181,7 @@ Helper under the card title, exact: "These options apply to new sessions in a la
 
 Default project is shown because the UI, not the adapter, passes it as `projectPath` (section 5). Custom args and env are hidden because 2a does not apply them and Phase 2b starts from empty user allowlists. Duplicate still copies the stored arrays so a later phase does not lose them.
 
-The chat header model pill is a status group, not a button. Today it is a button that opens runtime settings ([apps/desktop/src/ui/App.tsx](../../../apps/desktop/src/ui/App.tsx) line 459). Phase 3 removes that click so the pill is not a second editor. It shows the agent colour dot, the runtime label, and either "CLI default" or `session.model` when that string is non-empty. `title` on the group, exact: "Reported by the session. Bitbots does not choose the model until a later update." Do not say the model was applied.
+The chat header model pill is a status group, not a button. Today it is a button that opens runtime settings ([apps/desktop/src/ui/App.tsx](../../../apps/desktop/src/ui/App.tsx) line 459). Phase 3 removes that click so the pill is not a second editor. It shows the agent colour dot, the runtime label, and either "CLI default" or `session.model` when that string is non-empty. `title` on the group, exact: "Reported by the session. Retinue does not choose the model until a later update." Do not say the model was applied.
 
 ### Save, cancel, dirty, validation
 
@@ -218,8 +218,8 @@ Daemon codes are mapped below. The desktop bridge currently throws `"${code}: ${
 | `invalid_argument` | `session.new` | Choose a project folder that exists on this device. |
 | `invalid_argument` | `agent.reorder` (Phase 3 does not call it; keep the sentence for the mapper) | The roster order is out of date. Refresh and try again. |
 | `not_found` | `agent.reorder` | That runtime is no longer available. |
-| `internal` | any `agent.*` save or archive | Bitbots could not save that change. Nothing was applied. |
-| `unauthorized` | any of the above | Bitbots could not reach the local daemon. Reconnect and try again. |
+| `internal` | any `agent.*` save or archive | Retinue could not save that change. Nothing was applied. |
+| `unauthorized` | any of the above | Retinue could not reach the local daemon. Reconnect and try again. |
 | any other code | any of the above | The local daemon request failed. |
 
 `agent.delete` does not use `conflict` for a second archive; the daemon returns the archived row ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 147). Treat that as success.
@@ -350,7 +350,7 @@ Add `selectedAgentId: string | null`. Keep `selectedSessionId`. Derive the runti
 
 Initial choice, once the snapshot is available:
 
-1. `localStorage` key `bloblex.selectedAgentId` when that id is an active agent.
+1. `localStorage` key `retinue.selectedAgentId` when that id is an active agent.
 2. Otherwise the first `agentsForRuntime` entry for `getActiveRuntime()`, when that returns an id.
 3. Otherwise the first `activeAgents` entry.
 4. Otherwise null.
@@ -373,7 +373,7 @@ When the selected id is missing or `archived` becomes true:
 2. Let `next` be the following active agent in that order, wrapping to the first active agent. If none remain, `next` is null.
 3. Set `selectedAgentId` to `next`. Clear `selectedSessionId` so the new agent's chat does not inherit the archived agent's conversation.
 4. `aria-live="polite"` on the sidebar: `Archived {name}. Now showing {next name}.` or `Archived {name}. No blobs left.`
-5. Persist `bloblex.selectedAgentId` as the new id, or remove the key when null.
+5. Persist `retinue.selectedAgentId` as the new id, or remove the key when null.
 
 ### Selected runtime goes offline
 
@@ -381,7 +381,7 @@ Keep the agent selected. Mood and status follow `deriveCompanionStatus`. Disable
 
 ### `session.new`
 
-Every Bitbots-initiated create uses `{ agentId, projectPath }` and omits `runtimeId`. Sending both is `invalid_argument` ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 162). Omit `title` so the daemon stores `New chat` ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 166).
+Every Retinue-initiated create uses `{ agentId, projectPath }` and omits `runtimeId`. Sending both is `invalid_argument` ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 162). Omit `title` so the daemon stores `New chat` ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 166).
 
 Paths that change from `{ runtimeId, projectPath }` ([apps/desktop/src/ui/App.tsx](../../../apps/desktop/src/ui/App.tsx) lines 329–335):
 
@@ -397,7 +397,7 @@ Do not remove the daemon's legacy `runtimeId` form. The UI simply stops calling 
 
 ### localStorage
 
-Existing keys stay, with the same values: `bloblex.runtimeExplainer.dismissed` and `bloblex.inspector.open` ([apps/desktop/src/ui/App.tsx](../../../apps/desktop/src/ui/App.tsx) lines 51–52, 406, and 471). Add `bloblex.selectedAgentId` only. Write it when the selected agent changes, and remove it when the selection is null. Do not store colour, instructions, or drafts. Do not add `bloblex.roster.expanded`; that key is Phase 4's ([docs/plans/e2e-plan-v2.md](../../plans/e2e-plan-v2.md) line 198). There is no existing agent key to migrate.
+Existing keys stay, with the same values: `retinue.runtimeExplainer.dismissed` and `retinue.inspector.open` ([apps/desktop/src/ui/App.tsx](../../../apps/desktop/src/ui/App.tsx) lines 51–52, 406, and 471). Add `retinue.selectedAgentId` only. Write it when the selected agent changes, and remove it when the selection is null. Do not store colour, instructions, or drafts. Do not add `retinue.roster.expanded`; that key is Phase 4's ([docs/plans/e2e-plan-v2.md](../../plans/e2e-plan-v2.md) line 198). There is no existing agent key to migrate.
 
 There is no `setActiveAgent` IPC. Do not add a Tauri command. Cross-window sync stays on `setActiveRuntime` and `setActiveSession`.
 
@@ -521,7 +521,7 @@ Character sheet ([apps/desktop/src/preview/main.tsx](../../../apps/desktop/src/p
 
 The desktop package runs Vitest ([apps/desktop/package.json](../../../apps/desktop/package.json) lines 6–11) with no Testing Library dependency. Mounted tests follow [apps/desktop/src/ui/App.lifecycle.mounted.test.tsx](../../../apps/desktop/src/ui/App.lifecycle.mounted.test.tsx): the `// @vitest-environment happy-dom` banner (line 1), `createRoot` plus `act` (lines 96–107), and a `vi.mock` of `../tauri`. The default Vitest environment is node; pure tests omit the banner. Do not change the lifecycle file's `BlobCanvas` mock (lines 53–62). The new mounted file mocks `BlobCanvas` as a span with `data-color` and `data-label` so colour can be asserted.
 
-None of these tests start the daemon, open a database, or set `BLOBLEX_DB_PATH`.
+None of these tests start the daemon, open a database, or set `RETINUE_DB_PATH`.
 
 Pure tests:
 
@@ -567,11 +567,11 @@ Those scripts delegate to `apps/desktop` ([package.json](../../../package.json) 
 
 Run this after the Phase 3 diff is in the tree and before Phase 4 ([docs/plans/e2e-plan-v2.md](../../plans/e2e-plan-v2.md) lines 11 and 185–187). It is manual or automatable. It is not part of `npm test`.
 
-The live inspection database is `%LOCALAPPDATA%\Bloblex\bloblex.db`, or `%TEMP%\Bloblex\bloblex.db` when `LOCALAPPDATA` is unset. `BLOBLEX_DB_PATH` overrides both ([crates/bloblex-daemon/src/main.rs](../../../crates/bloblex-daemon/src/main.rs) lines 1065–1072, [docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 26). Never set the variable to that live file, and never open, copy, or delete its `-wal` or `-shm` sidecars.
+The live inspection database is `%LOCALAPPDATA%\Retinue\retinue.db`, or `%TEMP%\Retinue\retinue.db` when `LOCALAPPDATA` is unset. `RETINUE_DB_PATH` overrides both ([crates/retinue-daemon/src/main.rs](../../../crates/retinue-daemon/src/main.rs) lines 1065–1072, [docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 26). Never set the variable to that live file, and never open, copy, or delete its `-wal` or `-shm` sidecars.
 
 1. Record `git rev-parse HEAD` and the date. Do not stop, restart, or kill the running inspection app.
 2. If the live database file exists, record its last-write time and size. Do not open it.
-3. In a new PowerShell session, set `$env:BLOBLEX_DB_PATH` to a new file under `$env:TEMP`, for example `$env:TEMP\bloblex-phase3-smoke.db`. The file must not already exist. The dev script does not unset this variable ([scripts/dev-windows.ps1](../../../scripts/dev-windows.ps1) lines 1–31). The desktop process starts `bloblexd` without clearing the environment ([apps/desktop/src-tauri/src/lib.rs](../../../apps/desktop/src-tauri/src/lib.rs) lines 239–243), so the child inherits the variable.
+3. In a new PowerShell session, set `$env:RETINUE_DB_PATH` to a new file under `$env:TEMP`, for example `$env:TEMP\retinue-phase3-smoke.db`. The file must not already exist. The dev script does not unset this variable ([scripts/dev-windows.ps1](../../../scripts/dev-windows.ps1) lines 1–31). The desktop process starts `retinued` without clearing the environment ([apps/desktop/src-tauri/src/lib.rs](../../../apps/desktop/src-tauri/src/lib.rs) lines 239–243), so the child inherits the variable.
 4. From the repository root, run `npm run desktop:dev` ([package.json](../../../package.json) line 14). Wait until the main window and the companion are up.
 5. Confirm the temp database file now exists and is non-empty. Confirm the live database's last-write time and size are unchanged.
 6. Roster: one row per discovered runtime's default agent. Claude's face is coral `#F38C6F`, Codex is blue `#82AAFF`, OpenCode is violet `#BF9CFF`, any other runtime is mint `#89D6B3`. The small line under the preview names the runtime. The face is not the only place the provider appears.
@@ -580,8 +580,8 @@ The live inspection database is `%LOCALAPPDATA%\Bloblex\bloblex.db`, or `%TEMP%\
 9. Drag the companion by its drag region. The island body stays opaque and rounded. The native window around it stays transparent (no rectangular plate). Release it somewhere other than the default and confirm it stays there.
 10. Create a second blob on the same runtime as Claude, name it "Pink sibling", colour pink, description "Second blob.". Save. Both rows show. Their faces differ if you set the original Claude blob back to coral first; if Claude was left on pink, give the sibling lemon instead so the two faces differ. Start a session on each with two different folders, or the same folder twice. Each blob's header session list shows its own session, not the other's.
 11. Archive "Pink sibling". Confirm the copy in section 2. The row disappears. Restart is next, so do not restore it; there is no restore control.
-12. Quit Bitbots from the header menu. The inspection app, if it was running, is still running.
-13. Start `npm run desktop:dev` again in the same session so `BLOBLEX_DB_PATH` is unchanged. The edited name, the pink (or lemon) colour, the description, and the archived row's absence all survive. The archived blob's session is not offered as a new-session target.
+12. Quit Retinue from the header menu. The inspection app, if it was running, is still running.
+13. Start `npm run desktop:dev` again in the same session so `RETINUE_DB_PATH` is unchanged. The edited name, the pink (or lemon) colour, the description, and the archived row's absence all survive. The archived blob's session is not offered as a new-session target.
 14. Record the temp database path, the git revision, and a pass/fail line per step in `docs/operations/session-handoff.md`. Delete the temp database only after that note exists. Do not copy it over the live database.
 
 ## 10. Risks, open questions, and out of scope

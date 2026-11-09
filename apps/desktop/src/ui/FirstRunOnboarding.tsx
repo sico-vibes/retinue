@@ -19,7 +19,7 @@ import { LookPreview } from './LookPreview'
 import { LookEditor } from './LookEditor'
 import { Skeleton } from './Skeleton'
 import { HelpTip } from './SettingsParts'
-import { setThemeStyle } from '../blob/bitbots'
+import { setThemeStyle } from '../blob/retinue'
 import { draftLook } from '../blob/look'
 import { agentColorHex, previewHex } from './agentColor'
 import { createDraft, type AgentDraft } from './agentForm'
@@ -39,7 +39,7 @@ export function ImportTemplate({ onImported }: { onImported: () => void }) {
     const token = await selectBackupImportPath().catch((reason) => { setProblem(messageOf(reason, 'The file dialog could not open.')); return null })
     if (!token) return
     setBusy(true)
-    try { setPreview(await previewBackupImport(token)) } catch (reason) { setProblem(messageOf(reason, 'That file could not be read as a Bitbots template.')) } finally { setBusy(false) }
+    try { setPreview(await previewBackupImport(token)) } catch (reason) { setProblem(messageOf(reason, 'That file could not be read as a Retinue template.')) } finally { setBusy(false) }
   }
   const restore = async () => {
     if (!preview) return
@@ -50,7 +50,7 @@ export function ImportTemplate({ onImported }: { onImported: () => void }) {
     } catch (reason) { setProblem(messageOf(reason, 'The template could not be brought in.')); setBusy(false) }
   }
   return <div className="onboarding-template">
-    {!preview && <p>Already use Bitbots on another computer? <button type="button" className="link-btn" disabled={busy} onClick={() => void choose()}>{busy ? 'Reading…' : 'Bring your ' + nouns + ' from a template'}</button></p>}
+    {!preview && <p>Already use Retinue on another computer? <button type="button" className="link-btn" disabled={busy} onClick={() => void choose()}>{busy ? 'Reading…' : 'Bring your ' + nouns + ' from a template'}</button></p>}
     {preview && <>
       <p>This template holds {statsSentence(preview.counts, [noun, nouns])}. Schedules come in paused, and sign-ins and secrets aren't in it.</p>
       {preview.warnings.map((warning) => <p key={warning} className="onboarding-notice">{warning}</p>)}
@@ -137,11 +137,11 @@ export function FirstRunOnboarding({ runtimes, scanning, error, onScan, onCreate
   const look = draftLook(draft, null)
   const colorHex = previewHex(draft.color, agentColorHex('violet'))
   return <main className="onboarding-screen" aria-labelledby="onboarding-title"><section className={`onboarding-content${step === 2 ? ' wide' : ''}`}>
-    {step >= 0 && step < 2 && <div className="onboarding-character"><BlobCanvas color={colorHex} size={112} mood={step === 1 ? (scanning ? 'tool_activity' : 'thinking') : 'idle'} label="Bitbots onboarding companion" /></div>}
+    {step >= 0 && step < 2 && <div className="onboarding-character"><BlobCanvas color={colorHex} size={112} mood={step === 1 ? (scanning ? 'tool_activity' : 'thinking') : 'idle'} label="Retinue onboarding companion" /></div>}
     <div className="onboarding-progress" role="group" aria-label={'Step ' + (step + 2) + ' of 4'}>{[-1, 0, 1, 2].map((index) => <span key={index} className={index === step ? 'active' : index < step ? 'done' : ''} />)}</div>
-    {step === -1 && <section className="onboarding-step look-step"><h1 id="onboarding-title" tabIndex={-1} ref={headingRef}>Choose your look</h1><p>Pick how Bitbots looks and feels. You can switch any time in Settings.</p><LookPicker value={pickedLook} onChange={chooseLook} label="App look" /><LookPreview look={pickedLook} /><div className="onboarding-actions"><button className="primary-button" disabled={!pickedLook} onClick={() => setStep(0)}>Continue</button></div></section>}
+    {step === -1 && <section className="onboarding-step look-step"><h1 id="onboarding-title" tabIndex={-1} ref={headingRef}>Choose your look</h1><p>Pick how Retinue looks and feels. You can switch any time in Settings.</p><LookPicker value={pickedLook} onChange={chooseLook} label="App look" /><LookPreview look={pickedLook} /><div className="onboarding-actions"><button className="primary-button" disabled={!pickedLook} onClick={() => setStep(0)}>Continue</button></div></section>}
     {step === 0 && <section className="onboarding-step"><h1 id="onboarding-title" tabIndex={-1} ref={headingRef}>What should we call you?</h1><p>This name stays on this device.</p><label className="onboarding-field">Your name<input ref={nameRef} className="text-input" value={name} maxLength={40} onChange={(event) => setName(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && name.trim()) continueName() }} /></label><div className="onboarding-actions"><button className="ghost-button" onClick={() => setStep(-1)}>Back</button><button className="ghost-button" onClick={() => continueName(true)}>Skip</button><button className="primary-button" disabled={!name.trim()} onClick={() => continueName()}>Continue</button></div></section>}
-    {step === 1 && <section className="onboarding-step"><h1 id="onboarding-title" tabIndex={-1} ref={headingRef}>Coding agents</h1><p>Bitbots checks which coding agents are installed on this device.</p><div className="onboarding-runtimes" aria-live="polite" aria-busy={scanning || undefined}>{scanning && runtimes.length === 0 && <Skeleton variant="row" lines={3} />}{(['claude', 'codex', 'opencode'] as const).map((provider) => {
+    {step === 1 && <section className="onboarding-step"><h1 id="onboarding-title" tabIndex={-1} ref={headingRef}>Coding agents</h1><p>Retinue checks which coding agents are installed on this device.</p><div className="onboarding-runtimes" aria-live="polite" aria-busy={scanning || undefined}>{scanning && runtimes.length === 0 && <Skeleton variant="row" lines={3} />}{(['claude', 'codex', 'opencode'] as const).map((provider) => {
       const guide = PROVIDER_GUIDES[provider]
       const providerName = providerBrand(provider).name
       const matches = runtimes.filter((runtime) => runtime.provider.toLowerCase() === provider)

@@ -315,13 +315,13 @@ describe('Remote responsive layout', () => {
 
   it('lets This device switch layouts and saves the override', async () => {
     media(1440, true)
-    localStorage.setItem('bitbots.remote.layout', 'phone')
+    localStorage.setItem('retinue.remote.layout', 'phone')
     const view = await mount(fakeDevice(meFor('chat')))
     expect(view.querySelector('[data-layout="phone"]')).not.toBeNull()
     await act(async () => { [...view.querySelectorAll<HTMLButtonElement>('.rm-tabs button')].find((b) => b.textContent?.includes('This device'))!.click() })
     await act(async () => { view.querySelector<HTMLButtonElement>('.rm-layout-choice .select-trigger')!.click() })
     await act(async () => { [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((o) => o.textContent === 'Wide')!.click() })
     expect(view.querySelector('[data-layout="wide"]')).not.toBeNull()
-    expect(localStorage.getItem('bitbots.remote.layout')).toBe('wide')
+    expect(localStorage.getItem('retinue.remote.layout')).toBe('wide')
   })
 })

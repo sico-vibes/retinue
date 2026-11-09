@@ -1,4 +1,4 @@
-# Brief: Bitbots in Rust (GPUI), slice 6 — the full Settings sheet, the CEO, onboarding, analytics and updates
+# Brief: Retinue in Rust (GPUI), slice 6 — the full Settings sheet, the CEO, onboarding, analytics and updates
 
 **Lane:** Gogo (OpenCode Go DeepSeek V4.1 Flash, high), in its own git worktree. **Two other lanes run at the same time:**
 - slice 4 (tasks, changes, terminal), in another Gogo conversation;
@@ -22,7 +22,7 @@ Keep to the file ownership below.
 - `CARGO_TARGET_DIR=C:\bbn\target6`, your own.
 - If something is impossible at the pinned GPUI rev, take the smallest working alternative and say so.
 
-**Read first:** `.claude/skills/bitbots-development/references/native-gpui.md`, especially "Traps that kill or blank the window", and the native entries at the end of `references/lessons.md`. Also read `AGENTS.md`: Remote, machines, `usage.readCliSignIns`, dictation and secrets carry owner rules that apply here exactly as in the React app.
+**Read first:** `.claude/skills/retinue-development/references/native-gpui.md`, especially "Traps that kill or blank the window", and the native entries at the end of `references/lessons.md`. Also read `AGENTS.md`: Remote, machines, `usage.readCliSignIns`, dictation and secrets carry owner rules that apply here exactly as in the React app.
 
 ## File ownership
 

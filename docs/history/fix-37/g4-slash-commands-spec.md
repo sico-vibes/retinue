@@ -27,7 +27,7 @@ Like Claude Code: typing `/` at the start of the composer (or after a space) ope
 
 ## Daemon (non-visual part)
 
-- `session.prompt` accepts optional `command: { kind: "skill" | "manager", name: string }`. The user's message is stored and shown as typed (for example `/interview` or `/code-review check the parser`). The daemon adds a **hidden, per-turn directive** to the prompt it sends to the provider (the same suffix mechanism as `<bloblex_skills>` / `<bloblex_manager>`), for example `<bloblex_command>Load the skill "code-review" with load_skill now and follow it for this message.</bloblex_command>`, or the Manager command's instruction text. Unknown or disabled skills, or a Manager command sent to a bot that is not the Manager, are refused with `invalid_argument`.
+- `session.prompt` accepts optional `command: { kind: "skill" | "manager", name: string }`. The user's message is stored and shown as typed (for example `/interview` or `/code-review check the parser`). The daemon adds a **hidden, per-turn directive** to the prompt it sends to the provider (the same suffix mechanism as `<retinue_skills>` / `<retinue_manager>`), for example `<retinue_command>Load the skill "code-review" with load_skill now and follow it for this message.</retinue_command>`, or the Manager command's instruction text. Unknown or disabled skills, or a Manager command sent to a bot that is not the Manager, are refused with `invalid_argument`.
 - Add `skills.forAgent { agentId }` (or reuse an existing method) so the UI can list the skills enabled for a bot, if no such method exists. Every new method or event needs a row in `apps/desktop/src/remote/tiers.json` (the parity test fails otherwise); these are `read`/`viewer` for listing and follow `session.prompt`'s tier for sending.
 - Tests in `main.rs`: the directive is in the provider prompt but not in the stored message; a disabled skill and a Manager command to an ordinary bot are refused.
 
@@ -40,8 +40,8 @@ Like Claude Code: typing `/` at the start of the composer (or after a space) ope
 - Mounted tests: `/` opens the menu, filtering, picking an action runs it without sending, picking a skill sends `command` with the prompt, Manager commands appear only for the Manager.
 
 ## Gates
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"` (foreground; wait)
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"` (foreground; wait)
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
 - `cd apps/desktop && npx tsc -b && npx vitest run --maxWorkers=3 2>&1 | grep -E "Test Files|Tests |FAIL"` and `npm run build`
 
 Write `docs/history/fix-37/g4-report.md`.

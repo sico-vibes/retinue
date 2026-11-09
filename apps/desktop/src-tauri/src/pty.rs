@@ -253,13 +253,13 @@ fn choose_shell(requested: Option<&str>) -> Result<ShellChoice, String> {
     }
 }
 
-/// No Bitbots secret may reach a user shell's environment.
+/// No Retinue secret may reach a user shell's environment.
 fn sanitize_environment(command: &mut CommandBuilder) {
     for (name, _) in std::env::vars_os() {
         let name = name.to_string_lossy();
         let upper = name.to_ascii_uppercase();
-        if upper.starts_with("BLOBLEX_")
-            || upper.starts_with("BITBOTS_")
+        if upper.starts_with("RETINUE_")
+            || upper.starts_with("RETINUE_")
             || upper == "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS"
         {
             command.env_remove(name.as_ref());

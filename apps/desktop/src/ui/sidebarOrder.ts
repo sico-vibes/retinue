@@ -3,8 +3,8 @@ import type { Agent, Project, Session } from '../types'
 import { mainSessionFor, sessionIsBusy } from './teamSelectors'
 
 export type SidebarSort = 'manual' | 'recent' | 'name' | 'status'
-const SORT_KEY = 'bitbots.sidebar.sort'
-const GROUP_KEY = 'bitbots.sidebar.groupByProject'
+const SORT_KEY = 'retinue.sidebar.sort'
+const GROUP_KEY = 'retinue.sidebar.groupByProject'
 
 export const SIDEBAR_SORTS: Array<{ id: SidebarSort; label: string }> = [
   { id: 'manual', label: 'My order' },
@@ -17,7 +17,7 @@ export function storedSidebarSort(): SidebarSort {
   try { const value = localStorage.getItem(SORT_KEY); return SIDEBAR_SORTS.some((item) => item.id === value) ? value as SidebarSort : 'manual' } catch { return 'manual' }
 }
 export function storeSidebarSort(sort: SidebarSort) { try { localStorage.setItem(SORT_KEY, sort) } catch { /* private mode */ } }
-const VIEW_KEY = 'bitbots.sidebar.view'
+const VIEW_KEY = 'retinue.sidebar.view'
 export type SidebarView = 'bots' | 'projects'
 // 8 November 2026: Projects is the default; the bot roster is the Team view.
 export function storedSidebarView(): SidebarView { try { return localStorage.getItem(VIEW_KEY) === 'bots' ? 'bots' : 'projects' } catch { return 'projects' } }

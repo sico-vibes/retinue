@@ -40,7 +40,7 @@ describe('new project', () => {
   })
 
   it('spells out what the owner is approving', () => {
-    expect(scaffoldPlan('site', 'D:\\work\\', false, null, null)).toEqual(['Create the folder D:\\work\\site', 'Add it to Bitbots as a project'])
+    expect(scaffoldPlan('site', 'D:\\work\\', false, null, null)).toEqual(['Create the folder D:\\work\\site', 'Add it to Retinue as a project'])
     expect(scaffoldPlan('site', 'D:\\work', true, 'private', 'me')[3]).toBe('Create a private GitHub repository under me and push to it')
   })
 

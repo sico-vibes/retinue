@@ -4,21 +4,21 @@
 > **Status:** historical
 > **Last updated:** 2026-10-15
 
-Written 14 October 2026. Backend only (`crates/bloblex-adapter-acp`).
+Written 14 October 2026. Backend only (`crates/retinue-adapter-acp`).
 
 ## 1. Symptom
 
-On a machine with OpenCode 2.0.28, Bitbots finds the CLI and (since beta.23)
+On a machine with OpenCode 2.0.28, Retinue finds the CLI and (since beta.23)
 reads its version and sign-in, but the blob settings screen shows "The provider
 could not be reached." and "Model unavailable". The model catalog fails, and
 real OpenCode sessions very likely fail to start for the same reason.
 
 ## 2. Root cause (reproduced against the installed CLI)
 
-Bitbots starts ACP as `opencode acp --cwd <dir>` in two places:
+Retinue starts ACP as `opencode acp --cwd <dir>` in two places:
 
-- `crates/bloblex-adapter-acp/src/lib.rs` ~line 300 (`spawn_process`, real sessions)
-- `crates/bloblex-adapter-acp/src/catalog.rs` ~line 103 (`fetch_config_options`)
+- `crates/retinue-adapter-acp/src/lib.rs` ~line 300 (`spawn_process`, real sessions)
+- `crates/retinue-adapter-acp/src/catalog.rs` ~line 103 (`fetch_config_options`)
 
 OpenCode 2 (`opencode v2.0.28`) has no `--cwd`. `opencode acp --help` lists only
 `--login`. With the extra flag the CLI prints its help text on stdout and never
@@ -52,7 +52,7 @@ OpenCode 1.x accepts the working directory from the process cwd and from the
    works. Make sure a failed `models --verbose` cannot leave a child process
    running or consume the whole timeout (it must fall through quickly).
 3. Check how the daemon and UI use `ModelCatalog.validated`
-   (`crates/bloblex-daemon/src/main.rs`, `apps/desktop/src/executionContract.ts`
+   (`crates/retinue-daemon/src/main.rs`, `apps/desktop/src/executionContract.ts`
    are read-only references for you; do not edit `apps/`). The config-option
    catalog is currently `validated:false`. Decide, and justify in your report,
    whether a catalog read from the provider's own `session/new` should stay
@@ -63,7 +63,7 @@ OpenCode 1.x accepts the working directory from the process cwd and from the
    at how `exec::config_option_catalog` / `options_from_result` handle a
    `thought_level` option today and add it only if it is missing. Do not
    invent levels for the other models.
-5. Do not change `crates/bloblex-runtime` (discovery and sign-in were fixed in
+5. Do not change `crates/retinue-runtime` (discovery and sign-in were fixed in
    beta.23).
 
 ## 4. Tests (fake CLIs only; no installed OpenCode, no network)
@@ -84,10 +84,10 @@ OpenCode 1.x accepts the working directory from the process cwd and from the
 ## 5. Gates
 
 ```
-cargo test -p bloblex-adapter-acp
-cargo test -p bloblex-adapter-opencode
-cargo test -p bloblex-daemon          # RUST_MIN_STACK=33554432 on this machine
-cargo clippy -p bloblex-adapter-acp -p bloblex-adapter-opencode --all-targets -- -D warnings
+cargo test -p retinue-adapter-acp
+cargo test -p retinue-adapter-opencode
+cargo test -p retinue-daemon          # RUST_MIN_STACK=33554432 on this machine
+cargo clippy -p retinue-adapter-acp -p retinue-adapter-opencode --all-targets -- -D warnings
 ```
 
 `cargo fmt --check` already fails on HEAD; report only.

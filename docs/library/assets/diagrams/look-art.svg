@@ -13,18 +13,18 @@
   <text x="32" y="61" class="h">appearance.style</text>
   <text x="32" y="79" class="m">saved per device</text>
   <text x="232" y="58" class="t">→ documentElement.dataset.style</text>
-  <text x="232" y="76" class="m">bitbots · blobots · legacy · pop · dot</text>
+  <text x="232" y="76" class="m">retinue · stone · legacy · pop · dot</text>
   <path d="M214 66 H226" class="a"/>
 
   <rect x="18" y="108" width="186" height="54" rx="9" class="c"/>
-  <text x="32" y="130" class="t">Bitbots (Frost)</text>
+  <text x="32" y="130" class="t">Retinue (Frost)</text>
   <text x="32" y="148" class="m">frost.css · wallpaper · glass</text>
   <rect x="216" y="108" width="140" height="54" rx="9" class="c"/>
-  <text x="230" y="130" class="t">Blobots</text>
-  <text x="230" y="148" class="m">bitbotsUi.css</text>
+  <text x="230" y="130" class="t">Stone</text>
+  <text x="230" y="148" class="m">retinueUi.css</text>
   <rect x="368" y="108" width="140" height="54" rx="9" class="c"/>
   <text x="382" y="130" class="t">Legacy</text>
-  <text x="382" y="148" class="m">bitbots.css · pixels</text>
+  <text x="382" y="148" class="m">retinue.css · pixels</text>
   <rect x="18" y="174" width="186" height="54" rx="9" class="c"/>
   <text x="32" y="196" class="t">Pop</text>
   <text x="32" y="214" class="m">pop.css · cream · outline</text>
@@ -46,8 +46,8 @@
 
   <rect x="540" y="112" width="196" height="138" rx="10" class="c"/>
   <text x="554" y="134" class="t">Default art for a look</text>
-  <text x="554" y="155" class="m">Bitbots → Flat robot</text>
-  <text x="554" y="173" class="m">Blobots → Glossy blob</text>
+  <text x="554" y="155" class="m">Retinue → Flat robot</text>
+  <text x="554" y="173" class="m">Stone → Glossy blob</text>
   <text x="554" y="191" class="m">Legacy → 3D robot</text>
   <text x="554" y="209" class="m">Pop → Pop robot</text>
   <text x="554" y="227" class="m">Dot → Dot robot</text>

@@ -1,6 +1,6 @@
 # Wave 15 brief: Phase 1A, bots across projects (backend)
 
-**Lane:** the Sonnet 5.5 (medium) bot in the owner's Bitbots app, assigned through the Bitbots MCP, in its own git worktree.
+**Lane:** the Sonnet 5.5 (medium) bot in the owner's Retinue app, assigned through the Retinue MCP, in its own git worktree.
 
 **Rules:**
 - You never run `git commit`, `git push` or `git merge`, and never switch branches.
@@ -10,7 +10,7 @@
 **Plan:** `docs/plans/expansion-plan-v3.md`, Phase 1A (an owner decision of 29 October 2026).
 
 **Read first:**
-- `.claude/skills/bitbots-development/SKILL.md`;
+- `.claude/skills/retinue-development/SKILL.md`;
 - its `references/codebase-map.md` and `references/lessons.md`;
 - `AGENTS.md` (the Remote rules and the 29 October amendment).
 
@@ -29,7 +29,7 @@ A bot is no longer owned by a project. The owner builds a few good bots once, an
 - Conversations already carry their own project: `sessions.data.projectId`, stamped at creation (`new_sessions_carry_project_id` test, `main.rs` ~12170).
 - `agent.conversations {agentId, projectId?}` already filters by project (`team.rs` ~1372).
 - `agent.conversation.create {agentId, title?}` always uses `workspace_for(agent)` (`team.rs` ~1358).
-- Memory has the scopes `blob | project | shared`. `memory_visible_to(row, agent_id, project_id)` (`bloblex-storage` ~1512) takes the project from its caller.
+- Memory has the scopes `blob | project | shared`. `memory_visible_to(row, agent_id, project_id)` (`retinue-storage` ~1512) takes the project from its caller.
 - `permission_rules(id, agent_id, kind, match_key, label, created_at)` has no project. `permission.reply {permissionId, choice, remember: bool}` (`main.rs` ~1238).
 
 ## Contract (the UI is built against exactly this)
@@ -63,12 +63,12 @@ A bot is no longer owned by a project. The owner builds a few good bots once, an
 
 ### 4. Context: the bot's part and the project's part
 
-- **Instructions:** when a conversation starts or resumes, the instructions Bitbots sends are the bot's own instructions plus a short **project section**:
+- **Instructions:** when a conversation starts or resumes, the instructions Retinue sends are the bot's own instructions plus a short **project section**:
   - the project's name;
   - its folder;
   - its description;
   - its notes or rules;
-  - when the repo root has a `.bitbots.json`, its `instructions` string (at most 4,000 characters; ignore the file if it isn't valid JSON or has no string `instructions`).
+  - when the repo root has a `.retinue.json`, its `instructions` string (at most 4,000 characters; ignore the file if it isn't valid JSON or has no string `instructions`).
 
   The project section comes from the **conversation's** project, never the bot's default.
 - **Memory:** memory reads and writes use the conversation's project. `memory_visible_to` gets the conversation's `projectId`. A note saved with scope `project` from a conversation is tied to that conversation's project. A note tied to one project never appears in another.
@@ -83,7 +83,7 @@ A bot is no longer owned by a project. The owner builds a few good bots once, an
 - **Matching:** a rule applies when its `project_id` is null or equals the conversation's `projectId`.
 - **Listing:** `permission.rules.list` rows gain `projectId` and `projectName` (null = everywhere).
 - **New RPC:** `permission.rules.update {id, scope: "project" | "bot", projectId?}`. It moves a rule between "everywhere" and one project (`projectId` is required for `"project"`), broadcasting `permission.rules.changed`.
-- **The card:** permission cards that are rememberable gain `projectId` and `projectName`, so the card can say "Always allow in Blolblex".
+- **The card:** permission cards that are rememberable gain `projectId` and `projectName`, so the card can say "Always allow in Retinue".
 
 ### 6. Manager and team
 
@@ -94,7 +94,7 @@ A bot is no longer owned by a project. The owner builds a few good bots once, an
 - **The Manager's `list_projects`** stays, and the Manager's instructions say that any bot can work in any project.
 - **Bots may message each other across projects;** nothing refuses it.
 
-### 7. The Bitbots MCP (`external.rs`)
+### 7. The Retinue MCP (`external.rs`)
 
 - **`send_message`** with `newConversation` takes `projectId`, or `projectPath` matched to a registered project, and uses section 2.
 - **`list_projects`** lists, per project, the bots that have conversations in it.
@@ -113,7 +113,7 @@ Keep both parity tests green. Pass `projectId` and `projectName` through the rem
 - `a_conversation_opens_in_the_project_it_picks`, plus a missing or folderless project refused.
 - `a_new_conversation_defaults_to_the_bots_last_project`.
 - `agent_projects_lists_every_project_a_bot_has_worked_in`.
-- `the_project_section_comes_from_the_conversation_not_the_bot`, including `.bitbots.json` read, capped, and ignored when invalid.
+- `the_project_section_comes_from_the_conversation_not_the_bot`, including `.retinue.json` read, capped, and ignored when invalid.
 - `project_memory_stays_in_its_project`.
 - `an_always_rule_for_one_project_does_not_apply_in_another`.
 - `an_everywhere_rule_applies_in_every_project`.
@@ -125,8 +125,8 @@ Keep both parity tests green. Pass `projectId` and `projectName` through the rem
 
 ## Gates you run before reporting (from your worktree)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`
 - `npm run typecheck` and `npm test`. These need `node_modules`; if your worktree has none, say so, and the Director runs them after merging.
 - **Do not run `npm install`.**
 

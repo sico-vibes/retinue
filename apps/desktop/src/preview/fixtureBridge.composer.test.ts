@@ -108,7 +108,7 @@ describe('composer preview RPC behavior', () => {
     await expect(rpc('session.prompt', { sessionId: created.session.id, text: '/figma-to-react', command: { kind: 'skill', name: 'figma-to-react' } })).rejects.toThrow('invalid_argument')
     await expect(rpc('session.prompt', { sessionId: created.session.id, text: '/interview', command: { kind: 'manager', name: 'interview' } })).rejects.toThrow('invalid_argument')
 
-    const managerSession = await rpc<{ session: Session }>('session.new', { agentId: 'agent-manager', projectPath: 'C:/Bloblex/workspaces/agent-manager' })
+    const managerSession = await rpc<{ session: Session }>('session.new', { agentId: 'agent-manager', projectPath: 'C:/Retinue/workspaces/agent-manager' })
     await rpc('session.prompt', { sessionId: managerSession.session.id, text: '/interview', command: { kind: 'manager', name: 'interview' } })
     expect(managerSession.session.messages?.at(-1)?.content).toBe('/interview')
   })

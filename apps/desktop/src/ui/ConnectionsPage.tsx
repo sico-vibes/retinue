@@ -1,5 +1,5 @@
-// Wave 14: the Bitbots MCP. A Claude Code session (or another MCP client) started outside Bitbots can see
-// and drive the bots through `bitbots-mcp.exe mcp-server`. The daemon owns the key and the endpoint file; this
+// Wave 14: the Retinue MCP. A Claude Code session (or another MCP client) started outside Retinue can see
+// and drive the bots through `retinue-mcp.exe mcp-server`. The daemon owns the key and the endpoint file; this
 // page only turns it on, picks the level and shows the command that connects a client. The key never reaches
 // the UI.
 import { useEffect, useState } from 'react'
@@ -72,7 +72,7 @@ function TierChoices({ value, disabled, onPick }: { value: ExternalTier; disable
   </div>
 }
 
-/** Settings › Connections: the Bitbots MCP switch, its level and the connect command. */
+/** Settings › Connections: the Retinue MCP switch, its level and the connect command. */
 export function ConnectionsPage({ connected }: { connected: boolean }) {
   const [status, setStatus] = useState<ExternalStatus | null>(null)
   const [consent, setConsent] = useState<ExternalTier | null>(null)
@@ -121,8 +121,8 @@ export function ConnectionsPage({ connected }: { connected: boolean }) {
   return <>
     <p className="settings-intro">Let a Claude Code session work with your employees. It uses its own key, never your sign-ins.</p>
     <SettingsGroup title="Access">
-      <SettingsRow label="Let outside sessions use Bitbots" hint="Sessions you connect can do what the level below allows. Turning this off cuts them off at once.">
-        <button type="button" className={`toggle ${on ? 'on' : ''}`} role="switch" aria-label="Let outside sessions use Bitbots" aria-checked={on} disabled={!connected || busy || !status} onClick={() => on ? void run('external.disable', {}, 'Off. Connected sessions can no longer reach Bitbots.') : setConsent(status?.tier ?? 'chat')}><i /></button>
+      <SettingsRow label="Let outside sessions use Retinue" hint="Sessions you connect can do what the level below allows. Turning this off cuts them off at once.">
+        <button type="button" className={`toggle ${on ? 'on' : ''}`} role="switch" aria-label="Let outside sessions use Retinue" aria-checked={on} disabled={!connected || busy || !status} onClick={() => on ? void run('external.disable', {}, 'Off. Connected sessions can no longer reach Retinue.') : setConsent(status?.tier ?? 'chat')}><i /></button>
       </SettingsRow>
       {on && status && <>
         <SettingsRow stacked label="What they may do">
@@ -132,7 +132,7 @@ export function ConnectionsPage({ connected }: { connected: boolean }) {
         {status.tier === 'operator' && <SettingsRow label="Let them give employees Full access" hint="An employee on Full access runs commands and edits files without asking you. Turning the MCP off turns this off too.">
           <button type="button" className={`toggle ${status.allowFullAccess ? 'on' : ''}`} role="switch" aria-label="Let outside sessions give employees Full access" aria-checked={status.allowFullAccess} disabled={busy} onClick={() => status.allowFullAccess ? void run('external.setFullAccess', { allow: false }, 'Outside sessions can no longer give employees Full access.') : setFullConsent(true)}><i /></button>
         </SettingsRow>}
-        <SettingsRow stacked label="Connect Claude Code" detail={status.command ? 'Run this once in a terminal. Claude Code then lists Bitbots under /mcp.' : 'The connection program is still being prepared. Check again in a moment.'}>
+        <SettingsRow stacked label="Connect Claude Code" detail={status.command ? 'Run this once in a terminal. Claude Code then lists Retinue under /mcp.' : 'The connection program is still being prepared. Check again in a moment.'}>
           {status.command && <div className="connect-command">
             <code>{status.command}</code>
             <button type="button" className="ghost-button small" onClick={() => void copy()} aria-label="Copy the connect command">{copied ? <Check size={13} /> : <Copy size={13} />}{copied ? 'Copied' : 'Copy'}</button>
@@ -171,8 +171,8 @@ function ConnectConsentDialog({ tier, busy, onPick, onCancel, onConfirm }: { tie
   const { ref, close } = useDialogAccessibility(onCancel, () => !busy)
   return <div className={`sheet-backdrop blob-dialog-backdrop ${entered ? 'is-entered' : ''}`}>
     <section ref={ref} className="blob-dialog connect-consent" role="dialog" aria-modal="true" aria-labelledby="connect-consent-title" tabIndex={-1}>
-      <h2 id="connect-consent-title">Let outside sessions use Bitbots?</h2>
-      <p>Any MCP client you connect on this computer, such as Claude Code, can use your employees at the level you pick. Messages it sends show who sent them. It never gets your coding agents’ sign-ins or Bitbots’ own key, and it cannot reach Bitbots from another device.</p>
+      <h2 id="connect-consent-title">Let outside sessions use Retinue?</h2>
+      <p>Any MCP client you connect on this computer, such as Claude Code, can use your employees at the level you pick. Messages it sends show who sent them. It never gets your coding agents’ sign-ins or Retinue’ own key, and it cannot reach Retinue from another device.</p>
       <TierChoices value={tier} disabled={busy} onPick={onPick} />
       <div className="blob-dialog-actions">
         <button type="button" className="secondary-button" disabled={busy} onClick={close}>Cancel</button>

@@ -27,7 +27,7 @@ export interface BlobLook {
   /** Fills every unpinned trait. Agents default to their id. */
   seed?: string | null
   traits?: TraitOverrides
-  /** The robot's outline and colours, read only while Bitbots mode is on. */
+  /** The robot's outline and colours, read only while Retinue mode is on. */
   bot?: BotStyle
   /** The art style. Omitted, the bot follows the app look. */
   art?: BotArt
@@ -45,12 +45,12 @@ export const SHAPE_LABELS: Record<BlobShape, string> = {
 }
 
 /**
- * The Bitbots mascot: the round silhouette with tall capsule eyes. It is the
+ * The Retinue mascot: the round silhouette with tall capsule eyes. It is the
  * face of onboarding, the welcome wave and the companion's default look.
  */
 export const MASCOT_LOOK: BlobLook = {
   shape: 'circle',
-  seed: 'bloblex',
+  seed: 'retinue',
   traits: {
     'body.r': 0.999, 'body.ratio': 0.5, 'body.n': 0.25,
     'eye.rx': 0.999, 'eye.ratio': 0.33, 'eye.scale': 0.48, 'eye.stretch': 0.455, 'eye.gap': 0.53,

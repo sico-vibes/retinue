@@ -30,11 +30,11 @@ Verdict: The archive is organized, but several documents presented as current ar
 
 9. `docs/reference/architecture.md:35` — It says `nativeBridge.ts` is the only place that talks to the native shell. `apps/desktop/src/tauri.ts:1-2` also imports and calls Tauri APIs; `nativeBridge.ts` itself describes exceptions. **Proposed change:** describe the transport seam and name the existing direct Tauri wrappers or exceptions. **Must fix**
 
-10. `docs/reference/architecture.md:38,55` — The Remote section generalizes the loopback-only Tailscale listener to all Remote access and says Remote “never” uses a public bind. The Native method binds host interfaces and requires HTTPS, as documented in `crates/bloblex-daemon/src/remote/native.rs:15,78`. **Proposed change:** distinguish the loopback Tailscale gateway from the interface-bound Native gateway, including Native’s TLS requirement. **Must fix**
+10. `docs/reference/architecture.md:38,55` — The Remote section generalizes the loopback-only Tailscale listener to all Remote access and says Remote “never” uses a public bind. The Native method binds host interfaces and requires HTTPS, as documented in `crates/retinue-daemon/src/remote/native.rs:15,78`. **Proposed change:** distinguish the loopback Tailscale gateway from the interface-bound Native gateway, including Native’s TLS requirement. **Must fix**
 
 11. `README.md:53` — The signed updater feed is described as beta.6, while the release checklist says the rolling beta channel offers beta.35. **Proposed change:** update the feed reference or link readers to the current updater contract. This is separate from the README release-version figure noted in the known limits. **Must fix**
 
-12. `docs/reference/architecture.md:18-20` — Several citations use `main.rs:...` instead of a repository-relative path, unlike the guide’s `path:line` rule; those references are ambiguous on their own. **Proposed change:** use full paths such as `crates/bloblex-daemon/src/main.rs:4299` consistently. **Should fix**
+12. `docs/reference/architecture.md:18-20` — Several citations use `main.rs:...` instead of a repository-relative path, unlike the guide’s `path:line` rule; those references are ambiguous on their own. **Proposed change:** use full paths such as `crates/retinue-daemon/src/main.rs:4299` consistently. **Should fix**
 
 ### Missing coverage
 

@@ -1,4 +1,4 @@
-# Brief: Bitbots in Rust (GPUI), slice 5 — the companion and dictation
+# Brief: Retinue in Rust (GPUI), slice 5 — the companion and dictation
 
 **Lane:** Gogo (OpenCode Go DeepSeek V4.1 Flash, high), in its own git worktree. **Slice 3 runs at the same time in another Gogo conversation**, so file ownership below matters. The Director reviews, screenshots the window, merges both and commits.
 
@@ -7,7 +7,7 @@
 **Rules (unchanged):**
 - Never run `git commit`, `push`, `merge`, `stash` or `reset`, and never switch branches. Change nothing outside your worktree.
 - Never print or log tokens, the capability or credentials.
-- Don't modify `crates/` or `apps/desktop/`. Read them as the reference. You may depend on `crates/bloblex-speech` by path.
+- Don't modify `crates/` or `apps/desktop/`. Read them as the reference. You may depend on `crates/retinue-speech` by path.
 - If something is impossible at the pinned GPUI rev, pick the smallest working alternative and say so.
 - `CARGO_TARGET_DIR=C:\bbn\target5`. Use a separate target dir, because slice 3 is building in `C:\bbn\target` at the same time.
 
@@ -49,7 +49,7 @@ Port the companion from `apps/desktop/src-tauri/src/lib.rs` (`make_companion` ~2
 - The conversation picker (`CompanionConversationPicker.tsx`).
 - A small composer that sends to the picked conversation. A plain multi-line input from `text_input.rs` is enough; don't wait for slice 3's composer.
 - The status gradient from `haze.css`, where a solid colour can stand in if GPUI can't draw it.
-- "Open in Bitbots" brings the main window forward on that conversation.
+- "Open in Retinue" brings the main window forward on that conversation.
 
 **File drop:** dropping a file on the companion attaches it to the picked conversation, as `companionDrop.ts` does, or opens a new one.
 
@@ -61,14 +61,14 @@ Port the companion from `apps/desktop/src-tauri/src/lib.rs` (`make_companion` ~2
 
 Port `src/blob/soundCues.ts`, `soundVolume.ts` and `ui/dictationSound.ts`:
 - the same cues, off by default as in the React app, with the volume in `CompanionSettings`;
-- play through `rodio` or the `cpal` that `bloblex-speech` already pulls;
+- play through `rodio` or the `cpal` that `retinue-speech` already pulls;
 - if the React app synthesises the sounds in Web Audio, synthesise the same envelopes in Rust; don't add audio files unless the React app ships them.
 
 ## 3. Dictation (on-device)
 
 Port the native half from `apps/desktop/src-tauri/src/speech.rs` and the commands `dictation_*`, `speech_*`, `set_dictation_shortcut` and `make_dictation` (lib.rs ~3041–3100). Port the UI from `ui/DictationIsland.tsx`, `DictationBubble.tsx`, `DictationButton.tsx`, `dictation.ts` and `dictationCopy.test.ts`.
 
-- **The engine:** `bloblex-speech` with its `native` feature (sherpa-onnx + cpal), by path.
+- **The engine:** `retinue-speech` with its `native` feature (sherpa-onnx + cpal), by path.
   - If depending on it from the separate workspace fails (workspace-inherited fields), say exactly why. Then try `[patch]` or a thin re-export crate under `apps/native/`. Don't edit `crates/`.
   - If sherpa-onnx's native libraries need bundling, add them to `package.ps1` the way `tauri.conf.json` bundles them.
 - **Model:** use the same model directory and catalogue as the installed app, so a model it already downloaded is reused (read `speech.rs` for the path). Downloading a model can wait for slice 6's settings; if no model is installed, the bubble says the React app's exact message.
@@ -90,7 +90,7 @@ Port the native half from `apps/desktop/src-tauri/src/speech.rs` and the command
 - the dictation copy messages;
 - hotkey registration failure → the React app's message ("Ctrl+Alt+B is already in use.").
 
-**Gates:** `cargo build --release`, `cargo test` and `cargo clippy --all-targets -- -D warnings` in `apps/native` (with your target dir), and `cargo check -p bloblex-daemon`.
+**Gates:** `cargo build --release`, `cargo test` and `cargo clippy --all-targets -- -D warnings` in `apps/native` (with your target dir), and `cargo check -p retinue-daemon`.
 
 **Live check** against a temporary database. Report through logs:
 1. the companion opens;

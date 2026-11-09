@@ -40,7 +40,7 @@ import { ProviderLimits } from '../../ui/QuotaBar'
 
 const params = new URLSearchParams(location.search)
 const theme = params.get('theme') === 'light' ? 'light' : 'dark'
-const style = params.get('style') === 'blobots' ? 'blobots' : 'haze'
+const style = params.get('style') === 'stone' ? 'stone' : 'haze'
 document.documentElement.dataset.theme = theme
 document.documentElement.dataset.style = style
 

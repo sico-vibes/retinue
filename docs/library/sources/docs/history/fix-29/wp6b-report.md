@@ -1,4 +1,4 @@
-# FIX29 WP6b — the remote gateway in `bitbotsd` over Tailscale
+# FIX29 WP6b — the remote gateway in `retinued` over Tailscale
 
 > **What this is:** Report on FIX29 WP6b: the remote gateway in the daemon over Tailscale.
 > **Status:** historical
@@ -14,24 +14,24 @@ executed.
 
 New / changed in this package:
 
-- `crates/bloblex-daemon/src/remote/mod.rs` — `RemoteState` in `AppState`, the
+- `crates/retinue-daemon/src/remote/mod.rs` — `RemoteState` in `AppState`, the
   `remote.*` dispatch, enable/disable lifecycle, start-at-boot.
-- `crates/bloblex-daemon/src/remote/tailscale.rs` — `TailscaleCli` trait, the
+- `crates/retinue-daemon/src/remote/tailscale.rs` — `TailscaleCli` trait, the
   real `std::process::Command` implementation and the `FakeCli`, status/help
   parsing, the serve add/remove argv.
-- `crates/bloblex-daemon/src/remote/pairing.rs` — offers, pending requests, the
+- `crates/retinue-daemon/src/remote/pairing.rs` — offers, pending requests, the
   pair cookie, token creation and constant-time comparison.
-- `crates/bloblex-daemon/src/remote/web.rs` — the axum router, the §4.1 request
+- `crates/retinue-daemon/src/remote/web.rs` — the axum router, the §4.1 request
   checks, the §4.5 pipeline and the §6 event sockets.
-- `crates/bloblex-daemon/src/remote/tests.rs` — the integration tests (fake CLI,
+- `crates/retinue-daemon/src/remote/tests.rs` — the integration tests (fake CLI,
   temp databases, ephemeral ports).
-- `crates/bloblex-daemon/src/main.rs` — `remote` module, the `remote.*` arms,
+- `crates/retinue-daemon/src/main.rs` — `remote` module, the `remote.*` arms,
   the `settings.set` refusal for `remote.` keys.
-- `crates/bloblex-storage/src/lib.rs` — `ensure_remote_schema`, the
+- `crates/retinue-storage/src/lib.rs` — `ensure_remote_schema`, the
   `remote_device_*` and `remote_activity_*` methods.
 - `apps/desktop/src/remote/tiers.json` — the 12 `remote.*` methods (`never`)
   and the 5 `remote.*` events (`drop`).
-- `apps/desktop/src-tauri/src/lib.rs` — `BITBOTS_REMOTE_WEB_DIR` when a
+- `apps/desktop/src-tauri/src/lib.rs` — `RETINUE_REMOTE_WEB_DIR` when a
   `remote-web` resource folder exists.
 - `apps/desktop/src/remote/remoteTiers.parity.test.ts` — the dispatch extractor
   now joins rustfmt multi-line alternation arms (see "Fixes" below).
@@ -158,13 +158,13 @@ Remote-module tests (75): `remote::tests` (integration, fake CLI + temp DB),
 
 | Gate | Result |
 | --- | --- |
-| `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast` | **pass** — every `test result: ok`, 0 failed (daemon bin 93, storage 291, etc.) |
-| `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` | **pass** — clean |
-| `cargo test -p bloblex-desktop --lib` | **blocked** — build script: `resource path binaries\bitbotsd-x86_64-pc-windows-msvc.exe doesn't exist` (the sidecar is not built in this worktree). The Director runs it after staging the sidecar. |
+| `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast` | **pass** — every `test result: ok`, 0 failed (daemon bin 93, storage 291, etc.) |
+| `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` | **pass** — clean |
+| `cargo test -p retinue-desktop --lib` | **blocked** — build script: `resource path binaries\retinued-x86_64-pc-windows-msvc.exe doesn't exist` (the sidecar is not built in this worktree). The Director runs it after staging the sidecar. |
 | `cd apps/desktop && npx tsc -b` | **pass** — no output |
 | `cd apps/desktop && npx vitest run src/remote` | **pass** — 4 files, 125 tests |
 
-`cargo build -p bloblex-daemon` succeeds.
+`cargo build -p retinue-daemon` succeeds.
 
 ## Hard rules
 
@@ -190,7 +190,7 @@ Remote-module tests (75): `remote::tests` (integration, fake CLI + temp DB),
   installed CLI version, its `serve --help` text, real `status --json` shapes,
   SChannel/cert issuance and the actual 443→8443 fallback against a live tailnet
   are unverified here.
-- **The desktop sidecar gate** (`cargo test -p bloblex-desktop --lib`) did not
+- **The desktop sidecar gate** (`cargo test -p retinue-desktop --lib`) did not
   run in this worktree because the sidecar is missing; the Director runs it.
-- The native `BITBOTS_REMOTE_WEB_DIR` hand-off is source-reviewed only (WP6c
+- The native `RETINUE_REMOTE_WEB_DIR` hand-off is source-reviewed only (WP6c
   builds `remote-web`).

@@ -4,8 +4,8 @@
 > **Status:** historical
 > **Last updated:** 2026-10-14
 
-Written 14 October 2026. Backend only (`crates/bloblex-storage`,
-`crates/bloblex-daemon`, and their tests). No `apps/` edits.
+Written 14 October 2026. Backend only (`crates/retinue-storage`,
+`crates/retinue-daemon`, and their tests). No `apps/` edits.
 
 ## 1. Symptom (owner)
 
@@ -25,11 +25,11 @@ must sit above the text that follows the call.
 ## 2. Cause (read from the code)
 
 - All assistant text of one turn is appended to **one** message row.
-  `Storage::append_typed_message_delta` (`crates/bloblex-storage/src/lib.rs`
+  `Storage::append_typed_message_delta` (`crates/retinue-storage/src/lib.rs`
   ~line 2676) finds the turn's existing assistant row and appends; a row is
   created, with the next `sequence`, only when the turn has none.
 - The "Messaged X" chip is a `notice` message written by `team::note`
-  (`crates/bloblex-daemon/src/team.rs` ~line 539, called from the `message_blob`
+  (`crates/retinue-daemon/src/team.rs` ~line 539, called from the `message_blob`
   tool handler ~line 446) via `append_message_with_data`, which also takes the next
   `sequence`.
 - So when the model streams any text **before** it calls `message_blob` (even a
@@ -85,9 +85,9 @@ must sit above the text that follows the call.
 ## 5. Gates
 
 ```
-cargo test -p bloblex-storage
-cargo test -p bloblex-daemon          # RUST_MIN_STACK=33554432 on this machine
-cargo clippy -p bloblex-storage -p bloblex-daemon --no-deps --all-targets -- -D warnings
+cargo test -p retinue-storage
+cargo test -p retinue-daemon          # RUST_MIN_STACK=33554432 on this machine
+cargo clippy -p retinue-storage -p retinue-daemon --no-deps --all-targets -- -D warnings
 ```
 
 The workspace is clippy-clean; keep it so.

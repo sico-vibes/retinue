@@ -41,7 +41,7 @@ export const BOTS: Bot[] = [
 ]
 
 export const PROJECTS: Project[] = [
-  { id: 'bitbots', name: 'Bitbots' },
+  { id: 'retinue', name: 'Retinue' },
   { id: 'pricing', name: 'Pricing site' },
   { id: 'ads', name: 'Ads automation' },
 ]
@@ -58,8 +58,8 @@ export function makeSessions(now: number): Session[] {
     s('s5', 'ads', 'Sync the ad spend sheet', 'ads', 29, 22, 'done', ['Pulled last week of spend', 'Updated 42 rows']),
     s('s6', 'ads', 'Rotate the ads API keys', 'ads', 8, null, 'needs', ['Prepared the new key', 'Waiting for approval to run the rotate script']),
     s('s7', 'codex', 'Build the checkout page', 'pricing', 24, 6, 'error', ['Wired the plan picker', 'Checkout tests failed: coupon total off by one cent']),
-    s('s8', 'pololo', 'Review PR #482 billing', 'bitbots', 70, 48, 'done', ['Left six review comments', 'Approved after fixes']),
-    s('s9', 'cc', 'Release notes for beta.37', 'bitbots', 140, 118, 'done', ['Collected 23 merged changes', 'Wrote the notes']),
+    s('s8', 'pololo', 'Review PR #482 billing', 'retinue', 70, 48, 'done', ['Left six review comments', 'Approved after fixes']),
+    s('s9', 'cc', 'Release notes for beta.37', 'retinue', 140, 118, 'done', ['Collected 23 merged changes', 'Wrote the notes']),
   ]
 }
 
@@ -99,7 +99,7 @@ export const TASKS: Task[] = [
   { ...blank, id: 't3', title: 'Build the page and wire up checkout', brief: 'Build the pricing page from the design and connect the plan picker to checkout.', doneGoal: 'The page renders and the checkout tests pass.', projectId: 'pricing', estimateMinutes: 25, state: 'failed', assigneeId: 'codex', parentId: 't-root', origin: 'manager', sessionId: 's7', costSoFar: 0.49 },
   { ...blank, id: 't4', title: 'Group interview quotes by theme', brief: 'Read the 14 interview notes and group the strongest quotes by theme for the page.', doneGoal: 'A quotes section in docs/pricing/quotes.md.', projectId: 'pricing', estimateMinutes: 18, state: 'running', assigneeId: 'doop', parentId: 't-root', origin: 'manager', sessionId: 's4', costSoFar: 0.03 },
   { ...blank, id: 't5', title: 'Fix the coupon rounding test', brief: 'The coupon total is one cent off when tax rounds down. Fix the rounding and run the checkout tests again.', doneGoal: 'npm test checkout passes.', projectId: 'pricing', estimateMinutes: 10, state: 'queued', assigneeId: 'codex', parentId: 't3', origin: 'manager', sessionId: null },
-  { ...blank, id: 't6', title: 'Write release notes', brief: 'Collect merged changes since beta.36 and write plain release notes.', doneGoal: 'docs/releases/beta.37.md exists and reads well.', projectId: 'bitbots', estimateMinutes: 12, state: 'unassigned', assigneeId: null, parentId: null, origin: 'manager', sessionId: null },
+  { ...blank, id: 't6', title: 'Write release notes', brief: 'Collect merged changes since beta.36 and write plain release notes.', doneGoal: 'docs/releases/beta.37.md exists and reads well.', projectId: 'retinue', estimateMinutes: 12, state: 'unassigned', assigneeId: null, parentId: null, origin: 'manager', sessionId: null },
   { ...blank, id: 't7', title: 'Fix the flaky checkout test', brief: 'checkout.spec fails about one run in ten. Find the race and fix it.', doneGoal: 'Fifty runs in a row pass.', projectId: 'pricing', estimateMinutes: 20, state: 'unassigned', assigneeId: null, parentId: null, origin: 'manager', sessionId: null },
   { ...blank, id: 't8', title: 'Summarise the churn calls', brief: 'Summarise last week’s churn call notes into the five most common reasons.', doneGoal: 'A list of five reasons with a quote each.', projectId: 'ads', estimateMinutes: 15, state: 'unassigned', assigneeId: null, parentId: null, origin: 'you', sessionId: null, schedule: { kind: 'repeat', at: '', cron: '0 9 * * 1' } },
   { ...blank, id: 't9', title: 'Refresh the weekly ad report', brief: 'Pull spend and conversions for the last seven days and update the report sheet.', doneGoal: 'The sheet shows this week’s numbers.', projectId: 'ads', estimateMinutes: 10, state: 'queued', assigneeId: 'ads', parentId: null, origin: 'you', sessionId: null, schedule: { kind: 'repeat', at: '', cron: '30 8 * * 1-5' } },
@@ -111,7 +111,7 @@ export function draftFromAsk(ask: string, id: string): Task {
   const title = ask.trim().replace(/[.]+$/, '')
   const head = title.charAt(0).toUpperCase() + title.slice(1)
   return {
-    ...blank, id, title: head, projectId: 'bitbots', estimateMinutes: 15, state: 'unassigned', assigneeId: null, parentId: null, origin: 'manager', sessionId: null,
+    ...blank, id, title: head, projectId: 'retinue', estimateMinutes: 15, state: 'unassigned', assigneeId: null, parentId: null, origin: 'manager', sessionId: null,
     brief: `${head}. Start by reading the relevant code and docs, then make the smallest correct change. Keep notes of anything surprising.`,
     doneGoal: 'The change is in place, its tests pass, and nothing else broke.',
     reportBack: 'What changed (files), how it was checked, and anything left open.',

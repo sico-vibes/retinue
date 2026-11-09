@@ -26,7 +26,7 @@ export function LookPicker({ value, onChange, disabled = false, compact = false,
   compact?: boolean
   label?: string
 }) {
-  const order: ThemeStyle[] = ['haze', 'blobots']
+  const order: ThemeStyle[] = ['haze', 'stone']
   return <div className={`look-orb-picker ${compact ? 'compact' : ''}`} role="radiogroup" aria-label={label}>
     {order.map((id) => {
       const look = LOOKS.find((item) => item.id === id)!

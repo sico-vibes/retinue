@@ -44,9 +44,9 @@ describe('instruction history', () => {
   })
 
   it('drops malformed stored entries', () => {
-    localStorage.setItem('bitbots.instructionHistory.agent-1', JSON.stringify([{ at: 'now' }, 'nope', { at: 't', text: 'ok' }]))
+    localStorage.setItem('retinue.instructionHistory.agent-1', JSON.stringify([{ at: 'now' }, 'nope', { at: 't', text: 'ok' }]))
     expect(instructionVersions('agent-1')).toEqual([{ at: 't', text: 'ok' }])
-    localStorage.setItem('bitbots.instructionHistory.agent-1', 'not json')
+    localStorage.setItem('retinue.instructionHistory.agent-1', 'not json')
     expect(instructionVersions('agent-1')).toEqual([])
   })
 })

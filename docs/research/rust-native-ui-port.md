@@ -1,4 +1,4 @@
-# Moving the Bitbots UI to native Rust: is it worth it?
+# Moving the Retinue UI to native Rust: is it worth it?
 
 Research only, 8 November 2026. No code was changed. The question from the owner: could the UI leave Tauri 2 + React/TypeScript (WebView2) for a native Rust stack, mainly GPUI, to be faster and use less memory, while keeping the Haze look and every feature?
 
@@ -27,7 +27,7 @@ Measured in this checkout (`main` at `d5708cf`): 280 non-test TS/TSX files (~37k
 | Diffs and review | `ui/DiffBody.tsx`, `ui/ChangesView.tsx` | Virtualised text grid with line comments | Medium |
 | PDF and media preview | `ui/PdfViewer.tsx` (pdf.js), `ui/MediaPreview.tsx` | pdfium or MuPDF bindings, image and video decoding | Medium–high |
 | Terminal dock | `@xterm/xterm` 6 in `ui/TerminalDock.tsx`, `ui/terminalHub.ts`, native `src-tauri/src/pty.rs` | A terminal grid. `alacritty_terminal` (used by Zed) is the usual choice; the PTY side stays | Medium |
-| Text input, IME, dictation | Composer in `ui/TeamMessages.tsx`/`ui/ComposerControls.tsx`; dictation island (`?dictation=1`), `bloblex-speech` | A multi-line editor with full IME (CJK composition, emoji picker), mentions (`#` project, `@` bot), drafts, pasted images. Dictation's audio side stays in Rust | High (IME is where most Rust toolkits fall short) |
+| Text input, IME, dictation | Composer in `ui/TeamMessages.tsx`/`ui/ComposerControls.tsx`; dictation island (`?dictation=1`), `retinue-speech` | A multi-line editor with full IME (CJK composition, emoji picker), mentions (`#` project, `@` bot), drafts, pasted images. Dictation's audio side stays in Rust | High (IME is where most Rust toolkits fall short) |
 | Accessibility | ~2,050 ARIA attributes and roles; Narrator works through WebView2's UIA tree today | AccessKit (UIA on Windows) wired into every control | High, the main risk |
 | Three windows | Main, companion and dictation (`WebviewWindowBuilder`, undecorated, transparent, always-on-top, skip-taskbar; `src-tauri/src/lib.rs` ~2942 and ~3057), companion resize commands | Multi-window with per-window transparency and z-order. GPUI and Slint support this | Medium |
 | Drag and drop | File drop on the companion, task cards in `ui/DelegateBoard.tsx` | OS file drop plus in-app drag | Medium |
@@ -37,7 +37,7 @@ Measured in this checkout (`main` at `d5708cf`): 280 non-test TS/TSX files (~37k
 | Browser preview and DOM tests | `apps/desktop/src/preview/`, ~25k lines of `*.test.ts(x)` and `*.mounted.test.tsx` | Rebuild a test harness. GPUI has `TestAppContext`; visual checks move from the browser to screenshots | High |
 | macOS later | Tauri covers it today | GPUI is strongest on macOS (Zed's home). Others vary | Varies |
 
-The daemon (`crates/bloblex-daemon`) and its loopback HTTP + WebSocket API (`docs/ipc-contract.md`) are already a clean seam: a native UI would talk to the same `POST /v1/rpc` and `GET /v1/events`, so nothing behind it changes.
+The daemon (`crates/retinue-daemon`) and its loopback HTTP + WebSocket API (`docs/ipc-contract.md`) are already a clean seam: a native UI would talk to the same `POST /v1/rpc` and `GET /v1/events`, so nothing behind it changes.
 
 ## 2. Framework comparison
 
@@ -75,13 +75,13 @@ Notes:
 | Tauri on heavy pages | ~370–399 MB, similar to Electron | [tauri#5889](https://github.com/tauri-apps/tauri/issues/5889) |
 | Slint, comparable window | ~21–25 MiB, one process | zsui matrix (above) |
 
-These are other projects' numbers, measured in different ways (resident vs private). Bitbots runs **three** WebView2 windows (main, companion, dictation), which share the WebView2 browser process but add renderer memory each. We haven't measured our own process tree. The first step is to do that on the installed app (Task Manager's "Details" view, or `Get-Process msedgewebview2 | Measure-Object WorkingSet64,PrivateMemorySize64 -Sum`).
+These are other projects' numbers, measured in different ways (resident vs private). Retinue runs **three** WebView2 windows (main, companion, dictation), which share the WebView2 browser process but add renderer memory each. We haven't measured our own process tree. The first step is to do that on the installed app (Task Manager's "Details" view, or `Get-Process msedgewebview2 | Measure-Object WorkingSet64,PrivateMemorySize64 -Sum`).
 
 A native GPUI or Slint UI would probably bring the UI side to tens of megabytes. The saving is about 200 MB or more, and it is real. The daemon's memory doesn't change.
 
 ### Speed (measured, ours)
 
-- Every slowdown we have measured was in the daemon and storage (`.claude/skills/bitbots-development/references/lessons.md`, 1 November 2026): one SQLite mutex, a 12–22 s full snapshot, and a correlated subquery that scanned the event log once per turn. After the fixes: lazy snapshot 99 ms, `session.get` 0.5 ms, an effort save 3.5 ms. A native UI would have inherited the old numbers unchanged.
+- Every slowdown we have measured was in the daemon and storage (`.claude/skills/retinue-development/references/lessons.md`, 1 November 2026): one SQLite mutex, a 12–22 s full snapshot, and a correlated subquery that scanned the event log once per turn. After the fixes: lazy snapshot 99 ms, `session.get` 0.5 ms, an effort save 3.5 ms. A native UI would have inherited the old numbers unchanged.
 - Still open, and also backend: tool payloads (96 of 100 ms on the slowest conversation; needs tool output on demand), and one fsync per streamed token (2.6–11.6 ms).
 - The UI side is **unmeasured in WebView2**. `perf-budgets.json` records 4.5–14.5 s to mount a 1,000-message conversation in happy-dom, and says itself that this is a regression alarm, not a WebView2 figure.
 - The code has known render costs: no `memo(` on message rows, no virtualised conversation list, no `useDeferredValue`/`startTransition`, and a ~3,900-line `App.tsx` whose state changes re-render large trees. GPUI would avoid some of this by design (retained, GPU-drawn, only dirty views redraw), but a virtualised, memoised React list gets most of the same effect.
@@ -178,6 +178,6 @@ The remote PWA stays React. From Phase 2 on, there are two UIs to keep in step, 
 - Linebender / Xilem: https://linebender.org/blog/tmil-15/, https://poignardazur.github.io/2025/03/24/plan-for-linebender-post-mortem
 - 2025 Rust GUI survey, coverage and discussion: https://weeklyrust.substack.com/p/the-state-of-rust-gui-the-good-and, https://redlib.hackliberty.org/r/rust/comments/1jyy8u2/2025_survey_of_rust_gui_libraries
 - WebView2 `MemoryUsageTargetLevel`: https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2.memoryusagetargetlevel
-- In this repository: `.claude/skills/bitbots-development/references/lessons.md` (1 November 2026 performance entries), `perf-budgets.json`, `apps/desktop/src-tauri/src/backdrop.rs`, `apps/desktop/src-tauri/src/lib.rs`, `apps/desktop/src/blob/haze/characters/`, `apps/desktop/src/ui/SafeMarkdown.tsx`.
+- In this repository: `.claude/skills/retinue-development/references/lessons.md` (1 November 2026 performance entries), `perf-budgets.json`, `apps/desktop/src-tauri/src/backdrop.rs`, `apps/desktop/src-tauri/src/lib.rs`, `apps/desktop/src/blob/haze/characters/`, `apps/desktop/src/ui/SafeMarkdown.tsx`.
 
 Claims marked "to verify" come from forks, third-party notes or secondary coverage and weren't checked against the upstream source. GPUI's upstream accessibility status matters most among them.

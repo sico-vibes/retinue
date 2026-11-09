@@ -25,7 +25,7 @@ pub struct Shared {
     /// The bot the main window has focused.
     agent_id: Option<String>,
     root: Option<WeakEntity<Root>>,
-    /// The main window, so "Open in Bitbots" can bring it forward.
+    /// The main window, so "Open in Retinue" can bring it forward.
     pub main_window: Option<AnyWindowHandle>,
     /// The companion window, so a dictation or a click can activate it.
     pub companion_window: Option<AnyWindowHandle>,
@@ -138,7 +138,7 @@ impl Shared {
     }
 
     /// The main window's selection, so the companion shows the same conversation
-    /// and "Open in Bitbots" knows where to go.
+    /// and "Open in Retinue" knows where to go.
     pub fn set_selection(&mut self, session_id: Option<String>, agent_id: Option<String>, cx: &mut gpui::Context<Self>) {
         if self.session_id != session_id || self.agent_id != agent_id {
             self.session_id = session_id;

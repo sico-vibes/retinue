@@ -5,7 +5,7 @@
 //! model whichever window starts them, and tears itself down after an idle
 //! period. A session opens the microphone before the model finishes loading,
 //! so audio queues instead of being lost. The pure lifecycle lives in
-//! `bloblex_speech`; this module is the native shell.
+//! `retinue_speech`; this module is the native shell.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -14,13 +14,13 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use bloblex_speech::capture::{start_capture, AudioFrame};
-use bloblex_speech::cloud::{
+use retinue_speech::capture::{start_capture, AudioFrame};
+use retinue_speech::cloud::{
     auth_status, resolve_engine, warm, AudioBuffer, AuthState, CloudCooldown, CloudError,
     CloudTranscriber, EnginePreference, ResolvedEngine, WarmReport, BOTH_ENGINES_UNAVAILABLE,
     CLOUD_SAMPLE_RATE, MAX_BUFFER_SAMPLES,
 };
-use bloblex_speech::{
+use retinue_speech::{
     catalog, downmix_to_mono, get_catalog_model, model_manager, resample_to_rate, rms_level,
     DictationLifecycle, DictationOwner, EngineEvent, SpeechEngine, SpeechModelManifest,
 };
@@ -97,7 +97,7 @@ fn resolve_cache_root(app: &AppHandle) -> PathBuf {
         .ok()
         .map(|root| {
             PathBuf::from(root)
-                .join("Bitbots")
+                .join("Retinue")
                 .join("speech-models")
                 .join(short)
         })
@@ -107,12 +107,12 @@ fn resolve_cache_root(app: &AppHandle) -> PathBuf {
 
 fn emit(app: &AppHandle, owner: DictationOwner, kind: &str, text: Option<&str>) {
     let payload = json!({ "type": kind, "owner": owner.as_str(), "text": text });
-    let _ = app.emit("bloblex-dictation", payload);
+    let _ = app.emit("retinue-dictation", payload);
 }
 
 fn emit_error(app: &AppHandle, owner: DictationOwner, text: &str, code: Option<&str>) {
     let payload = json!({ "type": "error", "owner": owner.as_str(), "text": text, "code": code });
-    let _ = app.emit("bloblex-dictation", payload);
+    let _ = app.emit("retinue-dictation", payload);
 }
 
 /// Status-only engine announcement for the UI indicator. Never carries content.
@@ -124,7 +124,7 @@ fn emit_engine_choice(
     reason: Option<&str>,
 ) {
     let _ = app.emit(
-        "bloblex-dictation-engine",
+        "retinue-dictation-engine",
         json!({ "owner": owner.as_str(), "engine": engine.as_str(), "fallback": fallback, "reason": reason }),
     );
 }
@@ -297,7 +297,7 @@ pub async fn speech_model_download(app: AppHandle, model_id: String) -> Result<V
     let emit_id = manifest.id.clone();
     let directory = model_manager::ensure_model(&client, &root, &manifest, move |completed, total| {
         let _ = emit_app.emit(
-            "bloblex-speech-download",
+            "retinue-speech-download",
             json!({ "modelId": emit_id, "completed": completed, "total": total }),
         );
     })
@@ -590,7 +590,7 @@ fn run_worker(
         };
         let surface = if companion_visible(&app) { "companion" } else { "bubble" };
         let _ = app.emit(
-            "bloblex-dictation-surface",
+            "retinue-dictation-surface",
             json!({ "surface": surface, "owner": owner.as_str() }),
         );
         if surface == "bubble" {
@@ -625,7 +625,7 @@ fn run_worker(
                             if last_level.elapsed() >= LEVEL_INTERVAL {
                                 last_level = Instant::now();
                                 let _ = app.emit(
-                                    "bloblex-dictation-level",
+                                    "retinue-dictation-level",
                                     json!({ "level": rms_level(&resampled) }),
                                 );
                             }
@@ -664,7 +664,7 @@ fn run_worker(
                             if last_level.elapsed() >= LEVEL_INTERVAL {
                                 last_level = Instant::now();
                                 let _ = app.emit(
-                                    "bloblex-dictation-level",
+                                    "retinue-dictation-level",
                                     json!({ "level": rms_level(&resampled) }),
                                 );
                             }
@@ -831,7 +831,7 @@ pub fn dictation_state(state: State<'_, SpeechState>) -> Result<Value, String> {
 #[cfg(test)]
 mod tests {
     use super::{cloud_failure_events, cloud_failure_message, cloud_warm_payload};
-    use bloblex_speech::cloud::{AuthState, AuthStatus, CloudError, WarmReport};
+    use retinue_speech::cloud::{AuthState, AuthStatus, CloudError, WarmReport};
 
     #[test]
     fn cloud_warm_payload_is_status_only() {

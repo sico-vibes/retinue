@@ -5,9 +5,9 @@ Worktree `D:\t4a`, branch `t4/delegation`. No tests were run of any kind (no `ca
 block added, edited or deleted). No git write of any kind was made (no commit/add/push/reset/stash/
 checkout/rebase). No process was started beyond `cargo check`; no app, browser or screenshot was used.
 
-Only these files were edited: `crates/bloblex-daemon/src/team.rs`,
-`crates/bloblex-daemon/src/delegations.rs`, `crates/bloblex-daemon/src/questions.rs`,
-`crates/bloblex-storage/src/lib.rs`, `crates/bloblex-daemon/src/main.rs` (one added block inside the
+Only these files were edited: `crates/retinue-daemon/src/team.rs`,
+`crates/retinue-daemon/src/delegations.rs`, `crates/retinue-daemon/src/questions.rs`,
+`crates/retinue-storage/src/lib.rs`, `crates/retinue-daemon/src/main.rs` (one added block inside the
 `AgentEvent::PermissionRequested` arm, nothing else), plus `target/lane/report.md` and
 `target/lane/worklog.md`.
 
@@ -17,20 +17,20 @@ Only these files were edited: `crates/bloblex-daemon/src/team.rs`,
 
 **Changed**
 
-- `crates/bloblex-daemon/src/team.rs:298-315` — new `const CHART_TABLE_INSTRUCTIONS: &str`, built with
+- `crates/retinue-daemon/src/team.rs:298-315` — new `const CHART_TABLE_INSTRUCTIONS: &str`, built with
   `concat!` from the brief's text verbatim (real newlines, literal ``` fences). The two JSON
   examples are raw string literals so their quoting is byte-identical to the brief; the table example
   uses `r##"…"##` because it contains `"#12"` (an `r#"…"#` literal would have terminated early).
-- `crates/bloblex-daemon/src/team.rs:350-353` — `lines.push(CHART_TABLE_INSTRUCTIONS.into());`, placed
+- `crates/retinue-daemon/src/team.rs:350-353` — `lines.push(CHART_TABLE_INSTRUCTIONS.into());`, placed
   after the teammate/delegation/`list_conversations` lines and before the `link["kind"] == "side"`
   block, so every bot (Manager, ordinary bot, side and task conversations) gets the same block.
-- `crates/bloblex-daemon/src/team.rs:339` — Manager-only line, verbatim from the brief:
+- `crates/retinue-daemon/src/team.rs:339` — Manager-only line, verbatim from the brief:
   `A message that starts with [Update from NAME] means a teammate is waiting … do not try to answer
   for them, approve anything, or send the task again.` It sits in the `systemRole == "manager"` branch
   after the notes/playbook line.
 - No tool description was touched.
 
-**Invariants relied on**: `runtime_instructions` joins `lines` with `\n` inside `<bloblex_team>`, so a
+**Invariants relied on**: `runtime_instructions` joins `lines` with `\n` inside `<retinue_team>`, so a
 single multi-line push renders exactly as the brief's block, blank lines included. The text is the
 contract with `apps/desktop/src/ui/richData.ts`; the fences, field names, limits and examples are
 unchanged from the brief.
@@ -44,16 +44,16 @@ follows the last delegation line directly, exactly as "placed after … and befo
 
 **Changed**
 
-- `crates/bloblex-storage/src/lib.rs:999-1002` — nullable column `wake_request TEXT`, added with the
+- `crates/retinue-storage/src/lib.rs:999-1002` — nullable column `wake_request TEXT`, added with the
   same idempotent `pragma_table_info` guard `reply_state` uses. Not added to `DELEGATION_COLUMNS`, so
   it never reaches the wire DTO.
-- `crates/bloblex-storage/src/lib.rs:3567-3579` — `delegation_wake_claim(id, request_id) -> Result<bool>`:
+- `crates/retinue-storage/src/lib.rs:3567-3579` — `delegation_wake_claim(id, request_id) -> Result<bool>`:
   one atomic `UPDATE delegations SET wake_request=?2 WHERE id=?1 AND status='running' AND
   (wake_request IS NULL OR wake_request != ?2)`, returns `changed == 1` (empty request id → `false`).
-- `crates/bloblex-daemon/src/delegations.rs:191-194` — `active_turn()` (reads `st.active_turns`).
-- `crates/bloblex-daemon/src/delegations.rs:196-222` — private `struct Update` plus
+- `crates/retinue-daemon/src/delegations.rs:191-194` — `active_turn()` (reads `st.active_turns`).
+- `crates/retinue-daemon/src/delegations.rs:196-222` — private `struct Update` plus
   `fn spawn_update(st, Update)`, which delivers the notice from its own task (see the E0391 note below).
-- `crates/bloblex-daemon/src/delegations.rs:224-274` — `pub(crate) async fn attention(st,
+- `crates/retinue-daemon/src/delegations.rs:224-274` — `pub(crate) async fn attention(st,
   side_session_id, request_id, request_kind, title)`:
   1. row = `delegation_find_for_side_turn(side, active turn)` else `delegation_latest_open_for_side(side)`;
      returns unless `status == "running"`;
@@ -64,26 +64,26 @@ follows the last delegation line directly, exactly as "placed after … and befo
      (`{"kind":"blob_update","fromAgentId","fromName","sideSessionId","delegationId","requestId",
      "requestKind","title"}`), carried at the side conversation's hop depth and sent through
      `team::deliver_update` → `deliver` (the same path as `deliver_reply`).
-- `crates/bloblex-daemon/src/team.rs:44-52` — `same_delivery` now also compares `meta["requestId"]`,
+- `crates/retinue-daemon/src/team.rs:44-52` — `same_delivery` now also compares `meta["requestId"]`,
   so two different requests on one assignment are both delivered and one request is never queued
   twice. Briefs and replies have no `requestId` on either side (both `Null`), so their dedupe is
   unchanged.
-- `crates/bloblex-daemon/src/team.rs:846-857` — `deliver` treats `blob_update` like `blob_reply`: a
+- `crates/retinue-daemon/src/team.rs:846-857` — `deliver` treats `blob_update` like `blob_reply`: a
   delivery carrying a `delegationId` starts/fails the assignment only for a forwarded brief.
-- `crates/bloblex-daemon/src/team.rs:86-90` — `Team::depth_of(session_id)`, so `delegations.rs` can
+- `crates/retinue-daemon/src/team.rs:86-90` — `Team::depth_of(session_id)`, so `delegations.rs` can
   read the hop depth without touching `team`'s private map.
-- `crates/bloblex-daemon/src/team.rs:877-898` — `deliver_update` next to `deliver_reply`, building
+- `crates/retinue-daemon/src/team.rs:877-898` — `deliver_update` next to `deliver_reply`, building
   the `blob_update` meta and calling `deliver(..., retry = false)`.
-- `crates/bloblex-daemon/src/team.rs:932-938` (doc comment on `stopped_delegation`) — states that an
+- `crates/retinue-daemon/src/team.rs:932-938` (doc comment on `stopped_delegation`) — states that an
   update carries a running assignment's id and is never dropped there. The function itself is
   unchanged: it only ever drops `blob_message`, so an update for a running assignment always goes out.
-- `crates/bloblex-daemon/src/main.rs:4053-4063` — inside `AgentEvent::PermissionRequested`, after the
+- `crates/retinue-daemon/src/main.rs:4053-4063` — inside `AgentEvent::PermissionRequested`, after the
   policy auto-resolution attempt (which `continue`s when it succeeds) and the automation auto-deny
   block, and only when `inserted.is_ok() && !auto_approved && !is_automation &&
   session["link"]["kind"] == "side"`, `attention(..., "approval", &title)` is spawned. Nothing about
   the request is resolved, answered or dismissed; the arm's own `permission.requested` payload and
   the auto paths are untouched.
-- `crates/bloblex-daemon/src/questions.rs:104-108, 125-129` — at the end of `ask_user_tool`, after the
+- `crates/retinue-daemon/src/questions.rs:104-108, 125-129` — at the end of `ask_user_tool`, after the
   question is recorded and `permission.requested` is emitted, `attention(..., "question", &title)` is
   spawned; its result is ignored and the tool still returns `SHOWN` immediately.
 
@@ -113,7 +113,7 @@ re-sent for the same request (the brief asks for "once per request", not "once d
 question, which travels through `questions.rs`.
 
 **Known reachability gap (not a deviation)**: `ask_user_tool` refuses side conversations
-(`crates/bloblex-daemon/src/questions.rs:91-93`), so today a *question* left pending in a side
+(`crates/retinue-daemon/src/questions.rs:91-93`), so today a *question* left pending in a side
 conversation cannot occur; the hook is wired as the brief requires and becomes live if that refusal is
 ever relaxed. Approval requests in side conversations do occur and are the live path.
 
@@ -123,20 +123,20 @@ ever relaxed. Approval requests in side conversations do occur and are the live 
 
 **Changed**
 
-- `crates/bloblex-daemon/src/team.rs:980-994` — new `pub(crate) fn reply_text(outcome_kind,
+- `crates/retinue-daemon/src/team.rs:980-994` — new `pub(crate) fn reply_text(outcome_kind,
   reply_or_detail)`: `completed` → the reply (or `(finished without a text reply)`), `cancelled` →
   `The task was cancelled before it finished.`, anything else → `The turn failed: {detail}` with
   `the provider reported an error` when the detail is empty/missing. Blank/whitespace-only text is
   treated as missing.
-- `crates/bloblex-daemon/src/team.rs:1022-1034` — `after_turn` maps `turn.completed` /
+- `crates/retinue-daemon/src/team.rs:1022-1034` — `after_turn` maps `turn.completed` /
   `turn.cancelled` / other → `completed` / `cancelled` / `failed`, reads the turn's stored reply only
   for a completion, and calls `reply_text`. Same `[Reply from NAME]` prefix, same meta, same
   `settle_reply(delivery == Sent)`.
-- `crates/bloblex-storage/src/lib.rs:3581-3590` — `delegation_pending_replies` widened to
+- `crates/retinue-storage/src/lib.rs:3581-3590` — `delegation_pending_replies` widened to
   `status IN ('completed','failed','cancelled') AND reply_state='pending'` (still `ORDER BY
   created_at,rowid`, still no reply text stored), and its select now also returns `status` and `error`
   so the re-offer can recompose the right wording. `interrupted` stays out.
-- `crates/bloblex-daemon/src/delegations.rs:292-318` — `startup` re-offers every such row: a
+- `crates/retinue-daemon/src/delegations.rs:292-318` — `startup` re-offers every such row: a
   completion re-reads `turn_reply` (a missing turn now falls back instead of skipping the row), a
   cancellation uses the fixed sentence, a failure uses the row's `error` column with the same
   fallback. Same `[Reply from NAME]\n{reply}` text and meta as the live path, queued through
@@ -162,25 +162,25 @@ silently at boot.
 
 ```
 PS D:\t4a> $env:RUST_MIN_STACK='33554432'
-PS D:\t4a> cargo check -p bloblex-storage --message-format short
+PS D:\t4a> cargo check -p retinue-storage --message-format short
 ```
 
 last 15 lines (the output was shorter):
 
 ```
-    Checking bloblex-storage v0.1.0-beta.38 (D:\t4a\crates\bloblex-storage)
+    Checking retinue-storage v0.1.0-beta.38 (D:\t4a\crates\retinue-storage)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.95s
 ```
 
 ```
-PS D:\t4a> cargo check -p bloblex-daemon --message-format short
+PS D:\t4a> cargo check -p retinue-daemon --message-format short
 ```
 
 last 15 lines (the output was shorter):
 
 ```
-    Checking bloblex-storage v0.1.0-beta.38 (D:\t4a\crates\bloblex-storage)
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\t4a\crates\bloblex-daemon)
+    Checking retinue-storage v0.1.0-beta.38 (D:\t4a\crates\retinue-storage)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\t4a\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.80s
 ```
 
@@ -193,11 +193,11 @@ forbids `--all-targets`, and no clippy run was asked for); `deliver_update` carr
 
 **None that I could find**, and I edited no test code. Specifically checked by reading:
 
-- `crates/bloblex-daemon/src/team_p7_tests.rs:92-94` — only `contains` assertions on instructions; the
+- `crates/retinue-daemon/src/team_p7_tests.rs:92-94` — only `contains` assertions on instructions; the
   new block contains neither `message_blob`-removal phrasing nor the string it asserts is absent.
-- `crates/bloblex-daemon/src/team_p7_tests.rs:171-175` — asserts two calls to `runtime_instructions`
+- `crates/retinue-daemon/src/team_p7_tests.rs:171-175` — asserts two calls to `runtime_instructions`
   are equal; the new text is constant, so it stays equal.
-- `crates/bloblex-daemon/src/main.rs:4999-5003` and `main.rs:6337` — assert the live reply relay
+- `crates/retinue-daemon/src/main.rs:4999-5003` and `main.rs:6337` — assert the live reply relay
   (`"[Reply from Mate]\nhandled: Check the build"` and "contains `The turn failed`"); both wordings
   are preserved by `reply_text`.
 - No test refers to `delegation_pending_replies`, `reply_state`, `wake_request`, `blob_update` or

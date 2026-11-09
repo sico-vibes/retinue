@@ -1,18 +1,18 @@
 # Runtimes and adapters
 
-> **What this is:** how Bitbots finds Claude Code, Codex and OpenCode, how each adapter talks to its CLI, and which execution options each provider supports.
+> **What this is:** how Retinue finds Claude Code, Codex and OpenCode, how each adapter talks to its CLI, and which execution options each provider supports.
 > **Status:** current; capability facts are from `docs/reference/runtime-capabilities.md` (CLI builds observed 2–13 October 2026) and the adapter sources. Models and authentication are host-dependent.
 > **Last updated:** 2026-10-19
 
 ## Purpose
 
-A **runtime** is one installed coding-agent CLI that Bitbots can drive. The runtime layer finds it, records its executable and version, and reports what it supports. An **adapter** owns the protocol. The daemon never reads a provider's terminal output to guess what happened; every adapter speaks a structured protocol or parses a documented stream.
+A **runtime** is one installed coding-agent CLI that Retinue can drive. The runtime layer finds it, records its executable and version, and reports what it supports. An **adapter** owns the protocol. The daemon never reads a provider's terminal output to guess what happened; every adapter speaks a structured protocol or parses a documented stream.
 
 This page explains the four adapters and the execution options they accept. Exact parameter shapes are in [IPC and events](ipc-and-events.md); the evidence for each capability is in `docs/reference/runtime-capabilities.md`.
 
 ## How discovery works
 
-`bloblex-runtime` resolves native Windows executables and configured WSL hosts. Discovery runs at startup and on **Scan again**. Each runtime reports:
+`retinue-runtime` resolves native Windows executables and configured WSL hosts. Discovery runs at startup and on **Scan again**. Each runtime reports:
 
 - provider and display name (`Claude Code`, `Codex`, `OpenCode`);
 - absolute executable path, version and host;
@@ -27,7 +27,7 @@ This page explains the four adapters and the execution options they accept. Exac
 | `live_query` | The provider itself answered. Authoritative for model ids. |
 | `cli_list` | The CLI listed models in a documented command. A suggestion. |
 | `config_options` | The protocol exposed the options for this session. A suggestion until a turn proves it. |
-| `fallback` | Bitbots' fallback list. Never authoritative. |
+| `fallback` | Retinue's fallback list. Never authoritative. |
 
 The catalog is cached per runtime and profile for 60 seconds; `refresh:true` bypasses the cache. A fallback or unvalidated catalog is shown as a suggestion and does not validate execution. This is why typing an arbitrary model id is not equivalent to choosing one the runtime reported.
 
@@ -36,13 +36,13 @@ The catalog is cached per runtime and profile for 60 seconds; `refresh:true` byp
 - **Transport:** the CLI in print mode with `--output-format stream-json`. Turns go in on stdin; one JSON object per line comes back.
 - **Process model:** one process per session. Claude's CLI session model does not support multiplexing several conversations through one child (`docs/reference/runtime-capabilities.md`, "Shared provider processes").
 - **Permissions:** `--permission-mode default` plus host `control_request` / `control_response` messages over stream-json. `ask` and `auto` use that channel; `bypass` adds `--permission-mode bypassPermissions` and, when the installed CLI requires it, `--allow-dangerously-skip-permissions`. The flags are verified against the installed CLI's help before they are relied on.
-- **Model and effort:** `--model` and `--effort` are accepted with `-p`. The five observed levels are `low`, `medium`, `high`, `xhigh` and `max`. An unknown level is ignored by the CLI with a warning, so Bitbots hides the picker when the catalog row has no levels and does not claim an effort was applied until a successful turn shows it.
+- **Model and effort:** `--model` and `--effort` are accepted with `-p`. The five observed levels are `low`, `medium`, `high`, `xhigh` and `max`. An unknown level is ignored by the CLI with a warning, so Retinue hides the picker when the catalog row has no levels and does not claim an effort was applied until a successful turn shows it.
 - **Speed:** there is no speed or service-tier launch flag. Do not invent one; fast-mode fields in usage are reports, not a spawn option.
 - **Usage:** stream-json `result` reports input, output and cache token fields. A result from an API error can contain zeroes and a null model; those are not a successful turn.
 
 ## Codex
 
-- **Transport:** `codex app-server` over JSON-RPC on stdio. Bitbots never scrapes terminal text.
+- **Transport:** `codex app-server` over JSON-RPC on stdio. Retinue never scrapes terminal text.
 - **Process model:** one lazily started app-server per process key. The key hashes the runtime id, executable, launch arguments, project working directory, allowlisted environment overrides, provider config and a fingerprint of the daemon's inherited environment. Different working directories or environment values get separate children. The child closes 30 seconds after its last attached session; a shutdown closes every child immediately.
 - **Threads:** model, effort, approval policy and developer instructions are sent on `thread/start`, `thread/resume` or per-turn `turn/start`. They are thread-scoped and do not split the process key. A change to instructions requires a new thread because instructions are part of the identity.
 - **Approvals:** `approvalPolicy: "on-request"` with `sandbox: "workspace-write"` for ask and auto. Bypass uses `"never"` with `danger-full-access` and records `permission.bypass_active`.
@@ -52,16 +52,16 @@ The catalog is cached per runtime and profile for 60 seconds; `refresh:true` byp
 
 ## OpenCode
 
-- **Transport:** Agent Client Protocol over stdio. `bloblex-adapter-opencode` adds `acp` and `--cwd` to the resolved executable and uses the shared ACP adapter.
-- **Process model:** shared per process key like Codex, with one important addition: the key includes the exact Bitbots-generated `OPENCODE_CONFIG_CONTENT`, because that JSON carries the session model and instructions.
-- **Instructions:** ACP's `session/new` and `session/prompt` have no instruction field. Bitbots keeps a Bitbots-owned agent prompt and selects it as the session mode only when instructions are non-empty; with no instructions, the provider default mode stays active.
+- **Transport:** Agent Client Protocol over stdio. `retinue-adapter-opencode` adds `acp` and `--cwd` to the resolved executable and uses the shared ACP adapter.
+- **Process model:** shared per process key like Codex, with one important addition: the key includes the exact Retinue-generated `OPENCODE_CONFIG_CONTENT`, because that JSON carries the session model and instructions.
+- **Instructions:** ACP's `session/new` and `session/prompt` have no instruction field. Retinue keeps a Retinue-owned agent prompt and selects it as the session mode only when instructions are non-empty; with no instructions, the provider default mode stays active.
 - **Model and effort:** select the model with `session/set_config_option` (`configId: "model"`) or `session/set_model` (`modelId`). After a variant-capable model is selected, ACP exposes an `effort` option (`configId: "effort"`, category `thought_level`). The values come from the model's `variants` plus the synthetic `default` when the option lists it. Hide the picker when the model has no variants.
-- **Environment:** the read-only model listing runs `opencode models --verbose` with the inherited user environment but removes `OPENCODE_CONFIG_CONTENT`. A session inherits the user's home and XDG/OpenCode directory variables, removes any inherited config content, then sets the Bitbots JSON. Custom environment is limited to `LANG`, `LC_ALL`, `TZ`, `NO_COLOR` and `TERM`.
+- **Environment:** the read-only model listing runs `opencode models --verbose` with the inherited user environment but removes `OPENCODE_CONFIG_CONTENT`. A session inherits the user's home and XDG/OpenCode directory variables, removes any inherited config content, then sets the Retinue JSON. Custom environment is limited to `LANG`, `LC_ALL`, `TZ`, `NO_COLOR` and `TERM`.
 - **Usage:** `usage_update` is session-cumulative. A low-effort and a high-effort turn that both complete are not proof that effort changed provider behaviour; the capability record says exactly that.
 
 ## Shared execution options
 
-Every session builds an `ExecOptions` from the bot, then overlays a per-conversation lock when one exists (`crates/bloblex-daemon/src/main.rs:1459-1479`):
+Every session builds an `ExecOptions` from the bot, then overlays a per-conversation lock when one exists (`crates/retinue-daemon/src/main.rs:1459-1479`):
 
 - approval mode, model, thinking/effort and service tier;
 - plan mode;
@@ -79,8 +79,8 @@ The applied settings and the provider's evidence are stored in an execution snap
 
 1. Add an adapter crate that speaks the provider's documented structured protocol. No terminal scraping.
 2. Implement the shared adapter trait: start or resume, send a turn, cancel, answer permissions, close, and report capabilities and usage.
-3. Translate its messages into Bitbots events. Do not pass provider JSON through.
-4. Add discovery and a launch specification in `bloblex-runtime`.
+3. Translate its messages into Retinue events. Do not pass provider JSON through.
+4. Add discovery and a launch specification in `retinue-runtime`.
 5. Add the provider to the runtime capabilities record and to `runtime.models` with a real `source`.
 6. Add the provider to the approval-mode mapping and the Remote policy, then update the parity test.
 7. Add a fake-peer test for the protocol and a live, opt-in check that is clearly labelled as consuming provider quota.

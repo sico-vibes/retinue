@@ -1,4 +1,4 @@
-//! Keeps Windows awake while Bitbots has work, without fighting the user.
+//! Keeps Windows awake while Retinue has work, without fighting the user.
 //!
 //! The UI decides when a keep-awake request is wanted and calls
 //! [`set_keep_awake`]; this module owns the native request. The Windows
@@ -7,7 +7,7 @@
 //! released; the display is deliberately left free to sleep. Nothing here stops
 //! the user from putting the computer to sleep themselves (closing the lid,
 //! Start menu, power button): it only asks the idle sleep timer not to fire
-//! while Bitbots is working.
+//! while Retinue is working.
 
 use std::sync::{Arc, Mutex};
 
@@ -102,7 +102,7 @@ pub fn set_keep_awake(state: State<'_, PowerState>, enabled: bool) -> Result<boo
     state.set(enabled)
 }
 
-/// Reports whether Bitbots currently holds a keep-awake request.
+/// Reports whether Retinue currently holds a keep-awake request.
 #[tauri::command]
 pub fn keep_awake_state(state: State<'_, PowerState>) -> bool {
     state.is_enabled()
@@ -174,7 +174,7 @@ impl PowerBackend for Win32Power {
             let (commands, receiver) = mpsc::channel();
             let (ready_tx, ready_rx) = mpsc::channel();
             let join = thread::Builder::new()
-                .name("bloblex-keep-awake".to_string())
+                .name("retinue-keep-awake".to_string())
                 .spawn(move || run_keep_awake(receiver, ready_tx))
                 .map_err(|error| format!("Could not start the keep-awake thread: {error}"))?;
             match ready_rx.recv() {

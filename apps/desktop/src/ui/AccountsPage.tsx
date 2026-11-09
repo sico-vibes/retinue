@@ -1,5 +1,5 @@
 // Phase 5: Settings > Accounts. Who each coding agent is signed in as, extra accounts in their
-// own config folders, and models a catalog doesn't list. Bitbots reads a name from the agent's
+// own config folders, and models a catalog doesn't list. Retinue reads a name from the agent's
 // own command, never a token, and the owner signs in with the agent's own command.
 import { useCallback, useEffect, useState } from 'react'
 import { PrivateEmail } from './PrivateEmail'
@@ -152,7 +152,7 @@ export function AccountsPage({ runtimes }: { runtimes: readonly Runtime[] }) {
   useEffect(load, [load])
   const chosen = modelProvider || providers[0]?.provider || ''
   return <>
-    <p className="settings-intro">Give some {nouns} a different sign-in, then choose it in their settings. Bitbots never handles a token.</p>
+    <p className="settings-intro">Give some {nouns} a different sign-in, then choose it in their settings. Retinue never handles a token.</p>
     {providers.map((runtime) => {
       const provider = runtime.provider ?? ''
       const account = runtime.account as RuntimeAccount | null | undefined
@@ -167,7 +167,7 @@ export function AccountsPage({ runtimes }: { runtimes: readonly Runtime[] }) {
     {!providers.length && <p className="settings-empty">No coding agents found yet.</p>}
     {problem && <p className="new-project-error" role="alert">{problem}</p>}
     {providers.length > 0 && <SettingsGroup title="Custom models">
-      <SettingsRow label="Models a catalog doesn't list" hint="Bitbots passes the id to the agent as it is. If the agent refuses it, the turn says why.">
+      <SettingsRow label="Models a catalog doesn't list" hint="Retinue passes the id to the agent as it is. If the agent refuses it, the turn says why.">
         <Select ariaLabel="Coding agent for custom models" variant="muted" value={chosen} onChange={setModelProvider} options={providers.map((runtime) => ({ value: runtime.provider ?? '', label: providerBrand(runtime.provider ?? '').name }))} />
       </SettingsRow>
       {chosen && <CustomModels key={chosen} provider={chosen} />}

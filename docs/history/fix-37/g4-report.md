@@ -22,7 +22,7 @@ travels to the provider as a hidden per-turn directive.
 
 ### `session.prompt` accepts `command`
 
-- New module `crates/bloblex-daemon/src/commands.rs`:
+- New module `crates/retinue-daemon/src/commands.rs`:
   - `directive(st, session_id, &value) -> Result<Option<String>, DispatchError>`
     validates the optional `command` parameter and returns the hidden directive
     (or `None` when none was sent).
@@ -37,13 +37,13 @@ travels to the provider as a hidden per-turn directive.
     A Manager command sent to an ordinary bot, or an unknown name, is refused
     with `invalid_argument`.
   - The directive is one of:
-    - `<bloblex_command>Load the skill "code-review" with load_skill now and follow it for this message.</bloblex_command>`
+    - `<retinue_command>Load the skill "code-review" with load_skill now and follow it for this message.</retinue_command>`
     - the Manager command's instruction text (interview, onboard, team, status,
-      playbook, remember), inside `<bloblex_command>`.
+      playbook, remember), inside `<retinue_command>`.
 - `session_prompt_impl` (`main.rs`) computes the directive once, at admission,
   and carries it in `TurnDriver.command_directive`. `run_turn` appends it to the
-  provider prompt next to `<bloblex_handover>` / `<bloblex_manager>` /
-  `<bloblex_memory>` / `<bloblex_skills>` / references / reply. It is **never**
+  provider prompt next to `<retinue_handover>` / `<retinue_manager>` /
+  `<retinue_memory>` / `<retinue_skills>` / references / reply. It is **never**
   part of the stored user message, which keeps the text exactly as typed
   (`/code-review check the parser`).
 - The queue carries the command through too: `session.queue.add` validates it
@@ -93,7 +93,7 @@ tier changes. The parity test stays green.
     component and the `App.tsx` changes stay in the composer area.
   - Actions run in the app and send nothing: `/plan` (`setPlanMode`), `/new`
     (`newSession`), `/model` and `/effort` (open the existing pickers via the
-    `bloblex:exec-picker` window event, handled inside
+    `retinue:exec-picker` window event, handled inside
     `SessionExecutionControls`), `/rename` (the text-prompt dialog +
     `session.rename`), `/export` (`exportConversation(false)`), and `/help`
     (keeps the menu open as the full list).
@@ -114,7 +114,7 @@ tier changes. The parity test stays green.
 
 ## 3. Tests
 
-Rust (`crates/bloblex-daemon/src/main.rs`, `phase2a_tests`):
+Rust (`crates/retinue-daemon/src/main.rs`, `phase2a_tests`):
 `a_chosen_skill_or_manager_command_is_a_hidden_per_turn_directive` — a skill
 directive reaches the provider prompt but not the stored message; an unknown
 skill, a bad kind, a per-bot opt-out and a Manager command sent to an ordinary
@@ -132,7 +132,7 @@ TypeScript:
   picking a skill shows a chip and sends `session.prompt` with the composed text
   and `command`; Manager commands appear only for the Manager.
 - `ui/ComposerControls.mounted.test.tsx` — `/model` and `/effort` open the
-  existing model menu and effort popover through the `bloblex:exec-picker`
+  existing model menu and effort popover through the `retinue:exec-picker`
   event.
 - `preview/fixtureBridge.composer.test.ts` — `skills.forAgent` and the
   `command` handling on `session.prompt`.
@@ -141,10 +141,10 @@ TypeScript:
 
 Run in this worktree after the final edit:
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-  — **all suites ok, 0 failed** (339 in `bloblex-daemon`, 103 in
-  `bloblex-storage`, every other binary ok; no `FAILED`, no `panicked`).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` —
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+  — **all suites ok, 0 failed** (339 in `retinue-daemon`, 103 in
+  `retinue-storage`, every other binary ok; no `FAILED`, no `panicked`).
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` —
   **clean** (`Finished`).
 - `cd apps/desktop && npx tsc -b` — **clean**.
 - `cd apps/desktop && npx vitest run --maxWorkers=3` — **157 files, 1107 tests
@@ -155,7 +155,7 @@ Run in this worktree after the final edit:
 ## 5. Notes / not verified
 
 - **The provider actually honouring the directive is not proven here.** The
-  daemon test asserts the `<bloblex_command>` text reaches the adapter prompt;
+  daemon test asserts the `<retinue_command>` text reaches the adapter prompt;
   whether a given CLI calls `load_skill` when told to is the same open question
   recorded in the FIX32 report.
 - **`skills.forAgent` excludes nothing for native copies.** The list is the

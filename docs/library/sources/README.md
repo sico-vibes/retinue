@@ -1,12 +1,12 @@
-# Bitbots
+# Retinue
 
-> **What this is:** The front page of the repository: what Bitbots is, how to build and test it, and where the documentation starts.
+> **What this is:** The front page of the repository: what Retinue is, how to build and test it, and where the documentation starts.
 > **Status:** current. The release figures in this file are set at v0.1.0-beta.36; `main` is ahead of that release with unreleased work.
 > **Last updated:** 2026-10-22
 
-Bitbots (formerly Bloblex)
+Retinue (formerly Retinue)
 
-Local Windows desktop control plane for Claude Code, Codex, and OpenCode. A React/Tauri shell and a companion window share state from the `bitbotsd` daemon. Each provider CLI keeps its own login.
+Local Windows desktop control plane for Claude Code, Codex, and OpenCode. A React/Tauri shell and a companion window share state from the `retinued` daemon. Each provider CLI keeps its own login.
 
 **Status: `v0.1.0-beta.36`** (the version in `Cargo.toml` and `package.json`), published as an NSIS installer that is not Authenticode-signed but is signed for the updater (new key) and offered on the beta update channel; beta.32 and later update themselves; older versions install by hand once. Full native acceptance and a clean-machine install remain open ([docs/operations/release-checklist.md](docs/operations/release-checklist.md)). Release notes: [docs/releases/0.1.0-beta.36.md](docs/releases/0.1.0-beta.36.md). History and dated records: [docs/operations/session-handoff.md](docs/operations/session-handoff.md) and [docs/operations/implementation-status.md](docs/operations/implementation-status.md). The hub for every document is [docs/README.md](docs/README.md).
 
@@ -32,7 +32,7 @@ npm run build
 
 Those commands do not launch the app or the daemon.
 
-Native development, when you intend to open the window, uses an isolated database. Never point it at `%LOCALAPPDATA%\Bitbots`.
+Native development, when you intend to open the window, uses an isolated database. Never point it at `%LOCALAPPDATA%\Retinue`.
 
 ```powershell
 npm run desktop:dev
@@ -45,7 +45,7 @@ Renderer-only Vite (`npm run dev`) does not establish native IPC or a provider s
 Backend tests, in a private Cargo target and a fresh database path:
 
 ```powershell
-cargo test --workspace --exclude bloblex-desktop
+cargo test --workspace --exclude retinue-desktop
 ```
 
 An opt-in provider smoke may use provider quota. A default test pass does not mean a live provider path ran.
@@ -62,12 +62,12 @@ This is the local NSIS path (`bundle.targets` is `nsis` only in `apps/desktop/sr
 | --- | --- |
 | `apps/desktop/src/` | Main and companion UI, analytics, approval and execution contracts |
 | `apps/desktop/src-tauri/` | Native windows, tray, authenticated daemon proxy, file actions |
-| `crates/bloblex-daemon/` | Sessions, permissions, usage analytics, quota RPCs and the durable task board (`src/tasks.rs`). Budgets are retired: `budget.*` returns `unsupported` (`crates/bloblex-daemon/src/main.rs:1270`) |
-| `crates/bloblex-adapter-*` | OpenCode ACP, Codex app-server, and Claude adapters |
-| `crates/bloblex-storage/` | SQLite, migrations, usage analytics |
-| `crates/bloblex-runtime/` | CLI discovery and launch specifications |
-| `crates/bloblex-usage/`, `bloblex-budget/`, `bloblex-wsl/` | Usage helpers and the official price table (`crates/bloblex-usage/data/official-prices.json`); `bloblex-budget` is a workspace member that no crate depends on (budgets are retired); WSL helpers |
-| `tools/bloblex-hook/` | Bounded Claude hook helper |
+| `crates/retinue-daemon/` | Sessions, permissions, usage analytics, quota RPCs and the durable task board (`src/tasks.rs`). Budgets are retired: `budget.*` returns `unsupported` (`crates/retinue-daemon/src/main.rs:1270`) |
+| `crates/retinue-adapter-*` | OpenCode ACP, Codex app-server, and Claude adapters |
+| `crates/retinue-storage/` | SQLite, migrations, usage analytics |
+| `crates/retinue-runtime/` | CLI discovery and launch specifications |
+| `crates/retinue-usage/`, `retinue-budget/`, `retinue-wsl/` | Usage helpers and the official price table (`crates/retinue-usage/data/official-prices.json`); `retinue-budget` is a workspace member that no crate depends on (budgets are retired); WSL helpers |
+| `tools/retinue-hook/` | Bounded Claude hook helper |
 | `scripts/` | Windows dev, sidecar staging, and installer entry points |
 
 ## References

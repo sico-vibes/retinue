@@ -1,6 +1,6 @@
 # Documentation style guide
 
-> **What this is:** the rules for writing and maintaining Bitbots documents: tone, layout, naming, links and how to mark what is verified.
+> **What this is:** the rules for writing and maintaining Retinue documents: tone, layout, naming, links and how to mark what is verified.
 > **Status:** current. Applies to every document written from October 2026 on. Historical records were brought under the front block but keep their own body layout (see [Historical records](#historical-records)).
 > **Last updated:** 2026-10-22
 
@@ -18,20 +18,20 @@ Use the current names in new text:
 
 | Use | Meaning |
 | --- | --- |
-| Bitbots | The desktop app and the product. |
-| bot | One agent character in Bitbots. Use "bot" for the character itself, whatever it looks like. |
-| Blobots | The quiet, monochrome look; its automatic bot art is Glossy blob. A bot's art style is chosen separately: Automatic, 3D robot, 2D robot, Glossy or Hand-painted. |
-| look | A visual style the user picks: Bitbots (the Frost look) or Blobots. Pop, Dot and Legacy were retired on 21 October 2026 (see AGENTS.md). |
+| Retinue | The desktop app and the product. |
+| bot | One agent character in Retinue. Use "bot" for the character itself, whatever it looks like. |
+| Stone | The quiet, monochrome look; its automatic bot art is Glossy blob. A bot's art style is chosen separately: Automatic, 3D robot, 2D robot, Glossy or Hand-painted. |
+| look | A visual style the user picks: Retinue (the Frost look) or Stone. Pop, Dot and Legacy were retired on 21 October 2026 (see AGENTS.md). |
 | task | A record on the Tasks board: a title, a brief and a done goal. It is not a conversation. A task with no bot is a draft. |
 | companion | The floating window that shows bot state. |
-| daemon | The local `bitbotsd` process that owns sessions, permissions and usage. |
+| daemon | The local `retinued` process that owns sessions, permissions and usage. |
 | Manager | The permanent, global bot that plans and proposes work. |
 | lane | One delegated work stream in the delivery process. |
 | Director | The orchestrating Claude session in the delivery process. |
 
-In historical records, "blob" and "Bloblex" keep their original wording.
+In historical records, "blob" and "Retinue" keep their original wording.
 
-Code identifiers keep their names (crate names such as `bloblex-daemon`, file paths, and type names). Do not rename them in prose; put the path in code font.
+Code identifiers keep their names (crate names such as `retinue-daemon`, file paths, and type names). Do not rename them in prose; put the path in code font.
 
 ## Front block
 
@@ -77,7 +77,7 @@ A history record (a FIX wave report, a spec, a brief, an audit) keeps its conten
 
 ## Citing code
 
-- Cite code as `path:line`, in code font: `crates/bloblex-daemon/src/main.rs:992`. Prefer a function or test name when the line may move.
+- Cite code as `path:line`, in code font: `crates/retinue-daemon/src/main.rs:992`. Prefer a function or test name when the line may move.
 - Cite a path that exists. Cite a commit by its short hash in code font.
 
 ## Verification markers

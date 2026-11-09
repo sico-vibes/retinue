@@ -782,7 +782,7 @@
         "sessions": [
           {
             "id": "s_1",
-            "projectPath": "C:\\Users\\sam\\repos\\bloblex\\apps",
+            "projectPath": "C:\\Users\\sam\\repos\\retinue\\apps",
             "providerSessionId": "thread_1"
           }
         ]
@@ -800,7 +800,7 @@
         "sessions": [
           {
             "id": "s_1",
-            "projectPath": "bloblex/apps"
+            "projectPath": "retinue/apps"
           }
         ]
       }
@@ -812,7 +812,7 @@
       "input": {
         "id": "s_1",
         "providerSessionId": "thread_opaque",
-        "projectPath": "C:\\Users\\sam\\repos\\bloblex\\apps\\desktop",
+        "projectPath": "C:\\Users\\sam\\repos\\retinue\\apps\\desktop",
         "messages": [
           {
             "id": "m_1",
@@ -864,7 +864,7 @@
         "sessions": [
           {
             "id": "s_1",
-            "projectPath": "C:\\Users\\sam\\repos\\bloblex\\deep",
+            "projectPath": "C:\\Users\\sam\\repos\\retinue\\deep",
             "providerSessionId": "t"
           },
           {
@@ -877,7 +877,7 @@
         "sessions": [
           {
             "id": "s_1",
-            "projectPath": "bloblex/deep"
+            "projectPath": "retinue/deep"
           },
           {
             "id": "s_2",
@@ -1126,7 +1126,7 @@
         "projects": [
           {
             "id": "pr_1",
-            "path": "C:\\Users\\sam\\repos\\bloblex\\deep\\proj",
+            "path": "C:\\Users\\sam\\repos\\retinue\\deep\\proj",
             "secret": "x"
           }
         ]
@@ -1275,8 +1275,8 @@
               "path": "C:\\Users\\sam\\repos\\site",
               "worktree": {
                 "repo": "C:\\Users\\sam\\repos\\site",
-                "branch": "bitbots/d1",
-                "path": "C:\\Users\\sam\\.bitbots\\worktrees\\d1"
+                "branch": "retinue/d1",
+                "path": "C:\\Users\\sam\\.retinue\\worktrees\\d1"
               }
             }
           }
@@ -1426,7 +1426,7 @@
         "agents": [
           {
             "id": "a_1",
-            "defaultProject": "C:\\Users\\sam\\repos\\bloblex\\apps\\desktop",
+            "defaultProject": "C:\\Users\\sam\\repos\\retinue\\apps\\desktop",
             "customArgs": [
               "--api-key",
               "k"
@@ -1446,7 +1446,7 @@
         "sessions": [
           {
             "id": "s_1",
-            "projectPath": "C:\\Users\\sam\\repos\\bloblex\\src",
+            "projectPath": "C:\\Users\\sam\\repos\\retinue\\src",
             "providerSessionId": "thread_1",
             "messages": [
               {
@@ -1514,7 +1514,7 @@
         "sessions": [
           {
             "id": "s_1",
-            "projectPath": "bloblex/src",
+            "projectPath": "retinue/src",
             "messages": [
               {
                 "id": "m_1",
@@ -1565,7 +1565,7 @@
         "agents": [
           {
             "id": "a_1",
-            "defaultProject": "/home/sam/repos/bloblex/apps/desktop",
+            "defaultProject": "/home/sam/repos/retinue/apps/desktop",
             "instructions": ""
           }
         ],
@@ -1578,11 +1578,11 @@
         "sessions": [
           {
             "id": "s_1",
-            "projectPath": "/home/sam/repos/bloblex/src",
+            "projectPath": "/home/sam/repos/retinue/src",
             "files": [
               {
                 "id": "f_1",
-                "path": "/home/sam/repos/bloblex/src/main.ts"
+                "path": "/home/sam/repos/retinue/src/main.ts"
               }
             ]
           }
@@ -1632,7 +1632,7 @@
         "sessions": [
           {
             "id": "s_1",
-            "projectPath": "bloblex/src",
+            "projectPath": "retinue/src",
             "files": [
               {
                 "id": "f_1",
@@ -2010,7 +2010,7 @@
           "sessionId": "s",
           "title": "Run tests",
           "detail": "pnpm test",
-          "path": "C:\\Users\\sam\\repos\\bloblex\\src\\a.ts"
+          "path": "C:\\Users\\sam\\repos\\retinue\\src\\a.ts"
         }
       },
       "expect": {
@@ -2240,8 +2240,8 @@
               "path": "C:\\Users\\sam\\repos\\site",
               "worktree": {
                 "repo": "C:\\Users\\sam\\repos\\site",
-                "branch": "bitbots/d1",
-                "path": "C:\\Users\\sam\\.bitbots\\worktrees\\d1"
+                "branch": "retinue/d1",
+                "path": "C:\\Users\\sam\\.retinue\\worktrees\\d1"
               }
             }
           }

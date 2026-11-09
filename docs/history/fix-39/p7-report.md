@@ -1,6 +1,6 @@
 # FIX39 P7 implementation report
 
-> **What this is:** Implementation report for FIX39 package P7: the Bitbots tool set for the Manager.
+> **What this is:** Implementation report for FIX39 package P7: the Retinue tool set for the Manager.
 > **Status:** historical
 > **Last updated:** 2026-10-18
 
@@ -10,7 +10,7 @@ A follow-up pass by a second implementer (DeepSeek V4.1 Flash, same worktree) re
 
 ## Scope and design
 
-P7 uses the existing local, per-session-capability bloblex MCP bridge. There is no new listener, endpoint, daemon RPC or event. The existing `mcp.* = never` row in `apps/desktop/src/remote/tiers.json` covers every tool below, so no policy row was added or widened.
+P7 uses the existing local, per-session-capability retinue MCP bridge. There is no new listener, endpoint, daemon RPC or event. The existing `mcp.* = never` row in `apps/desktop/src/remote/tiers.json` covers every tool below, so no policy row was added or widened.
 
 Existing `bot`, `project` and `task` proposal kinds carry an explicit `action` for updates/opening. This avoids a storage migration and keeps old create proposals working. Legacy pending task cards receive conservative completion/report defaults at approval; every new Manager delegation must supply the contract itself. All mutations remain owner-approved. Decisions are serialized so simultaneous approvals cannot execute a proposal twice.
 
@@ -31,7 +31,7 @@ Existing `bot`, `project` and `task` proposal kinds carry an explicit `action` f
 | Ordinary bots and automation sessions | `team.rs:216`, `team.rs:269`: ordinary tools and schemas remain; new Manager tools are dispatch-gated; existing automation recursion guard remains. | Per-tool ordinary-bot refusals above and existing automation tool tests. |
 | Approval cards | `ProposalCard.tsx:76`, `ProposalCard.tsx:116`, `ProposalCard.tsx:163`, `ProposalCard.tsx:177`: clear update/open actions, proposed fields, look preview, completion/report text and project folder. Permission scope is stated plainly. | `ProposalCard.mounted.test.tsx`: new update/project/task/open cases, approval selection and rejection; existing create/edit/folder/permission tests. |
 
-All daemon file references above are under `crates/bloblex-daemon/src/`; UI references are under `apps/desktop/src/ui/`.
+All daemon file references above are under `crates/retinue-daemon/src/`; UI references are under `apps/desktop/src/ui/`.
 
 ## Failing-first evidence
 
@@ -41,12 +41,12 @@ Before implementation, the P7 daemon tests reproduced direct project writes, mis
 
 All gates were re-run to completion by the follow-up pass on the final source (worktree `lane/fix39-p7`, branch at `122ab81` + this diff). Every gate is green; every number below is from that run.
 
-- **Workspace Rust gate:** `cargo test --workspace --exclude bloblex-desktop --no-fail-fast -- --skip session_environment_reports_a_git_branch` → **exit 0, 0 failed in every target.** The daemon `bitbotsd` binary target reported **401 passed, 0 failed, 0 ignored, 1 filtered out** (the skip below); this includes all 14 P7 tests in `team_p7_tests.rs`, the daemon smoke, parent-watchdog and process-tree integration tests. Log: `C:/fxt/d3/p7-workspace.log`.
-- **Workspace clippy:** `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` → **exit 0, no warnings.**
+- **Workspace Rust gate:** `cargo test --workspace --exclude retinue-desktop --no-fail-fast -- --skip session_environment_reports_a_git_branch` → **exit 0, 0 failed in every target.** The daemon `retinued` binary target reported **401 passed, 0 failed, 0 ignored, 1 filtered out** (the skip below); this includes all 14 P7 tests in `team_p7_tests.rs`, the daemon smoke, parent-watchdog and process-tree integration tests. Log: `C:/fxt/d3/p7-workspace.log`.
+- **Workspace clippy:** `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` → **exit 0, no warnings.**
 - **UI typecheck:** `npx tsc -b` (apps/desktop) → **exit 0.**
 - **UI unit tests:** `npx vitest run --maxWorkers=3` → **170 files passed, 1257 tests passed, 0 failed**, including the new P7 mounted cases in `ProposalCard.mounted.test.tsx`. Log: `C:/fxt/d3/p7-vitest.log`.
 - **UI production build:** `npm run build` (apps/desktop) → **exit 0**, built in ~22 s. Log: `C:/fxt/d3/p7-build.log`.
-- No `src-tauri` source and no remote-app source or policy changed, so the conditional native (`cargo test -p bloblex-desktop --lib`) and remote (`npm run build:remote`) gates were not required.
+- No `src-tauri` source and no remote-app source or policy changed, so the conditional native (`cargo test -p retinue-desktop --lib`) and remote (`npm run build:remote`) gates were not required.
 
 Reproduction settings: `CARGO_TARGET_DIR=C:/fxt/d3`, `TEMP=TMP=C:/fxt/d3/tmp`, `RUST_MIN_STACK=33554432`.
 
@@ -58,7 +58,7 @@ First run of the final workspace gate exposed one failing P7 test that the first
 
 `team::p7_tests::p7_archived_manager_cannot_fall_back_to_ordinary_message_routing` — **failed** before the fix.
 
-- **Cause:** `mcp_rpc`'s `is_manager` check (`crates/bloblex-daemon/src/team.rs:288`) tested `row["archived"] != true` on the *session*. Archiving the Manager's conversation therefore made `is_manager` false, so `message_blob` fell through to the **ordinary** sender path and delivered immediately with no approval card — the exact downgrade the test guards against.
+- **Cause:** `mcp_rpc`'s `is_manager` check (`crates/retinue-daemon/src/team.rs:288`) tested `row["archived"] != true` on the *session*. Archiving the Manager's conversation therefore made `is_manager` false, so `message_blob` fell through to the **ordinary** sender path and delivered immediately with no approval card — the exact downgrade the test guards against.
 - **Fix:** dropped the session-level archived test from `is_manager`; Manager identity now follows the session's bot (`agentId` → `systemRole == "manager"` and the bot not archived), as it did before P7. Every Manager write still re-checks `manager_of_session` (`proposals.rs:211-218`), which refuses an archived conversation, so an archived Manager session is refused rather than downgraded. Comment added at `team.rs:285-289`.
 - **Result:** the test now passes; all 14 P7 tests and the full workspace gate are green (numbers above). No other test or surface changed.
 
@@ -66,12 +66,12 @@ Earlier first-implementer verification (kept for history): workspace gate 798 pa
 
 ## Limits and handoff
 
-- No live model, installed Bitbots, personal database, phone, tailnet or native-window verification was performed. Daemon delegation tests use fake adapters, in-memory databases and temporary folders under C:/fxt/d3/tmp.
+- No live model, installed Retinue, personal database, phone, tailnet or native-window verification was performed. Daemon delegation tests use fake adapters, in-memory databases and temporary folders under C:/fxt/d3/tmp.
 - The Director still needs visual checks of the cards in both themes and both looks, and a real Manager chat to judge routing, questions and tone. Mounted/source tests do not prove model compliance.
 - The required Sonnet implementation audit is still the Director's lane; this report does not self-certify that audit.
 - Worktree edits are limited to team.rs, proposals.rs, knowledge.rs, main.rs (tool tests only), ProposalCard.tsx, its mounted tests, the new team_p7_tests.rs and this report. No other production file was needed; tiers.json is unchanged because the existing never-remote MCP family already covers the tools.
 - Cargo output and test temporaries use C:/fxt/d3 and C:/fxt/d3/tmp. No worktree commit, merge, release or installed-app/data operation was performed. No process outside the tests' own spawned children was ended.
-- The follow-up pass changed only `crates/bloblex-daemon/src/team.rs` (the `is_manager` check and its comment) and this report. It added no file, touched nothing outside the package's file list, and left `tiers.json` unchanged.
+- The follow-up pass changed only `crates/retinue-daemon/src/team.rs` (the `is_manager` check and its comment) and this report. It added no file, touched nothing outside the package's file list, and left `tiers.json` unchanged.
 
 ## Follow-up (audit) — third implementer (DeepSeek V4.1 Flash)
 
@@ -79,9 +79,9 @@ This pass answers `docs/history/fix-39/p7-audit.md` (verdict FAIL, blocker B1). 
 
 ### B1 (blocker) — approved permission change no longer pins model/effort/mode
 The bot's `approvalMode` is now the single source of truth; the approval writes only the bot.
-- `sync_bot_permission` (`crates/bloblex-daemon/src/proposals.rs:753`) was rewritten. It no longer calls `conversation_lock_for`, so it never builds a lock and never writes a bot's current model/effort into a session. For each of the bot's non-automation sessions it does exactly one thing: if the session **already** has `modelLock.approvalMode`, it removes `approvalMode` and `approvalModeSource`, keeping the rest of the lock (model, effort, workflows, speed, plan mode) untouched, and writes it back. A session with no lock, or a lock with no `approvalMode`, is left alone. Errors are swallowed per session (best-effort), so one failing chat cannot undo the approved bot change or turn the approval into an error.
+- `sync_bot_permission` (`crates/retinue-daemon/src/proposals.rs:753`) was rewritten. It no longer calls `conversation_lock_for`, so it never builds a lock and never writes a bot's current model/effort into a session. For each of the bot's non-automation sessions it does exactly one thing: if the session **already** has `modelLock.approvalMode`, it removes `approvalMode` and `approvalModeSource`, keeping the rest of the lock (model, effort, workflows, speed, plan mode) untouched, and writes it back. A session with no lock, or a lock with no `approvalMode`, is left alone. Errors are swallowed per session (best-effort), so one failing chat cannot undo the approved bot change or turn the approval into an error.
 - Callers `apply_permission` (`proposals.rs:570`) and `apply_update` (`proposals.rs:742`) now call it without a mode and without `?`.
-- Four failing-first daemon tests in `crates/bloblex-daemon/src/team_p7_tests.rs::p7_permission_change_releases_pins_and_bot_stays_the_source_of_truth`: (1) after approval a chat with no lock still has `modelLock == null`; (2) a later bot model change is picked up by `exec_options_for_session` for that chat; (3) a later bot permission change is picked up (this failed on the old code, which pinned `auto`); (4) a chat that had an `approvalMode`/`approvalModeSource` pin keeps its model and effort but follows the bot again. On the pre-fix `sync_bot_permission` all four fail at assertion 1 (the old code created a lock for every session).
+- Four failing-first daemon tests in `crates/retinue-daemon/src/team_p7_tests.rs::p7_permission_change_releases_pins_and_bot_stays_the_source_of_truth`: (1) after approval a chat with no lock still has `modelLock == null`; (2) a later bot model change is picked up by `exec_options_for_session` for that chat; (3) a later bot permission change is picked up (this failed on the old code, which pinned `auto`); (4) a chat that had an `approvalMode`/`approvalModeSource` pin keeps its model and effort but follows the bot again. On the pre-fix `sync_bot_permission` all four fail at assertion 1 (the old code created a lock for every session).
 - The two P5 tests that asserted the removed per-conversation pin (`main.rs:10802`, `main.rs:10825`) now assert the bot's mode and that no conversation lock is created. The P7 permission proposal is bot-wide (the audit accepted that) only with B1 fixed.
 
 ### F1 — stray `?` in the roster
@@ -113,19 +113,19 @@ New table test `p7_every_manager_tool_is_refused_for_an_ordinary_bot` builds the
 ### Gates (rerun to completion by this pass)
 All green on the final source (worktree `lane/fix39-p7`), every number from this run. Repro: `CARGO_TARGET_DIR=C:/fxt/d3`, `TEMP=TMP=C:/fxt/d3/tmp`, `RUST_MIN_STACK=33554432`.
 
-- **Rust workspace:** `cargo test --workspace --exclude bloblex-desktop --no-fail-fast` → **exit 0**. The daemon `bitbotsd` binary target reported **409 passed, 0 failed**. `session_environment_reports_a_git_branch` was **run, not skipped** (the audit needs it; it commits only inside its own throwaway temp repo) and passed. Log: `C:/fxt/d3/p7c-workspace.log`. (One earlier parallel run had two flakes — the git-branch test and an unrelated `bloblex-speech` cloud challenge test — that both pass in isolation and in the clean rerun above.)
-- **Workspace clippy:** `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` → **exit 0, no warnings.**
+- **Rust workspace:** `cargo test --workspace --exclude retinue-desktop --no-fail-fast` → **exit 0**. The daemon `retinued` binary target reported **409 passed, 0 failed**. `session_environment_reports_a_git_branch` was **run, not skipped** (the audit needs it; it commits only inside its own throwaway temp repo) and passed. Log: `C:/fxt/d3/p7c-workspace.log`. (One earlier parallel run had two flakes — the git-branch test and an unrelated `retinue-speech` cloud challenge test — that both pass in isolation and in the clean rerun above.)
+- **Workspace clippy:** `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` → **exit 0, no warnings.**
 - **UI typecheck:** `npx tsc -b` (apps/desktop) → **exit 0.**
 - **UI unit tests:** `npx vitest run --maxWorkers=3` → **170 files passed, 1257 tests passed, 0 failed**, including the updated P7 mounted cases. Log: `C:/fxt/d3/p7b-vitest.log`.
 - **UI production build:** `npm run build` (apps/desktop) → **exit 0**, built in ~11 s.
-- No `src-tauri` and no remote-app source or policy changed, so `cargo test -p bloblex-desktop --lib` and `npm run build:remote` were not required.
+- No `src-tauri` and no remote-app source or policy changed, so `cargo test -p retinue-desktop --lib` and `npm run build:remote` were not required.
 - 14 → 21 P7 daemon tests in `team_p7_tests.rs`; all pass.
 
 ### What I could not check
-- No live model, installed Bitbots, personal database, phone, tailnet or native-window verification. The new tests use fake adapters, in-memory databases and temp folders under `C:/fxt/d3/tmp`.
+- No live model, installed Retinue, personal database, phone, tailnet or native-window verification. The new tests use fake adapters, in-memory databases and temp folders under `C:/fxt/d3/tmp`.
 - The dedicated failing-first demonstration was reasoned from the audit's B1 analysis plus the removed code (which created a lock for every session); I ran the tests after the fix, not against a checked-out pre-fix revision.
 - Visual checks (both looks, both themes) and live Manager routing remain the Director's.
 
 ### Files touched by this pass
-`crates/bloblex-daemon/src/proposals.rs`, `crates/bloblex-daemon/src/team.rs`, `crates/bloblex-daemon/src/team_p7_tests.rs`, `crates/bloblex-daemon/src/main.rs` (permission-proposal test expectations, `list_conversations` assertions, the depth test), `apps/desktop/src/ui/ProposalCard.tsx`, `apps/desktop/src/ui/ProposalCard.mounted.test.tsx`, and this report. `knowledge.rs` is unchanged from the previous pass. One stray, line-ending-only change to `docs/history/fix-39/audit-impl-brief.md` was already in the worktree; it is not part of this package and should not be merged. No `git commit` was run.
+`crates/retinue-daemon/src/proposals.rs`, `crates/retinue-daemon/src/team.rs`, `crates/retinue-daemon/src/team_p7_tests.rs`, `crates/retinue-daemon/src/main.rs` (permission-proposal test expectations, `list_conversations` assertions, the depth test), `apps/desktop/src/ui/ProposalCard.tsx`, `apps/desktop/src/ui/ProposalCard.mounted.test.tsx`, and this report. `knowledge.rs` is unchanged from the previous pass. One stray, line-ending-only change to `docs/history/fix-39/audit-impl-brief.md` was already in the worktree; it is not part of this package and should not be merged. No `git commit` was run.
 

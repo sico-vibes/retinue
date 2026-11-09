@@ -6,7 +6,7 @@ import { DizzyRecoveryDeadline, GreetingLifecycle } from './motion'
 import { playCompanionCue, unlockCompanionAudioFromGesture } from './soundCues'
 import type { BlobLook } from './look'
 import { BitbotCanvas } from './BitbotCanvas'
-import { useThemeStyle } from './bitbots'
+import { useThemeStyle } from './retinue'
 import { resolveArt, type BotArt } from './art/art'
 import { PaintedBlob } from './art/PaintedBlob'
 import { HazeMark } from './haze/HazeMark'
@@ -36,7 +36,7 @@ export interface BlobCanvasProps {
   /** Extra transparent canvas above the logical body, without enlarging its hit or layout box. */
   effectOverscanTop?: number
   decorative?: boolean
-  /** The blob's silhouette and face. Omitted, it is the round Bitbots mascot. */
+  /** The blob's silhouette and face. Omitted, it is the round Retinue mascot. */
   look?: BlobLook | null
   /** Opt in only on the companion surface; main-window avatars stay silent. */
   soundCues?: boolean
@@ -91,7 +91,7 @@ const LOVE_HOVER_MS = 1900
 const LOVE_COOLDOWN_MS = 6000
 
 /**
- * Bitbots character. The same engine renders the companion and every chat
+ * Retinue character. The same engine renders the companion and every chat
  * avatar, so a blob keeps one face language everywhere. With `greeting`, the
  * canvas plays the companion welcome scene instead.
  */

@@ -6,12 +6,12 @@ import { ProviderLogo } from './providerBrand'
 import { PixelClouds } from './PixelClouds'
 import markWhite from '../assets/brand/retinue-mark-white.png'
 import markBlack from '../assets/brand/retinue-mark-black.png'
-import { useLegacyPixel } from '../blob/bitbots'
+import { useLegacyPixel } from '../blob/retinue'
 
 type Phase = 'scanning' | 'greeting' | 'ready'
 
 /**
- * Startup checks. The mark breathes while Bitbots looks for coding agents,
+ * Startup checks. The mark breathes while Retinue looks for coding agents,
  * then settles once everything is ready; the checks scroll inside a fixed
  * window whose edges fade into the background.
  */
@@ -24,7 +24,7 @@ export function LaunchIntro({ checks, runtimes, agent: _agent = null, onComplete
   const finished = checks.length > 0 && checks.every((check) => check.state !== 'running')
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const [phase, setPhase] = useState<Phase>('scanning')
-  const bitbots = useLegacyPixel()
+  const retinue = useLegacyPixel()
   useEffect(() => { onCompleteRef.current = onComplete }, [onComplete])
 
   const complete = () => {
@@ -72,14 +72,14 @@ export function LaunchIntro({ checks, runtimes, agent: _agent = null, onComplete
 
   const names = new Map(runtimes.map((runtime) => [runtime.id, runtime.provider]))
   const running = checks.find((check) => check.state === 'running')
-  const status = serviceDown ? 'Bitbots could not connect to its service.' : finished ? 'Ready for your next conversation.' : running?.label ?? 'Getting Bitbots ready…'
-  return <main className={`launch-intro${reducedMotion ? ' reduced-motion' : ''}`} data-phase={phase} aria-label="Bitbots launch checks" onPointerDown={() => { if (phase === 'greeting' && autoComplete) complete() }}>
+  const status = serviceDown ? 'Retinue could not connect to its service.' : finished ? 'Ready for your next conversation.' : running?.label ?? 'Getting Retinue ready…'
+  return <main className={`launch-intro${reducedMotion ? ' reduced-motion' : ''}`} data-phase={phase} aria-label="Retinue launch checks" onPointerDown={() => { if (phase === 'greeting' && autoComplete) complete() }}>
     <PixelClouds className="launch-clouds" />
     <section className="launch-intro-content">
       <div className="launch-blob-stage">
         <LaunchLogo state={serviceDown ? 'error' : phase === 'greeting' ? 'greeting' : phase === 'ready' ? 'ready' : 'working'} onGreeted={greetingDone} />
       </div>
-      {bitbots && !reducedMotion && phase === 'scanning' && !serviceDown && <PixelScan />}
+      {retinue && !reducedMotion && phase === 'scanning' && !serviceDown && <PixelScan />}
       <p className="launch-status" role="status" aria-live="polite">{status}</p>
       <LaunchChecklist checks={checks} names={names} />
       {serviceDown && <div className="launch-actions"><button className="primary-button" onClick={retry}>Retry</button><button className="secondary-button" onClick={continueOffline}>Continue offline</button></div>}
@@ -126,7 +126,7 @@ function StateGlyph({ state }: { state: LaunchCheck['state'] }) {
   </svg>
 }
 
-/** Bitbots scan: a row of pixels lights in a short run while Bitbots looks for coding agents. */
+/** Retinue scan: a row of pixels lights in a short run while Retinue looks for coding agents. */
 function PixelScan() {
   return <div className="launch-pixel-scan" aria-hidden="true">{Array.from({ length: 14 }, (_, index) => <i key={index} style={{ ['--i' as string]: index }} />)}</div>
 }

@@ -8,11 +8,11 @@ checkout, stash, reset, push).
 
 Files touched (all of them under "You own"):
 
-- `crates/bloblex-storage/src/lib.rs` (question + queue lookup helpers only)
-- `crates/bloblex-daemon/src/delegations.rs`
-- `crates/bloblex-daemon/src/questions.rs`
-- `crates/bloblex-daemon/src/team.rs` — **not touched** (see "What I did not need")
-- `crates/bloblex-daemon/src/main.rs` — only the `QuestionAnswer` hook (lines 3233-3244)
+- `crates/retinue-storage/src/lib.rs` (question + queue lookup helpers only)
+- `crates/retinue-daemon/src/delegations.rs`
+- `crates/retinue-daemon/src/questions.rs`
+- `crates/retinue-daemon/src/team.rs` — **not touched** (see "What I did not need")
+- `crates/retinue-daemon/src/main.rs` — only the `QuestionAnswer` hook (lines 3233-3244)
 
 Nothing outside those paths was edited; `checkpoints.rs`, `media.rs`,
 `workspace.rs`, `experiments.rs`, `queue.rs`, `apps/`, `docs/`, `.claude/` are
@@ -22,7 +22,7 @@ untouched.
 
 ## A. The association is persisted on the question, from the daemon's own lookup
 
-**Storage** (`crates/bloblex-storage/src/lib.rs`)
+**Storage** (`crates/retinue-storage/src/lib.rs`)
 
 - `question_set_delegation(id, delegation_id)` — 2360-2370. Writes
   `data.delegationId` into the card's own JSON (`json_set`), which is the same
@@ -36,7 +36,7 @@ untouched.
   (`wake_request`/`reply_state` were columns because they are queried by SQL with
   `IS NULL` semantics and never read through `permission_get`).
 
-**Daemon** (`crates/bloblex-daemon/src/delegations.rs`, `questions.rs`)
+**Daemon** (`crates/retinue-daemon/src/delegations.rs`, `questions.rs`)
 
 - `delegations::question_owner_row(st, side)` — 387-398. Exactly the brief's rule:
   the row of `delegation_find_for_side_turn(side, active_turn(st, side))` (with
@@ -64,7 +64,7 @@ delegated bot can still ask a question whose card has no owner.
 
 ## B. A question holds *its* assignment open until the answer's turn has started
 
-**Per-question state** (`crates/bloblex-storage/src/lib.rs`)
+**Per-question state** (`crates/retinue-storage/src/lib.rs`)
 
 - `question_mark_answer_pending(id, pending)` — 2373-2387. `true` sets
   `data.answerPending = true` and `data.answerPendingAt = <rfc3339 millis>`; `false`
@@ -373,24 +373,24 @@ result: the Director's gate run is the authority.
 
 ## Checks (last 15 lines of each, verbatim)
 
-`$env:RUST_MIN_STACK='33554432'; cargo check -p bloblex-storage --message-format short`
+`$env:RUST_MIN_STACK='33554432'; cargo check -p retinue-storage --message-format short`
 
 ```
-    Checking bloblex-storage v0.1.0-beta.38 (D:\t6\crates\bloblex-storage)
+    Checking retinue-storage v0.1.0-beta.38 (D:\t6\crates\retinue-storage)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.91s
 ```
 
-`$env:RUST_MIN_STACK='33554432'; cargo check -p bloblex-daemon --message-format short`
+`$env:RUST_MIN_STACK='33554432'; cargo check -p retinue-daemon --message-format short`
 
 ```
-    Checking bloblex-storage v0.1.0-beta.38 (D:\t6\crates\bloblex-storage)
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\t6\crates\bloblex-daemon)
+    Checking retinue-storage v0.1.0-beta.38 (D:\t6\crates\retinue-storage)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\t6\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.47s
 ```
 
 No warnings were printed by either (a warning would appear as a `path:line: …`
 line before `Finished`). The first full build of both crates after my edits also
-finished clean (`bloblex-daemon` in 54.43s), so nothing was hidden by caching.
+finished clean (`retinue-daemon` in 54.43s), so nothing was hidden by caching.
 
 ## What I did not need
 
@@ -400,6 +400,6 @@ brief allowed changes there "and what it needs"; nothing was needed.
 
 ## Proposed skill update (I may not edit `.claude/`)
 
-`.claude/skills/bitbots-development/references/lessons.md`, new dated entry:
+`.claude/skills/retinue-development/references/lessons.md`, new dated entry:
 
 > **2026-10-27 — a delegated question belonged to a conversation, not an assignment (lane R, `t6/question-delegation`).** Symptom: an answer typed while a side conversation's question turn was still finishing was queued, the turn then finished the assignment `completed` and relayed the question text as the reply, and the queued answer's turn was unowned. Cause: `delegations::after_turn` / `close_pending_questions` / `question_resolved` all keyed on the side session (`pending_question_exists(side)`, newest row), so two assignments in one conversation shared one answer. Fix: `ask_user` cards store their `delegationId` (`question_set_delegation`), `answer_pending` holds *that* row open until the answer's turn starts (`delegations::answer_started`, a sync `fn` that spawns its emit because the prompt path reaches back into the turn hook — E0391), and every row lookup is per assignment with a single-open-assignment fallback only. When adding anything that maps a turn to a delegation row, never key on the session alone, and remember the daemon is multi-threaded: only a database-atomic state (here `resolving`) closes a claim/answer race.

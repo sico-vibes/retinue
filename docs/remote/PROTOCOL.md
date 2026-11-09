@@ -1,7 +1,7 @@
-# Bitbots remote protocol (v1)
+# Retinue remote protocol (v1)
 
 > **What this is:** The Remote mode protocol (v1): requests, events and the rules for each.
-> **Status:** current; the design for the wire contract. The daemon contains the gateway (`crates/bloblex-daemon/src/remote/`); live tailnet and phone verification is still owed (see AGENTS.md, 17 October 2026 amendment).
+> **Status:** current; the design for the wire contract. The daemon contains the gateway (`crates/retinue-daemon/src/remote/`); live tailnet and phone verification is still owed (see AGENTS.md, 17 October 2026 amendment).
 > **Last updated:** 2026-10-22
 
 **Status: Implemented in the daemon gateway (shipped in beta.30); not yet verified against a live tailnet and a real phone.** This document describes the wire contract between a
@@ -12,9 +12,9 @@ daemon are marked **(recommendation)** and may change before implementation.
 **Amended 16 October 2026.** The owner chose Tailscale. The Noise secure channel, X25519 device
 keys, relay framing, `wake` frames and the direct LAN listener of the 15 October draft are
 superseded and removed from this document. Tailscale (WireGuard) supplies encryption, node
-identity and HTTPS; Bitbots adds device pairing, cookies and tier policy on top.
+identity and HTTPS; Retinue adds device pairing, cookies and tier policy on top.
 
-Vocabulary: a **host** is a computer running Bitbots and its daemon; a **device** is a paired
+Vocabulary: a **host** is a computer running Retinue and its daemon; a **device** is a paired
 phone, tablet, browser or computer on the same tailnet; the **gateway** is the host-side
 listener that exposes the daemon to remote devices; the **serve address** is the HTTPS URL
 `tailscale serve` publishes, for example `https://work-pc.example-tailnet.ts.net`. See
@@ -32,7 +32,7 @@ allowlist, presence and versioning.
 
 - The loopback daemon API is unchanged. The daemon still binds `127.0.0.1` on an ephemeral
   port and serves `POST /v1/rpc` and `GET /v1/events`
-  (`crates/bloblex-daemon/src/main.rs:3381-3384`). Remote never widens that listener.
+  (`crates/retinue-daemon/src/main.rs:3381-3384`). Remote never widens that listener.
 - The daemon's capability token, its startup bootstrap and its Tauri proxy path are untouched
   (`docs/ipc-contract.md:15-23`).
 - This document does not define product policy (who may pair, what a tier means to the user),
@@ -54,7 +54,7 @@ allowlist, presence and versioning.
 
 ### 2.1 Listener and serve
 
-- The gateway is a second listener inside `bitbotsd` on `127.0.0.1:<remote.port>`, default
+- The gateway is a second listener inside `retinued` on `127.0.0.1:<remote.port>`, default
   `48620`. It runs only while Remote is on. It never binds `0.0.0.0`, a LAN interface or an
   IPv6 wildcard.
 - The host publishes it with `tailscale serve --bg --https=443 http://127.0.0.1:<port>`. If
@@ -66,7 +66,7 @@ allowlist, presence and versioning.
 - The **serve origin** is `https://<DNSName>` (or `https://<DNSName>:8443`), where `DNSName`
   comes from `tailscale status --json` with the trailing dot removed. It is the only accepted
   `Origin` (§4.1).
-- **Port choice (FIX39 P3).** If the configured port is held by another Bitbots copy, `enable`
+- **Port choice (FIX39 P3).** If the configured port is held by another Retinue copy, `enable`
   is refused with `conflict`. If another program holds it, the gateway moves to the next free
   loopback port: the configured port, then +1 to +9 skipping the Native port, then an
   OS-assigned port. Ports inside a Windows reserved range are skipped the same way. The chosen
@@ -109,7 +109,7 @@ Rules carried over unchanged:
 
 - `id` is an opaque, per-client request identifier; a response echoes it.
 - Event `sequence` is daemon-global and monotonically increasing
-  (`crates/bloblex-storage/src/lib.rs:1107`; `docs/ipc-contract.md:51`).
+  (`crates/retinue-storage/src/lib.rs:1107`; `docs/ipc-contract.md:51`).
 - Unknown fields and unknown event types are ignored (`docs/ipc-contract.md:51`).
 - No raw provider JSON appears in the contract (`docs/ipc-contract.md:51`).
 
@@ -140,7 +140,7 @@ carries no credential material or prompt text (`docs/ipc-contract.md:255`).
 
 ## 4. Gateway routes and authentication
 
-Tailscale encrypts the link and proves which tailnet node is talking. Bitbots still decides
+Tailscale encrypts the link and proves which tailnet node is talking. Retinue still decides
 which **device** may act, and at which tier. Every rule in this section runs on the host.
 
 ### 4.1 Checks on every `/api/*` request
@@ -174,7 +174,7 @@ In this order:
 
 | Property | Value |
 |---|---|
-| Name | `__Host-bitbots_remote` **(recommendation)**; the `__Host-` prefix forces `Secure`, `Path=/` and no `Domain` |
+| Name | `__Host-retinue_remote` **(recommendation)**; the `__Host-` prefix forces `Secure`, `Path=/` and no `Domain` |
 | Value | 256 random bits, base64url, created by the host at approval |
 | Attributes | `HttpOnly; Secure; SameSite=Strict; Path=/`, `Max-Age` equal to the idle expiry (no `Max-Age` when expiry is "never") |
 | Stored on the host | `sha256(token)` only, never the token |
@@ -195,7 +195,7 @@ needs (`apps/desktop/src/remote/remoteContract.ts:17-28`).
      is burned and the owner must start a new one.
    - The first correct code **locks** the offer to that request. Any later submission, right or
      wrong, is refused. The response is `202 {state:"pending"}` and sets a short-lived
-     `__Host-bitbots_pair` cookie (`HttpOnly; Secure; SameSite=Strict`, five minutes) that
+     `__Host-retinue_pair` cookie (`HttpOnly; Secure; SameSite=Strict`, five minutes) that
      names this pending request.
    - Every failure returns the same `pairing_invalid` error, so a guesser cannot tell a wrong code
      from an expired or burned one.
@@ -230,7 +230,7 @@ phone (PWA)                           gateway (127.0.0.1:48620)          desktop
 
 | Route | Purpose |
 |---|---|
-| `GET /` and static files | The PWA, served only from paths listed in a manifest built at startup from `BITBOTS_REMOTE_WEB_DIR`. Anything else is 404, which also rules out path traversal. |
+| `GET /` and static files | The PWA, served only from paths listed in a manifest built at startup from `RETINUE_REMOTE_WEB_DIR`. Anything else is 404, which also rules out path traversal. |
 | `POST /api/pair`, `GET /api/pair` | Pairing (§4.3). Runs without the device cookie. |
 | `GET /api/me` **(recommendation)** | `{protocolVersion:1, device:{id,name,tier}, host:{name}, approvalsFromRemote, quietHoursActive}`, so the client can show what it may do. |
 | `POST /api/rpc` | One daemon envelope in, one out (§4.5). |
@@ -279,22 +279,22 @@ through the event allowlist and the scrubber.
 Daemon facts this relies on:
 
 - Replay is batched at 1000 events per call: `events.replay` passes limit 1000
-  (`crates/bloblex-daemon/src/main.rs:698`) and the event socket calls `replay_events(after,1000)`
-  (`crates/bloblex-daemon/src/main.rs:3274`).
+  (`crates/retinue-daemon/src/main.rs:698`) and the event socket calls `replay_events(after,1000)`
+  (`crates/retinue-daemon/src/main.rs:3274`).
 - The daemon registers the live subscription before replaying, so a client may see duplicate
-  sequences and must discard them (`docs/ipc-contract.md:23`; `crates/bloblex-daemon/src/main.rs:3264-3292`).
+  sequences and must discard them (`docs/ipc-contract.md:23`; `crates/retinue-daemon/src/main.rs:3264-3292`).
 - If retention no longer covers the gap, replay returns `replayAvailable:false` with
-  `earliestSequence` (`crates/bloblex-storage/src/lib.rs:1509-1513`); the client then fetches a
+  `earliestSequence` (`crates/retinue-storage/src/lib.rs:1509-1513`); the client then fetches a
   fresh `app.snapshot` (`docs/ipc-contract.md:23`).
-- The live broadcast channel has capacity 1024 (`crates/bloblex-daemon/src/main.rs:3343`). A
+- The live broadcast channel has capacity 1024 (`crates/retinue-daemon/src/main.rs:3343`). A
   slow client that lags is sent a `replay.gap` event and the socket is closed
-  (`crates/bloblex-daemon/src/main.rs:3313`).
+  (`crates/retinue-daemon/src/main.rs:3313`).
 - Sequences are daemon-global, not per session (`docs/ipc-contract.md:51`).
 - After replay the daemon emits `events.replay.complete` with `throughSequence`
-  (`crates/bloblex-daemon/src/main.rs:3297-3304`).
+  (`crates/retinue-daemon/src/main.rs:3297-3304`).
 
 The first message on the remote socket is `{"v":1,"afterSequence":<cursor>}`, the same shape
-the daemon's own socket takes (`crates/bloblex-daemon/src/main.rs:3264-3272`;
+the daemon's own socket takes (`crates/retinue-daemon/src/main.rs:3264-3272`;
 `docs/ipc-contract.md:23`).
 
 ```
@@ -463,20 +463,20 @@ it; regenerate it so it cannot drift from `METHOD_RULES`.
 supported from remote devices yet").
 
 Reasons: the local path accepts an absolute host path
-(`crates/bloblex-daemon/src/main.rs:2621-2623`), which a device must never send, and a staging
+(`crates/retinue-daemon/src/main.rs:2621-2623`), which a device must never send, and a staging
 upload area would need its own design (random single-use ids bound to device and session, a time
 to live, a per-device byte cap and image decoding limits). That design is deferred. When it
 returns, it keeps the daemon's limits: 10 MiB per image (`MAX_ATTACHMENT_BYTES`,
-`crates/bloblex-daemon/src/main.rs:2608,2626`), at most 8 per message
-(`crates/bloblex-daemon/src/main.rs:2607,2619`), and the host derives the media type from magic
-bytes, never from the caller (`crates/bloblex-daemon/src/main.rs:2610-2641`).
+`crates/retinue-daemon/src/main.rs:2608,2626`), at most 8 per message
+(`crates/retinue-daemon/src/main.rs:2607,2619`), and the host derives the media type from magic
+bytes, never from the caller (`crates/retinue-daemon/src/main.rs:2610-2641`).
 
 ---
 
 ## 10. Presence and notifications
 
 **Host heartbeat.** The daemon reports `state`, `version`, `uptimeSeconds` and `heartbeatAt`
-through `daemon.health` (`crates/bloblex-daemon/src/main.rs:709-711`). The gateway derives
+through `daemon.health` (`crates/retinue-daemon/src/main.rs:709-711`). The gateway derives
 presence from the live event socket, not from a stored value.
 
 **Device online flag.** `RemoteDevice.online` is true while the device has a live event socket
@@ -500,7 +500,7 @@ summary is one short sentence and never message content
 - The PWA is served by the host it talks to, so client and gateway ship together and normally
   match. A stale cached shell is the main mismatch; the service worker prompts for the update.
 - A request whose `v` does not match is rejected with `unsupported` ("protocol version
-  mismatch") (`crates/bloblex-daemon/src/main.rs:345-350`). Remote keeps a matching rule: an
+  mismatch") (`crates/retinue-daemon/src/main.rs:345-350`). Remote keeps a matching rule: an
   unsupported major version fails at startup, not per call.
 - Unknown fields and unknown event types are ignored, never an error
   (`docs/ipc-contract.md:51`).
@@ -552,7 +552,7 @@ daemon is never asked to evaluate remote policy; the gateway denies before dispa
    yes, with the cookie as the only proof, and the desktop shows "no Tailscale login" at
    approval.
 3. **Enterprise policy.** Tailnet ACLs already decide which nodes can reach the host. Should
-   Bitbots also offer an allowlist of Tailscale logins? Deferred.
+   Retinue also offer an allowlist of Tailscale logins? Deferred.
 4. **Staging design.** When attachments return, how long does a staged upload live and what is
    the per-device cap? Deferred with §9.
 
@@ -615,7 +615,7 @@ the `Host` is still required on every `/api/*` request. `/api/ping` is the one r
 | Route | Purpose |
 |---|---|
 | `POST /api/login` | `{username, password, name, kind, platform}`. A wrong pair is `401 login_invalid` (same answer for an unknown username); a locked-out source or a global pause is `429 rate_limited`. A device that already holds a valid cookie gets `200 {state:"approved"}`. Otherwise it starts the owner's approval exactly like `POST /api/pair` (`202 {state:"pending"}`, `remote.pairing.requested` with `method:"native"`), then `GET /api/pair` reports the outcome and sets the cookie. |
-| `GET /api/ping` | Unauthenticated self-test, outside the `Origin` check so it can be opened from an address bar. Answers only the fixed marker `{"ok":true,"app":"bitbots","role":"remote-gateway"}` (FIX39 P3; nothing about the host, owner or account); records `native.lastReachedAt` and `lastReachedFrom` (a public address, or "this network") and emits `remote.changed`. Rate-limited. |
+| `GET /api/ping` | Unauthenticated self-test, outside the `Origin` check so it can be opened from an address bar. Answers only the fixed marker `{"ok":true,"app":"retinue","role":"remote-gateway"}` (FIX39 P3; nothing about the host, owner or account); records `native.lastReachedAt` and `lastReachedFrom` (a public address, or "this network") and emits `remote.changed`. Rate-limited. |
 | `GET /api/me` | Unchanged when signed in, plus `method`. A refusal (`unauthorized`, `device_revoked`) now also carries `"method"` so a signed-out client shows the matching screen: username and password for `native`, the pairing code for `tailscale`. |
 
 **Desktop-only methods** (all `never` remote, on the loopback API): `remote.method.set

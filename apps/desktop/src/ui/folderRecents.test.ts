@@ -28,9 +28,9 @@ describe('recent folders', () => {
   })
 
   it('drops non-string and empty stored entries', () => {
-    localStorage.setItem('bitbots.recentFolders', JSON.stringify(['C:/ok', 7, '', '  ', null, 'C:/next']))
+    localStorage.setItem('retinue.recentFolders', JSON.stringify(['C:/ok', 7, '', '  ', null, 'C:/next']))
     expect(recentFolders()).toEqual(['C:/ok', 'C:/next'])
-    localStorage.setItem('bitbots.recentFolders', 'not json')
+    localStorage.setItem('retinue.recentFolders', 'not json')
     expect(recentFolders()).toEqual([])
   })
 })

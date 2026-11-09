@@ -1,6 +1,6 @@
 # Lane V1 report (27 October 2026): durable Manager wake, turn-checked cancel, optional delegation pause
 
-Worktree `D:\v1`, branch `lane/v1`. No tests, no test-target builds, no app/browser/probe/screenshot, no git writes were run. Only `cargo check -p bloblex-daemon -p bloblex-storage` (production targets). Files touched: `crates/bloblex-daemon/src/delegations.rs`, `team.rs`, `main.rs` (only the cancel functions and the `validate_setting` arm), `backup.rs` (allowlist only), `crates/bloblex-storage/src/lib.rs` (delegation, question and `permission_requests` functions, schema and the setting validation entry).
+Worktree `D:\v1`, branch `lane/v1`. No tests, no test-target builds, no app/browser/probe/screenshot, no git writes were run. Only `cargo check -p retinue-daemon -p retinue-storage` (production targets). Files touched: `crates/retinue-daemon/src/delegations.rs`, `team.rs`, `main.rs` (only the cancel functions and the `validate_setting` arm), `backup.rs` (allowlist only), `crates/retinue-storage/src/lib.rs` (delegation, question and `permission_requests` functions, schema and the setting validation entry).
 
 The T7 report is missing from this worktree (`docs/history/t7` does not exist here). It was read read-only from the main checkout (`D:\Basem's\Coding\Blolblex\docs\history\t7\REPORT.md`), together with `report-u2-delegation-questions.md`; the wake/cancel facts below were then re-read in the code of this worktree.
 
@@ -160,11 +160,11 @@ The turn identity is checked and the stop recorded under the gate. After the gat
 
 ## Existing tests that reference changed code (names only, not run)
 
-- `crates/bloblex-daemon/src/main.rs`: `cancel_while_starting_skips_prompt`, `manager_delegates_to_a_teammate_and_is_woken_by_the_relayed_reply`, `delegation_notice_splits_a_turn_and_reply_paths_read_one_row`, `timeout_finalisation_drains_the_queued_team_delivery`, `team_deliveries_drain_after_the_user_queue`, `a_transient_turn_conflict_keeps_the_item_queued_and_unpaused`, `row_a_refused_drain_keeps_the_queue_order`, `row_repeated_refused_drains_write_one_waiting_notice`, `row_a_finished_turn_drains_another_conversations_queue`, `task_restart_marks_ambiguous_work_needs_you_and_resumes_queued_work_once`, `automations_coalesce_missed_runs_skip_overlaps_and_respect_global_pause`.
-- `crates/bloblex-daemon/src/team_p7_tests.rs`: `p7_manager_messages_a_teammate_immediately_with_no_proposal_or_task`, `p7_manager_messages_a_teammate_at_once_while_start_and_assign_stay_approved` (and the module's other `message_blob` tests that share `install_delegation`).
-- `crates/bloblex-daemon/src/team_p10_tests.rs`: `p10_a_follow_up_after_a_merge_runs_in_an_existing_folder`, `p10_isolates_a_code_task_when_another_runs_in_the_repo`, `p10_isolates_when_the_other_task_is_queued_or_has_not_started_a_turn`.
-- `crates/bloblex-storage/src/lib.rs`: `appearance_values_validate` (calls `validate_setting_value`), and the delegation schema/setting tests in that module that run `Storage::open_in_memory` (they now also create the three new columns and the partial index through the same schema path).
-- `crates/bloblex-daemon/src/backup.rs`: `haze_style_survives_a_document_round_trip` (exercises the settings allowlist).
+- `crates/retinue-daemon/src/main.rs`: `cancel_while_starting_skips_prompt`, `manager_delegates_to_a_teammate_and_is_woken_by_the_relayed_reply`, `delegation_notice_splits_a_turn_and_reply_paths_read_one_row`, `timeout_finalisation_drains_the_queued_team_delivery`, `team_deliveries_drain_after_the_user_queue`, `a_transient_turn_conflict_keeps_the_item_queued_and_unpaused`, `row_a_refused_drain_keeps_the_queue_order`, `row_repeated_refused_drains_write_one_waiting_notice`, `row_a_finished_turn_drains_another_conversations_queue`, `task_restart_marks_ambiguous_work_needs_you_and_resumes_queued_work_once`, `automations_coalesce_missed_runs_skip_overlaps_and_respect_global_pause`.
+- `crates/retinue-daemon/src/team_p7_tests.rs`: `p7_manager_messages_a_teammate_immediately_with_no_proposal_or_task`, `p7_manager_messages_a_teammate_at_once_while_start_and_assign_stay_approved` (and the module's other `message_blob` tests that share `install_delegation`).
+- `crates/retinue-daemon/src/team_p10_tests.rs`: `p10_a_follow_up_after_a_merge_runs_in_an_existing_folder`, `p10_isolates_a_code_task_when_another_runs_in_the_repo`, `p10_isolates_when_the_other_task_is_queued_or_has_not_started_a_turn`.
+- `crates/retinue-storage/src/lib.rs`: `appearance_values_validate` (calls `validate_setting_value`), and the delegation schema/setting tests in that module that run `Storage::open_in_memory` (they now also create the three new columns and the partial index through the same schema path).
+- `crates/retinue-daemon/src/backup.rs`: `haze_style_survives_a_document_round_trip` (exercises the settings allowlist).
 
 No test file was edited, added or deleted; no test target was compiled. Any test that would need a signature change would be a compile break I cannot see without compiling tests: the only changed signature is `storage::delegation_wake_claim` (now takes `title` and `kind`), and a search found no test caller (only `delegations::attention`).
 
@@ -172,30 +172,30 @@ No test file was edited, added or deleted; no test target was compiled. Any test
 
 ## Checks
 
-`cargo check -p bloblex-daemon -p bloblex-storage` (production targets only; `$env:RUST_MIN_STACK=33554432`), last 15 lines of the full rebuild:
+`cargo check -p retinue-daemon -p retinue-storage` (production targets only; `$env:RUST_MIN_STACK=33554432`), last 15 lines of the full rebuild:
 
 ```
     Checking url v2.5.8
-    Checking bloblex-runtime v0.1.0-beta.38 (D:\v1\crates\bloblex-runtime)
+    Checking retinue-runtime v0.1.0-beta.38 (D:\v1\crates\retinue-runtime)
     Checking tower-http v0.6.11
-    Checking bloblex-adapter-claude v0.1.0-beta.38 (D:\v1\crates\bloblex-adapter-claude)
-    Checking bloblex-adapter-codex v0.1.0-beta.38 (D:\v1\crates\bloblex-adapter-codex)
-    Checking bloblex-adapter-acp v0.1.0-beta.38 (D:\v1\crates\bloblex-adapter-acp)
+    Checking retinue-adapter-claude v0.1.0-beta.38 (D:\v1\crates\retinue-adapter-claude)
+    Checking retinue-adapter-codex v0.1.0-beta.38 (D:\v1\crates\retinue-adapter-codex)
+    Checking retinue-adapter-acp v0.1.0-beta.38 (D:\v1\crates\retinue-adapter-acp)
     Checking hyper v1.11.1
     Checking hyper-util v0.1.21
     Checking hyper-tls v0.6.0
     Checking igd-next v0.18.0
     Checking axum v0.8.9
     Checking reqwest v0.12.28
-    Checking bloblex-storage v0.1.0-beta.38 (D:\v1\crates\bloblex-storage)
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\v1\crates\bloblex-daemon)
+    Checking retinue-storage v0.1.0-beta.38 (D:\v1\crates\retinue-storage)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\v1\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 07s
 ```
 
 The final check, after the last edit, printed only these lines (everything else was cached):
 
 ```
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\v1\crates\bloblex-daemon)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\v1\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.20s
 ```
 

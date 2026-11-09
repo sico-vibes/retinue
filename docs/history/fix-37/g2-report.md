@@ -27,8 +27,8 @@ plus the wrapper's own `margin-right` gave a ~12 px gap to the name.
   height, so `align-items: center` on the row puts the mark's centre on the
   name's line-box centre, and the logo-to-name gap is the row gap alone (5 px).
 
-Both looks share this rule: the Bitbots look only restyles `.team-row-name
-strong` font size (`bitbots.css:862`) and does not override the row gap, so the
+Both looks share this rule: the Retinue look only restyles `.team-row-name
+strong` font size (`retinue.css:862`) and does not override the row gap, so the
 same 5 px and the same centring apply. The change is alignment-only, so the
 row with a role chip (`flex: 0 1000 auto`), a long name (the `<strong>` keeps
 `overflow: hidden; text-overflow: ellipsis; min-width: 0`) and the Manager row
@@ -115,7 +115,7 @@ Tests:
 
 `SideConversationHeader`'s pill floats in `.chat-header`. `.side-header` was
 `z-index: 2` while `.conversation-frame::before` — the fade that the message
-list scrolls under — is `z-index: 3` (`team.css:169`/`bitbots.css:346`). The
+list scrolls under — is `z-index: 3` (`team.css:169`/`retinue.css:346`). The
 pill's shadow fell below the 64 px header into the top of the message area,
 where the fade painted over it, so the shadow read as cut off.
 
@@ -127,8 +127,8 @@ where the fade painted over it, so the shadow read as cut off.
   that stays under the badge. No ancestor on the path (`.chat-header`,
   `.conversation-pane`, `.app-shell`) clips it.
 
-The Bitbots look keeps its own hard `4px 4px 0` shadow
-(`bitbots.css:162`), which is already downward; the z-index fix applies to it
+The Retinue look keeps its own hard `4px 4px 0` shadow
+(`retinue.css:162`), which is already downward; the z-index fix applies to it
 too.
 
 ## What I could not check visually

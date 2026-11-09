@@ -1,6 +1,6 @@
-# Bitbots improvement plan v2: a BB-informed, companion-style roadmap
+# Retinue improvement plan v2: a BB-informed, companion-style roadmap
 
-> **What this is:** The v2 improvement roadmap for Bitbots: a companion-style plan that builds on the E2E plan.
+> **What this is:** The v2 improvement roadmap for Retinue: a companion-style plan that builds on the E2E plan.
 > **Status:** historical; a finished roadmap. Phases 1 to 7 shipped in `v0.1.0-beta.19`. It is kept as the record that AGENTS.md (12 October 2026 amendment) names. The current state is in [implementation-status.md](../operations/implementation-status.md).
 > **Last updated:** 2026-10-22
 
@@ -8,21 +8,21 @@ Status: approved by the owner, 12 October 2026. **Phases 1-7 are implemented and
 
 ## Context
 
-The owner wants Bitbots to be a Grok-Bot-style companion that reuses the coding-agent CLIs already installed and logged in on the user's PC (Claude Code, Codex, OpenCode). The owner asked me to read `get-bb/bb` (MIT, "the agent IDE that builds itself", ~40 plugins) and borrow what fits, then produce an improved plan. This replaces the QA lane's `docs/plans/improvement-plan.md` (v1), which was ~1/3 stale against HEAD (`17591b9`, beta.18) and framed everything as "match BB".
+The owner wants Retinue to be a Grok-Bot-style companion that reuses the coding-agent CLIs already installed and logged in on the user's PC (Claude Code, Codex, OpenCode). The owner asked me to read `get-bb/bb` (MIT, "the agent IDE that builds itself", ~40 plugins) and borrow what fits, then produce an improved plan. This replaces the QA lane's `docs/plans/improvement-plan.md` (v1), which was ~1/3 stale against HEAD (`17591b9`, beta.18) and framed everything as "match BB".
 
 Owner decisions: (1) lead with ALL four themes: proactive companion, memory and persona, reliability, interaction polish; (2) ChatGPT transcription via the Codex login is approved as an exception to the "no copied provider authentication" invariant, but **opt-in, on-device stays default**, with consent and automatic fallback.
 
-Sources: BB read remotely (provider layer, ~25 feature plugins, dictation, desktop UX, Windows notes) and Bitbots code verified by grep/read. BB claims are from reading its source; none were run.
+Sources: BB read remotely (provider layer, ~25 feature plugins, dictation, desktop UX, Windows notes) and Retinue code verified by grep/read. BB claims are from reading its source; none were run.
 
-## What Bitbots already has (do not re-plan)
+## What Retinue already has (do not re-plan)
 
-Per-model effort catalogs incl. Codex `ultra` and CLI-gated Claude `ultracode`; validated/fallback catalog gating; ask/auto/bypass modes (Codex bypass = `danger-full-access`); usage/quota/context meters; runtime health discovery; session resume; team delegation + side conversations over an app-owned MCP bridge (`bloblexd mcp-bridge`, `crates/bloblex-daemon/src/mcp_bridge.rs`, tools in `team.rs` ~L132); Claude and Codex native question cards in chat and island; per-blob `instructions`; tray, global shortcuts, notifications; on-device dictation; opt-in experiments framework; additive SQLite schema (v12).
+Per-model effort catalogs incl. Codex `ultra` and CLI-gated Claude `ultracode`; validated/fallback catalog gating; ask/auto/bypass modes (Codex bypass = `danger-full-access`); usage/quota/context meters; runtime health discovery; session resume; team delegation + side conversations over an app-owned MCP bridge (`retinued mcp-bridge`, `crates/retinue-daemon/src/mcp_bridge.rs`, tools in `team.rs` ~L132); Claude and Codex native question cards in chat and island; per-blob `instructions`; tray, global shortcuts, notifications; on-device dictation; opt-in experiments framework; additive SQLite schema (v12).
 
-**Found while verifying:** budgets are retired (`crates/bloblex-daemon/src/main.rs:992`; the budget clause in `AGENTS.md` line 57 predates the 12 October amendment and is superseded by it); the timeout path never calls `team::after_turn` (`main.rs` ~L2415-2440, so queued deliveries stall); the 45s/300s watchdog (`crates/bloblex-daemon/src/main.rs:2702-2703`) does not pause for a pending permission or question; Codex's fresh-thread resume fallback is silent (only Claude emits `ContextReset`); no queue/steer, keep-awake, memory, scheduler or ask-user shim exists.
+**Found while verifying:** budgets are retired (`crates/retinue-daemon/src/main.rs:992`; the budget clause in `AGENTS.md` line 57 predates the 12 October amendment and is superseded by it); the timeout path never calls `team::after_turn` (`main.rs` ~L2415-2440, so queued deliveries stall); the 45s/300s watchdog (`crates/retinue-daemon/src/main.rs:2702-2703`) does not pause for a pending permission or question; Codex's fresh-thread resume fallback is silent (only Claude emits `ContextReset`); no queue/steer, keep-awake, memory, scheduler or ask-user shim exists.
 
 ## Not taking from BB
 
-Account-pool proxy (credential custody), workflows (QuickJS fan-out), browser-automation, GitHub panel, editors, worktree/sandbox environments, connect/tunnel/mobile, Claude Agent SDK (TypeScript; Bitbots already speaks stream-json). Credential-free profile rotation (alternate `CLAUDE_CONFIG_DIR`/`CODEX_HOME`) is deferred. v1 items already done are dropped: A1, A3, B4, D1, D2, D4.
+Account-pool proxy (credential custody), workflows (QuickJS fan-out), browser-automation, GitHub panel, editors, worktree/sandbox environments, connect/tunnel/mobile, Claude Agent SDK (TypeScript; Retinue already speaks stream-json). Credential-free profile rotation (alternate `CLAUDE_CONFIG_DIR`/`CODEX_HOME`) is deferred. v1 items already done are dropped: A1, A3, B4, D1, D2, D4.
 
 ## Execution model (owner directive: delegation pipeline)
 
@@ -55,13 +55,13 @@ Account-pool proxy (credential custody), workflows (QuickJS fan-out), browser-au
 ## Phases (order follows dependencies)
 
 ### 1. Lifecycle hardening (reliability core), M
-- Extract one `finish_turn_failed()` from the three failure sites in `crates/bloblex-daemon/src/main.rs` (Error ~L2716, spawned-prompt Err ~L2200, timeout ~L2422); call `team::after_turn` on timeout; pause the inactivity timer while a permission/question is pending.
-- `bloblex-agent-core`: new `AgentEvent::RecoveryHint{hint,retry_after}` (typed: authRequired, rateLimited, overloaded, restartRecommended, staleTurn) instead of text matching. Claude emits from the `result` branch and `api_retry`; Codex from `turn/completed` errors. Codex fresh-resume and Claude restart emit `ContextReset`; daemon emits `session.replaced{reason,contextLost}` plus a transcript notice via `team.rs` `note()`.
+- Extract one `finish_turn_failed()` from the three failure sites in `crates/retinue-daemon/src/main.rs` (Error ~L2716, spawned-prompt Err ~L2200, timeout ~L2422); call `team::after_turn` on timeout; pause the inactivity timer while a permission/question is pending.
+- `retinue-agent-core`: new `AgentEvent::RecoveryHint{hint,retry_after}` (typed: authRequired, rateLimited, overloaded, restartRecommended, staleTurn) instead of text matching. Claude emits from the `result` branch and `api_retry`; Codex from `turn/completed` errors. Codex fresh-resume and Claude restart emit `ContextReset`; daemon emits `session.replaced{reason,contextLost}` plus a transcript notice via `team.rs` `note()`.
 - Record per-turn `delivery` (`not_sent|acknowledged|unknown`) in `turns.data` (no migration). Acknowledged = Claude first stream event after stdin write; Codex `turn/start` result; ACP first `session/update`.
 - UI: "context was reset" divider, honest timeout copy. Tests: extend the three `forward_events_with_timeouts` tests; reuse `fake_codex_server` `crash-reject`; add a fake_claude rejected-resume flag.
 
 ### 2. Durable queue, "send later", steer, M-L
-- `crates/bloblex-storage`: `queued_prompts` via the idempotent `ensure_*_schema` pattern (like `ensure_team_schema` ~L396, no version bump). New `queue.rs` absorbs the in-memory `Team.queued` (`team.rs:34`) and its drain in `after_turn`.
+- `crates/retinue-storage`: `queued_prompts` via the idempotent `ensure_*_schema` pattern (like `ensure_team_schema` ~L396, no version bump). New `queue.rs` absorbs the in-memory `Team.queued` (`team.rs:34`) and its drain in `after_turn`.
 - RPCs `session.queue.add|list|update|reorder|delete|send_now`, `session.steer`; event `queue.changed`. Startup settles `sending` rows. A queue never changes the permission mode; attachments revalidated at send.
 - Steer maps honestly per adapter: **Codex** `turn/steer{expectedTurnId}` (stale falls back to queue); **Claude and ACP** queue-only until a live capture proves otherwise. Gate via a `steer` row in `runtime_capabilities` (`main.rs` ~L1407) + `exec_gate.codex.steer`, default off, evidence `none`.
 - UI (`apps/desktop/src/ui/App.tsx` ~L1941/1952): composer stays enabled during a live turn, Enter queues, Stop is its own button; queue banner (reorder/edit/delete); "Send later" presets with countdown card, also in the island composer. Missed-while-off sends on next start labelled "late by X".
@@ -69,19 +69,19 @@ Account-pool proxy (credential custody), workflows (QuickJS fan-out), browser-au
 ### 3. Safe auto-retry and replay harness, M
 - `retry.rs`, behind `experimental.autoRetry` (default off). Overload: 5s·2^(n-1)+jitter, max 5. Rate limit: only with a known reset (reuse `quota.rs` `resets_at`), capped by a `retry.maxWait` setting. Auth/billing/context/permission/cancel/unknown: decline with a stored explanation.
 - **No double-send:** `not_sent` resends the prompt; `acknowledged` sends "Please continue."; `unknown` declines. One retry per original (`turns.data.retryOf` + in-flight set); enters the Phase 2 queue as `kind=retry`, never steers; reuses the locked model/effort/mode. Events `turn.retry_scheduled|declined` with Cancel.
-- Replay harness (BB `provider-parity` idea): `--replay` mode on `fake_claude`, `fake_codex_server`, `fake_acp_peer`; redacted NDJSON under `crates/*/tests/wire/`, stamped with CLI version; dev-only `BLOBLEX_WIRE_RECORD` reusing the credential markers in `safe_provider_error_detail`.
+- Replay harness (BB `provider-parity` idea): `--replay` mode on `fake_claude`, `fake_codex_server`, `fake_acp_peer`; redacted NDJSON under `crates/*/tests/wire/`, stamped with CLI version; dev-only `RETINUE_WIRE_RECORD` reusing the credential markers in `safe_provider_error_detail`.
 
 ### 4. Proactive companion: automations and presence, L
 - Data: `automations(agent_id,name,prompt,cron,tz,once_at,mode,enabled,next_run_at,consecutive_failures,max_runtime_s,created_by)`, `automation_runs(...)` with a partial unique index for single-flight; `agents.notification_level` (all|input|muted).
 - `scheduler.rs` spawned in `run()` beside the deletion loop (~L2902); 1s tick for send-later, 10s sweep for automations; cron + IANA tz (`chrono-tz` present, add a cron crate). **Missed runs coalesce into one** (next run recomputed from now). Overlap = `skipped`. Failures retry at 30s/60s; 3 consecutive pause it visibly. Startup settles interrupted runs next to `recover_after_restart()` (~L2862).
 - **Safety (budgets no longer exist, so automations bring their own):** `max_runtime_s` default 30 min via `adapter.cancel`; `automations.maxConcurrent` default 1 under the existing cap of 4; global pause wired to tray "Pause all". Unattended runs pin `modelLock.approvalMode`, clamp bypass to auto, default to plan; an unclassified permission is auto-denied with an audit event. Run sessions carry `link.kind="automation"` and their MCP tool list drops `message_blob` and scheduling tools (recursion guard; make `team::tools()` take the link, generalize `is_team_tool_permission` ~L1132).
-- Presence: notifications honour per-blob level and `automation.run.finished` (`App.tsx` ~L520-546); opt-in `power.keepAwake` via `SetThreadExecutionState` on a parked thread in `apps/desktop/src-tauri/src/power.rs` (registered in `apps/desktop/src-tauri/src/lib.rs`), requested by a daemon `power.wanted` event. UI states plainly: "Runs only while Bitbots is running and awake; missed runs coalesce; lid-close/user sleep is not blocked."
+- Presence: notifications honour per-blob level and `automation.run.finished` (`App.tsx` ~L520-546); opt-in `power.keepAwake` via `SetThreadExecutionState` on a parked thread in `apps/desktop/src-tauri/src/power.rs` (registered in `apps/desktop/src-tauri/src/lib.rs`), requested by a daemon `power.wanted` event. UI states plainly: "Runs only while Retinue is running and awake; missed runs coalesce; lid-close/user sleep is not blocked."
 - UI: per-blob "Schedule" tab with run history, island badge, Settings list.
 
 ### 5. Memory and persona, L
 - Tables via `ensure_*_schema`: `memory_records(scope blob|project|shared, kind, title, body, tags, importance, pinned, origin user|agent, source_session_id, reviewed, version, deleted_at)` + FTS5 (assert availability in a unit test).
-- Tools on the existing bridge: `memory_search|get|write|update|forget` (extend `team::tools()` + `mcp_rpc`; auto-allow like the existing `bloblex` tools). Bounded catalog (~3.9k chars, summaries only) delivered as a **per-turn prompt prefix like `reference_context` (~L2190)**, not via instructions, so a memory write never changes the instruction hash; re-sent only when its hash changes or context was replaced.
-- Rails: size/writes-per-turn caps; reject credential markers (move the list into `bloblex-security`) and injection phrases/`<bloblex_` tags; `expected_version` on update; soft delete; agent-written shared records show "new, unreviewed" and post a `note()`; automation sessions write blob scope only.
+- Tools on the existing bridge: `memory_search|get|write|update|forget` (extend `team::tools()` + `mcp_rpc`; auto-allow like the existing `retinue` tools). Bounded catalog (~3.9k chars, summaries only) delivered as a **per-turn prompt prefix like `reference_context` (~L2190)**, not via instructions, so a memory write never changes the instruction hash; re-sent only when its hash changes or context was replaced.
+- Rails: size/writes-per-turn caps; reject credential markers (move the list into `retinue-security`) and injection phrases/`<retinue_` tags; `expected_version` on update; soft delete; agent-written shared records show "new, unreviewed" and post a `note()`; automation sessions write blob scope only.
 - Persona: add `profile.about` (<=1.5k) in `runtime_instructions` next to `user_name` (`team.rs:84`); per-blob persona is the existing `instructions` field. UI says Codex persona edits need a new conversation.
 - UI: Settings → Memory (search, filter, edit, delete, approve, source link), per-blob "Remembers" tab.
 
@@ -91,7 +91,7 @@ Account-pool proxy (credential custody), workflows (QuickJS fan-out), browser-au
 - Onboarding: turn the numeric `step` in `FirstRunOnboarding.tsx` into a typed machine (checking, ready, signIn, install, update, installFailed) reusing `launchChecks`.
 
 ### 7. Cloud dictation (approved exception), M, independent
-- `crates/bloblex-speech/src/cloud.rs`: read `$CODEX_HOME`/`~/.codex` `auth.json` read-only and fresh per call; `tokens.access_token` + account id (`tokens.account_id` else JWT claim `https://api.openai.com/auth`.`chatgpt_account_id`); redacting `Debug`, `zeroize`, never persisted or logged. POST `https://chatgpt.com/backend-api/transcribe` multipart (`file`, `model=gpt-transcribe`, optional `prompt`), headers `Authorization`, `chatgpt-account-id`, `originator`, `User-Agent`; 65s timeout, 20 MiB cap, parse `{text}`. API-key mode falls back to `api.openai.com/v1/audio/transcriptions`. Typed errors: AuthRequired(401, "run `codex login`"), RateLimited, Unavailable, Challenged (403 `cf-mitigated`: fall back, **no cookie replay**), TooLarge.
+- `crates/retinue-speech/src/cloud.rs`: read `$CODEX_HOME`/`~/.codex` `auth.json` read-only and fresh per call; `tokens.access_token` + account id (`tokens.account_id` else JWT claim `https://api.openai.com/auth`.`chatgpt_account_id`); redacting `Debug`, `zeroize`, never persisted or logged. POST `https://chatgpt.com/backend-api/transcribe` multipart (`file`, `model=gpt-transcribe`, optional `prompt`), headers `Authorization`, `chatgpt-account-id`, `originator`, `User-Agent`; 65s timeout, 20 MiB cap, parse `{text}`. API-key mode falls back to `api.openai.com/v1/audio/transcriptions`. Typed errors: AuthRequired(401, "run `codex login`"), RateLimited, Unavailable, Challenged (403 `cf-mitigated`: fall back, **no cookie replay**), TooLarge.
 - Wire into `apps/desktop/src-tauri/src/speech.rs` `run_worker` (~L335) as `Backend::{Local,Cloud}`: buffer 16 kHz PCM, upload on Stop, on any failure feed the same buffer to the local engine. Reuse the existing `SpeechProvider::OpenAi` manifest variant (no download).
 - Settings: `speech.engine = local|automatic|cloud`, **default `local`**; `speech.cloud.consent` set via a dialog listing what is read and sent; status-only `engine` event (on-device / chatgpt) for the indicator; never log audio, transcripts or tokens.
 - **Process:** amend `AGENTS.md` invariants with this one explicit, scoped exception so the audit trail matches.

@@ -266,7 +266,7 @@ pub fn schedule_outcome_label(outcome: &str) -> &str {
 /// Shown under every time control: the daemon skips a missed run rather than
 /// running it late (`SCHEDULE_GRACE_SECS`).
 pub const SCHEDULE_DISCLAIMER: &str =
-    "Runs only while Bitbots is open and this computer is on and awake. A run that is missed by more than five minutes is skipped, not run late.";
+    "Runs only while Retinue is open and this computer is on and awake. A run that is missed by more than five minutes is skipped, not run late.";
 
 /// The time limits the form offers, as the React form does.
 pub const TIME_LIMIT_CHOICES: [(i64, &str); 7] = [

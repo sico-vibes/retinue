@@ -28,7 +28,7 @@ import type { RepositoryState } from './sessionRepository'
 
 const DIFF = ['diff --git a/a.ts b/a.ts', '@@ -1,3 +1,3 @@', ' first', '-old line', '+new line', ' last'].join('\n')
 const file = (repositoryPath: string, staged = 'none') => ({ path: `C:/r/${repositoryPath}`, repositoryPath, change: 'modified', addedLines: 1, removedLines: 1, diff: DIFF, binary: false, truncated: false, staged })
-const repository = (files = [file('src/a.ts'), file('src/b.ts')]) => ({ projectPath: 'C:/r', repoRoot: 'C:/r', gitRepo: true, branch: 'bitbots/x', detached: false, files, addedLines: 2, removedLines: 2, truncated: false, error: null })
+const repository = (files = [file('src/a.ts'), file('src/b.ts')]) => ({ projectPath: 'C:/r', repoRoot: 'C:/r', gitRepo: true, branch: 'retinue/x', detached: false, files, addedLines: 2, removedLines: 2, truncated: false, error: null })
 
 let root: Root | null = null
 let host: HTMLDivElement
@@ -198,13 +198,13 @@ describe('ChangesView', () => {
 })
 
 describe('PullRequestDialog', () => {
-  const draft: PullRequestDraft = { ready: true, reason: null, gh: { available: true, login: 'me' }, branch: 'bitbots/x', base: 'main', commitsAhead: 1, uncommitted: 2, title: 'Fix it', body: 'Body', existingUrl: null }
+  const draft: PullRequestDraft = { ready: true, reason: null, gh: { available: true, login: 'me' }, branch: 'retinue/x', base: 'main', commitsAhead: 1, uncommitted: 2, title: 'Fix it', body: 'Body', existingUrl: null }
   const state = repository() as unknown as RepositoryState
   const dialog = (onSend = vi.fn(async () => undefined)) => <PullRequestDialog sessionId="s1" repository={state} botName="Sona" busy={false} onSend={onSend} onClose={vi.fn()} />
 
   it('lists what it will do', () => {
-    expect(pullRequestPlan(draft, true, false)).toEqual(['Commit 2 uncommitted files', 'Push bitbots/x to origin', 'Open a pull request into main as me'])
-    expect(pullRequestPlan(draft, false, true)).toEqual(['Push bitbots/x to origin', 'Open a draft pull request into main as me'])
+    expect(pullRequestPlan(draft, true, false)).toEqual(['Commit 2 uncommitted files', 'Push retinue/x to origin', 'Open a pull request into main as me'])
+    expect(pullRequestPlan(draft, false, true)).toEqual(['Push retinue/x to origin', 'Open a draft pull request into main as me'])
   })
 
   it('creates it from the drafted title, with a commit message', async () => {
@@ -336,7 +336,7 @@ describe('adding projects', () => {
 })
 
 describe('leftover task copies', () => {
-  const item = { id: 'w1', repo: 'C:/r', path: 'C:/r-bitbots/x', branch: 'bitbots/x', reason: 'conversation_deleted', dirtyFiles: 0, commitsAhead: 0, lastActivityAt: null }
+  const item = { id: 'w1', repo: 'C:/r', path: 'C:/r-retinue/x', branch: 'retinue/x', reason: 'conversation_deleted', dirtyFiles: 0, commitsAhead: 0, lastActivityAt: null }
 
   it('says what would be lost', () => {
     expect(wouldLose({ dirtyFiles: 0, commitsAhead: 3 }, false)).toBeNull()

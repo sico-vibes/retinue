@@ -1,4 +1,4 @@
-# Find Bitbots tray icon via UI Automation; optionally right-click it and dump the context menu items.
+# Find Retinue tray icon via UI Automation; optionally right-click it and dump the context menu items.
 param([switch]$Menu)
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $root = [System.Windows.Automation.AutomationElement]::RootElement
@@ -8,11 +8,11 @@ function Find-Tray($name) {
   foreach ($e in $all) { if ($e.Current.Name -like "*$name*") { return $e } }
   return $null
 }
-$btn = Find-Tray 'Bitbots'
+$btn = Find-Tray 'Retinue'
 if (-not $btn) {
   # try opening the hidden-icons overflow
   $chev = Find-Tray 'Show Hidden Icons'
-  if ($chev) { try { ($chev.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 700 } catch {} ; $btn = Find-Tray 'Bitbots' }
+  if ($chev) { try { ($chev.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)).Invoke(); Start-Sleep -Milliseconds 700 } catch {} ; $btn = Find-Tray 'Retinue' }
 }
 if (-not $btn) { Write-Host 'TRAY ICON NOT FOUND via UIA'; exit 3 }
 $r = $btn.Current.BoundingRectangle

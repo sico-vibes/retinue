@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import { showMainWindow } from '../tauri'
 
-const CHANNEL = 'bitbots-open-changes'
+const CHANNEL = 'retinue-open-changes'
 
 export async function openChangesInMainWindow(sessionId: string): Promise<void> {
   await showMainWindow(sessionId)

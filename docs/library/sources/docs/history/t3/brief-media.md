@@ -8,22 +8,22 @@ You are an implementation lane. You work ONLY in the git worktree `D:\t3m` (bran
 2. **No git writes.** Never `git commit`, `git add`, `git push`, `git reset`, `git stash`, `git checkout`, `git rebase`. Leave changes in the working tree.
 3. Do not touch any path outside `D:\t3m`. Do not start, stop or kill any process you did not start. Never print secrets or file contents in logs.
 4. Only edit the files listed under "You own". If another file must change, say so in the report.
-5. Keep tool output small: `crates/bloblex-daemon/src/main.rs` is 12,900 lines, so use search and offset reads, never cat it. Keep a work log at `D:\t3m\target\lane\worklog.md` (one line per step).
+5. Keep tool output small: `crates/retinue-daemon/src/main.rs` is 12,900 lines, so use search and offset reads, never cat it. Keep a work log at `D:\t3m\target\lane\worklog.md` (one line per step).
 
 ## Background you need
 
-Bitbots is a Tauri desktop app; a Rust daemon (`crates/bloblex-daemon`) owns sessions and SQLite storage (`crates/bloblex-storage`). The daemon exposes JSON RPC methods through `dispatch()` in `crates/bloblex-daemon/src/main.rs` (for example `"message.image" => message_image(st, &p)` near line 1014 and `"file.revert" => {...}` near line 1036). Errors are built with `derr(code, message, StatusCode)` (see `message_image`, main.rs ~3556, a good model: it reads a file only through what the conversation recorded, size-capped, and never from a caller-supplied path). A session row (`st.db.session_detail(id)`) has `projectPath`, `state`, `files` (file changes the provider reported, each with `id`, `path`, `detail` including a saved unified `diff` and a `reverted` flag), `turns`, `link`.
+Retinue is a Tauri desktop app; a Rust daemon (`crates/retinue-daemon`) owns sessions and SQLite storage (`crates/retinue-storage`). The daemon exposes JSON RPC methods through `dispatch()` in `crates/retinue-daemon/src/main.rs` (for example `"message.image" => message_image(st, &p)` near line 1014 and `"file.revert" => {...}` near line 1036). Errors are built with `derr(code, message, StatusCode)` (see `message_image`, main.rs ~3556, a good model: it reads a file only through what the conversation recorded, size-capped, and never from a caller-supplied path). A session row (`st.db.session_detail(id)`) has `projectPath`, `state`, `files` (file changes the provider reported, each with `id`, `path`, `detail` including a saved unified `diff` and a `reverted` flag), `turns`, `link`.
 
 The chat UI wants to show images, audio, video, PDFs and text/code documents that an agent produced or that the user refers to, **only from inside the conversation's project folder**. The webview's CSP allows `img-src ... blob: data:` and has no remote hosts, so the daemon returns bytes as a data URL (or text), the same way `message.image` does. This must not become an arbitrary-file-read primitive.
 
 ## You own (and may edit)
 
-- `crates/bloblex-daemon/src/media.rs` (NEW)
-- `crates/bloblex-daemon/src/checkpoints.rs` (NEW)
-- `crates/bloblex-daemon/src/experiments.rs` (ONLY to add a `pub(super)` dry-run variant of `reverse_file`, see item 2; do not change the behaviour of the existing `reverse_file`)
-- `crates/bloblex-daemon/src/main.rs`: ONLY (a) `mod media;` and `mod checkpoints;` lines next to the other `mod` lines, (b) new dispatch arms next to `"message.image"` and `"file.revert"`. Another lane edits other parts of main.rs at the same time; keep your edits to those few lines so they merge.
+- `crates/retinue-daemon/src/media.rs` (NEW)
+- `crates/retinue-daemon/src/checkpoints.rs` (NEW)
+- `crates/retinue-daemon/src/experiments.rs` (ONLY to add a `pub(super)` dry-run variant of `reverse_file`, see item 2; do not change the behaviour of the existing `reverse_file`)
+- `crates/retinue-daemon/src/main.rs`: ONLY (a) `mod media;` and `mod checkpoints;` lines next to the other `mod` lines, (b) new dispatch arms next to `"message.image"` and `"file.revert"`. Another lane edits other parts of main.rs at the same time; keep your edits to those few lines so they merge.
 
-Never touch: `delegations.rs`, `team.rs`, `workspace.rs`, `repository.rs`, `bloblex-storage` (if you need a storage read that does not exist, use `st.db.session_detail` data instead, and report it), anything under `apps/`, `docs/`, `.claude/`.
+Never touch: `delegations.rs`, `team.rs`, `workspace.rs`, `repository.rs`, `retinue-storage` (if you need a storage read that does not exist, use `st.db.session_detail` data instead, and report it), anything under `apps/`, `docs/`, `.claude/`.
 
 ## Item 1: `media.preview` (new `media.rs`)
 
@@ -49,9 +49,9 @@ Hard errors (use `derr`): missing/empty `sessionId` or `path` -> `invalid_argume
 Authorisation (all of these are required; this is the security core, take your time):
 1. The root is the session's `projectPath` (from `session_detail`), canonicalized. No other root. If it is empty or not a directory: `status: "unavailable"`.
 2. `path` may be relative to the root or absolute. Reject a path longer than 1024 bytes or containing a NUL. Join, then **canonicalize** (so `..`, symlinks and junctions are resolved) and require the result `starts_with` the canonical root (compare after stripping the Windows `\\?\` prefix consistently on both sides, case-insensitively on Windows). Anything else: `status: "blocked"`, reason "That file is outside this project." Never reveal whether a path outside the root exists.
-3. Deny by name (case-insensitive) even inside the root: any path component equal to `.git`, `node_modules`, `.ssh`, `.aws`, `.gnupg`; file names starting with `.env`, or ending in `.pem`, `.key`, `.pfx`, `.p12`, `.kdbx`; names equal to `id_rsa`, `id_ed25519`, `.npmrc`, `.pypirc`, `credentials`, `auth.json`, `secrets.json`. `status: "blocked"`, reason "Bitbots does not preview files that may hold secrets."
+3. Deny by name (case-insensitive) even inside the root: any path component equal to `.git`, `node_modules`, `.ssh`, `.aws`, `.gnupg`; file names starting with `.env`, or ending in `.pem`, `.key`, `.pfx`, `.p12`, `.kdbx`; names equal to `id_rsa`, `id_ed25519`, `.npmrc`, `.pypirc`, `credentials`, `auth.json`, `secrets.json`. `status: "blocked"`, reason "Retinue does not preview files that may hold secrets."
 4. It must be a regular file (`metadata.is_file()` after canonicalize; no devices, no directories). Empty file: `unavailable` ("That file is empty.").
-5. Allowlist by extension (lowercase): images `png jpg jpeg gif webp bmp ico svg avif`; audio `mp3 wav ogg oga m4a aac flac opus`; video `mp4 webm mov m4v ogv`; `pdf`; text `txt md markdown json jsonc csv tsv log yaml yml toml ini xml html htm css scss js jsx ts tsx mjs cjs rs py go java c h cpp hpp cs rb php sh ps1 bat sql diff patch lock`. Unknown extension: `status: "unsupported"`, `kind: "unsupported"`, reason "Bitbots can't preview .<ext> files yet."
+5. Allowlist by extension (lowercase): images `png jpg jpeg gif webp bmp ico svg avif`; audio `mp3 wav ogg oga m4a aac flac opus`; video `mp4 webm mov m4v ogv`; `pdf`; text `txt md markdown json jsonc csv tsv log yaml yml toml ini xml html htm css scss js jsx ts tsx mjs cjs rs py go java c h cpp hpp cs rb php sh ps1 bat sql diff patch lock`. Unknown extension: `status: "unsupported"`, `kind: "unsupported"`, reason "Retinue can't preview .<ext> files yet."
 6. Verify content against the claim: images/pdf by magic bytes (PNG, JPEG, GIF, WebP `RIFF....WEBP`, BMP, ICO, AVIF `ftypavif`, PDF `%PDF-`; SVG must, after trimming a BOM and whitespace, start with `<svg` or `<?xml` and contain `<svg`, and must be < 1 MiB); a mismatch is `status: "unsupported"`, reason "The file doesn't match its type." Audio/video: check a plausible container signature if cheap (`ID3`/`0xFF 0xFB`/`RIFF....WAVE`/`OggS`/`fLaC`/`ftyp`/`1A45DFA3` webm), otherwise trust the extension. Text: first 4 KiB must contain no NUL byte (else unsupported, "That file is binary."). Read text as UTF-8 lossy.
 7. Size caps (bytes on disk): image 8 MiB, audio 16 MiB, video 24 MiB, pdf 16 MiB, svg 1 MiB, text read only the first 256 KiB (`truncated: true` if the file is larger). Over the cap: `status: "tooLarge"`, reason "That file is too large to preview (limit N MB).", and do not read it.
 8. `mediaType` from the extension (`image/png`, `audio/mpeg`, `video/mp4`, `application/pdf`, `text/plain`, ...); never from caller input.
@@ -70,7 +70,7 @@ session.checkpoints { "sessionId": String }
        "capability": {
          "workspaceRestore": bool,       // true only when the folder is a Git repository and git is usable
          "workspaceReason": String | null,   // why not, in one plain sentence
-         "providerStateRestore": false,  // always false: Bitbots cannot rewind a provider's own conversation memory
+         "providerStateRestore": false,  // always false: Retinue cannot rewind a provider's own conversation memory
          "providerReason": "Restoring files does not rewind what the agent remembers of the conversation."
        },
        "busy": bool,                      // session state is starting/working/cancelling/waiting_permission: reverting is refused meanwhile
@@ -118,7 +118,7 @@ From `D:\t3m`:
 
 ```powershell
 $env:RUST_MIN_STACK='33554432'
-cargo check -p bloblex-daemon --message-format short
+cargo check -p retinue-daemon --message-format short
 ```
 
 `cargo check` without `--tests` is allowed. Fix every warning you introduce. The first build can take many minutes: use a long timeout. Do NOT run clippy with `--all-targets`.

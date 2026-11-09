@@ -120,7 +120,7 @@
 .chat-row.user { justify-content: flex-end; padding-left: 32px; }
 .bubble { padding: 6px 10px; color: var(--c-ink-2); border-radius: 12px; background: var(--companion-alpha-13); font: 400 var(--fs-sm) var(--c-font); white-space: pre-wrap; user-select: text; }
 /* An assistant reply sits in the same framed bubble as the main chat's
-   (.message-bubble from shell.css, and its bitbots skin), at island scale. */
+   (.message-bubble from shell.css, and its retinue skin), at island scale. */
 .reply { color: var(--companion-text-muted); font: 400 var(--fs-sm)/1.45 var(--c-font); white-space: pre-wrap; user-select: text; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
 .reply.message-bubble { min-width: 0; margin-right: 24px; padding: 7px 12px; color: var(--c-ink-2); border: 1px solid var(--companion-alpha-09); border-radius: 12px; background: var(--companion-alpha-07); font: 400 var(--fs-sm)/1.45 var(--c-font); }
 .chat-log .typing { padding: 4px 2px; }
@@ -458,7 +458,7 @@ button.compact-copy:active { transform: none; }
 .cs-resize-ne { top: 0; right: 0; cursor: nesw-resize; } .cs-resize-sw { bottom: 0; left: 0; cursor: nesw-resize; }
 .cs-resize-nw { top: 0; left: 0; cursor: nwse-resize; } .cs-resize-se { bottom: 0; right: 0; cursor: nwse-resize; }
 
-/* Wave 13: Claude Code sessions started outside Bitbots. Flat rows; status colour only while something happens. */
+/* Wave 13: Claude Code sessions started outside Retinue. Flat rows; status colour only while something happens. */
 .outside-sessions { margin: 10px 2px 0; display: grid; gap: 4px; }
 .outside-sessions-title { color: var(--c-dim-3); font: 500 var(--fs-2xs) var(--c-font); }
 .outside-sessions ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; }
@@ -468,7 +468,7 @@ button.compact-copy:active { transform: none; }
 .outside-pill.working .outside-pill-state { color: var(--c-dim); }
 .outside-pill.waiting .outside-pill-state { color: var(--status-working); }
 
-/* Wave 14: a message sent through the Bitbots MCP names its sender. */
+/* Wave 14: a message sent through the Retinue MCP names its sender. */
 .companion-via { display: block; margin-bottom: 2px; opacity: .7; font: 500 var(--fs-2xs) var(--c-font); }
 
 /* Phase 3: "Changes ready" opens the review screen in the full app. */

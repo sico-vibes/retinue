@@ -1,21 +1,21 @@
 # Fix 1A spec: why ChatGPT dictation says "verification required" (diagnose, then fix what is ours)
 
-> **What this is:** Spec for Fix 1A: why ChatGPT dictation reports verification required, and what to change in Bitbots.
+> **What this is:** Spec for Fix 1A: why ChatGPT dictation reports verification required, and what to change in Retinue.
 > **Status:** historical; line 12 is amended for cloud dictation by the AGENTS.md amendment of 14 October 2026
 > **Last updated:** 2026-10-15
 
 Original status line, kept as written: historical spec. Its rule "No bypass of bot protection" (line 12) is amended for cloud dictation request-shape matching by the AGENTS.md amendment of 14 October 2026. `originator`, the User-Agent identity, cookie replay, challenge-solving and retry loops remain forbidden. The shipped result is in [docs/history/fix-02/dictation-tls-spec.md](../fix-02/dictation-tls-spec.md) and [evidence/cloud-dictation-tls-backend-2026-10-14.md](../../evidence/cloud-dictation-tls-backend-2026-10-14.md).
 
-Owner: OpenCode lane (backend/native only). Reviewer: Director. The desktop UI (`apps/desktop/src`) is the Director's; **do not touch it, and do not touch `crates/bloblex-daemon`, `crates/bloblex-adapter-*`.**
-Scope: `crates/bloblex-speech` (mainly `src/cloud.rs`), `apps/desktop/src-tauri/src/speech.rs`, `docs/evidence/`.
+Owner: OpenCode lane (backend/native only). Reviewer: Director. The desktop UI (`apps/desktop/src`) is the Director's; **do not touch it, and do not touch `crates/retinue-daemon`, `crates/retinue-adapter-*`.**
+Scope: `crates/retinue-speech` (mainly `src/cloud.rs`), `apps/desktop/src-tauri/src/speech.rs`, `docs/evidence/`.
 
 ## Symptom (owner report)
-The owner is signed in to Codex (ChatGPT login) on this PC. Starting dictation with the ChatGPT engine shows: "ChatGPT transcription is unavailable (verification required) and no on-device model is installed." "verification required" is our `CloudError::Challenged` (403 with a `cf-mitigated` response header, `crates/bloblex-speech/src/cloud.rs` ~L716). The owner does not understand it and asked for a root cause.
+The owner is signed in to Codex (ChatGPT login) on this PC. Starting dictation with the ChatGPT engine shows: "ChatGPT transcription is unavailable (verification required) and no on-device model is installed." "verification required" is our `CloudError::Challenged` (403 with a `cf-mitigated` response header, `crates/retinue-speech/src/cloud.rs` ~L716). The owner does not understand it and asked for a root cause.
 
 ## Hard rules (security, non-negotiable)
 - Never run `git commit`, `git push`, `git checkout`, `git stash`. Leave changes uncommitted. Work only inside this worktree except for the explicit read-only auth-file read in the probe below.
 - **Never print, log, store, paste into a file or include in your report any token, API key, account id, JWT fragment, cookie or response body.** A probe may print only: HTTP status code, the *names* (not values) of response headers, the value of `cf-mitigated`, `content-type`, `server`, body length, and whether the body parses as JSON with a `text` key.
-- **No bypass of bot protection.** Do not change `User-Agent`, `originator` or any header to imitate Codex, a browser or any other client, do not replay cookies, do not solve or work around a challenge, do not add a retry loop to defeat it. We identify as Bitbots. This is a diagnosis, not an evasion exercise. If the root cause is "Cloudflare challenges non-browser clients to this private endpoint", the correct outcome is an honest message plus the existing fallback, and you say so.
+- **No bypass of bot protection.** Do not change `User-Agent`, `originator` or any header to imitate Codex, a browser or any other client, do not replay cookies, do not solve or work around a challenge, do not add a retry loop to defeat it. We identify as Retinue. This is a diagnosis, not an evasion exercise. If the root cause is "Cloudflare challenges non-browser clients to this private endpoint", the correct outcome is an honest message plus the existing fallback, and you say so.
 - The owner approved reading the Codex `auth.json` read-only for dictation only (see `AGENTS.md`). Probing the endpoint with one tiny silent clip using that login is within that approval; do it at most 3 times in total.
 
 ## Task A: reproduce with a safe probe
@@ -35,8 +35,8 @@ Based on the findings, and only for defects that are really ours, fix them with 
 
 ## Gates
 ```
-CARGO_TARGET_DIR=D:/b-p7 cargo test -p bloblex-speech
-CARGO_TARGET_DIR=D:/b-p7 cargo check -p bloblex-desktop
+CARGO_TARGET_DIR=D:/b-p7 cargo test -p retinue-speech
+CARGO_TARGET_DIR=D:/b-p7 cargo check -p retinue-desktop
 ```
 (if the desktop crate cannot be built from this apostrophe-free sibling path for a reason you cannot fix, say so plainly.)
 

@@ -1,4 +1,4 @@
-# Bitbots improvement plan: CLI connectivity, reasoning effort, and dictation
+# Retinue improvement plan: CLI connectivity, reasoning effort, and dictation
 
 > **What this is:** Early improvement plan (CLI connectivity, reasoning effort and dictation), QA draft, 12 October 2026.
 > **Status:** superseded by [improvement-plan.md](../../plans/improvement-plan.md)
@@ -9,7 +9,7 @@ Original status line, kept as written: superseded by [docs/plans/improvement-pla
 Status: proposal for review. Author: QA lane (OpenCode), for the Director.
 Date: 12 October 2026. Baseline source: `17591b9` (beta.18).
 
-This plan is grounded in a side-by-side read of the Bitbots sources and the
+This plan is grounded in a side-by-side read of the Retinue sources and the
 `get-bb/bb` sources. It covers the two areas requested:
 
 1. **Connection to different coding-agent CLIs** (Claude Code, Codex, OpenCode
@@ -29,14 +29,14 @@ capability secrets or provider credentials are written to docs or logs.
 
 ### 1.1 CLI connectivity
 
-Bitbots already uses the right shape: one Rust adapter per CLI, spawned as the
+Retinue already uses the right shape: one Rust adapter per CLI, spawned as the
 user's installed executable, using the user's own logged-in account.
 
-| CLI | Bitbots transport | Reference |
+| CLI | Retinue transport | Reference |
 | --- | --- | --- |
-| Claude Code | `claude` CLI with typed flags (`--model`, `--effort`, `--settings`) | `crates/bloblex-adapter-claude/src/lib.rs` |
-| Codex | `codex app-server` JSON-RPC (`initialize`, `model/list`, `turn/start`) | `crates/bloblex-adapter-codex/src/lib.rs` |
-| OpenCode Go/Zen | ACP over stdio via the shared ACP adapter | `crates/bloblex-adapter-opencode/src/lib.rs` (re-exports `bloblex-adapter-acp`) |
+| Claude Code | `claude` CLI with typed flags (`--model`, `--effort`, `--settings`) | `crates/retinue-adapter-claude/src/lib.rs` |
+| Codex | `codex app-server` JSON-RPC (`initialize`, `model/list`, `turn/start`) | `crates/retinue-adapter-codex/src/lib.rs` |
+| OpenCode Go/Zen | ACP over stdio via the shared ACP adapter | `crates/retinue-adapter-opencode/src/lib.rs` (re-exports `retinue-adapter-acp`) |
 
 Comparable to BB's provider plugins (`plugins/provider-claude-code`,
 `plugins/provider-codex`, `plugins/provider-acp`). Connectivity is therefore
@@ -44,20 +44,20 @@ not the core gap.
 
 ### 1.2 Reasoning/effort
 
-Bitbots calls the concept `thinking`:
+Retinue calls the concept `thinking`:
 
 - `ModelInfo.supported_thinking` carries per-model effort ids
-  (`crates/bloblex-agent-core/src/lib.rs:801`).
+  (`crates/retinue-agent-core/src/lib.rs:801`).
 - Codex keeps raw `supportedReasoningEfforts`, including `ultra`
-  (`crates/bloblex-adapter-codex/src/lib.rs:1044`; test at `:1857`).
+  (`crates/retinue-adapter-codex/src/lib.rs:1044`; test at `:1857`).
 - Claude maps `supportedEffortLevels` and synthesizes `ultracode` only after a
-  workflow probe (`crates/bloblex-adapter-claude/src/lib.rs:97`, `:193`).
+  workflow probe (`crates/retinue-adapter-claude/src/lib.rs:97`, `:193`).
 - OpenCode derives efforts from `opencode models --verbose` *variant keys*,
   and the ACP config-option fallback leaves `supported_thinking` **empty**
-  (`crates/bloblex-adapter-acp/src/catalog.rs:171`, `:221`).
+  (`crates/retinue-adapter-acp/src/catalog.rs:171`, `:221`).
 - The daemon gates OpenCode thinking behind `exec_gate.opencode.thinking`,
-  default **off** (`crates/bloblex-daemon/src/main.rs:1381`, `:1410`), and the
-  ACP effort echo is recorded as unproven (`crates/bloblex-adapter-acp/src/exec.rs:362`).
+  default **off** (`crates/retinue-daemon/src/main.rs:1381`, `:1410`), and the
+  ACP effort echo is recorded as unproven (`crates/retinue-adapter-acp/src/exec.rs:362`).
 
 BB instead has a canonical ladder shared by all providers and reads each
 provider's *live* per-model effort list:
@@ -77,8 +77,8 @@ provider's *live* per-model effort list:
 
 ### 1.3 Dictation
 
-Bitbots is on-device only: `bloblex-speech` bundles sherpa-onnx + cpal and
-requires a model download (`crates/bloblex-speech/src/model_manager.rs`,
+Retinue is on-device only: `retinue-speech` bundles sherpa-onnx + cpal and
+requires a model download (`crates/retinue-speech/src/model_manager.rs`,
 `manifest.rs`).
 
 BB has **two** transcription backends and does not ship a model:
@@ -125,7 +125,7 @@ run `codex login`: the Codex service answers from the user's ChatGPT session.
 **Non-goals**
 
 - Mobile apps, tunnels, remote access, and account systems (deferred).
-- Multi-session/thread orchestration. Bitbots stays single-session with
+- Multi-session/thread orchestration. Retinue stays single-session with
   bot-to-bot communication.
 - Replacing the daemon's decision ownership or copying provider credentials.
 
@@ -138,20 +138,20 @@ and in the frontend; capability is declared inconsistently, and OpenCode's real
 efforts are not read.
 
 **A1. Add a shared ladder module.**
-- New module (suggested `bloblex-agent-core::reasoning` or a small
-  `bloblex-reasoning` crate) with:
+- New module (suggested `retinue-agent-core::reasoning` or a small
+  `retinue-reasoning` crate) with:
   - `REASONING_LEVELS = [none, low, medium, high, xhigh, ultracode, max, ultra]`
     and a rank function.
   - `reconcile(previous, supported) -> level` that treats `ultracode` as
     `xhigh` when the target model lacks it and otherwise picks the nearest
     ranked level.
 - Replace the ad-hoc sort in
-  `crates/bloblex-adapter-claude/src/lib.rs:161` and the daemon's
-  `normalize_model_fields` logic (`crates/bloblex-daemon/src/main.rs:1227`)
+  `crates/retinue-adapter-claude/src/lib.rs:161` and the daemon's
+  `normalize_model_fields` logic (`crates/retinue-daemon/src/main.rs:1227`)
   with calls to the shared module.
 
 **A2. Claude: advertise `Ultracode` per model, not per session.**
-- Change `offer_ultracode` (`crates/bloblex-adapter-claude/src/lib.rs:193`) so
+- Change `offer_ultracode` (`crates/retinue-adapter-claude/src/lib.rs:193`) so
   any model reporting `xhigh` also lists `ultracode`, independent of
   `claude.enableWorkflows`.
 - Keep the execution mapping already present: `ultracode` → `--effort xhigh`
@@ -168,17 +168,17 @@ efforts are not read.
   turn request carries `"ultra"`.
 
 **A4. OpenCode/ACP: read the real effort option.**
-- In `crates/bloblex-adapter-acp/src/catalog.rs` / `exec.rs`, find the config
+- In `crates/retinue-adapter-acp/src/catalog.rs` / `exec.rs`, find the config
   option by `category == "thought_level"` (fallback ids: `effort`,
   `reasoning_effort`) and populate each model's `supported_thinking` from its
   option `value`s. Use the option `name` as the display label when present.
 - Keep applying effort through `session/set_config_option`
-  (`crates/bloblex-adapter-acp/src/lib.rs:763`), addressed by the discovered
+  (`crates/retinue-adapter-acp/src/lib.rs:763`), addressed by the discovered
   option id rather than a hard-coded `"effort"`.
 - Stop treating the effort echo as unusable: after a successful
   `set_config_option` whose returned `currentValue` matches the request, record
   `provider_echo` evidence instead of `none`
-  (`crates/bloblex-adapter-acp/src/exec.rs:362`).
+  (`crates/retinue-adapter-acp/src/exec.rs:362`).
 - Acceptance: an OpenCode model lists its ACP-reported efforts and selecting
   one persists and echoes.
 
@@ -192,10 +192,10 @@ efforts are not read.
 **A6. Gate/evidence correction for OpenCode.**
 - Make the default for OpenCode thinking permissive: derive availability from
   the catalog instead of `exec_gate.opencode.thinking` defaulting false
-  (`crates/bloblex-daemon/src/main.rs:1381`).
+  (`crates/retinue-daemon/src/main.rs:1381`).
 - Update `runtime_capabilities` for `opencode` thinking from
   `evidence: "none"` to `provider_echo` with `scope: "session"`
-  (`crates/bloblex-daemon/src/main.rs:1410`).
+  (`crates/retinue-daemon/src/main.rs:1410`).
 - Update the fixture bridge so the preview no longer hard-codes OpenCode
   thinking as gated (`apps/desktop/src/preview/fixtureBridge.ts:456`).
 
@@ -229,7 +229,7 @@ CLI versions are thin compared to BB.
 **B4. Model catalog freshness.**
 - Ensure `refresh` bypasses the 60s cache and that a stale/fallback catalog is
   labeled as such in the UI (`fetch_model_catalog_for`,
-  `crates/bloblex-daemon/src/main.rs:1184`). Confirm a fallback catalog never
+  `crates/retinue-daemon/src/main.rs:1184`). Confirm a fallback catalog never
   authorizes a model/effort change as if validated.
 
 ---
@@ -241,7 +241,7 @@ supported CLI login should get working dictation immediately, and the local
 engine should remain the private fallback.
 
 **C1. Introduce a `SpeechProvider` abstraction.**
-- In `bloblex-speech`, define a provider trait with two operations: list
+- In `retinue-speech`, define a provider trait with two operations: list
   providers + availability, and `transcribe(audio) -> transcript`. Wire the
   existing sherpa-onnx engine as one provider.
 - Acceptance: the dictation entry point works against the trait with the local
@@ -264,7 +264,7 @@ engine should remain the private fallback.
 **C3. Optional BYO-key provider.**
 - Add a settings-level remote provider for a user-supplied key (OpenAI /
   Groq / Deepgram), stored via the existing secrets facility
-  (`bloblex-security`), never in docs or logs.
+  (`retinue-security`), never in docs or logs.
 - Acceptance: configuring a key enables transcription with no model download;
   clearing it reverts to local.
 
@@ -278,7 +278,7 @@ engine should remain the private fallback.
 **C5. Privacy and consent.**
 - Because a remote provider sends audio off-device, surface an explicit,
   per-source consent and a clear indicator when remote transcription is used,
-  consistent with Bitbots' local-first posture.
+  consistent with Retinue's local-first posture.
 
 ---
 
@@ -404,9 +404,9 @@ Each phase is independently reviewable and revertible.
   scope for the current UI.
 - **Automations (E):** decide the missed-run policy when the machine was off at
   the trigger time — skip, or catch up once on next start. BB only advances
-  `nextRunAt`, so a sleeping host silently misses runs; Bitbots should pick and
+  `nextRunAt`, so a sleeping host silently misses runs; Retinue should pick and
   document one behavior.
-- **Automations (E):** decide whether Bitbots ever wants an always-on
+- **Automations (E):** decide whether Retinue ever wants an always-on
   scheduler. Without a hosted daemon, "the computer must be on" is inherent;
   keep it out of scope unless the Director wants a hosted option.
 
@@ -418,7 +418,7 @@ Mobile is intentionally out of scope for this plan. For reference, BB's model
 is a thin native Expo shell around the same web UI, reaching the user's machine
 through an outbound tunnel (`@bb/tunnel-client` + the `apps/connect` relay),
 with QR pairing (`@bb/connect-client`), a desktop-session cookie gate, Expo
-push, and universal links. If Bitbots later wants a phone client, the
+push, and universal links. If Retinue later wants a phone client, the
 proportionate path is to serve the existing UI over LAN as a PWA (gated by the
 existing capability system) with QR pairing, rather than a native app plus a
 hosted tunnel/account service. This is recorded here only so the decision is
@@ -428,7 +428,7 @@ not lost; it is not part of this plan.
 
 ## 12. Appendix — Account and hosted services (reference)
 
-Bitbots is deliberately account-less and local-first. This appendix records what
+Retinue is deliberately account-less and local-first. This appendix records what
 BB's getbb.app account adds, so the Director can decide later whether any of it
 is worth an optional hosted tier.
 
@@ -447,8 +447,8 @@ is worth an optional hosted tier.
 
 **Implications for this plan.**
 - Workstreams A–D and E require **no** account; they rely on the user's existing
-  CLI logins, consistent with Bitbots' invariants.
-- If Bitbots ever wants phone access or hosted dictation without a CLI login,
+  CLI logins, consistent with Retinue's invariants.
+- If Retinue ever wants phone access or hosted dictation without a CLI login,
   that is the point at which an optional account + relay + quota would be
   needed. Keep it strictly optional and off by default; do not reintroduce
   copied provider credentials or a mandatory sign-in.

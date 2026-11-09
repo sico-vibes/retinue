@@ -49,7 +49,7 @@ count with and without the anchor) and `TourHost`'s progress label if it hardcod
 ## 5. Production build note
 
 `apps/desktop/remote.html` and `src/remote/*` are preview-only. Confirm
-`npm run build --workspace @bloblex/desktop` does not include `remote.html` (it is not in
+`npm run build --workspace @retinue/desktop` does not include `remote.html` (it is not in
 `vite.config.ts` inputs) and say so in the report. Do not add it.
 
 ## Gates

@@ -219,9 +219,9 @@ function TaskSheet({ light, onToast }: { light: boolean; onToast: (text: string)
               {CRON_PRESETS.map((preset) => <option key={preset.cron} value={preset.cron}>{preset.label}</option>)}<option value="custom">Custom</option>
             </select>
             <input className="mono" value={form.schedule.cron} onChange={(event) => set({ schedule: { ...form.schedule, cron: event.target.value } })} aria-label="Cron expression" spellCheck={false} />
-            <div className={`next-runs${runs ? '' : ' bad'}`}>{runs ? <><Clock size={12} />Next: {runs.map((run) => run.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })).join(' · ')}</> : 'That is not a schedule Bitbots can read. Use five fields: minute hour day month weekday.'}</div>
+            <div className={`next-runs${runs ? '' : ' bad'}`}>{runs ? <><Clock size={12} />Next: {runs.map((run) => run.toLocaleString([], { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })).join(' · ')}</> : 'That is not a schedule Retinue can read. Use five fields: minute hour day month weekday.'}</div>
           </div>}
-          {form.schedule.kind !== 'none' && <p className="hint">Runs only while Bitbots is open. A missed run is skipped, not run late. Each run keeps the time limit above and never bypasses approvals.</p>}
+          {form.schedule.kind !== 'none' && <p className="hint">Runs only while Retinue is open. A missed run is skipped, not run late. Each run keeps the time limit above and never bypasses approvals.</p>}
         </Field>
         {task.costSoFar !== null && <p className="hint">So far: {money(task.costSoFar)} (estimate)</p>}
       </div>

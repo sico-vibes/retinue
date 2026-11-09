@@ -9,7 +9,7 @@ released**: it touches many crates and must not tangle with FIX2/FIX3.
 
 ## 1. Why
 
-`cargo clippy --workspace --exclude bloblex-desktop --all-targets` reports about
+`cargo clippy --workspace --exclude retinue-desktop --all-targets` reports about
 70 findings on Rust 1.99 / clippy 0.1.99. The project was already not clean on
 older toolchains (see `docs/history/improvement/phase-1b-spec.md`: "already failing on the
 base commit"), and a newer clippy has added more. No release gates on it today.
@@ -41,15 +41,15 @@ base commit"), and a newer clippy has added more. No release gates on it today.
 2. Apply mechanical fixes crate by crate; run that crate's tests after each.
 3. Add the `#[allow]`s for structure lints with reasons.
 4. Re-run clippy; the target is **zero findings** under
-   `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`.
+   `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`.
    If a finding genuinely cannot be fixed without a behavior change, leave a
    targeted `#[allow]` and list it in the report; do not guess.
 
 ## 4. Gates
 
 ```
-cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings
-cargo test --workspace --exclude bloblex-desktop      # RUST_MIN_STACK=33554432
+cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings
+cargo test --workspace --exclude retinue-desktop      # RUST_MIN_STACK=33554432
 ```
 
 Report: findings before and after by lint name, files changed, every `#[allow]`
@@ -58,17 +58,17 @@ added with its reason, and any test whose result changed (there should be none).
 ## 5. Review (Director)
 
 Read the whole diff. Spot-check the semantic suggestions above. Run the desktop
-crate's library tests too, since `bloblex-desktop` shares workspace crates.
+crate's library tests too, since `retinue-desktop` shares workspace crates.
 
 ## 6. Execution order (14 October 2026, owner said go)
 
 FIX5 (`docs/history/fix-05/opencode2-per-model-effort-spec.md`) is running at the same time
-and owns `crates/bloblex-adapter-acp` and the daemon. To avoid conflicts this is
+and owns `crates/retinue-adapter-acp` and the daemon. To avoid conflicts this is
 run in two parts:
 
-- **Part 1 (now):** every workspace crate EXCEPT `bloblex-adapter-acp` and
-  `bloblex-daemon`. The gate is the clippy command from section 4 with
-  `--exclude bloblex-adapter-acp --exclude bloblex-daemon`... but clippy lints
+- **Part 1 (now):** every workspace crate EXCEPT `retinue-adapter-acp` and
+  `retinue-daemon`. The gate is the clippy command from section 4 with
+  `--exclude retinue-adapter-acp --exclude retinue-daemon`... but clippy lints
   dependencies of the selected crates too, so judge "zero findings" per crate:
   `cargo clippy -p <crate> --no-deps --all-targets -- -D warnings` for each crate in part 1.
-- **Part 2 (after FIX5 is merged):** `bloblex-adapter-acp` and `bloblex-daemon`.
+- **Part 2 (after FIX5 is merged):** `retinue-adapter-acp` and `retinue-daemon`.

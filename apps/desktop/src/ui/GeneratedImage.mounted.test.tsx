@@ -180,6 +180,6 @@ describe('GeneratedImage', () => {
     bridge.inDesktop = false
     await render(<GeneratedImage sessionId="s1" meta={generatedImageMeta({ ...ready, mediaId: 'phone-1' })!} />)
     expect(rpc).not.toHaveBeenCalled()
-    expect(host.textContent).toContain('Open Bitbots on your computer to see this image.')
+    expect(host.textContent).toContain('Open Retinue on your computer to see this image.')
   })
 })

@@ -1,5 +1,5 @@
 [package]
-name = "bloblex-desktop"
+name = "retinue-desktop"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -12,7 +12,7 @@ tauri-build = { version = "2", features = [] }
 arboard = "3.7"
 base64.workspace = true
 chrono.workspace = true
-bloblex-speech = { path = "../../../crates/bloblex-speech", features = ["native"] }
+retinue-speech = { path = "../../../crates/retinue-speech", features = ["native"] }
 futures-util.workspace = true
 image = { version = "0.25", default-features = false, features = ["png"] }
 portable-pty = "0.9"

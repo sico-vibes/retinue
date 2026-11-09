@@ -44,7 +44,7 @@ afterEach(() => {
 
 describe('ProfileMenu row', () => {
   it('shows initials, the name and "On this device", and opens the menu', async () => {
-    localStorage.setItem('bloblex.profile.name', 'Ada Lovelace')
+    localStorage.setItem('retinue.profile.name', 'Ada Lovelace')
     const host = await mount()
     expect(host.querySelector('.profile-avatar')?.textContent).toContain('AL')
     expect(host.querySelector('.profile-copy strong')?.textContent).toBe('Ada Lovelace')
@@ -67,7 +67,7 @@ describe('ProfileMenu row', () => {
 
 describe('ProfileMenu Remote entry', () => {
   it('offers Remote after Automations and opens Settings > Remote', async () => {
-    localStorage.setItem('bloblex.profile.name', 'Ada')
+    localStorage.setItem('retinue.profile.name', 'Ada')
     const onRemote = vi.fn()
     const host = await mount(onRemote)
     act(() => host.querySelector<HTMLButtonElement>('.profile-button')!.click())
@@ -82,7 +82,7 @@ describe('ProfileMenu Remote entry', () => {
   })
 
   it('hides the Remote entry when this build has no remote support', async () => {
-    localStorage.setItem('bloblex.profile.name', 'Ada')
+    localStorage.setItem('retinue.profile.name', 'Ada')
     h.rpc.mockImplementation(async (method: string) => { if (method === 'remote.status') throw new Error('unsupported'); return {} })
     const host = await mount(vi.fn())
     act(() => host.querySelector<HTMLButtonElement>('.profile-button')!.click())

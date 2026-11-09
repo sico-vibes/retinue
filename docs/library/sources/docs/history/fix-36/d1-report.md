@@ -12,7 +12,7 @@ Spec: [docs/history/fix-36/d1-manager-spec.md](d1-manager-spec.md).
 
 ## What changed
 
-### Storage (`crates/bloblex-storage/src/lib.rs`)
+### Storage (`crates/retinue-storage/src/lib.rs`)
 
 - **Schema (additive, no `user_version` bump).** `ensure_team_schema` adds
   `agents.system_role TEXT` (idempotent column add) and a partial unique index
@@ -42,7 +42,7 @@ Spec: [docs/history/fix-36/d1-manager-spec.md](d1-manager-spec.md).
   imported manager row becomes an ordinary bot) and never touches the local Manager's
   `system_role` on a replace, so the local Manager stays the Manager.
 
-### Daemon (`crates/bloblex-daemon/src/main.rs`, `team.rs`)
+### Daemon (`crates/retinue-daemon/src/main.rs`, `team.rs`)
 
 - **`manager.get`** → `{"manager": <agent>|null}`; **`manager.ensure { name?, look?, runtimeId, model?, thinking? }`**
   → `{"manager": <agent>, "created": true|false}`. `ensure` returns the existing
@@ -60,11 +60,11 @@ Spec: [docs/history/fix-36/d1-manager-spec.md](d1-manager-spec.md).
 - **Tools.** `is_leader` → `is_manager` (session's agent has `systemRole == "manager"`).
   `list_projects` and `update_blob` are manager-only; `create_blob` is **removed from
   the bridge** (its function, its tool schema, its per-turn creation counter and the
-  `bloblex_create_blob` entries in the safe-tool allowlist are gone). A non-manager
+  `retinue_create_blob` entries in the safe-tool allowlist are gone). A non-manager
   calling either remaining tool gets
   `"Only the Manager can list projects or change bots. Ask the Manager (@<name>)."`
   (`"…no Manager yet. Ask the user to set one up."` when there is none).
-- **`<bloblex_team>`.** The leader paragraph became the Manager paragraph:
+- **`<retinue_team>`.** The leader paragraph became the Manager paragraph:
   `"You are <name>, the user's Manager. You work across all projects (list them with
   `list_projects`), know every bot (`list_blobs`), plan work, delegate with
   `message_blob`, and you ask the user before creating projects, bots or assigning
@@ -85,7 +85,7 @@ Spec: [docs/history/fix-36/d1-manager-spec.md](d1-manager-spec.md).
 
 ## Tests
 
-Storage (`crates/bloblex-storage/src/lib.rs`, `memory_tests` module):
+Storage (`crates/retinue-storage/src/lib.rs`, `memory_tests` module):
 
 - `manager_migration_demotes_every_leader_once_and_is_marked` — an open stamps the
   marker; with the marker cleared and a `leader=1` row, `ensure_team_schema` clears
@@ -102,7 +102,7 @@ Storage (`crates/bloblex-storage/src/lib.rs`, `memory_tests` module):
   `systemRole: "manager"` lands as an ordinary bot; a replace that names the local
   Manager leaves it the Manager.
 
-Daemon (`crates/bloblex-daemon/src/main.rs`, `phase2a_tests`):
+Daemon (`crates/retinue-daemon/src/main.rs`, `phase2a_tests`):
 
 - `manager_ensure_is_idempotent_and_manager_get_reports_it` — `manager.get` is null
   first, `ensure` creates one (`created: true`, name/role/description/`ask`/`systemRole`,
@@ -125,7 +125,7 @@ test in `src/remote` fails the build if a dispatch method has no `tiers.json` ro
 
 ## Follow-up fix: old-version databases must re-run the v9 rebuild (Director's failing tests)
 
-The Director's full workspace run had four `bloblex-storage` tests failing, all with the
+The Director's full workspace run had four `retinue-storage` tests failing, all with the
 same panic: `no such column: system_role` in
 `CREATE UNIQUE INDEX idx_agents_manager ON agents(system_role) WHERE system_role='manager'`.
 
@@ -145,7 +145,7 @@ rebuild tried to recreate it before `ensure_team_schema` had re-added the column
 not an `agents` query selecting `system_role` before the column existed, and not the
 marker migration: no read path is reached here.
 
-**Fix** (`crates/bloblex-storage/src/lib.rs`, `migrate_agent_outfit_ids`): the columns of
+**Fix** (`crates/retinue-storage/src/lib.rs`, `migrate_agent_outfit_ids`): the columns of
 each index are captured with `pragma_index_info` while the old table still exists, and
 after the rebuild an index is replayed only when every one of its columns survived into
 the v9 table. `idx_agents_manager` sits on `system_role`, which the v9 rebuild does not
@@ -159,26 +159,26 @@ are still created before any query uses them, and the marker migration still run
 `agents` columns exist. (Earlier in this lane the same failure was filtered with
 `... AND name <> 'idx_agents_manager'`; it is now the general column check above.)
 
-Verified: `cargo test -p bloblex-storage` — **98 passed, 0 failed**, including the four
+Verified: `cargo test -p retinue-storage` — **98 passed, 0 failed**, including the four
 tests above and the D1 manager tests (the partial unique index is still enforced).
 
 ## Gates
 
 Run in this worktree with `CARGO_TARGET_DIR=C:\fxt\d1`:
 
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — **clean** (exit 0).
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — **clean** (exit 0).
 - `cd apps/desktop && npx tsc -b` — **clean** (exit 0).
 - `cd apps/desktop && npx vitest run src/remote src/preview` — **13 files, 207 tests passed**.
   (One earlier full-suite run failed `RemoteApp.mounted.test.tsx > pairs: …` on a
   timing flush while `remoteBuild.test.ts` was loading the machine; it passes alone
   with and without these changes and passes on re-run. It is a flaky timing test, not
   caused by D1.)
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
   — **all suites ok, 0 failed** (677 tests passed across the workspace; no `FAILED`,
   no `panicked`, no build errors). Re-run after the follow-up fix above, so this covers
   the four tests the Director's run failed.
 - Both gates were re-run on the fixed tree and waited for completion:
-  `cargo test -p bloblex-storage` (98 passed) and the full workspace command above
+  `cargo test -p retinue-storage` (98 passed) and the full workspace command above
   (`test result: ok` from every binary), then the clippy command — **clean (exit 0)**.
 
 ## Unverified / notes

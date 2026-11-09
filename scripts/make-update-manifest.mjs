@@ -23,7 +23,7 @@ export function isPreRelease(version) {
 
 /** One-line note used when a release notes file is absent or blank. */
 export function defaultNotes(version) {
-  return `Bitbots ${version}`
+  return `Retinue ${version}`
 }
 
 function stripBom(text) {

@@ -8,7 +8,7 @@ let root: Root | null = null
 let host: HTMLDivElement | null = null
 afterEach(() => { if (root) act(() => root!.unmount()); host?.remove(); root = null; host = null })
 
-const options = [{ value: '', label: 'No project' }, { value: 'p1', label: 'Bitbots' }]
+const options = [{ value: '', label: 'No project' }, { value: 'p1', label: 'Retinue' }]
 
 function mount(onChange = vi.fn(), inDialog = true) {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host)

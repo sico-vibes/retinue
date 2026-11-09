@@ -29,7 +29,7 @@ Phase 1 and every slice after it follow this arrangement.
   - Claude Haiku 5.5 does the documentation, from the briefs, the diffs and the gate results.
 - **Lanes never commit.** The Director reviews the diff, runs the gates, and commits.
 - **The Director reviews every diff** and sends work back until it is right.
-- **The Director checks every screen against the owner's reference image** in each look the slice touches: Bitbots (the Frost look) and Blobots (Pop, Dot and Legacy were retired on 21 October 2026).
+- **The Director checks every screen against the owner's reference image** in each look the slice touches: Retinue (the Frost look) and Stone (Pop, Dot and Legacy were retired on 21 October 2026).
 - **Nothing is marked done** until its state in [status.md](status.md) is backed by evidence.
 
 ## Naming

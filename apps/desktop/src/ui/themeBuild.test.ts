@@ -24,7 +24,7 @@ describe('look stylesheet loading', () => {
   })
 
   it('does not dynamically import look stylesheets from application source', () => {
-    const dynamicLookImport = /\bimport\s*\(\s*['"][^'"]*(?:ui\/themes\/|(?:\.\.\/|\.\/)?themes\/|bitbots\.css)/
+    const dynamicLookImport = /\bimport\s*\(\s*['"][^'"]*(?:ui\/themes\/|(?:\.\.\/|\.\/)?themes\/|retinue\.css)/
     const offenders = sourceFiles(SRC).filter((path) => dynamicLookImport.test(readFileSync(path, 'utf8')))
     expect(offenders).toEqual([])
   })

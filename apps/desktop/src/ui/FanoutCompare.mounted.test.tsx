@@ -106,7 +106,7 @@ describe('the compare view', () => {
   }
 
   it('shows each answer in a column, opens a conversation and marks a pick', async () => {
-    const state = { fanout: record({ rows: [row('a1', 'Alpha', { tokens: 1200, worktree: { path: 'D:/w/a', branch: 'bitbots/a' } }), row('a2', 'Beta', { sessionId: null, reply: null, error: 'That coding agent takes no images.', state: 'failed' })] }) }
+    const state = { fanout: record({ rows: [row('a1', 'Alpha', { tokens: 1200, worktree: { path: 'D:/w/a', branch: 'retinue/a' } }), row('a2', 'Beta', { sessionId: null, reply: null, error: 'That coding agent takes no images.', state: 'failed' })] }) }
     daemon(state)
     const onOpen = vi.fn()
     const view = await mount(<CompareView initialId="f1" agents={bots} connected onBack={vi.fn()} onOpenSession={onOpen} onStartNew={vi.fn()} />); await settle()
@@ -114,7 +114,7 @@ describe('the compare view', () => {
     expect(columns.map((column) => column.querySelector('strong')?.textContent)).toEqual(['Alpha', 'Beta'])
     expect(columns[0].textContent).toContain('Alpha says hi')
     expect(columns[0].textContent).toContain('1m 5s · 1,200 tokens')
-    expect(columns[0].textContent).toContain('bitbots/a')
+    expect(columns[0].textContent).toContain('retinue/a')
     expect(columns[1].textContent).toContain('That coding agent takes no images.')
     expect(button(columns[1], 'Pick this'), 'a failed row has nothing to pick').toBeUndefined()
     await act(async () => { button(columns[0], 'Open')!.click() })

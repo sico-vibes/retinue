@@ -10,10 +10,10 @@ Brief: [docs/history/fix-41/companion-looks-brief.md](companion-looks-brief.md).
 
 ## What the owner asked for
 
-- On 19 October 2026 the owner decided that Frost (`bitbots`), Pop and Dot should style the companion and dictation windows, as Legacy already does.
+- On 19 October 2026 the owner decided that Frost (`frost`), Pop and Dot should style the companion and dictation windows, as Legacy already does.
 - The companion and dictation windows had a fixed dark palette in every look. The looks never reached them.
 - Styling only. No change to companion behaviour, layout, drag, placement or sizes. No new animation. `prefers-reduced-motion` is respected.
-- Legacy and Blobots do not change.
+- Legacy and Stone do not change.
 - The per-bot art keeps working in every look.
 - Each look must read correctly in light, with text at 4.5:1 or more. A look that could not reach that would stay dark, and the report would say so. No look had to stay dark.
 
@@ -23,7 +23,7 @@ Each look has its own layer. The layer is scoped to the look and to the window c
 
 Each layer sets the companion's surface, text, line, accent and font tokens, plus the companion's own text, status, shimmer and alpha tokens. Then it styles the parts the tokens cannot reach: the capsule, the listening pill, island cards, tabs, primary and secondary buttons, and the dictation island.
 
-- **Frost (`bitbots`).** A solid tint at the Solid glass level, with blur 0. A faint inner top highlight and soft hairlines. See the window-effect finding below.
+- **Frost (`frost`).** A solid tint at the Solid glass level, with blur 0. A faint inner top highlight and soft hairlines. See the window-effect finding below.
 - **Pop (`pop`).** A 2 px ink line, drawn with an inset `box-shadow`. The offset shadows (4 px and 3 px) are outer `box-shadow`s. Neither changes any box's size, so no box grows. Fonts: DM Sans Variable and Bricolage Grotesque Variable.
 - **Dot (`dot`).** Dotted outlines and borders. Fonts: Geist, Geist Mono and Doto.
 - **Bot-coloured text on light.** Overview chips, chat mentions, team-chip names and settings chips mix the bot colour toward ink, using a shared 15% bot-colour share. This keeps them at 4.5:1 or more.
@@ -31,12 +31,12 @@ Each layer sets the companion's surface, text, line, accent and font tokens, plu
 Other changes:
 
 - `apps/desktop/src/preview/dictationPreview.tsx` (preview only) accepts `?style=`, `?theme=light|dark` and `?surface=companion|dictation`.
-- New test file `apps/desktop/src/ui/companionLooks.mounted.test.ts`. It injects the CSS into happy-dom and checks the dark and light tokens for each look on both windows. It also checks the light Settings and Activity text tokens, that Legacy and Blobots tokens do not change with `data-surface-theme=light`, that main-window Frost values do not reach the companion, and that the compact capsule and dictation island heights do not change.
+- New test file `apps/desktop/src/ui/companionLooks.mounted.test.ts`. It injects the CSS into happy-dom and checks the dark and light tokens for each look on both windows. It also checks the light Settings and Activity text tokens, that Legacy and Stone tokens do not change with `data-surface-theme=light`, that main-window Frost values do not reach the companion, and that the compact capsule and dictation island heights do not change.
 - `apps/desktop/src/ui/appearance.mounted.test.ts` covers `data-surface-theme` and `data-theme-choice`.
 
 ## How the theme reaches the overlay windows
 
-- The companion and dictation windows keep `data-theme="dark"`. `index.html` forces it, so the Legacy and Blobots light rules can never reach them.
+- The companion and dictation windows keep `data-theme="dark"`. `index.html` forces it, so the Legacy and Stone light rules can never reach them.
 - A new attribute, `data-surface-theme` (`light` or `dark`, the user's resolved theme), is set on the overlay windows only:
   - the boot script in `apps/desktop/index.html`;
   - `applySurfaceAppearance(..., companion=true)` in `apps/desktop/src/ui/appearance.ts`, which also keeps `data-theme-choice` current;
@@ -66,15 +66,15 @@ Method: the WCAG 2.x ratio of the computed text colour over its composited backg
 | Pop light | 7.05 | 7.05 | 7.05 | 6.24 | 7.05 | 5.64 | 7.05 |
 | Dot dark | 10.84 | 9.12 | 8.48 | 6.03 | 8.33 | 5.79 | 10.84 |
 | Dot light | 6.30 | 6.29 | 6.29 | 6.17 | 5.79 | 5.79 | 6.30 |
-| Blobots dark (reference) | 7.93 | - | 5.99 | 5.98 | 5.42 | 5.99 | - |
+| Stone dark (reference) | 7.93 | - | 5.99 | 5.98 | 5.42 | 5.99 | - |
 
 All text in every view is at least 4.5:1. No look had to stay dark. Text sits on the opaque capsule and cards, never directly on the desktop.
 
-## Legacy and Blobots unchanged
+## Legacy and Stone unchanged
 
 - A computed-style fingerprint was taken of every visible element in the compact, chat, activity and settings views. It covers 17 properties per element, including size, colour, border, shadow and font. The views were checked dark and with `?theme=light`. The fingerprint is identical before (base `9758572`) and after.
-- The compact bar measures 344x62 in Blobots, Frost, Pop and Dot.
-- The dictation island's CSS height is 46 px in Pop and Dot, as in Blobots.
+- The compact bar measures 344x62 in Stone, Frost, Pop and Dot.
+- The dictation island's CSS height is 46 px in Pop and Dot, as in Stone.
 - Per-bot art renders in the companion in every look, including the robot and Dot's dot-matrix face. Checked visually.
 
 ## Review rounds

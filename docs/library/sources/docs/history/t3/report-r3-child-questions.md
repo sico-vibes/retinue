@@ -6,7 +6,7 @@ deleted. No git writes. Nothing outside `D:\t5` was touched.
 ## 1. Gate: when a side conversation may ask
 
 Files and lines:
-- `crates/bloblex-daemon/src/questions.rs:51-81` — new `pub(crate) fn may_ask(st, session) -> Result<(), &'static str>`.
+- `crates/retinue-daemon/src/questions.rs:51-81` — new `pub(crate) fn may_ask(st, session) -> Result<(), &'static str>`.
   Refuses an archived session; refuses `automation` and unattended `task` links with
   the existing sentences ("ask_user is not available to scheduled runs."); for
   `side` requires `link.originSessionId` to name an existing, non-archived
@@ -14,14 +14,14 @@ Files and lines:
   hops, refusing if any link in it is `is_unattended` with "This assignment was
   started by a scheduled run, so there is no one to ask."; every other kind passes,
   as today. Constants at `questions.rs:26-34`.
-- `crates/bloblex-daemon/src/questions.rs:130-132` — `ask_user_tool` now calls
+- `crates/retinue-daemon/src/questions.rs:130-132` — `ask_user_tool` now calls
   `may_ask` and returns its sentence; the old `match session["link"]["kind"]`
   refusals are gone. Archived keeps "This conversation is archived.".
-- `crates/bloblex-daemon/src/team.rs:447-451` — the `mcp_rpc` `ask_user` boolean is
+- `crates/retinue-daemon/src/team.rs:447-451` — the `mcp_rpc` `ask_user` boolean is
   now `crate::questions::may_ask(st, row).is_ok()`, with the comment rewritten (tool
   list and call gate both read it). `team.rs:512` is the fallback refusal sentence for
   the remaining refusals ("ask_user is not available in this conversation.").
-- `crates/bloblex-daemon/src/questions.rs:87` — the tool description now says a side
+- `crates/retinue-daemon/src/questions.rs:87` — the tool description now says a side
   conversation's Manager is told the bot is waiting, but only the user can answer.
 
 Invariants relied on: `is_unattended` (main.rs:1487) is the one definition of a
@@ -31,7 +31,7 @@ deeper than four hops is refused rather than trusted.
 
 ## 2. A pending question holds the assignment open
 
-Storage (`crates/bloblex-storage/src/lib.rs:2336-2351`):
+Storage (`crates/retinue-storage/src/lib.rs:2336-2351`):
 - `pending_question_exists(session_id) -> Result<bool>`: a `permission_requests` row
   for that session with `status='pending'` and `json_extract(data,'$.kind')='question'`.
 - `pending_questions_for_session(session_id) -> Result<Vec<String>>`: the same rows'
@@ -176,7 +176,7 @@ table, `checkpoints.rs`, `media.rs`, `workspace.rs`, `experiments.rs`, `docs/` a
 
 ## Existing tests this makes stale (not edited)
 
-- `crates/bloblex-daemon/src/main.rs:10122-10168`
+- `crates/retinue-daemon/src/main.rs:10122-10168`
   `ask_user_is_listed_for_every_providers_own_conversation`: it asserts `ask_user` is
   not listed and is rejected for the side session `side-run`, whose origin `open-main`
   exists and is not archived. With `may_ask`, the tool is now listed there and the
@@ -189,18 +189,18 @@ table, `checkpoints.rs`, `media.rs`, `workspace.rs`, `experiments.rs`, `docs/` a
 
 ## Gate output (last 15 lines of each)
 
-`cargo check -p bloblex-storage --message-format short` (RUST_MIN_STACK=33554432):
+`cargo check -p retinue-storage --message-format short` (RUST_MIN_STACK=33554432):
 
 ```
-    Checking bloblex-storage v0.1.0-beta.38 (D:\t5\crates\bloblex-storage)
+    Checking retinue-storage v0.1.0-beta.38 (D:\t5\crates\retinue-storage)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.84s
 ```
 
-`cargo check -p bloblex-daemon --message-format short` (RUST_MIN_STACK=33554432):
+`cargo check -p retinue-daemon --message-format short` (RUST_MIN_STACK=33554432):
 
 ```
-    Checking bloblex-storage v0.1.0-beta.38 (D:\t5\crates\bloblex-storage)
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\t5\crates\bloblex-daemon)
+    Checking retinue-storage v0.1.0-beta.38 (D:\t5\crates\retinue-storage)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\t5\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.50s
 ```
 
@@ -209,7 +209,7 @@ Both finished with no warnings and no errors. Full logs are saved at
 
 **I ran no tests of any kind.**
 
-## Proposed `bitbots-development` skill note (not applied: `.claude/` is out of bounds for this lane)
+## Proposed `retinue-development` skill note (not applied: `.claude/` is out of bounds for this lane)
 
 - The `ask_user` bridge is now legal in side conversations (`questions::may_ask`); a
   delegated assignment that ends on a pending question is `TurnEnd::Waiting`, so it

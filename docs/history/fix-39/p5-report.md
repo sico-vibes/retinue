@@ -47,7 +47,7 @@ sub-conversation; the project-path part is P6), **13** (lock a bot), **11**
 ### Item 19 — permissions in a sub-conversation
 
 - New RPC `session.permissions.set { sessionId, approvalMode|null }`:
-  `crates/bloblex-daemon/src/main.rs:2632` (`set_session_permissions`),
+  `crates/retinue-daemon/src/main.rs:2632` (`set_session_permissions`),
   dispatch arm `:1118`. It edits only the conversation pin, is **allowed while a
   turn runs** (effective next turn), refuses an automation session, refuses a
   locked bot, and keeps the stored model/thinking the lock requires.
@@ -57,14 +57,14 @@ sub-conversation; the project-path part is P6), **13** (lock a bot), **11**
   (`ComposerControls.tsx:57,119`), slotted into
   `apps/desktop/src/ui/TeamMessages.tsx:113` (`permission?` prop).
 - Manager tool: `set_conversation_permission { conversation, mode }` —
-  `crates/bloblex-daemon/src/proposals.rs:56` (schema), `:164`
+  `crates/retinue-daemon/src/proposals.rs:56` (schema), `:164`
   (`validate_permission`), `:250` (`propose_permission`), dispatch
-  `crates/bloblex-daemon/src/team.rs:279`. It accepts only `ask`/`auto`, only a
+  `crates/retinue-daemon/src/team.rs:279`. It accepts only `ask`/`auto`, only a
   side conversation the Manager itself started (`link.peerAgentId == manager`),
   and refuses a locked target. It is proposal-gated: the new `permission` kind is
   applied in `proposals.rs:335,460` (`apply_permission`, re-checking the lock).
 - Storage: the `proposals.kind` CHECK and the table rebuild now include
-  `'permission'` (`crates/bloblex-storage/src/lib.rs:701,715,723`, and
+  `'permission'` (`crates/retinue-storage/src/lib.rs:701,715,723`, and
   `insert_proposal`'s allow-list `:1963`).
 - Card: `apps/desktop/src/ui/ProposalCard.tsx` renders the conversation and the
   mode with Approve/Reject.
@@ -74,19 +74,19 @@ sub-conversation; the project-path part is P6), **13** (lock a bot), **11**
   (includes the "full access is never offered" and "not a conversation I
   started" refusals), `row_proposal_apply_permission_refuses_a_bot_locked_after_the_card`.
 - **Not done (outside P5's file list):** item 19's sub-point 5, richer denial
-  text (`bloblex_agent_core::permission_summary`), touches
-  `crates/bloblex-agent-core`, which is not a P5 file. Flagged for the Director.
+  text (`retinue_agent_core::permission_summary`), touches
+  `crates/retinue-agent-core`, which is not a P5 file. Flagged for the Director.
 
 ### Item 13 — lock a bot
 
 - Storage: an `agents.locked` column, added idempotently on every open
-  (`crates/bloblex-storage/src/lib.rs:444`), exposed as `locked` in every agent
+  (`crates/retinue-storage/src/lib.rs:444`), exposed as `locked` in every agent
   JSON projection (the three `agent_list`/`agent_read`/manager rows), and set
   only by the new `Storage::agent_set_locked` (`:1803`), which refuses to lock
   the Manager and is a no-op for an unchanged value. `agent.update` can never
   write `locked` (it copies only its allow-list of fields, `:2168`).
 - New RPC `agent.lock.set { agentId, locked }` —
-  `crates/bloblex-daemon/src/main.rs:987`; `tiers.json:425` row is `never`.
+  `crates/retinue-daemon/src/main.rs:987`; `tiers.json:425` row is `never`.
 - Daemon enforcement (`bot_is_locked`/`locked_bot_error`, `main.rs:438,444`; the
   one sentence "This bot is locked. Unlock it to change its settings."):
   - `agent.update` refuses (`main.rs:869`);
@@ -150,7 +150,7 @@ sub-conversation; the project-path part is P6), **13** (lock a bot), **11**
 
 Every writer of an agent field or a session lock, whether the lock guards it, and
 the daemon test that proves it. All tests are in
-`#[cfg(test)] mod fix39_p5_tests` (`crates/bloblex-daemon/src/main.rs:10435`).
+`#[cfg(test)] mod fix39_p5_tests` (`crates/retinue-daemon/src/main.rs:10435`).
 
 | Writer (input → storage call) | Guarded? | Daemon test (one per row) |
 | --- | --- | --- |
@@ -182,7 +182,7 @@ Both schema changes target a live user database.
 
 - `agents.locked` — added by `ensure_team_schema`, which runs on every open and
   only adds a missing column, so an old database opens untouched
-  (`crates/bloblex-storage/src/lib.rs:433-444`).
+  (`crates/retinue-storage/src/lib.rs:433-444`).
 - `proposals.kind` — a CHECK constraint cannot be altered in place, so the table
   is rebuilt (rows copied verbatim) when the stored DDL lacks `'profile'` or
   `'permission'` (`lib.rs:715-737`), the same pattern the FIX36 D3 migration
@@ -204,9 +204,9 @@ its schema then rewound to the old definition, then reopened through
 
 ## 4. Gates (all run to completion, foreground)
 
-- Rust: `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
+- Rust: `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
   — **all crates pass, 0 failed** (storage 109, daemon 365 incl. 13 new).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — **clean**.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — **clean**.
 - UI: `npx tsc -b` — clean; `npx vitest run --maxWorkers=3` — **168 files, 1220
   tests passed**; `npm run build` — ok; `npm run build:remote` — ok (tiers.json is
   shared policy data).
@@ -233,14 +233,14 @@ its schema then rewound to the old definition, then reopened through
 - **"set by the Manager" label** on the side-conversation pill (item 19 sub-point
   3's card copy) is not shown; the pill shows the effective mode only.
 - **Item 19 sub-point 5** (classifier category/path in the denial notice) is
-  outside P5's files (`crates/bloblex-agent-core`) — see §1.
+  outside P5's files (`crates/retinue-agent-core`) — see §1.
 - **Live behaviour:** no live daemon, no tailnet, no real bot run was exercised.
 
 ---
 
 ## 6. Files outside the package list (kept minimal)
 
-- `crates/bloblex-storage/src/lib.rs` — the `proposals.kind` CHECK and rebuild
+- `crates/retinue-storage/src/lib.rs` — the `proposals.kind` CHECK and rebuild
   (item 19 needs an accepted `permission` kind; the file was already the P5
   storage file for the `agents.locked` column).
 - `apps/desktop/src/ui/TeamMessages.tsx` — one optional `permission?: ReactNode`
@@ -265,7 +265,7 @@ and the Director's failed check (`docs/history/fix-39/director-checks.md`). Stil
 committed. The sections above describe the first pass; this section covers what
 this follow-up changed. Where the two disagree, this section is current.
 
-## F1. A locked bot can use plan mode again — `crates/bloblex-daemon/src/main.rs`
+## F1. A locked bot can use plan mode again — `crates/retinue-daemon/src/main.rs`
 
 `update_session_model` no longer consults the lock for a request that carries
 only `planMode` (`main.rs:2533`: `touches_locked_settings` over
@@ -345,7 +345,7 @@ speed survive). All three fail on the first-pass code.
   `propose_permission` does. Test:
   `row_permission_proposal_edits_cannot_retarget_the_card` (an edited
   `conversation` at approval time is refused; the untouched card still applies).
-- **S6** untouched (item 19 sub-point 5 lives in `crates/bloblex-agent-core`).
+- **S6** untouched (item 19 sub-point 5 lives in `crates/retinue-agent-core`).
 - **S7** `catalogCache.ts:130` exports `useCatalogVersion()`, and
   `TeamSidebar.tsx:133` subscribes to it, so the model line repaints when the
   catalog lands. Test: "names the catalog model once it arrives, and the raw id
@@ -428,16 +428,16 @@ shrink rules and the fieldset rules, since no unit test can measure layout.
 
 ## Gates (follow-up, all foreground, `TEMP=TMP=C:/fxt/c2/tmp`)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop
   --no-fail-fast` — **0 failed** (daemon 371 tests, storage 109, every other
   crate green).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — **clean**.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — **clean**.
 - `npx tsc -b` — clean.
 - `npx vitest run --maxWorkers=3` — **169 files, 1242 tests passed** (was 168 /
   1220: one new file, 22 new tests).
 - `npm run build` — ok. `npm run build:remote` — ok (parity green; both methods
   keep their `never` rows in `tiers.json`).
-- `src-tauri` was not touched, so `cargo test -p bloblex-desktop --lib` was not
+- `src-tauri` was not touched, so `cargo test -p retinue-desktop --lib` was not
   run.
 
 ## Still needs the Director
@@ -446,6 +446,6 @@ shrink rules and the fieldset rules, since no unit test can measure layout.
   (badge compact vs full, title ellipsised, no overlap), the locked editor with
   the banner and the disabled look controls, the side header's permission pill
   with and without "set by the Manager". I ran no browser.
-- **S6** remains unassigned (item 19 sub-point 5, `crates/bloblex-agent-core`).
+- **S6** remains unassigned (item 19 sub-point 5, `crates/retinue-agent-core`).
 - No live daemon, tailnet or real bot run was exercised; the preview stubs above
   are for the Director's screenshots, not a substitute for that.

@@ -7,22 +7,22 @@ You are an implementation lane. You work ONLY in the git worktree `D:\t4a` (bran
 1. **NO tests of any kind.** Do not run `cargo test`, `cargo check --tests`, `cargo clippy --all-targets`, `npm test`, `vitest`, or anything that compiles a test target. Do not add, edit or delete any `#[test]`, `#[cfg(test)]` module, `*_tests.rs` file, `tests/` file or scratch probe. Leave every existing test block untouched (list in the report any that your change makes stale). No screenshots, no browser, no running the app.
 2. **No git writes.** Never `git commit`, `git add`, `git push`, `git reset`, `git stash`, `git checkout`, `git rebase`.
 3. Do not touch any path outside `D:\t4a`. Do not start, stop or kill any process you did not start. Never print secrets or message content.
-4. Only edit the files listed under "You own". `crates/bloblex-daemon/src/main.rs` is 13,000 lines: use search and offset reads, never cat it. Another lane edits other regions of main.rs concurrently (it only deletes one dispatch arm), so keep your main.rs edits to the few lines named below.
+4. Only edit the files listed under "You own". `crates/retinue-daemon/src/main.rs` is 13,000 lines: use search and offset reads, never cat it. Another lane edits other regions of main.rs concurrently (it only deletes one dispatch arm), so keep your main.rs edits to the few lines named below.
 5. Keep a work log at `D:\t4a\target\lane\worklog.md` (one line per step).
 
 ## Background
 
-Bitbots: a Rust daemon (`crates/bloblex-daemon`) with SQLite storage (`crates/bloblex-storage`). A **Manager** bot delegates work to teammate bots with `message_blob` (`team.rs`). Each assignment is a row in the durable `delegations` ledger (`delegations.rs`, storage functions `delegation_*` in `crates/bloblex-storage/src/lib.rs`): `queued -> running -> completed|failed|cancelled|interrupted`, plus a `reply_state` column (`NULL`, `pending`, `delivered`) that makes the `[Reply from X]` relay to the Manager happen once per outcome. Read `delegations.rs` and the `after_turn`, `deliver`, `deliver_reply`, `queue_delivery`, `drain_queued_deliveries` functions in `team.rs` first. `docs/history/t3/report-delegation.md` describes the previous lane's work on exactly this code; read it too.
+Retinue: a Rust daemon (`crates/retinue-daemon`) with SQLite storage (`crates/retinue-storage`). A **Manager** bot delegates work to teammate bots with `message_blob` (`team.rs`). Each assignment is a row in the durable `delegations` ledger (`delegations.rs`, storage functions `delegation_*` in `crates/retinue-storage/src/lib.rs`): `queued -> running -> completed|failed|cancelled|interrupted`, plus a `reply_state` column (`NULL`, `pending`, `delivered`) that makes the `[Reply from X]` relay to the Manager happen once per outcome. Read `delegations.rs` and the `after_turn`, `deliver`, `deliver_reply`, `queue_delivery`, `drain_queued_deliveries` functions in `team.rs` first. `docs/history/t3/report-delegation.md` describes the previous lane's work on exactly this code; read it too.
 
 The provider permission handler is `AgentEvent::PermissionRequested` in `main.rs` (search for `AgentEvent::PermissionRequested {`); user questions arrive through `questions.rs` (`ask_user_tool`, which emits `permission.requested` with `kind: "question"`). Both create a pending request that only the owner can answer, in the teammate's own (side) conversation.
 
 ## You own
 
-- `crates/bloblex-daemon/src/team.rs` (`runtime_instructions`, `after_turn`, delivery helpers)
-- `crates/bloblex-daemon/src/delegations.rs`
-- `crates/bloblex-daemon/src/questions.rs` (only to call the new attention helper)
-- `crates/bloblex-storage/src/lib.rs` (only `delegation_*` functions and the `delegations` schema/migration)
-- `crates/bloblex-daemon/src/main.rs`: ONLY a call to the new attention helper inside the `AgentEvent::PermissionRequested` handler (one or two lines after the request is stored and found to be left pending for the owner).
+- `crates/retinue-daemon/src/team.rs` (`runtime_instructions`, `after_turn`, delivery helpers)
+- `crates/retinue-daemon/src/delegations.rs`
+- `crates/retinue-daemon/src/questions.rs` (only to call the new attention helper)
+- `crates/retinue-storage/src/lib.rs` (only `delegation_*` functions and the `delegations` schema/migration)
+- `crates/retinue-daemon/src/main.rs`: ONLY a call to the new attention helper inside the `AgentEvent::PermissionRequested` handler (one or two lines after the request is stored and found to be left pending for the owner).
 
 Never touch `checkpoints.rs`, `media.rs`, `workspace.rs`, `experiments.rs`, anything under `apps/`, `docs/`, `.claude/`.
 
@@ -31,22 +31,22 @@ Never touch `checkpoints.rs`, `media.rs`, `workspace.rs`, `experiments.rs`, anyt
 `runtime_instructions` builds the text appended to every bot's system instructions. Add one block for **every** bot (Manager and side conversations included), placed after the teammate/delegation lines and before the side-conversation block. Use this text **exactly** (it is the contract with the renderer in `apps/desktop/src/ui/richData.ts`; the schemas below are what it accepts, do not "improve" them). In Rust, build it as one `lines.push(...)` of a `concat!`/escaped string with real newlines; the fences must come out as literal triple backticks:
 
 ```
-Charts and tables in chat. The Bitbots window draws two fenced block types as interactive views. Use them only for numbers and rows you actually have from the user, your tools, files or commands in this conversation. Never invent, estimate or pad values to make a chart; if you do not have the data, say so or fetch it first. A plain Markdown table is fine for a short list; use a chart when the user asks for a chart, graph or plot, or when comparing numbers across categories or over time is the point. Add one sentence outside the block saying what it shows and where the data came from.
+Charts and tables in chat. The Retinue window draws two fenced block types as interactive views. Use them only for numbers and rows you actually have from the user, your tools, files or commands in this conversation. Never invent, estimate or pad values to make a chart; if you do not have the data, say so or fetch it first. A plain Markdown table is fine for a short list; use a chart when the user asks for a chart, graph or plot, or when comparing numbers across categories or over time is the point. Add one sentence outside the block saying what it shows and where the data came from.
 
-```bitbots-chart
+```retinue-chart
 {"type":"bar","title":"Build time by job","unit":"s","categories":["lint","test","bundle"],"series":[{"name":"main","values":[12.4,98.1,45]}]}
 ```
 
 "type" is "bar" or "line". "categories" are strings. Each series has a "name" and exactly one number per category (null for a missing value). Use at most 6 series and 200 categories, and one unit for the whole chart: put measures with different units in separate charts. Optional: "title", "caption", "unit". Shorthand for one series: {"type":"bar","data":[{"label":"lint","value":12.4}]}.
 
-```bitbots-table
+```retinue-table
 {"title":"Open issues","columns":["Issue","Owner","Age (days)"],"rows":[["#12","Sam",4],["#15","Ada",9]]}
 ```
 
 "columns" are names; each row is a list in column order (or an object keyed by column name); at most 24 columns and 1000 rows; keep numbers as numbers. Each block must be valid JSON on its own with nothing else inside the fence. Plain Markdown tables and csv code blocks are also shown as sortable tables.
 ```
 
-Keep the existing style of the function (it joins `lines` with newlines inside `<bloblex_team>`). Do not mention these blocks in tool descriptions.
+Keep the existing style of the function (it joins `lines` with newlines inside `<retinue_team>`). Do not mention these blocks in tool descriptions.
 
 For the **Manager only** (the `systemRole == "manager"` branch) add one more line: `A message that starts with [Update from NAME] means a teammate is waiting for the user to approve or answer something in that teammate's own conversation. Tell the user briefly which teammate and what is being asked, point them to that conversation, and do not try to answer for them, approve anything, or send the task again.`
 
@@ -72,8 +72,8 @@ Add `pub(crate) async fn attention(st, side_session_id: &str, request_id: &str, 
 
 ```powershell
 $env:RUST_MIN_STACK='33554432'
-cargo check -p bloblex-storage --message-format short
-cargo check -p bloblex-daemon --message-format short
+cargo check -p retinue-storage --message-format short
+cargo check -p retinue-daemon --message-format short
 ```
 
 Fix every warning you introduce. Use a long timeout for the first build.

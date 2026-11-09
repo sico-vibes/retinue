@@ -6,11 +6,11 @@
 
 **Status: design.** Written 15 October 2026; amended 16 October 2026 for the owner's choice of
 Tailscale. The 15 October states are reachable in the web preview; the Tailscale states
-(sections 1.2 and 1.3) are new and the preview must gain them in FIX30. Preview URLs assume `npm run dev --workspace @bloblex/desktop` with the preview config
-(see `.claude/launch.json` name `bitbots-web-preview`, port 5199).
+(sections 1.2 and 1.3) are new and the preview must gain them in FIX30. Preview URLs assume `npm run dev --workspace @retinue/desktop` with the preview config
+(see `.claude/launch.json` name `retinue-web-preview`, port 5199).
 
 Flags on the main preview URL: `?remote=on|off`, `?devices=0|1|3`, `?host=offline`, plus the
-usual `?style=bitbots|blobots` and `?accent=%23rrggbb`.
+usual `?style=retinue|stone` and `?accent=%23rrggbb`.
 
 ## 1. Host side: Settings > Remote
 
@@ -33,8 +33,8 @@ used. Each blocked state names the fix in one step:
 | Not installed | "Tailscale isn't installed on this computer." | **Get Tailscale** (opens tailscale.com) |
 | Logged out | "Tailscale is installed but signed out." | "Open Tailscale and sign in, then come back." **Check again** |
 | HTTPS certificates off | "Your tailnet doesn't allow HTTPS certificates yet." | **Open admin settings** (the tailnet's DNS page) and **Check again** |
-| Port in use | "Something else is already served on this computer's tailnet address." | Explains that Bitbots tried 443 and 8443 and changed nothing |
-| Funnel on | "Tailscale Funnel is on for this port, which would put Bitbots on the internet." | "Turn Funnel off, then try again." |
+| Port in use | "Something else is already served on this computer's tailnet address." | Explains that Retinue tried 443 and 8443 and changed nothing |
+| Funnel on | "Tailscale Funnel is on for this port, which would put Retinue on the internet." | "Turn Funnel off, then try again." |
 | Ready | "Tailscale is ready as work-pc." | **Enable** becomes available |
 
 1. **Enable** pressed: dialog "Turn on Remote?" explains in one paragraph that devices on your
@@ -91,7 +91,7 @@ records the change. The row shows "Can't approve while approvals from remote are
 - Companion: a later "Phone connected" chip (see PHASES).
 - Sidebar chip "Remote on, 2 devices" is a P1 item; not in the mock.
 
-## 2. Device side: Bitbots Remote (`/remote.html`)
+## 2. Device side: Retinue Remote (`/remote.html`)
 
 On a phone the app is full screen; on a desktop browser it sits in a 390 px frame. In the
 preview build only, a thin ribbon says "Preview · simulated" on every screen. The real build,

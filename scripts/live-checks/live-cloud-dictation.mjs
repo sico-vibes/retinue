@@ -1,5 +1,5 @@
 // Fix 1A probe: does the ChatGPT transcription endpoint (the one
-// CloudTranscriber::transcribe calls) challenge a plain, honest Bitbots client?
+// CloudTranscriber::transcribe calls) challenge a plain, honest Retinue client?
 //
 // Reads $CODEX_HOME/auth.json (default ~/.codex/auth.json) READ-ONLY, sends one
 // 1-second silent 16 kHz mono PCM16 WAV exactly the way the Rust client does,
@@ -9,7 +9,7 @@
 //   facts about the auth file (auth_mode, account-id presence, token expiry).
 // It never prints the token, any request header, or any response body.
 //
-// It identifies as Bitbots and does not imitate Codex, a browser, or any other
+// It identifies as Retinue and does not imitate Codex, a browser, or any other
 // client. Like bb (get-bb/bb, provider-codex/src/ai/chatgpt-fetch.ts) it keeps the
 // Cloudflare cookies from a challenged response (names only are printed) and
 // sends the request once more carrying them. It uses Node's own fetch, so
@@ -22,7 +22,7 @@ import { execFileSync } from 'node:child_process'
 
 const MODEL = 'gpt-transcribe'
 const SAMPLE_RATE = 16000
-const USER_AGENT = 'bloblex-desktop/0.1.0-beta.19'
+const USER_AGENT = 'retinue-desktop/0.1.0-beta.19'
 const TIMEOUT_MS = 65000
 
 function authPath() {
@@ -112,13 +112,13 @@ function multipart(boundary, wav, model) {
 }
 
 async function probe(auth) {
-  const boundary = `----bloblex-${Date.now().toString(16).padStart(32, '0')}`
+  const boundary = `----retinue-${Date.now().toString(16).padStart(32, '0')}`
   const wav = silentWav(1)
   const body = multipart(boundary, wav, MODEL)
   const headers = {
     'Content-Type': `multipart/form-data; boundary=${boundary}`,
     'User-Agent': USER_AGENT,
-    originator: 'bloblex',
+    originator: 'retinue',
     Authorization: `Bearer ${auth.accessToken}`,
   }
   if (auth.accountId) headers['chatgpt-account-id'] = auth.accountId

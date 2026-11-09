@@ -13,12 +13,12 @@ the end-to-end Noise channel of the first draft. Companion documents:
 ## 1. What it is
 
 Remote mode lets a person use the bots running on their computer from somewhere else: a
-phone, a tablet, a browser on another machine, or Bitbots on a second computer. The computer
+phone, a tablet, a browser on another machine, or Retinue on a second computer. The computer
 stays the one place where work happens. The remote device is a window onto it.
 
 The person installs Tailscale on the computer and the phone, turns Remote on once, and pairs
 each device with a short code that they approve on the computer. From then on they can open
-Bitbots from anywhere their tailnet reaches, see which bots are working or waiting, read
+Retinue from anywhere their tailnet reaches, see which bots are working or waiting, read
 conversations, and send messages. Approving a request from a phone is off by default and is a
 separate, explicit choice.
 
@@ -30,18 +30,18 @@ separate, explicit choice.
    serve several devices. In v1 each computer is its own installed app at its own address.
 3. **The computer stays in charge.** Everything runs on the host, inside its approval mode.
    Remote adds a way to ask, not a way around the rules.
-4. **No Bitbots account.** Pairing uses a one-time code and the owner's approval. There is
-   nothing to sign up for with Bitbots and no Bitbots-held list of a person's computers. The
+4. **No Retinue account.** Pairing uses a one-time code and the owner's approval. There is
+   nothing to sign up for with Retinue and no Retinue-held list of a person's computers. The
    person needs their own Tailscale account.
 5. **Private by construction.** Traffic stays inside the person's tailnet, encrypted by
-   WireGuard and served over HTTPS. Bitbots runs no server. Tailscale's coordination service
+   WireGuard and served over HTTPS. Retinue runs no server. Tailscale's coordination service
    sees which nodes exist, as it does for any tailnet, but not the traffic.
 6. **Revocable and visible.** Every device has a name, a last-seen time and a Remove button.
    Remote activity is listed (without message text).
 
 ## 3. Non-goals
 
-- Running bots in the cloud. There is no hosted Bitbots execution; if the computer is off,
+- Running bots in the cloud. There is no hosted Retinue execution; if the computer is off,
   nothing runs.
 - Remote administration. Changing settings, creating or deleting bots, adding coding agents,
   editing automations or memory, and reverting files stay on the computer. See the method
@@ -51,7 +51,7 @@ separate, explicit choice.
 - Syncing transcripts between devices. Each device asks the host.
 - Team accounts, sharing a computer with other people, or enterprise policy. Later.
 - Reaching the computer from the open internet. Remote never uses Tailscale Funnel.
-- A Bitbots-run relay or a direct listener on the local network. Both were in the first draft
+- A Retinue-run relay or a direct listener on the local network. Both were in the first draft
   and are removed.
 
 ## 4. People and situations
@@ -65,7 +65,7 @@ separate, explicit choice.
 
 ## 5. Concepts
 
-- **Host**: a computer running Bitbots with Remote on. Has a name, "Work PC" by default.
+- **Host**: a computer running Retinue with Remote on. Has a name, "Work PC" by default.
 - **Device**: a phone, tablet, browser or second computer paired with a host.
 - **Pairing code**: eight characters, `K7QM-4XPD`, valid for five minutes, with five tries
   before it is burned, shown with a QR pattern of the computer's address. The owner then
@@ -83,7 +83,7 @@ separate, explicit choice.
 1. **Off by default.** Nothing listens or is published on the tailnet until the person turns
    Remote on and confirms a plain-language dialog.
 2. **One switch to stop.** Turning Remote off disconnects every device immediately, stops the
-   listener and removes Bitbots' entry from `tailscale serve`, and nothing else. Paired devices
+   listener and removes Retinue's entry from `tailscale serve`, and nothing else. Paired devices
    are kept so turning it back on is quick.
 3. **A prompt is code execution.** The dialog and the Safety page say so in those terms.
 4. **Never silent.** A remote prompt appears in the conversation on the host with its source
@@ -98,12 +98,12 @@ separate, explicit choice.
 
 ## 6a. Wording
 
-The characters are "bots" in the Bitbots look and "blobs" in Blobots; Remote follows the
-look chosen on the host. Copy in this folder says "bot" unless it quotes the Blobots look.
+The characters are "bots" in the Retinue look and "blobs" in Stone; Remote follows the
+look chosen on the host. Copy in this folder says "bot" unless it quotes the Stone look.
 
 ## 7. Screens
 
-Host (desktop): **Settings > Remote**. Device: **Bitbots Remote** (`/remote.html`). Every
+Host (desktop): **Settings > Remote**. Device: **Retinue Remote** (`/remote.html`). Every
 state is described in [UX_FLOWS.md](UX_FLOWS.md) and exists in the web preview.
 
 ## 8. Success measures (for when it is built)

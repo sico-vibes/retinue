@@ -66,6 +66,6 @@ tests. The Director renders it.
 
 ## Gates
 
-`npm run typecheck`, `npm run test`; `cargo test -p bloblex-storage -p
-bloblex-daemon` and clippy only if you touched Rust. Never commit. Leave the diff
+`npm run typecheck`, `npm run test`; `cargo test -p retinue-storage -p
+retinue-daemon` and clippy only if you touched Rust. Never commit. Leave the diff
 and write `docs/history/fix-15/report.md` (one line per section, call sites, anything left).

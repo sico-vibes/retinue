@@ -539,256 +539,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bloblex-adapter-acp"
-version = "0.1.0-beta.50"
-dependencies = [
- "async-trait",
- "base64 0.22.1",
- "bloblex-agent-core",
- "bloblex-process",
- "bloblex-runtime",
- "chrono",
- "futures-util",
- "serde_json",
- "tokio",
- "tracing",
- "uuid",
-]
-
-[[package]]
-name = "bloblex-adapter-claude"
-version = "0.1.0-beta.50"
-dependencies = [
- "async-trait",
- "bloblex-agent-core",
- "bloblex-process",
- "chrono",
- "serde_json",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "bloblex-adapter-codex"
-version = "0.1.0-beta.50"
-dependencies = [
- "async-trait",
- "bloblex-agent-core",
- "bloblex-process",
- "chrono",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "bloblex-adapter-opencode"
-version = "0.1.0-beta.50"
-dependencies = [
- "bloblex-adapter-acp",
- "bloblex-agent-core",
-]
-
-[[package]]
-name = "bloblex-agent-core"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "tokio",
-]
-
-[[package]]
-name = "bloblex-budget"
-version = "0.1.0-beta.50"
-dependencies = [
- "serde",
- "thiserror 2.0.21",
-]
-
-[[package]]
-name = "bloblex-daemon"
-version = "0.1.0-beta.50"
-dependencies = [
- "aes-gcm",
- "argon2",
- "async-trait",
- "axum",
- "base64 0.22.1",
- "bloblex-adapter-acp",
- "bloblex-adapter-claude",
- "bloblex-adapter-codex",
- "bloblex-agent-core",
- "bloblex-process",
- "bloblex-protocol",
- "bloblex-runtime",
- "bloblex-security",
- "bloblex-storage",
- "bloblex-usage",
- "chrono",
- "futures-util",
- "hkdf",
- "hmac",
- "if-addrs",
- "igd-next",
- "p256",
- "rand 0.9.5",
- "rcgen",
- "regex",
- "reqwest 0.12.28",
- "rusqlite",
- "rustls",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "sha2",
- "subtle",
- "tokio",
- "tokio-rustls",
- "tokio-tungstenite 0.27.0",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "uuid",
- "webpki-roots 1.0.9",
- "windows-sys 0.61.2",
- "zeroize",
- "zip 2.4.2",
-]
-
-[[package]]
-name = "bloblex-desktop"
-version = "0.1.0-beta.50"
-dependencies = [
- "arboard",
- "base64 0.22.1",
- "bloblex-speech",
- "chrono",
- "futures-util",
- "image",
- "portable-pty",
- "reqwest 0.12.28",
- "semver",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-autostart",
- "tauri-plugin-dialog",
- "tauri-plugin-global-shortcut",
- "tauri-plugin-notification",
- "tauri-plugin-opener",
- "tauri-plugin-process",
- "tauri-plugin-single-instance",
- "tauri-plugin-updater",
- "tauri-plugin-window-state",
- "tokio",
- "tokio-tungstenite 0.27.0",
- "url",
- "uuid",
- "window-vibrancy",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "bloblex-hook"
-version = "0.1.0-beta.50"
-dependencies = [
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "bloblex-process"
-version = "0.1.0-beta.50"
-dependencies = [
- "tokio",
- "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "bloblex-protocol"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "bloblex-runtime"
-version = "0.1.0-beta.50"
-dependencies = [
- "bloblex-process",
- "bloblex-protocol",
- "rusqlite",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "bloblex-security"
-version = "0.1.0-beta.50"
-dependencies = [
- "rand 0.9.5",
- "subtle",
- "tokio",
-]
-
-[[package]]
-name = "bloblex-speech"
-version = "0.1.0-beta.50"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "cpal",
- "reqwest 0.12.28",
- "rustls",
- "serde",
- "serde_json",
- "sha2",
- "sherpa-onnx",
- "tempfile",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "webpki-roots 0.26.11",
- "zeroize",
-]
-
-[[package]]
-name = "bloblex-storage"
-version = "0.1.0-beta.50"
-dependencies = [
- "bloblex-usage",
- "chrono",
- "chrono-tz",
- "rusqlite",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "uuid",
-]
-
-[[package]]
-name = "bloblex-usage"
-version = "0.1.0-beta.50"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "bloblex-wsl"
-version = "0.1.0-beta.50"
-dependencies = [
- "tokio",
-]
-
-[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4806,6 +4556,256 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
+]
+
+[[package]]
+name = "retinue-adapter-acp"
+version = "0.1.0-beta.50"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "futures-util",
+ "retinue-agent-core",
+ "retinue-process",
+ "retinue-runtime",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "retinue-adapter-claude"
+version = "0.1.0-beta.50"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "retinue-agent-core",
+ "retinue-process",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "retinue-adapter-codex"
+version = "0.1.0-beta.50"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "retinue-agent-core",
+ "retinue-process",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "retinue-adapter-opencode"
+version = "0.1.0-beta.50"
+dependencies = [
+ "retinue-adapter-acp",
+ "retinue-agent-core",
+]
+
+[[package]]
+name = "retinue-agent-core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
+name = "retinue-budget"
+version = "0.1.0-beta.50"
+dependencies = [
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "retinue-daemon"
+version = "0.1.0-beta.50"
+dependencies = [
+ "aes-gcm",
+ "argon2",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "chrono",
+ "futures-util",
+ "hkdf",
+ "hmac",
+ "if-addrs",
+ "igd-next",
+ "p256",
+ "rand 0.9.5",
+ "rcgen",
+ "regex",
+ "reqwest 0.12.28",
+ "retinue-adapter-acp",
+ "retinue-adapter-claude",
+ "retinue-adapter-codex",
+ "retinue-agent-core",
+ "retinue-process",
+ "retinue-protocol",
+ "retinue-runtime",
+ "retinue-security",
+ "retinue-storage",
+ "retinue-usage",
+ "rusqlite",
+ "rustls",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
+ "sha2",
+ "subtle",
+ "tokio",
+ "tokio-rustls",
+ "tokio-tungstenite 0.27.0",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "uuid",
+ "webpki-roots 1.0.9",
+ "windows-sys 0.61.2",
+ "zeroize",
+ "zip 2.4.2",
+]
+
+[[package]]
+name = "retinue-desktop"
+version = "0.1.0-beta.50"
+dependencies = [
+ "arboard",
+ "base64 0.22.1",
+ "chrono",
+ "futures-util",
+ "image",
+ "portable-pty",
+ "reqwest 0.12.28",
+ "retinue-speech",
+ "semver",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-autostart",
+ "tauri-plugin-dialog",
+ "tauri-plugin-global-shortcut",
+ "tauri-plugin-notification",
+ "tauri-plugin-opener",
+ "tauri-plugin-process",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-updater",
+ "tauri-plugin-window-state",
+ "tokio",
+ "tokio-tungstenite 0.27.0",
+ "url",
+ "uuid",
+ "window-vibrancy",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "retinue-hook"
+version = "0.1.0-beta.50"
+dependencies = [
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "retinue-process"
+version = "0.1.0-beta.50"
+dependencies = [
+ "tokio",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "retinue-protocol"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "retinue-runtime"
+version = "0.1.0-beta.50"
+dependencies = [
+ "retinue-process",
+ "retinue-protocol",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "retinue-security"
+version = "0.1.0-beta.50"
+dependencies = [
+ "rand 0.9.5",
+ "subtle",
+ "tokio",
+]
+
+[[package]]
+name = "retinue-speech"
+version = "0.1.0-beta.50"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "cpal",
+ "reqwest 0.12.28",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sherpa-onnx",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "webpki-roots 0.26.11",
+ "zeroize",
+]
+
+[[package]]
+name = "retinue-storage"
+version = "0.1.0-beta.50"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "retinue-usage",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "uuid",
+]
+
+[[package]]
+name = "retinue-usage"
+version = "0.1.0-beta.50"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "retinue-wsl"
+version = "0.1.0-beta.50"
+dependencies = [
+ "tokio",
 ]
 
 [[package]]

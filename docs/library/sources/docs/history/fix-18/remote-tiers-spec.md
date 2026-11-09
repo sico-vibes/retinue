@@ -21,7 +21,7 @@ export function ruleFor(method: string): MethodRule | null
 export function authorizeRemoteCall(input: { tier: RemoteTier; approvalsFromRemote: boolean; method: string; params?: unknown }): { allowed: true } | { allowed: false; reason: string }
 ```
 
-Classification (from the exploration of `crates/bloblex-daemon/src/main.rs` dispatch):
+Classification (from the exploration of `crates/retinue-daemon/src/main.rs` dispatch):
 
 - **read** (viewer and up): `app.snapshot`, `events.replay`, `daemon.health`, `session.list`,
   `session.get`, `runtime.list`, `runtime.capabilities`, `runtime.models`, `exec.snapshot.*`,
@@ -60,7 +60,7 @@ Test with a realistic fixture.
 
 ## 4. Parity test (the important one)
 
-`remoteTiers.parity.test.ts` reads `crates/bloblex-daemon/src/main.rs` with `fs`, extracts every
+`remoteTiers.parity.test.ts` reads `crates/retinue-daemon/src/main.rs` with `fs`, extracts every
 dispatch arm method string (arms like `"session.prompt" =>` inside the dispatch function, also
 `a | b =>` alternations and prefix guards such as `m if m.starts_with("mcp.")`; read the code to
 get the extraction right), and asserts every method appears in `METHOD_RULES` (or is covered by a

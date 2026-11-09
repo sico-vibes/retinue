@@ -91,7 +91,7 @@ const TAILSCALE_FIX: Record<Exclude<RemoteTailscaleState, 'ready'>, string> = {
   logged_out: 'Tailscale is not signed in. Sign in to Tailscale on this computer, then turn Remote on again.',
   https_disabled: 'HTTPS certificates are off for your tailnet. Turn them on in the Tailscale admin settings, then turn Remote on again.',
   port_in_use: 'Tailscale cannot publish this computer: ports 443 and 8443 are both in use. Free one of them, then turn Remote on again.',
-  funnel_on: 'Funnel is on for the port Bitbots needs. Turn Funnel off in Tailscale, then turn Remote on again.',
+  funnel_on: 'Funnel is on for the port Retinue needs. Turn Funnel off in Tailscale, then turn Remote on again.',
 }
 
 /** Unambiguous pairing alphabet: no 0/O and no 1/I. */

@@ -33,7 +33,7 @@ New event in `AgentEvent`: `ImageRequested { tool_call_id, stem: Option<String>,
 - If a synthetic notice does reach ACP with metadata source `experimental_image_generate`, use its exact file or failure. Don't depend on it.
 - Between turns: the file can arrive after the turn ends, so nothing here may depend on an active turn.
 
-**Find out what ACP really sends.** Use `crates/bloblex-adapter-acp/src/bin/fake_acp_peer.rs` for tests. For evidence, check with `opencode models --verbose` whether any connected provider has an image model. If a free one exists, do one real run through ACP and record the exact messages in your report, with no secrets. If only paid ones exist, or none, don't spend anything: say so, and I'll ask the owner.
+**Find out what ACP really sends.** Use `crates/retinue-adapter-acp/src/bin/fake_acp_peer.rs` for tests. For evidence, check with `opencode models --verbose` whether any connected provider has an image model. If a free one exists, do one real run through ACP and record the exact messages in your report, with no secrets. If only paid ones exist, or none, don't spend anything: say so, and I'll ask the owner.
 
 ## 3. Codex
 
@@ -87,14 +87,14 @@ With `mediaId`:
 - No credentials, message text, image bytes or base64 in logs. Paths in logs are not allowed either. Keep `every_daemon_log_call_site_is_a_fixed_message` true.
 - Every new RPC and event gets a `tiers.json` row (`never`, `drop`). The parity tests must pass.
 - Don't edit the skill files: put proposed text in your report. Do update `docs/ipc-contract.md`.
-- `crates/bloblex-storage/src/lib.rs` contains one NUL byte: edit it only with your edit tool. No shell heredocs for anything with backslashes. New storage functions can go in `crates/bloblex-storage/src/phase1b.rs` or a new module.
-- Another lane is changing `request()` in `crates/bloblex-adapter-acp/src/lib.rs` to remove a 30-minute timer. Don't touch that function.
+- `crates/retinue-storage/src/lib.rs` contains one NUL byte: edit it only with your edit tool. No shell heredocs for anything with backslashes. New storage functions can go in `crates/retinue-storage/src/phase1b.rs` or a new module.
+- Another lane is changing `request()` in `crates/retinue-adapter-acp/src/lib.rs` to remove a 30-minute timer. Don't touch that function.
 
 ## Gates
 
-From PowerShell in your worktree, with `BITBOTS_HOOK_BRIDGE` and `BITBOTS_REMOTE_WEB_DIR` removed for the session:
-- `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`
+From PowerShell in your worktree, with `RETINUE_HOOK_BRIDGE` and `RETINUE_REMOTE_WEB_DIR` removed for the session:
+- `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`
 
 Send output to a log file and read the summary lines. Known flaky test: `a_crash_after_a_finished_turn_does_not_fail_that_session`.
 

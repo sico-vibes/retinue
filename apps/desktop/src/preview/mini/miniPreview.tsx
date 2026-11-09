@@ -169,7 +169,7 @@ function Sidebar({ light }: { light: boolean }) {
   const pick = (id: string) => { act.select(id); act.setScreen('chat') }
   return <aside className="sidebar">
     <div className="side-head">
-      <span className="side-title">Bitbots</span>
+      <span className="side-title">Retinue</span>
       <button className="ghost-icon" aria-label="Search"><Search size={15} /></button>
       <button className="ghost-icon" aria-label="New chat"><SquarePen size={15} /></button>
     </div>
@@ -294,7 +294,7 @@ function Chat({ light }: { light: boolean }) {
 
 function CompanionDesk({ light }: { light: boolean }) {
   return <div className={`companion-desk c-${variant.companion}`}>
-    <p className="desk-hint">The companion floats over other apps. Click an employee to reply without opening Bitbots.</p>
+    <p className="desk-hint">The companion floats over other apps. Click an employee to reply without opening Retinue.</p>
     <Companion light={light} />
   </div>
 }
@@ -316,7 +316,7 @@ function Companion({ light }: { light: boolean }) {
   </form>
 
   if (variant.companion === 'stack') return <div className={`companion comp-stack${collapsed ? ' collapsed' : ''}`}>
-    <div className="comp-head"><b>Bitbots</b><span>{active.length} active</span><button className="ghost-icon" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? <Plus size={14} /> : <Minus size={14} />}</button></div>
+    <div className="comp-head"><b>Retinue</b><span>{active.length} active</span><button className="ghost-icon" onClick={() => setCollapsed(!collapsed)} aria-label={collapsed ? 'Expand' : 'Collapse'}>{collapsed ? <Plus size={14} /> : <Minus size={14} />}</button></div>
     {collapsed
       ? <div className="comp-mini">{active.map((bot) => <span key={bot.id} className="comp-mini-item" title={`${bot.name}: ${STATUS_WORD[bot.status]}`}><Aura bot={bot} status={bot.status} selected={false} kind={variant.aura} /><Logo bot={bot} size={16} mode={state.logoMode} light={light} /></span>)}</div>
       : bots.map((bot) => <div key={bot.id} className={`comp-row${open === bot.id ? ' open' : ''}`}>

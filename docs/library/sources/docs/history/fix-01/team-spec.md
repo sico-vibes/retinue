@@ -1,11 +1,11 @@
-# Fix 1C spec: leader-only blob creation over the Bitbots MCP bridge, workflows default on, one reaction per message
+# Fix 1C spec: leader-only blob creation over the Retinue MCP bridge, workflows default on, one reaction per message
 
-> **What this is:** Spec for Fix 1C: leader-only blob creation over the Bitbots MCP bridge, with workflows on by default.
+> **What this is:** Spec for Fix 1C: leader-only blob creation over the Retinue MCP bridge, with workflows on by default.
 > **Status:** superseded in part by [d1-manager-spec.md](../fix-36/d1-manager-spec.md)
 > **Last updated:** 2026-10-15
 
-Owner: OpenCode lane (backend only). Reviewer: Director. **Do not touch `apps/desktop/src`** (Director builds the UI). Another lane edits `crates/bloblex-adapter-acp` and OpenCode catalog bits of `main.rs` in parallel: do not touch the adapter crates or `fetch_model_catalog`/`runtime_capabilities`.
-Scope: `crates/bloblex-daemon/src/team.rs`, `crates/bloblex-daemon/src/main.rs` (only the places named below), `crates/bloblex-storage/src/lib.rs` (reaction function only, plus anything blob creation needs), tests, `docs/`.
+Owner: OpenCode lane (backend only). Reviewer: Director. **Do not touch `apps/desktop/src`** (Director builds the UI). Another lane edits `crates/retinue-adapter-acp` and OpenCode catalog bits of `main.rs` in parallel: do not touch the adapter crates or `fetch_model_catalog`/`runtime_capabilities`.
+Scope: `crates/retinue-daemon/src/team.rs`, `crates/retinue-daemon/src/main.rs` (only the places named below), `crates/retinue-storage/src/lib.rs` (reaction function only, plus anything blob creation needs), tests, `docs/`.
 
 ## Rules
 - Never run `git commit`, `git push`, `git checkout`, `git stash`. Leave changes uncommitted. Work only inside this worktree; never read or list paths outside it.
@@ -22,7 +22,7 @@ Add three tools to the app-owned bridge (`team.rs` `tools()` and `mcp_rpc`), **l
 - `update_blob`: input `{ blob (name or id), role?, description?, instructions? }`, leader only, cannot change leader flag, runtime, mode, project, archive or delete. Same size limits.
 - No tool to delete or archive blobs is offered. 
 
-Permissions: these tools are covered by the existing `mcp__bloblex__` allow (`is_team_tool_permission`); leave it. Add tests that a non-leader gets no such tools in `mcp.tools.list` and that calling them returns `isError` with the text in section 2.
+Permissions: these tools are covered by the existing `mcp__retinue__` allow (`is_team_tool_permission`); leave it. Add tests that a non-leader gets no such tools in `mcp.tools.list` and that calling them returns `isError` with the text in section 2.
 
 ## 2. Non-leaders know their limits and tag the leader
 `runtime_instructions` (team.rs): 
@@ -35,13 +35,13 @@ Today `claude.enableWorkflows` is read as `settings["claude.enableWorkflows"] ==
 (The UI default is changed by the Director; do not touch it.)
 
 ## 4. One reaction per message
-`Storage::toggle_message_reaction` (`crates/bloblex-storage/src/lib.rs` ~L2704) currently allows several emoji per message. New semantics: **at most one reaction per message.** Toggling the emoji that is already set removes it; toggling a different emoji replaces the previous one (delete all existing rows for that message, insert the new one) in the same transaction. The returned/broadcast payload keeps `{sessionId,messageId,emoji,selected,reactions}` with `reactions` containing at most one entry. Existing messages that already have several reactions keep them until the next toggle (no data migration); toggling then collapses to the single chosen one. Update `message_reaction_rpc_persists_and_broadcasts_only_scoped_user_state` and storage tests; add one for replacement and one for removal of the sole reaction.
+`Storage::toggle_message_reaction` (`crates/retinue-storage/src/lib.rs` ~L2704) currently allows several emoji per message. New semantics: **at most one reaction per message.** Toggling the emoji that is already set removes it; toggling a different emoji replaces the previous one (delete all existing rows for that message, insert the new one) in the same transaction. The returned/broadcast payload keeps `{sessionId,messageId,emoji,selected,reactions}` with `reactions` containing at most one entry. Existing messages that already have several reactions keep them until the next toggle (no data migration); toggling then collapses to the single chosen one. Update `message_reaction_rpc_persists_and_broadcasts_only_scoped_user_state` and storage tests; add one for replacement and one for removal of the sole reaction.
 
 ## Gates (run and report real output)
 ```
-CARGO_TARGET_DIR=D:/b-int cargo test -p bloblex-daemon
-CARGO_TARGET_DIR=D:/b-int cargo test -p bloblex-storage
-CARGO_TARGET_DIR=D:/b-int cargo test --workspace --exclude bloblex-desktop
+CARGO_TARGET_DIR=D:/b-int cargo test -p retinue-daemon
+CARGO_TARGET_DIR=D:/b-int cargo test -p retinue-storage
+CARGO_TARGET_DIR=D:/b-int cargo test --workspace --exclude retinue-desktop
 ```
 
 ## Final report (plain text, last message)

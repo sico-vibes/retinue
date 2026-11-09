@@ -14,7 +14,7 @@ machine. Every cause below has a reproduction.
 
 ### C1 — `require_origin` refused every `GET`, so the approval poll never ran (server)
 
-`crates/bloblex-daemon/src/remote/web.rs` required an `Origin` header on **every** `/api/*`
+`crates/retinue-daemon/src/remote/web.rs` required an `Origin` header on **every** `/api/*`
 request. Per the Fetch standard a browser sends **no** `Origin` on a same-origin `GET`/`HEAD`,
 so the phone's `GET /api/pair` (the approval poll), `GET /api/me` and the `/api/events`
 handshake-time fetches were all refused with 403 before any handler ran. This alone produces
@@ -64,9 +64,9 @@ $ tailscale serve --https=8443 off
 error: failed to remove web serve: handler does not exist   (exit 1, inert port)
 ```
 
-So Bitbots printed "The installed Tailscale CLI does not document turning one serve handler off,
-so Bitbots left it alone." and left the handler in place (symptom 3). Note that
-`tailscale serve status --json` on this machine shows the stale handler Bitbots added:
+So Retinue printed "The installed Tailscale CLI does not document turning one serve handler off,
+so Retinue left it alone." and left the handler in place (symptom 3). Note that
+`tailscale serve status --json` on this machine shows the stale handler Retinue added:
 `desktop-puf7ihb.tail64dae5.ts.net:443 → / → http://127.0.0.1:48620`.
 
 ### C6 — the origin refusal was mis-coded as `unauthorized` (server/client)
@@ -79,8 +79,8 @@ the brief's "This page must be opened from the address shown on the computer." w
 
 | # | Fix | Where |
 |---|---|---|
-| C1,C6 | Origin policy rewritten: a **safe** `GET`/`HEAD` may omit `Origin` (present ⇒ must match); `Sec-Fetch-Site` must be `same-origin`/`none`; **state-changing** methods and the **WebSocket upgrade** still require a matching `Origin`; cross-site/same-site refused; Native `Host` still checked. New code `forbidden_origin`. | `crates/bloblex-daemon/src/remote/web.rs:107-160` |
-| C5 | Attempt `serve --https=<port> off` directly; treat "handler does not exist" as already-removed; warn only on a real failure. Help-text gate removed. | `crates/bloblex-daemon/src/remote/tailscale.rs:427-460`, `crates/bloblex-daemon/src/remote/mod.rs:834-848` |
+| C1,C6 | Origin policy rewritten: a **safe** `GET`/`HEAD` may omit `Origin` (present ⇒ must match); `Sec-Fetch-Site` must be `same-origin`/`none`; **state-changing** methods and the **WebSocket upgrade** still require a matching `Origin`; cross-site/same-site refused; Native `Host` still checked. New code `forbidden_origin`. | `crates/retinue-daemon/src/remote/web.rs:107-160` |
+| C5 | Attempt `serve --https=<port> off` directly; treat "handler does not exist" as already-removed; warn only on a real failure. Help-text gate removed. | `crates/retinue-daemon/src/remote/tailscale.rs:427-460`, `crates/retinue-daemon/src/remote/mod.rs:834-848` |
 | C2 | `/api/me` is exempt from the sign-out latch; a successful call clears the latch (`leaveSignedOut`). | `apps/desktop/src/remote/remoteTransport.ts:307-343`, `:376-385` |
 | C3 | `check()` consults `pairStatus()` only on an explicit not-paired answer; only `pending`/`approved` move forward, and a failed probe never demotes a waiting screen. A `forbidden_origin` refusal shows the address words. | `apps/desktop/src/remote/RemoteApp.tsx:135-169` |
 | C4 | Clear `#pair=` **before** the request and map the failure by code (`connectProblem`). | `apps/desktop/src/remote/RemoteApp.tsx:82-93`, `:212-226` |
@@ -91,7 +91,7 @@ checks); `docs/remote/THREAT_MODEL.md` T9, N6 and the §8 checklist line.
 
 ## Tests
 
-**Browser-like end-to-end (Rust), `crates/bloblex-daemon/src/remote/tests.rs`.** A `Browser` +
+**Browser-like end-to-end (Rust), `crates/retinue-daemon/src/remote/tests.rs`.** A `Browser` +
 `BrowserJar` send headers exactly as a browser does: a cookie jar that keeps what the host sets,
 **no `Origin` on `GET`**, `Origin` on `POST` and the WebSocket handshake, `Sec-Fetch-Site:
 same-origin`.
@@ -123,9 +123,9 @@ loop.
 
 ## Gates (all green)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast` — all
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast` — all
   suites `ok` (daemon: 346 passed, incl. all 73 `remote::tests`).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
 - `apps/desktop`: `npx tsc -b` clean; `npx vitest run --maxWorkers=3` — 162 files, 1143 tests
   passed; `npm run build` and `npm run build:remote` succeed.
 

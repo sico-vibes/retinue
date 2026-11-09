@@ -3,7 +3,7 @@
 //!
 //! Sessions live in memory only: no transcript is written anywhere. A shell is
 //! only ever started in a folder that resolves inside the conversation's project,
-//! only the three fixed shells are offered, and no Bitbots secret reaches a
+//! only the three fixed shells are offered, and no Retinue secret reaches a
 //! shell's environment. Terminal output is never logged.
 
 use std::collections::HashMap;
@@ -132,12 +132,12 @@ pub fn user_path(path: &Path) -> Result<PathBuf, String> {
     Ok(path.to_path_buf())
 }
 
-/// No Bitbots secret may reach a user shell's environment.
+/// No Retinue secret may reach a user shell's environment.
 fn sanitize(command: &mut CommandBuilder) {
     for (name, _) in std::env::vars_os() {
         let name = name.to_string_lossy();
         let upper = name.to_ascii_uppercase();
-        if upper.starts_with("BLOBLEX_") || upper.starts_with("BITBOTS_") || upper == "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS" {
+        if upper.starts_with("RETINUE_") || upper.starts_with("RETINUE_") || upper == "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS" {
             command.env_remove(name.as_ref());
         }
     }

@@ -6,7 +6,7 @@
 
 Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort. Director reviews, runs the gates and commits. **Do not run `git commit`.** Work only in this worktree.
 
-Read first: `AGENTS.md`, then `crates/bloblex-daemon/src/main.rs` around `MODEL_CATALOG_CACHE` (line ~50), `catalog_key`, `catalog_probe_args`, `fetch_model_catalog`, `fetch_model_catalog_for`, `runtime_models`, `validate_agent_catalog`, `validate_exec_catalog`, `opencode_thinking_support`, `resolve_session_model_lock`, `resume_session`, the `runtime.refresh` dispatch arm, and `run()`. Plan: `C:\Users\Sico Vibes\.claude\plans\robust-dazzling-taco.md`, Part 3 "WP1".
+Read first: `AGENTS.md`, then `crates/retinue-daemon/src/main.rs` around `MODEL_CATALOG_CACHE` (line ~50), `catalog_key`, `catalog_probe_args`, `fetch_model_catalog`, `fetch_model_catalog_for`, `runtime_models`, `validate_agent_catalog`, `validate_exec_catalog`, `opencode_thinking_support`, `resolve_session_model_lock`, `resume_session`, the `runtime.refresh` dispatch arm, and `run()`. Plan: `C:\Users\Sico Vibes\.claude\plans\robust-dazzling-taco.md`, Part 3 "WP1".
 
 ## Why
 
@@ -14,10 +14,10 @@ Today every cache miss starts a CLI (Claude 2-8 s, Codex app-server 5 s, OpenCod
 
 ## Design
 
-Move the catalog code into a new module `crates/bloblex-daemon/src/catalog.rs` and hold the cache in `AppState` (`st.catalog: Arc<CatalogCache>`), replacing the `MODEL_CATALOG_CACHE` static. Update the test `state()` helper accordingly.
+Move the catalog code into a new module `crates/retinue-daemon/src/catalog.rs` and hold the cache in `AppState` (`st.catalog: Arc<CatalogCache>`), replacing the `MODEL_CATALOG_CACHE` static. Update the test `state()` helper accordingly.
 
 ### Key
-`catalog_key(runtime)` + `|claude-workflows=<bool>` + **only for provider `claude`** `|model=<hint>`. Claude's `get_settings` reports `ultracodeAvailable` per model (`crates/bloblex-adapter-claude/src/lib.rs` ~974-1000), so Claude keeps the hint; Codex and OpenCode drop it.
+`catalog_key(runtime)` + `|claude-workflows=<bool>` + **only for provider `claude`** `|model=<hint>`. Claude's `get_settings` reports `ultracodeAvailable` per model (`crates/retinue-adapter-claude/src/lib.rs` ~974-1000), so Claude keeps the hint; Codex and OpenCode drop it.
 
 ### Entries and lifetimes
 - `Entry { fetched: Instant, at: DateTime<Utc> (or the catalog's fetchedAt string), value: Value, persisted: bool }`.
@@ -42,7 +42,7 @@ Move the catalog code into a new module `crates/bloblex-daemon/src/catalog.rs` a
   Keep the existing rule in `validate_exec_catalog` ("Choose a concrete model before sending a prompt.") working with a cached validated catalog.
 
 ### Persistence
-Add `ensure_model_catalog_schema` in `crates/bloblex-storage/src/lib.rs`, called with the other `ensure_*` functions (no `user_version` bump):
+Add `ensure_model_catalog_schema` in `crates/retinue-storage/src/lib.rs`, called with the other `ensure_*` functions (no `user_version` bump):
 
 ```sql
 CREATE TABLE IF NOT EXISTS model_catalog_cache(
@@ -61,7 +61,7 @@ On an in-memory miss, look in the database; a database hit counts as **stale** (
 ### Boot
 In `run()`:
 1. Before discovery finishes, load `st.runtimes` from the saved `runtimes` rows so a send right after boot does not fail with "runtime is not installed". `validate_spawn_target` still guards a missing executable.
-2. After `refresh_runtime_discovery` completes, run `catalog::prewarm_all(&st)` in the background: every runtime whose status is usable (check the exact status/auth strings in `bloblex-runtime` and the UI's `runtimeUsable`) and not signed out, **two at a time**, with each provider's base key (Claude: the workflows setting with hint `sonnet`, as today's default).
+2. After `refresh_runtime_discovery` completes, run `catalog::prewarm_all(&st)` in the background: every runtime whose status is usable (check the exact status/auth strings in `retinue-runtime` and the UI's `runtimeUsable`) and not signed out, **two at a time**, with each provider's base key (Claude: the workflows setting with hint `sonnet`, as today's default).
 3. Emit `runtime.models.changed { runtimeId }` only when a refreshed list differs from the previous one (compare the model ids and their `supportedThinking`/`serviceTiers`).
 
 ### Invalidation
@@ -93,8 +93,8 @@ Existing tests that relied on the 60 s cache or on per-model Codex/OpenCode keys
 - Log catalog contents beyond counts.
 
 ## Gates (run them; paste summaries into the report)
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` (report pre-existing warnings separately)
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` (report pre-existing warnings separately)
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote`
 
 Set `CARGO_TARGET_DIR` to the path the brief gives you.

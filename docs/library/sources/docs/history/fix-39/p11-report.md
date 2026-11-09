@@ -16,13 +16,13 @@ Two layers, as the decision asks.
 1. **Adapter layer** — a test-only recorder proxies a real CLI, records a sanitised
    wire transcript, and an offline test replays that transcript through the **real
    adapter** on every gate (`fake-* --replay`, the existing wire-fixture player).
-2. **Daemon layer** — a gated suite starts the real `bitbotsd`, which discovers the
+2. **Daemon layer** — a gated suite starts the real `retinued`, which discovers the
    installed CLIs, and drives the decided scenarios over the authenticated loopback
    RPC, recording a sanitised summary per provider.
 
 ### 1. The recorder helper (test-only)
 
-`crates/bloblex-adapter-{claude,codex,acp}/src/bin/{claude,codex,acp}_cli_recorder.rs`
+`crates/retinue-adapter-{claude,codex,acp}/src/bin/{claude,codex,acp}_cli_recorder.rs`
 (identical copies, the established `wire_support` copy pattern; `[[bin]]` `test = false`
 added to each `Cargo.toml`).
 
@@ -30,7 +30,7 @@ added to each `Cargo.toml`).
   and forwards everything after `--` to the real CLI. It spawns the CLI with piped
   stdin/stdout, forwards each line unchanged in both directions, and records it through
   the shared `wire_replay` module (adapter→CLI as `in`, CLI→adapter as `out`).
-- Only Bitbots' own data moves to temporary folders; the CLI keeps its own sign-in and
+- Only Retinue's own data moves to temporary folders; the CLI keeps its own sign-in and
   is never read, copied or printed.
 - `wire_replay::init_live` (in all three `src/bin/wire_support/wire_replay.rs`, line 70)
   records a header with `"synthesised": false` instead of `true`, so a real capture is
@@ -40,7 +40,7 @@ added to each `Cargo.toml`).
 
 ### 2. Adapter live + replay suites
 
-`crates/bloblex-adapter-{claude,codex,acp}/tests/live_suite.rs` (`mod live;`) and
+`crates/retinue-adapter-{claude,codex,acp}/tests/live_suite.rs` (`mod live;`) and
 `tests/live/mod.rs`.
 
 - `two_turn` (claude:203, codex:200, acp:203) is the scenario both layers assert:
@@ -52,7 +52,7 @@ added to each `Cargo.toml`).
 - `detect_cli` (claude:71, codex:67, acp:70) resolves the installed CLI through
   `where.exe`, because npm installs `opencode.cmd`/`codex.cmd` and a bare name does not
   reach a `.cmd` from `CreateProcess`.
-- **Live (gated by `BITBOTS_LIVE_TESTS=1`)** — `claude_live_records_a_two_turn_transcript`
+- **Live (gated by `RETINUE_LIVE_TESTS=1`)** — `claude_live_records_a_two_turn_transcript`
   (342), `claude_live_permission_change_and_steer_are_reported` (372); codex equivalents
   at 335/360; acp equivalents at 338/365. A turn whose raw provider error names a usage
   limit, rate limit, quota or unavailable account is printed as a **reported skip with
@@ -66,9 +66,9 @@ added to each `Cargo.toml`).
 
 ### 3. Daemon-path suite
 
-`crates/bloblex-daemon/tests/live_cli.rs`.
+`crates/retinue-daemon/tests/live_cli.rs`.
 
-- `Daemon` (55) starts/stops `bitbotsd` with `BLOBLEX_DB_PATH` in a fresh temp folder and
+- `Daemon` (55) starts/stops `retinued` with `RETINUE_DB_PATH` in a fresh temp folder and
   speaks the authenticated loopback RPC (the `daemon_smoke.rs` pattern).
 - `run_provider` (242) waits for background discovery, creates a session on a temporary
   project folder, selects the decision's cheapest model through `session.model.update`
@@ -84,15 +84,15 @@ added to each `Cargo.toml`).
   recorded summary is missing its provider/scenario keys or contains a path, token, id,
   prompt or message field.
 
-## Fixtures recorded from the live run (`BITBOTS_LIVE_TESTS=1`)
+## Fixtures recorded from the live run (`RETINUE_LIVE_TESTS=1`)
 
 | file | source CLI | header | proves |
 |---|---|---|---|
-| `bloblex-adapter-claude/tests/live/fixtures/claude-two-turn.ndjson` | claude 2.1.302 | `synthesised:false` | `claude_replays_recorded_live_transcripts` |
-| `bloblex-adapter-codex/tests/live/fixtures/codex-two-turn.ndjson` | codex-cli 0.162.1 | `synthesised:false` | `codex_replays_recorded_live_transcripts` |
-| `bloblex-adapter-codex/tests/live/fixtures/codex-usage-limit.ndjson` | codex-cli 0.162.1 | `synthesised:false` | limit replays as a clean reported state |
-| `bloblex-adapter-acp/tests/live/fixtures/opencode-two-turn.ndjson` | opencode 2.0.28 | `synthesised:false` | `opencode_replays_recorded_live_transcripts` |
-| `bloblex-daemon/tests/live/fixtures/daemon-{claude,codex,opencode}.json` | live daemon |—| sanitised summary integrity |
+| `retinue-adapter-claude/tests/live/fixtures/claude-two-turn.ndjson` | claude 2.1.302 | `synthesised:false` | `claude_replays_recorded_live_transcripts` |
+| `retinue-adapter-codex/tests/live/fixtures/codex-two-turn.ndjson` | codex-cli 0.162.1 | `synthesised:false` | `codex_replays_recorded_live_transcripts` |
+| `retinue-adapter-codex/tests/live/fixtures/codex-usage-limit.ndjson` | codex-cli 0.162.1 | `synthesised:false` | limit replays as a clean reported state |
+| `retinue-adapter-acp/tests/live/fixtures/opencode-two-turn.ndjson` | opencode 2.0.28 | `synthesised:false` | `opencode_replays_recorded_live_transcripts` |
+| `retinue-daemon/tests/live/fixtures/daemon-{claude,codex,opencode}.json` | live daemon |—| sanitised summary integrity |
 
 All transcripts are sanitised by the existing recorder masking (volatile keys, UUIDs and
 absolute paths replaced; the two turns' prompt and answer text remain, which is test
@@ -130,9 +130,9 @@ offline replay today; the earlier run is preserved as the usage-limit fixture.
 
 ## Gates (final tree)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
   — **all targets ok, 0 failed** (new tests included; live tests skip without the env var).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — **clean**.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — **clean**.
   (`cargo clippy --tests` on the daemon also reports a pre-existing
   `clippy::zombie-processes` in `tests/parent_watchdog.rs:14`; that is outside P11 and
   outside the specified gate.)
@@ -151,11 +151,11 @@ offline replay today; the earlier run is preserved as the usage-limit fixture.
 
 ## Files outside the package list that were touched
 
-- `crates/bloblex-adapter-{claude,codex,acp}/src/bin/wire_support/wire_replay.rs` — the
+- `crates/retinue-adapter-{claude,codex,acp}/src/bin/wire_support/wire_replay.rs` — the
   shared **test-only** recorder/replayer gained the additive `init_live` (and `init`
   delegates to `init_inner`). It is never compiled into a production adapter; the three
   copies remain byte-identical.
-- `crates/bloblex-daemon/tests/live/mod.rs` and three `*-daemon.ndjson` transcripts were
+- `crates/retinue-daemon/tests/live/mod.rs` and three `*-daemon.ndjson` transcripts were
   already present in this worktree at 18:23–18:32 (they are not referenced by any test
   target and duplicate this package's daemon suite). They were **moved, not deleted**, to
   `C:/fxt/a5/tmp/opencode/p11-abandoned-daemon-live/` so this worktree has one coherent
@@ -237,8 +237,8 @@ The base report above is kept as history; this section records the follow-up wor
    Claude and OpenCode limit fixtures are unrecorded; their replay tests skip with a
    message when the file is absent. Noted here as the audit asked.
 
-10. **Clippy on tests (finding 10).** `cargo clippy -p bloblex-adapter-claude
-    -p bloblex-adapter-codex -p bloblex-adapter-acp --tests -- -D warnings` is clean. The
+10. **Clippy on tests (finding 10).** `cargo clippy -p retinue-adapter-claude
+    -p retinue-adapter-codex -p retinue-adapter-acp --tests -- -D warnings` is clean. The
     daemon's pre-existing `parent_watchdog` / `main.rs` test warnings remain, outside P11.
 
 ### Live results (follow-up, `--test-threads=1`)
@@ -251,10 +251,10 @@ The base report above is kept as history; this section records the follow-up wor
 
 ### Gates (follow-up)
 
-- `cargo test --workspace --exclude bloblex-desktop --no-fail-fast` — **all targets ok,
-  0 failed** (live tests skip without `BITBOTS_LIVE_TESTS=1`).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — **clean**.
-- `cargo clippy -p bloblex-adapter-{claude,codex,acp} --tests -- -D warnings` — **clean**.
+- `cargo test --workspace --exclude retinue-desktop --no-fail-fast` — **all targets ok,
+  0 failed** (live tests skip without `RETINUE_LIVE_TESTS=1`).
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — **clean**.
+- `cargo clippy -p retinue-adapter-{claude,codex,acp} --tests -- -D warnings` — **clean**.
 - UI: `npx tsc -b` clean; `npx vitest run --maxWorkers=3` — 169 files / 1242 tests, all
   passed; `npm run build` succeeded. P11 changes no TypeScript, so `build:remote` was not
   run.

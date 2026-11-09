@@ -1,6 +1,6 @@
 {
-  "name": "Bitbots Remote",
-  "short_name": "Bitbots",
+  "name": "Retinue Remote",
+  "short_name": "Retinue",
   "description": "Chat with the bots on your computer from any device.",
   "start_url": "/remote.html",
   "scope": "/",

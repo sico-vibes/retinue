@@ -1,7 +1,7 @@
 /* User accent colour.
-   The setting sets --user-accent and friends on <html> (see blob/bitbots.ts) and
-   data-accent="custom". Bitbots reads them through its own --bb-accent tokens in
-   bitbots.css, so this file covers the Blobots look and the few shared pieces.
+   The setting sets --user-accent and friends on <html> (see blob/retinue.ts) and
+   data-accent="custom". Retinue reads them through its own --bb-accent tokens in
+   retinue.css, so this file covers the Stone look and the few shared pieces.
    With no accent chosen nothing here applies and the app stays monochrome. */
 
 :root[data-accent="custom"] {

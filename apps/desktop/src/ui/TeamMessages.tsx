@@ -101,7 +101,7 @@ export function HandoffDialog({ agents, sourceAgentId, busy, error, onPick, onCl
   return <div className={`sheet-backdrop blob-dialog-backdrop ${entered ? 'is-entered' : ''}`}>
     <section ref={ref} className="blob-dialog handoff-dialog" role="dialog" aria-modal="true" aria-labelledby="handoff-title" tabIndex={-1}>
       <h2 id="handoff-title">Continue in another {noun}</h2>
-      <p>{limitedName ? `${limitedName} reached its usage limit. Pick an ${noun} on another coding agent to pick this up. ` : 'Pick who should pick this up. '}Bitbots puts a short summary and the latest messages in their composer. Nothing is sent until you send it.</p>
+      <p>{limitedName ? `${limitedName} reached its usage limit. Pick an ${noun} on another coding agent to pick this up. ` : 'Pick who should pick this up. '}Retinue puts a short summary and the latest messages in their composer. Nothing is sent until you send it.</p>
       {choices.length === 0 && <p className="blob-muted">There is no other {noun} to hand this to.</p>}
       <ul className="handoff-list">
         {choices.map((agent, index) => {

@@ -23,10 +23,10 @@ Settings › General.
 
 ### Item 18 — parallel conversations with one bot
 
-- **No per-bot cap.** `crates/bloblex-storage/src/lib.rs:3498`
+- **No per-bot cap.** `crates/retinue-storage/src/lib.rs:3498`
   (`create_reserved_turn`) lost its `agents.max_concurrency` check; it now takes
   the global limit as an argument and enforces only that and one turn per
-  conversation. `crates/bloblex-daemon/src/main.rs:2995` reads the limit and
+  conversation. `crates/retinue-daemon/src/main.rs:2995` reads the limit and
   `:3013` passes it.
 - **The global limit is a setting.** New `concurrency.botsAtOnce`
   (default 4, Clamped 1–16): validator at `main.rs:1368`, allowlist at `:1294`,
@@ -37,7 +37,7 @@ Settings › General.
     (a 1–16 select), search entry `apps/desktop/src/ui/settingsIndex.ts:56`.
   - `apps/desktop/src/ui/BlobSettings.tsx:541` (`concurrencyText`) no longer says
     a per-bot "configured cap"; it names the global limit.
-- **The drain is global.** `crates/bloblex-daemon/src/team.rs:677`
+- **The drain is global.** `crates/retinue-daemon/src/team.rs:677`
   (`drain_queued_deliveries`) is called from `after_turn` (`:729`): after *any*
   turn ends it tries every session with a queued delivery, not only the one that
   finished — the global limit can be what refused another bot's delivery.
@@ -50,7 +50,7 @@ Settings › General.
   `:2524` (a waiting indicator).
 - **The Manager is told the truth.** `team.rs:453` (`Delegation.started`) is set
   from the free slots (`team.rs:518`); `team.rs:456` (`message_blob`) says
-  "working on it" or "queued"; `crates/bloblex-daemon/src/proposals.rs:449`
+  "working on it" or "queued"; `crates/retinue-daemon/src/proposals.rs:449`
   (`apply_task`) returns `started` and a summary that says "started"/"queued".
 - **Tests** (`fix39_p6_tests`): `row_one_bot_runs_many_conversations_at_once`
   (one bot, three conversations with `maxConcurrency` 1, all three run),
@@ -70,12 +70,12 @@ Settings › General.
   `knowledge::announce_context_loss`; a model change calls
   `knowledge::announce_model_change`, which for a non-Manager bot routes to the
   same recap instead of silence
-  (`crates/bloblex-daemon/src/knowledge.rs:425`).
+  (`crates/retinue-daemon/src/knowledge.rs:425`).
 - **A persisted boolean, never the text.** `recapPending` in the session's `data`
-  — `crates/bloblex-storage/src/lib.rs:2196` / `:2202` (`session_recap_pending`,
+  — `crates/retinue-storage/src/lib.rs:2196` / `:2202` (`session_recap_pending`,
   `set_session_recap_pending`) plus `session_has_conversation_history` (`:2210`).
   The recap text is never written to the database (asserted).
-- **Built from Bitbots' own record, bounded and inert.**
+- **Built from Retinue's own record, bounded and inert.**
   `knowledge.rs:470` (`recap_for_prompt`) reads the last 8 user/assistant
   messages via `handoff_messages` (each clipped to 600 characters), adds the
   changed file paths (max 12) from the session's own `files`, caps the block at
@@ -99,7 +99,7 @@ Settings › General.
 
 - **Storage.** `tags TEXT NOT NULL DEFAULT '[]'` on `projects` and `agents`,
   added idempotently on every open
-  (`crates/bloblex-storage/src/lib.rs:423`, `:444`, `:455`); validated by
+  (`crates/retinue-storage/src/lib.rs:423`, `:444`, `:455`); validated by
   `validate_entity_tags` (`:977`: array of strings, trimmed, lower-cased, each
   1–24 characters, ≤ 8, de-duplicated, `[]` clears). Exposed in the project and
   agent JSON (`project_rows`, `agent_list`, `agent_read`); written by
@@ -141,11 +141,11 @@ Settings › General.
 
 ### Item 19.5 — the permission-denial notice text
 
-- `bloblex_agent_core::permission_summary` now takes the project and returns the
+- `retinue_agent_core::permission_summary` now takes the project and returns the
   classifier's category followed by the exact path or command it judged (for
   example `READ: src/main.rs`, `ASKED: C:\Outside\secrets.txt`,
   `SAFE_COMMANDS: git status`), so "denied" says *what* and *where*
-  (`crates/bloblex-agent-core/src/lib.rs:118`). The daemon passes the session's
+  (`crates/retinue-agent-core/src/lib.rs:118`). The daemon passes the session's
   project (`main.rs:3732`).
 - Test: `permission_summary_names_the_category_and_the_target`.
 
@@ -153,21 +153,21 @@ Settings › General.
 
 ## 2. Gate results (all run to completion, foreground)
 
-- Rust tests: `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
+- Rust tests: `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
   → **all green**. The daemon suite alone: 384 passed, 0 failed (which includes
-  the 13 new `fix39_p6_tests`); `bloblex-storage` 112 passed;
-  `bloblex-agent-core` 11 passed.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` → **clean**.
+  the 13 new `fix39_p6_tests`); `retinue-storage` 112 passed;
+  `retinue-agent-core` 11 passed.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` → **clean**.
 - `npx tsc -b` → **clean**.
 - `npx vitest run --maxWorkers=3` → **170 files, 1247 tests passed** (includes
   the new mounted tag test and the `teamSelectors` waiting-state test).
 - `npm run build` → **built** (existing chunk-size warning only).
-- **Not run:** `npm run build:remote` and `cargo test -p bloblex-desktop --lib`
+- **Not run:** `npm run build:remote` and `cargo test -p retinue-desktop --lib`
   — neither the Remote app nor `src-tauri` was touched. The `tiers.json` parity
   test ran inside `vitest` and passed (no new daemon method or event was added).
 - **`cargo fmt --check`** is **not clean at baseline** in these packages (574
-  diffs in `bloblex-storage`, 68 in `bloblex-agent-core`, 1680 in
-  `bloblex-daemon`, plus `src-tauri`); the repository deliberately uses a
+  diffs in `retinue-storage`, 68 in `retinue-agent-core`, 1680 in
+  `retinue-daemon`, plus `src-tauri`); the repository deliberately uses a
   compact one-line style. My changes follow that style; I did not reformat
   existing code.
 
@@ -197,7 +197,7 @@ Settings › General.
   per-bot cap that no longer exists; it now names the global limit.
 - `apps/desktop/src/ui/ProposalCard.tsx` — risk 7 requires the task approval
   card to show the folder. (P7 also lists this file for new proposal kinds.)
-- `crates/bloblex-agent-core/src/lib.rs` — item 19.5, explicitly assigned to P6
+- `crates/retinue-agent-core/src/lib.rs` — item 19.5, explicitly assigned to P6
   by the launch prompt; the brief lists it as P2's file but P5 could not reach it.
 - Test files: the new `apps/desktop/src/ui/TeamSidebar.tags.mounted.test.tsx`,
   and edits to existing tests (`teamSelectors.test.ts`,
@@ -219,7 +219,7 @@ and added the missing tests. Nothing was committed.
 
 ### 1. Refused retry no longer reorders the queue or stacks notices
 
-`crates/bloblex-daemon/src/team.rs:650` (`deliver`) now takes a `retry` flag.
+`crates/retinue-daemon/src/team.rs:650` (`deliver`) now takes a `retry` flag.
 The drain (`:716`) retries with `retry = true`; a delegation and a relayed reply
 start with `retry = false`.
 
@@ -248,7 +248,7 @@ still queued, but adds no notice.
 
 ### 3. A model change on a never-prompted non-Manager stays silent
 
-`knowledge::announce_model_change` (`crates/bloblex-daemon/src/knowledge.rs:425`)
+`knowledge::announce_model_change` (`crates/retinue-daemon/src/knowledge.rs:425`)
 calls `announce_context_loss` only when `session_has_conversation_history` is
 true (`:430`). A conversation with no messages is left untouched; nothing is
 armed and no "no longer has earlier context" notice is written. The
@@ -261,7 +261,7 @@ Manager handover path is unchanged.
 
 `apps/desktop/src/ui/ProposalCard.tsx:38` adds `projectForDraft`, matching by id
 or by a trimmed, case-insensitive name (the same match as
-`crates/bloblex-daemon/src/team.rs:430` and `proposals.rs:458`). The folder line
+`crates/retinue-daemon/src/team.rs:430` and `proposals.rs:458`). The folder line
 (`ProposalCard.tsx:145`) now shows the real path for an id, a differently cased
 name or stray spaces, shows `Project not found` for an unknown name, and is
 absent when no project is named.
@@ -310,15 +310,15 @@ absent when no project is named.
 
 ### Gate results (rerun after the follow-up, `TEMP=C:/fxt/c2/tmp`)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-  → all green. `bloblex-daemon` **388 passed** (includes the 17 `fix39_p6_tests`),
-  `bloblex-storage` **112 passed**, `bloblex-agent-core` **11 passed**.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` → clean.
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+  → all green. `retinue-daemon` **388 passed** (includes the 17 `fix39_p6_tests`),
+  `retinue-storage` **112 passed**, `retinue-agent-core` **11 passed**.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` → clean.
 - `npx tsc -b` → clean.
 - `npx vitest run --maxWorkers=3` → **170 files, 1251 tests passed**
   (1247 before the follow-up; +4 new tests).
 - `npm run build` → built (existing chunk-size warning only).
-- **Not run:** `npm run build:remote` and `cargo test -p bloblex-desktop --lib`
+- **Not run:** `npm run build:remote` and `cargo test -p retinue-desktop --lib`
   — neither the Remote app nor `src-tauri` was touched.
 
 ### What I could not check

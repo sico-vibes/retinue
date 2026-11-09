@@ -11,14 +11,14 @@ Gates (all run from the repository root unless stated):
 
 - `npm run typecheck` — pass
 - `npm run test` — pass
-- `cargo test -p bloblex-storage -p bloblex-daemon` — pass
-- `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings` — pass
+- `cargo test -p retinue-storage -p retinue-daemon` — pass
+- `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings` — pass
 
 ## Part A — preferences plumbing (final API)
 
 Written first, before part B, so the Director can code against it.
 
-### Daemon settings (`crates/bloblex-storage/src/lib.rs`)
+### Daemon settings (`crates/retinue-storage/src/lib.rs`)
 
 Three new window-level settings, validated in `Storage::set_setting` and broadcast as
 `settings.changed` through the existing `appearance.*` branch (now also matching
@@ -32,7 +32,7 @@ Three new window-level settings, validated in `Storage::set_setting` and broadca
 
 Validation helpers: `valid_hints_seen`, `valid_hint_id`, `valid_tour_state`. An invalid
 value returns `StorageError::InvalidAgent`. The daemon's `settings.set` `validation_key`
-list in `crates/bloblex-daemon/src/main.rs` now includes the three keys so a storage
+list in `crates/retinue-daemon/src/main.rs` now includes the three keys so a storage
 rejection is reported as `invalid_argument` rather than `internal`.
 
 Rust test `ui_preference_settings_validate_default_and_announce_their_changes` covers
@@ -41,10 +41,10 @@ payloads, and every invalid shape.
 
 ### `apps/desktop/src/ui/uiPrefs.ts` (new)
 
-Mirrors `blob/bitbots.ts`: an in-window value, a localStorage first-paint cache, a
+Mirrors `blob/retinue.ts`: an in-window value, a localStorage first-paint cache, a
 listener set, and `useSyncExternalStore` hooks. Every storage access is guarded.
 
-First-paint cache keys: `bitbots.density`, `bitbots.hints`, `bitbots.tour`.
+First-paint cache keys: `retinue.density`, `retinue.hints`, `retinue.tour`.
 
 Exported API (exactly as specified, plus three daemon-hydration helpers):
 
@@ -104,7 +104,7 @@ Behaviour notes:
 Each line: status, what changed, and the test that covers it.
 
 1. **Disabled model and effort pills** — done.
-2. **Bitbots titles in light mode** — done.
+2. **Retinue titles in light mode** — done.
 3. **Profile row** — done.
 4. **Starter chips** — done.
 5. **Context ring label** — done.
@@ -113,4 +113,4 @@ Each line: status, what changed, and the test that covers it.
 8. **Sound preview** — done.
 9. **Accessible names with state** — done.
 10. **Reduced motion audit** — done.
-11. **Transitions in Bitbots** — done.
+11. **Transitions in Retinue** — done.

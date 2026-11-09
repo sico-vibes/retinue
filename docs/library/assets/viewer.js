@@ -100,7 +100,7 @@
         link.closest('details').open = true;
       } else link.removeAttribute('aria-current');
     }
-    document.title = `${doc.title} | Bitbots Docs`;
+    document.title = `${doc.title} | Retinue Docs`;
     observeHeadings();
   }
 
@@ -135,7 +135,7 @@
       main.innerHTML = `<h1 class="article-title" id="page-title">Document not found</h1><p>This document is not in this library. Search for its title or <a href="#guides/five-minute-path">return to the five-minute path</a>.</p>`;
       toc.innerHTML = '';
       currentId = '';
-      document.title = 'Document not found | Bitbots Docs';
+      document.title = 'Document not found | Retinue Docs';
       closeMenu();
       return;
     }
@@ -343,7 +343,7 @@
     const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
     document.documentElement.dataset.theme = theme;
     try {
-      localStorage.setItem('bitbots-docs-theme', theme);
+      localStorage.setItem('retinue-docs-theme', theme);
     } catch {
       /* File-mode or private storage may be unavailable. */
     }

@@ -13,8 +13,8 @@ Answers to the questions in `docs/history/fix-39/research-audit.md`, plus the de
    - Keep only the **global** safety limit, shown as a setting (Settings › General › "Bots working at once", default 4, range 1–16).
    - If a hard technical reason prevents unlimited per-bot work for one provider, cap that provider at 3 and say why in the report.
    - Show "waiting" (queued) honestly when the global limit is reached.
-2. **Workspace (item 21): projects added to Bitbots, with tags; the Manager may set tags itself** (never on a locked bot). Scanning disk folders is out of scope.
-3. **Bitbots MCP (item 22): build it, but as Bitbots' own internal tool set.** The owner meant T3 Code's own MCP that lets models act inside the T3 app, not an endpoint for outside agents. Bots and especially the Manager get a complete, documented set of Bitbots tools on the existing bloblex MCP bridge to act inside Bitbots:
+2. **Workspace (item 21): projects added to Retinue, with tags; the Manager may set tags itself** (never on a locked bot). Scanning disk folders is out of scope.
+3. **Retinue MCP (item 22): build it, but as Retinue's own internal tool set.** The owner meant T3 Code's own MCP that lets models act inside the T3 app, not an endpoint for outside agents. Bots and especially the Manager get a complete, documented set of Retinue tools on the existing retinue MCP bridge to act inside Retinue:
    - list and read bots, projects, conversations and status;
    - create bots; change a bot's name, description, role, instructions, look, model, effort and permission mode;
    - create projects and set tags;
@@ -33,7 +33,7 @@ Answers to the questions in `docs/history/fix-39/research-audit.md`, plus the de
 - The composer always writes the bot's settings (item 16).
 - The Manager is never lockable; the daemon enforces the lock (item 13).
 - The Manager cannot set Full access (item 19).
-- Context recovery uses a bounded summary of the conversation from Bitbots' own record (item 20).
+- Context recovery uses a bounded summary of the conversation from Retinue's own record (item 20).
 - The eight target shapes and their migration (item 4).
 - "N/A" and "No usage yet" (item 14).
 
@@ -41,13 +41,13 @@ Answers to the questions in `docs/history/fix-39/research-audit.md`, plus the de
 
 - Follow `docs/design/design-system.md`.
 - No sparkle or star icons (`Sparkles`, `Sparkle`, `Wand2`, `WandSparkles`, ✦ ✧ ✨) except the Manager's star badge (item 8).
-- Both looks (classic and Bitbots) and both themes.
+- Both looks (classic and Retinue) and both themes.
 
-## P7: the Bitbots tool set (added by the Director from the owner's answer 3)
+## P7: the Retinue tool set (added by the Director from the owner's answer 3)
 
 - **When:** Wave D, after P6 is merged. It shares `team.rs`, `proposals.rs` and `main.rs` with P5 and P6.
 - **Files:**
-  - `crates/bloblex-daemon/src/team.rs` (bridge tool schemas and handlers);
+  - `crates/retinue-daemon/src/team.rs` (bridge tool schemas and handlers);
   - `proposals.rs` (new proposal kinds where a write needs approval);
   - `main.rs` (tool routing only);
   - `knowledge.rs` (the Manager suffix that lists its tools, kept short);
@@ -78,11 +78,11 @@ The owner chose to fold the T3 research's P0 items into this release (`docs/hist
   - After a turn is killed or crashes (app restart, timeout), the next activation continues it with a one-off "Continue where you left off" prompt. The chain is bounded, and the context recap from P6 is included when the resume failed.
   - The user sees one honest line, for example "Retrying (2 of 3)…" or "Picking up where it left off", never a pile of errors.
 - **Files:**
-  - adapter error mapping in `crates/bloblex-adapter-{claude,codex,acp}`;
-  - `crates/bloblex-daemon/src/retry.rs`;
+  - adapter error mapping in `crates/retinue-adapter-{claude,codex,acp}`;
+  - `crates/retinue-daemon/src/retry.rs`;
   - `main.rs`, the turn start, failure and continuation path only;
   - `quota.rs` / `quota_sources.rs`;
-  - the `crates/bloblex-storage/src/lib.rs` state columns, with a migration tested on a previous-version database;
+  - the `crates/retinue-storage/src/lib.rs` state columns, with a migration tested on a previous-version database;
   - `apps/desktop/src/remote/tiers.json` rows for new events;
   - UI: the notice copy in `errorCopy.ts`, the "Limited" state in `teamSelectors.ts` / `TeamSidebar.tsx` and the transcript notice, and the Experimental toggle.
 - **When:** after P6 is merged; it shares `main.rs` and storage. It may run in parallel with P7 only if each keeps to its own areas of `main.rs` (P8 the turn path, P7 the tool routing).
@@ -119,20 +119,20 @@ The owner chose to fold the T3 research's P0 items into this release (`docs/hist
 
 ## P11: reliability tests against the real CLIs (recommendation 10)
 
-- **Live tests** run only when `BITBOTS_LIVE_TESTS=1`; they are skipped in the normal gates.
+- **Live tests** run only when `RETINUE_LIVE_TESTS=1`; they are skipped in the normal gates.
 - **Models:** the cheapest from each provider, with simple prompts such as "which model are you?" and a short multi-turn exchange:
   - **Claude Code:** `claude-haiku-5-5`, effort medium.
   - **Codex:** `gpt-6-luna`, effort medium.
   - **OpenCode:** `opencode/deepseek-v4.1-flash-free`. This is the free Zen model, for tests only; the lanes keep using the Go plan.
-- **Scenarios**, per provider, through Bitbots' real adapter and daemon path: start, turn, model report, second turn in the same session, resume after a daemon restart, a steer or queue while working, a permission-mode change, and a usage-limit or unavailable answer turning into a clean reported state or skip, not a failure.
+- **Scenarios**, per provider, through Retinue's real adapter and daemon path: start, turn, model report, second turn in the same session, resume after a daemon restart, a steer or queue while working, a permission-mode change, and a usage-limit or unavailable answer turning into a clean reported state or skip, not a failure.
 - **Transcript replay:** the live runs record sanitised transcripts. Those transcripts become fixtures that a normal, offline test replays through the real adapters on every gate, as T3 does, so regressions are caught without spending tokens.
 - **Rules:**
   - never print or store credentials;
   - fixtures contain no personal paths or secrets;
   - the CLIs use their normal installed sign-in, read-only, because live tests need it; nothing writes to CLI config or session files outside what a normal run creates;
-  - Bitbots' own data (database, settings, workspaces) always goes to temporary folders, never the owner's real Bitbots data;
+  - Retinue's own data (database, settings, workspaces) always goes to temporary folders, never the owner's real Retinue data;
   - a usage limit is a reported skip with the reset time.
-- **Files:** new test files and fixture folders under `crates/bloblex-adapter-*/tests` and `crates/bloblex-daemon/tests`, a small recorder helper, and a `docs/` note added by the documentation lane. P11 touches no production code, except a test-only hook if one is truly needed.
+- **Files:** new test files and fixture folders under `crates/retinue-adapter-*/tests` and `crates/retinue-daemon/tests`, a small recorder helper, and a `docs/` note added by the documentation lane. P11 touches no production code, except a test-only hook if one is truly needed.
 - **When:** now, in parallel with P6, because its files are separate.
 
 ## P12: local diagnostics (owner, 18 October, evening)
@@ -154,9 +154,9 @@ The background service logs only to stderr, which nobody keeps, and there is no 
 
   A preview lists the contents before saving. Nothing is uploaded anywhere.
 - **Files:**
-  - new `crates/bloblex-daemon/src/diagnostics.rs`;
+  - new `crates/retinue-daemon/src/diagnostics.rs`;
   - `main.rs`, the tracing set-up and the RPC routing only;
-  - `crates/bloblex-daemon/Cargo.toml` (`tracing-appender`; a zip crate if not present);
+  - `crates/retinue-daemon/Cargo.toml` (`tracing-appender`; a zip crate if not present);
   - `apps/desktop/src-tauri/src/lib.rs`, the shell's own log file and the save dialog command only;
   - `apps/desktop/src/remote/tiers.json` (`diagnostics.export` is `never` remote);
   - UI: the Settings row, the profile menu item and the preview dialog;

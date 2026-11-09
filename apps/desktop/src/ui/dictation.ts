@@ -167,7 +167,7 @@ export function useDictation({
     if (!supported) return
     let disposed = false
     let unlisten: Unlisten | undefined
-    void listenNative<DictationEvent>('bloblex-dictation', (payload) => {
+    void listenNative<DictationEvent>('retinue-dictation', (payload) => {
       if (payload.owner && payload.owner !== owner) return
       if (payload.type === 'ready') {
         setPhase('listening')
@@ -208,7 +208,7 @@ export function useDictation({
     let unlisten: Unlisten | undefined
     try {
       unlisten = await listenNative<{ modelId: string; completed: number; total: number }>(
-        'bloblex-speech-download',
+        'retinue-speech-download',
         (payload) => {
           if (payload.modelId !== modelId) return
           setProgress(payload.total ? payload.completed / payload.total : 0)
@@ -277,7 +277,7 @@ export function useDictation({
     let unlisten: Unlisten | undefined
     // Scoped to this window: Ctrl+E is sent to the companion while it is on
     // screen and to the main window otherwise, never to both.
-    void currentWebviewWindow().listen('bloblex-dictation-toggle', () => {
+    void currentWebviewWindow().listen('retinue-dictation-toggle', () => {
       void toggle()
     })
       .then((fn) => {

@@ -20,7 +20,7 @@ document.documentElement.dataset.theme = query.get('theme') === 'light' ? 'light
 
 function CharacterSheet() {
   return <main style={{ padding: 24, color: 'var(--text-1)', background: 'var(--bg-1)', minHeight: '100vh' }}>
-    <p style={{ margin: '0 0 4px', color: 'var(--text-3)', fontSize: 'var(--fs-xs)' }}>Bitbots · art renderer</p>
+    <p style={{ margin: '0 0 4px', color: 'var(--text-3)', fontSize: 'var(--fs-xs)' }}>Retinue · art renderer</p>
     <h1 style={{ margin: 0, fontSize: 'var(--fs-2xl)', fontWeight: 600 }}>Every art, every mood</h1>
     {arts.map((art) => <section key={art} aria-label={ART_LABELS[art]} style={{ marginTop: 22 }}>
       <h2 style={{ fontSize: 'var(--fs-md)', margin: '0 0 8px' }}>{ART_LABELS[art]}</h2>

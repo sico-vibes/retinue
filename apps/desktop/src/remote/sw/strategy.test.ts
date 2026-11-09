@@ -32,7 +32,7 @@ describe('remote service worker strategyFor', () => {
 
   it('serves hashed assets from the cache first', () => {
     expect(strategyFor('/assets/remote-DXB5vYc3.js', 'GET')).toBe('cache-first')
-    expect(strategyFor('/assets/bitbots-DL6Ujsob.css', 'GET')).toBe('cache-first')
+    expect(strategyFor('/assets/retinue-DL6Ujsob.css', 'GET')).toBe('cache-first')
     expect(strategyFor('/assets/index-Bzv5PnAn.png', 'GET')).toBe('cache-first')
   })
 

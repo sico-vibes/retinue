@@ -7,10 +7,10 @@ writes were made. Production `cargo check` only.
 
 ### A1. Capability on the adapter trait
 
-- `crates/bloblex-agent-core/src/lib.rs:1232-1244`: new `ModelSwitch` enum
+- `crates/retinue-agent-core/src/lib.rs:1232-1244`: new `ModelSwitch` enum
   (`KeepsSession`, `NewSession`), serde `camelCase` (`keepsSession` /
   `newSession`), `as_str()`, `Default = NewSession`.
-- `crates/bloblex-agent-core/src/lib.rs:1246-1251`: `AgentAdapter::model_switch()`
+- `crates/retinue-agent-core/src/lib.rs:1246-1251`: `AgentAdapter::model_switch()`
   default method returning `NewSession`. Doc comment says why: only a proven
   provider may claim it keeps the session.
 
@@ -18,18 +18,18 @@ Overrides, each with the proof in a comment:
 
 | Adapter | Line | Value | Proof in the code |
 |---|---|---|---|
-| Codex | `crates/bloblex-adapter-codex/src/lib.rs:1359-1362` | `KeepsSession` | `prompt` (1542-1618) sends `p["model"]` and `p["effort"]` in every `turn/start` for the live `threadId` (1565-1568); a model change is just a different value for the same thread. |
-| Claude | `crates/bloblex-adapter-claude/src/lib.rs:986-988` | `KeepsSession` | `prompt` (1155-1193) compares `launch_options` (including `model`, 1168) with the request, then kills the process and restarts with `provider_id` (`--resume`, 1177-1193) and the new options (`typed_args` emits `--model`, 203-205). The same provider session carries on. |
-| ACP | `crates/bloblex-adapter-acp/src/lib.rs:1026-1028` | `KeepsSession` | `apply_options` selects the agent's `model` config option before each prompt when it differs from `c.applied.model` (836-850), and refuses with `ERR_MODEL_MISSING` / `ERR_MODEL_REJECTED` instead of prompting. |
-| OpenCode | no edit | inherits ACP | `crates/bloblex-adapter-opencode/src/lib.rs:3` is `pub use bloblex_adapter_acp::AcpAdapter as OpenCodeAdapter;` — the same type, so the ACP override is the OpenCode answer. There is no separate impl to override. |
+| Codex | `crates/retinue-adapter-codex/src/lib.rs:1359-1362` | `KeepsSession` | `prompt` (1542-1618) sends `p["model"]` and `p["effort"]` in every `turn/start` for the live `threadId` (1565-1568); a model change is just a different value for the same thread. |
+| Claude | `crates/retinue-adapter-claude/src/lib.rs:986-988` | `KeepsSession` | `prompt` (1155-1193) compares `launch_options` (including `model`, 1168) with the request, then kills the process and restarts with `provider_id` (`--resume`, 1177-1193) and the new options (`typed_args` emits `--model`, 203-205). The same provider session carries on. |
+| ACP | `crates/retinue-adapter-acp/src/lib.rs:1026-1028` | `KeepsSession` | `apply_options` selects the agent's `model` config option before each prompt when it differs from `c.applied.model` (836-850), and refuses with `ERR_MODEL_MISSING` / `ERR_MODEL_REJECTED` instead of prompting. |
+| OpenCode | no edit | inherits ACP | `crates/retinue-adapter-opencode/src/lib.rs:3` is `pub use retinue_adapter_acp::AcpAdapter as OpenCodeAdapter;` — the same type, so the ACP override is the OpenCode answer. There is no separate impl to override. |
 
 Everything else (test fakes, future adapters) keeps `NewSession`.
 
 ### A2. Read-only `session.model.plan`
 
-- Dispatch arm: `crates/bloblex-daemon/src/main.rs:1178-1181`, next to
+- Dispatch arm: `crates/retinue-daemon/src/main.rs:1178-1181`, next to
   `session.model.update`.
-- Implementation: `crates/bloblex-daemon/src/main.rs:2870-2897`.
+- Implementation: `crates/retinue-daemon/src/main.rs:2870-2897`.
 - Shared predicates: `session_model_facts` (2652-2670), `keeps_provider_session`
   (2682-2688), `model_switch_for` (2675-2677), `model_continuity_reason`
   (2690-2702). `update_session_model` calls the same three helpers
@@ -42,7 +42,7 @@ Contract (details in "Contracts" below).
 
 ### A3. `update_session_model` uses the capability
 
-`crates/bloblex-daemon/src/main.rs:2703-2861`.
+`crates/retinue-daemon/src/main.rs:2703-2861`.
 
 - `keeps_session = model_changed && providerSessionId present &&
   adapter.model_switch() == KeepsSession` (2772, helper at 2682).
@@ -63,7 +63,7 @@ Failure honesty (what I found by reading, not by running):
   preflight refusal is recorded as a rejected turn and returned
   (`main.rs:3227-3240`); an adapter refusal on delivery finalises that turn as an
   error (`main.rs:3552-3580`). `retry.rs` contains no model logic at all
-  (`rg -n model crates/bloblex-daemon/src/retry.rs` → no match) and its retry
+  (`rg -n model crates/retinue-daemon/src/retry.rs` → no match) and its retry
   item carries only `text`, so an automatic retry re-reads the same lock.
 - ACP returns `ERR_MODEL_MISSING` / `ERR_MODEL_REJECTED` before prompting
   (`adapter-acp/src/lib.rs:836-850`). Claude returns
@@ -77,7 +77,7 @@ Failure honesty (what I found by reading, not by running):
 
 ### A4. Atomic persistence
 
-- `crates/bloblex-storage/src/lib.rs:2870-2897`: `session_apply_model_change(id,
+- `crates/retinue-storage/src/lib.rs:2870-2897`: `session_apply_model_change(id,
   &lock, clear_provider)`. One `IMMEDIATE` transaction writes `model_lock_json`
   and, when `clear_provider` is true, also
   `provider_session_id=NULL, resumable=0, data.providerTurns=0` (the exact
@@ -282,7 +282,7 @@ Compiled-behaviour risk is low: every test fake adapter implements
 `AgentAdapter` without `model_switch`, so it gets the `NewSession` default and
 the old update behaviour. Tests that call the changed APIs:
 
-`crates/bloblex-daemon/src/main.rs`
+`crates/retinue-daemon/src/main.rs`
 (`#[cfg(test)] mod tests`):
 
 - `model_confirmation_is_asked_only_when_context_can_be_lost`
@@ -305,7 +305,7 @@ Plus the queue/prompt behaviour tests that call `session.queue.add` or
 `restart_with_the_feature_off_drops_pending_retries_silently` and
 `reply_prompt_is_session_scoped_data_and_persists_a_bounded_snapshot`.
 
-`crates/bloblex-storage/src/lib.rs`:
+`crates/retinue-storage/src/lib.rs`:
 
 - `provider_session_pointer_clears_only_when_explicitly_requested`
 - `queued_prompts_order_reorder_update_and_delete_follow_state_rules`
@@ -315,7 +315,7 @@ Plus the queue/prompt behaviour tests that call `session.queue.add` or
 - `a_delegation_notice_sits_above_the_text_its_turn_already_streamed`
 - `non_delegation_notices_keep_a_single_assistant_row`
 
-`crates/bloblex-daemon/src/queue.rs` has no test module. No test, fixture or
+`crates/retinue-daemon/src/queue.rs` has no test module. No test, fixture or
 `#[cfg(test)]` code was added, edited or deleted.
 
 ## Could not make safe / unverified
@@ -345,32 +345,32 @@ Plus the queue/prompt behaviour tests that call `session.queue.add` or
 ## Gate
 
 `cargo check` (production targets only; no `--tests`), packages
-`bloblex-daemon bloblex-storage bloblex-agent-core bloblex-adapter-claude
-bloblex-adapter-codex bloblex-adapter-acp bloblex-adapter-opencode`
+`retinue-daemon retinue-storage retinue-agent-core retinue-adapter-claude
+retinue-adapter-codex retinue-adapter-acp retinue-adapter-opencode`
 (`RUST_MIN_STACK=33554432`), 0 warnings. Tail of the final run:
 
 ```
-    Checking bloblex-agent-core v0.1.0 (D:\u1\crates\bloblex-agent-core)
-    Checking bloblex-storage v0.1.0-beta.38 (D:\u1\crates\bloblex-storage)
-    Checking bloblex-adapter-claude v0.1.0-beta.38 (D:\u1\crates\bloblex-adapter-claude)
-    Checking bloblex-adapter-acp v0.1.0-beta.38 (D:\u1\crates\bloblex-adapter-acp)
-    Checking bloblex-adapter-codex v0.1.0-beta.38 (D:\u1\crates\bloblex-adapter-codex)
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\u1\crates\bloblex-daemon)
-    Checking bloblex-adapter-opencode v0.1.0-beta.38 (D:\u1\crates\bloblex-adapter-opencode)
+    Checking retinue-agent-core v0.1.0 (D:\u1\crates\retinue-agent-core)
+    Checking retinue-storage v0.1.0-beta.38 (D:\u1\crates\retinue-storage)
+    Checking retinue-adapter-claude v0.1.0-beta.38 (D:\u1\crates\retinue-adapter-claude)
+    Checking retinue-adapter-acp v0.1.0-beta.38 (D:\u1\crates\retinue-adapter-acp)
+    Checking retinue-adapter-codex v0.1.0-beta.38 (D:\u1\crates\retinue-adapter-codex)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\u1\crates\retinue-daemon)
+    Checking retinue-adapter-opencode v0.1.0-beta.38 (D:\u1\crates\retinue-adapter-opencode)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.47s
 ```
 
-`bloblex-adapter-opencode` was added to the brief's list because OpenCode is the
+`retinue-adapter-opencode` was added to the brief's list because OpenCode is the
 one provider whose answer had to be derived from another crate; it is a
 production check, not a test. The full log is `target/lane/cargo-check.log`.
 
 ## Proposed skill update (not edited here: the brief limits the files this lane owns)
 
-Add to `.claude/skills/bitbots-development/references/codebase-map.md` (daemon
+Add to `.claude/skills/retinue-development/references/codebase-map.md` (daemon
 RPC area), one short entry:
 
 > **Model switch capability.** `AgentAdapter::model_switch()` in
-> `crates/bloblex-agent-core/src/lib.rs` says whether a provider applies a new
+> `crates/retinue-agent-core/src/lib.rs` says whether a provider applies a new
 > model inside the same provider session (`KeepsSession`: Codex, Claude, ACP and
 > OpenCode) or needs a fresh one (default). `session.model.plan` previews the
 > outcome (`kept` / `recap` / `none`) with the same predicates

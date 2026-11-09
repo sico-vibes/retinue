@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 const claudeExe = process.env.CLAUDE_EXE || (process.env.APPDATA + '\npm\node_modules\@anthropic-ai\claude-code\bin\claude.exe')
-const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bloblex-live-claude-'))
+const work = fs.mkdtempSync(path.join(os.tmpdir(), 'retinue-live-claude-'))
 const fileA = path.join(work, 'instr-a.txt')
 const fileB = path.join(work, 'instr-b.txt')
 fs.writeFileSync(fileA, 'When you answer, end your reply with the exact token ZEBRA-4417 and nothing after it.\n')

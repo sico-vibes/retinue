@@ -56,7 +56,7 @@ vi.mock('../tauri', () => ({
   selectBlobExportPath: h.selectBlobExportPath, writeBlobExport: h.writeBlobExport, selectBackupExportPath: h.selectBackupExportPath, writeBackupExport: h.writeBackupExport,
   selectBlobImportPath: h.selectBlobImportPath, readBlobImport: h.readBlobImport,
   openInEditor: vi.fn(), revealInExplorer: vi.fn(), resolveProjectFile: vi.fn(),
-  quitBloblex: vi.fn(), setCloseToTray: vi.fn(),
+  quitRetinue: vi.fn(), setCloseToTray: vi.fn(),
   fetchUsageAnalytics: h.fetchUsageAnalytics,
   updatesGetState: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesSetPreferences: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
@@ -102,7 +102,7 @@ const mounted: Array<{ unmount: () => void }> = []
 // choice would.
 function showTeamView() {
   const read = localStorage.getItem.bind(localStorage)
-  try { localStorage.getItem = ((key: string) => key === 'bitbots.sidebar.view' ? 'bots' : read(key)) as typeof localStorage.getItem } catch { /* a stub that refuses assignment keeps its own answers */ }
+  try { localStorage.getItem = ((key: string) => key === 'retinue.sidebar.view' ? 'bots' : read(key)) as typeof localStorage.getItem } catch { /* a stub that refuses assignment keeps its own answers */ }
 }
 
 function startApp() {
@@ -140,7 +140,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-10-02T12:00:00.000Z'))
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  vi.stubGlobal('localStorage', { getItem: vi.fn((key: string) => key === 'bloblex.profile.name' ? 'Ada' : null), setItem: vi.fn(), removeItem: vi.fn(), clear: vi.fn() })
+  vi.stubGlobal('localStorage', { getItem: vi.fn((key: string) => key === 'retinue.profile.name' ? 'Ada' : null), setItem: vi.fn(), removeItem: vi.fn(), clear: vi.fn() })
   for (const mock of Object.values(h)) if (typeof mock === 'function' && 'mockReset' in mock) mock.mockReset()
   const stop = vi.fn()
   h.fetchSnapshot.mockResolvedValue(snapshot())
@@ -173,9 +173,9 @@ beforeEach(() => {
   h.selectBlobExportPath.mockResolvedValue('selected-blob-export-token')
   h.writeBlobExport.mockResolvedValue(undefined)
   h.selectBackupExportPath.mockResolvedValue('selected-backup-export-token')
-  h.writeBackupExport.mockResolvedValue({ path: 'C:/Users/me/Claude.bitbots-backup.json', stats: {} })
+  h.writeBackupExport.mockResolvedValue({ path: 'C:/Users/me/Claude.retinue-backup.json', stats: {} })
   h.selectBlobImportPath.mockResolvedValue('selected-blob-import-token')
-  h.readBlobImport.mockResolvedValue(JSON.stringify({ format: 'bloblex.blob.v1', name: 'Imported helper', description: 'Shared', colour: '#aabbcc', instructions: 'Use concise answers.', model: null, thinking: null, speed: null, look: { shape: 'droplet', seed: 'imported' }, defaultApprovalMode: 'ask' }))
+  h.readBlobImport.mockResolvedValue(JSON.stringify({ format: 'retinue.blob.v1', name: 'Imported helper', description: 'Shared', colour: '#aabbcc', instructions: 'Use concise answers.', model: null, thinking: null, speed: null, look: { shape: 'droplet', seed: 'imported' }, defaultApprovalMode: 'ask' }))
 })
 
 afterEach(() => {

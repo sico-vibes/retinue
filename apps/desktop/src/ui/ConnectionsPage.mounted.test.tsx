@@ -26,10 +26,10 @@ async function mount(node: ReactNode) {
 }
 const settle = () => act(async () => { await Promise.resolve(); await Promise.resolve() })
 
-const off = { enabled: false, tier: 'chat', endpointPath: null, bridgePath: 'C:/Data/bitbots-mcp.exe', command: 'claude mcp add bitbots -- "C:/Data/bitbots-mcp.exe" mcp-server --endpoint "C:/Data/external-mcp.json"', lastCallAt: null, lastClient: null }
+const off = { enabled: false, tier: 'chat', endpointPath: null, bridgePath: 'C:/Data/retinue-mcp.exe', command: 'claude mcp add retinue -- "C:/Data/retinue-mcp.exe" mcp-server --endpoint "C:/Data/external-mcp.json"', lastCallAt: null, lastClient: null }
 
-// Wave 14: Settings › Connections, the Bitbots MCP.
-describe('Bitbots MCP settings', () => {
+// Wave 14: Settings › Connections, the Retinue MCP.
+describe('Retinue MCP settings', () => {
   it('reads only a well-formed status and names the client plainly', () => {
     expect(normalizeExternalStatus({ ...off, tier: 'root' })?.tier).toBe('chat')
     expect(normalizeExternalStatus({ tier: 'chat' })).toBeNull()
@@ -133,13 +133,13 @@ describe('Bitbots MCP settings', () => {
   it('shows a plain problem when the daemon refuses', async () => {
     rpc.mockImplementation(async (method: string) => {
       if (method === 'external.status') return off
-      if (method === 'external.enable') throw new Error('The Bitbots MCP could not be turned on.')
+      if (method === 'external.enable') throw new Error('The Retinue MCP could not be turned on.')
       throw new Error(`unexpected ${method}`)
     })
     const view = await mount(<ConnectionsPage connected />)
     await act(async () => { view.querySelector<HTMLButtonElement>('[role="switch"]')!.click() }); await settle()
     await act(async () => { document.querySelector<HTMLButtonElement>('.connect-consent .primary-button')!.click() }); await settle()
-    expect(view.querySelector('[role="alert"]')?.textContent).toBe('The Bitbots MCP could not be turned on.')
+    expect(view.querySelector('[role="alert"]')?.textContent).toBe('The Retinue MCP could not be turned on.')
     expect(document.querySelector('.connect-consent')).not.toBeNull()
   })
 })

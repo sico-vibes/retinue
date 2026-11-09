@@ -6,7 +6,7 @@ export function pointerDropPlacement(pointerY: number, rowTop: number, rowHeight
   return pointerY < rowTop + rowHeight / 2 ? 'before' : 'after'
 }
 
-export const PINS_STORAGE_KEY = 'bloblex.sidebar.pins'
+export const PINS_STORAGE_KEY = 'retinue.sidebar.pins'
 
 export function emptyPins(): SidebarPins {
   return { v: 1, favorites: [], projects: [], sessions: [], order: [] }

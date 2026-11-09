@@ -9,7 +9,7 @@
       "sha256": "e4176c7c105b2a490b42b7d1550038644219acc521de2dbbe10cb7667d2c0e47"
     },
     {
-      "source": "docs/library/assets/bitbots.png",
+      "source": "docs/library/assets/retinue.png",
       "sha256": "a388c925e5fa6814808753dba3371bcb856ee150d4513b945efc8a2a765d74b7"
     },
     {
@@ -37,27 +37,27 @@
       "sha256": "bbb19cc123b2ca301beae7280a96d1f051023ce23237c7b6dcfef80150e2936b"
     },
     {
-      "source": "docs/library/assets/expansion-2026-10-21/current-board-bitbots-dark-1000.png",
+      "source": "docs/library/assets/expansion-2026-10-21/current-board-retinue-dark-1000.png",
       "sha256": "0729cf05f060d4e3b81f5dddc8eb80a727cbf40581909668580ee5647e4fdb94"
     },
     {
-      "source": "docs/library/assets/expansion-2026-10-21/current-board-bitbots-dark-1440.png",
+      "source": "docs/library/assets/expansion-2026-10-21/current-board-retinue-dark-1440.png",
       "sha256": "bece61ebc5f1d6f29c6f317b6d4ab77341a2077055e4a8d71e86a4105e29158d"
     },
     {
-      "source": "docs/library/assets/expansion-2026-10-21/current-board-bitbots-light-1000.png",
+      "source": "docs/library/assets/expansion-2026-10-21/current-board-retinue-light-1000.png",
       "sha256": "83865d307f23a1403b128af2c60c0d58dd3fb335cc07e9a0de4b938962523646"
     },
     {
-      "source": "docs/library/assets/expansion-2026-10-21/current-board-bitbots-light-1440.png",
+      "source": "docs/library/assets/expansion-2026-10-21/current-board-retinue-light-1440.png",
       "sha256": "584af02c9b5d187158f400e878767fed7ef35ce2371ad820974cf1c39a2e57b5"
     },
     {
-      "source": "docs/library/assets/expansion-2026-10-21/current-board-blobots-dark-1440.png",
+      "source": "docs/library/assets/expansion-2026-10-21/current-board-stone-dark-1440.png",
       "sha256": "82cd75a17c5eda30db86eb822c29fb2440dd3bec1d839877e06720233298243a"
     },
     {
-      "source": "docs/library/assets/expansion-2026-10-21/current-board-blobots-light-1440.png",
+      "source": "docs/library/assets/expansion-2026-10-21/current-board-stone-light-1440.png",
       "sha256": "97c89704afaa7e1193804b983b81dde1166324e1857699967de157760a988e5c"
     },
     {
@@ -125,15 +125,15 @@
       "sha256": "bd46167188c60fa22bf9a09a815a5ffb8d78dc431f613e13672728658ff8d2e0"
     },
     {
-      "source": "docs/library/assets/expansion-2026-10-21/current-schedules-bitbots-dark-1440.png",
+      "source": "docs/library/assets/expansion-2026-10-21/current-schedules-retinue-dark-1440.png",
       "sha256": "cc856f2d68f5b08f355b0ea1acba9eb26c3b5936ed5938c745472b1eafe05e73"
     },
     {
-      "source": "docs/library/assets/expansion-2026-10-21/current-timeline-bitbots-dark-1440.png",
+      "source": "docs/library/assets/expansion-2026-10-21/current-timeline-retinue-dark-1440.png",
       "sha256": "5e85a75c5b43f7b45a505a0ce980d20c7988022de7bf0d67d92e0f6a8a80aaff"
     },
     {
-      "source": "docs/library/assets/expansion-2026-10-21/current-tree-bitbots-dark-1440.png",
+      "source": "docs/library/assets/expansion-2026-10-21/current-tree-retinue-dark-1440.png",
       "sha256": "fd1f20fc0e49b431a70fcfd30a96d6a2fb7f650ccf927822194bfdd553988dee"
     },
     {
@@ -181,15 +181,15 @@
       "sha256": "d54625e582afacdc327ed694f8507fe6ed69157a5e1df7abadd0fe2cadd13b09"
     },
     {
-      "source": "docs/library/assets/screens/main-bitbots-dark.png",
+      "source": "docs/library/assets/screens/main-retinue-dark.png",
       "sha256": "51960b841bae972b78d06c1483e820ce9f3c36f5531df1f91f474a3ce1dac3b1"
     },
     {
-      "source": "docs/library/assets/screens/main-bitbots-light.png",
+      "source": "docs/library/assets/screens/main-retinue-light.png",
       "sha256": "b12c01b151bd99220feef2597320e3a2ff5201516fc44da2d794093fbf1e9565"
     },
     {
-      "source": "docs/library/assets/screens/main-blobots.png",
+      "source": "docs/library/assets/screens/main-stone.png",
       "sha256": "c0fb6212ca371bbc4efddd702518252205f21293559aa680f03f82b4227edebf"
     },
     {
@@ -284,7 +284,7 @@
     {
       "id": "overview",
       "source": "docs/library/content/overview.md",
-      "title": "What Bitbots is",
+      "title": "What Retinue is",
       "section": "Quickstart",
       "status": "Guide",
       "sha256": "c1d4ed1f33dcb3252d0df8d34d3012208c0c9943fdeb7af0b7ca045a4052ce02",
@@ -334,7 +334,7 @@
       "id": "guides/looks-and-appearance",
       "source": "docs/library/content/guides/looks-and-appearance.md",
       "title": "Looks and appearance",
-      "section": "Working with Bitbots",
+      "section": "Working with Retinue",
       "status": "Guide",
       "sha256": "06e22b740ccc30a60f8aa4f888fea9caf9edf00ebceb444daad0046d7739a965",
       "headings": [
@@ -349,13 +349,13 @@
           "level": 2
         },
         {
-          "id": "bitbots-frost",
-          "text": "Bitbots (Frost)",
+          "id": "retinue-frost",
+          "text": "Retinue (Frost)",
           "level": 3
         },
         {
-          "id": "blobots",
-          "text": "Blobots",
+          "id": "stone",
+          "text": "Stone",
           "level": 3
         },
         {
@@ -394,7 +394,7 @@
       "id": "guides/bots",
       "source": "docs/library/content/guides/bots.md",
       "title": "Bots",
-      "section": "Working with Bitbots",
+      "section": "Working with Retinue",
       "status": "Guide",
       "sha256": "7e799f80cfe0550bde641cce02c55608a365bb826e6916e58bf94f15a6f66388",
       "headings": [
@@ -464,7 +464,7 @@
       "id": "guides/conversations-and-approvals",
       "source": "docs/library/content/guides/conversations-and-approvals.md",
       "title": "Conversations and approvals",
-      "section": "Working with Bitbots",
+      "section": "Working with Retinue",
       "status": "Guide",
       "sha256": "820f0fed071c47e6c7a7e307399a3dc39c78a79a94f5f6baf5681870265198af",
       "headings": [
@@ -534,7 +534,7 @@
       "id": "guides/team-and-manager",
       "source": "docs/library/content/guides/team-and-manager.md",
       "title": "Team and Manager",
-      "section": "Working with Bitbots",
+      "section": "Working with Retinue",
       "status": "Guide",
       "sha256": "a3ec7d4856941194dbc6f7ed4cf1f0207ccb84fa96388f7aed5733639ca00d86",
       "headings": [
@@ -584,7 +584,7 @@
       "id": "guides/companion-and-dictation",
       "source": "docs/library/content/guides/companion-and-dictation.md",
       "title": "Companion and dictation",
-      "section": "Working with Bitbots",
+      "section": "Working with Retinue",
       "status": "Guide",
       "sha256": "c3f37a9c3026463acecb449632ad9f454a42387ae5615b5f72dde81e6d5e617b",
       "headings": [
@@ -669,7 +669,7 @@
       "id": "guides/automations-memory-and-skills",
       "source": "docs/library/content/guides/automations-memory-and-skills.md",
       "title": "Automations, memory and skills",
-      "section": "Working with Bitbots",
+      "section": "Working with Retinue",
       "status": "Guide",
       "sha256": "ec741ba89fb090388f48be59c0196ea8d6a9f5ffd50c9bfa1fd4a762bd506a35",
       "headings": [
@@ -749,7 +749,7 @@
       "id": "guides/remote-access",
       "source": "docs/library/content/guides/remote-access.md",
       "title": "Remote access",
-      "section": "Working with Bitbots",
+      "section": "Working with Retinue",
       "status": "Guide",
       "sha256": "91dd72e939e4be271155c70585c3803cbda094067e0ec7ad9aa0ca73e99772e0",
       "headings": [
@@ -794,7 +794,7 @@
       "id": "guides/backup-updates-and-troubleshooting",
       "source": "docs/library/content/guides/backup-updates-and-troubleshooting.md",
       "title": "Backup, updates and troubleshooting",
-      "section": "Working with Bitbots",
+      "section": "Working with Retinue",
       "status": "Guide",
       "sha256": "6fe9de9b1848c2324ca6919f4679fb6b9c1281b29a5888f8f4c1cf7eecb009d8",
       "headings": [
@@ -824,8 +824,8 @@
           "level": 2
         },
         {
-          "id": "bitbots-cannot-reach-its-background-service",
-          "text": "Bitbots cannot reach its background service",
+          "id": "retinue-cannot-reach-its-background-service",
+          "text": "Retinue cannot reach its background service",
           "level": 3
         },
         {
@@ -1753,7 +1753,7 @@
     {
       "id": "repository/README",
       "source": "README.md",
-      "title": "Bitbots",
+      "title": "Retinue",
       "section": "Project documentation",
       "status": "Project reference",
       "sha256": "8204290d4d5afd4d4af6e6963fe354e4fa3c7d4b93fdcdf659a663290916a35b",
@@ -1788,7 +1788,7 @@
     {
       "id": "repository/AGENTS",
       "source": "AGENTS.md",
-      "title": "Bitbots collaboration instructions",
+      "title": "Retinue collaboration instructions",
       "section": "Project documentation",
       "status": "Project reference",
       "sha256": "b9e0f7b4761d9c35fb9cf552626c1521e6e8f61d39cf0ae0a10704b0231d99ae",
@@ -1818,7 +1818,7 @@
     {
       "id": "project/ipc-contract",
       "source": "docs/ipc-contract.md",
-      "title": "Bitbots daemon IPC contract (v1)",
+      "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
       "sha256": "ecfa3780e37dea60a71af54bac5ef741b238f91fb679096892480ea30781459f",
@@ -1964,8 +1964,8 @@
           "level": 2
         },
         {
-          "id": "wave-14-bitbots-mcp",
-          "text": "Wave 14: Bitbots MCP",
+          "id": "wave-14-retinue-mcp",
+          "text": "Wave 14: Retinue MCP",
           "level": 2
         },
         {
@@ -2038,7 +2038,7 @@
     {
       "id": "project/README",
       "source": "docs/README.md",
-      "title": "Bitbots documentation",
+      "title": "Retinue documentation",
       "section": "Project documentation",
       "status": "Project reference",
       "sha256": "d325b7461d824f4a0f1186347cf5dc9aff79ee28aec2bae91f7aaca7913d59cd",
@@ -2169,8 +2169,8 @@
           "level": 3
         },
         {
-          "id": "fix9-rename-to-bitbots",
-          "text": "FIX9: Rename to Bitbots",
+          "id": "fix9-rename-to-retinue",
+          "text": "FIX9: Rename to Retinue",
           "level": 3
         },
         {
@@ -2855,7 +2855,7 @@
     {
       "id": "project/design/components",
       "source": "docs/design/components.md",
-      "title": "Bitbots Components",
+      "title": "Retinue Components",
       "section": "Design & product",
       "status": "Design rule",
       "sha256": "cf17fa66c7f3ad01616a3278b2b77700356b0d5fda89a92061921484170287dd",
@@ -2920,7 +2920,7 @@
     {
       "id": "project/design/design-system",
       "source": "docs/design/design-system.md",
-      "title": "Bitbots Design System",
+      "title": "Retinue Design System",
       "section": "Design & product",
       "status": "Design rule",
       "sha256": "b7bf35b6310df910731f81f8987114c5823aa2802569a551ce84199e88802bdb",
@@ -3025,7 +3025,7 @@
     {
       "id": "project/design/product",
       "source": "docs/design/product.md",
-      "title": "Bitbots Product",
+      "title": "Retinue Product",
       "section": "Design & product",
       "status": "Design rule",
       "sha256": "3b86400d63dc897358f1a5ea456775924a2f38a58c6579dca8786b2fd2ded3e3",
@@ -3068,9 +3068,9 @@
       ]
     },
     {
-      "id": "project/design/bitbots-theme-spec",
-      "source": "docs/design/bitbots-theme-spec.md",
-      "title": "Bitbots theme spec: the pixel re-skin (CSS only)",
+      "id": "project/design/retinue-theme-spec",
+      "source": "docs/design/retinue-theme-spec.md",
+      "title": "Retinue theme spec: the pixel re-skin (CSS only)",
       "section": "Design & product",
       "status": "Design rule",
       "sha256": "6004065d21b17d996060a3fe7dc714ad809ec243cfba570cc2d559ac683c9944",
@@ -3240,7 +3240,7 @@
     {
       "id": "project/operations/session-handoff",
       "source": "docs/operations/session-handoff.md",
-      "title": "Bitbots session handoff",
+      "title": "Retinue session handoff",
       "section": "Operations",
       "status": "Operations",
       "sha256": "ca8990c8296960efaf90b1450a27b280250b1c2f15f3b32dc4a1ef2af8a70fe2",
@@ -3326,8 +3326,8 @@
           "level": 3
         },
         {
-          "id": "owner-review-follow-up-and-bitbots-13-october-2026-after-beta19",
-          "text": "Owner review follow-up and Bitbots (13 October 2026, after beta.19)",
+          "id": "owner-review-follow-up-and-retinue-13-october-2026-after-beta19",
+          "text": "Owner review follow-up and Retinue (13 October 2026, after beta.19)",
           "level": 2
         },
         {
@@ -3751,8 +3751,8 @@
           "level": 2
         },
         {
-          "id": "bitbots-robots-and-fonts",
-          "text": "Bitbots robots and fonts",
+          "id": "retinue-robots-and-fonts",
+          "text": "Retinue robots and fonts",
           "level": 2
         },
         {
@@ -3810,7 +3810,7 @@
     {
       "id": "project/plans/e2e-plan-v2",
       "source": "docs/plans/e2e-plan-v2.md",
-      "title": "Bitbots E2E plan: configurable blobs, sessions tree, token analytics, provider quota, release",
+      "title": "Retinue E2E plan: configurable blobs, sessions tree, token analytics, provider quota, release",
       "section": "Plans & briefs",
       "status": "Plan",
       "sha256": "8f452ae299b8a736c0c2e3c7771f8f30d77ad9e957d06ec5e519a1afb1aa082f",
@@ -3900,7 +3900,7 @@
     {
       "id": "project/plans/expansion-plan-v2",
       "source": "docs/plans/expansion-plan-v2.md",
-      "title": "Bitbots expansion plan v2: tasks, desktop wins, providers, trusted access and phone relay",
+      "title": "Retinue expansion plan v2: tasks, desktop wins, providers, trusted access and phone relay",
       "section": "Plans & briefs",
       "status": "Plan",
       "sha256": "a5f24b3262af5a29c4fb68459439a1aee923f8c8158dc7c8ce180e5d77d78041",
@@ -4005,7 +4005,7 @@
     {
       "id": "project/plans/improvement-plan",
       "source": "docs/plans/improvement-plan.md",
-      "title": "Bitbots improvement plan v2: a BB-informed, companion-style roadmap",
+      "title": "Retinue improvement plan v2: a BB-informed, companion-style roadmap",
       "section": "Plans & briefs",
       "status": "Plan",
       "sha256": "85e20dc7a6ddad65d7caac29c88e116c68e2a5bfdb88a8c98b217313e3c2a5f9",
@@ -4016,8 +4016,8 @@
           "level": 2
         },
         {
-          "id": "what-bitbots-already-has-do-not-re-plan",
-          "text": "What Bitbots already has (do not re-plan)",
+          "id": "what-retinue-already-has-do-not-re-plan",
+          "text": "What Retinue already has (do not re-plan)",
           "level": 2
         },
         {
@@ -4111,8 +4111,8 @@
           "level": 2
         },
         {
-          "id": "phase-0-the-bitbots-mcp-first-release-on-its-own",
-          "text": "Phase 0: the Bitbots MCP (first, release on its own)",
+          "id": "phase-0-the-retinue-mcp-first-release-on-its-own",
+          "text": "Phase 0: the Retinue MCP (first, release on its own)",
           "level": 2
         },
         {
@@ -4184,7 +4184,7 @@
     {
       "id": "project/history/improvement/plan-v1-qa-draft",
       "source": "docs/history/improvement/plan-v1-qa-draft.md",
-      "title": "Bitbots improvement plan: CLI connectivity, reasoning effort, and dictation",
+      "title": "Retinue improvement plan: CLI connectivity, reasoning effort, and dictation",
       "section": "History records",
       "status": "Historical record",
       "sha256": "02d1580e659123349523491d277bb6012ccc5ed1bab56d0256495dbd34b7f17f",
@@ -4560,8 +4560,8 @@
           "level": 2
         },
         {
-          "id": "4-bitbotsjson-gogo-new-sharedsettingsrs",
-          "text": "4. .bitbots.json (Gogo, new shared_settings.rs)",
+          "id": "4-retinuejson-gogo-new-sharedsettingsrs",
+          "text": "4. .retinue.json (Gogo, new shared_settings.rs)",
           "level": 2
         },
         {
@@ -4620,8 +4620,8 @@
       "sha256": "d1d4e74ad43696f088d86e3a32ec8d2dc183552524348bbc5a8569c080035a66",
       "headings": [
         {
-          "id": "1-claudes-own-sub-agents-lane-x-cratesbloblex-adapter-claude-daemon-storage",
-          "text": "1. Claude's own sub-agents (Lane X, crates/bloblex-adapter-claude, daemon, storage)",
+          "id": "1-claudes-own-sub-agents-lane-x-cratesretinue-adapter-claude-daemon-storage",
+          "text": "1. Claude's own sub-agents (Lane X, crates/retinue-adapter-claude, daemon, storage)",
           "level": 2
         },
         {
@@ -4759,7 +4759,7 @@
     {
       "id": "project/history/wave15/mcp-update-bot-brief",
       "source": "docs/history/wave15/mcp-update-bot-brief.md",
-      "title": "Brief: the Bitbots MCP edits bots (update_bot) and may grant Full access",
+      "title": "Brief: the Retinue MCP edits bots (update_bot) and may grant Full access",
       "section": "History records",
       "status": "Historical record",
       "sha256": "949786c190a4105c99487945ffa66cef02724bbbaa5e3ff16b88b3657b57cc03",
@@ -4785,8 +4785,8 @@
           "level": 3
         },
         {
-          "id": "tests-in-cratesbloblex-daemonsrcexternaltestsrs-plus-a-tiers-parity-pass",
-          "text": "Tests (in crates/bloblex-daemon/src/external_tests.rs, plus a tiers parity pass)",
+          "id": "tests-in-cratesretinue-daemonsrcexternaltestsrs-plus-a-tiers-parity-pass",
+          "text": "Tests (in crates/retinue-daemon/src/external_tests.rs, plus a tiers parity pass)",
           "level": 2
         },
         {
@@ -5174,7 +5174,7 @@
     {
       "id": "project/history/fix-01/team-spec",
       "source": "docs/history/fix-01/team-spec.md",
-      "title": "Fix 1C spec: leader-only blob creation over the Bitbots MCP bridge, workflows default on, one reaction per message",
+      "title": "Fix 1C spec: leader-only blob creation over the Retinue MCP bridge, workflows default on, one reaction per message",
       "section": "History records",
       "status": "Historical record",
       "sha256": "b2c4ef09a082d60f9b9d141ab7e178154ac6a2c3417980efebcb6bb8b5b3c12e",
@@ -5264,7 +5264,7 @@
     {
       "id": "project/history/fix-10/report",
       "source": "docs/history/fix-10/report.md",
-      "title": "FIX10 report: theme style (Bitbots / Blobots) and user accent, logic layer",
+      "title": "FIX10 report: theme style (Retinue / Stone) and user accent, logic layer",
       "section": "History records",
       "status": "Historical record",
       "sha256": "c5534823c5f30cba071afb14b0145fe53ac082f0f0b1008f968e960630a8935b",
@@ -5280,8 +5280,8 @@
           "level": 3
         },
         {
-          "id": "appsdesktopsrcblobbitbotsts",
-          "text": "apps/desktop/src/blob/bitbots.ts",
+          "id": "appsdesktopsrcblobretinuets",
+          "text": "apps/desktop/src/blob/retinue.ts",
           "level": 3
         },
         {
@@ -5300,8 +5300,8 @@
           "level": 2
         },
         {
-          "id": "legacy-experimentalbitbots-note",
-          "text": "Legacy experimental.bitbots note",
+          "id": "legacy-experimentalretinue-note",
+          "text": "Legacy experimental.retinue note",
           "level": 3
         },
         {
@@ -5324,7 +5324,7 @@
     {
       "id": "project/history/fix-10/theme-style-spec",
       "source": "docs/history/fix-10/theme-style-spec.md",
-      "title": "FIX10: theme style (Bitbots / Blobots) and user accent colour, logic layer",
+      "title": "FIX10: theme style (Retinue / Stone) and user accent colour, logic layer",
       "section": "History records",
       "status": "Historical record",
       "sha256": "9eba012414eb5e7a06eb8c0dc958000f1ec52ff52e8732d1fe4f95d85fcccafc",
@@ -5364,7 +5364,7 @@
     {
       "id": "project/history/fix-11/report",
       "source": "docs/history/fix-11/report.md",
-      "title": "FIX11 report: Bitbots installed identity (installer, executables, data directory)",
+      "title": "FIX11 report: Retinue installed identity (installer, executables, data directory)",
       "section": "History records",
       "status": "Historical record",
       "sha256": "04b11ca945801a539cb87103fb11f135a84b3929b2411c556e7b8e546621424c",
@@ -5405,8 +5405,8 @@
           "level": 3
         },
         {
-          "id": "tests-temp-dirs-cargo-test--p-bloblex-desktop-migrate",
-          "text": "Tests (temp dirs, cargo test -p bloblex-desktop migrate::)",
+          "id": "tests-temp-dirs-cargo-test--p-retinue-desktop-migrate",
+          "text": "Tests (temp dirs, cargo test -p retinue-desktop migrate::)",
           "level": 3
         },
         {
@@ -5429,7 +5429,7 @@
     {
       "id": "project/history/fix-11/identity-spec",
       "source": "docs/history/fix-11/identity-spec.md",
-      "title": "FIX11: Bitbots installed identity (installer, executables, data directory)",
+      "title": "FIX11: Retinue installed identity (installer, executables, data directory)",
       "section": "History records",
       "status": "Historical record",
       "sha256": "6c7ed306f56a68502c83039d4a82e8feeda849fd8ee112849121e54578329e27",
@@ -5459,7 +5459,7 @@
     {
       "id": "project/history/fix-12/report",
       "source": "docs/history/fix-12/report.md",
-      "title": "FIX12 report — the characters are \"bots\" in Bitbots and \"blobs\" in Blobots",
+      "title": "FIX12 report — the characters are \"bots\" in Retinue and \"blobs\" in Stone",
       "section": "History records",
       "status": "Historical record",
       "sha256": "9db1010f1885f3f4e08978f882b9e65eb1015d74d86a946b0375001aad665836",
@@ -5504,7 +5504,7 @@
     {
       "id": "project/history/fix-12/vocabulary-spec",
       "source": "docs/history/fix-12/vocabulary-spec.md",
-      "title": "FIX12: the characters are \"bots\" in Bitbots and \"blobs\" in Blobots",
+      "title": "FIX12: the characters are \"bots\" in Retinue and \"blobs\" in Stone",
       "section": "History records",
       "status": "Historical record",
       "sha256": "08f4db2c9f4e856788e52b89e0b761500810027428810517001b8481a70a37f9",
@@ -5550,8 +5550,8 @@
           "level": 2
         },
         {
-          "id": "daemon-settings-cratesbloblex-storagesrclibrs",
-          "text": "Daemon settings (crates/bloblex-storage/src/lib.rs)",
+          "id": "daemon-settings-cratesretinue-storagesrclibrs",
+          "text": "Daemon settings (crates/retinue-storage/src/lib.rs)",
           "level": 3
         },
         {
@@ -6555,23 +6555,23 @@
           "level": 2
         },
         {
-          "id": "cratesbloblex-storagesrclibrs",
-          "text": "crates/bloblex-storage/src/lib.rs",
+          "id": "cratesretinue-storagesrclibrs",
+          "text": "crates/retinue-storage/src/lib.rs",
           "level": 3
         },
         {
-          "id": "cratesbloblex-daemonsrcteamrs",
-          "text": "crates/bloblex-daemon/src/team.rs",
+          "id": "cratesretinue-daemonsrcteamrs",
+          "text": "crates/retinue-daemon/src/team.rs",
           "level": 3
         },
         {
-          "id": "cratesbloblex-daemonsrcmainrs",
-          "text": "crates/bloblex-daemon/src/main.rs",
+          "id": "cratesretinue-daemonsrcmainrs",
+          "text": "crates/retinue-daemon/src/main.rs",
           "level": 3
         },
         {
-          "id": "cratesbloblex-daemonsrcexperimentsrs",
-          "text": "crates/bloblex-daemon/src/experiments.rs",
+          "id": "cratesretinue-daemonsrcexperimentsrs",
+          "text": "crates/retinue-daemon/src/experiments.rs",
           "level": 3
         },
         {
@@ -6760,8 +6760,8 @@
           "level": 2
         },
         {
-          "id": "new-module-cratesbloblex-daemonsrccatalogrs",
-          "text": "New module crates/bloblex-daemon/src/catalog.rs",
+          "id": "new-module-cratesretinue-daemonsrccatalogrs",
+          "text": "New module crates/retinue-daemon/src/catalog.rs",
           "level": 3
         },
         {
@@ -6915,18 +6915,18 @@
           "level": 2
         },
         {
-          "id": "cratesbloblex-daemonsrcmainrs",
-          "text": "crates/bloblex-daemon/src/main.rs",
+          "id": "cratesretinue-daemonsrcmainrs",
+          "text": "crates/retinue-daemon/src/main.rs",
           "level": 3
         },
         {
-          "id": "cratesbloblex-daemonsrccatalogrs",
-          "text": "crates/bloblex-daemon/src/catalog.rs",
+          "id": "cratesretinue-daemonsrccatalogrs",
+          "text": "crates/retinue-daemon/src/catalog.rs",
           "level": 3
         },
         {
-          "id": "cratesbloblex-speechsrccloudrs",
-          "text": "crates/bloblex-speech/src/cloud.rs",
+          "id": "cratesretinue-speechsrccloudrs",
+          "text": "crates/retinue-speech/src/cloud.rs",
           "level": 3
         },
         {
@@ -6990,8 +6990,8 @@
           "level": 2
         },
         {
-          "id": "3-rust-cratesbloblex-daemonsrcremote-new",
-          "text": "3. Rust: crates/bloblex-daemon/src/remote/ (new)",
+          "id": "3-rust-cratesretinue-daemonsrcremote-new",
+          "text": "3. Rust: crates/retinue-daemon/src/remote/ (new)",
           "level": 2
         },
         {
@@ -7074,7 +7074,7 @@
     {
       "id": "project/history/fix-29/wp6b-gateway-spec",
       "source": "docs/history/fix-29/wp6b-gateway-spec.md",
-      "title": "FIX29 (WP6b): the remote gateway in bitbotsd over Tailscale",
+      "title": "FIX29 (WP6b): the remote gateway in retinued over Tailscale",
       "section": "History records",
       "status": "Historical record",
       "sha256": "d09a30a5185af63ec9e89e1fa7951997c443794231e706ed8c218024b83f6752",
@@ -7085,8 +7085,8 @@
           "level": 2
         },
         {
-          "id": "module-layout-cratesbloblex-daemonsrcremote",
-          "text": "Module layout: crates/bloblex-daemon/src/remote/",
+          "id": "module-layout-cratesretinue-daemonsrcremote",
+          "text": "Module layout: crates/retinue-daemon/src/remote/",
           "level": 2
         },
         {
@@ -7100,8 +7100,8 @@
           "level": 2
         },
         {
-          "id": "storage-cratesbloblex-storagesrclibrs",
-          "text": "Storage (crates/bloblex-storage/src/lib.rs)",
+          "id": "storage-cratesretinue-storagesrclibrs",
+          "text": "Storage (crates/retinue-storage/src/lib.rs)",
           "level": 2
         },
         {
@@ -7379,7 +7379,7 @@
     {
       "id": "project/history/fix-29/wp6b-report",
       "source": "docs/history/fix-29/wp6b-report.md",
-      "title": "FIX29 WP6b — the remote gateway in bitbotsd over Tailscale",
+      "title": "FIX29 WP6b — the remote gateway in retinued over Tailscale",
       "section": "History records",
       "status": "Historical record",
       "sha256": "14e56d14d0bd6d67af4f368a88bd9ba5405d944b439d4db5052cb9e0b990b3f3",
@@ -7545,28 +7545,28 @@
           "level": 2
         },
         {
-          "id": "new-module-cratesbloblex-daemonsrcbackuprs",
-          "text": "New module crates/bloblex-daemon/src/backup.rs",
+          "id": "new-module-cratesretinue-daemonsrcbackuprs",
+          "text": "New module crates/retinue-daemon/src/backup.rs",
           "level": 3
         },
         {
-          "id": "cratesbloblex-daemonsrcmainrs",
-          "text": "crates/bloblex-daemon/src/main.rs",
+          "id": "cratesretinue-daemonsrcmainrs",
+          "text": "crates/retinue-daemon/src/main.rs",
           "level": 3
         },
         {
-          "id": "cratesbloblex-daemonsrcskillsrs",
-          "text": "crates/bloblex-daemon/src/skills.rs",
+          "id": "cratesretinue-daemonsrcskillsrs",
+          "text": "crates/retinue-daemon/src/skills.rs",
           "level": 3
         },
         {
-          "id": "cratesbloblex-storagesrclibrs",
-          "text": "crates/bloblex-storage/src/lib.rs",
+          "id": "cratesretinue-storagesrclibrs",
+          "text": "crates/retinue-storage/src/lib.rs",
           "level": 3
         },
         {
-          "id": "cratesbloblex-daemoncargotoml-cargolock",
-          "text": "crates/bloblex-daemon/Cargo.toml + Cargo.lock",
+          "id": "cratesretinue-daemoncargotoml-cargolock",
+          "text": "crates/retinue-daemon/Cargo.toml + Cargo.lock",
           "level": 3
         },
         {
@@ -7635,8 +7635,8 @@
           "level": 2
         },
         {
-          "id": "1-format-one-bitbots-backupjson-file",
-          "text": "1. Format: one .bitbots-backup.json file",
+          "id": "1-format-one-retinue-backupjson-file",
+          "text": "1. Format: one .retinue-backup.json file",
           "level": 2
         },
         {
@@ -7665,8 +7665,8 @@
           "level": 3
         },
         {
-          "id": "2-rpcs-new-module-cratesbloblex-daemonsrcbackuprs",
-          "text": "2. RPCs (new module crates/bloblex-daemon/src/backup.rs)",
+          "id": "2-rpcs-new-module-cratesretinue-daemonsrcbackuprs",
+          "text": "2. RPCs (new module crates/retinue-daemon/src/backup.rs)",
           "level": 2
         },
         {
@@ -7705,23 +7705,23 @@
           "level": 2
         },
         {
-          "id": "storage-cratesbloblex-storagesrclibrs",
-          "text": "Storage (crates/bloblex-storage/src/lib.rs)",
+          "id": "storage-cratesretinue-storagesrclibrs",
+          "text": "Storage (crates/retinue-storage/src/lib.rs)",
           "level": 3
         },
         {
-          "id": "module-cratesbloblex-daemonsrcskillsrs-new",
-          "text": "Module crates/bloblex-daemon/src/skills.rs (new)",
+          "id": "module-cratesretinue-daemonsrcskillsrs-new",
+          "text": "Module crates/retinue-daemon/src/skills.rs (new)",
           "level": 3
         },
         {
-          "id": "daemon-wiring-cratesbloblex-daemonsrcmainrs",
-          "text": "Daemon wiring (crates/bloblex-daemon/src/main.rs)",
+          "id": "daemon-wiring-cratesretinue-daemonsrcmainrs",
+          "text": "Daemon wiring (crates/retinue-daemon/src/main.rs)",
           "level": 3
         },
         {
-          "id": "team-bridge-cratesbloblex-daemonsrcteamrs",
-          "text": "Team bridge (crates/bloblex-daemon/src/team.rs)",
+          "id": "team-bridge-cratesretinue-daemonsrcteamrs",
+          "text": "Team bridge (crates/retinue-daemon/src/team.rs)",
           "level": 3
         },
         {
@@ -7735,8 +7735,8 @@
           "level": 2
         },
         {
-          "id": "mcp-tools-on-the-bloblex-bridge",
-          "text": "MCP tools on the bloblex bridge",
+          "id": "mcp-tools-on-the-retinue-bridge",
+          "text": "MCP tools on the retinue bridge",
           "level": 2
         },
         {
@@ -7780,8 +7780,8 @@
           "level": 2
         },
         {
-          "id": "2-module-cratesbloblex-daemonsrcskillsrs",
-          "text": "2. Module crates/bloblex-daemon/src/skills.rs",
+          "id": "2-module-cratesretinue-daemonsrcskillsrs",
+          "text": "2. Module crates/retinue-daemon/src/skills.rs",
           "level": 2
         },
         {
@@ -7790,8 +7790,8 @@
           "level": 2
         },
         {
-          "id": "4-mcp-tools-on-the-existing-bloblex-bridge-teamtools",
-          "text": "4. MCP tools on the existing bloblex bridge (team::tools)",
+          "id": "4-mcp-tools-on-the-existing-retinue-bridge-teamtools",
+          "text": "4. MCP tools on the existing retinue bridge (team::tools)",
           "level": 2
         },
         {
@@ -7929,7 +7929,7 @@
     {
       "id": "project/history/fix-34/a1-remote-web-spec",
       "source": "docs/history/fix-34/a1-remote-web-spec.md",
-      "title": "FIX34 A1: the remote web app loads (\"Bitbots Remote is not installed\")",
+      "title": "FIX34 A1: the remote web app loads (\"Retinue Remote is not installed\")",
       "section": "History records",
       "status": "Historical record",
       "sha256": "80b913a7968ec65f6ff4c863015336796c509b06bfb2f8913826d21d4b5cbc4f",
@@ -8080,8 +8080,8 @@
       "sha256": "56c0f5c62ca6c7fb40f53f12c2e26bd3b6402a44816e43ee999bbd63bfe28fec",
       "headings": [
         {
-          "id": "part-1-daemon-cratesbloblex-daemonsrcmainrs",
-          "text": "Part 1 — daemon (crates/bloblex-daemon/src/main.rs)",
+          "id": "part-1-daemon-cratesretinue-daemonsrcmainrs",
+          "text": "Part 1 — daemon (crates/retinue-daemon/src/main.rs)",
           "level": 2
         },
         {
@@ -8125,8 +8125,8 @@
           "level": 2
         },
         {
-          "id": "cargo-test--p-bloblex-desktop---lib",
-          "text": "cargo test -p bloblex-desktop --lib",
+          "id": "cargo-test--p-retinue-desktop---lib",
+          "text": "cargo test -p retinue-desktop --lib",
           "level": 3
         },
         {
@@ -8613,13 +8613,13 @@
           "level": 2
         },
         {
-          "id": "storage-cratesbloblex-storagesrclibrs",
-          "text": "Storage (crates/bloblex-storage/src/lib.rs)",
+          "id": "storage-cratesretinue-storagesrclibrs",
+          "text": "Storage (crates/retinue-storage/src/lib.rs)",
           "level": 3
         },
         {
-          "id": "daemon-cratesbloblex-daemonsrcmainrs-teamrs",
-          "text": "Daemon (crates/bloblex-daemon/src/main.rs, team.rs)",
+          "id": "daemon-cratesretinue-daemonsrcmainrs-teamrs",
+          "text": "Daemon (crates/retinue-daemon/src/main.rs, team.rs)",
           "level": 3
         },
         {
@@ -8707,8 +8707,8 @@
       "sha256": "404b04d8949061116afdabcb2fa12cb42544862b3db864c7f8890318d6a915b1",
       "headings": [
         {
-          "id": "1-storage-cratesbloblex-storagesrclibrs",
-          "text": "1. Storage (crates/bloblex-storage/src/lib.rs)",
+          "id": "1-storage-cratesretinue-storagesrclibrs",
+          "text": "1. Storage (crates/retinue-storage/src/lib.rs)",
           "level": 2
         },
         {
@@ -8717,8 +8717,8 @@
           "level": 2
         },
         {
-          "id": "new-module-cratesbloblex-daemonsrcproposalsrs",
-          "text": "New module crates/bloblex-daemon/src/proposals.rs",
+          "id": "new-module-cratesretinue-daemonsrcproposalsrs",
+          "text": "New module crates/retinue-daemon/src/proposals.rs",
           "level": 3
         },
         {
@@ -9650,8 +9650,8 @@
           "level": 2
         },
         {
-          "id": "p7-the-bitbots-tool-set-added-by-the-director-from-the-owners-answer-3",
-          "text": "P7: the Bitbots tool set (added by the Director from the owner's answer 3)",
+          "id": "p7-the-retinue-tool-set-added-by-the-director-from-the-owners-answer-3",
+          "text": "P7: the Retinue tool set (added by the Director from the owner's answer 3)",
           "level": 2
         },
         {
@@ -9875,23 +9875,23 @@
           "level": 2
         },
         {
-          "id": "1-new-git-helper-cratesbloblex-daemonsrcworktreers-new",
-          "text": "1. New git helper — crates/bloblex-daemon/src/worktree.rs (new)",
+          "id": "1-new-git-helper-cratesretinue-daemonsrcworktreers-new",
+          "text": "1. New git helper — crates/retinue-daemon/src/worktree.rs (new)",
           "level": 3
         },
         {
-          "id": "2-decide-and-isolate-in-cratesbloblex-daemonsrcteamrs",
-          "text": "2. Decide and isolate in crates/bloblex-daemon/src/team.rs",
+          "id": "2-decide-and-isolate-in-cratesretinue-daemonsrcteamrs",
+          "text": "2. Decide and isolate in crates/retinue-daemon/src/team.rs",
           "level": 3
         },
         {
-          "id": "3-new-merge-proposal-kind-cratesbloblex-daemonsrcproposalsrs",
-          "text": "3. New merge proposal kind — crates/bloblex-daemon/src/proposals.rs",
+          "id": "3-new-merge-proposal-kind-cratesretinue-daemonsrcproposalsrs",
+          "text": "3. New merge proposal kind — crates/retinue-daemon/src/proposals.rs",
           "level": 3
         },
         {
-          "id": "4-storage-cratesbloblex-storagesrclibrs-outside-the-package-list",
-          "text": "4. Storage — crates/bloblex-storage/src/lib.rs (outside the package list)",
+          "id": "4-storage-cratesretinue-storagesrclibrs-outside-the-package-list",
+          "text": "4. Storage — crates/retinue-storage/src/lib.rs (outside the package list)",
           "level": 3
         },
         {
@@ -10080,8 +10080,8 @@
           "level": 3
         },
         {
-          "id": "fixtures-recorded-from-the-live-run-bitbotslivetests1",
-          "text": "Fixtures recorded from the live run (BITBOTS_LIVE_TESTS=1)",
+          "id": "fixtures-recorded-from-the-live-run-retinuelivetests1",
+          "text": "Fixtures recorded from the live run (RETINUE_LIVE_TESTS=1)",
           "level": 2
         },
         {
@@ -10955,8 +10955,8 @@
           "level": 2
         },
         {
-          "id": "f1-a-locked-bot-can-use-plan-mode-again-cratesbloblex-daemonsrcmainrs",
-          "text": "F1. A locked bot can use plan mode again — crates/bloblex-daemon/src/main.rs",
+          "id": "f1-a-locked-bot-can-use-plan-mode-again-cratesretinue-daemonsrcmainrs",
+          "text": "F1. A locked bot can use plan mode again — crates/retinue-daemon/src/main.rs",
           "level": 2
         },
         {
@@ -11850,8 +11850,8 @@
           "level": 3
         },
         {
-          "id": "item-22-an-mcp-that-lets-bots-or-the-manager-control-bitbots",
-          "text": "Item 22 — An MCP that lets bots or the Manager control Bitbots",
+          "id": "item-22-an-mcp-that-lets-bots-or-the-manager-control-retinue",
+          "text": "Item 22 — An MCP that lets bots or the Manager control Retinue",
           "level": 2
         },
         {
@@ -12095,8 +12095,8 @@
           "level": 3
         },
         {
-          "id": "22-mcp-to-control-bitbots-partly-right-answer-below",
-          "text": "22. MCP to control Bitbots — Partly right (answer below)",
+          "id": "22-mcp-to-control-retinue-partly-right-answer-below",
+          "text": "22. MCP to control Retinue — Partly right (answer below)",
           "level": 3
         },
         {
@@ -12120,8 +12120,8 @@
           "level": 3
         },
         {
-          "id": "item-22-can-bots-or-the-manager-control-bitbots-through-an-mcp-like-t3-code",
-          "text": "Item 22: can bots or the Manager control Bitbots through an MCP, like T3 Code?",
+          "id": "item-22-can-bots-or-the-manager-control-retinue-through-an-mcp-like-t3-code",
+          "text": "Item 22: can bots or the Manager control Retinue through an MCP, like T3 Code?",
           "level": 3
         },
         {
@@ -12503,7 +12503,7 @@
     {
       "id": "project/history/fix-40/report",
       "source": "docs/history/fix-40/report.md",
-      "title": "FIX40 report: Bitbots looks, bot art and look orbs",
+      "title": "FIX40 report: Retinue looks, bot art and look orbs",
       "section": "History records",
       "status": "Historical record",
       "sha256": "6129ea1360386511f2513884c7f04120e070755548a82e10e0943e69a2cdd40e",
@@ -12524,8 +12524,8 @@
           "level": 3
         },
         {
-          "id": "frost-bitbots",
-          "text": "Frost (Bitbots)",
+          "id": "frost-retinue",
+          "text": "Frost (Retinue)",
           "level": 3
         },
         {
@@ -12534,8 +12534,8 @@
           "level": 3
         },
         {
-          "id": "blobots-and-legacy",
-          "text": "Blobots and Legacy",
+          "id": "stone-and-legacy",
+          "text": "Stone and Legacy",
           "level": 3
         },
         {
@@ -12613,7 +12613,7 @@
     {
       "id": "project/history/fix-40/t3-research",
       "source": "docs/history/fix-40/t3-research.md",
-      "title": "FIX40 research — how T3 Code runs its agents, and what Bitbots should take from it",
+      "title": "FIX40 research — how T3 Code runs its agents, and what Retinue should take from it",
       "section": "History records",
       "status": "Historical record",
       "sha256": "f093d4c35104b4683f8001f4ba634a7bd28a7a0c927711acf1f84eff8659d7e1",
@@ -12654,8 +12654,8 @@
           "level": 3
         },
         {
-          "id": "q6-their-mcp-vs-our-bloblex-bridge-and-the-p7-tool-set",
-          "text": "Q6. Their MCP vs our bloblex bridge and the P7 tool set",
+          "id": "q6-their-mcp-vs-our-retinue-bridge-and-the-p7-tool-set",
+          "text": "Q6. Their MCP vs our retinue bridge and the P7 tool set",
           "level": 3
         },
         {
@@ -12688,7 +12688,7 @@
     {
       "id": "project/history/fix-40/t3-research-brief",
       "source": "docs/history/fix-40/t3-research-brief.md",
-      "title": "FIX40 research brief: how T3 Code runs its agents, and what Bitbots should take from it",
+      "title": "FIX40 research brief: how T3 Code runs its agents, and what Retinue should take from it",
       "section": "History records",
       "status": "Historical record",
       "sha256": "d226d105a7d1d95872924dcfb8a67fddc84ee3b009b4e537f77b43c226c5ee83",
@@ -12699,8 +12699,8 @@
           "level": 2
         },
         {
-          "id": "questions-to-answer-with-fileline-evidence-from-t3-and-from-bitbots",
-          "text": "Questions to answer, with file:line evidence from T3 and from Bitbots",
+          "id": "questions-to-answer-with-fileline-evidence-from-t3-and-from-retinue",
+          "text": "Questions to answer, with file:line evidence from T3 and from Retinue",
           "level": 2
         },
         {
@@ -12758,7 +12758,7 @@
     {
       "id": "project/history/fix-40/themes-spec",
       "source": "docs/history/fix-40/themes-spec.md",
-      "title": "FIX40 Themes lane: Frost becomes Bitbots, new looks, fonts, wallpapers, Appearance page",
+      "title": "FIX40 Themes lane: Frost becomes Retinue, new looks, fonts, wallpapers, Appearance page",
       "section": "History records",
       "status": "Historical record",
       "sha256": "d0fe752ca088f5162dcb9c56e96d2b0aaa8ac848da9688abcf8e2c37a4ac6555",
@@ -12784,8 +12784,8 @@
           "level": 2
         },
         {
-          "id": "t2-frost-style-bitbots",
-          "text": "T2. Frost (style bitbots)",
+          "id": "t2-frost-style-retinue",
+          "text": "T2. Frost (style retinue)",
           "level": 2
         },
         {
@@ -12949,8 +12949,8 @@
           "level": 2
         },
         {
-          "id": "legacy-and-blobots-unchanged",
-          "text": "Legacy and Blobots unchanged",
+          "id": "legacy-and-stone-unchanged",
+          "text": "Legacy and Stone unchanged",
           "level": 2
         },
         {
@@ -13358,7 +13358,7 @@
     {
       "id": "project/history/fix-09/rename-report",
       "source": "docs/history/fix-09/rename-report.md",
-      "title": "FIX9 rename report: Bloblex to Bitbots",
+      "title": "FIX9 rename report: Retinue to Retinue",
       "section": "History records",
       "status": "Historical record",
       "sha256": "b235de343840a295b30555efb7df15a7e21a0c24e86295c68a9158bea94b993d",
@@ -13403,7 +13403,7 @@
     {
       "id": "project/history/fix-09/rename-spec",
       "source": "docs/history/fix-09/rename-spec.md",
-      "title": "FIX9: rename the product from Bloblex to Bitbots",
+      "title": "FIX9: rename the product from Retinue to Retinue",
       "section": "History records",
       "status": "Historical record",
       "sha256": "2c41a2c008991f5c610e823d9f0631571ad821a8bb65c31d516ba66ffc0ce460",
@@ -13533,13 +13533,13 @@
           "level": 2
         },
         {
-          "id": "cratesbloblex-daemonsrccheckpointsrs",
-          "text": "crates/bloblex-daemon/src/checkpoints.rs",
+          "id": "cratesretinue-daemonsrccheckpointsrs",
+          "text": "crates/retinue-daemon/src/checkpoints.rs",
           "level": 3
         },
         {
-          "id": "cratesbloblex-daemonsrcmainrs",
-          "text": "crates/bloblex-daemon/src/main.rs",
+          "id": "cratesretinue-daemonsrcmainrs",
+          "text": "crates/retinue-daemon/src/main.rs",
           "level": 3
         },
         {
@@ -13881,7 +13881,7 @@
     {
       "id": "project/history/t3/brief-pty",
       "source": "docs/history/t3/brief-pty.md",
-      "title": "Lane PTY: native terminal sessions for the Bitbots desktop shell",
+      "title": "Lane PTY: native terminal sessions for the Retinue desktop shell",
       "section": "History records",
       "status": "Historical record",
       "sha256": "b589ed4617475ea3bccb53bc52c6f5a1dca8e0ddb102900f7bbe0ee8a22fe75d",
@@ -13982,8 +13982,8 @@
           "level": 2
         },
         {
-          "id": "proposed-bitbots-development-skill-note-not-applied-claude-is-out-of-bounds-for-this-lane",
-          "text": "Proposed bitbots-development skill note (not applied: .claude/ is out of bounds for this lane)",
+          "id": "proposed-retinue-development-skill-note-not-applied-claude-is-out-of-bounds-for-this-lane",
+          "text": "Proposed retinue-development skill note (not applied: .claude/ is out of bounds for this lane)",
           "level": 2
         }
       ]
@@ -14722,8 +14722,8 @@
           "level": 2
         },
         {
-          "id": "appendix-tails-of-each-cargo-check--p-bloblex-daemon--p-bloblex-storage",
-          "text": "Appendix — tails of each cargo check -p bloblex-daemon -p bloblex-storage",
+          "id": "appendix-tails-of-each-cargo-check--p-retinue-daemon--p-retinue-storage",
+          "text": "Appendix — tails of each cargo check -p retinue-daemon -p retinue-storage",
           "level": 2
         }
       ]
@@ -15262,8 +15262,8 @@
           "level": 2
         },
         {
-          "id": "adapter-trait-bloblex-agent-core",
-          "text": "Adapter trait (bloblex-agent-core)",
+          "id": "adapter-trait-retinue-agent-core",
+          "text": "Adapter trait (retinue-agent-core)",
           "level": 3
         },
         {
@@ -15272,8 +15272,8 @@
           "level": 3
         },
         {
-          "id": "capability-and-gate-bloblex-daemon",
-          "text": "Capability and gate (bloblex-daemon)",
+          "id": "capability-and-gate-retinue-daemon",
+          "text": "Capability and gate (retinue-daemon)",
           "level": 3
         },
         {
@@ -15936,7 +15936,7 @@
     {
       "id": "project/history/improvement/phase-4b-spec",
       "source": "docs/history/improvement/phase-4b-spec.md",
-      "title": "Phase 4B spec: keep the computer awake while Bitbots has work (native)",
+      "title": "Phase 4B spec: keep the computer awake while Retinue has work (native)",
       "section": "History records",
       "status": "Historical record",
       "sha256": "b8f0a6445142732353695e46d0ae0dc3ac8f9bf6b3191fdd194f762caf87a217",
@@ -15997,8 +15997,8 @@
           "level": 2
         },
         {
-          "id": "mcp-tools-on-the-existing-bridge-extend-the-tool-list-and-mcprpc-in-teamrs-only-when-experimentalmemory-is-on-auto-allowed-like-the-existing-bloblex-tools",
-          "text": "MCP tools on the existing bridge (extend the tool list and mcp_rpc in team.rs; only when experimental.memory is on; auto-allowed like the existing bloblex tools)",
+          "id": "mcp-tools-on-the-existing-bridge-extend-the-tool-list-and-mcprpc-in-teamrs-only-when-experimentalmemory-is-on-auto-allowed-like-the-existing-retinue-tools",
+          "text": "MCP tools on the existing bridge (extend the tool list and mcp_rpc in team.rs; only when experimental.memory is on; auto-allowed like the existing retinue tools)",
           "level": 2
         },
         {
@@ -16097,13 +16097,13 @@
           "level": 2
         },
         {
-          "id": "cloud-transcriber-bloblex-speechcloud-pure-no-native-feature",
-          "text": "Cloud transcriber (bloblex-speech::cloud, pure, no native feature)",
+          "id": "cloud-transcriber-retinue-speechcloud-pure-no-native-feature",
+          "text": "Cloud transcriber (retinue-speech::cloud, pure, no native feature)",
           "level": 2
         },
         {
-          "id": "engine-selection-bloblex-speech-pure-function-with-tests",
-          "text": "Engine selection (bloblex-speech, pure function with tests)",
+          "id": "engine-selection-retinue-speech-pure-function-with-tests",
+          "text": "Engine selection (retinue-speech, pure function with tests)",
           "level": 2
         },
         {
@@ -16621,7 +16621,7 @@
     {
       "id": "project/history/wave14/mcp-brief",
       "source": "docs/history/wave14/mcp-brief.md",
-      "title": "Wave 14 brief: the Bitbots MCP (backend)",
+      "title": "Wave 14 brief: the Retinue MCP (backend)",
       "section": "History records",
       "status": "Historical record",
       "sha256": "ce72e30fec530f119f731d2811b558b427ee9fdc78089e9f58e6b56396cc29b5",
@@ -16727,8 +16727,8 @@
           "level": 3
         },
         {
-          "id": "2-opencodes-question-tool-always-fails-inside-bitbots",
-          "text": "2. OpenCode's question tool always fails inside Bitbots",
+          "id": "2-opencodes-question-tool-always-fails-inside-retinue",
+          "text": "2. OpenCode's question tool always fails inside Retinue",
           "level": 2
         },
         {
@@ -16802,8 +16802,8 @@
           "level": 3
         },
         {
-          "id": "7-the-bitbots-mcp-externalrs",
-          "text": "7. The Bitbots MCP (external.rs)",
+          "id": "7-the-retinue-mcp-externalrs",
+          "text": "7. The Retinue MCP (external.rs)",
           "level": 3
         },
         {
@@ -16831,14 +16831,14 @@
     {
       "id": "project/releases/0.1.0-beta.29",
       "source": "docs/releases/0.1.0-beta.29.md",
-      "title": "Bitbots 0.1.0-beta.29",
+      "title": "Retinue 0.1.0-beta.29",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "a322d702bf3fd7f0eef29fcfa2f5542bdbf39764168e3c97aff116dc9c07c734",
       "headings": [
         {
-          "id": "upgrading-from-bloblex",
-          "text": "Upgrading from Bloblex",
+          "id": "upgrading-from-retinue",
+          "text": "Upgrading from Retinue",
           "level": 2
         },
         {
@@ -16866,7 +16866,7 @@
     {
       "id": "project/releases/0.1.0-beta.30",
       "source": "docs/releases/0.1.0-beta.30.md",
-      "title": "Bitbots 0.1.0-beta.30",
+      "title": "Retinue 0.1.0-beta.30",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "b87193547270395b72acedd63638b80ee09a97b7e4b50f72598e6313f0d0c3a9",
@@ -16901,7 +16901,7 @@
     {
       "id": "project/releases/0.1.0-beta.31",
       "source": "docs/releases/0.1.0-beta.31.md",
-      "title": "Bitbots 0.1.0-beta.31",
+      "title": "Retinue 0.1.0-beta.31",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "7a0d2ac033c1c7b1ebdbfaf9a4743efaa9b01878c2813c8f5e80ea25e38c8c12",
@@ -16941,7 +16941,7 @@
     {
       "id": "project/releases/0.1.0-beta.32",
       "source": "docs/releases/0.1.0-beta.32.md",
-      "title": "Bitbots 0.1.0-beta.32",
+      "title": "Retinue 0.1.0-beta.32",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "baa99ed1680c459e46a327c3864c2223224ff614f6f270c99369a350ab498e11",
@@ -16971,7 +16971,7 @@
     {
       "id": "project/releases/0.1.0-beta.33",
       "source": "docs/releases/0.1.0-beta.33.md",
-      "title": "Bitbots 0.1.0-beta.33",
+      "title": "Retinue 0.1.0-beta.33",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "f1ae5a1ce6f88d1c5551ad1c5b4a2aa6cb7971b26f5cc3978731134a126feb50",
@@ -17001,7 +17001,7 @@
     {
       "id": "project/releases/0.1.0-beta.34",
       "source": "docs/releases/0.1.0-beta.34.md",
-      "title": "Bitbots 0.1.0-beta.34",
+      "title": "Retinue 0.1.0-beta.34",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "13188dbf222cbc7c509a7dd1120959f0e56f5cea648a384f874ef87acac7a5d4",
@@ -17036,7 +17036,7 @@
     {
       "id": "project/releases/0.1.0-beta.35",
       "source": "docs/releases/0.1.0-beta.35.md",
-      "title": "Bitbots 0.1.0-beta.35",
+      "title": "Retinue 0.1.0-beta.35",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "e2b1dd7d356530f3899a2c4a8e610fc49c0c61930e6541a598e7850e5942d6ef",
@@ -17071,7 +17071,7 @@
     {
       "id": "project/releases/0.1.0-beta.36",
       "source": "docs/releases/0.1.0-beta.36.md",
-      "title": "Bitbots 0.1.0-beta.36",
+      "title": "Retinue 0.1.0-beta.36",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "cef425c0be41c24fc3d54af28c7c4e38d14febee8f51bae2d53c3765e3c5f17d",
@@ -17101,7 +17101,7 @@
     {
       "id": "project/releases/0.1.0-beta.37",
       "source": "docs/releases/0.1.0-beta.37.md",
-      "title": "Bitbots 0.1.0-beta.37",
+      "title": "Retinue 0.1.0-beta.37",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "d47997dcee39eb7bdc2b70fa205d48755a33cf8d49bb0e4cf29b5909d3982db8",
@@ -17136,7 +17136,7 @@
     {
       "id": "project/releases/0.1.0-beta.38",
       "source": "docs/releases/0.1.0-beta.38.md",
-      "title": "Bitbots 0.1.0-beta.38",
+      "title": "Retinue 0.1.0-beta.38",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "5387b68a8b9dfc9ff32cdc38c8f62221aa2013fdeedb119516819a9f55c34238",
@@ -17171,7 +17171,7 @@
     {
       "id": "project/releases/0.1.0-beta.39",
       "source": "docs/releases/0.1.0-beta.39.md",
-      "title": "Bitbots 0.1.0-beta.39",
+      "title": "Retinue 0.1.0-beta.39",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "a4f9e0837fd5be4d3be540cacb4d29e3e8bf425a0f672845da0b075b9cbe9e4b",
@@ -17206,7 +17206,7 @@
     {
       "id": "project/releases/0.1.0-beta.40",
       "source": "docs/releases/0.1.0-beta.40.md",
-      "title": "Bitbots 0.1.0-beta.40",
+      "title": "Retinue 0.1.0-beta.40",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "d3aa8634a32f3bae74e635a9c1e4746ff1c00d166af2de5b9e4c4e0ee6548b4b",
@@ -17236,7 +17236,7 @@
     {
       "id": "project/releases/0.1.0-beta.41",
       "source": "docs/releases/0.1.0-beta.41.md",
-      "title": "Bitbots 0.1.0-beta.41",
+      "title": "Retinue 0.1.0-beta.41",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "a386bda65a2db6211822036ca68aec7d7719d2ffda6ce91abb932e9d46884fa9",
@@ -17266,7 +17266,7 @@
     {
       "id": "project/releases/0.1.0-beta.42",
       "source": "docs/releases/0.1.0-beta.42.md",
-      "title": "Bitbots 0.1.0-beta.42",
+      "title": "Retinue 0.1.0-beta.42",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "3aff22b1300b3d58c29c76b0fa486ef5ba371f9437e864be0cb8822fa31e5f25",
@@ -17306,7 +17306,7 @@
     {
       "id": "project/releases/0.1.0-beta.43",
       "source": "docs/releases/0.1.0-beta.43.md",
-      "title": "Bitbots 0.1.0-beta.43",
+      "title": "Retinue 0.1.0-beta.43",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "a3e47e8cb49e5f6a60b1449992e03c289cdb01f34417db8ad8ee22b10b54bd3a",
@@ -17336,7 +17336,7 @@
     {
       "id": "project/releases/0.1.0-beta.44",
       "source": "docs/releases/0.1.0-beta.44.md",
-      "title": "Bitbots 0.1.0-beta.44",
+      "title": "Retinue 0.1.0-beta.44",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "b40866e172b4a9f831cf538f9064af1649420ede2050903fea8c4f66fbd097f8",
@@ -17371,7 +17371,7 @@
     {
       "id": "project/releases/0.1.0-beta.45",
       "source": "docs/releases/0.1.0-beta.45.md",
-      "title": "Bitbots 0.1.0-beta.45",
+      "title": "Retinue 0.1.0-beta.45",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "1545b733822dfc31c96329639cab2519b6dff5d4fe2bb647c1a021928e16eb40",
@@ -17406,7 +17406,7 @@
     {
       "id": "project/releases/0.1.0-beta.46",
       "source": "docs/releases/0.1.0-beta.46.md",
-      "title": "Bitbots 0.1.0-beta.46",
+      "title": "Retinue 0.1.0-beta.46",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "b4fad2927317107ef340a52de141995cc048bf01328fe6ae2fc86eb9674f1dcd",
@@ -17446,7 +17446,7 @@
     {
       "id": "project/releases/0.1.0-beta.47",
       "source": "docs/releases/0.1.0-beta.47.md",
-      "title": "Bitbots 0.1.0-beta.47",
+      "title": "Retinue 0.1.0-beta.47",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "f43cbc217e4a56a8d3e224b93c0daf08ba8e8f22be4291ec59b099e95258cf86",
@@ -17486,7 +17486,7 @@
     {
       "id": "project/releases/0.1.0-beta.48",
       "source": "docs/releases/0.1.0-beta.48.md",
-      "title": "Bitbots 0.1.0-beta.48",
+      "title": "Retinue 0.1.0-beta.48",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "90cd74bcef03a94a2d02b0fe20672cb9ab69d2051a5095fb6c4d1b085cac633e",
@@ -17516,7 +17516,7 @@
     {
       "id": "project/releases/0.1.0-beta.49",
       "source": "docs/releases/0.1.0-beta.49.md",
-      "title": "Bitbots 0.1.0-beta.49",
+      "title": "Retinue 0.1.0-beta.49",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "e541278e62ea12a79b8b8be6c9fe46af83b042cc9c479462b240c55e0f31a28e",
@@ -17536,7 +17536,7 @@
     {
       "id": "project/releases/0.1.0-beta.50",
       "source": "docs/releases/0.1.0-beta.50.md",
-      "title": "Bitbots 0.1.0-beta.50",
+      "title": "Retinue 0.1.0-beta.50",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "092e883cf8455ae8b3cdbb92a4a60b794df173459f2c155d4723bbdefa5c8c9d",
@@ -17566,7 +17566,7 @@
     {
       "id": "project/releases/0.1.0-beta.1",
       "source": "docs/releases/0.1.0-beta.1.md",
-      "title": "Bloblex 0.1.0-beta.1",
+      "title": "Retinue 0.1.0-beta.1",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "7198c178bfdeb2c6c52b067d96a4154e9d188960010c142e2d7861f9e95ae327",
@@ -17586,7 +17586,7 @@
     {
       "id": "project/releases/0.1.0-beta.10",
       "source": "docs/releases/0.1.0-beta.10.md",
-      "title": "Bloblex 0.1.0-beta.10",
+      "title": "Retinue 0.1.0-beta.10",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "7602ebd5f8c753d5a6d018aafebb3cb884526f7a062b1fdeb17abd54deeaad0d",
@@ -17611,7 +17611,7 @@
     {
       "id": "project/releases/0.1.0-beta.11",
       "source": "docs/releases/0.1.0-beta.11.md",
-      "title": "Bloblex 0.1.0-beta.11",
+      "title": "Retinue 0.1.0-beta.11",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "446a86ca15ccd941f0afd8b221b1598377246d87a9d83361032911d498cd50d1",
@@ -17636,7 +17636,7 @@
     {
       "id": "project/releases/0.1.0-beta.12",
       "source": "docs/releases/0.1.0-beta.12.md",
-      "title": "Bloblex 0.1.0-beta.12",
+      "title": "Retinue 0.1.0-beta.12",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "70f87651d7f939275f73e55b147f80a800926ea627046729de998a56285ffa9d",
@@ -17661,7 +17661,7 @@
     {
       "id": "project/releases/0.1.0-beta.13",
       "source": "docs/releases/0.1.0-beta.13.md",
-      "title": "Bloblex 0.1.0-beta.13",
+      "title": "Retinue 0.1.0-beta.13",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "8a9cc4fd326017d01da84bddd2bfc291bea79bfcacb4ca96c5a6041bfaaac98a",
@@ -17721,7 +17721,7 @@
     {
       "id": "project/releases/0.1.0-beta.14",
       "source": "docs/releases/0.1.0-beta.14.md",
-      "title": "Bloblex 0.1.0-beta.14",
+      "title": "Retinue 0.1.0-beta.14",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "3ff2d0b0e9dbe50f776450f0efadefa2b50c95ba16e0fe2e666eb05c54d951d1",
@@ -17756,7 +17756,7 @@
     {
       "id": "project/releases/0.1.0-beta.15",
       "source": "docs/releases/0.1.0-beta.15.md",
-      "title": "Bloblex 0.1.0-beta.15",
+      "title": "Retinue 0.1.0-beta.15",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "3db5be9ea2667348f42af1e2c896dc95721bd59cfc371a04c8008090a19f53bb",
@@ -17801,7 +17801,7 @@
     {
       "id": "project/releases/0.1.0-beta.16",
       "source": "docs/releases/0.1.0-beta.16.md",
-      "title": "Bloblex 0.1.0-beta.16",
+      "title": "Retinue 0.1.0-beta.16",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "6e4acc7d3947acaa8e597d71a6a35b6bc868c74f055fc221913ce76903ce4da2",
@@ -17826,7 +17826,7 @@
     {
       "id": "project/releases/0.1.0-beta.17",
       "source": "docs/releases/0.1.0-beta.17.md",
-      "title": "Bloblex 0.1.0-beta.17",
+      "title": "Retinue 0.1.0-beta.17",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "457da532ff029b562dd549496a860542832cd103c495231e69cb3ad68d21a71a",
@@ -17851,7 +17851,7 @@
     {
       "id": "project/releases/0.1.0-beta.18",
       "source": "docs/releases/0.1.0-beta.18.md",
-      "title": "Bloblex 0.1.0-beta.18",
+      "title": "Retinue 0.1.0-beta.18",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "6cbb369d5a78871a48192dbd2eea588e3a1b0aa8a179670c7db20c9b4550a239",
@@ -17876,7 +17876,7 @@
     {
       "id": "project/releases/0.1.0-beta.19",
       "source": "docs/releases/0.1.0-beta.19.md",
-      "title": "Bloblex 0.1.0-beta.19",
+      "title": "Retinue 0.1.0-beta.19",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "d3649310f2f46d984d56e19e6da96a4c2dfff1d43da26a85a868dd156aabcfb3",
@@ -17906,7 +17906,7 @@
     {
       "id": "project/releases/0.1.0-beta.2",
       "source": "docs/releases/0.1.0-beta.2.md",
-      "title": "Bloblex 0.1.0-beta.2",
+      "title": "Retinue 0.1.0-beta.2",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "8d2f1223ad5d7ea0605fbe3e1016a75f7e737fb3f8323f117fb40e2ade14d644",
@@ -17926,7 +17926,7 @@
     {
       "id": "project/releases/0.1.0-beta.20",
       "source": "docs/releases/0.1.0-beta.20.md",
-      "title": "Bloblex 0.1.0-beta.20",
+      "title": "Retinue 0.1.0-beta.20",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "62eff5dfa95b127ea02f7c516a76007837485fd2d5bf7a23ae5535a7b1cd156e",
@@ -17966,7 +17966,7 @@
     {
       "id": "project/releases/0.1.0-beta.21",
       "source": "docs/releases/0.1.0-beta.21.md",
-      "title": "Bloblex 0.1.0-beta.21",
+      "title": "Retinue 0.1.0-beta.21",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "5b8fb57ee7618f1660ccbf903fef3695065bf95955cf86d8aef0fc5a0a2af1a6",
@@ -17996,7 +17996,7 @@
     {
       "id": "project/releases/0.1.0-beta.22",
       "source": "docs/releases/0.1.0-beta.22.md",
-      "title": "Bloblex 0.1.0-beta.22",
+      "title": "Retinue 0.1.0-beta.22",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "079f09bf0bdf618a65f590274925444251e2cc74549c3eb5d26802641bc8fa36",
@@ -18021,7 +18021,7 @@
     {
       "id": "project/releases/0.1.0-beta.23",
       "source": "docs/releases/0.1.0-beta.23.md",
-      "title": "Bloblex 0.1.0-beta.23",
+      "title": "Retinue 0.1.0-beta.23",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "42b37bbb3c9f908796b1321b726b60e03079e394fe6028a8ab7251e67023f1a8",
@@ -18051,7 +18051,7 @@
     {
       "id": "project/releases/0.1.0-beta.24",
       "source": "docs/releases/0.1.0-beta.24.md",
-      "title": "Bloblex 0.1.0-beta.24",
+      "title": "Retinue 0.1.0-beta.24",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "b7e9acc26b80358148714d01b92ff4b2831d811e14bcb9f7cbaa31a6279f3423",
@@ -18081,7 +18081,7 @@
     {
       "id": "project/releases/0.1.0-beta.25",
       "source": "docs/releases/0.1.0-beta.25.md",
-      "title": "Bloblex 0.1.0-beta.25",
+      "title": "Retinue 0.1.0-beta.25",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "d9f219e2e2e07d983d87a8eaafab79fe9fbacb278cd1a9236877e94f00a85ca1",
@@ -18111,7 +18111,7 @@
     {
       "id": "project/releases/0.1.0-beta.26",
       "source": "docs/releases/0.1.0-beta.26.md",
-      "title": "Bloblex 0.1.0-beta.26",
+      "title": "Retinue 0.1.0-beta.26",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "01de59a57a3ad487042591666f920e7d112cca1c0721e8978ebffe8f45059ee2",
@@ -18136,7 +18136,7 @@
     {
       "id": "project/releases/0.1.0-beta.27",
       "source": "docs/releases/0.1.0-beta.27.md",
-      "title": "Bloblex 0.1.0-beta.27",
+      "title": "Retinue 0.1.0-beta.27",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "517e6dd7eedd1254682576c5851a95ad1a6507e71e361db98574a945bee09687",
@@ -18166,7 +18166,7 @@
     {
       "id": "project/releases/0.1.0-beta.28",
       "source": "docs/releases/0.1.0-beta.28.md",
-      "title": "Bloblex 0.1.0-beta.28",
+      "title": "Retinue 0.1.0-beta.28",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "aac6097dc9fc6ddc357f774be1a1a745861c748eeed7cbbe09c085c57c2468b5",
@@ -18196,7 +18196,7 @@
     {
       "id": "project/releases/0.1.0-beta.3",
       "source": "docs/releases/0.1.0-beta.3.md",
-      "title": "Bloblex 0.1.0-beta.3",
+      "title": "Retinue 0.1.0-beta.3",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "4a9a643a07ca97972b6ce7e67351291ac475dec84fe8bde69b8871aa48c1cd48",
@@ -18216,7 +18216,7 @@
     {
       "id": "project/releases/0.1.0-beta.4",
       "source": "docs/releases/0.1.0-beta.4.md",
-      "title": "Bloblex 0.1.0-beta.4",
+      "title": "Retinue 0.1.0-beta.4",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "0c74491e1fa0873ab237b812266e78dafb3a34ff0114bf01b70071748e5f0805",
@@ -18236,7 +18236,7 @@
     {
       "id": "project/releases/0.1.0-beta.5",
       "source": "docs/releases/0.1.0-beta.5.md",
-      "title": "Bloblex 0.1.0-beta.5",
+      "title": "Retinue 0.1.0-beta.5",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "4079930244167c94fa2d1126f7757ed2175ff13935bf4db711690c1c8c6c692f",
@@ -18256,7 +18256,7 @@
     {
       "id": "project/releases/0.1.0-beta.6",
       "source": "docs/releases/0.1.0-beta.6.md",
-      "title": "Bloblex 0.1.0-beta.6",
+      "title": "Retinue 0.1.0-beta.6",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "897e640caf398f8b0233aa9679d7e959390e76d88eeb6c0d764faa6ae59e3e56",
@@ -18276,7 +18276,7 @@
     {
       "id": "project/releases/0.1.0-beta.7",
       "source": "docs/releases/0.1.0-beta.7.md",
-      "title": "Bloblex 0.1.0-beta.7",
+      "title": "Retinue 0.1.0-beta.7",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "9bdf81a0c34388eb6cc85c80b3ef23c457d7c89ec46768c014d190f94dd28ae4",
@@ -18301,7 +18301,7 @@
     {
       "id": "project/releases/0.1.0-beta.8",
       "source": "docs/releases/0.1.0-beta.8.md",
-      "title": "Bloblex 0.1.0-beta.8",
+      "title": "Retinue 0.1.0-beta.8",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "01957c94c60095e219b060613ef772ff0b9d34abe5bc68705757525dca52c179",
@@ -18326,7 +18326,7 @@
     {
       "id": "project/releases/0.1.0-beta.9",
       "source": "docs/releases/0.1.0-beta.9.md",
-      "title": "Bloblex 0.1.0-beta.9",
+      "title": "Retinue 0.1.0-beta.9",
       "section": "Release notes",
       "status": "Release note",
       "sha256": "494f250b659a03c8559db1f22e7d2b581bfcb996035405f12fa1eab7daeb3f63",
@@ -18351,7 +18351,7 @@
     {
       "id": "project/remote/PROTOCOL",
       "source": "docs/remote/PROTOCOL.md",
-      "title": "Bitbots remote protocol (v1)",
+      "title": "Retinue remote protocol (v1)",
       "section": "Remote specifications",
       "status": "Remote specification",
       "sha256": "9a69c67ffdb93d9fbdc212f009fae6ede0e557c201bfd99083672a32d7f1ebee",
@@ -18902,8 +18902,8 @@
           "level": 3
         },
         {
-          "id": "2-device-side-bitbots-remote-remotehtml",
-          "text": "2. Device side: Bitbots Remote (/remote.html)",
+          "id": "2-device-side-retinue-remote-remotehtml",
+          "text": "2. Device side: Retinue Remote (/remote.html)",
           "level": 2
         },
         {
@@ -19164,9 +19164,9 @@
       ]
     },
     {
-      "id": "project/evidence/bitbots-theme-2026-10-13",
-      "source": "docs/evidence/bitbots-theme-2026-10-13.md",
-      "title": "Evidence: Bitbots pixel theme (CSS only) — 2026-10-13",
+      "id": "project/evidence/retinue-theme-2026-10-13",
+      "source": "docs/evidence/retinue-theme-2026-10-13.md",
+      "title": "Evidence: Retinue pixel theme (CSS only) — 2026-10-13",
       "section": "Evidence",
       "status": "Evidence",
       "sha256": "43860c485ebfeaff02eef3047964f7c61d1dd1517bf22fe4792338679472fd5d",
@@ -19913,7 +19913,7 @@
     {
       "id": "library",
       "source": "docs/library/README.md",
-      "title": "Bitbots documentation library",
+      "title": "Retinue documentation library",
       "section": "Library guide",
       "status": "Library guide",
       "sha256": "4d8f4f6a9358267121858d705acc5ca265ba3ad71861be9c09d96bbabcefa764",

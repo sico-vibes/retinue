@@ -9,7 +9,7 @@ Written 15 October 2026. Docs-only lane. You are a second pair of eyes: the Dire
 `docs/remote/PROTOCOL.md`. Do not edit those three files. Do not change any code.
 
 Read: `docs/remote/*`, `docs/ipc-contract.md`, `AGENTS.md`, `apps/desktop/src/remote/*`,
-`crates/bloblex-daemon/src/main.rs` (transport, auth, dispatch, event replay),
+`crates/retinue-daemon/src/main.rs` (transport, auth, dispatch, event replay),
 `apps/desktop/src-tauri/src/lib.rs` (`daemon_rpc`, attachment staging, native commands).
 
 ## Output 1: `docs/remote/REVIEW_NOTES.md`

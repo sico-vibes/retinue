@@ -47,7 +47,7 @@ vi.mock('../tauri', () => ({
   listenForOpenSettings: h.listenForOpenSettings,
   openProjectFolder: vi.fn(), selectLocalFile: vi.fn(), inspectLocalFile: vi.fn(),
   openInEditor: vi.fn(), revealInExplorer: vi.fn(), resolveProjectFile: vi.fn(),
-  quitBloblex: vi.fn(), setCloseToTray: vi.fn(),
+  quitRetinue: vi.fn(), setCloseToTray: vi.fn(),
   stagePromptAttachment: vi.fn(),
   updatesGetState: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesSetPreferences: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),

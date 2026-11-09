@@ -25,7 +25,7 @@ async function mount(node: ReactNode) {
 }
 const settle = () => act(async () => { await Promise.resolve(); await Promise.resolve() })
 
-// Wave 13: Claude Code sessions started outside Bitbots.
+// Wave 13: Claude Code sessions started outside Retinue.
 describe('outside sessions', () => {
   it('says what a session is doing without guessing', () => {
     const session = (state: string, tool: string | null = null) => normalizeOutsideSessions([{ id: 'x', state, tool, folder: 'site' }])[0]!
@@ -49,7 +49,7 @@ describe('outside sessions', () => {
     rpc.mockImplementation(async (method: string) => {
       if (method === 'outside.status') return off
       if (method === 'outside.preview') return { settingsPath: off.settingsPath, exists: true, before: '{}', after: '{"hooks":{}}' }
-      if (method === 'outside.enable') return { status: { ...off, enabled: true, installed: true }, backupPath: 'C:/Users/me/.claude/settings.json.bitbots-backup-1' }
+      if (method === 'outside.enable') return { status: { ...off, enabled: true, installed: true }, backupPath: 'C:/Users/me/.claude/settings.json.retinue-backup-1' }
       throw new Error(`unexpected ${method}`)
     })
     const view = await mount(<OutsideWatchSetting connected />)
@@ -63,7 +63,7 @@ describe('outside sessions', () => {
     await act(async () => { [...dialog.querySelectorAll('button')].find((button) => button.textContent === 'Turn on')!.click() }); await settle()
     expect(rpc).toHaveBeenCalledWith('outside.enable', { confirm: true })
     expect(view.querySelector('[role="switch"]')!.getAttribute('aria-checked')).toBe('true')
-    expect(view.textContent).toContain('settings.json.bitbots-backup-1')
+    expect(view.textContent).toContain('settings.json.retinue-backup-1')
   })
 
   it('is unavailable without the hook bridge', async () => {

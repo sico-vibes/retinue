@@ -8,7 +8,7 @@ Lane: OpenCode `deepseek-v4.1-flash` (high). Worktree `C:\fx61`. No commit was r
 
 ## 1. The remote web app downloads as a file
 
-`crates/bloblex-daemon/src/remote/web.rs` `static_file` looked up the request path
+`crates/retinue-daemon/src/remote/web.rs` `static_file` looked up the request path
 in the manifest (so `/` resolved to `remote.html`) but passed the **request** path
 to `content_type_of`. `/` has no extension, so the entry page was served as
 `application/octet-stream`; with `X-Content-Type-Options: nosniff` the browser
@@ -21,7 +21,7 @@ downloaded it as `download`.
   `web.rs:972-979`) already set `text/html; charset=utf-8`; no other route serves
   an entry page (unknown paths are a `404`, not an SPA fallback).
 
-Tests (`crates/bloblex-daemon/src/remote/tests.rs`):
+Tests (`crates/retinue-daemon/src/remote/tests.rs`):
 
 - `raw_content_type` helper (`tests.rs:821`) reads the response's `content-type`.
 - `static_files_come_from_the_manifest_and_nothing_else` (`tests.rs:828`) now
@@ -37,13 +37,13 @@ A stored Claude resume that failed to initialize returned
 `AdapterError::Process("Claude resume did not initialize")`, which the daemon
 treated as a terminal turn error instead of continuing the conversation.
 
-**New error variant.** `crates/bloblex-agent-core/src/lib.rs:672-676` adds
+**New error variant.** `crates/retinue-agent-core/src/lib.rs:672-676` adds
 `AdapterError::ResumeFailed(String)` ("provider resume did not initialize: …").
 It is distinct from `ResumeRejected` (the provider rejected a stored id) and from
 a generic `Protocol` failure (and a `Process` failure outside a resume start),
 which must stay terminal.
 
-**Daemon fallback.** `crates/bloblex-daemon/src/main.rs`:
+**Daemon fallback.** `crates/retinue-daemon/src/main.rs`:
 
 - `resume_or_start_fresh` (`main.rs:2065-2105`) now falls back to a fresh
   provider session for `ResumeRejected` **and** `ResumeFailed`, using the existing
@@ -57,14 +57,14 @@ which must stay terminal.
 
 **Adapters.**
 
-- Claude (`crates/bloblex-adapter-claude/src/lib.rs:945-947`): a resume that
+- Claude (`crates/retinue-adapter-claude/src/lib.rs:945-947`): a resume that
   never emits `system/init` (process exits or errors before init, or the 8s gate
   times out) now returns `ResumeFailed` instead of `Process`.
-- Codex (`crates/bloblex-adapter-codex/src/lib.rs:720-728`): a `thread/resume`
+- Codex (`crates/retinue-adapter-codex/src/lib.rs:720-728`): a `thread/resume`
   that fails to come up (`Process` or `Timeout` after `initialize`) is reported
   as `ResumeFailed`; the crash-resume path treats it like `ResumeRejected`
   (`lib.rs:636`).
-- OpenCode/ACP (`crates/bloblex-adapter-acp/src/lib.rs:1130-1136` and
+- OpenCode/ACP (`crates/retinue-adapter-acp/src/lib.rs:1130-1136` and
   `579-580`): a `session/load` that fails to come up is reported as
   `ResumeFailed`, and `establish_session` starts a fresh `session/new` for it
   (`lib.rs:588`). Recognised rejections still map to `ResumeRejected`.
@@ -104,22 +104,22 @@ Tests (`main.rs`):
 - `resume_failure_becomes_turn_error` (unchanged, `SendAdapter` returns a generic
   `Protocol` failure) still proves a non-resume-specific error stays terminal.
 
-Adapter test: `crates/bloblex-adapter-claude/tests/lifecycle.rs:552`
+Adapter test: `crates/retinue-adapter-claude/tests/lifecycle.rs:552`
 `resume_that_never_initializes_is_reported_for_a_fresh_retry` drives the fake CLI
 mode `--fake-resume-no-init` (added at
-`crates/bloblex-adapter-claude/src/bin/fake_claude.rs:56`), which exits on
+`crates/retinue-adapter-claude/src/bin/fake_claude.rs:56`), which exits on
 `--resume` without emitting `system/init`, and asserts `ResumeFailed`.
 
 ## Gates
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
   — 43 test targets, 721 tests passed. One run reported
   `phase2a_tests::catalog_cached_only_never_waits` failing; that test is a timing
   test in the catalog path this diff does not touch (probe 40 ms, sleep 80 ms
   before asserting the background refresh filled the cache). It passes 3/3 in
   isolation and the full run is clean on re-run, so it is recorded as a
   pre-existing load flake, not a regression.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
 
 ## Unverified
 

@@ -115,16 +115,16 @@ describe('user accent colours', () => {
     expect(normalizeAccent(undefined)).toBe('')
   })
 
-  // Frost (bitbots) was retired on 27 October 2026; Haze and Stone (blobots) remain.
+  // Frost (frost) was retired on 27 October 2026; Haze and Stone (stone) remain.
   it('recognizes only Haze and Stone, and moves retired looks to Haze', () => {
-    expect(THEME_STYLES).toEqual(['haze', 'blobots'])
+    expect(THEME_STYLES).toEqual(['haze', 'stone'])
     for (const look of THEME_STYLES) expect(isThemeStyle(look)).toBe(true)
-    for (const retired of ['bitbots', 'legacy', 'pop', 'dot']) {
+    for (const retired of ['frost', 'legacy', 'pop', 'dot']) {
       expect(isThemeStyle(retired)).toBe(false)
       expect(normalizeThemeStyle(retired)).toBe('haze')
     }
-    expect(normalizeThemeStyle('blobots')).toBe('blobots')
-    expect(isThemeStyle('Blobots')).toBe(false)
+    expect(normalizeThemeStyle('stone')).toBe('stone')
+    expect(isThemeStyle('Stone')).toBe(false)
     expect(isThemeStyle('')).toBe(false)
     expect(isThemeStyle(undefined)).toBe(false)
     expect(THEME_LOOKS.map((look) => look.id)).toEqual(THEME_STYLES)

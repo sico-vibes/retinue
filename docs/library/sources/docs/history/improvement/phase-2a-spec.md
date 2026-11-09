@@ -5,7 +5,7 @@
 > **Last updated:** 2026-10-12
 
 Owner: OpenCode lane (backend only). Reviewer: Director. Parent plan: `docs/plans/improvement-plan.md` Phase 2. The desktop UI is built in parallel by the Director against this contract; do not touch `apps/`.
-Scope: `crates/bloblex-storage`, `crates/bloblex-daemon` (new `src/queue.rs`, `main.rs`, `team.rs`), `docs/ipc-contract.md`. No new dependencies.
+Scope: `crates/retinue-storage`, `crates/retinue-daemon` (new `src/queue.rs`, `main.rs`, `team.rs`), `docs/ipc-contract.md`. No new dependencies.
 
 ## Rules
 - Work only in this worktree. **Never run `git commit`, `git push`, `git checkout`, `git stash`.** Leave changes uncommitted.
@@ -16,7 +16,7 @@ Scope: `crates/bloblex-storage`, `crates/bloblex-daemon` (new `src/queue.rs`, `m
 ## Background (verified at the base commit)
 - Prompts are sent with the `session.prompt` RPC (`session_prompt_impl` in `main.rs`). While a turn is live it returns `conflict` ("this session already has an active turn"). Accepted params: `sessionId, text, attachments, conversationRefs, replyTo` (and internal `meta`).
 - Team deliveries are queued in memory in `Team.queued` and drained by `team::after_turn`, which runs after `turn.completed|turn.error|turn.cancelled` (Phase 1A made every failure path call it exactly once).
-- `ensure_team_schema` in `bloblex-storage` shows the idempotent additive-schema pattern (no ledger/`user_version` bump). Follow it. `recover_after_restart()` is where startup settles interrupted rows.
+- `ensure_team_schema` in `retinue-storage` shows the idempotent additive-schema pattern (no ledger/`user_version` bump). Follow it. `recover_after_restart()` is where startup settles interrupted rows.
 - Image attachments are re-validated by `prompt_attachments` at send time; keep that.
 
 ## Data model
@@ -76,7 +76,7 @@ Daemon:
 
 ## Gates (run and report real output)
 ```
-CARGO_TARGET_DIR=D:/b-p1 RUST_MIN_STACK=33554432 cargo test -p bloblex-storage -p bloblex-daemon -p bloblex-agent-core -p bloblex-adapter-claude -p bloblex-adapter-codex -p bloblex-adapter-acp
+CARGO_TARGET_DIR=D:/b-p1 RUST_MIN_STACK=33554432 cargo test -p retinue-storage -p retinue-daemon -p retinue-agent-core -p retinue-adapter-claude -p retinue-adapter-codex -p retinue-adapter-acp
 ```
 Clippy is already failing on base; only avoid adding new findings.
 

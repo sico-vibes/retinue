@@ -18,11 +18,11 @@ Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort, own worktree, pri
 - User RPCs: `manager.playbook.get`, `manager.playbook.history`, `manager.playbook.set { text }` (author `user`), `manager.playbook.revert { version }`. Event `manager.playbook.changed`.
 
 ## 3. Context for every Manager turn
-- A per-turn suffix block `<bloblex_manager>` for the Manager only (same mechanism as the memory catalog / skills index: re-sent only when its hash changes, cleared on context reset), containing: the profile grouped by category (locked first, ≤ 3000 chars, then "call recall_about_user for more"), the current playbook (≤ 6000 chars), and the workspace summary (projects with bot names; ≤ 1500 chars). Tool `recall_about_user { category? }` returns the full profile.
-- This block is **not** part of `<bloblex_team>`, so profile and playbook edits never change the instruction hash.
+- A per-turn suffix block `<retinue_manager>` for the Manager only (same mechanism as the memory catalog / skills index: re-sent only when its hash changes, cleared on context reset), containing: the profile grouped by category (locked first, ≤ 3000 chars, then "call recall_about_user for more"), the current playbook (≤ 6000 chars), and the workspace summary (projects with bot names; ≤ 1500 chars). Tool `recall_about_user { category? }` returns the full profile.
+- This block is **not** part of `<retinue_team>`, so profile and playbook edits never change the instruction hash.
 
 ## 4. Model change: same Manager
-- When the Manager's runtime or model changes, its next turn starts a fresh provider session (as any model change does) and the first prompt of that session carries a `<bloblex_handover>` block: profile, playbook, active projects and bots, open (pending) proposals, and the last 10 approved/rejected decisions with dates. The transcript notice for that reset reads "New model, same Manager. It has its notes and playbook." (`meta.kind = "context_reset"`, `reason = "manager_handover"`, `contextLost: false`).
+- When the Manager's runtime or model changes, its next turn starts a fresh provider session (as any model change does) and the first prompt of that session carries a `<retinue_handover>` block: profile, playbook, active projects and bots, open (pending) proposals, and the last 10 approved/rejected decisions with dates. The transcript notice for that reset reads "New model, same Manager. It has its notes and playbook." (`meta.kind = "context_reset"`, `reason = "manager_handover"`, `contextLost: false`).
 
 ## 5. Non-visual TS
 Add the new RPCs/events to `apps/desktop/src/remote/tiers.json` (`manager.profile.list` / `manager.playbook.get` / `.history` read-viewer; the writes never; events drop), types to `apps/desktop/src/types.ts` (`ManagerFact`, `PlaybookVersion`), and fixtures in `apps/desktop/src/preview/fixtureBridge.ts`.
@@ -30,16 +30,16 @@ Add the new RPCs/events to `apps/desktop/src/remote/tiers.json` (`manager.profil
 ## Tests
 - remember: new key saved, unlocked update, locked change → proposal; approve applies; secrets rejected.
 - playbook: seed exists; update_playbook → proposal; approve appends a version; user set/revert.
-- `<bloblex_manager>` only for the Manager, re-sent only when the hash changes, absent for other bots, respects the caps.
-- Model change → next prompt carries `<bloblex_handover>`; the notice has `reason:"manager_handover"` and `contextLost:false`.
+- `<retinue_manager>` only for the Manager, re-sent only when the hash changes, absent for other bots, respects the caps.
+- Model change → next prompt carries `<retinue_handover>`; the notice has `reason:"manager_handover"` and `contextLost:false`.
 
 ## Gates
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote src/preview`
 
 ## Report
 `docs/history/fix-36/d3-report.md`.
 
 ## Also: a small D2 hardening (Director's review)
-In `crates/bloblex-daemon/src/proposals.rs` `apply_project`: a project folder path (both `existing` and `new`) must be an **absolute** path; reject relative paths with `invalid_argument` ("Choose a full folder path."). For `new`, refuse a path that already exists as a file. Add tests for both.
+In `crates/retinue-daemon/src/proposals.rs` `apply_project`: a project folder path (both `existing` and `new`) must be an **absolute** path; reject relative paths with `invalid_argument` ("Choose a full folder path."). For `new`, refuse a path that already exists as a file. Add tests for both.

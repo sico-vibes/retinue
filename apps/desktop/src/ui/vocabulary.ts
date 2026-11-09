@@ -2,7 +2,7 @@
 // who wears a profile picture and is hired into projects. Kept as a helper so
 // copy has one place to change.
 
-import { useThemeStyle } from '../blob/bitbots'
+import { useThemeStyle } from '../blob/retinue'
 import type { ThemeStyle } from './appearance'
 
 export interface EntityNounOptions {

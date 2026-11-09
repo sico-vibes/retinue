@@ -13,7 +13,7 @@ Keep the contract exactly. If something can't work as written, pick the smallest
 
 **All new RPCs:** `tiers.json` class `never` except where a section says otherwise. Events `drop`, except where a section says otherwise.
 
-## 1. Claude's own sub-agents (Lane X, `crates/bloblex-adapter-claude`, daemon, storage)
+## 1. Claude's own sub-agents (Lane X, `crates/retinue-adapter-claude`, daemon, storage)
 
 Today `parse_line` emits every frame the same way. So a Task's text lands in the parent's reply, and its tools look like the parent's own. `is_subagent_message` is only used for the model and usage.
 
@@ -31,7 +31,7 @@ Today `parse_line` emits every frame the same way. So a Task's text lands in the
 ### The bot row
 
 `agents` gains `parent_agent_id`, in new storage file `phase8.rs`. `agent.parentAgentId` is on every read. A sub-bot row:
-- `hidden: true`, and left out of `list_blobs`, the Manager's lists, `agent.team`, backups and the Bitbots MCP's `list_bots`.
+- `hidden: true`, and left out of `list_blobs`, the Manager's lists, `agent.team`, backups and the Retinue MCP's `list_bots`.
 - `instructions`: the parent's, then the brief's `role` as one sentence.
 - `color` and `look`: the parent's.
 - `model`, `thinking` and `runtimeId` from the spawn. `approvalMode`: see Limits.
@@ -72,17 +72,17 @@ Bot tools, through the same bridge as `message_blob`. A sub-bot is never offered
 
 ## Keeping the lanes apart
 
-Lane X: `crates/bloblex-adapter-claude`, `crates/bloblex-agent-core` (the event), the daemon's tool event arms, and storage for the tool row. Lane Y: `subbots.rs`, `phase8.rs`, `team.rs` (tool list and arm), dispatch arm after `"project.scaffold"`, `tiers.json` after `delegation.list`, `docs/ipc-contract.md` at the end.
+Lane X: `crates/retinue-adapter-claude`, `crates/retinue-agent-core` (the event), the daemon's tool event arms, and storage for the tool row. Lane Y: `subbots.rs`, `phase8.rs`, `team.rs` (tool list and arm), dispatch arm after `"project.scaffold"`, `tiers.json` after `delegation.list`, `docs/ipc-contract.md` at the end.
 
 ## Rules
 
-As in `docs/history/wave15/phase-5-7-brief.md`: never commit, push, merge or switch branches. Change nothing outside your worktree, apart from test folders and your build folder. No `npm install`. `CARGO_TARGET_DIR=C:\bt\<lane letter>`, and delete it when your last chunk is done. Tests in the foreground. `crates/bloblex-storage/src/lib.rs` has one NUL byte: edit it only with your edit tool. Don't edit the skill files. Keep `every_daemon_log_call_site_is_a_fixed_message` true. **Spend as little as you can on real provider turns:** use the cheapest model, and only where the brief asks.
+As in `docs/history/wave15/phase-5-7-brief.md`: never commit, push, merge or switch branches. Change nothing outside your worktree, apart from test folders and your build folder. No `npm install`. `CARGO_TARGET_DIR=C:\bt\<lane letter>`, and delete it when your last chunk is done. Tests in the foreground. `crates/retinue-storage/src/lib.rs` has one NUL byte: edit it only with your edit tool. Don't edit the skill files. Keep `every_daemon_log_call_site_is_a_fixed_message` true. **Spend as little as you can on real provider turns:** use the cheapest model, and only where the brief asks.
 
 **A test must go through `dispatch`**, or the real tool path, at least once for every new method. Two bugs in the last phase passed their unit tests because a handler was called directly.
 
 ## Gates
 
-From PowerShell, with `BITBOTS_HOOK_BRIDGE` and `BITBOTS_REMOTE_WEB_DIR` removed: `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude bloblex-desktop --no-fail-fast`, then `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`.
+From PowerShell, with `RETINUE_HOOK_BRIDGE` and `RETINUE_REMOTE_WEB_DIR` removed: `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude retinue-desktop --no-fail-fast`, then `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`.
 
 ## Report
 

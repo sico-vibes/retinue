@@ -129,8 +129,8 @@ describe('task folder line (FIX39 risk 7)', () => {
     expect(projectForDraft(projects, 'Missing')).toBeUndefined()
     expect(projectForDraft(projects, '  ')).toBeUndefined()
     // A tag names a project only while one project carries it, as in `team::project_named`.
-    const tagged = [{ ...projects[0]!, tags: ['bitbots', 'shared'] }, { ...projects[1]!, tags: ['shared'] }]
-    expect(projectForDraft(tagged, '#BitBots')?.id).toBe(tagged[0]!.id)
+    const tagged = [{ ...projects[0]!, tags: ['retinue', 'shared'] }, { ...projects[1]!, tags: ['shared'] }]
+    expect(projectForDraft(tagged, '#Retinue')?.id).toBe(tagged[0]!.id)
     expect(projectForDraft(tagged, 'shared')).toBeUndefined()
   })
 })
@@ -173,8 +173,8 @@ describe('merge card (P10)', () => {
   const merge = () => proposal('merge', {
     action: 'merge',
     repo: 'C:\\Code\\Repo',
-    worktree: 'C:\\Code\\Repo-bitbots\\add-login',
-    branch: 'bitbots/add-login',
+    worktree: 'C:\\Code\\Repo-retinue\\add-login',
+    branch: 'retinue/add-login',
     baseBranch: 'main',
     taskTitle: 'Add login',
     botName: 'Builder',
@@ -185,7 +185,7 @@ describe('merge card (P10)', () => {
   it('shows the branch, files and summary without an edit control', async () => {
     await mount(merge())
     expect(host!.textContent).toContain('Merge a task')
-    expect(host!.textContent).toContain('bitbots/add-login')
+    expect(host!.textContent).toContain('retinue/add-login')
     expect(host!.textContent).toContain('main')
     expect(host!.textContent).toContain('2 files changed, +10 −3')
     expect(host!.textContent).toContain('src/login.ts')

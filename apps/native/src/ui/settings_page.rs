@@ -1,5 +1,5 @@
 //! Settings, first pass: Appearance (theme and density), Data (where the native
-//! database is, and copying the installed Bitbots data again) and About.
+//! database is, and copying the installed Retinue data again) and About.
 //!
 //! Everything here is the window's own state; the daemon keeps product settings.
 
@@ -90,11 +90,11 @@ impl Root {
         let data = {            let path = self.db_path.display().to_string();
             let installed = paths::installed_db_path();
             let installed_line = if installed.is_file() {
-                format!("The installed Bitbots database is at {}.", installed.display())
+                format!("The installed Retinue database is at {}.", installed.display())
             } else {
-                "There is no installed Bitbots database on this computer.".to_owned()
+                "There is no installed Retinue database on this computer.".to_owned()
             };
-            let busy = if self.data_busy { "Copying…" } else { "Copy my Bitbots data again" };
+            let busy = if self.data_busy { "Copying…" } else { "Copy my Retinue data again" };
             let button = div()
                 .id("copy-data-again")
                 .h(px(28.0))
@@ -119,7 +119,7 @@ impl Root {
                 vec![
                     field(
                         "This preview's database",
-                        "It never shares a database with the installed Bitbots.",
+                        "It never shares a database with the installed Retinue.",
                         div()
                             .text_size(px(theme::FS_XS))
                             .font_family(theme::MONO_FONT)
@@ -152,7 +152,7 @@ impl Root {
                 colors,
                 vec![
                     field(
-                        "Bitbots (Rust preview)",
+                        "Retinue (Rust preview)",
                         "The native port of the desktop app.",
                         div()
                             .text_size(px(theme::FS_XS))

@@ -46,7 +46,7 @@ bot's latest session.
 ## 3. Drag to organise (`ui/TeamSidebar.tsx`, `ui/rosterSelectors.ts`) — done
 
 Pointer reordering with a drop indicator line, keyboard moves, and cross-project moves.
-Ordering is **already persisted**: the daemon has `agent.reorder` (`crates/bloblex-daemon`
+Ordering is **already persisted**: the daemon has `agent.reorder` (`crates/retinue-daemon`
 dispatch) and storage `agent_reorder`/`sort_order` with tests, so no daemon or storage
 change and no new table was needed — the frontend simply calls the existing RPC.
 

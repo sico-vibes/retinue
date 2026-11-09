@@ -54,7 +54,7 @@ export function LookPreview({ look }: { look: ThemeStyle | null }) {
     <div className="look-preview-inner">
       <div className="look-preview-stage">
         <PreviewWindow look="haze" active={look === 'haze'} />
-        <PreviewWindow look="blobots" active={look === 'blobots'} />
+        <PreviewWindow look="stone" active={look === 'stone'} />
       </div>
     </div>
   </div>

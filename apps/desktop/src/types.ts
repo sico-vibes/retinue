@@ -218,7 +218,7 @@ export interface Project extends JsonRecord {
   overrides?: { models?: Record<string, string>; approvalMode?: ApprovalMode | null; setupScript?: string | null; icon?: { kind: 'emoji' | 'lucide' | 'favicon'; value: string; color?: string | null } | null }
   /** Phase 4: the normalized Git remote, which makes it the same project on another machine. */
   repoIdentity?: string | null
-  /** Phase 4: the repository's `.bitbots.json`, which does nothing until the owner trusts it. */
+  /** Phase 4: the repository's `.retinue.json`, which does nothing until the owner trusts it. */
   sharedSettings?: 'none' | 'untrusted' | 'trusted' | 'invalid'
   defaultBot?: { name: string; agentId: string | null } | null
 }

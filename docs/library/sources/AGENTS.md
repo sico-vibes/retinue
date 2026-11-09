@@ -1,6 +1,6 @@
-# Bitbots collaboration instructions
+# Retinue collaboration instructions
 
-**Every agent, whatever the model: before working in this repository, read `.claude/skills/bitbots-development/SKILL.md` and the reference it points to for your task. Before you report a task done, update that skill with anything the task taught (a fix and its root cause, a changed design rule, a new pattern, a changed tool or gate), as its "Keep this skill current" section describes. If your sandbox is read-only, put the proposed update in your report.**
+**Every agent, whatever the model: before working in this repository, read `.claude/skills/retinue-development/SKILL.md` and the reference it points to for your task. Before you report a task done, update that skill with anything the task taught (a fix and its root cause, a changed design rule, a new pattern, a changed tool or gate), as its "Keep this skill current" section describes. If your sandbox is read-only, put the proposed update in your report.**
 
 # Amendment (31 October 2026, later): finish the plan, mostly on Gogo
 
@@ -16,25 +16,25 @@ From the owner's plan (`docs/plans/expansion-plan-v3.md`, Phase 4), which the ow
 
 - **A machine link is a paired device.** One daemon pairs with another through its gateway, with the same owner approval and tiers. The window never talks to the other machine. No new listener and no relay.
 - **The device token** lives in a user-only file under `<data>/machines/`, never in the database, a backup, a log or a diagnostics bundle. Native links pin the certificate's fingerprint, which the owner compares before a password is sent. A password is used once and never kept.
-- **`handoff.*` is new reach through the gateway.** It needs tier `operator` and device kind `machine`. It may commit a conversation's own task copy, with the owner's consent, and push its `bitbots/` branch. It never forces, never pushes the base branch, and never carries host paths, environment values, thinking or tool output.
+- **`handoff.*` is new reach through the gateway.** It needs tier `operator` and device kind `machine`. It may commit a conversation's own task copy, with the owner's consent, and push its `retinue/` branch. It never forces, never pushes the base branch, and never carries host paths, environment values, thinking or tool output.
 - **Only one machine runs a conversation.** Another machine's conversations are read-only here. Take over is the only action. Sending a message to another machine's bot isn't part of this.
 - **A handoff never grants Full access.**
-- **`.bitbots.json`** does nothing until the owner trusts its exact content, and can never turn on Full access. All other overrides stay desktop-only.
+- **`.retinue.json`** does nothing until the owner trusts its exact content, and can never turn on Full access. All other overrides stay desktop-only.
 
 # Amendment (30 October 2026): two backend lanes, and the usage-bar sign-in read
 
 Owner directive in the live session of 30 October 2026, until the owner says otherwise. It amends the 29 October amendment below.
 
-- **Backend lanes:** from Phase 1, the backend may run on two in-app bots in parallel through the Bitbots MCP, each in its own git worktree: Sona (Claude Sonnet 5.5, medium) and Gogo (OpenCode Go DeepSeek V4.1 Flash, high). The Director splits the work so their files overlap as little as possible, reviews each diff, merges, runs every gate and commits. Lanes never run `git commit`, and they put proposed skill text in their reports.
+- **Backend lanes:** from Phase 1, the backend may run on two in-app bots in parallel through the Retinue MCP, each in its own git worktree: Sona (Claude Sonnet 5.5, medium) and Gogo (OpenCode Go DeepSeek V4.1 Flash, high). The Director splits the work so their files overlap as little as possible, reviews each diff, merges, runs every gate and commits. Lanes never run `git commit`, and they put proposed skill text in their reports.
 - **Usage-bar sign-in read, an exception to "no copied provider authentication":** to show usage bars, the daemon reads Claude Code's stored access token (`.credentials.json`) and OpenCode's stored API key (`auth.json`, or its credential database, read-only), and sends each only to that provider's own usage endpoint. It is off by default (`usage.readCliSignIns`) and needs the owner's choice. The credential is never stored, logged or copied, is held only for that one request, and the setting doesn't travel in backups. The exception covers the usage bar only. Codex's usage comes from its own app server and isn't part of this.
 
-# Amendment (29 October 2026): Sonnet backend, Director frontend, through the Bitbots MCP
+# Amendment (29 October 2026): Sonnet backend, Director frontend, through the Retinue MCP
 
 Owner directive in the live session of 29 October 2026, for the expansion plan in `docs/plans/expansion-plan-v3.md`, until the owner says otherwise. It amends the 28 October amendment below.
 
 - **Backend** (daemon, storage, adapters, `src-tauri` native code, schema, non-visual TypeScript, backend tests) is done by Claude Sonnet 5.5 at medium effort.
-  - For Phase 0 (the Bitbots MCP) this is a subagent of the Director's Claude Code session, working in its own short-path worktree.
-  - From Phase 1, this is a Sonnet 5.5 (medium) bot in the owner's running Bitbots app, assigned through the Bitbots MCP. It works in a git worktree separate from the checkout the running app was built from. The owner confirms before this starts.
+  - For Phase 0 (the Retinue MCP) this is a subagent of the Director's Claude Code session, working in its own short-path worktree.
+  - From Phase 1, this is a Sonnet 5.5 (medium) bot in the owner's running Retinue app, assigned through the Retinue MCP. It works in a git worktree separate from the checkout the running app was built from. The owner confirms before this starts.
 - **Frontend** (components, styles, copy, motion, companion, settings, onboarding, UI tests) is done by the Director (Claude).
 - **Commits:** the backend lane never runs `git commit`. The Director reviews every diff, runs every gate, commits, and pushes only when asked.
 
@@ -46,7 +46,7 @@ Owner directive in the live session of 28 October 2026 ("close opencode backgrou
 
 Owner decision in the live session of 27 October 2026. It amends the looks and bot art in the 24 and 22 October amendments below.
 
-- **Looks:** only **Haze** (primary, default for new installs) and **Stone** (stored id `blobots`) remain. **Frost** (stored id `bitbots`) is retired, together with its wallpaper and glass settings. Onboarding and Settings offer Haze and Stone. Haze gets the visual-fidelity work.
+- **Looks:** only **Haze** (primary, default for new installs) and **Stone** (stored id `stone`) remain. **Frost** (stored id `frost`) is retired, together with its wallpaper and glass settings. Onboarding and Settings offer Haze and Stone. Haze gets the visual-fidelity work.
 - **Bot art:** keep the **3D robot**, **Glossy**, **Hand-painted**, the AI-made **character portraits** and the **logo marks**. The **2D robot** (stored `robot-pop`, which already stood in for the flat and dot robots) and the **pixel icons** (`px-*`) are retired.
 - **Migration:** a saved Frost (and the older Legacy, Pop and Dot) moves to Haze. The 2D, flat and dot robots become the 3D robot, and a pixel icon becomes the logo in the bot's colour. A Haze bot whose coding agent has no logo shows its initial. This happens in the window cache, the pre-paint script, storage startup, every look write and backup import. The daemon still *accepts* the retired values from older clients and backups, and stores what replaced them.
 
@@ -56,13 +56,13 @@ Owner directive for the FIX43 wave (task dialog and schedules, the tasks table e
 
 - **Implementation:** one Claude Sonnet 5.5 agent at high effort does every item, in order, in the worktree `D:x71` (branch `fix43/sonnet`). The Director does not implement; it writes the brief, reviews the diff, runs the gates, merges and commits. The lane never runs `git commit`.
 - **Owner decisions:** Whistle is linked as Cactus's C library, falling back to their prebuilt `needle.exe` (pinned revision and SHA-256, run as a local subprocess) if it will not link; in Frost and Stone the new companion layout keeps each look's own bot art and status dots, and the status gradient stays Haze-only.
-- **Looks** (24 October 2026): Haze is the primary look and the default for new installs; the Bitbots and Blobots looks are shown as Frost and Stone (stored ids unchanged).
+- **Looks** (24 October 2026): Haze is the primary look and the default for new installs; the Retinue and Stone looks are shown as Frost and Stone (stored ids unchanged).
 
 # Amendment (22 October 2026): expansion lanes, two looks
 
 Owner directive (21 October 2026, recorded here on 22 October 2026). It amends the FIX40 and Delegation pipeline sections below where they differ.
 
-- **Looks.** Pop, Dot and Legacy are retired (decided by the owner on 20 October 2026 in the live-development session; on `main` since 22 October 2026). Only two looks remain: **Bitbots** (`bitbots`, the Frost look) and **Blobots** (`blobots`). Saved, cached, database and backup selections of the old looks migrate to Bitbots. Bot art is one of Automatic, 3D robot, 2D robot, Glossy and Hand-painted; the flat and dot robots resolve to 2D robot.
+- **Looks.** Pop, Dot and Legacy are retired (decided by the owner on 20 October 2026 in the live-development session; on `main` since 22 October 2026). Only two looks remain: **Retinue** (`frost`, the Frost look) and **Stone** (`stone`). Saved, cached, database and backup selections of the old looks migrate to Retinue. Bot art is one of Automatic, 3D robot, 2D robot, Glossy and Hand-painted; the flat and dot robots resolve to 2D robot.
 - **Expansion lanes.** Three lanes: the Director (Claude) does all UI and UX; OpenCode `opencode-go/deepseek-v4.1-flash` (high) does backend and tests; Claude Haiku 5.5 does documentation. No lane runs `git commit`. The Director reviews every diff, runs the gates, commits and pushes. The owner allowed pushing to `main` on request.
 - **Current state.** The latest release is `v0.1.0-beta.36`. `main` is ahead of it with unreleased changes, including the Tasks board (`docs/plans/expansion-plan-v2.md`).
 
@@ -103,7 +103,7 @@ Owner directive (request of 17 October 2026, decisions made in planning). It ame
 
 - **Two methods, one at a time.** Remote has a Tailscale method (unchanged) and a **Native** method. Only one is active (`remote.method`); switching needs Remote off.
 - **Native may bind beyond loopback, only for the gateway.** While Native is on, the gateway's own listener binds the host's interfaces on `remote.nativePort` (default 48621). It is never on when Native is off. The daemon API listener stays on `127.0.0.1` with the capability, and the Tailscale listener stays loopback-only.
-- **TLS is mandatory.** Native serves HTTPS only, with a certificate Bitbots generates and stores with user-only access (owner decision: built-in certificate; each device sees a one-time warning; the app shows the fingerprint to check). Plain HTTP is refused.
+- **TLS is mandatory.** Native serves HTTPS only, with a certificate Retinue generates and stores with user-only access (owner decision: built-in certificate; each device sees a one-time warning; the app shows the fingerprint to check). Plain HTTP is refused.
 - **Sign-in is a password plus the owner's approval.** A username and password (Argon2id hash only, never logged or returned) and, for every new device, approval on the desktop with the tier, as for Tailscale pairing. Approvals from remote stay off by default.
 - **Abuse limits are required.** Per-IP rate limits on every unauthenticated route, lockout after repeated failed sign-ins, a global pause on a burst, and a content-free activity line for each.
 - **No third-party service.** Native contacts no IP-echo, relay or DNS service. UPnP port mapping happens only with the owner's consent and removes only its own mapping. A firewall rule is added only through an elevated prompt the owner accepts.
@@ -115,7 +115,7 @@ Owner directive, accepted as drafted in [docs/remote/AGENTS_AMENDMENT_DRAFT.md](
 
 - **The daemon API is unchanged.** Its HTTP and WebSocket listeners stay on `127.0.0.1`, protected by the capability, and the Tauri shell path is unchanged.
 - **The gateway is the only remote entry.** It is off by default and compiled into the daemon: a second listener on `127.0.0.1:<remote.port>` (default 48620) and nothing else. It never reads, accepts or exposes the capability; it calls `dispatch()` in-process.
-- **Tailscale is the only way in.** The gateway is published with `tailscale serve --bg --https=443` (or 8443). Never `tailscale funnel`, never `tailscale serve reset`, never a non-loopback bind. Turning Remote off removes only Bitbots' own serve handler. No Bitbots relay and no LAN listener.
+- **Tailscale is the only way in.** The gateway is published with `tailscale serve --bg --https=443` (or 8443). Never `tailscale funnel`, never `tailscale serve reset`, never a non-loopback bind. Turning Remote off removes only Retinue's own serve handler. No Retinue relay and no LAN listener.
 - **Authorisation is per device.** Pairing needs a one-time code (5 minutes, 5 attempts) and the owner's approval on the desktop, where the owner picks the tier (`viewer`, `chat` or `operator`; Chat is preselected). The device gets a 256-bit token in an `HttpOnly; Secure; SameSite=Strict` cookie; only its SHA-256 is stored. Every request checks the cookie, revocation and `Origin`, and the Tailscale login when that header is present; a device without the header may still pair, with the cookie as its only proof. Approvals from remote are off by default.
 - **One policy, two languages.** The tier table, event policy and settings allowlist live in `apps/desktop/src/remote/tiers.json`, read by the Rust gateway and the TypeScript client, and a parity test fails the build when a daemon method or event has no row.
 - **Never remote:** `settings.set`, every `remote.*` method, agent create/update/delete, runtime profile changes, runtime refresh, file revert, automation writes, memory writes, daemon shutdown, attachments (in v1) and every native Tauri command.
@@ -136,15 +136,15 @@ Owner directive; this amends the section below where they differ. The roadmap is
 
 - **Lanes.** Heavy non-UI coding (Rust daemon, adapters, storage, speech crate, `src-tauri` native code, schema, non-visual TypeScript, backend tests) goes to OpenCode `opencode-go/deepseek-v4.1-flash` at high effort. Anything that touches UI or UX (components, styles, copy, motion, island/companion, settings screens) is done by the Director (Claude), who follows `docs/design/design-system.md` and `docs/design/product.md`. The Director therefore may write UI/UX production code; it still reviews every OpenCode diff and commits after gates. The OpenCode lane never runs `git commit` and does not grade its own work: backend diffs also get a read-only second opinion from a different lane (`impl-b` via `scripts/run-cursor-delegate.ps1`). Codex `impl` remains available when the owner assigns it.
 - **Dictation exception (approved by the owner, 12 October 2026).** Cloud dictation may read the Codex CLI's `auth.json` read-only to call ChatGPT transcription. It is opt-in with explicit consent, the on-device engine stays the default and automatic fallback, the token, audio and transcripts are never persisted or logged, and the exception covers dictation only. All other "no copied provider authentication" rules stand.
-- **Budgets are retired.** `budget.*` returns `unsupported` (`crates/bloblex-daemon/src/main.rs`); do not claim budget enforcement. Unattended work (automations) must bring its own caps: runtime limit, concurrency limit, global pause, and a permission mode that is never bypass.
+- **Budgets are retired.** `budget.*` returns `unsupported` (`crates/retinue-daemon/src/main.rs`); do not claim budget enforcement. Unattended work (automations) must bring its own caps: runtime limit, concurrency limit, global pause, and a permission mode that is never bypass.
 
 # Amendment (14 October 2026): request-shape matching for cloud dictation
 
 Owner directive. Amends the 12 October dictation exception and the "No bypass of bot protection" rule in [docs/history/fix-01/dictation-spec.md](docs/history/fix-01/dictation-spec.md).
 
 - **Endpoint approved, by the owner's account of OpenAI's reply.** The owner states that OpenAI's answer to them names `chatgpt.com/backend-api/transcribe` and permits its use. This is recorded as **owner-attested**: no copy of the correspondence is in the repository, and no blob has independently verified it. If the endpoint or the terms change, this exception lapses.
-- **Request-shape matching is allowed, for cloud dictation only.** The earlier prohibition on shaping requests past OpenAI's bot check is lifted for this one call path. Reason: the check is not an identity or permission gate — live probes returned HTTP 200 while identifying as Bloblex — so matching the accepted request shape is no longer "impersonation to defeat a check" in this case.
-- **What stays forbidden.** Presenting another client's identity is still out. `originator` stays `bloblex` and the User-Agent stays ours; we do not send `originator: bb`, `bb-host-daemon`, a Codex or browser User-Agent, or any other app's name. Cookie replay, challenge-solving and retry loops remain out.
+- **Request-shape matching is allowed, for cloud dictation only.** The earlier prohibition on shaping requests past OpenAI's bot check is lifted for this one call path. Reason: the check is not an identity or permission gate — live probes returned HTTP 200 while identifying as Retinue — so matching the accepted request shape is no longer "impersonation to defeat a check" in this case.
+- **What stays forbidden.** Presenting another client's identity is still out. `originator` stays `retinue` and the User-Agent stays ours; we do not send `originator: bb`, `bb-host-daemon`, a Codex or browser User-Agent, or any other app's name. Cookie replay, challenge-solving and retry loops remain out.
 - **What does not change.** Cloud dictation stays opt-in with explicit consent; the on-device engine stays the default and the automatic fallback; the token, audio and transcripts are never persisted or logged; the exception covers dictation only.
 - **Evidence.** [docs/evidence/cloud-dictation-client-shape-2026-10-14.md](docs/evidence/cloud-dictation-client-shape-2026-10-14.md) records the falsified claims and the client-shape finding. The accepted client shape is the TLS stack: the endpoint challenges SChannel and accepts rustls, with ALPN tested and ruled out — [docs/evidence/cloud-dictation-tls-backend-2026-10-14.md](docs/evidence/cloud-dictation-tls-backend-2026-10-14.md).
 - **Commit and release authority, delegated once (14 October 2026).** The owner, acting as Director, directed the OpenCode lane to commit and publish the beta.22 dictation fix itself. This is a one-release exception to "the OpenCode lane never runs `git commit`" and to "implementers never run `git commit`"; the lane recorded it here rather than acting on a verbal instruction alone. It does not change the general rule, and the read-only second opinion on backend diffs still applies to later work.
@@ -169,7 +169,7 @@ This section supersedes the older **Resume** and **User's current working arrang
 
 ## Resume — 1 October 2026, evening (superseded by Delegation pipeline above)
 
-The user explicitly resumed work after the 20:37 stop. Finish the UI first: the main shell should follow a chat-style layout while keeping Bloblex's plan (agents, sessions, usage, permissions, companion). Companion blobs must match the island's animation and face language on a circle, and the same face is used in the chat. Backend expansion stays paused. The older "coordinator must not touch code" arrangement applied to the Luna lanes; this resume is direct UI work unless the user says otherwise.
+The user explicitly resumed work after the 20:37 stop. Finish the UI first: the main shell should follow a chat-style layout while keeping Retinue's plan (agents, sessions, usage, permissions, companion). Companion blobs must match the island's animation and face language on a circle, and the same face is used in the chat. Backend expansion stays paused. The older "coordinator must not touch code" arrangement applied to the Luna lanes; this resume is direct UI work unless the user says otherwise.
 
 Status at 22:30: the character engine, companion island and chat-style main shell are implemented and pass typecheck/tests/build; native-window verification and per-blob model/effort/speed (needs daemon support) remain. See the top section of `docs/operations/session-handoff.md`.
 

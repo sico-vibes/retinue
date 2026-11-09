@@ -123,7 +123,7 @@ export function tableFromJson(source: string): Parsed<DataTable> {
   return build(keys, (data as Record<string, unknown>[]).slice(0, LIMITS.rows + 1).map((record) => keys.map((key) => cellFrom(record[key]))))
 }
 
-/** `bitbots-table`: { title?, caption?, columns: [string | {label, type?}], rows: [[...]] | [{...}] }. */
+/** `retinue-table`: { title?, caption?, columns: [string | {label, type?}], rows: [[...]] | [{...}] }. */
 export function parseTableSpec(source: string): Parsed<DataTable> {
   if (source.length > LIMITS.jsonBytes) return failure('The table is too large.')
   let spec: unknown
@@ -157,7 +157,7 @@ export function parseTableSpec(source: string): Parsed<DataTable> {
   return build(headers, rows, { ...(title ? { title } : {}), ...(caption ? { caption } : {}) })
 }
 
-/** `bitbots-chart`: { type: "bar"|"line", title?, caption?, unit?, categories: [..], series: [{name, values:[..]}] } or { data: [{label, value}] }. */
+/** `retinue-chart`: { type: "bar"|"line", title?, caption?, unit?, categories: [..], series: [{name, values:[..]}] } or { data: [{label, value}] }. */
 export function parseChartSpec(source: string): Parsed<ChartSpec> {
   if (source.length > LIMITS.jsonBytes) return failure('The chart is too large.')
   let spec: unknown

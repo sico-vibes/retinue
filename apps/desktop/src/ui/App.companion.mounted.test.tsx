@@ -47,7 +47,7 @@ vi.mock('../tauri', () => ({
   listenForOpenSettings: h.listenForOpenSettings,
   openProjectFolder: vi.fn(), selectLocalFile: vi.fn(), inspectLocalFile: vi.fn(),
   openInEditor: vi.fn(), revealInExplorer: vi.fn(), resolveProjectFile: vi.fn(),
-  quitBloblex: vi.fn(), setCloseToTray: vi.fn(),
+  quitRetinue: vi.fn(), setCloseToTray: vi.fn(),
   updatesGetState: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesSetPreferences: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesCheck: async () => ({ status: 'up_to_date' as const, checkedAt: '2026-10-02T00:00:00.000Z' }),
@@ -82,7 +82,7 @@ vi.mock('../blob/BlobCanvas', async () => {
 })
 
 import { App } from './App'
-import { setThemeStyle } from '../blob/bitbots'
+import { setThemeStyle } from '../blob/retinue'
 import { hydrateHints } from './uiPrefs'
 import type { Agent, Runtime, Session, Snapshot } from '../types'
 import { playCompanionCue, setCompanionSoundVolume, unlockCompanionAudioFromGesture } from '../blob/soundCues'
@@ -185,7 +185,7 @@ function configure(snapshotValue = snapshot()) {
 
 beforeEach(() => {
   // These cover the classic island (Stone; Frost was retired on 27 October 2026). Haze draws its own shell (App.hazeCompanion.mounted.test.tsx).
-  setThemeStyle('blobots')
+  setThemeStyle('stone')
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-10-02T12:00:00.000Z'))
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
@@ -574,7 +574,7 @@ describe('companion settings panel', () => {
     // One way to size it: drag the edges, or reset. The old Compact, Comfortable and Tall choice is gone.
     expect(panel.querySelector('[role="radiogroup"][aria-label="Chat height"]')).toBeNull()
     expect(panel.querySelector('button[aria-label="Reset companion size"]')).not.toBeNull()
-    expect([...panel.querySelectorAll('.cset-footer button')].map((button) => button.textContent)).toEqual(['Open Bitbots settings', 'Hide companion'])
+    expect([...panel.querySelectorAll('.cset-footer button')].map((button) => button.textContent)).toEqual(['Open Retinue settings', 'Hide companion'])
     // The old loose "Choose" hop to the overview is gone: choosing happens in the panel.
     expect([...panel.querySelectorAll('button')].some((button) => button.textContent === 'Choose')).toBe(false)
   })
@@ -597,7 +597,7 @@ describe('companion settings panel', () => {
     await act(async () => { slider.dispatchEvent(new Event('pointerup', { bubbles: true })); await settleMicrotasks() })
     expect(volumeSaves()).toEqual([['settings.set', { key: 'companion.soundVolume', value: 0.4 }]])
     expect(blips()).toBe(navigationBlips + 1)
-    expect(h.emit).toHaveBeenCalledWith('bloblex-sound-volume-changed', { volume: 0.4 })
+    expect(h.emit).toHaveBeenCalledWith('retinue-sound-volume-changed', { volume: 0.4 })
   })
 
   it('reads the saved volume, follows another window, and keeps the sounds switch alone', async () => {
@@ -609,7 +609,7 @@ describe('companion settings panel', () => {
     const sounds = view.host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Companion sounds"]')!
     expect(sounds.getAttribute('aria-checked')).toBe('true')
 
-    await act(async () => { handlers['bloblex-sound-volume-changed']({ payload: { volume: 0.6, preview: true } }); await settleMicrotasks() })
+    await act(async () => { handlers['retinue-sound-volume-changed']({ payload: { volume: 0.6, preview: true } }); await settleMicrotasks() })
     expect(slider.value).toBe('60')
     expect(vi.mocked(setCompanionSoundVolume)).toHaveBeenLastCalledWith(0.6)
     expect(blips()).toBe(navigationBlips + 1)

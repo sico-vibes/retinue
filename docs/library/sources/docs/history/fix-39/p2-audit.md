@@ -22,7 +22,7 @@ Scope audited: `git diff` and `git status` in `C:/fx82`, the report `docs/histor
 
 ### F1. Security: `tools[].title` now carries command, path, pattern and URL text into Remote by default (must fix)
 
-- **Where:** `crates/bloblex-adapter-claude/src/lib.rs:570`, `crates/bloblex-adapter-acp/src/lib.rs:917` and `crates/bloblex-adapter-codex/src/lib.rs:932` set the event `title` to `tool_activity(...).label`. Storage keeps it as `tools[].title`. Remote only hides `tools[].detail` unless `includeToolOutput` is set: `remote/policy.rs:450` and `ToolDetail` at `:511`, with the TypeScript twin at `remoteTiers.ts:360-406`. The title is not hidden by default.
+- **Where:** `crates/retinue-adapter-claude/src/lib.rs:570`, `crates/retinue-adapter-acp/src/lib.rs:917` and `crates/retinue-adapter-codex/src/lib.rs:932` set the event `title` to `tool_activity(...).label`. Storage keeps it as `tools[].title`. Remote only hides `tools[].detail` unless `includeToolOutput` is set: `remote/policy.rs:450` and `ToolDetail` at `:511`, with the TypeScript twin at `remoteTiers.ts:360-406`. The title is not hidden by default.
 - **What is wrong:** the report says `label`, `pattern`, `url`, `path` and `command` "disappear by default", but only inside `detail`. The same text now sits in the title as "Ran <80 chars of command>", "Read C:/full/path", "Searched <pattern> in <path>" and "Fetched host".
   - Claude's title was a bare tool name such as `Bash`. It is now a command head or a full path, so this is a new exposure.
   - Codex's title was already the full command (a pre-existing leak, now capped at 80 characters).
@@ -36,7 +36,7 @@ Scope audited: `git diff` and `git status` in `C:/fx82`, the report `docs/histor
 ### F2. Companion activity layout regressed (small)
 
 - **Where:** `ActivityDetails.tsx:140-149` and `shell.css:538`.
-- **What is wrong:** `ActivitySteps` used to render `<ol class="activity-steps flat">`. It now renders `GroupedSteps` with no `flat` class. The `.activity-steps.flat { padding: 0; border: 0 }` rule is now dead. The companion list gains the left border and 10px padding meant for nested steps, plus the `h4` headings, in a small window. The `bitbots.css:392` dotted border applies too.
+- **What is wrong:** `ActivitySteps` used to render `<ol class="activity-steps flat">`. It now renders `GroupedSteps` with no `flat` class. The `.activity-steps.flat { padding: 0; border: 0 }` rule is now dead. The companion list gains the left border and 10px padding meant for nested steps, plus the `h4` headings, in a small window. The `retinue.css:392` dotted border applies too.
 - **Fix:** add a `flat` prop to `GroupedSteps` that puts `flat` on the inner `ol` for the companion. Remove the dead rule if you drop the prop. The Director still needs to look at it in both looks and both themes.
 
 ### F3. Long paths lose the filename (small)

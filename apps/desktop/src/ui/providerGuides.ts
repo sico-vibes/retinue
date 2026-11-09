@@ -65,7 +65,7 @@ export const PROVIDER_GUIDES: Record<'claude' | 'codex' | 'opencode' | 'qwen' | 
   // Phase 5: both run through ACP, which each vendor still marks experimental.
   cursor: {
     name: 'Cursor CLI',
-    installSummary: 'Install the Cursor CLI. Bitbots talks to it through its ACP mode (agent acp).',
+    installSummary: 'Install the Cursor CLI. Retinue talks to it through its ACP mode (agent acp).',
     installCommands: [{ label: 'PowerShell', command: 'irm https://cursor.com/install?win32=true | iex', docsUrl: 'https://cursor.com/docs/cli/overview' }],
     installDocsUrl: 'https://cursor.com/docs/cli/overview',
     signInSummary: 'Run agent login in a terminal and complete its sign-in.',
@@ -76,7 +76,7 @@ export const PROVIDER_GUIDES: Record<'claude' | 'codex' | 'opencode' | 'qwen' | 
   },
   grok: {
     name: 'Grok CLI',
-    installSummary: 'Install the Grok CLI (Grok Build). Bitbots talks to it through its ACP mode (grok agent stdio).',
+    installSummary: 'Install the Grok CLI (Grok Build). Retinue talks to it through its ACP mode (grok agent stdio).',
     installCommands: [],
     installDocsUrl: 'https://docs.x.ai/build/cli/headless-scripting',
     signInSummary: 'Run grok login in a terminal and complete its sign-in.',
@@ -87,7 +87,7 @@ export const PROVIDER_GUIDES: Record<'claude' | 'codex' | 'opencode' | 'qwen' | 
   },
   qwen: {
     name: 'Qwen Code',
-    installSummary: 'Install it with npm. Bitbots talks to it through its experimental ACP mode.',
+    installSummary: 'Install it with npm. Retinue talks to it through its experimental ACP mode.',
     installCommands: [{ label: 'npm', command: 'npm install -g @qwen-code/qwen-code', docsUrl: 'https://github.com/QwenLM/qwen-code' }],
     installDocsUrl: 'https://github.com/QwenLM/qwen-code',
     signInSummary: 'Run it once in a terminal and complete its sign-in.',

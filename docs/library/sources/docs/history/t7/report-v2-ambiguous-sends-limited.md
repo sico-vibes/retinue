@@ -4,7 +4,7 @@ Branch `lane/v2`, worktree `D:\v2`. OpenCode lane. Owner rules obeyed: **no test
 kind were run, added, edited or deleted** (no `cargo test`, no `--tests`/`--all-targets`,
 no `npm`, no app, no probe), **no git writes**, no other worktree or process touched, no
 secrets or message content printed anywhere. The only check run was
-`cargo check -p bloblex-daemon -p bloblex-storage`.
+`cargo check -p retinue-daemon -p retinue-storage`.
 
 ## What I could not read (stated, not guessed)
 
@@ -16,13 +16,13 @@ nothing. Every claim below is therefore taken from the code in this worktree, wi
 
 ## Files changed (only the ones I own)
 
-- `crates/bloblex-storage/src/lib.rs`: `watchdog_due_sessions`, `watchdog_reset`, new
+- `crates/retinue-storage/src/lib.rs`: `watchdog_due_sessions`, `watchdog_reset`, new
   `watchdog_settle_exhausted`, new `queue_mark_failed_ambiguous`, `message_by_client_id`.
-- `crates/bloblex-daemon/src/retry.rs`: `DeclineReason::DeliveryUnknown`, the auto-retry
+- `crates/retinue-daemon/src/retry.rs`: `DeclineReason::DeliveryUnknown`, the auto-retry
   guard in `after_failed_turn`, the settle hook in the usage-limit branch, new
   `settle_exhausted`, `continue_on_activation`, `sweep`.
-- `crates/bloblex-daemon/src/queue.rs`: `send_claimed` failure classification.
-- `crates/bloblex-daemon/src/main.rs`: `DELIVERY_UNKNOWN_CODE` / `DELIVERY_UNKNOWN_MESSAGE` /
+- `crates/retinue-daemon/src/queue.rs`: `send_claimed` failure classification.
+- `crates/retinue-daemon/src/main.rs`: `DELIVERY_UNKNOWN_CODE` / `DELIVERY_UNKNOWN_MESSAGE` /
   `delivery_unknown()` / `message_delivery_unknown()` / `replay_reply()`, and the two replay
   checks inside `session_prompt_impl`.
 
@@ -117,7 +117,7 @@ One error code, one sentence, 409 (same status as `confirmation_required`):
 - code `delivery_unknown` (`main.rs:3167`), produced by `delivery_unknown()` (`3172-3174`)
   with `StatusCode::CONFLICT`.
 - message, verbatim (`main.rs:3170`):
-  `Bitbots could not confirm that the agent received this message. It may have reached the agent. Check the conversation before sending it again.`
+  `Retinue could not confirm that the agent received this message. It may have reached the agent. Check the conversation before sending it again.`
 
 Where it can come from: **the `clientMessageId` replay only** (`main.rs:3202`). It cannot be
 returned by any Phase A failure site, because none of them is after `adapter.prompt`
@@ -355,7 +355,7 @@ The settle is a single conditional UPDATE, so the interleaving is decided by tha
 
 # Existing tests that reference the code I changed (names only; none edited)
 
-Storage (`crates/bloblex-storage/src/lib.rs`, `mod p8_watchdog_tests`):
+Storage (`crates/retinue-storage/src/lib.rs`, `mod p8_watchdog_tests`):
 
 - `p8_previous_database_migrates_and_recovery_is_claimed_once` (uses `watchdog_limit`,
   `watchdog_enqueue`)
@@ -363,7 +363,7 @@ Storage (`crates/bloblex-storage/src/lib.rs`, `mod p8_watchdog_tests`):
   `watchdog_enqueue`, `recover_after_restart`)
 - `p8_sweep_only_sees_due_limited_sessions` (uses `watchdog_due_sessions`, `watchdog_limit`)
 
-Daemon (`crates/bloblex-daemon/src/main.rs`):
+Daemon (`crates/retinue-daemon/src/main.rs`):
 
 - `p8_provider_limits_are_durable_with_the_right_reset` (usage-limit branch of
   `after_failed_turn`)
@@ -403,22 +403,22 @@ constant is unchanged.
 
 # Gates
 
-`cargo check -p bloblex-daemon -p bloblex-storage`, `RUST_MIN_STACK=33554432`, from `D:\v2`.
+`cargo check -p retinue-daemon -p retinue-storage`, `RUST_MIN_STACK=33554432`, from `D:\v2`.
 No warnings in either run.
 
 First run (fresh build of both crates):
 
 ```
-    Checking bloblex-adapter-claude v0.1.0-beta.38 (D:\v2\crates\bloblex-adapter-claude)
-    Checking bloblex-adapter-codex v0.1.0-beta.38 (D:\v2\crates\bloblex-adapter-codex)
-    Checking bloblex-adapter-acp v0.1.0-beta.38 (D:\v2\crates\bloblex-adapter-acp)
+    Checking retinue-adapter-claude v0.1.0-beta.38 (D:\v2\crates\retinue-adapter-claude)
+    Checking retinue-adapter-codex v0.1.0-beta.38 (D:\v2\crates\retinue-adapter-codex)
+    Checking retinue-adapter-acp v0.1.0-beta.38 (D:\v2\crates\retinue-adapter-acp)
     Checking sha2 v0.10.9
     Checking rustls-pemfile v2.2.0
     Checking url v2.5.8
     Checking hyper v1.11.1
     Checking tower-http v0.6.11
     Checking hyper-util v0.1.21
-    Checking bloblex-storage v0.1.0-beta.38 (D:\v2\crates\bloblex-storage)
+    Checking retinue-storage v0.1.0-beta.38 (D:\v2\crates\retinue-storage)
     Checking hyper-tls v0.6.0
     Checking igd-next v0.18.0
     Checking axum v0.8.9
@@ -429,8 +429,8 @@ First run (fresh build of both crates):
 Final run (both crates forced to re-check after the last edits):
 
 ```
-    Checking bloblex-storage v0.1.0-beta.38 (D:\v2\crates\bloblex-storage)
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\v2\crates\bloblex-daemon)
+    Checking retinue-storage v0.1.0-beta.38 (D:\v2\crates\retinue-storage)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\v2\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.21s
 ```
 

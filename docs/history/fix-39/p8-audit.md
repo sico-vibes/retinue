@@ -24,21 +24,21 @@
 
 ### F1. An `Error` event with no turn is now dropped silently (regression)
 
-`crates/bloblex-daemon/src/main.rs:~3999-4008`, the `AgentEvent::Error` arm in `forward_events_with_timeouts`.
+`crates/retinue-daemon/src/main.rs:~3999-4008`, the `AgentEvent::Error` arm in `forward_events_with_timeouts`.
 
 - **Problem.** The old arm always set the session state to `error` and emitted `turn.error`, whether or not a turn was watched. The new arm does its work only inside `if let Some(t) = turn.as_deref()` and then does `continue`. An adapter error that arrives while `turn` is `None` (for example between turns) now changes nothing and emits nothing. The user sees no failure, and the session state is left as it was.
 - **Fix.** Add an `else` branch that keeps the old behaviour for the no-turn case: `update_session_state(&sid, "error")`, `session.changed` from `session_event_summary`, and `turn.error` with `turnId: null`, `failureClass`, `message` and `detail`. Add a test that sends `AgentEvent::Error` with no active turn and expects the `turn.error` event.
 
 ### F2. ACP can return `TurnErrorReported` without having emitted an `Error` event
 
-`crates/bloblex-adapter-acp/src/lib.rs:~1218-1227`.
+`crates/retinue-adapter-acp/src/lib.rs:~1218-1227`.
 
 - **Problem.** `TurnErrorReported` is returned unconditionally, but the `AgentEvent::Error` is sent only `if had_active_turn`. When `had_active_turn` is false, `run_turn` (`main.rs:~3271`) returns early on `TurnErrorReported`, expecting the event stream to finish the turn, and no terminal event exists. The old code returned `Protocol` there, so the daemon finalized the turn. A turn can then be left in `working` with the session busy.
 - **Fix.** Return `TurnErrorReported` only when the `Error` event was actually queued. Otherwise return `AdapterError::Protocol("OpenCode prompt failed")` as before. Add a test for the `!had_active_turn` path.
 
 ### F3. ACP sends a `RecoveryHint` before the cancellation check
 
-`crates/bloblex-adapter-acp/src/lib.rs:~1208-1212`.
+`crates/retinue-adapter-acp/src/lib.rs:~1208-1212`.
 
 - **Problem.** The hint is sent first, and `was_cancelled` is checked afterwards. A cancelled turn leaves a stale `hint` in the turn data with no `Error` after it. It is harmless today, but it is a hidden coupling.
 - **Fix.** Move the hint send after the `was_cancelled` early return, inside the `had_active_turn` branch and before the `Error`.
@@ -52,14 +52,14 @@
 
 ### F5. The sweep reads every session once per second
 
-`crates/bloblex-daemon/src/retry.rs:~719-731`.
+`crates/retinue-daemon/src/retry.rs:~719-731`.
 
 - **Problem.** `st.db.sessions()` runs the full session-list query, with project sub-selects and JSON extraction, every second just to find `state == 'limited'`.
 - **Fix.** Add a small storage query, for example `watchdog_due_sessions(now)`, that selects `id` where `state='limited' AND limited_until IS NOT NULL AND limited_until<=?`. The sweep loop then iterates only those. `watchdog_enqueue` already re-checks the condition atomically, so correctness does not change.
 
 ### F6. Garbled doc comment
 
-`crates/bloblex-daemon/src/retry.rs:~513-514` (`latest_blocked_reset`).
+`crates/retinue-daemon/src/retry.rs:~513-514` (`latest_blocked_reset`).
 
 - **Problem.** There are two stacked, contradictory `///` lines ("snapshot once when it is missing or older…" followed by "Refresh an existing stale snapshot once; absence never launches a probe").
 - **Fix.** Keep one accurate sentence.

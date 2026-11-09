@@ -60,7 +60,7 @@ The companion is the only surface that plays character sounds. Volume is set in 
 
 Settings › Speech has a **Dictation** switch. When it is on, the composer and companion show a microphone and `Ctrl+E` starts and stops a recording. The live transcript appears in the composer as provisional text; you can edit it before sending.
 
-If dictation is off, the shortcut does nothing. If no speech model is installed and the cloud is not allowed, Bitbots says that both engines are unavailable rather than failing silently.
+If dictation is off, the shortcut does nothing. If no speech model is installed and the cloud is not allowed, Retinue says that both engines are unavailable rather than failing silently.
 
 ### On-device engine
 
@@ -75,20 +75,20 @@ The default engine runs on this computer. The speech model is downloaded once an
 
 While you speak, the island shows your words as they arrive: every on-device model sends a provisional line about once a second and keeps the words in place at each pause. Cloud dictation sends the whole recording when you stop, so its island says "Words appear when you stop." instead of showing nothing.
 
-Whistle runs through Cactus's own Windows engine, which Bitbots downloads with the model, checks against a fixed fingerprint and runs as a separate local process. Your voice goes to that process as a short temporary file that is deleted at once; it is never sent anywhere.
-Your recording is processed on this computer and is not written to disk by Bitbots. The model and its download progress are managed in Settings › Speech.
+Whistle runs through Cactus's own Windows engine, which Retinue downloads with the model, checks against a fixed fingerprint and runs as a separate local process. Your voice goes to that process as a short temporary file that is deleted at once; it is never sent anywhere.
+Your recording is processed on this computer and is not written to disk by Retinue. The model and its download progress are managed in Settings › Speech.
 
 ### Cloud dictation (opt-in)
 
-Cloud dictation is off until you allow it. The confirmation says exactly what happens: each recording is sent to OpenAI's ChatGPT transcription service through the Codex sign-in already on this computer, read-only. Bitbots does not store or log the recording, the transcript or the sign-in. If the cloud is unavailable, dictation falls back to the on-device model when it is installed.
+Cloud dictation is off until you allow it. The confirmation says exactly what happens: each recording is sent to OpenAI's ChatGPT transcription service through the Codex sign-in already on this computer, read-only. Retinue does not store or log the recording, the transcript or the sign-in. If the cloud is unavailable, dictation falls back to the on-device model when it is installed.
 
-Bitbots identifies itself to the service and does not pretend to be another app. Choose **On device** in Settings to stop using the cloud. Turning the master switch off stops both engines.
+Retinue identifies itself to the service and does not pretend to be another app. Choose **On device** in Settings to stop using the cloud. Turning the master switch off stops both engines.
 
 ### Privacy
 
 - The on-device path sends nothing anywhere.
 - The cloud path sends only the audio for the current recording.
-- No audio, transcript or cloud sign-in is saved by Bitbots.
+- No audio, transcript or cloud sign-in is saved by Retinue.
 - The companion's cues are generated locally and are not speech recordings.
 
 ![The dictation island while recording](../../assets/screens/dictation.png)
@@ -98,7 +98,7 @@ Bitbots identifies itself to the service and does not pretend to be another app.
 ## Check the result
 
 - The companion follows the current bot and shows the same approval that the main window shows.
-- Dragging it to an edge and releasing snaps it; restarting Bitbots restores the position.
+- Dragging it to an edge and releasing snaps it; restarting Retinue restores the position.
 - `Ctrl+1` focuses a teammate, and `N` moves to the next waiting bot.
 - The microphone appears only when dictation is on.
 - A recording produces a transcript in the composer and leaves no file behind.
@@ -108,12 +108,12 @@ Bitbots identifies itself to the service and does not pretend to be another app.
 
 **The companion is not on screen.** It may be on another display. Use **Reset companion position**, or turn it off and on from the sidebar. Check that it is not hidden behind the main window.
 
-**The companion does not follow the light theme in Stone.** Stone (stored as `blobots`) keeps its dark companion by design. The dictation window picks up a theme change only when it is created.
+**The companion does not follow the light theme in Stone.** Stone (stored as `stone`) keeps its dark companion by design. The dictation window picks up a theme change only when it is created.
 
 **The companion has no approvals.** Approvals from remote apply only to remote devices; locally, the card appears in the companion when it is open. Focus mode hides peeks, not approvals.
 
 **`Ctrl+E` does nothing.** Dictation is off, the shortcut belongs to another app, or no text field has focus. Turn it on in Settings › Speech and focus the composer.
 
-**A model download stalls.** Reopen Settings › Speech and resume; the download is resumable and checks each part. Do not delete the app's speech files by hand while Bitbots is running.
+**A model download stalls.** Reopen Settings › Speech and resume; the download is resumable and checks each part. Do not delete the app's speech files by hand while Retinue is running.
 
-**The cloud says verification is required.** That is OpenAI's anti-bot check rejecting the request, not a Bitbots sign-in failure. Use the on-device engine. Bitbots does not try to defeat the check.
+**The cloud says verification is required.** That is OpenAI's anti-bot check rejecting the request, not a Retinue sign-in failure. Use the on-device engine. Retinue does not try to defeat the check.

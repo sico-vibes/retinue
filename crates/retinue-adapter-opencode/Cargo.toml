@@ -1,0 +1,7 @@
+[package]
+name = "retinue-adapter-opencode"
+version.workspace = true
+edition.workspace = true
+[dependencies]
+retinue-adapter-acp = { path = "../retinue-adapter-acp" }
+retinue-agent-core = { path = "../retinue-agent-core" }

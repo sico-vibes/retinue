@@ -48,7 +48,7 @@ vi.mock('../tauri', () => ({
   listenForOpenSettings: h.listenForOpenSettings,
   openProjectFolder: vi.fn(), selectLocalFile: vi.fn(), inspectLocalFile: vi.fn(),
   openInEditor: vi.fn(), revealInExplorer: vi.fn(), resolveProjectFile: vi.fn(),
-  quitBloblex: vi.fn(), setCloseToTray: vi.fn(),
+  quitRetinue: vi.fn(), setCloseToTray: vi.fn(),
   updatesGetState: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesSetPreferences: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesCheck: async () => ({ status: 'up_to_date' as const, checkedAt: '2026-10-02T00:00:00.000Z' }),
@@ -170,7 +170,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-10-01T12:00:00.000Z'))
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  vi.stubGlobal('localStorage', { getItem: vi.fn((key: string) => key === 'bloblex.profile.name' ? 'Ada' : null), setItem: vi.fn(), removeItem: vi.fn(), clear: vi.fn() })
+  vi.stubGlobal('localStorage', { getItem: vi.fn((key: string) => key === 'retinue.profile.name' ? 'Ada' : null), setItem: vi.fn(), removeItem: vi.fn(), clear: vi.fn() })
   vi.spyOn(window, 'matchMedia').mockImplementation(() => ({
     matches: true, media: '(prefers-reduced-motion: reduce)', onchange: null,
     addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn(() => true),
@@ -253,11 +253,16 @@ describe('App mounted lifecycle', () => {
     await view.settle()
     const logo = view.host.querySelector<HTMLImageElement>('.brand-lockup img')
     expect(logo).not.toBeNull()
-    expect(logo?.getAttribute('alt')).toBe('Bitbots logo')
+    expect(logo?.getAttribute('alt')).toBe('Retinue logo')
     const logoUrl = logo?.getAttribute('src') ?? ''
     expect(logoUrl.length).toBeGreaterThan(0)
     expect(logoUrl.endsWith('.png')).toBe(true)
-    expect(logo?.getAttribute('class')).toBe('brand-logo')
+    expect(logo?.getAttribute('class')).toBe('brand-logo theme-on-dark')
+    expect(logoUrl).toContain('retinue-tile-dark')
+    // The light theme has its own tile, hidden from assistive tech beside the first.
+    const light = view.host.querySelector<HTMLImageElement>('.brand-lockup img.theme-on-light')
+    expect(light?.getAttribute('src')).toContain('retinue-tile-light')
+    expect(light?.getAttribute('alt')).toBe('')
   })
 
   it('unlistens when a StrictMode registration resolves after cleanup', async () => {

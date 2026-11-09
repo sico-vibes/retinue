@@ -30,21 +30,21 @@ Schema paths below are relative to that output directory.
 
 ## Implementation
 
-- `crates/bloblex-agent-core/src/lib.rs`: `SteerRequest { turn_id, text }`,
+- `crates/retinue-agent-core/src/lib.rs`: `SteerRequest { turn_id, text }`,
   `SteerOutcome { Accepted, Stale }`, and a defaulted
   `AgentAdapter::steer` that returns
   `AdapterError::Unsupported("steering is unavailable for this runtime")`.
-- `crates/bloblex-adapter-codex/src/lib.rs`: `CodexAdapter::steer` builds
+- `crates/retinue-adapter-codex/src/lib.rs`: `CodexAdapter::steer` builds
   `{"threadId": <provider thread>, "expectedTurnId": <provider active turn id>,
   "input":[{"type":"text","text":<text>}]}` and calls `turn/steer`. The
   daemon's `SteerRequest.turn_id` is *not* sent; the adapter uses the provider
   turn id it tracks from `turn/start` (`Conn::turn.id`), which the fake names
   `turn-1`. `TurnSteerResponse` is not parsed beyond success.
-- `crates/bloblex-adapter-codex/src/lib.rs`: `steer_stale_evidence` lowercases
+- `crates/retinue-adapter-codex/src/lib.rs`: `steer_stale_evidence` lowercases
   the JSON-RPC error text and treats "not active" / "expected turn" /
   "does not match" style messages as `SteerOutcome::Stale`; every other
   `AdapterError::Rejected`/`Process`/`Timeout` stays an error.
-- `crates/bloblex-daemon/src/main.rs`: `session.steer` validates, checks the
+- `crates/retinue-daemon/src/main.rs`: `session.steer` validates, checks the
   `exec_gate.codex.steer` gate (default false) and the capability table, then
   requires an active turn. On `Accepted` it appends the text as a user message
   with `meta.kind == "steer"` and emits `message.completed`; on `Stale` it calls
@@ -53,7 +53,7 @@ Schema paths below are relative to that output directory.
 
 ## What the fixture proves (request shape only)
 
-`crates/bloblex-adapter-codex/src/bin/fake_codex_server.rs` handles
+`crates/retinue-adapter-codex/src/bin/fake_codex_server.rs` handles
 `turn/steer` with modes `steer-accept` (default when the expected turn is
 active), `steer-stale`, and `steer-reject`. The adapter test
 `steer_accepts_with_the_schema_exact_request_and_reports_stale_and_reject`
@@ -64,7 +64,7 @@ The daemon tests
 `stale_steer_falls_back_to_the_queue_at_position_zero`,
 `steer_is_unsupported_for_other_runtimes_and_side_conversations`, and
 `runtime_capabilities_report_steer_none_and_follow_the_gate` cover the RPC
-contract. This proves only that Bitbots sends a schema-shaped request to a fake
+contract. This proves only that Retinue sends a schema-shaped request to a fake
 peer and routes the fake's accept/stale/reject replies.
 
 ## Not verified live

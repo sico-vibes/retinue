@@ -1,0 +1,26 @@
+[package]
+name = "retinue-adapter-acp"
+version.workspace = true
+edition.workspace = true
+[dependencies]
+base64.workspace = true
+chrono.workspace = true
+async-trait.workspace = true
+retinue-agent-core = { path = "../retinue-agent-core" }
+retinue-process = { path = "../retinue-process" }
+retinue-runtime = { path = "../retinue-runtime" }
+futures-util.workspace = true
+serde_json = { workspace = true, features = ["arbitrary_precision"] }
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[[bin]]
+name = "fake-acp-peer"
+path = "src/bin/fake_acp_peer.rs"
+
+[[bin]]
+name = "acp-cli-recorder"
+path = "src/bin/acp_cli_recorder.rs"
+test = false
+bench = false

@@ -63,8 +63,8 @@ export const UPDATE_ERROR_MESSAGES: Record<UpdateErrorCode, string> = {
 
 export const DEV_BUILD_UPDATES_MESSAGE = 'Updates are unavailable in development builds'
 export const NO_STABLE_RELEASE_MESSAGE = 'No stable release yet.'
-export const UP_TO_DATE_MESSAGE = 'Bitbots is up to date.'
-export const INSTALLING_RESTART_MESSAGE = 'Installing. Bitbots will restart.'
+export const UP_TO_DATE_MESSAGE = 'Retinue is up to date.'
+export const INSTALLING_RESTART_MESSAGE = 'Installing. Retinue will restart.'
 export const CHECKING_UPDATES_MESSAGE = 'Checking for updates.'
 
 export const STABLE_CHANNEL_EXPLANATION = 'Finished releases only.'
@@ -241,7 +241,7 @@ export function formatUpdateTimestamp(value: string | null): string | null {
 
 export function installImpactCopy(count: number): string {
   const noun = count === 1 ? 'session is' : 'sessions are'
-  return `${count} ${noun} running or waiting for approval. They will end when Bitbots restarts.`
+  return `${count} ${noun} running or waiting for approval. They will end when Retinue restarts.`
 }
 
 export function countInstallAffectedSessions(

@@ -4,7 +4,7 @@
 // wake the leader, who reports to the user. Isolated database and temp
 // workspace; prints verdicts only.
 //
-//   node scripts/live-checks/live-team.mjs [path-to-bitbotsd.exe]
+//   node scripts/live-checks/live-team.mjs [path-to-retinued.exe]
 //   env: LEADER=codex|claude|opencode (default codex), TEAMMATE=opencode|codex|claude (default opencode)
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
@@ -12,18 +12,18 @@ import os from 'node:os'
 import path from 'node:path'
 import readline from 'node:readline'
 
-const daemonExe = process.argv[2] || process.env.BLOBLEXD_EXE || 'C:/dev/bloblex-target/debug/bitbotsd.exe'
+const daemonExe = process.argv[2] || process.env.RETINUED_EXE || 'C:/dev/retinue-target/debug/retinued.exe'
 const leaderProvider = process.env.LEADER || 'codex'
 const teammateProvider = process.env.TEAMMATE || 'opencode'
-const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bloblex-live-team-'))
+const work = fs.mkdtempSync(path.join(os.tmpdir(), 'retinue-live-team-'))
 const project = path.join(work, 'project')
 fs.mkdirSync(project)
 
-const child = spawn(daemonExe, [], { env: { ...process.env, BLOBLEX_DB_PATH: path.join(work, 'live.db') }, stdio: ['ignore', 'pipe', 'ignore'] })
+const child = spawn(daemonExe, [], { env: { ...process.env, RETINUE_DB_PATH: path.join(work, 'live.db') }, stdio: ['ignore', 'pipe', 'ignore'] })
 const ready = await new Promise((resolve, reject) => {
   const lines = readline.createInterface({ input: child.stdout })
   const timer = setTimeout(() => reject(new Error('daemon did not start')), 60_000)
-  lines.on('line', (line) => { try { const value = JSON.parse(line); if (value.type === 'bloblexd.ready') { clearTimeout(timer); resolve(value) } } catch { /* not JSON */ } })
+  lines.on('line', (line) => { try { const value = JSON.parse(line); if (value.type === 'retinued.ready') { clearTimeout(timer); resolve(value) } } catch { /* not JSON */ } })
 })
 let rpcId = 0
 async function rpc(method, params = {}) {

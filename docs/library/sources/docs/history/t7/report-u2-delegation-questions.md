@@ -8,18 +8,18 @@ rebase, push, branch); `git status` was only read. Nothing outside `D:\u2` was t
 running process was signalled. All log/notice/event text added carries ids, counts, names and
 short titles only — never message, question, option or answer text.
 
-Files changed: `crates/bloblex-daemon/src/delegations.rs` (untracked/new in this worktree —
+Files changed: `crates/retinue-daemon/src/delegations.rs` (untracked/new in this worktree —
 see "Reading the diff"), `questions.rs`, `team.rs`, `proposals.rs`, the
 `AgentEvent::QuestionRequested` branch and one `permission.reply` line in `main.rs`, and the
 question/delegation/`permission_requests` helpers + `ensure_delegation_schema` in
-`crates/bloblex-storage/src/lib.rs`. `queue.rs`, `retry.rs`, `tasks.rs`, `update_session_model`,
+`crates/retinue-storage/src/lib.rs`. `queue.rs`, `retry.rs`, `tasks.rs`, `update_session_model`,
 `session_prompt_impl`, adapters, `apps/` and `docs/` are untouched.
 
 ## Reading the diff
 
-`crates/bloblex-daemon/src/delegations.rs` is **untracked** in this worktree (it exists with
+`crates/retinue-daemon/src/delegations.rs` is **untracked** in this worktree (it exists with
 the t6 patch but was never added), so `git diff` does not show it. Read it as a whole file.
-`team.rs`, `questions.rs`, `proposals.rs`, `main.rs` and `bloblex-storage/src/lib.rs` show as
+`team.rs`, `questions.rs`, `proposals.rs`, `main.rs` and `retinue-storage/src/lib.rs` show as
 modified against `HEAD`, and those diffs contain the t6 patch as well as this lane's work.
 
 ---
@@ -77,7 +77,7 @@ item 3/4.4). Verdict: not swallowed any more.
   `meta`, and `add` refuses side conversations (`queue.rs:144`). The delegation id is then read
   from the card itself (`main.rs:3238`), never from the request.
 * *Can the spawned `adopt` overwrite a newer `sideTurnId`?* **Yes, it could.** The storage guard
-  is `WHERE id=?1 AND status IN ('queued','running')` (`bloblex-storage/src/lib.rs:3679-3692`),
+  is `WHERE id=?1 AND status IN ('queued','running')` (`retinue-storage/src/lib.rs:3679-3692`),
   which compares nothing about the turn: a delayed `answer_started` task for `T_a1` could land
   after the answer `T_a2` was adopted and set `side_turn_id` back to `T_a1`. Consequence was
   benign (the `turn_is_newer` rule recovers at `T_a2`'s end) but the stored state lied.
@@ -88,15 +88,15 @@ item 3/4.4). Verdict: not swallowed any more.
 ### 1.3 `resolving` held a row for ever — **found, fixed**
 
 `permission_requests` stores no resolving timestamp; `begin_permission_reply` only wrote
-`status='resolving'` and a `choice` inside `data` (`bloblex-storage/src/lib.rs:5441-5451`).
+`status='resolving'` and a `choice` inside `data` (`retinue-storage/src/lib.rs:5441-5451`).
 Fix, all additive inside the card's JSON (no table migration):
 
 * `begin_permission_reply` now also stamps `data.resolvingAt` (RFC3339 millis) in the same
-  transaction (`bloblex-storage/src/lib.rs:5450-5453`).
+  transaction (`retinue-storage/src/lib.rs:5450-5453`).
 * `question_holds_open` counts `resolving` only while `resolvingAt >= now - 2 min`, or when the
   field is absent (a card claimed by an older build, treated as old for the same reason)
-  (`bloblex-storage/src/lib.rs:2455-2472`, constant `QUESTION_RESOLVING_HOLD` at 1093).
-* `question_expire_stalled` (`bloblex-storage/src/lib.rs:2477-2494`) moves such cards to
+  (`retinue-storage/src/lib.rs:2455-2472`, constant `QUESTION_RESOLVING_HOLD` at 1093).
+* `question_expire_stalled` (`retinue-storage/src/lib.rs:2477-2494`) moves such cards to
   `expired` with `data.resolution = "answer_stalled"` and removes `choice`; `questions::sweep`
   (`questions.rs:260-267`) runs it next to `expire_due_questions` and then reuses the existing
   expiry path: `permission.resolved` (`status:"expired"`), the content-free notice, and — in a
@@ -128,7 +128,7 @@ Then `cancel_row(A)`: `waiting` true (its own card), `close_pending_questions(A,
 cards are closed — B's card is not in A's list and is left `pending`; A's reply goes out once.
 The answer to B then takes exactly the path above. Each row ends once, each with its own reply,
 and `question_holds_open` only ever sees its own delegation id
-(`bloblex-storage/src/lib.rs:2463-2472`).
+(`retinue-storage/src/lib.rs:2463-2472`).
 
 The dangerous middle case also closes: if A's question turn ends *after* B's answer turn
 started, `answer_continues_row` compares B's card to A's row and returns false, so A's ending is
@@ -145,7 +145,7 @@ break 1.4).
    and the 30-minute bound is only *evaluated* at a turn end or a restart — so the assignment
    could stay `running` for ever, and every later turn end of that conversation stayed silent
    while the flag was set. Fixed with a periodic reconciliation in the sweep:
-   `question_pending_answers` (`bloblex-storage/src/lib.rs:2495-2505`) lists answer-pending cards
+   `question_pending_answers` (`retinue-storage/src/lib.rs:2495-2505`) lists answer-pending cards
    older than 2 minutes, and `release_dropped_answers` (`questions.rs:295-309`) skips any card
    that still has a queued answer (`queue_has_question_answer`) or a live turn, and hands the
    rest to `delegations::dropped_answer` (`delegations.rs:508-521`), which clears the flag,
@@ -173,7 +173,7 @@ which **starts no new turn** — the provider continues the same turn. So no `an
 no hold is created for a native answer, and consistency on the read side is enforced in
 `question_holds_open`: a `pending` card holds only when it is an `ask_user` card
 (`provider_request_id LIKE 'mcp:%'`); a pending *native* card cannot be answered once the turn it
-was asked in has ended, so it no longer holds the assignment (`bloblex-storage/src/lib.rs:2455-2472`).
+was asked in has ended, so it no longer holds the assignment (`retinue-storage/src/lib.rs:2455-2472`).
 The one added line at `main.rs:1263` writes the same content-free `question_resolved` notice for a
 native answer that `reply_mcp_question` writes for an `ask_user` one.
 
@@ -183,8 +183,8 @@ native answer that `reply_mcp_question` writes for an `ask_user` one.
 
 **Found, fixed.** `delegations` rows now keep `turn_ids` (JSON array, additive column), appended
 idempotently by `delegation_mark_running` alongside `side_turn_id`
-(`bloblex-storage/src/lib.rs:3679-3692`). `delegation_open_rows_for_turn`
-(`bloblex-storage/src/lib.rs:3725-3734`) returns the open rows whose *current* turn or any
+(`retinue-storage/src/lib.rs:3679-3692`). `delegation_open_rows_for_turn`
+(`retinue-storage/src/lib.rs:3725-3734`) returns the open rows whose *current* turn or any
 earlier turn is the given one. `retry_dropped` (`delegations.rs:461-473`) acts only when there is
 exactly one such row (`let [row] = rows.as_slice() else { return }`), never when two open rows
 could own it, skips a row whose current turn is the live one, then finishes it `failed` and
@@ -205,9 +205,9 @@ relays that failure once (`relay_stopped`). Idempotent: `delegation_mark_termina
   second one and then never match). The target and the message hash already pin the brief, and
   the extra strictness is what stops a duplicate conversation as well as a duplicate delivery.
 * Storage: `dedupe_key TEXT` plus `CREATE UNIQUE INDEX ... ON delegations(dedupe_key) WHERE
-  dedupe_key IS NOT NULL` (`bloblex-storage/src/lib.rs:1003-1023`). `delegation_create` returns
+  dedupe_key IS NOT NULL` (`retinue-storage/src/lib.rs:1003-1023`). `delegation_create` returns
   `(row, created)`, looks the key up first, and inserts with `INSERT OR IGNORE`; a losing race
-  reads the winner's row and returns `created = false` (`bloblex-storage/src/lib.rs:3608-3660`).
+  reads the winner's row and returns `created = false` (`retinue-storage/src/lib.rs:3608-3660`).
 * `delegate` looks the key up *before* resolving or creating a conversation and returns the
   stored assignment through `already_sent` (`team.rs:660-670`, `team.rs:738-746`); a race that
   loses the insert returns it too (`team.rs:829-833`). Nothing is recorded, announced or
@@ -229,11 +229,11 @@ is used), and a missing/unusable runtime using the same lookup `new_session` use
 (`st.runtimes` by the agent's `runtimeId` + `adapter_for`): `team.rs:641-658`.
 Wording: "X is locked, so it cannot start new work. Ask the user to unlock X, or pick another
 teammate."; "X has no installed runtime any more, so it cannot start work. Ask the user to
-choose a runtime for X, or pick another teammate."; "X's runtime is not usable by Bitbots any
+choose a runtime for X, or pick another teammate."; "X's runtime is not usable by Retinue any
 more, ... fix X's runtime ...". No approval rule changed and no bypass added; the deeper
 executable preflight stays in `new_session`, whose message already names the target.
 **Global delegation pause does not exist**: the only global pause flag is
-`automations.paused` (`crates/bloblex-daemon/src/automations.rs:321,391`), which governs
+`automations.paused` (`crates/retinue-daemon/src/automations.rs:321,391`), which governs
 scheduled runs, not delegations — so nothing was refused on that ground. A `botsAtOnce` of 0 is
 reported honestly as the `slots` queue reason instead.
 
@@ -242,10 +242,10 @@ reported honestly as the `slots` queue reason instead.
 `queue_reason` (additive column) is computed where `started` is
 (`team.rs:801-808`: `busy` when the conversation is mid-turn, `slots` when every global slot is
 taken), stored by `delegation_create`, exposed as `queueReason` in the DTO through
-`DELEGATION_COLUMNS` (`bloblex-storage/src/lib.rs:1035`), and therefore present in
+`DELEGATION_COLUMNS` (`retinue-storage/src/lib.rs:1035`), and therefore present in
 `delegation.list`, in `delegation.updated` (same DTO) and in the Manager's own `delegation`
 notice. `delegation_mark_running` clears it, so a delivered row never keeps a stale reason
-(`bloblex-storage/src/lib.rs:3679-3692`). The Manager's reply text now says which of the two it
+(`retinue-storage/src/lib.rs:3679-3692`). The Manager's reply text now says which of the two it
 is (`team.rs:690-701`).
 
 ### 4.4 Parent wake semantics — **verified; three gaps found, two fixed, one listed**
@@ -297,14 +297,14 @@ it needs a generation-checked cancel in `main.rs`.
 
 * `CREATE INDEX IF NOT EXISTS idx_permission_requests_delegation ON
   permission_requests(json_extract(data,'$.delegationId'))` in `ensure_delegation_schema`
-  (`bloblex-storage/src/lib.rs:1015-1023`), which every open path runs
-  (`bloblex-storage/src/lib.rs:1823`), so the `json_extract` lookups of
+  (`retinue-storage/src/lib.rs:1015-1023`), which every open path runs
+  (`retinue-storage/src/lib.rs:1823`), so the `json_extract` lookups of
   `question_ids_for_delegation`, `pending_questions_for_delegation`, `question_holds_open` are
   index-assisted instead of table scans.
 * `idx_delegations_side_turn ON delegations(side_session_id, side_turn_id)` — new, for
   `delegation_find_for_side_turn`, which runs on every turn end.
 * `delegations(side_session_id, status)` already existed (`idx_delegations_side`,
-  `bloblex-storage/src/lib.rs:999`), so `delegation_list_for_side` — called several times per
+  `retinue-storage/src/lib.rs:999`), so `delegation_list_for_side` — called several times per
   turn end — was already an indexed query; nothing was added for it beyond the new `side_turn`
   index used by the same queries' predicates.
 * `idx_delegations_dedupe` (unique, partial) makes the replay check a single index probe.
@@ -372,7 +372,7 @@ it needs a generation-checked cancel in `main.rs`.
   `QUESTION_ANSWER_HOLD` stays at 30 minutes.
 * A pending **native** question card no longer holds its assignment open; an unresolved native
   card left pending by a failed answer is left for a restart to expire (`recover_after_restart`
-  expires every pending card, `bloblex-storage/src/lib.rs:4982`).
+  expires every pending card, `retinue-storage/src/lib.rs:4982`).
 * `record()` returns `(row, created)` rather than an id; `proposals.rs` uses the new
   `Delegation.duplicate` for its verb.
 * One line was added in `permission.reply` (`main.rs:1263`) to write the native
@@ -384,14 +384,14 @@ it needs a generation-checked cancel in `main.rs`.
 
 ## Existing tests that reference what I changed (names only; none edited, none run)
 
-* `bloblex-storage/src/lib.rs`:
+* `retinue-storage/src/lib.rs`:
   `automatic_permission_resolution_is_conditional_and_persists_policy_source`
   (`begin_permission_reply`), `team_projects_leader_side_sessions_and_questions_round_trip`
   (`insert_question`, `permission_get`, question card snapshot),
   `proposals_are_cards_the_question_sweep_ignores_and_a_decision_resolves_them`
   (`expire_due_questions`, `permission_get`), `queued_prompts_order_reorder_update_and_delete_follow_state_rules`
   (`queue_add` shape, untouched).
-* `bloblex-daemon/src/main.rs`: `ask_user_is_listed_for_every_providers_own_conversation`,
+* `retinue-daemon/src/main.rs`: `ask_user_is_listed_for_every_providers_own_conversation`,
   `ask_user_validates_bounds_persists_an_expiring_card_and_leaves_the_turn_idle`,
   `ask_user_answers_are_delivered_idle_or_queued_and_never_read_as_answered_after_expiry`
   (questions + sweep), `delegation_notice_splits_a_turn_and_reply_paths_read_one_row`
@@ -399,12 +399,12 @@ it needs a generation-checked cancel in `main.rs`.
   `row_a_task_runs_in_the_named_project`, `row_repeated_refused_drains_write_one_waiting_notice`
   (`team::delegate` / `message_blob` text). No other test body in this tree names the changed
   helpers (searched by symbol).
-* `bloblex-daemon/src/team_p7_tests.rs`: `p7_manager_messages_a_teammate_immediately_with_no_proposal_or_task`,
+* `retinue-daemon/src/team_p7_tests.rs`: `p7_manager_messages_a_teammate_immediately_with_no_proposal_or_task`,
   `p7_manager_messages_a_teammate_at_once_while_start_and_assign_stay_approved`,
   `p7_approved_parallel_tasks_carry_contract_and_follow_up_uses_same_conversation`,
   `p7_archived_manager_conversation_cannot_message_or_make_unapproved_writes` (all via
   `message_blob` → `delegate`).
-* `bloblex-daemon/src/team_p10_tests.rs`: `p10_isolates_a_code_task_when_another_runs_in_the_repo`,
+* `retinue-daemon/src/team_p10_tests.rs`: `p10_isolates_a_code_task_when_another_runs_in_the_repo`,
   `p10_never_isolates_for_a_plain_folder_a_research_bot_or_no_clash`,
   `p10_a_follow_up_after_a_merge_runs_in_an_existing_folder`,
   `p10_isolates_when_the_other_task_is_queued_or_has_not_started_a_turn`.
@@ -437,11 +437,11 @@ it needs a generation-checked cancel in `main.rs`.
 
 ## Checks (last lines, verbatim)
 
-`$env:RUST_MIN_STACK='33554432'; cargo check -p bloblex-storage -p bloblex-daemon --message-format short`
+`$env:RUST_MIN_STACK='33554432'; cargo check -p retinue-storage -p retinue-daemon --message-format short`
 
 ```
-    Checking bloblex-storage v0.1.0-beta.38 (D:\u2\crates\bloblex-storage)
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\u2\crates\bloblex-daemon)
+    Checking retinue-storage v0.1.0-beta.38 (D:\u2\crates\retinue-storage)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\u2\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.64s
 ```
 
@@ -451,7 +451,7 @@ target was built, so anything the test modules use is unverified here.
 
 ## Proposed skill update (I may not edit `.claude/`)
 
-`.claude/skills/bitbots-development/references/lessons.md`, new dated entry:
+`.claude/skills/retinue-development/references/lessons.md`, new dated entry:
 
 > **2026-10-27 — "another turn is live" is not the same as "this turn's ending is stale" (lane U2,
 > `lane/u2`).** t6 silenced every turn end that arrived while any other turn of the same side

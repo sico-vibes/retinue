@@ -1,6 +1,6 @@
 import type { AnalyticsBucket, AnalyticsLeaderboardRow, AnalyticsMetric, AnalyticsRangeDays, AnalyticsSeriesPoint, AnalyticsTokens, UsageAnalytics, UsageAnalyticsRequest } from '../analyticsTypes'
 import { entityNoun } from './vocabulary'
-import { themeStyle } from '../blob/bitbots'
+import { themeStyle } from '../blob/retinue'
 
 export function resolvedTimeZone(): string {
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -273,7 +273,7 @@ export function formatUpdatedClock(instant: Date, timeZone: string): string {
   }
 }
 
-export const ANALYTICS_STORAGE_KEY = 'bloblex.analytics.view'
+export const ANALYTICS_STORAGE_KEY = 'retinue.analytics.view'
 
 export interface AnalyticsViewPrefs {
   days: AnalyticsRangeDays

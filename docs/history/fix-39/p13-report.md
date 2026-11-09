@@ -16,7 +16,7 @@ Two fixes, both proven by the P11 live suite and by offline tests that fail on t
 ### Root cause (found by probing the real CLI, `claude 2.1.302`)
 
 The Claude adapter already relaunched the process and passed `--resume` when the launch
-options changed (`bloblex-adapter-claude/src/lib.rs:1174`), but `start` blocked for up to
+options changed (`retinue-adapter-claude/src/lib.rs:1174`), but `start` blocked for up to
 eight seconds waiting for `system/init` before writing anything to the resumed process
 (`lib.rs:948-972`). Claude Code emits `system/init` **only once a turn's input arrives**, so a
 valid resume is silent and the wait timed out; the adapter then wrapped the failure as
@@ -35,13 +35,13 @@ Probed directly against the installed CLI:
 
 ### What changed
 
-- `crates/bloblex-adapter-claude/src/lib.rs:837-959` — on a resume, `start` now sends a
-  single `get_context_usage` control request with a `bloblex-resume-<uuid>` id and treats
+- `crates/retinue-adapter-claude/src/lib.rs:837-959` — on a resume, `start` now sends a
+  single `get_context_usage` control request with a `retinue-resume-<uuid>` id and treats
   its `control_response` (or a `system/init`) as proof the session is alive; the
   resume-rejected `result` is still returned as `ResumeRejected`; the eight-second bound
   stays as the timeout. The probe uses its own request-id prefix so it is not swallowed by
-  the `bloblex-context-` interception (`lib.rs:851`).
-- `crates/bloblex-daemon/src/main.rs:3191` — the daemon's in-turn relaunch (step 4 of
+  the `retinue-context-` interception (`lib.rs:851`).
+- `crates/retinue-daemon/src/main.rs:3191` — the daemon's in-turn relaunch (step 4 of
   `run_turn`) now covers **Claude as well as Codex**, and goes through the existing
   `resume_or_start_fresh` (`main.rs:2143`). When the resume fails, this starts a fresh
   provider session and, for a context that had delivered prompts, the daemon arms P6's
@@ -51,19 +51,19 @@ Probed directly against the installed CLI:
 
 ### Tests that prove it (fail on today's code)
 
-- `crates/bloblex-daemon/src/main.rs:5623` `p13_claude_permission_change_relaunches_and_resumes_the_same_session`
+- `crates/retinue-daemon/src/main.rs:5623` `p13_claude_permission_change_relaunches_and_resumes_the_same_session`
   — a live Claude session (process running, launched on `Ask`) gets a changed mode
   (`Auto`); asserts the adapter's `resume_session` is called once, `new_session` not at
   all, and the prompt is delivered without a recap.
-- `crates/bloblex-daemon/src/main.rs:5640` `p13_claude_permission_change_falls_back_to_the_recap_when_resume_fails`
+- `crates/retinue-daemon/src/main.rs:5640` `p13_claude_permission_change_falls_back_to_the_recap_when_resume_fails`
   — same setup with a rejected resume; asserts a fresh session starts, exactly one
-  `context_reset` notice, and this prompt contains `<bloblex_recap>` with the last user
+  `context_reset` notice, and this prompt contains `<retinue_recap>` with the last user
   message (never stored).
   Both tests were run against the **old** codex-only condition and fail there
   (`resume_calls == 0`), so they are genuine failing-first tests.
-- `crates/bloblex-adapter-claude/tests/lifecycle.rs:637` `changed_mode_resumes_a_silent_session_without_waiting_for_init`
+- `crates/retinue-adapter-claude/tests/lifecycle.rs:637` `changed_mode_resumes_a_silent_session_without_waiting_for_init`
   — offline, through the real adapter using a new fake mode `--fake-lazy-resume-init`
-  (`crates/bloblex-adapter-claude/src/bin/fake_claude.rs:63-71` and `:84`) that mimics the
+  (`crates/retinue-adapter-claude/src/bin/fake_claude.rs:63-71` and `:84`) that mimics the
   real CLI: a resumed process stays silent until woken but answers `get_context_usage`.
   Without the probe the test fails with exactly the recorded error
   (`Unsupported("Claude could not resume after changing approvalMode: …")`); with it the
@@ -73,7 +73,7 @@ Probed directly against the installed CLI:
 
 ### What changed
 
-- `crates/bloblex-daemon/src/main.rs:1802` `gate_default` now returns true for `steer`
+- `crates/retinue-daemon/src/main.rs:1802` `gate_default` now returns true for `steer`
   wherever `provider_can_steer` (`main.rs:1815`) says the adapter can steer (Codex today).
   The stored `exec_gate.<provider>.steer` value stays the off-switch.
 - `runtime_capabilities` reports `settings.steer` from the same predicate
@@ -82,7 +82,7 @@ Probed directly against the installed CLI:
 - Routing by the P9 setting is unchanged and already correct: the composer uses
   `composer.busySendMode` (`apps/desktop/src/ui/busySend.ts`) and falls back to Queue with
   the honest line when `runtime.capabilities` reports steer unsupported.
-- `crates/bloblex-storage/src/lib.rs:88` seeds `exec_gate.codex.steer = true`, and a new
+- `crates/retinue-storage/src/lib.rs:88` seeds `exec_gate.codex.steer = true`, and a new
   one-time, idempotent migration `ensure_steer_gate_open` (`lib.rs:580`, called from every
   existing-database migration path) opens a previously seeded `false` once — matching the
   `exec_gate.opencode.thinking` precedent — so the owner's existing database is fixed too.
@@ -91,16 +91,16 @@ Probed directly against the installed CLI:
 
 ### Tests that prove it (fail on today's code)
 
-- `crates/bloblex-daemon/src/main.rs` `runtime_capabilities_report_steer_evidence_none_and_follow_the_gate`
+- `crates/retinue-daemon/src/main.rs` `runtime_capabilities_report_steer_evidence_none_and_follow_the_gate`
   — Codex steer is `enabled: true` by default, `false` after an explicit off, back to true.
-- `crates/bloblex-daemon/src/main.rs` `steer_requires_the_gate_codex_and_an_active_turn`
+- `crates/retinue-daemon/src/main.rs` `steer_requires_the_gate_codex_and_an_active_turn`
   — the gate accepts only a JSON boolean, an idle turn is the only refusal at the default,
   and setting the gate false still yields "Steering is turned off for this runtime.".
 - `steer_is_unsupported_for_other_runtimes_and_side_conversations` still proves Claude and
   OpenCode keep the honest Queue fallback.
-- `crates/bloblex-storage/src/lib.rs:5672` `steer_gate_migration_opens_a_seeded_closed_gate_once`
+- `crates/retinue-storage/src/lib.rs:5672` `steer_gate_migration_opens_a_seeded_closed_gate_once`
   and `:5686` `a_new_database_seeds_the_steer_gate_open`.
-- `crates/bloblex-daemon/tests/live_cli.rs:585-610` — the always-on summary check now
+- `crates/retinue-daemon/tests/live_cli.rs:585-610` — the always-on summary check now
   requires a started, unlimited provider's `permissionChange == "completed"` and, for
   Codex, that `steer` is not `"unsupported"` (other providers must loop back to Queue).
 
@@ -122,10 +122,10 @@ user name or user paths).
 
 ## Gates (final tree)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
   — **all targets ok, 0 failed** (48 `test result: ok` lines; live tests skip without
-  `BITBOTS_LIVE_TESTS=1`).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — **clean**.
+  `RETINUE_LIVE_TESTS=1`).
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — **clean**.
 - UI: `npx tsc -b` clean; `npx vitest run --maxWorkers=3` — **174 files / 1288 tests, all
   passed**; `npm run build` succeeded. The remote app was not touched, so `build:remote`
   was not run.
@@ -141,13 +141,13 @@ user name or user paths).
 
 ## Files outside the package list that were touched
 
-- `crates/bloblex-storage/src/lib.rs` — the gate seed (`:88`) and the one-time
+- `crates/retinue-storage/src/lib.rs` — the gate seed (`:88`) and the one-time
   `ensure_steer_gate_open` migration (`:580`). The package line for P13 names "the steer
   routing"; the seed and its migration are required for the gate default, and the codebase
   precedent for opening such a gate lives in this file.
 - `apps/desktop/src/preview/fixtureBridge.ts` — keeps the preview daemon's steer capability
   in line with the real daemon. Not production.
-- `crates/bloblex-adapter-claude/src/bin/fake_claude.rs` and `tests/lifecycle.rs`, and
-  `crates/bloblex-daemon/tests/live_cli.rs` — test-only.
+- `crates/retinue-adapter-claude/src/bin/fake_claude.rs` and `tests/lifecycle.rs`, and
+  `crates/retinue-daemon/tests/live_cli.rs` — test-only.
 - `apps/desktop/src/remote/tiers.json` was **not** changed: P13 adds no daemon method or
   event, so the parity test is unaffected.

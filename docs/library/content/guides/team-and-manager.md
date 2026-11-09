@@ -45,7 +45,7 @@ The Manager page in Settings has three parts:
 - **What it knows about you:** facts with a category (identity, workflow, style, conventions, design or other), a name, a value up to 1,000 characters, and whether the fact was said, learned or corrected. A fact you lock is not changed directly: the Manager proposes the change and waits.
 - **Playbook:** the Manager's standing brief, with a version history and a comparison for every version. Restoring an earlier version is reversible in the same way.
 
-These notes are kept by Bitbots, not by the coding agent, so a new model starts with the Manager's knowledge rather than a blank slate.
+These notes are kept by Retinue, not by the coding agent, so a new model starts with the Manager's knowledge rather than a blank slate.
 
 ### Talk to the team
 

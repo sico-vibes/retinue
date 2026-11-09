@@ -20,7 +20,7 @@ Lane: OpenCode `deepseek-v4.1-flash` (high), its own worktree. All code in this 
 ## Where to look (find the real causes; there may be several)
 
 - `apps/desktop/src/ui/App.tsx`: `selectAgent` calls `ensureConversation` when the bot has no main session; the auto-create effect (`autoCreatedFor`) does the same; G3's reconcile effect and `nextSelectionAfterRemoval` choose a new selection "when the selected id is no longer in the snapshot" — check whether a bot with **no** session (selectedSessionId null) or a just-created session not yet in the snapshot is misread as "removed" and sends the selection to the first bot. Also the active-session listener and `setActiveSession(null)` round-trip with the companion window, and the "empty conversation is not kept" effect (`session.delete.schedule`).
-- The daemon's `agent.conversation` (`crates/bloblex-daemon/src/main.rs`, and the preview fixture `apps/desktop/src/preview/fixtureBridge.ts`) creates a session titled with the agent's name. Decide the clean design: preferably the UI holds a **local draft** (no RPC) until the first send, which then calls `agent.conversation.create` + `session.prompt`; if a daemon session must exist earlier, create it untitled ("New conversation" shown by the UI) and never persist it without a message.
+- The daemon's `agent.conversation` (`crates/retinue-daemon/src/main.rs`, and the preview fixture `apps/desktop/src/preview/fixtureBridge.ts`) creates a session titled with the agent's name. Decide the clean design: preferably the UI holds a **local draft** (no RPC) until the first send, which then calls `agent.conversation.create` + `session.prompt`; if a daemon session must exist earlier, create it untitled ("New conversation" shown by the UI) and never persist it without a message.
 
 ## Proof (required)
 
@@ -35,6 +35,6 @@ Daemon test if you change `agent.conversation`.
 
 ## Gates
 - `cd apps/desktop && npx tsc -b && npx vitest run --maxWorkers=3 2>&1 | grep -E "Test Files|Tests |FAIL"` and `npm run build`
-- If Rust changed: `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"` and clippy `-D warnings`.
+- If Rust changed: `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"` and clippy `-D warnings`.
 
 Write `docs/history/fix-38/h2-report.md`: the actual causes (file:line), the fix, the tests, what is unverified.

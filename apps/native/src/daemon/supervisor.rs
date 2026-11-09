@@ -1,4 +1,4 @@
-//! Finding and starting `bitbotsd.exe`, ported from the Tauri shell's
+//! Finding and starting `retinued.exe`, ported from the Tauri shell's
 //! supervisor (`apps/desktop/src-tauri/src/lib.rs:303` `candidate_daemon_paths`,
 //! `:329` `start_daemon`).
 //!
@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use super::ready::{parse_ready, ReadyError};
 
-pub const DAEMON_EXE: &str = "bitbotsd.exe";
+pub const DAEMON_EXE: &str = "retinued.exe";
 // A copy of a large installed database opens and re-creates its read indexes on
 // the first start, which measured 20 seconds on an 804 MB database; the line is
 // still a timeout, not a hang, and a daemon that starts normally answers in
@@ -102,7 +102,7 @@ pub fn daemon_candidates() -> Vec<PathBuf> {
 /// `<repo>/apps/native` at compile time, which is how a dev build finds the
 /// daemon it was built next to.
 fn workspace_root() -> Option<PathBuf> {
-    if let Some(explicit) = std::env::var_os("BITBOTS_REPO_ROOT") {
+    if let Some(explicit) = std::env::var_os("RETINUE_REPO_ROOT") {
         return Some(PathBuf::from(explicit));
     }
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -114,7 +114,7 @@ pub fn find_daemon() -> Result<PathBuf, String> {
         .into_iter()
         .find(|candidate| candidate.is_file())
         .ok_or_else(|| {
-            "bitbotsd.exe is missing. Build the daemon first: cargo build -p bloblex-daemon --release"
+            "retinued.exe is missing. Build the daemon first: cargo build -p retinue-daemon --release"
                 .to_owned()
         })
 }
@@ -123,8 +123,8 @@ pub fn find_daemon() -> Result<PathBuf, String> {
 pub fn spawn_daemon(executable: &Path, db_path: &Path) -> Result<DaemonProcess, String> {
     let mut command = Command::new(executable);
     command
-        .env("BLOBLEX_PARENT_PID", std::process::id().to_string())
-        .env("BLOBLEX_DB_PATH", db_path)
+        .env("RETINUE_PARENT_PID", std::process::id().to_string())
+        .env("RETINUE_DB_PATH", db_path)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -136,9 +136,9 @@ pub fn spawn_daemon(executable: &Path, db_path: &Path) -> Result<DaemonProcess, 
     // The hook bridge is installed beside the daemon, not beside its run copy, so
     // the daemon is told where it is (Health check, outside sessions).
     if let Some(folder) = executable.parent() {
-        let bridge = folder.join("bitbots-hook.exe");
+        let bridge = folder.join("retinue-hook.exe");
         if bridge.is_file() {
-            command.env("BITBOTS_HOOK_BRIDGE", bridge);
+            command.env("RETINUE_HOOK_BRIDGE", bridge);
         }
     }
     let mut child = command

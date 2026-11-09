@@ -37,7 +37,7 @@ exists) and writes a 280-byte placeholder page:
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Bitbots remote</title>
+    <title>Retinue remote</title>
   </head>
   <body>
     <p>The remote app was not built. Run npm run build:remote.</p>
@@ -73,38 +73,38 @@ tolerate a missing resource: creating the path before calling it is the only loc
 ## 2. What was run, and what came back
 
 The worktree had neither `apps/desktop/dist-remote/` (gitignored, WP6c) nor
-`apps/desktop/src-tauri/binaries/bitbotsd-*.exe` (gitignored, release sidecars), so `cargo build`
+`apps/desktop/src-tauri/binaries/retinued-*.exe` (gitignored, release sidecars), so `cargo build`
 stops at the sidecars before it ever reaches the resource copy. Both cases were probed.
 
 ### 2.1 Pre-fix reproduction (this is the spec's failure, confirmed)
 
 To get past the sidecar step, two **empty** files were created at the gitignored paths
-`apps/desktop/src-tauri/binaries/bitbotsd-x86_64-pc-windows-msvc.exe` and
-`bitbots-hook-…exe` (both deleted again in §5). `cargo build -p bloblex-desktop` then reported:
+`apps/desktop/src-tauri/binaries/retinued-x86_64-pc-windows-msvc.exe` and
+`retinue-hook-…exe` (both deleted again in §5). `cargo build -p retinue-desktop` then reported:
 
 ```
-  cargo:rerun-if-changed=binaries\bitbotsd-x86_64-pc-windows-msvc.exe
-  cargo:rerun-if-changed=binaries\bitbots-hook-x86_64-pc-windows-msvc.exe
+  cargo:rerun-if-changed=binaries\retinued-x86_64-pc-windows-msvc.exe
+  cargo:rerun-if-changed=binaries\retinue-hook-x86_64-pc-windows-msvc.exe
   resource path `..\dist-remote` doesn't exist
-error: failed to run custom build command for `bloblex-desktop v0.1.0-beta.29 (…\apps\desktop\src-tauri)`
+error: failed to run custom build command for `retinue-desktop v0.1.0-beta.29 (…\apps\desktop\src-tauri)`
 ```
 
 With no dummy sidecars the same command fails earlier, on the sidecar copy:
 
 ```
-  resource path `binaries\bitbotsd-x86_64-pc-windows-msvc.exe` doesn't exist
+  resource path `binaries\retinued-x86_64-pc-windows-msvc.exe` doesn't exist
 ```
 
 ### 2.2 Post-fix, verification item 1
 
 | Command | Result |
 |---|---|
-| `cargo build -p bloblex-desktop`, no sidecars | Fails at `resource path `binaries\bitbotsd-…exe` doesn't exist` — the expected worktree stop, and **not** the resource error. `apps/desktop/dist-remote/remote.html` (280 bytes) existed afterwards. |
-| `cargo build -p bloblex-desktop`, dummy sidecars | **The build script succeeds.** `tauri_build` ran to completion with nothing further printed, and copied the resource: `C:/fxtarget2/debug/remote-web/remote.html` is 280 bytes, the placeholder. The next failure is a *different, pre-existing* wall — the non-dev macro needs the other gitignored folder: `proc macro panicked … The `frontendDist` configuration is set to `"../dist"` but this path doesn't exist` (`src/lib.rs:2392`). |
-| `npm run build` (to make `dist/`, then `cargo clippy -p bloblex-desktop`) | The crate compiles — `tauri_build` and `tauri::generate_context!()` both succeed with the placeholder resource. Clippy then stops on **pre-existing** lints in `src/{lib,power,speech,updates}.rs` (1 error `power.rs:222` "this loop never actually loops", 7 warnings; 8 errors under `-D warnings`). **None in `build.rs`.** |
+| `cargo build -p retinue-desktop`, no sidecars | Fails at `resource path `binaries\retinued-…exe` doesn't exist` — the expected worktree stop, and **not** the resource error. `apps/desktop/dist-remote/remote.html` (280 bytes) existed afterwards. |
+| `cargo build -p retinue-desktop`, dummy sidecars | **The build script succeeds.** `tauri_build` ran to completion with nothing further printed, and copied the resource: `C:/fxtarget2/debug/remote-web/remote.html` is 280 bytes, the placeholder. The next failure is a *different, pre-existing* wall — the non-dev macro needs the other gitignored folder: `proc macro panicked … The `frontendDist` configuration is set to `"../dist"` but this path doesn't exist` (`src/lib.rs:2392`). |
+| `npm run build` (to make `dist/`, then `cargo clippy -p retinue-desktop`) | The crate compiles — `tauri_build` and `tauri::generate_context!()` both succeed with the placeholder resource. Clippy then stops on **pre-existing** lints in `src/{lib,power,speech,updates}.rs` (1 error `power.rs:222` "this loop never actually loops", 7 warnings; 8 errors under `-D warnings`). **None in `build.rs`.** |
 
 So: yes, `tauri_build` is past. It is worth being blunt that this fix does **not** on its own make
-`cargo build -p bloblex-desktop` succeed in a worktree: that still needs the sidecar binaries and
+`cargo build -p retinue-desktop` succeed in a worktree: that still needs the sidecar binaries and
 `../dist`. It removes exactly one of the three gitignored gates, the one this spec named.
 
 ### 2.3 Post-fix, verification item 2 — the real build replaces the placeholder
@@ -114,7 +114,7 @@ folder: 21 files (14 hashed assets, 4 icons, `remote.html`, `remote.webmanifest`
 `remote.html` 1150 bytes and starting `<!doctype html>` with the real head — the placeholder is
 gone.
 
-Then `cargo build -p bloblex-desktop -v`:
+Then `cargo build -p retinue-desktop -v`:
 
 - Cargo reported `Dirty … the file `apps\desktop\src-tauri\../dist-remote` has changed (40s after
   last build)`, re-ran the build script, and `copy_resources` refreshed
@@ -124,16 +124,16 @@ Then `cargo build -p bloblex-desktop -v`:
 
 ### 2.4 Post-fix, verification item 3
 
-`cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` → **exit 0**, no diagnostics
+`cargo clippy --workspace --exclude retinue-desktop -- -D warnings` → **exit 0**, no diagnostics
 ("Finished `dev` profile … in 1m 15s").
 
 ### 2.5 Extra checks run
 
 | Check | Result |
 |---|---|
-| Rebuild loop | A second `cargo build -p bloblex-desktop` with nothing changed did **not** re-run the build script (no `Running …build-script-build` under `-v`). After `npm run build:remote` it did re-run once. No constant rebuilds. |
+| Rebuild loop | A second `cargo build -p retinue-desktop` with nothing changed did **not** re-run the build script (no `Running …build-script-build` under `-v`). After `npm run build:remote` it did re-run once. No constant rebuilds. |
 | Folder exists, entry missing | `mkdir dist-remote` (empty), then `cargo build`: the placeholder was written, so `tauri_build` passed. |
-| `rustfmt --check --edition 2021 apps/desktop/src-tauri/build.rs` | Clean. (`cargo fmt -p bloblex-desktop -- --check` reports diffs in `src/lib.rs`, `speech.rs`, `snap.rs`, `migrate.rs` — all pre-existing, untouched here; `build.rs` is not among them.) |
+| `rustfmt --check --edition 2021 apps/desktop/src-tauri/build.rs` | Clean. (`cargo fmt -p retinue-desktop -- --check` reports diffs in `src/lib.rs`, `speech.rs`, `snap.rs`, `migrate.rs` — all pre-existing, untouched here; `build.rs` is not among them.) |
 | `.gitignore` | `git check-ignore -v apps/desktop/dist-remote/remote.html` → `.gitignore:3`. The placeholder is untracked. |
 
 ---
@@ -162,14 +162,14 @@ written, so the script cannot invalidate itself.
   `remote.html`; an existing `remote.html` is never overwritten (sha256 unchanged across a build).
 - `npm run build:remote` replaces the folder with the real build, and the next build picks up the
   real files.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`: clean.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`: clean.
 - `build.rs` is rustfmt-clean.
 
 **Not verified here:**
 
-- **`cargo build`, `cargo test` and `cargo clippy -p bloblex-desktop` as green gates.** They cannot
+- **`cargo build`, `cargo test` and `cargo clippy -p retinue-desktop` as green gates.** They cannot
   go green in this worktree for reasons this spec does not address: the release sidecars
-  (`binaries/bitbotsd-*.exe`, `bitbots-hook-*.exe`) and `apps/desktop/dist/` are absent and
+  (`binaries/retinued-*.exe`, `retinue-hook-*.exe`) and `apps/desktop/dist/` are absent and
   gitignored. With both supplied by hand, the crate compiles; the remaining failures are
   pre-existing clippy lints in files this change does not touch. A reviewer wanting a green
   desktop clippy should note that `power.rs:222` already fails `-D warnings` on this branch.
@@ -177,7 +177,7 @@ written, so the script cannot invalidate itself.
   needs the sidecars. So "an installer ships the real `remote-web/`" is argued from
   `beforeBuildCommand` (`npm run build && npm run build:remote`, `emptyOutDir: true`) and not
   observed.
-- **WP6b serving the placeholder.** The gateway is not in this branch (`crates/bloblex-daemon/src/`
+- **WP6b serving the placeholder.** The gateway is not in this branch (`crates/retinue-daemon/src/`
   has no `web.rs`), so nothing was served. WP6b's spec says an absent-or-empty folder makes `/`
   return its built-in "not installed" page; with the placeholder present the folder is non-empty,
   so `/remote.html` (and whatever the manifest maps) will return this page instead. Out of scope
@@ -214,7 +214,7 @@ written, so the script cannot invalidate itself.
   `build.rs`. Any other lane running `cargo build` in this crate will see the same two files
   dirtied — worth knowing, not introduced here.
 - Removed again after probing: the two empty dummy sidecars, their copies in
-  `C:/fxtarget2/debug/{bitbotsd,bitbots-hook}.exe`, and `apps/desktop/dist/` (built only for the
+  `C:/fxtarget2/debug/{retinued,retinue-hook}.exe`, and `apps/desktop/dist/` (built only for the
   clippy probe).
 - Left in place: `apps/desktop/dist-remote/remote.html` (the 280-byte placeholder, gitignored) —
   the state the spec's verification step 2 describes. `C:/fxtarget2` itself is kept; it makes the

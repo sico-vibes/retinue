@@ -31,7 +31,7 @@ describe('mounted conversation controls', () => {
     trigger.focus()
     const cancelled = vi.fn()
     const confirmed = vi.fn()
-    const view = mount(<ConfirmDialog title="Delete this conversation?" body="This removes it and its messages from Bitbots. The coding agent's own history is not touched." confirmLabel="Delete" cancelLabel="Cancel" onConfirm={confirmed} onCancel={cancelled} />)
+    const view = mount(<ConfirmDialog title="Delete this conversation?" body="This removes it and its messages from Retinue. The coding agent's own history is not touched." confirmLabel="Delete" cancelLabel="Cancel" onConfirm={confirmed} onCancel={cancelled} />)
     views.push({ unmount: () => { view.unmount(); trigger.remove() } })
     expect(view.host.querySelector('[role="dialog"]')?.textContent).toContain('The coding agent\'s own history is not touched.')
     await act(async () => { [...view.host.querySelectorAll('button')].find((button) => button.textContent === 'Cancel')?.click() })
@@ -45,7 +45,7 @@ describe('mounted conversation controls', () => {
     const grouped = groupConversationActivity([
       { kind: 'message', id: 'm-1' },
       { kind: 'activity', id: 'tool-1', activityKind: 'tool', activity: { title: 'npm test', kind: 'commandExecution', state: 'failed', detail: { command: 'npm test', output: '1 failing', exitCode: 1 } } },
-      { kind: 'activity', id: 'tool-2', activityKind: 'tool', activity: { title: 'bloblex · message_blob', kind: 'mcpToolCall', state: 'completed', detail: { tool: 'bloblex · message_blob', input: '{ "blob": "Gogo" }', result: 'Sent to Gogo.' } } },
+      { kind: 'activity', id: 'tool-2', activityKind: 'tool', activity: { title: 'retinue · message_blob', kind: 'mcpToolCall', state: 'completed', detail: { tool: 'retinue · message_blob', input: '{ "blob": "Gogo" }', result: 'Sent to Gogo.' } } },
       { kind: 'activity', id: 'file-1', activityKind: 'file', activity: { path: 'src/a.ts', detail: { path: 'src/a.ts', diff: '+one line' } } },
       { kind: 'message', id: 'm-2' },
     ])[1]

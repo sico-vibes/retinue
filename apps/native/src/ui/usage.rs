@@ -476,10 +476,10 @@ impl Root {
             }
             let (bot_name, title) = match snapshot.session(&id) {
                 Some(session) => (
-                    session.agent_id.clone().and_then(|agent_id| snapshot.agent(&agent_id)).map(|agent| agent.name.clone()).unwrap_or_else(|| "Bitbots".to_owned()),
+                    session.agent_id.clone().and_then(|agent_id| snapshot.agent(&agent_id)).map(|agent| agent.name.clone()).unwrap_or_else(|| "Retinue".to_owned()),
                     session.title_or_default().to_owned(),
                 ),
-                None => ("Bitbots".to_owned(), "Conversation".to_owned()),
+                None => ("Retinue".to_owned(), "Conversation".to_owned()),
             };
             announce.push((bot_name, title, notice));
         }

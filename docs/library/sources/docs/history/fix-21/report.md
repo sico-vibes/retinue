@@ -6,8 +6,8 @@
 
 Implemented 15 October 2026 in worktree `C:\fx34a`. Spec: `docs/history/fix-21/companion-b-spec.md`.
 No commit. Gates: `npm run typecheck` clean; `npm run test` 125 files / 804 tests pass;
-`cargo test -p bloblex-storage -p bloblex-daemon` pass (storage 92, daemon 157 + 1 smoke);
-`cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings` clean.
+`cargo test -p retinue-storage -p retinue-daemon` pass (storage 92, daemon 157 + 1 smoke);
+`cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings` clean.
 
 Note: the full `npm run test` run is intermittently flaky in two unrelated mounted files
 (`App.agent.mounted.test.tsx` "shows every create validation message…" and
@@ -33,7 +33,7 @@ New view code: `ui/CompanionPanels.tsx`. New mounted tests: `FIX21.companion.mou
   show. A switch lives in the companion settings view and beside the companion sound row in the
   main Settings sheet, both reading/writing through the helper.
 - Rust: `companion.focusMode` is accepted only as a JSON boolean in
-  `crates/bloblex-storage/src/lib.rs` and `crates/bloblex-daemon/src/main.rs` (added to the
+  `crates/retinue-storage/src/lib.rs` and `crates/retinue-daemon/src/main.rs` (added to the
   daemon's `validation_key` list), with tests in both crates.
 - `preview/fixtureBridge.ts`: `?focus` mirrors the flag (`companion.focusMode`).
 - Tests: `companionPeek.test.ts`, `companionPrefs.test.ts`, and the FIX21 mounted C7 cases
@@ -101,7 +101,7 @@ New view code: `ui/CompanionPanels.tsx`. New mounted tests: `FIX21.companion.mou
 - `onOpenSettings` now takes an optional page: `tauri.ts` `showMainSettings(sessionId, page)`
   and `listenForOpenSettings(handler(page))`, the App handler sets the sheet's initial page, and
   `preview/fixtureBridge.ts` mirrors both. The page rides on a second global
-  `bloblex-open-settings` emit after the native `show_main_settings` command (the desktop crate
+  `retinue-open-settings` emit after the native `show_main_settings` command (the desktop crate
   was not modified). `settingsIndex.ts` gained `SETTINGS_PAGE_NAMES` + `settingsPageFromEvent`
   with tests.
 - Tests: the FIX21 C13 cases with a stubbed `rpc` (Off, On with count + dot + button, unavailable).

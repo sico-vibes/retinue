@@ -21,12 +21,12 @@ was added that is proved equal to TypeScript by shared golden fixtures.
 | `apps/desktop/src/remote/remoteTiers.ts` | changed | 555 | Loads and validates `tiers.json`; same exports, same behaviour |
 | `apps/desktop/src/remote/fixtures/policy-goldens.json` | new | 1812 | 76 worked cases, run by Vitest and by `cargo test` |
 | `apps/desktop/src/remote/policyGoldens.test.ts` | new | 105 | Runs every golden case through the TypeScript functions |
-| `crates/bloblex-daemon/src/remote/mod.rs` | new | 9 | `pub mod policy;` (WP6b adds `tailscale`, `pairing`, `web`) |
-| `crates/bloblex-daemon/src/remote/policy.rs` | new | 865 | The Rust port + 8 tests |
-| `crates/bloblex-daemon/src/main.rs` | changed | +4 | `#[allow(dead_code)] mod remote;` |
-| `crates/bloblex-daemon/Cargo.toml` | changed | +1 | `regex.workspace = true` |
+| `crates/retinue-daemon/src/remote/mod.rs` | new | 9 | `pub mod policy;` (WP6b adds `tailscale`, `pairing`, `web`) |
+| `crates/retinue-daemon/src/remote/policy.rs` | new | 865 | The Rust port + 8 tests |
+| `crates/retinue-daemon/src/main.rs` | changed | +4 | `#[allow(dead_code)] mod remote;` |
+| `crates/retinue-daemon/Cargo.toml` | changed | +1 | `regex.workspace = true` |
 | `Cargo.toml` | changed | +1 | `regex = "1"` in `[workspace.dependencies]` |
-| `Cargo.lock` | changed | +1 | adds `regex` to `bloblex-daemon`'s dependency list |
+| `Cargo.lock` | changed | +1 | adds `regex` to `retinue-daemon`'s dependency list |
 
 Not changed: `remoteTiers.test.ts`, `remoteTiers.parity.test.ts`, `remoteContract.ts`,
 `scripts/print-remote-tiers.mjs`, every UI file, every other daemon file. No listener, no
@@ -179,8 +179,8 @@ All commands were run in this worktree with `CARGO_TARGET_DIR=C:/fxtarget`.
 
 | Gate | Command | Result |
 |---|---|---|
-| Rust tests | `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast` | **pass** — 595 passed, 0 failed, 0 ignored across 43 suites |
-| Rust lints | `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` | **pass** — clean, `Finished dev profile` |
+| Rust tests | `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast` | **pass** — 595 passed, 0 failed, 0 ignored across 43 suites |
+| Rust lints | `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` | **pass** — clean, `Finished dev profile` |
 | TypeScript | `cd apps/desktop && npx tsc -b` | **pass** — exit 0, no diagnostics |
 | TypeScript tests | `cd apps/desktop && npx vitest run src/remote` | **pass** — 125 tests in 4 files (`remoteTiers.test.ts`, `remoteTiers.parity.test.ts`, `policyGoldens.test.ts` 78, `RemoteApp.mounted.test.tsx` 3) |
 | Tier table | `node ../../scripts/print-remote-tiers.mjs > NUL` | **cannot pass as written — pre-existing, not caused by this change (see below)** |
@@ -234,7 +234,7 @@ than papering over it. The temporary `_headcheck.ts` used as evidence was delete
 - The fixtures are not exhaustive over the whole snapshot schema; they cover the field
   policy branches the spec lists, not every field the daemon emits.
 - `serde_json/arbitrary_precision` is enabled elsewhere in the workspace
-  (`bloblex-adapter-acp`), so number equality is on the internal string form; the golden
+  (`retinue-adapter-acp`), so number equality is on the internal string form; the golden
   comparison passes, but that dependency is a workspace-level feature-unification effect
   rather than a property of this module.
 - The desktop Vite bundle was not rebuilt; `remoteTiers.ts` is not imported by any UI file

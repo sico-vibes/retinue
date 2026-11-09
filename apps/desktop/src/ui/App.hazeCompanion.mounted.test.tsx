@@ -51,7 +51,7 @@ vi.mock('../tauri', () => ({
   listenForOpenSettings: h.listenForOpenSettings,
   openProjectFolder: vi.fn(), selectLocalFile: vi.fn(), inspectLocalFile: vi.fn(),
   openInEditor: vi.fn(), revealInExplorer: vi.fn(), resolveProjectFile: vi.fn(),
-  quitBloblex: vi.fn(), setCloseToTray: vi.fn(),
+  quitRetinue: vi.fn(), setCloseToTray: vi.fn(),
   updatesGetState: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesSetPreferences: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesCheck: async () => ({ status: 'up_to_date' as const, checkedAt: '2026-10-02T00:00:00.000Z' }),
@@ -86,7 +86,7 @@ vi.mock('../blob/BlobCanvas', async () => {
 })
 
 import { App } from './App'
-import { setThemeStyle } from '../blob/bitbots'
+import { setThemeStyle } from '../blob/retinue'
 import type { Agent, Runtime, Session, Snapshot } from '../types'
 
 const stamp = '2026-10-01T00:00:00.000Z'
@@ -347,7 +347,7 @@ describe('Haze companion', () => {
   })
 })
 
-describe.each(['blobots'] as const)('The same companion layout in %s', (look) => {
+describe.each(['stone'] as const)('The same companion layout in %s', (look) => {
   beforeEach(() => { setThemeStyle(look) })
 
   it('shows the employee list and conversation, with no Haze gradient and no island tabs', async () => {
@@ -367,7 +367,7 @@ describe.each(['blobots'] as const)('The same companion layout in %s', (look) =>
 })
 
 // FIX43 item 7: the main window opens a bot with no conversation into a local draft (FIX38 H2); the companion does the same.
-describe.each(['haze', 'blobots'] as const)('An employee without a conversation in the %s companion', (look) => {
+describe.each(['haze', 'stone'] as const)('An employee without a conversation in the %s companion', (look) => {
   beforeEach(() => { setThemeStyle(look) })
 
   it('shows a ready composer, stores nothing on the click, and the first message creates the conversation', async () => {

@@ -132,7 +132,7 @@ button { cursor: pointer; }
   --shadow-pop: 0 10px 30px rgb(40 40 60 / .14);
 }
 
-/* D · Blobots: the current alternative look (DESIGN.md tokens), flush panels,
+/* D · Stone: the current alternative look (DESIGN.md tokens), flush panels,
    monochrome chrome; used to judge the hand-painted bots in their real setting. */
 .rd-root[data-rd="blob"] {
   --f-ui: "Segoe UI Variable Text", "Segoe UI", "Inter", system-ui, sans-serif; --f-display: var(--f-ui); --f-num: var(--f-ui);
@@ -765,7 +765,7 @@ kbd { font: 500 10.5px/1 var(--f-mono); padding: 3px 5px; border-radius: 5px; ba
 .mood-working .frost-eyes rect { fill: color-mix(in oklab, var(--bot) 35%, white); }
 .mood-waiting .frost-eyes rect { fill: #ffd28a; }
 
-/* ===================================================== D · Blobots details */
+/* ===================================================== D · Stone details */
 .rd-root[data-rd="blob"] .rd-side, .rd-root[data-rd="blob"] .rd-convos, .rd-root[data-rd="blob"] .rd-thread,
 .rd-root[data-rd="blob"] .rd-settings-nav, .rd-root[data-rd="blob"] .rd-settings-page, .rd-root[data-rd="blob"] .rd-usage, .rd-root[data-rd="blob"] .rd-desktop {
   border-radius: 0; border: 0; box-shadow: none;

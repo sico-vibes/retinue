@@ -1,6 +1,6 @@
-# Bitbots Product
+# Retinue Product
 
-> **What this is:** The product purpose, users, brand personality, anti-references and design principles for Bitbots.
+> **What this is:** The product purpose, users, brand personality, anti-references and design principles for Retinue.
 > **Status:** current
 > **Last updated:** 2026-10-15
 
@@ -14,7 +14,7 @@ Developers on Windows who already use Claude Code, Codex, or OpenCode. They need
 
 ## Product Purpose
 
-Bitbots is a local desktop control plane for authenticated coding-agent CLIs. It presents one conversation interface backed by a separate local daemon. Provider authentication stays with each CLI. The product succeeds when users can discover a real runtime, start or resume a session, follow its normalized events, and recover accurately after reconnects.
+Retinue is a local desktop control plane for authenticated coding-agent CLIs. It presents one conversation interface backed by a separate local daemon. Provider authentication stays with each CLI. The product succeeds when users can discover a real runtime, start or resume a session, follow its normalized events, and recover accurately after reconnects.
 
 ## Brand Personality
 
@@ -26,7 +26,7 @@ Calm, capable, characterful. The voice is concise and honest about unknown or un
 - Dashboard overload, permanent charts, and nested navigation trees.
 - Fabricated agent conversations, authentication, pricing, or successful actions.
 - Provider logos or copied reference assets.
-- A top-edge notch companion. The Bitbots companion is a draggable rounded rectangular bill, bottom-center by default, with island behavior and corner geometry.
+- A top-edge notch companion. The Retinue companion is a draggable rounded rectangular bill, bottom-center by default, with island behavior and corner geometry.
 - A generic status pill or mouth-based character expressions. Preserve the welcome wave, stateful home/chat views, and mouth-free expressions requested in the reference feedback.
 
 ## Design Principles

@@ -5,7 +5,7 @@
 /** How many recent folders the working-folder menu offers. */
 export const RECENT_FOLDER_LIMIT = 6
 
-const KEY = 'bitbots.recentFolders'
+const KEY = 'retinue.recentFolders'
 
 function storage(): Storage | null {
   try { return typeof localStorage === 'undefined' ? null : localStorage } catch { return null }

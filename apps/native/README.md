@@ -1,6 +1,6 @@
-# Bitbots in Rust (GPUI) — native preview
+# Retinue in Rust (GPUI) — native preview
 
-The native Rust version of Bitbots, ported screen by screen until it matches the
+The native Rust version of Retinue, ported screen by screen until it matches the
 app. This crate is **slice 2: the look, the team and new projects** — the window
 opens, starts its own daemon, and shows the projects tree, the conversations
 column and one conversation; each bot carries its Haze portrait or its agent's
@@ -13,11 +13,11 @@ stay out of the root workspace and its gates.
 
 ```
 apps/native/
-  Cargo.toml            own [workspace]; binary `bitbots-native`
+  Cargo.toml            own [workspace]; binary `retinue-native`
   build.rs              rasterises the Haze portraits and agent logos to PNG, embeds the app icon
   src/main.rs           the window: 1360×860 (min 1000×680), Mica Alt backdrop
   src/art.rs            a bot's mark: portrait, coloured/tinted logo or initial; Lucide icons
-  src/daemon/           start bitbotsd, RPC, events, restart with backoff (a worker thread)
+  src/daemon/           start retinued, RPC, events, restart with backoff (a worker thread)
   src/state/            the snapshot, `apply_event`, the projects tree, the preset catalogue
   src/ui/               root view, sidebar, conversations, conversation, team page, settings,
                         proposals, dialogs, motion, the text input
@@ -34,7 +34,7 @@ apps/native/
 | `gpui` | Zed `e2f3d5ed8e5a2d8532ef0a82d3594593f0523804` (15 February 2026) | Zed's own UI framework, used as a git dependency. This commit is the newest one whose `rust-toolchain.toml` still builds with the machine's `rustc 1.94.0`; `main` asks for 1.98.1. It has the Windows DWM backdrops (`WindowBackgroundAppearance::MicaAltBackdrop`) and a working IME path (`EntityInputHandler` + `ElementInputHandler`). |
 | `gpui-component` | **not used** | Its published line depends on `gpui-base`/`gpui-pre` and pulls in tree-sitter, resvg and LMDB. The text field, the markdown subset and the previews are written here against the pinned gpui; adding the library is a decision for the Director. |
 | `resvg` | 0.45, build-dependency | Rasterises the Haze portraits (full colour vector art) to PNG once at build time: GPUI's `svg()` element draws an SVG as a single tint, so it cannot show them. Already in the tree through gpui, so it needs no extra download. |
-| `embed-resource` | 3 | Puts `assets/icon/bloblex.ico` in `bitbots-native.exe`. A failure is a build warning, not an error, because the checkout path contains an apostrophe. |
+| `embed-resource` | 3 | Puts `assets/icon/retinue.ico` in `retinue-native.exe`. A failure is a build warning, not an error, because the checkout path contains an apostrophe. |
 
 The markdown subset and the multi-line input are ported from the React app and
 from Zed's `crates/gpui/examples/input.rs` at the same revision.
@@ -52,31 +52,31 @@ cargo test
 cargo clippy --all-targets -- -D warnings
 ```
 
-The window needs `bitbotsd.exe`. It looks, in order, beside `bitbots-native.exe`,
-then `<CARGO_TARGET_DIR>\{release,debug}\bitbotsd.exe`, then
-`<repo>\target\{release,debug}\bitbotsd.exe`. Build it first:
+The window needs `retinued.exe`. It looks, in order, beside `retinue-native.exe`,
+then `<CARGO_TARGET_DIR>\{release,debug}\retinued.exe`, then
+`<repo>\target\{release,debug}\retinued.exe`. Build it first:
 
 ```powershell
 cd ..\..
 $env:CARGO_TARGET_DIR = 'C:\bbn\daemon-target'
-cargo build -p bloblex-daemon --release
+cargo build -p retinue-daemon --release
 ```
 
-The preview keeps its own database: `%LOCALAPPDATA%\Bitbots Native\bloblex.db`,
-set as `BLOBLEX_DB_PATH` on the daemon child. On first run, when that file does
-not exist and `%LOCALAPPDATA%\Bitbots\bloblex.db` does, the window asks once
+The preview keeps its own database: `%LOCALAPPDATA%\Retinue Native\retinue.db`,
+set as `RETINUE_DB_PATH` on the daemon child. On first run, when that file does
+not exist and `%LOCALAPPDATA%\Retinue\retinue.db` does, the window asks once
 whether to start from a copy of the installed app's data (SQLite's online backup
-API, database file only) or empty. `BLOBLEX_DB_PATH` in the environment overrides
+API, database file only) or empty. `RETINUE_DB_PATH` in the environment overrides
 the location, which is how the live check runs against a throwaway file.
 
-The window writes `%LOCALAPPDATA%\Bitbots Native\native.log`: what started, what
+The window writes `%LOCALAPPDATA%\Retinue Native\native.log`: what started, what
 the snapshot held, who is hired where (counts only) and every error. It never
 records the daemon capability, a token or message text.
 
-`BITBOTS_NATIVE_SMOKE_SECS=<n>` closes the window by itself after n seconds, so
+`RETINUE_NATIVE_SMOKE_SECS=<n>` closes the window by itself after n seconds, so
 the close path (and the daemon shutdown it triggers) can be checked without
-someone at the keyboard. `BITBOTS_NATIVE_FIRST_RUN=empty|copy` answers the
-first-run question up front, and `BITBOTS_NATIVE_OPEN_SESSION=<id>` opens one
+someone at the keyboard. `RETINUE_NATIVE_FIRST_RUN=empty|copy` answers the
+first-run question up front, and `RETINUE_NATIVE_OPEN_SESSION=<id>` opens one
 conversation on the first snapshot, which is how the conversation pane is checked
 without a click.
 
@@ -106,7 +106,7 @@ without a click.
   the CEO, hire by hand, or not now. A project's "+" offers a new conversation,
   a hire and asking the CEO.
 - **Proposals** for a `hire` (with "Hire all N") and a `bot` (create or skip);
-  everything else still says to open Bitbots.
+  everything else still says to open Retinue.
 - **Settings**: theme, density, where the database is, copying the installed
   data again, and the daemon's version.
 - **Daemon resilience**: an unexpected exit shows a notice, restarts after 1, 2,
@@ -123,22 +123,22 @@ settings pages.
 pwsh apps/native/scripts/package.ps1
 ```
 
-Builds `bitbotsd` (and `bitbots-hook`) in release, builds `bitbots-native` in
-release, stages `apps/native/dist/Bitbots-Native-<version>/` with `install.ps1`,
+Builds `retinued` (and `retinue-hook`) in release, builds `retinue-native` in
+release, stages `apps/native/dist/Retinue-Native-<version>/` with `install.ps1`,
 the icon and a short `README.txt`, and zips it as
-`Bitbots-Native-<version>.zip`. `cargo-packager` is not used: it is not
+`Retinue-Native-<version>.zip`. `cargo-packager` is not used: it is not
 available offline.
 
 ```powershell
 # from the unzipped folder
 pwsh -ExecutionPolicy Bypass -File .\install.ps1
-pwsh -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\Programs\Bitbots Native\install.ps1" -Uninstall
+pwsh -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\Programs\Retinue Native\install.ps1" -Uninstall
 ```
 
-Install copies the folder to `%LOCALAPPDATA%\Programs\Bitbots Native` and adds a
-Start menu shortcut named **Bitbots (Rust preview)** with the app icon.
+Install copies the folder to `%LOCALAPPDATA%\Programs\Retinue Native` and adds a
+Start menu shortcut named **Retinue (Rust preview)** with the app icon.
 `-Uninstall` removes the shortcut and that folder, and never the data folder
-`%LOCALAPPDATA%\Bitbots Native`.
+`%LOCALAPPDATA%\Retinue Native`.
 
 ## Third-party art
 

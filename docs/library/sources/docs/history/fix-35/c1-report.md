@@ -19,21 +19,21 @@ Tailscale method is unchanged, and `remote.method` selects one at a time
 ## Files
 
 New:
-- `crates/bloblex-daemon/src/remote/native.rs` — certificate, TLS listener, account,
+- `crates/retinue-daemon/src/remote/native.rs` — certificate, TLS listener, account,
   the `native` status block, and the `remote.native.*` RPCs.
 
 Changed:
-- `crates/bloblex-daemon/src/remote/mod.rs` — `native` module wiring, `remote.method`
+- `crates/retinue-daemon/src/remote/mod.rs` — `native` module wiring, `remote.method`
   cache, abuse state (unauth bucket + login lockout), `remote.method.set`,
   method-aware `enable`/`disable`/`stop_serving`/`status_value`, new status fields.
-- `crates/bloblex-daemon/src/remote/web.rs` — `POST /api/login`, the `abuse_limit`
+- `crates/retinue-daemon/src/remote/web.rs` — `POST /api/login`, the `abuse_limit`
   middleware, Native `Origin`/`Host` checks, `method` in `/api/me` and in
   `remote.pairing.requested`.
-- `crates/bloblex-daemon/src/remote/pairing.rs` — `Pending.method`,
+- `crates/retinue-daemon/src/remote/pairing.rs` — `Pending.method`,
   `PairingState::begin_native`, `method` in `pending()`.
-- `crates/bloblex-daemon/src/main.rs` — the four new methods in the `remote.*` dispatch.
-- `crates/bloblex-daemon/src/remote/tests.rs` — 17 Native tests.
-- `crates/bloblex-daemon/Cargo.toml`, `Cargo.toml`, `Cargo.lock` — new dependencies.
+- `crates/retinue-daemon/src/main.rs` — the four new methods in the `remote.*` dispatch.
+- `crates/retinue-daemon/src/remote/tests.rs` — 17 Native tests.
+- `crates/retinue-daemon/Cargo.toml`, `Cargo.toml`, `Cargo.lock` — new dependencies.
 - `apps/desktop/src/remote/tiers.json` — four new `never` rows.
 - `apps/desktop/src/remote/remoteContract.ts` — `RemoteMethodId`, `RemoteNativeStatus`,
   `RemoteStatus.method`/`native`, `PairingRequest.method`, `REMOTE_METHODS`.
@@ -67,7 +67,7 @@ Routes (only while Native is on; the Tailscale listener is unchanged):
     a wrong username still runs one Argon2id verify against a fixed dummy hash);
   - correct and a valid device cookie → `200 { state: "approved" }` (lastSeenAt
     refreshed by the normal `authenticate`);
-  - correct, new device → `202 { state: "pending" }` + `__Host-bitbots_pair` cookie,
+  - correct, new device → `202 { state: "pending" }` + `__Host-retinue_pair` cookie,
     after `remote.pairing.requested` with `method: "native"`, `login: null`;
   - locked out or globally paused → `429 { error: { code: "rate_limited" } }`.
 - `GET /api/pair` — the Native device polls this exactly as a paired phone does.
@@ -113,7 +113,7 @@ restricted with `icacls <key> /inheritance:r /grant:r <user>:F`; elsewhere mode 
 
 ## Tests
 
-Rust (`crates/bloblex-daemon/src/remote/tests.rs`, all green):
+Rust (`crates/retinue-daemon/src/remote/tests.rs`, all green):
 - certificate generated once, fingerprint stable across a reload, regeneration changes
   it; the key file's permission command is recorded (`icacls` on Windows, `chmod`
   elsewhere);
@@ -138,9 +138,9 @@ Native status; the tier-parity test covers the new `tiers.json` rows.
 
 ## Gates
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-  — all `test result: ok`; `bloblex-daemon` 312 passed, 0 failed (17 new Native tests).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+  — all `test result: ok`; `retinue-daemon` 312 passed, 0 failed (17 new Native tests).
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote src/preview` — `tsc` clean;
   vitest 207 passed (13 files).
 

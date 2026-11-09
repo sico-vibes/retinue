@@ -5,12 +5,12 @@ import os from 'node:os'
 import path from 'node:path'
 
 const exe = process.env.OPENCODE_EXE || (process.env.APPDATA + '\npm\node_modules\opencode-ai\bin\opencode.exe')
-const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bloblex-live-opencode-'))
+const work = fs.mkdtempSync(path.join(os.tmpdir(), 'retinue-live-opencode-'))
 const model = process.env.OC_MODEL || 'opencode-go/deepseek-v4.1-flash'
 const config = {
   $schema: 'https://opencode.ai/config.json',
   model,
-  agent: { bloblexlive: { mode: 'primary', model, prompt: 'Rule: when the user says "status", reply with exactly PLUM-6612 and nothing else.' } },
+  agent: { retinuelive: { mode: 'primary', model, prompt: 'Rule: when the user says "status", reply with exactly PLUM-6612 and nothing else.' } },
 }
 const env = { ...process.env, OPENCODE_CONFIG_CONTENT: JSON.stringify(config) }
 const child = spawn(exe, ['acp', '--cwd', work], { cwd: work, env, stdio: ['pipe', 'pipe', 'pipe'] })
@@ -37,7 +37,7 @@ const notify = (method, params) => child.stdin.write(JSON.stringify({ jsonrpc: '
 const opt = (res) => (res.result?.configOptions || []).map((o) => ({ id: o.id, cur: o.currentValue, values: (o.options || []).map((x) => x.value ?? x.id).slice(0, 8), n: (o.options || []).length }))
 
 const report = { model }
-const init = await call('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'BitbotsLiveCheck', version: '0.0.1' } })
+const init = await call('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'RetinueLiveCheck', version: '0.0.1' } })
 notify('initialized', {})
 report.initialize = init.error ? { error: init.error.message?.slice(0, 120) } : { agent: init.result?.agentInfo?.name, version: init.result?.agentInfo?.version, caps: Object.keys(init.result?.agentCapabilities || {}) }
 
@@ -70,7 +70,7 @@ report.afterSetModel = m1.error ? { error: m1.error.message?.slice(0, 160) } : o
 const effortOpt = (m1.result?.configOptions || []).find((o) => o.id === 'effort')
 const e1 = effortOpt ? await call('session/set_config_option', { sessionId: sid, configId: 'effort', value: (effortOpt.options || []).map((x) => x.value ?? x.id).find((v) => v === 'low') || (effortOpt.options?.[0]?.value) }) : null
 report.afterSetEffort = e1 ? (e1.error ? { error: e1.error.message?.slice(0, 160) } : opt(e1).filter((o) => o.id === 'effort')) : 'no effort option offered for this model'
-const md = await call('session/set_config_option', { sessionId: sid, configId: 'mode', value: 'bloblexlive' })
+const md = await call('session/set_config_option', { sessionId: sid, configId: 'mode', value: 'retinuelive' })
 report.afterSetMode = md.error ? { error: md.error.message?.slice(0, 160) } : opt(md).filter((o) => o.id === 'mode')
 report.prompt1 = await prompt(sid, 'P1 session with custom agent selected, effort low, "status"')
 report.prompt2 = await prompt(sid, 'P2 same session, "status" again (cost cumulative vs delta)')

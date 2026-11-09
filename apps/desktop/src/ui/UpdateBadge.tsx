@@ -100,7 +100,7 @@ export function UpdateBadge({ sidebar = false }: { sidebar?: boolean }) {
   if (isCompanionWindow()) return null
 
   const { label, percent } = describeUpdatePhase(state)
-  const tooltip = state.version ? `Bitbots ${state.version}` : 'Bitbots update'
+  const tooltip = state.version ? `Retinue ${state.version}` : 'Retinue update'
 
   if (state.phase === 'downloading') {
     // FIX39 P5 follow-up: at a narrow window the badge keeps only the ring and a
@@ -113,7 +113,7 @@ export function UpdateBadge({ sidebar = false }: { sidebar?: boolean }) {
   }
 
   if (state.phase === 'ready') {
-    return <button type="button" className={`update-badge-button primary-button small${sidebar ? ' sidebar-update' : ''}${compact ? ' is-compact' : ''}`} data-update-badge="ready" title={sidebar ? 'Restart Bitbots to install the downloaded update' : compact ? `${BADGE_RESTART_LABEL} — ${tooltip}` : tooltip} aria-label={BADGE_RESTART_LABEL} disabled={busy} onClick={() => void restart()}>{(compact || sidebar) && <RotateCw size={13} aria-hidden="true" />}<span>{sidebar && state.version ? `Update to ${state.version}` : compact ? BADGE_RESTART_SHORT_LABEL : BADGE_RESTART_LABEL}</span>{sidebar && <small>v{currentVersion}</small>}</button>
+    return <button type="button" className={`update-badge-button primary-button small${sidebar ? ' sidebar-update' : ''}${compact ? ' is-compact' : ''}`} data-update-badge="ready" title={sidebar ? 'Restart Retinue to install the downloaded update' : compact ? `${BADGE_RESTART_LABEL} — ${tooltip}` : tooltip} aria-label={BADGE_RESTART_LABEL} disabled={busy} onClick={() => void restart()}>{(compact || sidebar) && <RotateCw size={13} aria-hidden="true" />}<span>{sidebar && state.version ? `Update to ${state.version}` : compact ? BADGE_RESTART_SHORT_LABEL : BADGE_RESTART_LABEL}</span>{sidebar && <small>v{currentVersion}</small>}</button>
   }
 
   if (state.phase === 'error') {

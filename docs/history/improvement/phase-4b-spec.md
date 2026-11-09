@@ -1,6 +1,6 @@
-# Phase 4B spec: keep the computer awake while Bitbots has work (native)
+# Phase 4B spec: keep the computer awake while Retinue has work (native)
 
-> **What this is:** Spec for phase 4B: keeping the computer awake while Bitbots has work (native).
+> **What this is:** Spec for phase 4B: keeping the computer awake while Retinue has work (native).
 > **Status:** historical
 > **Last updated:** 2026-10-15
 
@@ -23,7 +23,7 @@ Scope: new `apps/desktop/src-tauri/src/power.rs`, registration in `apps/desktop/
 A `PowerBackend` trait with `set(bool)` (real Win32 implementation and a recording fake): idempotent enable/disable, release on drop, state reporting, a failed backend call reports an error without flipping the state.
 
 ## Gates
-`CARGO_TARGET_DIR=D:/b-p7 cargo test -p bloblex-speech` (to prove nothing else broke) and, if possible, `cargo test -p bloblex-desktop --lib power::` (report honestly if it cannot build here).
+`CARGO_TARGET_DIR=D:/b-p7 cargo test -p retinue-speech` (to prove nothing else broke) and, if possible, `cargo test -p retinue-desktop --lib power::` (report honestly if it cannot build here).
 
 ## Final report
 Files changed, tests, gate output, what is unverified (the real Windows behaviour has not been observed; check with `powercfg /requests` while it is on).

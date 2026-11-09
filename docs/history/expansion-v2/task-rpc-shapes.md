@@ -1,8 +1,8 @@
 # Task RPC shapes (slice 1A)
 
-Written from the implementation in `crates/bloblex-daemon/src/tasks.rs` and `crates/bloblex-storage/src/lib.rs`
+Written from the implementation in `crates/retinue-daemon/src/tasks.rs` and `crates/retinue-storage/src/lib.rs`
 on 21 October 2026, for the board UI lane. Every RPC is registered in `dispatch()`
-(`crates/bloblex-daemon/src/main.rs`) and every one is `never` for remote devices
+(`crates/retinue-daemon/src/main.rs`) and every one is `never` for remote devices
 (`apps/desktop/src/remote/tiers.json`).
 
 Wire error codes are the daemon's existing ones: `invalid_argument` (the brief's

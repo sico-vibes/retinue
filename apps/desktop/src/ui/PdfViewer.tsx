@@ -60,7 +60,7 @@ export default function PdfViewer({ dataUrl, name, size, onReveal }: { dataUrl: 
     }).catch((reason: unknown) => {
       if (!live) return
       const code = (reason as { name?: string })?.name
-      setFailure(code === 'PasswordException' ? 'This PDF is password protected, so Bitbots cannot show it.' : code === 'InvalidPDFException' ? 'This file is not a valid PDF.' : 'Bitbots could not draw this PDF.')
+      setFailure(code === 'PasswordException' ? 'This PDF is password protected, so Retinue cannot show it.' : code === 'InvalidPDFException' ? 'This file is not a valid PDF.' : 'Retinue could not draw this PDF.')
     })
     return () => { live = false; task.current?.cancel(); void doc.current?.destroy(); doc.current = null }
   }, [dataUrl])
@@ -130,7 +130,7 @@ export default function PdfViewer({ dataUrl, name, size, onReveal }: { dataUrl: 
     </figcaption>
     <div className="media-pdf-frame" ref={frame}>
       {showText
-        ? <pre tabIndex={0} aria-label={`Text of page ${page}`}>{text === null ? 'Reading the page…' : text || 'This page has no text Bitbots can read (it may be a scanned image).'}</pre>
+        ? <pre tabIndex={0} aria-label={`Text of page ${page}`}>{text === null ? 'Reading the page…' : text || 'This page has no text Retinue can read (it may be a scanned image).'}</pre>
         : <canvas ref={canvas} role="img" aria-label={`${name}, page ${page} of ${pages || '?'}`} />}
       {!pages && <p className="media-pdf-loading" role="status">Opening the PDF…</p>}
     </div>

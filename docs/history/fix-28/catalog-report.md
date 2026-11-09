@@ -12,7 +12,7 @@ Status: implemented, all listed gates green. The lane did **not** run `git commi
 
 ## What changed
 
-### New module `crates/bloblex-daemon/src/catalog.rs`
+### New module `crates/retinue-daemon/src/catalog.rs`
 
 The whole catalog path moved out of `main.rs` into `catalog.rs`:
 
@@ -63,7 +63,7 @@ result fetched after it arrived (same pattern as `refresh_runtime_discovery`).
 
 ### Persistence
 
-New table via `ensure_model_catalog_schema` in `crates/bloblex-storage/src/lib.rs`,
+New table via `ensure_model_catalog_schema` in `crates/retinue-storage/src/lib.rs`,
 called with the other `ensure_*` functions (all five open paths) and with **no**
 `user_version` bump:
 
@@ -157,7 +157,7 @@ delay, optional failure, fallback mode) backs these:
 
 - `state()` — the `AppState` helper now constructs
   `catalog: Arc::new(catalog::CatalogCache::default())`.
-- `claude_catalog_probe_targets_bloblex_sonnet_default_and_keys_workflows_to_that_probe`
+- `claude_catalog_probe_targets_retinue_sonnet_default_and_keys_workflows_to_that_probe`
   — calls `catalog::catalog_probe_args` (the function moved module).
 - `session_lock_pins_speed_and_permission_mode_without_a_model_change` — the
   catalog is now read `CachedOnly` and was not warmed, so the unknown speed
@@ -180,11 +180,11 @@ because `Refresh` always probes.
 
 Run from `C:\fx41` with the lane's `CARGO_TARGET_DIR` / `RUST_MIN_STACK`.
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-  — **all green**. Daemon `bitbotsd` 166 passed / 0 failed; storage 92 passed;
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+  — **all green**. Daemon `retinued` 166 passed / 0 failed; storage 92 passed;
   runtime 33; adapter/agent/protocol/security/usage/speech suites all green; no
   failures, no ignored.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` —
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` —
   **`Finished` with no warnings** (none of my code and no pre-existing warnings
   surfaced). Nothing to report separately.
 - `cd apps/desktop && npx tsc -b` — **clean** (no output).
@@ -192,9 +192,9 @@ Run from `C:\fx41` with the lane's `CARGO_TARGET_DIR` / `RUST_MIN_STACK`.
   including `remoteTiers.parity.test.ts` (method parity + event policy parity).
 
 Note on the shared `CARGO_TARGET_DIR`: it is shared with the other lane, and a
-daemon build can pick up a stale `bloblex-storage` artifact produced from the
+daemon build can pick up a stale `retinue-storage` artifact produced from the
 other worktree (fingerprint collision on the identical package version). Touching
-`crates/bloblex-storage/src/lib.rs` (or building `-p bloblex-storage` in the same
+`crates/retinue-storage/src/lib.rs` (or building `-p retinue-storage` in the same
 invocation) forces the rebuild. This is an environment artefact, not a source
 issue.
 
@@ -214,7 +214,7 @@ Not verified by tests:
 - `prewarm_all` emitting `runtime.models.changed` only on a real change (it is
   exercised indirectly; no direct assertion that the event is emitted).
 - The full `run()` boot ordering (socket bind, discovery, prewarm) and the
-  `runtime.refresh` dispatch arm end to end: those call `bloblex_runtime::discover()`
+  `runtime.refresh` dispatch arm end to end: those call `retinue_runtime::discover()`
   (real CLIs), so only the extracted `load_saved_runtimes` and
   `invalidate_all` helpers are unit-tested.
 - The desktop UI's use of the new `stale`/`cachedAt` fields and the

@@ -4,7 +4,7 @@
 
 import { useCallback, useSyncExternalStore } from 'react'
 
-const DETAILS_KEY = 'bitbots.botPage.detailsOpen'
+const DETAILS_KEY = 'retinue.botPage.detailsOpen'
 
 function read(): boolean {
   try { return localStorage.getItem(DETAILS_KEY) === 'true' } catch { return false }

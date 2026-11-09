@@ -3,7 +3,7 @@
 Owner request, 31 October 2026: "Start Phase 4". Source: `docs/plans/expansion-plan-v3.md`, Phase 4. Windows only.
 
 **Lanes and order.**
-- **Round 1, at the same time.** Sona: sections 1 and 2 (machine identity, links, reading the other machine). Gogo: sections 3, 4 and 5 (repo identity, `.bitbots.json`, the handoff building blocks).
+- **Round 1, at the same time.** Sona: sections 1 and 2 (machine identity, links, reading the other machine). Gogo: sections 3, 4 and 5 (repo identity, `.retinue.json`, the handoff building blocks).
 - **The Director** reviews and merges Round 1, then starts Round 2 from the merged result.
 - **Round 2.** Sona: section 6 (the handoff itself).
 - **The Director:** all front end, against this contract, in the main checkout.
@@ -16,11 +16,11 @@ Keep the contract exactly. If something can't work as written, pick the smallest
 - A machine link is one daemon acting as a paired device of another, through that machine's Remote gateway. The window never talks to the other machine. There's no new listener and no relay.
 - A conversation on another machine is read-only here. The only action on it is **Take over**. Sending messages to another machine's bots isn't part of this phase.
 - Only pulling exists: the machine that wants a conversation takes it. To move one, open it on the other machine and press Take over.
-- Nothing on a link can grant Full access. A handoff never carries it, and neither does `.bitbots.json`.
+- Nothing on a link can grant Full access. A handoff never carries it, and neither does `.retinue.json`.
 
 **Already done, don't rebuild.** The channel switch (`apps/desktop/src-tauri/src/updates.rs`, setting `updates.channel`), the same installer and updater, template export and import (`backup.rs`, `include.agentIds`; schedules restore disabled, environment values never travel), the fresh-session recap (`knowledge::announce_context_loss`, `recap_for_prompt`).
 
-**All new RPCs:** `tiers.json` class `never`, events `drop`, except where section 2 and section 6 say otherwise. None go on the Bitbots MCP.
+**All new RPCs:** `tiers.json` class `never`, events `drop`, except where section 2 and section 6 say otherwise. None go on the Retinue MCP.
 
 **Every command** is an argument list with no shell, has a time limit, sets `GIT_TERMINAL_PROMPT=0`, uses git's own sign-in and never reads, passes or prints a credential. No message text, tokens, passwords, cookies or paths in logs.
 
@@ -31,7 +31,7 @@ Keep the contract exactly. If something can't work as written, pick the smallest
 - `machine.self {}` → `{id, name, version}`. `machine.self.rename {name}` → the same.
 - `machine.info {}` → `{machineId, name, version, handoffVersion: 1}`. `tiers.json` class `read`, `minTier` `viewer`. This is what the other side asks for.
 
-**Storage (new `crates/bloblex-storage/src/phase4.rs`).** Table `machine_links(id TEXT PRIMARY KEY, name, url, auth, fingerprint, tier, paired_at, last_seen_at, state, device_id)`. `id` is the other machine's `machine.id`.
+**Storage (new `crates/retinue-storage/src/phase4.rs`).** Table `machine_links(id TEXT PRIMARY KEY, name, url, auth, fingerprint, tier, paired_at, last_seen_at, state, device_id)`. `id` is the other machine's `machine.id`.
 
 **The token is never in the database.** It lives in `<data>/machines/<id>.token`, user-only through `native.rs`'s `apply_key_permissions` (make it `pub(crate)`). It's never returned, logged, exported, or put in a diagnostics bundle. Add tests for the backup and diagnostics.
 
@@ -41,19 +41,19 @@ Keep the contract exactly. If something can't work as written, pick the smallest
   - No pin stored: normal web PKI validation (Tailscale).
   - Pin stored: a custom `ServerCertVerifier` that compares the SHA-256 of the end-entity certificate with the pin, in constant time, and still verifies the handshake signatures. No host name check (Native).
 - Redirects off. Response capped at 32 MiB. 10-second timeout, overridable per call.
-- Every request sends `Origin: <origin>`, and the device cookie as `Cookie: __Host-bitbots_remote=<token>` (use the constant from `web.rs`).
+- Every request sends `Origin: <origin>`, and the device cookie as `Cookie: __Host-retinue_remote=<token>` (use the constant from `web.rs`).
 - `client.rpc(machine_id, method, params)` sends the normal envelope to `POST /api/rpc`. `device_revoked` sets the link's state to `revoked`.
 
-**`machine.probe {url}`** → `{origin, reachable, isBitbots, auth: "code"|"password", fingerprint, trusted}`.
+**`machine.probe {url}`** → `{origin, reachable, isRetinue, auth: "code"|"password", fingerprint, trusted}`.
 - Calls `GET /api/ping` and sends no credential. To read an untrusted certificate, use a verifier that records the fingerprint and accepts for this one call only.
 - `trusted` true means web PKI accepted it: `auth: "code"`, `fingerprint: null`. Otherwise `auth: "password"`, and the UI asks the owner to compare the fingerprint with the other machine's screen.
-- `isBitbots` is `app == "bitbots" && role == "remote-gateway"`. False stops pairing.
+- `isRetinue` is `app == "retinue" && role == "remote-gateway"`. False stops pairing.
 
 **`machine.pair.begin {url, code, username, password, fingerprint, confirm}`** → `{job}`, returned at once. Job: `{id, url, state: "pending"|"approved"|"rejected"|"expired"|"failed"|"cancelled", detail, machine}`. Event `machine.pair.changed {job}`.
 - No `confirm: true`: `invalid_argument`. `auth: "code"` needs `code`; `auth: "password"` needs `username`, `password` and the `fingerprint` the owner accepted. Re-probe first; if the certificate no longer matches the fingerprint, `failed` with "The other machine's certificate changed."
 - `POST /api/pair {code, name, kind: "machine", platform: "windows"}` or `POST /api/login {username, password, name, kind: "machine", platform: "windows"}`. `name` is `machine.name`.
 - The password is used for that one request and never kept or logged. The job never contains it.
-- Keep the short-lived pair cookie, and poll `GET /api/pair` every 2 seconds for up to 5 minutes. On `approved`, read the device cookie from `Set-Cookie`, write the token file, call `machine.info`, and write the link with its `id`, `name` and `tier`. An older machine without `machine.info`: `failed`, "That machine needs a newer version of Bitbots."
+- Keep the short-lived pair cookie, and poll `GET /api/pair` every 2 seconds for up to 5 minutes. On `approved`, read the device cookie from `Set-Cookie`, write the token file, call `machine.info`, and write the link with its `id`, `name` and `tier`. An older machine without `machine.info`: `failed`, "That machine needs a newer version of Retinue."
 - Pairing a machine with itself (`machine.info` returns our own id): call `/api/logout`, delete the token, `failed`, "That's this machine."
 - A second pairing to a machine already linked replaces the old token.
 
@@ -93,7 +93,7 @@ Keep the contract exactly. If something can't work as written, pick the smallest
 
 **Tests:** `identity_is_the_same_for_every_url_shape`, `identity_never_holds_a_credential`, `other_hosts_keep_their_case_and_port`, `a_local_path_has_no_identity`, `safe_url_removes_the_password`, `project_list_carries_the_identity`, `project_list_runs_no_git`, `find_by_identity_skips_a_missing_folder`, `old_projects_get_an_identity_at_startup`.
 
-## 4. `.bitbots.json` (Gogo, new `shared_settings.rs`)
+## 4. `.retinue.json` (Gogo, new `shared_settings.rs`)
 
 An optional file in the project folder's root, committed to the repo by the owner:
 
@@ -113,7 +113,7 @@ An optional file in the project folder's root, committed to the repo by the owne
 
 **`project.sharedSettings.untrust {projectId}`:** clears it.
 
-**`project.sharedSettings.write {projectId, replace, confirm}`:** writes the project's current `setupScript` and `approvalMode` overrides, and its default bot's name when it has one, to `.bitbots.json`. An approval mode of `bypass` is left out. An existing file without `replace: true`: `conflict`. Trusts the new hash. Doesn't commit anything.
+**`project.sharedSettings.write {projectId, replace, confirm}`:** writes the project's current `setupScript` and `approvalMode` overrides, and its default bot's name when it has one, to `.retinue.json`. An approval mode of `bypass` is left out. An existing file without `replace: true`: `conflict`. Trusts the new hash. Doesn't commit anything.
 
 **Effect.** One function, `effective_overrides(st, project)`, read wherever `setupScript` and `approvalMode` are read today. The project's own override wins, field by field. Then a trusted file. A file whose hash no longer matches counts as untrusted, so a `git pull` can't change what runs.
 
@@ -124,16 +124,16 @@ An optional file in the project folder's root, committed to the repo by the owne
 ## 5. Handoff building blocks (Gogo)
 
 **`worktree_attach.rs`: `attach_branch(repo_root, branch) -> Result<Attached, String>`.** `Attached` has what `worktree::create` returns. Put it in its own file, because another session is working in `worktree.rs`.
-- `branch` comes from another machine, so check it: it must start `bitbots/`, pass `git check-ref-format --branch`, and never start with `-`.
+- `branch` comes from another machine, so check it: it must start `retinue/`, pass `git check-ref-format --branch`, and never start with `-`.
 - `git fetch origin refs/heads/<branch>`.
 - A worktree already on that branch: refuse if it has uncommitted files, else `git merge --ff-only FETCH_HEAD`.
 - A local branch with no worktree: it must be an ancestor of `FETCH_HEAD`, else refuse: "`<branch>` has commits here that aren't on the remote." Fast-forward it, then `git worktree add <path> <branch>`.
 - No local branch: `git worktree add -b <branch> <path> FETCH_HEAD`.
-- `<path>` follows `<repo>-bitbots/<slug>`, adding a number when it's taken. **Never force, never delete, never reset.**
+- `<path>` follows `<repo>-retinue/<slug>`, adding a number when it's taken. **Never force, never delete, never reset.**
 
 **Storage, in `phase4.rs`:** `session_import(row)` inserts a session with a given id. `session_import_messages(session_id, messages)`, in one transaction, skips any message id already there, gives the rest the next sequence numbers in order, and keeps their `created_at`.
 
-**Tests:** `attach_creates_a_copy_from_the_remote_branch`, `attach_fast_forwards_an_existing_copy`, `attach_refuses_a_dirty_copy`, `attach_refuses_local_commits_it_would_lose`, `attach_refuses_a_branch_outside_bitbots`, `attach_refuses_a_branch_starting_with_a_dash`, `attach_takes_a_numbered_folder_when_the_name_is_used`, `importing_messages_skips_ones_already_there`, `importing_messages_keeps_their_order_and_times`, `a_failed_import_leaves_nothing`.
+**Tests:** `attach_creates_a_copy_from_the_remote_branch`, `attach_fast_forwards_an_existing_copy`, `attach_refuses_a_dirty_copy`, `attach_refuses_local_commits_it_would_lose`, `attach_refuses_a_branch_outside_retinue`, `attach_refuses_a_branch_starting_with_a_dash`, `attach_takes_a_numbered_folder_when_the_name_is_used`, `importing_messages_skips_ones_already_there`, `importing_messages_keeps_their_order_and_times`, `a_failed_import_leaves_nothing`.
 
 **Also confirm with a test, no code change expected:** `a_template_of_every_bot_carries_no_secrets`, `updates_channel_never_travels_in_a_backup`.
 
@@ -209,14 +209,14 @@ Steps, in this order. **Nothing here can run on this machine until the last step
 - **Never create a real GitHub repository, pull request or push while testing.** Use a local bare repository as `origin`.
 - No real second machine in tests. Use a second daemon state on loopback, with a test certificate.
 - Don't edit the skill files: put proposed text in your report.
-- `crates/bloblex-storage/src/lib.rs` has one NUL byte: edit it only with your edit tool. No shell heredocs for anything with backslashes.
+- `crates/retinue-storage/src/lib.rs` has one NUL byte: edit it only with your edit tool. No shell heredocs for anything with backslashes.
 - Keep `every_daemon_log_call_site_is_a_fixed_message` true.
 
 ## Gates
 
-From PowerShell in your worktree, with `BITBOTS_HOOK_BRIDGE` and `BITBOTS_REMOTE_WEB_DIR` removed for the session:
-- `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`
+From PowerShell in your worktree, with `RETINUE_HOOK_BRIDGE` and `RETINUE_REMOTE_WEB_DIR` removed for the session:
+- `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`
 
 Send output to a log file and read the summary lines. Known flaky tests: `a_crash_after_a_finished_turn_does_not_fail_that_session`, `stopping_a_turn_stops_its_setup_script`. Delete your `target` folder when you finish, because the disk is limited.
 

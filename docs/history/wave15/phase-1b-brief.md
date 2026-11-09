@@ -147,10 +147,10 @@ Extends `diagnostics.rs`. Nothing leaves the computer without the owner's confir
 
 ## Gates
 
-From PowerShell in your worktree, with `BITBOTS_HOOK_BRIDGE` and `BITBOTS_REMOTE_WEB_DIR` removed for the session:
+From PowerShell in your worktree, with `RETINUE_HOOK_BRIDGE` and `RETINUE_REMOTE_WEB_DIR` removed for the session:
 
-- `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`
+- `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`
 
 Known flaky test: `a_crash_after_a_finished_turn_does_not_fail_that_session`. There is no `node_modules` in the worktree, so the Director runs the npm gates after merging.
 
@@ -161,4 +161,4 @@ Known flaky test: `a_crash_after_a_finished_turn_does_not_fail_that_session`. Th
 - Every contract change, with its reason.
 - New test names, and the exact gate output tails.
 - Anything you could not verify.
-- Update `.claude/skills/bitbots-development/references/codebase-map.md` and `lessons.md`, and `docs/ipc-contract.md`.
+- Update `.claude/skills/retinue-development/references/codebase-map.md` and `lessons.md`, and `docs/ipc-contract.md`.

@@ -6,7 +6,7 @@
 
 ## Before you start
 
-You need at least one coding agent that Bitbots can find. A bot is a saved character and a set of defaults; it does not run until a turn needs it. The permanent Manager is created in onboarding and is covered in [team and Manager](team-and-manager.md).
+You need at least one coding agent that Retinue can find. A bot is a saved character and a set of defaults; it does not run until a turn needs it. The permanent Manager is created in onboarding and is covered in [team and Manager](team-and-manager.md).
 
 ## Steps
 
@@ -30,7 +30,7 @@ The composer has its own model, effort and permission controls for the current c
 
 ### Choose the model and effort
 
-The model list comes from the coding agent, not from Bitbots' guesses. If a model is not listed, do not type its id: choose the coding agent that offers it or refresh the list.
+The model list comes from the coding agent, not from Retinue's guesses. If a model is not listed, do not type its id: choose the coding agent that offers it or refresh the list.
 
 Each coding agent offers its own effort levels. The interface shows the levels that agent reports and passes your choice through. If a level is not supported, the agent says so rather than silently using another.
 
@@ -40,7 +40,7 @@ Art is per bot and independent of the app look. The picker offers Automatic and 
 
 | Art | What it is |
 | --- | --- |
-| Automatic | Follows the look: Bitbots gives 2D robot, and Blobots gives Glossy. |
+| Automatic | Follows the look: Retinue gives 2D robot, and Stone gives Glossy. |
 | 3D robot | The shaded robot. |
 | 2D robot | The outlined, flat robot. |
 | Glossy | The original blob, with eight shapes. |
@@ -53,7 +53,7 @@ Both robots offer four outlines: Rectangle, Square, Circle and Hexagon. Hand-pai
 The three modes are explained in [conversations and approvals](conversations-and-approvals.md). In short:
 
 - **Ask first** waits for you on every request. It is the default.
-- **Auto** lets Bitbots approve low-risk reads, edits inside the project and a small set of commands; everything else still asks.
+- **Auto** lets Retinue approve low-risk reads, edits inside the project and a small set of commands; everything else still asks.
 - **Full access** approves everything and, where the coding agent supports it, starts it without asking. It is set on the bot with a typed confirmation, or pinned on a conversation; the global default cannot be Full access.
 
 The global default can only be Ask first or Auto. A Full access bot is marked with a shield in the bot row, the conversation header, the companion and its page.
@@ -62,7 +62,7 @@ The global default can only be Ask first or Auto. A Full access bot is marked wi
 
 Locking freezes the bot's configuration without archiving it. A locked bot shows a lock badge on its avatar; its editor opens read-only behind a banner and the composer's model, effort and permission controls show "This bot is locked. Unlock it to change its settings."
 
-While locked, Bitbots refuses changes to the bot's name, description, instructions, colour, look, model, effort, permissions and team placement. It also refuses deleting the bot or its project, changing the model or permission mode in its conversations, and the Manager changing those settings. These still work: unlocking, creating other bots, hiding and sort order, plan mode, and every read.
+While locked, Retinue refuses changes to the bot's name, description, instructions, colour, look, model, effort, permissions and team placement. It also refuses deleting the bot or its project, changing the model or permission mode in its conversations, and the Manager changing those settings. These still work: unlocking, creating other bots, hiding and sort order, plan mode, and every read.
 
 ### Archive and restore
 
@@ -72,15 +72,15 @@ Archived bots are listed under **Archived bots** in the profile menu. Each row h
 
 ### Delete a bot permanently
 
-Deleting is permanent and cannot be undone. Open **Archived bots** in the profile menu and choose the bin icon on the bot (Bitbots asks you to confirm by holding the button). The confirmation says that the bot, all its conversations and every side-conversation it took part in are removed, including those shown under other bots. Its scheduled automations and private memory are removed too.
+Deleting is permanent and cannot be undone. Open **Archived bots** in the profile menu and choose the bin icon on the bot (Retinue asks you to confirm by holding the button). The confirmation says that the bot, all its conversations and every side-conversation it took part in are removed, including those shown under other bots. Its scheduled automations and private memory are removed too.
 
 Deleting does not remove project files or the coding agent's own history. The rules are:
 
-- Stop all of the bot's running work first. Bitbots refuses the delete while a conversation of the bot is active.
+- Stop all of the bot's running work first. Retinue refuses the delete while a conversation of the bot is active.
 - A locked bot cannot be deleted. Unlock it first.
 - The Manager cannot be deleted.
 
-The desktop calls the daemon method `agent.purge` with an explicit confirmation (`crates/bloblex-daemon/src/main.rs`). A paired phone or other remote device cannot delete a bot. The storage side is in [daemon and storage](../reference/daemon-and-storage.md).
+The desktop calls the daemon method `agent.purge` with an explicit confirmation (`crates/retinue-daemon/src/main.rs`). A paired phone or other remote device cannot delete a bot. The storage side is in [daemon and storage](../reference/daemon-and-storage.md).
 
 ## Check the result
 
@@ -91,7 +91,7 @@ The desktop calls the daemon method `agent.purge` with an explicit confirmation 
 
 ## If something fails
 
-**The model list is empty.** Bitbots cannot reach the coding agent. Open Settings › Agents, check its message and sign-in state, then refresh. A suggested list is not a promise; it will not make an unsupported model work.
+**The model list is empty.** Retinue cannot reach the coding agent. Open Settings › Agents, check its message and sign-in state, then refresh. A suggested list is not a promise; it will not make an unsupported model work.
 
 **The art does not match the look.** The bot has an explicit art. Set it to Automatic, or change it to the art you want.
 

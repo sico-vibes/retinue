@@ -1,4 +1,4 @@
-import { useThemeStyle } from '../blob/bitbots'
+import { useThemeStyle } from '../blob/retinue'
 
 /** Haze's smoky backdrop behind the shell; Stone has none. */
 export function AppWallpaper() {

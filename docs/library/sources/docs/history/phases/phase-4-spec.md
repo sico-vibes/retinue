@@ -8,7 +8,7 @@ Original status line, kept as written: historical spec. The roster, session tree
 
 This is the implementation contract for Phase 4 of [docs/plans/e2e-plan-v2.md](../../plans/e2e-plan-v2.md). Phase 4 adds an expandable project and session tree under each blob row in the sidebar. It depends on Phase 2a and on the Phase 3 roster. It does not depend on Phase 2b. Line citations are the committed tree this spec was written against. Re-open a cited line before treating it as current if a later edit moves it.
 
-Do not edit Rust. Do not add a projects table, a session-list RPC, or an expanded-state RPC. Projects are groups derived from `snapshot.sessions`. Expanded state is `localStorage`. Claude Desktop is a behavioural reference only: folder-then-session grouping is the behaviour; the paint stays Bitbots Midnight ([docs/plans/e2e-plan-v2.md](../../plans/e2e-plan-v2.md) lines 13 and 194). Copy no third-party layout, label set, icon, or asset.
+Do not edit Rust. Do not add a projects table, a session-list RPC, or an expanded-state RPC. Projects are groups derived from `snapshot.sessions`. Expanded state is `localStorage`. Claude Desktop is a behavioural reference only: folder-then-session grouping is the behaviour; the paint stays Retinue Midnight ([docs/plans/e2e-plan-v2.md](../../plans/e2e-plan-v2.md) lines 13 and 194). Copy no third-party layout, label set, icon, or asset.
 
 ## 1. Scope and non-scope
 
@@ -21,7 +21,7 @@ In scope:
 - Session rows with a status dot, a visible state word, a title, and `shortTime`.
 - The resolved selected session highlighted when its row is rendered.
 - "New session" from the blob context menu, from a project "+", and from the header, offering recent projects and then "Choose folder...".
-- Expanded and collapsed state per blob and per project in `localStorage` key `bloblex.roster.expanded`. Phase 3 reserved that key ([docs/history/phases/phase-3-spec.md](phase-3-spec.md) line 394).
+- Expanded and collapsed state per blob and per project in `localStorage` key `retinue.roster.expanded`. Phase 3 reserved that key ([docs/history/phases/phase-3-spec.md](phase-3-spec.md) line 394).
 - The header `<select>` stays, including the disabled option "Not linked to a blob" ([apps/desktop/src/ui/App.tsx](../../../apps/desktop/src/ui/App.tsx) line 743).
 - The companion chat follows the selected session. Companion pills still switch blobs.
 - Pure selectors, fixture sessions, and tests. No daemon process.
@@ -78,7 +78,7 @@ Worked keys:
 | `//server/share/site` | `\\server\share\site` |
 | `  ` or missing | `null` |
 
-Case-folding is a product choice for Bitbots on Windows ([docs/design/product.md](../../design/product.md) line 9 names the Windows audience; it does not define path keys). NTFS lookups are case-insensitive, and the daemon will have stored whatever string the picker or an older client sent. Two different folders that differ only by case on a case-sensitive volume would share a row. That risk is accepted. A `.` or `..` segment stays in the key, so `C:\work\site\.` and `C:\work\site\..\site` are different projects from `C:\work\site`. `C:` and `C:\` are different keys (`c:` and `c:\`). The stored string sent back to `session.new` keeps its original casing, slashes, and trailing slash.
+Case-folding is a product choice for Retinue on Windows ([docs/design/product.md](../../design/product.md) line 9 names the Windows audience; it does not define path keys). NTFS lookups are case-insensitive, and the daemon will have stored whatever string the picker or an older client sent. Two different folders that differ only by case on a case-sensitive volume would share a row. That risk is accepted. A `.` or `..` segment stays in the key, so `C:\work\site\.` and `C:\work\site\..\site` are different projects from `C:\work\site`. `C:` and `C:\` are different keys (`c:` and `c:\`). The stored string sent back to `session.new` keeps its original casing, slashes, and trailing slash.
 
 ### Projects
 
@@ -212,11 +212,11 @@ At 272px the flex math is: 6px list padding each side, 10px row padding each sid
 
 ## 4. New session flows
 
-Every Bitbots-initiated create goes through `sessionNewParams` ([apps/desktop/src/ui/rosterSelectors.ts](../../../apps/desktop/src/ui/rosterSelectors.ts) lines 193–196), which returns exactly `{ agentId, projectPath }`. Omit `runtimeId` and omit `title`. Sending both ids is `invalid_argument` ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 162, [docs/ipc-contract.md](../../ipc-contract.md) line 64). The daemon stores a blank title as `New chat` ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 166). Phase 3's `newSession` already calls this helper ([apps/desktop/src/ui/App.tsx](../../../apps/desktop/src/ui/App.tsx) lines 603–624).
+Every Retinue-initiated create goes through `sessionNewParams` ([apps/desktop/src/ui/rosterSelectors.ts](../../../apps/desktop/src/ui/rosterSelectors.ts) lines 193–196), which returns exactly `{ agentId, projectPath }`. Omit `runtimeId` and omit `title`. Sending both ids is `invalid_argument` ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 162, [docs/ipc-contract.md](../../ipc-contract.md) line 64). The daemon stores a blank title as `New chat` ([docs/history/phases/phase-2a-spec.md](phase-2a-spec.md) line 166). Phase 3's `newSession` already calls this helper ([apps/desktop/src/ui/App.tsx](../../../apps/desktop/src/ui/App.tsx) lines 603–624).
 
 `openProjectFolder` is the existing picker ([apps/desktop/src/tauri.ts](../../../apps/desktop/src/tauri.ts) lines 12–14). A cancel returns null, and the caller returns without an RPC, which is what `newSession` does today (lines 612–614).
 
-Errors use `daemonCodeOf` plus `messageForDaemonCode(code, 'session.new')` ([apps/desktop/src/ui/agentForm.ts](../../../apps/desktop/src/ui/agentForm.ts) lines 119–124 and 126–149). Show that sentence, not the daemon's message text. The sentences Phase 4 needs are already there: `conflict` → "This blob is archived, so a new session cannot be started."; `not_found` → "That blob is no longer available. Refresh and try again."; `invalid_argument` → "Choose a project folder that exists on this device."; `unauthorized` → "Bitbots could not reach the local daemon. Reconnect and try again."; any other code → "The local daemon request failed."
+Errors use `daemonCodeOf` plus `messageForDaemonCode(code, 'session.new')` ([apps/desktop/src/ui/agentForm.ts](../../../apps/desktop/src/ui/agentForm.ts) lines 119–124 and 126–149). Show that sentence, not the daemon's message text. The sentences Phase 4 needs are already there: `conflict` → "This blob is archived, so a new session cannot be started."; `not_found` → "That blob is no longer available. Refresh and try again."; `invalid_argument` → "Choose a project folder that exists on this device."; `unauthorized` → "Retinue could not reach the local daemon. Reconnect and try again."; any other code → "The local daemon request failed."
 
 Enabled when the daemon is connected, `busy` is false, and `runtimeUsable` is true for that blob's runtime. That is the menu flag already computed in `apps/desktop/src/ui/AgentRoster.tsx` lines 89–90 and `canStartSession` in [apps/desktop/src/ui/App.tsx](../../../apps/desktop/src/ui/App.tsx) line 694.
 
@@ -248,7 +248,7 @@ Resume and Cancel are not create flows. They stay available from the session row
 
 ## 5. Persistence
 
-One key: `bloblex.roster.expanded`. No other new key. `bloblex.selectedAgentId` stays as `readStoredAgentId` / `writeStoredAgentId` ([apps/desktop/src/ui/App.tsx](../../../apps/desktop/src/ui/App.tsx) lines 836–845). The companion window does not read or write the expanded key.
+One key: `retinue.roster.expanded`. No other new key. `retinue.selectedAgentId` stays as `readStoredAgentId` / `writeStoredAgentId` ([apps/desktop/src/ui/App.tsx](../../../apps/desktop/src/ui/App.tsx) lines 836–845). The companion window does not read or write the expanded key.
 
 Schema, version 1:
 
@@ -267,11 +267,11 @@ Storage access in `App.tsx` matches the guarded helpers:
 
 ```ts
 function readRosterExpanded(): ExpandedState {
-  try { return parseExpandedState(localStorage.getItem('bloblex.roster.expanded')) }
+  try { return parseExpandedState(localStorage.getItem('retinue.roster.expanded')) }
   catch { return { v: 1, blobs: {} } }
 }
 function writeRosterExpanded(state: ExpandedState) {
-  try { localStorage.setItem('bloblex.roster.expanded', JSON.stringify(state)) }
+  try { localStorage.setItem('retinue.roster.expanded', JSON.stringify(state)) }
   catch { /* A blocked Storage API must not break the tree. */ }
 }
 ```
@@ -469,7 +469,7 @@ Add these sessions in [apps/desktop/src/preview/fixtureBridge.ts](../../../apps/
 
 Give `session-claude-2` a newer `updatedAt` than `session-claude`. Give the 31 bulk sessions `updatedAt` values that increase with `n`, so `Bulk 31` is newest. `session-legacy` (`agentId: null`, title `Untied notes`) is already in the fixture (line 37). `?offline=1` already marks `runtime-codex` offline (lines 51–53). Do not add a query flag.
 
-The desktop package runs Vitest through the root scripts ([package.json](../../../package.json) lines 8–10). Mounted tests follow `App.agent.mounted.test.tsx`: the `happy-dom` banner, `createRoot` plus `act`, and `vi.mock` of `../tauri`. Pure tests have no banner. None of these start the daemon or set `BLOBLEX_DB_PATH`.
+The desktop package runs Vitest through the root scripts ([package.json](../../../package.json) lines 8–10). Mounted tests follow `App.agent.mounted.test.tsx`: the `happy-dom` banner, `createRoot` plus `act`, and `vi.mock` of `../tauri`. Pure tests have no banner. None of these start the daemon or set `RETINUE_DB_PATH`.
 
 Update the two existing mounted tests that click the header "Session" button and expect an immediate RPC ([apps/desktop/src/ui/App.agent.mounted.test.tsx](../../../apps/desktop/src/ui/App.agent.mounted.test.tsx) lines 523–530 and 533–539). Claude has a session, so Phase 4 opens the chooser. The payload test activates the recent row for `site` and still expects `{ agentId: 'agent-claude', projectPath: 'C:/work/site' }` with exactly those keys. The `invalid_argument` test activates that same row and still expects the sentence "Choose a project folder that exists on this device." The Arrow Down test (lines 320–328) stays as written: blobs start collapsed, and `.bot-row` is still only blob buttons.
 
@@ -499,7 +499,7 @@ Mounted tests in `App.agent.mounted.test.tsx`:
 - Legacy selection. Expand Codex, activate `Untied notes`. The session is selected and Codex stays current when Codex was already current. Invoice helper's expanded tree has no "Other sessions" node and no "Untied notes" row. A snapshot where Codex is archived shows that node under Invoice helper instead. A legacy session whose runtime has no active agent is absent from every tree, and `sessionSelectionTarget` returning `null` leaves Claude's `aria-current` in place. Bug: duplicating the legacy row under Invoice helper while Codex is active, dropping the row after Codex is archived, or calling an RPC that sets `agentId`.
 - New-session payload. In the mounted snapshot the Claude session path is `C:/work/site` ([apps/desktop/src/ui/App.agent.mounted.test.tsx](../../../apps/desktop/src/ui/App.agent.mounted.test.tsx) line 85). Project "+" on that group calls `session.new` with exactly `{ agentId: 'agent-claude', projectPath: 'C:/work/site' }`. The header chooser's "Choose folder..." uses the picker result and the same two keys. A pure test on the fixture pair asserts the representative is the newer stored string `c:\work\site\`, not the key `c:\work\site`. Bug: a third key `runtimeId`, or sending the normalised key.
 - Default project. Set Claude's `defaultProject` to `C:/work/site`. The chooser's first item label ends with `Default`. Activating it sends that trimmed string. A fixture `invalid_argument` on that call shows "Choose a project folder that exists on this device." and then calls `openProjectFolder`. Bug: skipping the mapped sentence, or clearing `defaultProject`.
-- Search auto-expand. Query `follow-up` sets Claude's `aria-expanded="true"` and the site project's `aria-expanded="true"` without `localStorage.setItem` having been called with `bloblex.roster.expanded`. Clearing the query removes those session rows when stored state is collapsed. Query `Invoice` leaves Invoice helper `aria-expanded="false"`. Bug: writing the search expansion, or failing to expand a title hit.
+- Search auto-expand. Query `follow-up` sets Claude's `aria-expanded="true"` and the site project's `aria-expanded="true"` without `localStorage.setItem` having been called with `retinue.roster.expanded`. Clearing the query removes those session rows when stored state is collapsed. Query `Invoice` leaves Invoice helper `aria-expanded="false"`. Bug: writing the search expansion, or failing to expand a title hit.
 - Persistence. Seed `getItem` to return a v1 document with Claude open. After mount, Claude is expanded before any click. Toggle the chevron closed and expect `setItem` with `open: false`. Replace `setItem` with a function that throws, toggle again, and expect `aria-expanded="true"` with the roster still mounted. Replace `getItem` with a function that throws and expect four collapsed blob rows. Bug: an exception escaping the toggle, or a throw on read blanking the roster.
 - Cap. Expand the Korus project. Exactly 30 session rows plus one "Show 1 more conversation" treeitem are mounted, and `Bulk 31` is among the 30. Enter on show-more mounts `Bulk 1`. Bug: rendering all 31 immediately, or hiding the newest.
 - Offline. With the `?offline` snapshot, Codex's sessions still mount after Right, and the blob menu's "New session" is disabled. Bug: dropping offline blobs' children, or leaving New session enabled.
@@ -521,12 +521,12 @@ Those scripts delegate to `apps/desktop` ([package.json](../../../package.json) 
 
 ## 10. Native smoke additions
 
-Run the Phase 3 checklist in [docs/history/phases/phase-3-spec.md](phase-3-spec.md) section 9 first, on an isolated database, before treating Phase 4 as ready to smoke. Do not edit that section. Phase 4 adds the following steps in the same session, with the same `$env:BLOBLEX_DB_PATH` under `$env:TEMP`, the same refusal to open the live database or its `-wal` and `-shm` sidecars, and the same record in `docs/operations/session-handoff.md`. The isolation rules are Phase 3 steps 1–5 and the quit/relaunch rules are steps 12–14 of that section. This list does not replace Phase 7.
+Run the Phase 3 checklist in [docs/history/phases/phase-3-spec.md](phase-3-spec.md) section 9 first, on an isolated database, before treating Phase 4 as ready to smoke. Do not edit that section. Phase 4 adds the following steps in the same session, with the same `$env:RETINUE_DB_PATH` under `$env:TEMP`, the same refusal to open the live database or its `-wal` and `-shm` sidecars, and the same record in `docs/operations/session-handoff.md`. The isolation rules are Phase 3 steps 1–5 and the quit/relaunch rules are steps 12–14 of that section. This list does not replace Phase 7.
 
 1. On the fresh smoke database, expand the default Claude blob. The face stays fully visible at the left of the row and the chevron sits at the right edge. Collapse it. The face does not shift between the two states.
 2. Start two sessions for that blob in one folder, and a third session in a different folder, using the project "+" for the second session in the first folder and "Choose folder..." for the other folder. The tree shows one project with two sessions and a second project. The session that is on screen has the selected background. The header `<select>` shows the same session.
 3. If two folders used in step 2 share a folder name, the project labels differ by a parent segment. If they do not, skip this step and rely on the collision unit test. Do not rename a folder on disk to force the case.
-4. Collapse one project, leave the blob expanded, and quit from the header menu. Start `npm run desktop:dev` again with the same `BLOBLEX_DB_PATH`. The blob is expanded and that project is collapsed. The other project keeps the state it had at quit.
+4. Collapse one project, leave the blob expanded, and quit from the header menu. Start `npm run desktop:dev` again with the same `RETINUE_DB_PATH`. The blob is expanded and that project is collapsed. The other project keeps the state it had at quit.
 5. Arrow Right on a collapsed blob expands it. Arrow Down moves to a project. Enter on a session selects it. Shift+F10 on that session opens a menu that contains Resume conversation and Cancel turn. Escape returns focus to the session row.
 6. A fresh smoke database has no "Other sessions" row. Legacy null-`agentId` placement is covered by the unit tests. Do not hand-edit the smoke database to insert one.
 7. Change the companion's blob with a pill. The companion name and the chat follow that blob's latest session. Select a non-latest session in the main window's tree. The companion overview title becomes that session's title.

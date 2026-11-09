@@ -31,7 +31,7 @@ describe('companion focus mode', () => {
     const { emitNative } = await import('../transport/nativeBridge')
     await saveFocusMode(true)
     expect(rpc).toHaveBeenCalledWith('settings.set', { key: FOCUS_MODE_KEY, value: true })
-    expect(emitNative).toHaveBeenCalledWith('bloblex-companion-focus-changed', true)
+    expect(emitNative).toHaveBeenCalledWith('retinue-companion-focus-changed', true)
     expect(focusMode()).toBe(true)
   })
 })

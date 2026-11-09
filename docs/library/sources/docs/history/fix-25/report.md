@@ -11,8 +11,8 @@ Rust or docs were edited.
 
 Input read first: `docs/remote/REVIEW_NOTES.md`, `remoteTiers.ts`, `remoteTiers.test.ts`,
 `remoteTiers.parity.test.ts`, `remoteContract.ts`, plus the daemon sources they cite
-(`crates/bloblex-daemon/src/main.rs`, `queue.rs`, `automations.rs`, `questions.rs`, `retry.rs`,
-`team.rs`, `memory.rs`, `crates/bloblex-storage/src/lib.rs`, `experiments.rs`) and the generated
+(`crates/retinue-daemon/src/main.rs`, `queue.rs`, `automations.rs`, `questions.rs`, `retry.rs`,
+`team.rs`, `memory.rs`, `crates/retinue-storage/src/lib.rs`, `experiments.rs`) and the generated
 table in `docs/remote/PROTOCOL.md`.
 
 ## 1. Honest enforcement header

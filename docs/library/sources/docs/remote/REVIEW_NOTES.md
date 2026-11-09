@@ -6,7 +6,7 @@
 
 Reviewer: OpenCode lane, 15 October 2026. Docs-only; no code or existing design file was
 edited. Claims about code cite `file:line`. Read: `docs/remote/*`, `docs/ipc-contract.md`,
-`apps/desktop/src/remote/*`, `crates/bloblex-daemon/src/main.rs` (auth, dispatch, events,
+`apps/desktop/src/remote/*`, `crates/retinue-daemon/src/main.rs` (auth, dispatch, events,
 attachments, startup), `apps/desktop/src-tauri/src/lib.rs` (`daemon_rpc`, `rpc_call`,
 attachment staging, native commands). Sequence diagrams: [SEQUENCES.md](SEQUENCES.md).
 
@@ -244,8 +244,8 @@ that take no attachments. `permission.reply`'s `choice` is only checked to be a 
 1. **Superseded (16 October 2026): there is no relay.** Reachability comes from the owner's
    tailnet, so no `hostId` is registered anywhere. Original question: **Relay identity without accounts.** `ARCHITECTURE.md:63-67` says the relay authenticates a
    hello with "a registered public key" and "has no accounts", while `REMOTE_MODE.md:26-27`
-   promises "no Bitbots-held list of a person's computers". How is a `hostId` registered, and
-   who prevents a stranger from squatting a `hostId`? Is the relay operated by Bitbots at all,
+   promises "no Retinue-held list of a person's computers". How is a `hostId` registered, and
+   who prevents a stranger from squatting a `hostId`? Is the relay operated by Retinue at all,
    or is self-hosting the only P1 path (`PROTOCOL.md:12` open question 1)?
 2. **Superseded (16 October 2026): there is no relay.** Tailscale's coordination service sees
    node metadata, as it does for any tailnet (THREAT_MODEL.md T33). Original question: **Relay metadata.** Even if the relay is content-blind, it holds stable `deviceId`/`hostId`

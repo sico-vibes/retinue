@@ -10,24 +10,24 @@ beforeEach(() => { localStorage.clear(); vi.resetModules() })
 
 describe('uiPrefs first-paint cache', () => {
   it('reads a cached density, else default', async () => {
-    localStorage.setItem('bitbots.density', 'roomy')
+    localStorage.setItem('retinue.density', 'roomy')
     expect((await import('./uiPrefs')).density()).toBe('roomy')
-    localStorage.setItem('bitbots.density', 'cozy')
+    localStorage.setItem('retinue.density', 'cozy')
     vi.resetModules()
     expect((await import('./uiPrefs')).density()).toBe('default')
   })
 
   it('reads cached hints and drops invalid entries', async () => {
-    localStorage.setItem('bitbots.hints', JSON.stringify(['companion.drag', 'Bad', 4]))
+    localStorage.setItem('retinue.hints', JSON.stringify(['companion.drag', 'Bad', 4]))
     const reloaded = await import('./uiPrefs')
     expect(reloaded.hintSeen('companion.drag')).toBe(true)
     expect(reloaded.hintSeen('Bad')).toBe(false)
   })
 
   it('reads a valid cached tour and ignores a stale one', async () => {
-    localStorage.setItem('bitbots.tour', JSON.stringify({ version: 1, done: true, step: 5 }))
+    localStorage.setItem('retinue.tour', JSON.stringify({ version: 1, done: true, step: 5 }))
     expect((await import('./uiPrefs')).tourState()).toEqual({ version: 1, done: true, step: 5 })
-    localStorage.setItem('bitbots.tour', JSON.stringify({ version: 1, done: true, step: 500 }))
+    localStorage.setItem('retinue.tour', JSON.stringify({ version: 1, done: true, step: 500 }))
     vi.resetModules()
     expect((await import('./uiPrefs')).tourState()).toEqual({ version: 0, done: false, step: 0 })
   })

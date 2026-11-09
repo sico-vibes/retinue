@@ -156,13 +156,13 @@ describe('useRemote', () => {
   it('keeps the exact daemon message from a string rejection after reload', async () => {
     await mount()
     h.rpc.mockImplementation(async (method: string) => {
-      if (method === 'remote.enable') throw 'conflict: Another copy of Bitbots is already serving Remote on this computer.'
+      if (method === 'remote.enable') throw 'conflict: Another copy of Retinue is already serving Remote on this computer.'
       if (method === 'remote.status') return status({ enabled: false, tailscale: 'port_in_use' })
       return {}
     })
     await act(async () => { await hook!.enable() })
     await flush()
-    expect(current().error).toBe('Another copy of Bitbots is already serving Remote on this computer.')
+    expect(current().error).toBe('Another copy of Retinue is already serving Remote on this computer.')
     expect(current().status?.tailscale).toBe('port_in_use')
   })
 

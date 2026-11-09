@@ -161,7 +161,7 @@ export interface RemoteTransport {
   dispose(): void
 }
 
-export const CURSOR_STORAGE_KEY = 'bitbots.remote.cursor'
+export const CURSOR_STORAGE_KEY = 'retinue.remote.cursor'
 export const PROTOCOL_VERSION = 1
 
 /** Backoff base and cap for the events socket, and the healthy period. */

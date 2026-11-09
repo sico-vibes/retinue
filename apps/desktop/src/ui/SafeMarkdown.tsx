@@ -141,8 +141,8 @@ function DualView({ table, code, language, initial }: { table: DataTable; code: 
 function FencedBlock({ language, code }: { language: string; code: string }) {
   const tag = language.trim().toLowerCase().split(/\s+/)[0] ?? ''
   const parsed = useMemo((): { kind: 'chart'; result: ReturnType<typeof parseChartSpec> } | { kind: 'table'; result: Parsed<DataTable> } | { kind: 'dual'; result: Parsed<DataTable>; initial: 'table' | 'code' } | null => {
-    if (tag === 'bitbots-chart') return { kind: 'chart', result: parseChartSpec(code) }
-    if (tag === 'bitbots-table') return { kind: 'table', result: parseTableSpec(code) }
+    if (tag === 'retinue-chart') return { kind: 'chart', result: parseChartSpec(code) }
+    if (tag === 'retinue-table') return { kind: 'table', result: parseTableSpec(code) }
     if (tag === 'csv' || tag === 'tsv') return { kind: 'dual', result: parseDelimited(code), initial: 'table' }
     if (tag === 'json') return /^\s*\[/.test(code) ? { kind: 'dual', result: tableFromJson(code), initial: 'code' } : null
     return null

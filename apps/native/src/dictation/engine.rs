@@ -4,7 +4,7 @@
 //! out (it reads the Codex sign-in, which this slice is not allowed to touch).
 //! What is left is what the React app calls "on-device": one worker thread that
 //! owns the recognizer, the microphone and the `DictationLifecycle` from
-//! `bloblex-speech`, so the two windows can never drive the same session.
+//! `retinue-speech`, so the two windows can never drive the same session.
 //!
 //! TODO(owner): cloud dictation is out of scope for slice 5. It depends on the
 //! owner-approved exception that lets the installed app read the Codex sign-in,
@@ -21,8 +21,8 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use bloblex_speech::capture::{start_capture, AudioFrame};
-use bloblex_speech::{
+use retinue_speech::capture::{start_capture, AudioFrame};
+use retinue_speech::{
     catalog, downmix_to_mono, get_catalog_model, model_manager, resample_to_rate, rms_level,
     DictationLifecycle, DictationOwner, EngineEvent, SpeechEngine, SpeechModelManifest,
 };
@@ -30,7 +30,7 @@ use bloblex_speech::{
 use crate::paths;
 use crate::trace;
 
-pub use bloblex_speech::DictationOwner as Owner;
+pub use retinue_speech::DictationOwner as Owner;
 
 /// How long a warm worker waits for the next session before releasing the model.
 const IDLE_WORKER_TEARDOWN: Duration = Duration::from_secs(600);
@@ -107,7 +107,7 @@ pub fn model_root_for(base: PathBuf) -> PathBuf {
     std::env::var("ProgramData")
         .or_else(|_| std::env::var("PROGRAMDATA"))
         .ok()
-        .map(|root| PathBuf::from(root).join("Bitbots").join("speech-models").join(short))
+        .map(|root| PathBuf::from(root).join("Retinue").join("speech-models").join(short))
         .filter(|candidate| !has_non_ascii(&candidate.to_string_lossy()))
         .unwrap_or(base)
 }
@@ -303,7 +303,7 @@ impl DictationEngine {
         let events = self.events.clone();
         let lifecycle = Arc::clone(&self.lifecycle);
         let join = thread::Builder::new()
-            .name("bitbots-dictation".to_owned())
+            .name("retinue-dictation".to_owned())
             .spawn(move || run_worker(events, manifest, directory, lifecycle, receiver, capture_commands, start))
             .map_err(|error| error.to_string())?;
         *self.worker.lock().map_err(|_| "speech state is unavailable".to_owned())? =
@@ -458,8 +458,8 @@ mod tests {
 
     #[test]
     fn an_ascii_model_folder_is_used_as_it_is_and_a_non_ascii_one_moves() {
-        let plain = model_root_for(PathBuf::from(r"C:\Users\me\AppData\Local\Bitbots\speech-models"));
-        assert_eq!(plain, PathBuf::from(r"C:\Users\me\AppData\Local\Bitbots\speech-models"));
+        let plain = model_root_for(PathBuf::from(r"C:\Users\me\AppData\Local\Retinue\speech-models"));
+        assert_eq!(plain, PathBuf::from(r"C:\Users\me\AppData\Local\Retinue\speech-models"));
         // An apostrophe is ASCII, and sherpa-onnx has no trouble with it; this
         // repository's own checkout path is full of them.
         let apostrophe = model_root_for(PathBuf::from(r"D:\Basem's\Coding\speech-models"));

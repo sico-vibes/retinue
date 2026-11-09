@@ -86,7 +86,7 @@ function Get-UpdaterKeyStatus {
         -not [string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)
     if ($envReady) { return 'environment' }
     if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) { return 'missing' }
-    $dir = Join-Path $env:USERPROFILE '.bloblex-release'
+    $dir = Join-Path $env:USERPROFILE '.retinue-release'
     $keyPath = Join-Path $dir 'updater.key'
     $passPath = Join-Path $dir 'updater.pass'
     if ((Test-Path -LiteralPath $keyPath) -and (Test-Path -LiteralPath $passPath)) {
@@ -118,11 +118,11 @@ function Enable-SigningEnvForBuild {
     if ([string]::IsNullOrWhiteSpace($env:USERPROFILE)) {
         throw 'USERPROFILE is not set, and the updater signing environment variables are missing.'
     }
-    $dir = Join-Path $env:USERPROFILE '.bloblex-release'
+    $dir = Join-Path $env:USERPROFILE '.retinue-release'
     $keyPath = Join-Path $dir 'updater.key'
     $passPath = Join-Path $dir 'updater.pass'
     if (-not (Test-Path -LiteralPath $keyPath) -or -not (Test-Path -LiteralPath $passPath)) {
-        throw 'Updater signing key is missing. Expected updater.key and updater.pass in the user .bloblex-release directory, or both TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD.'
+        throw 'Updater signing key is missing. Expected updater.key and updater.pass in the user .retinue-release directory, or both TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD.'
     }
     $keyText = $null
     $passText = $null
@@ -312,7 +312,7 @@ switch (Get-UpdaterKeyStatus) {
     'environment' { Write-Host 'Updater signing environment variables are set.' }
     'files' { Write-Host 'Updater key files are present.' }
     default {
-        $missingKey = 'Updater signing key was not found. Expected updater.key and updater.pass in the user .bloblex-release directory, or both TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD.'
+        $missingKey = 'Updater signing key was not found. Expected updater.key and updater.pass in the user .retinue-release directory, or both TAURI_SIGNING_PRIVATE_KEY and TAURI_SIGNING_PRIVATE_KEY_PASSWORD.'
         if ($DryRun) { Write-WarningLine "$missingKey Dry run continues." }
         else { throw $missingKey }
     }
@@ -347,7 +347,7 @@ try {
     }
     $assetUrl = "https://github.com/$Repo/releases/download/$tag/$($bundle.Installer.Name)"
 
-    $workDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ('bloblex-release-' + [guid]::NewGuid().ToString('n'))
+    $workDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ('retinue-release-' + [guid]::NewGuid().ToString('n'))
     New-Item -ItemType Directory -Path $workDirectory | Out-Null
     $manifestPath = Join-Path $workDirectory 'latest.json'
     $docsNotes = Join-Path (Join-Path $repoRoot 'docs\releases') "$Version.md"
@@ -356,7 +356,7 @@ try {
         # Keep in sync with defaultNotes() in scripts/make-update-manifest.mjs.
         $notesPath = Join-Path $workDirectory 'release-notes.md'
         $utf8 = New-Object System.Text.UTF8Encoding $false
-        [System.IO.File]::WriteAllText($notesPath, "Bitbots $Version`n", $utf8)
+        [System.IO.File]::WriteAllText($notesPath, "Retinue $Version`n", $utf8)
         Write-Host "Release notes docs/releases/$Version.md were not found. Using the default note."
     }
 
@@ -380,7 +380,7 @@ try {
         $bundle.Signature.FullName,
         $manifestPath,
         '--repo', $Repo,
-        '--title', "Bitbots $Version",
+        '--title', "Retinue $Version",
         '--notes-file', $notesPath
     )
     if (Test-PreReleaseVersion $Version) {
@@ -394,8 +394,8 @@ try {
         '--target', 'main',
         '--prerelease',
         '--latest=false',
-        '--title', 'Bitbots beta channel',
-        '--notes', 'Rolling beta channel manifest. Replaced on every Bitbots release.'
+        '--title', 'Retinue beta channel',
+        '--notes', 'Rolling beta channel manifest. Replaced on every Retinue release.'
     )
     $channelUploadArgs = @(
         'release', 'upload', 'channel-beta', $manifestPath,

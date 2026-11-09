@@ -1,4 +1,4 @@
-// Design study: "hand-painted" bots for the Blobots look. Each body is a flat
+// Design study: "hand-painted" bots for the Stone look. Each body is a flat
 // colour with a darker crescent painted along its lower right edge and a soft
 // highlight, plus two upright pill eyes. Preview only; the app still uses the
 // glossy canvas renderer.

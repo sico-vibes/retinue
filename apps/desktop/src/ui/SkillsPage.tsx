@@ -1,5 +1,5 @@
 // Skills: one pool of skill folders (SKILL.md plus files) that every bot can
-// load through the bloblex tools. The daemon owns the pool and the import
+// load through the retinue tools. The daemon owns the pool and the import
 // guards; this page lists it, imports from the coding agents' own skill folders
 // or any folder, shows a skill read-only, and switches skills on or off.
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -186,7 +186,7 @@ export function SkillsPage({ connected }: { connected: boolean }) {
 
     <section className="skills-import" aria-label="Import skills">
       <div className="skills-import-head">
-        <span className="skills-import-copy"><strong>Import skills</strong><small>Copies are kept in Bitbots. The originals are never changed.</small></span>
+        <span className="skills-import-copy"><strong>Import skills</strong><small>Copies are kept in Retinue. The originals are never changed.</small></span>
         <span className="skills-import-actions">
           <button type="button" className="secondary-button small" disabled={!connected || scanning || busy} onClick={() => void scan()}><RefreshCw size={13} aria-hidden="true" className={scanning ? 'skills-spin' : undefined} />{candidates ? 'Look again' : 'From your coding agents'}</button>
           <button type="button" className="secondary-button small" disabled={!connected || busy} onClick={() => void importFolder()}><FolderOpen size={13} aria-hidden="true" />A folder</button>

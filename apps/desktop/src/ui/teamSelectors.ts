@@ -87,7 +87,7 @@ export function sidebarSubtitle(
   return effort ? `${label} · ${effort}` : label
 }
 
-/** True for Bitbots' own per-bot folder (`<data>/workspaces/<id>`), which is not a name people know. */
+/** True for Retinue's own per-bot folder (`<data>/workspaces/<id>`), which is not a name people know. */
 export function isBotWorkspacePath(path: string) {
   return /[\\/]workspaces[\\/][^\\/]+[\\/]?$/i.test(path)
 }
@@ -95,7 +95,7 @@ export function isBotWorkspacePath(path: string) {
 /**
  * Where a conversation works, as a name people recognise: the daemon's label,
  * else the bot's project, else the folder name of a real project folder.
- * Null for a casual bot working in its own Bitbots workspace.
+ * Null for a casual bot working in its own Retinue workspace.
  */
 export function conversationPlaceName(session: Session | null | undefined, agents: readonly Agent[], projects: readonly Project[]): string | null {
   if (!session) return null
@@ -175,7 +175,7 @@ export function projectMatches(projects: readonly Project[], query: string): Pro
 /** The project a message names with `#`, read from the text itself so the words on
  * screen and the folder the work lands in cannot disagree: deleting `#Board` drops
  * the project, and a draft left and reopened keeps it. Same rules as the daemon's
- * `team::project_named`: an exact name (the longest wins, for "Blolblex site"), else
+ * `team::project_named`: an exact name (the longest wins, for "Retinue site"), else
  * a tag only one project carries; `ambiguous` holds the words that fit several. */
 export function projectNamedInText(text: string, projects: readonly Project[]): { project: Project } | { ambiguous: string } | null {
   const lower = text.toLowerCase()

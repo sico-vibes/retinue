@@ -16,7 +16,7 @@ hypothesis was tested and **disproved**; see "Correction" below.
 
 ## What changed
 
-`crates/bloblex-speech` only. Two files plus `Cargo.lock`:
+`crates/retinue-speech` only. Two files plus `Cargo.lock`:
 
 - `Cargo.toml` — `reqwest` gains the `rustls-tls` feature; new direct deps
   `rustls 0.23` (ring provider) and `webpki-roots 0.26`. All three were already
@@ -25,7 +25,7 @@ hypothesis was tested and **disproved**; see "Correction" below.
   The client is built with `use_preconfigured_tls(rustls config)` (reqwest uses
   a preconfigured config verbatim), `.http1_only()`, the same 65 s timeout and
   the same no-redirect policy. The request itself is untouched: same URL, same
-  multipart body, `model=gpt-transcribe`, `originator: bloblex`, our
+  multipart body, `model=gpt-transcribe`, `originator: retinue`, our
   User-Agent, the same cookie jar and single cookie-carrying retry.
 
 Nothing else in the crate changed. No identity, header, consent, cooldown or
@@ -33,7 +33,7 @@ error-mapping change.
 
 ## Live result
 
-`cargo run -q -p bloblex-speech --example cloud_probe` — 1.2 s of silence, no
+`cargo run -q -p retinue-speech --example cloud_probe` — 1.2 s of silence, no
 audio of the owner's voice, no token or body printed.
 
 | | before | after |
@@ -81,10 +81,10 @@ says so.
 
 ## Tests and gates
 
-- `cargo test -p bloblex-speech`: **56 passed**, 0 failed (54 before, 2 new:
+- `cargo test -p retinue-speech`: **56 passed**, 0 failed (54 before, 2 new:
   `cloud_tls_config_advertises_no_alpn`, `build_cloud_client_succeeds`).
-- `cargo test --workspace --exclude bloblex-desktop`: every crate passes
-  **except** `bloblex-daemon --bin bloblexd`, whose test binary aborts with
+- `cargo test --workspace --exclude retinue-desktop`: every crate passes
+  **except** `retinue-daemon --bin retinued`, whose test binary aborts with
   `STATUS_STACK_OVERFLOW` (`0xc00000fd`).
   - **Pre-existing and unrelated.** Verified by `git stash`-ing this change and
     re-running: the same binary crashes the same way on the unmodified tree.
@@ -113,7 +113,7 @@ says so.
 ## Reproducing
 
 ```
-cargo run -q -p bloblex-speech --example cloud_probe
+cargo run -q -p retinue-speech --example cloud_probe
 ```
 
 Expected on this machine today: `outcome=ok text_len=0`.

@@ -36,7 +36,7 @@ export type Machine = {
   bots: MachineBot[]
 }
 
-export type MachineProbe = { origin: string; reachable: boolean; isBitbots: boolean; auth: 'code' | 'password'; fingerprint: string | null; trusted: boolean }
+export type MachineProbe = { origin: string; reachable: boolean; isRetinue: boolean; auth: 'code' | 'password'; fingerprint: string | null; trusted: boolean }
 export type PairJobState = 'pending' | 'approved' | 'rejected' | 'expired' | 'failed' | 'cancelled'
 export type PairJob = { id: string; url: string; state: PairJobState; detail: string | null; machine: Machine | null }
 

@@ -4,7 +4,7 @@
 > **Status:** historical
 > **Last updated:** 2026-10-22
 
-Update 22 October 2026: the `bitbots.css` file named below no longer exists (the pixel look was retired), so the pixel-style rows describe a removed look. The current rules are in [design-system.md](design-system.md).
+Update 22 October 2026: the `retinue.css` file named below no longer exists (the pixel look was retired), so the pixel-style rows describe a removed look. The current rules are in [design-system.md](design-system.md).
 
 Owner directive: implement the UI/UX recommendations, keep the role chip to the
 right of a bot's name, and make the result feel premium. Not released; reviewed in
@@ -15,7 +15,7 @@ the browser preview first. Specs: FIX11 to FIX15.
 | Area | Change | Where |
 |---|---|---|
 | Identity | Installer, executables, bundle id, data migration | FIX11, `src-tauri/src/migrate.rs`, `installer-hooks.nsh` |
-| Wording | bot in Bitbots, blob in Blobots, live | FIX12, `ui/vocabulary.ts` |
+| Wording | bot in Retinue, blob in Stone, live | FIX12, `ui/vocabulary.ts` |
 | Preferences | `appearance.density`, `hints.seen`, `onboarding.tour` | FIX13, `ui/uiPrefs.ts` |
 | Tour | 5-step spotlight tour, invite for existing users, replay | `ui/tour/*`, profile menu, palette |
 | Hints | One-time pointers (permission, plan, context, bot-to-bot), one at a time | `ui/tour/ContextualHints.tsx` |
@@ -26,20 +26,20 @@ the browser preview first. Specs: FIX11 to FIX15.
 | Conversation | Message actions order, expandable delegation chips, retry | FIX15 |
 | Roster | Pointer and keyboard reorder, move to project | FIX15 |
 | Resilience | Plain-language errors, reconnect banner, scan recovery, uniform undo | FIX14 |
-| Polish | Press feedback, eased popovers, composer focus, numerals, pixel details | `polish.css`, `bitbots.css` |
+| Polish | Press feedback, eased popovers, composer focus, numerals, pixel details | `polish.css`, `retinue.css` |
 | Status | One status mark with shape plus label | `StatusDot.tsx` |
 
 ## Verified
 
 Desktop typecheck, 689 tests. Daemon, storage and clippy gates were green after
 FIX12 (no Rust changes since, except FIX11's migration tests, which pass:
-`cargo test -p bloblex-desktop migrate::`). Browser preview: tour (all five stops,
+`cargo test -p retinue-desktop migrate::`). Browser preview: tour (all five stops,
 dim and arrow), hints, Appearance page, accent, both looks, light mode.
 
 ## Not verified
 
 - The installer, the pre-install hook and the migration on a real machine with a
-  Bloblex install (see docs/history/fix-11/report.md for the checklist).
+  Retinue install (see docs/history/fix-11/report.md for the checklist).
 - Native windows (companion, tray, dictation).
 - Pointer drag on the roster in WebView2 (tested with synthetic events only).
 - Companion needs-you count badge: not built.
@@ -67,5 +67,5 @@ behaviour, real pointer drag in WebView2, installer migration, anything networke
 | Remote | Sidebar chip, profile-menu entry and a sixth tour step (skipped when remote is unavailable); independent review applied to the docs; policy hardening (wire codes, quiet hours as hard read-only, redactors for every read, event allowlist) | FIX23 to FIX25, `docs/remote/REVIEW_NOTES.md`, `SEQUENCES.md` |
 
 Verified: desktop typecheck and suite (875 tests), daemon (157) and storage (92) tests, workspace
-clippy, `cargo test -p bloblex-desktop snap::` (8). Not verified: the snap on a real window (needs
+clippy, `cargo test -p retinue-desktop snap::` (8). Not verified: the snap on a real window (needs
 a native run), the installer migration, any networked behaviour, the Remote gateway (design only).

@@ -1,4 +1,4 @@
-# Brief: the Bitbots MCP edits bots (`update_bot`) and may grant Full access
+# Brief: the Retinue MCP edits bots (`update_bot`) and may grant Full access
 
 Owner request, 30 October 2026: "the MCP should allow editing everything, so we need to add that". Today an outside session can create a bot (`create_bot`, Operator level, approval mode `ask` or `auto` only) but cannot change one, so the Director could not move the backend bot Sona from Auto to Full access and the owner had to do it by hand.
 
@@ -16,7 +16,7 @@ Lane: backend (Claude Sonnet 5.5, medium), in its own worktree. The Director bui
 
 - `external.setFullAccess {allow: bool, confirm?: bool}`
   - `allow: true` needs `confirm: true`, else `invalid_argument` "Confirm letting outside sessions give bots Full access first."
-  - Needs the MCP on, else `conflict` "Turn the Bitbots MCP on first." (as `external.setTier`).
+  - Needs the MCP on, else `conflict` "Turn the Retinue MCP on first." (as `external.setTier`).
   - Stores the setting, emits `external.changed`, returns the status.
 - `external.status` (and the `external.changed` payload) gains `allowFullAccess: bool` (false when the MCP is off).
 - `external.disable` also stores `allowFullAccess = false`.
@@ -46,13 +46,13 @@ Description: "Changes a bot's settings. Pass only what changes. Use list_runtime
 
 Rules:
 - The schema the tool list shows offers `bypass` in the `approvalMode` enum only while the switch is on, and the description then says "bypass is Full access: the bot acts without asking." Do the same for `create_bot` (its enum today is `ask`, `auto`).
-- Validate before writing anything: unknown keys (anything not in the table, including `customArgs`, `customEnv`, `locked`, `systemRole`, `leader`, `archived`) are refused with one message that names them, e.g. "update_bot can't change customEnv; that stays with the owner in Bitbots." A missing bot: "That bot was not found." Nothing to change: "Pass at least one setting to change."
-- `bypass` while the switch is off: "Full access needs the owner's switch in Bitbots › Settings › Connections." Nothing is written.
+- Validate before writing anything: unknown keys (anything not in the table, including `customArgs`, `customEnv`, `locked`, `systemRole`, `leader`, `archived`) are refused with one message that names them, e.g. "update_bot can't change customEnv; that stays with the owner in Retinue." A missing bot: "That bot was not found." Nothing to change: "Pass at least one setting to change."
+- `bypass` while the switch is off: "Full access needs the owner's switch in Retinue › Settings › Connections." Nothing is written.
 - Run `agent.update` (through `dispatch`, so model/effort validation, catalog normalisation, the lock check and `agent.changed` all apply) first, then `agent.team.update` for the team fields. If the first call fails, nothing else is written.
 - Returns the bot as `list_bots` shows it (`bot_view`).
 - `call_tool` records it like the other tools (`record`).
 
-## Tests (in `crates/bloblex-daemon/src/external_tests.rs`, plus a tiers parity pass)
+## Tests (in `crates/retinue-daemon/src/external_tests.rs`, plus a tiers parity pass)
 
 - `update_bot_changes_name_model_effort_and_role`
 - `update_bot_sets_and_clears_the_default_project_by_folder`
@@ -69,8 +69,8 @@ Rules:
 
 From the worktree:
 
-- `RUST_MIN_STACK=33554432 cargo test -p bloblex-daemon --no-fail-fast` (run from PowerShell; loopback HTTP from the Bash tool is reset on this machine);
-- `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`.
+- `RUST_MIN_STACK=33554432 cargo test -p retinue-daemon --no-fail-fast` (run from PowerShell; loopback HTTP from the Bash tool is reset on this machine);
+- `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`.
 
 The Director runs the full gates after merging.
 

@@ -6,7 +6,7 @@
 
 Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort, own worktree, private `CARGO_TARGET_DIR`. Director reviews, runs the gates on the merged result and commits. **Do not run `git commit`.** Read `AGENTS.md` first, then `docs/remote/ARCHITECTURE.md`, `docs/remote/PROTOCOL.md` and `docs/remote/PHASES.md` (WP6a).
 
-Read before coding: `apps/desktop/src/remote/remoteTiers.ts` (all of it), `remoteTiers.test.ts`, `remoteTiers.parity.test.ts`, `remoteContract.ts`, `scripts/print-remote-tiers.mjs`, and `crates/bloblex-daemon/src/main.rs` (`dispatch`, `mod` declarations).
+Read before coding: `apps/desktop/src/remote/remoteTiers.ts` (all of it), `remoteTiers.test.ts`, `remoteTiers.parity.test.ts`, `remoteContract.ts`, `scripts/print-remote-tiers.mjs`, and `crates/retinue-daemon/src/main.rs` (`dispatch`, `mod` declarations).
 
 ## Goal
 Today the remote policy lives only in `remoteTiers.ts`. The gateway (WP6b) will run inside the Rust daemon, so the same policy must exist in Rust **without two hand-kept copies drifting**. This package moves the data into one JSON file, keeps the TypeScript behaviour identical, and adds a Rust port that is proved equal by shared golden fixtures. No network, no listener, no gateway: that is WP6b.
@@ -32,7 +32,7 @@ Today the remote policy lives only in `remoteTiers.ts`. The gateway (WP6b) will 
 - Existing tests (`remoteTiers.test.ts`, `remoteTiers.parity.test.ts`) must pass unchanged, except that the parity test may read the JSON directly. `scripts/print-remote-tiers.mjs` keeps working.
 - Do not change UI files.
 
-## 3. Rust: `crates/bloblex-daemon/src/remote/` (new)
+## 3. Rust: `crates/retinue-daemon/src/remote/` (new)
 - `mod.rs` declares `pub mod policy;` (WP6b will add `tailscale`, `pairing`, `web`). Add `mod remote;` to `main.rs` with `#[allow(dead_code)]` only where truly needed until WP6b uses it.
 - `policy.rs` loads `tiers.json` once (`OnceLock` / `LazyLock`, `serde_json`; a parse failure panics in a test, never at runtime: add a test that parses it). It ports, with the same semantics and strings:
   - `rule_for(method) -> Option<&MethodRule>`: exact match first, else the longest `family.*` prefix.
@@ -61,8 +61,8 @@ The TypeScript parity test already checks `tiers.json` against `dispatch`; do no
 Listener, Tailscale, pairing, cookies, storage tables, `remote.*` RPCs, PWA build, any UI change. Do not touch `remoteContract.ts` types beyond what the JSON import needs.
 
 ## Gates
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote && node ../../scripts/print-remote-tiers.mjs > NUL` (or `/dev/null`)
 
 ## Report

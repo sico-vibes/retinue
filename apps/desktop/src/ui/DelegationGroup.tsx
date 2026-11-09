@@ -75,7 +75,7 @@ function Row({ row, now, onOpen, onError, onFollowUp }: { row: DelegationRowMode
       {row.preview && <p className="delegation-brief" title={row.preview}>{row.preview}</p>}
       {row.error && <p className="delegation-error" role="status">{row.error}</p>}
       {row.bucket === 'approval' && <p className="delegation-hint">{row.asking ? `${row.name} asked you a question and is waiting in its own conversation. Open it to answer; the answer goes only to ${row.name}.` : `Waiting for you in ${row.name}'s conversation. Open it to approve or decline.`}</p>}
-      {row.bucket === 'interrupted' && <p className="delegation-hint">Bitbots restarted before this finished. It was not sent again, so open the conversation to see what was done.</p>}
+      {row.bucket === 'interrupted' && <p className="delegation-hint">Retinue restarted before this finished. It was not sent again, so open the conversation to see what was done.</p>}
       {row.bucket === 'queued' && <p className="delegation-hint">Waiting for a free slot. It starts by itself.</p>}
       {!row.recorded && <p className="delegation-hint">Sent before assignments were recorded{row.bucket === 'earlier' ? ', so its own result is in the conversation.' : '; this is the conversation’s current state.'}</p>}
       {onFollowUp && row.bucket !== 'queued' && <button type="button" className="delegation-followup" onClick={() => onFollowUp(row)}>Ask for an update</button>}

@@ -94,7 +94,7 @@ export function PairMachine({ onDone, onCancel }: { onDone: () => void; onCancel
     try {
       const reply = await rpc<MachineProbe>('machine.probe', { url: url.trim() })
       if (!reply.reachable) setProblem('That address can\'t be reached. Check that Remote is on over there.')
-      else if (!reply.isBitbots) setProblem('That address isn\'t a Bitbots machine.')
+      else if (!reply.isRetinue) setProblem('That address isn\'t a Retinue machine.')
       else setProbe(reply)
     } catch (reason) { setProblem(messageOf(reason, 'That address could not be checked.')) } finally { setBusy(false) }
   }
@@ -159,7 +159,7 @@ export function PairMachine({ onDone, onCancel }: { onDone: () => void; onCancel
           <label className="new-project-check"><input type="checkbox" checked={matches} onChange={(event) => setMatches(event.target.checked)} /><span>It's the same on both machines</span></label>
         </div>
         <label className="new-project-field"><span>Username</span><input className="text-input" value={username} spellCheck={false} autoComplete="off" onChange={(event) => setUsername(event.target.value)} /></label>
-        <label className="new-project-field"><span>Password</span><input className="text-input" type="password" value={password} autoComplete="off" onChange={(event) => setPassword(event.target.value)} /><small className="project-settings-note">Sent once to sign in. Bitbots doesn't keep it.</small></label>
+        <label className="new-project-field"><span>Password</span><input className="text-input" type="password" value={password} autoComplete="off" onChange={(event) => setPassword(event.target.value)} /><small className="project-settings-note">Sent once to sign in. Retinue doesn't keep it.</small></label>
       </>}
     {problem && <p className="new-project-error" role="alert">{problem}</p>}
     <div className="machine-pair-actions">
@@ -192,7 +192,7 @@ export function MachinesPage() {
       {problem && <p className="new-project-error" role="alert">{problem}</p>}
       {pairing
         ? <PairMachine onCancel={() => setPairing(false)} onDone={() => { setPairing(false); void reload() }} />
-        : <SettingsRow label="Link a machine" hint="It needs Bitbots with Remote on. You approve this machine over there."><button type="button" className="primary-button small" onClick={() => setPairing(true)}>Link a machine</button></SettingsRow>}
+        : <SettingsRow label="Link a machine" hint="It needs Retinue with Remote on. You approve this machine over there."><button type="button" className="primary-button small" onClick={() => setPairing(true)}>Link a machine</button></SettingsRow>}
     </SettingsGroup>
     {removing && <ConfirmDialog title={`Remove ${removing.name}?`} body={`This machine stops seeing its ${nouns}. Nothing on ${removing.name} changes, and conversations that moved here stay here.`} confirmLabel="Remove" cancelLabel="Keep it" tone="warning"
       onConfirm={() => { const target = removing; setRemoving(null); void act(rpc('machine.remove', { id: target.id, confirm: true }), `${target.name} could not be removed.`) }}

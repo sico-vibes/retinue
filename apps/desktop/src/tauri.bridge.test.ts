@@ -113,15 +113,15 @@ describe('updates bridge', () => {
     let available: ((event: { payload: unknown }) => void) | undefined
     let progress: ((event: { payload: unknown }) => void) | undefined
     vi.mocked(listen).mockImplementation(((name: string, handler: (event: { payload: unknown }) => void) => {
-      if (name === 'bloblex-update-available') available = handler
-      if (name === 'bloblex-update-progress') progress = handler
+      if (name === 'retinue-update-available') available = handler
+      if (name === 'retinue-update-progress') progress = handler
       return Promise.resolve(() => undefined)
     }) as typeof listen)
     const seenInfo: unknown[] = []
     const seenProgress: unknown[] = []
     await listenForUpdateAvailable((info) => seenInfo.push(info))
     await listenForUpdateProgress((item) => seenProgress.push(item))
-    expect(vi.mocked(listen).mock.calls.map((call) => call[0])).toEqual(['bloblex-update-available', 'bloblex-update-progress'])
+    expect(vi.mocked(listen).mock.calls.map((call) => call[0])).toEqual(['retinue-update-available', 'retinue-update-progress'])
     available?.({ payload: { version: '1.2.0', notes: null, pubDate: null, channel: 'stable', token: 'SECRET_EVENT' } })
     available?.({ payload: { nope: true } })
     available?.({ payload: null })

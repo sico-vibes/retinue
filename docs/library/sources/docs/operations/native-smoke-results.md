@@ -8,11 +8,11 @@
 > **Status:** historical; a record of 2 October 2026
 > **Last updated:** 2026-10-15
 
-Run by the Director on 2 October 2026, ~07:40-08:20 BST, git revision `e770db8`, Windows 11, real `npm run desktop:dev` build against an **isolated database** (`BLOBLEX_DB_PATH` set to a scratch file; the live inspection database and the two earlier dev daemons were never touched). Screenshots are in [docs/evidence/native-smoke/](../evidence/native-smoke/); tooling is in [scripts/native-smoke/](../../scripts/native-smoke/) (WebView2 remote-debugging port + UI Automation + synthesized mouse input; no extra dependencies).
+Run by the Director on 2 October 2026, ~07:40-08:20 BST, git revision `e770db8`, Windows 11, real `npm run desktop:dev` build against an **isolated database** (`RETINUE_DB_PATH` set to a scratch file; the live inspection database and the two earlier dev daemons were never touched). Screenshots are in [docs/evidence/native-smoke/](../evidence/native-smoke/); tooling is in [scripts/native-smoke/](../../scripts/native-smoke/) (WebView2 remote-debugging port + UI Automation + synthesized mouse input; no extra dependencies).
 
 ## Part A: Phase 2a migration against a REAL v1 database
 
-The pre-Phase-2a sidecar (`bloblexd`, 1 Oct 19:48) was run on a scratch path to produce a genuine v1-schema database (it discovered the three installed runtimes), then seeded with 4 sessions / 4 turns / 4 usage rows including an orphaned runtime and a usage row with no session. The current daemon then opened it.
+The pre-Phase-2a sidecar (`retinued`, 1 Oct 19:48) was run on a scratch path to produce a genuine v1-schema database (it discovered the three installed runtimes), then seeded with 4 sessions / 4 turns / 4 usage rows including an orphaned runtime and a usage row with no session. The current daemon then opened it.
 
 | Check | Result |
 | --- | --- |
@@ -34,7 +34,7 @@ Observation: the backup directory also contains `-shm`/`-wal` sidecar files next
 | 6 Roster: one blob per runtime, colours coral / blue / violet, runtime label under each, real CLI versions | PASS | `01-main-native.png` |
 | 6b Companion compact bar shows the selected blob and peer minis | PASS | `02-companion-native.png` |
 | 7 Edit Claude, change colour to pink, save: sidebar row, chat header face, large face, companion island face, companion mini and companion focus card are pink; stored as `pink`; exactly one persisted `agent.changed` event | PASS | `03`, `04`, `15` |
-| 8 Tray menu (opened through UI Automation): Open Bitbots, **Active sessions**, **Pause all agents...**, Show / hide companion, Refresh runtimes, Settings, Quit Bitbots | PASS | text list (menu is a native popup) |
+| 8 Tray menu (opened through UI Automation): Open Retinue, **Active sessions**, **Pause all agents...**, Show / hide companion, Refresh runtimes, Settings, Quit Retinue | PASS | text list (menu is a native popup) |
 | 9 Companion window transparent around a rounded opaque island (wallpaper visible at all four corners) | PASS | `12-companion-on-desktop.png` |
 | 9 Free drag: window moved by exactly (+300, +250) when dragged from the top strip | PASS (partial, see N1) | `13-companion-after-drag.png` |
 | 9 Free drag from the face or the name/status text | **FAIL** (N1) | n/a |
@@ -52,7 +52,7 @@ Observation: the backup directory also contains `-shm`/`-wal` sidecar files next
 | N1 | major | Dragging the companion by its face or its name/status text does nothing. The mouse-down lands on `.compact-copy` / the face canvas, which sit inside the `data-tauri-drag-region` element but do not carry the attribute themselves; Tauri only starts a drag when the event target itself carries it. Dragging from the empty top strip works. Capability `core:window:allow-start-dragging` is granted. | `apps/desktop/src/ui/App.tsx` (~1549-1566), `companion.css` |
 | N2 | minor | Expanding the compact companion near a monitor edge is not clamped to the work area: the window grew from 344x62 to 640x160 anchored at bottom-centre and ended 87 px past the right edge of its monitor (x = -553..87 on a monitor ending at x = 0). | `apps/desktop/src-tauri/src/lib.rs` `set_companion_mode` (~765-835) |
 | N3 | minor | The companion focus card shows tokens/cost totals that are daemon-wide (2,575 tokens) under whichever blob is selected, which reads as per-blob. Per-agent attribution belongs to Phase 5; until then the card should label the figure as total. | `apps/desktop/src/ui/App.tsx` companion card |
-| N4 | nit | Backup directory contains sidecar files beside the backup `.db`. | `crates/bloblex-storage/src/lib.rs` `verified_backup` |
+| N4 | nit | Backup directory contains sidecar files beside the backup `.db`. | `crates/retinue-storage/src/lib.rs` `verified_backup` |
 
 ## Not covered
 

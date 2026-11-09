@@ -14,10 +14,10 @@
         if (dictation) document.documentElement.classList.add('dictation-surface')
         if (!companion && !dictation) document.documentElement.classList.add('booting')
         try {
-          const settings = JSON.parse(localStorage.getItem('bloblex.appearance') || '{}')
-          const storedStyle = localStorage.getItem('bitbots.style')
+          const settings = JSON.parse(localStorage.getItem('retinue.appearance') || '{}')
+          const storedStyle = localStorage.getItem('retinue.style')
           // Retired looks (Frost, Pop, Dot, Legacy) paint as Haze.
-          const style = storedStyle === 'blobots' ? 'blobots' : 'haze'
+          const style = storedStyle === 'stone' ? 'stone' : 'haze'
           document.documentElement.dataset.style = style
           const queryTheme = params.get('theme')
           const theme = ['system', 'dark', 'light'].includes(queryTheme) ? queryTheme : ['system', 'dark', 'light'].includes(settings.theme) ? settings.theme : 'system'
@@ -29,15 +29,15 @@
           if (overlay) document.documentElement.dataset.surfaceTheme = surfaceTheme
           document.documentElement.dataset.textSize = textSize
           document.documentElement.dataset.themeChoice = theme
-          const density = localStorage.getItem('bitbots.density')
+          const density = localStorage.getItem('retinue.density')
           if (density === 'compact' || density === 'default' || density === 'roomy') document.documentElement.dataset.density = density
           // The shell restores the native frosted backdrop before the first frame; paint the matching tint right away.
-          const backdrop = localStorage.getItem('bitbots.backdrop')
+          const backdrop = localStorage.getItem('retinue.backdrop')
           if (!overlay && style === 'haze' && (backdrop === 'acrylic' || backdrop === 'blur')) document.documentElement.dataset.backdrop = backdrop
         } catch { document.documentElement.dataset.theme = 'dark' }
       })()
     </script>
-    <title>Bitbots</title>
+    <title>Retinue</title>
   </head>
   <body>
     <div id="root"></div>

@@ -1,5 +1,5 @@
 // Development-only design study at /redesign-preview.html: three candidate
-// directions for the primary (Bitbots) look, drawn from fixtures. Nothing here
+// directions for the primary (Retinue) look, drawn from fixtures. Nothing here
 // is wired into the app; it exists so the owner can compare directions before
 // one is applied.
 import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from 'react'
@@ -17,7 +17,7 @@ import './redesign.css'
 
 // BlobCanvas pulls in the app's look store, which marks <html> for the pixel
 // theme; this page styles itself, so clear those markers.
-delete document.documentElement.dataset.bitbots
+delete document.documentElement.dataset.retinue
 delete document.documentElement.dataset.style
 
 type StyleId = 'pop' | 'dot' | 'frost' | 'blob'
@@ -30,7 +30,7 @@ const STYLES: { id: StyleId; letter: string; name: string; note: string; mode: M
   { id: 'pop', letter: 'A', name: 'Pop', note: 'Retro colour, outlined cards, sticker labels', mode: 'light' },
   { id: 'dot', letter: 'B', name: 'Dot', note: 'Monochrome widgets, dot-matrix numbers, one red', mode: 'dark' },
   { id: 'frost', letter: 'C', name: 'Frost', note: 'A see-through window over your desktop, flat and quiet', mode: 'dark' },
-  { id: 'blob', letter: 'D', name: 'Blobots', note: 'The current alternative look, with hand-painted employees', mode: 'dark' },
+  { id: 'blob', letter: 'D', name: 'Stone', note: 'The current alternative look, with hand-painted employees', mode: 'dark' },
 ]
 const SCREENS: { id: Screen; label: string }[] = [
   { id: 'chat', label: 'Conversation' },
@@ -76,7 +76,7 @@ function Bot({ data, size = 36, mood, badge = true }: { data: BotData; size?: nu
   return <span className={`rd-bot mood-${current}`} style={{ width: size, height: size, '--bot': data.color } as CSSProperties} role="img" aria-label={`${data.name}, ${current}`}>
     {style !== 'blob' ? <Head mood={current} />
       : skin === 'painted' ? <PaintedBot shape={data.paint} color={data.color} size={size} mood={current} />
-      : <BlobCanvas decorative style="blobots" color={data.color} size={size} mood={BLOB_MOOD[current]} look={{ shape: data.classic, seed: data.id }} />}
+      : <BlobCanvas decorative style="stone" color={data.color} size={size} mood={BLOB_MOOD[current]} look={{ shape: data.classic, seed: data.id }} />}
     {badge && data.manager && <span className="rd-bot-badge"><Star size={Math.max(8, size * 0.2)} fill="currentColor" strokeWidth={0} /></span>}
   </span>
 }
@@ -182,7 +182,7 @@ function Sidebar({ screen, setScreen, selected, setSelected }: { screen: Screen;
   return <aside className="rd-side">
     <div className="rd-brand">
       <Logo />
-      <strong>Bitbots</strong>
+      <strong>Retinue</strong>
       <button type="button" className="rd-icon-btn" aria-label="New employee"><Plus size={16} /></button>
     </div>
     <label className="rd-search"><Search size={15} /><input placeholder="Search employees and chats" /><kbd>Ctrl K</kbd></label>
@@ -376,21 +376,21 @@ function Row({ title, sub, children }: { title: string; sub?: string; children: 
 function AppearancePage({ mode, setMode }: { mode: Mode; setMode: (mode: Mode) => void }) {
   const style = useContext(StyleContext)
   const { skin, setSkin } = useContext(SkinContext)
-  const [look, setLook] = useState<'bitbots' | 'blobots'>('bitbots')
+  const [look, setLook] = useState<'frost' | 'stone'>('frost')
   const [accent, setAccent] = useState(ACCENTS[0])
   const [density, setDensity] = useState<'compact' | 'cozy' | 'roomy'>('cozy')
   const [text, setText] = useState(14)
   const [motion, setMotion] = useState(true)
   const [sounds, setSounds] = useState(false)
   return <>
-    <PageHead title="Appearance" sub="How Bitbots looks on this device: the employees, the colours and the density." />
+    <PageHead title="Appearance" sub="How Retinue looks on this device: the employees, the colours and the density." />
     <div className="rd-card-label">Look</div>
     {style === 'blob' ? <BlobLooks skin={skin} setSkin={setSkin} /> : <div className="rd-looks">
-      {(['bitbots', 'blobots'] as const).map((id) => <button key={id} type="button" className={`rd-look${look === id ? ' on' : ''}`} onClick={() => setLook(id)}>
-        <span className="rd-look-stage">{id === 'bitbots'
+      {(['frost', 'stone'] as const).map((id) => <button key={id} type="button" className={`rd-look${look === id ? ' on' : ''}`} onClick={() => setLook(id)}>
+        <span className="rd-look-stage">{id === 'frost'
           ? <><Bot data={bot('codex')} size={46} mood="idle" /><Bot data={bot('pololo')} size={46} mood="working" /><Bot data={bot('claude')} size={46} mood="sleeping" /></>
           : <><span className="rd-blob" style={{ background: '#8db7f5' }} /><span className="rd-blob" style={{ background: '#7fd3ae' }} /><span className="rd-blob" style={{ background: '#f2958a' }} /></>}</span>
-        <span className="rd-look-text"><strong>{id === 'bitbots' ? 'Bitbots' : 'Blobots'}</strong><span>{id === 'bitbots' ? 'Robot heads, this look' : 'Soft blobs, the quiet look'}</span></span>
+        <span className="rd-look-text"><strong>{id === 'frost' ? 'Frost' : 'Stone'}</strong><span>{id === 'frost' ? 'Robot heads, this look' : 'Soft blobs, the quiet look'}</span></span>
         {look === id && <span className="rd-look-check"><Check size={13} /></span>}
       </button>)}
     </div>}
@@ -418,11 +418,11 @@ function GeneralPage() {
   const [awake, setAwake] = useState(false)
   const [notify, setNotify] = useState(true)
   return <>
-    <PageHead title="General" sub="Your name, start-up and what Bitbots does in the background." />
+    <PageHead title="General" sub="Your name, start-up and what Retinue does in the background." />
     <div className="rd-card-label">You</div>
     <div className="rd-card">
       <Row title="Your name" sub="Employees use it when they talk to you."><input className="rd-input" defaultValue="Bassem" /></Row>
-      <Row title="Open on start" sub="The page Bitbots shows first."><button type="button" className="rd-select">Last conversation<ChevronDown size={14} /></button></Row>
+      <Row title="Open on start" sub="The page Retinue shows first."><button type="button" className="rd-select">Last conversation<ChevronDown size={14} /></button></Row>
     </div>
     <div className="rd-card-label">System</div>
     <div className="rd-card">
@@ -433,7 +433,7 @@ function GeneralPage() {
     <div className="rd-card-label">Danger zone</div>
     <div className="rd-card">
       <Row title="Reset onboarding" sub="Shows the first-run steps again."><button type="button" className="rd-btn">Reset</button></Row>
-      <Row title="Quit Bitbots" sub="Running employees stop after their current step."><button type="button" className="rd-btn danger">Quit</button></Row>
+      <Row title="Quit Retinue" sub="Running employees stop after their current step."><button type="button" className="rd-btn danger">Quit</button></Row>
     </div>
   </>
 }
@@ -446,7 +446,7 @@ function AgentsPage() {
     { name: 'Gemini CLI', version: '—', state: 'Not found', tone: 'plain' as const, bots: 0, icon: 'GM' },
   ]
   return <>
-    <PageHead title="Coding agents" sub="Command line tools Bitbots found on this device, and the employees that use them." />
+    <PageHead title="Coding agents" sub="Command line tools Retinue found on this device, and the employees that use them." />
     <div className="rd-card-label rd-label-row"><span>Detected</span><button type="button" className="rd-btn small"><RefreshCw size={13} />Scan again</button></div>
     <div className="rd-card">
       {agents.map((agent) => <div key={agent.name} className="rd-agent">
@@ -541,17 +541,17 @@ function UsageScreen() {
 function BlobLooks({ skin, setSkin }: { skin: Skin; setSkin: (skin: Skin) => void }) {
   const [shape, setShape] = useState<PaintedShape>('cube')
   const team = ['codex', 'pololo', 'claude']
-  const options: { id: 'bitbots' | Skin; title: string; sub: string }[] = [
-    { id: 'bitbots', title: 'Bitbots', sub: 'Robot heads' },
-    { id: 'glossy', title: 'Blobots', sub: 'Glossy blobs, today' },
-    { id: 'painted', title: 'Blobots, hand-painted', sub: 'Flat paint, twelve shapes' },
+  const options: { id: 'frost' | Skin; title: string; sub: string }[] = [
+    { id: 'frost', title: 'Frost', sub: 'Robot heads' },
+    { id: 'glossy', title: 'Stone', sub: 'Glossy blobs, today' },
+    { id: 'painted', title: 'Stone, hand-painted', sub: 'Flat paint, twelve shapes' },
   ]
   return <>
     <div className="rd-looks three">
-      {options.map((option) => <button key={option.id} type="button" className={`rd-look${skin === option.id ? ' on' : ''}`} onClick={() => option.id !== 'bitbots' && setSkin(option.id)}>
+      {options.map((option) => <button key={option.id} type="button" className={`rd-look${skin === option.id ? ' on' : ''}`} onClick={() => option.id !== 'frost' && setSkin(option.id)}>
         <span className="rd-look-stage">
-          {option.id === 'bitbots' ? <StyleContext.Provider value="frost">{team.map((id) => <Bot key={id} data={bot(id)} size={40} />)}</StyleContext.Provider>
-            : option.id === 'glossy' ? team.map((id) => <BlobCanvas key={id} decorative style="blobots" color={bot(id).color} size={40} mood={BLOB_MOOD[bot(id).mood]} look={{ shape: bot(id).classic, seed: id }} />)
+          {option.id === 'frost' ? <StyleContext.Provider value="frost">{team.map((id) => <Bot key={id} data={bot(id)} size={40} />)}</StyleContext.Provider>
+            : option.id === 'glossy' ? team.map((id) => <BlobCanvas key={id} decorative style="stone" color={bot(id).color} size={40} mood={BLOB_MOOD[bot(id).mood]} look={{ shape: bot(id).classic, seed: id }} />)
             : team.map((id) => <PaintedBot key={id} shape={bot(id).paint} color={bot(id).color} size={40} mood={bot(id).mood} />)}
         </span>
         <span className="rd-look-text"><strong>{option.title}</strong><span>{option.sub}</span></span>
@@ -578,7 +578,7 @@ function CharactersScreen() {
   const tint = (index: number) => colour === 'mixed' ? PALETTE[index % PALETTE.length] : colour
   return <div className="rd-usage rd-characters">
     <header className="rd-usage-head">
-      <div><div className="rd-eyebrow">Blobots · design study</div><h1>Hand-painted employees</h1></div>
+      <div><div className="rd-eyebrow">Stone · design study</div><h1>Hand-painted employees</h1></div>
       <Segmented label="Mood" value={mood} onChange={setMood} options={[{ id: 'idle', label: 'Idle' }, { id: 'working', label: 'Working' }, { id: 'waiting', label: 'Waiting' }, { id: 'sleeping', label: 'Sleeping' }]} />
     </header>
     <div className="rd-colour-row" role="radiogroup" aria-label="Colour">
@@ -595,7 +595,7 @@ function CharactersScreen() {
     <div className="rd-card-label">Next to the glossy employees you have now</div>
     <div className="rd-card rd-pairs">
       {PAIRS.map(([classic, painted], index) => <div key={painted} className="rd-pair">
-        <BlobCanvas decorative style="blobots" color={tint(index)} size={64} mood={BLOB_MOOD[mood]} look={{ shape: classic, seed: classic }} />
+        <BlobCanvas decorative style="stone" color={tint(index)} size={64} mood={BLOB_MOOD[mood]} look={{ shape: classic, seed: classic }} />
         <ChevronRight size={16} />
         <PaintedBot shape={painted} color={tint(index)} size={64} mood={mood} />
       </div>)}

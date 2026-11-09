@@ -9,7 +9,7 @@ import { rpc } from '../tauri'
 export type ProjectMember = { agentId: string; hiredAt?: number | string; sortOrder?: number }
 export type MembersByProject = ReadonlyMap<string, readonly ProjectMember[]>
 
-export const MEMBERS_CHANGED_EVENT = 'bitbots:project-members-changed'
+export const MEMBERS_CHANGED_EVENT = 'retinue:project-members-changed'
 
 export function announceMembersChanged() {
   try { window.dispatchEvent(new Event(MEMBERS_CHANGED_EVENT)) } catch { /* not in a window */ }

@@ -10,7 +10,7 @@ let previousTheme: string | null
 let previousLook: string | null
 beforeEach(() => {
   previousTheme = root.getAttribute('data-theme')
-  previousLook = root.getAttribute('data-bitbots')
+  previousLook = root.getAttribute('data-retinue')
   style = document.createElement('style')
   style.textContent = ['theme.css', 'shell.css', 'settings.css', 'botWizard.css', 'tooltipPortal.css']
     .map((file) => readFileSync(resolve(process.cwd(), 'src/ui', file), 'utf8')).join('\n')
@@ -19,7 +19,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   host.remove(); style.remove()
-  for (const [name, value] of [['data-theme', previousTheme], ['data-bitbots', previousLook]]) {
+  for (const [name, value] of [['data-theme', previousTheme], ['data-retinue', previousLook]]) {
     if (value === null) root.removeAttribute(name!)
     else root.setAttribute(name!, value!)
   }
@@ -28,8 +28,8 @@ afterEach(() => {
 describe.each([
   { theme: 'dark', look: 'off' }, { theme: 'light', look: 'off' },
   { theme: 'dark', look: 'on' }, { theme: 'light', look: 'on' },
-])('shell CSS in $theme, Bitbots $look', ({ theme, look }) => {
-  beforeEach(() => { root.setAttribute('data-theme', theme); root.setAttribute('data-bitbots', look) })
+])('shell CSS in $theme, Retinue $look', ({ theme, look }) => {
+  beforeEach(() => { root.setAttribute('data-theme', theme); root.setAttribute('data-retinue', look) })
 
   it('separates settings groups with space alone: no line above any group', () => {
     host.innerHTML = '<div class="settings-content"><h2>Page title</h2><section class="settings-group"></section><section class="settings-group"></section></div><div class="bot-wizard-body"><section class="settings-group"></section><section class="settings-group"></section></div>'
@@ -63,7 +63,7 @@ describe.each([
 
   it('keeps the Manager badge circular and the portal tooltip above the usage backdrop', () => {
     host.innerHTML = '<span class="leader-badge"></span><div class="sheet-backdrop"></div><span class="tip-bubble tip-portal"></span>'
-    // team.css supplies the normal circle; Bitbots must preserve it over its global square reset.
+    // team.css supplies the normal circle; Retinue must preserve it over its global square reset.
     const badgeStyle = document.createElement('style')
     badgeStyle.textContent = readFileSync(resolve(process.cwd(), 'src/ui/team.css'), 'utf8')
     document.head.prepend(badgeStyle)

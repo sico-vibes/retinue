@@ -15,11 +15,11 @@ Keep the contract exactly. If something can't work as written, pick the smallest
 
 **Every command** is an argument list with no shell, has a time limit, sets `GIT_TERMINAL_PROMPT=0`, uses git's and `gh`'s own sign-in and never reads, passes or prints a credential. Output is read to branch on it and to build a one-line reason (`scaffold::one_line`, `scaffold::run`). No file contents, message text or paths in logs.
 
-**All new RPCs:** `tiers.json` class `never`, events `drop`. None go on the Bitbots MCP.
+**All new RPCs:** `tiers.json` class `never`, events `drop`. None go on the Retinue MCP.
 
 ## What exists
 
-`repository.rs` (`session.repository`: read-only changes against `HEAD`, per file, capped diffs), `worktree.rs` (`create`, `inspect`, `commit_all`, `merge`, `discard`, worktrees at `<repo>-bitbots/<slug>` on `bitbots/<slug>`), `workspace.rs`, `project_setup.rs` (setup script), `scaffold.rs` (`gh_status`, `run`, `GH_STUB`/`GH_TEST_LOCK` for tests). `file.revert` reverses one turn's saved diff and stays as it is.
+`repository.rs` (`session.repository`: read-only changes against `HEAD`, per file, capped diffs), `worktree.rs` (`create`, `inspect`, `commit_all`, `merge`, `discard`, worktrees at `<repo>-retinue/<slug>` on `retinue/<slug>`), `workspace.rs`, `project_setup.rs` (setup script), `scaffold.rs` (`gh_status`, `run`, `GH_STUB`/`GH_TEST_LOCK` for tests). `file.revert` reverses one turn's saved diff and stays as it is.
 
 ## 1. Diff, stage, revert (Sona, new `git_ops.rs`)
 
@@ -36,7 +36,7 @@ Keep the contract exactly. If something can't work as written, pick the smallest
 - No `confirm: true`: `invalid_argument`.
 - Any conversation working in this folder, this one included (reuse `workspace::shared_with`'s meaning of working): error code `conflict`, "A bot is working in this folder. Stop it or wait, then try again."
 - The path must be exactly in the current status list. A submodule entry, a directory or a symlink leaf is refused: `invalid_argument`, in a plain sentence.
-- **First, a safety copy.** If the file exists, copy it to `<data>/reverted/<undo id>/` with a `meta.json` holding `{sessionId, repositoryPath, createdAt}`. Over 20 MiB: refuse, "That file is too large to keep a copy of, so Bitbots won't discard it." A failed copy discards nothing.
+- **First, a safety copy.** If the file exists, copy it to `<data>/reverted/<undo id>/` with a `meta.json` holding `{sessionId, repositoryPath, createdAt}`. Over 20 MiB: refuse, "That file is too large to keep a copy of, so Retinue won't discard it." A failed copy discards nothing.
 - **Then discard:**
   - tracked and modified or deleted: `git restore --source=HEAD --staged --worktree -- <path>`;
   - renamed: the same for the previous path, and remove the new path from the index and disk;
@@ -46,7 +46,7 @@ Keep the contract exactly. If something can't work as written, pick the smallest
 
 **`session.git.revertUndo {sessionId, undoId}`** puts the copy back:
 - The record must belong to this conversation, else `not_found`.
-- If the path has changes again, refuse: `conflict`, "That file has changed since, so Bitbots won't overwrite it."
+- If the path has changes again, refuse: `conflict`, "That file has changed since, so Retinue won't overwrite it."
 - Restores the working file only, not the staged state. Deletes the copy. Reply `{files}`.
 - The daemon deletes copies older than 7 days at startup.
 
@@ -71,7 +71,7 @@ Use `GH_STUB`, `GH_TEST_LOCK` and a local bare repository as `origin` in tests. 
 - `commitsAhead` is against `base`; `uncommitted` is the status count.
 - `remote` is the literal name `origin` or `null`. Never return its URL, which can hold a credential.
 - `title`: the subject of a single commit ahead, else the conversation title, capped at 72 characters.
-- `body`: "## Changes" with up to 20 commit subjects as bullets, then "## Files" with "N files, +a −r", then "Made with Bitbots." No message text from the conversation.
+- `body`: "## Changes" with up to 20 commit subjects as bullets, then "## Files" with "N files, +a −r", then "Made with Retinue." No message text from the conversation.
 - `existingUrl`: from `gh pr view --json url,state`, when the state is `OPEN`, with a 10-second limit. Any failure gives `null`.
 
 **`session.pr.create {sessionId, title, body, base, draft, commitMessage, confirm}`:**
@@ -94,7 +94,7 @@ Nothing here runs on a timer, and nothing is removed without a call from the own
 
 **`worktree.abandoned {}`** → `{items: [{id, repo, path, branch, reason, dirtyFiles, commitsAhead, lastActivityAt}]}`.
 - Repositories scanned: the repo roots of registered projects, and of every session's `link.worktree.repo`.
-- For each, `git worktree list --porcelain`. Keep an entry only when its path is inside `<repo>-bitbots` and its branch starts `bitbots/`. Skip locked entries and the main worktree.
+- For each, `git worktree list --porcelain`. Keep an entry only when its path is inside `<repo>-retinue` and its branch starts `retinue/`. Skip locked entries and the main worktree.
 - Skip anything a non-archived conversation works in, and any registered project's own folder.
 - `reason`: `conversation_deleted`, `conversation_archived` or `folder_missing`.
 - `id` is a hash of the normalised path. `commitsAhead` is against the main worktree's `HEAD`. `lastActivityAt` is the worktree folder's modification time.
@@ -135,7 +135,7 @@ Project `overrides` gain `copyFiles: string[]` and `initSubmodules: boolean`. A 
 
 **`project.discover {folder, depth}`** → `{folder, repos: [{path, name, branch, alreadyAdded}], truncated}`.
 - `depth` default 3, maximum 5. Off the runtime, with a 10-second budget, at most 5,000 folders and 200 repositories (`truncated`).
-- Never follow symlinks. Skip hidden folders, `node_modules`, `target`, `dist`, `vendor` and `*-bitbots`. Stop going down at a repository, so submodules aren't listed.
+- Never follow symlinks. Skip hidden folders, `node_modules`, `target`, `dist`, `vendor` and `*-retinue`. Stop going down at a repository, so submodules aren't listed.
 - `alreadyAdded` compares with `worktree::normalize`. A registered project's own folder is listed with `alreadyAdded: true`.
 
 **Tests:** `clone_refuses_dangerous_urls`, `clone_refuses_a_password_in_the_url`, `clone_refuses_an_existing_target`, `clone_needs_confirm`, `clone_registers_the_project` (from a local bare repository, through a test-only allowance for its path; the rule stays for real calls), `a_failed_clone_removes_only_its_own_folder`, `cancel_stops_the_clone_and_cleans_up`, `discover_finds_repositories_within_depth`, `discover_stops_at_a_repository`, `discover_skips_hidden_and_build_folders`, `discover_marks_what_is_already_added`, `discover_caps_what_it_lists`.
@@ -147,7 +147,7 @@ Both take `{sessionId}` or `{projectId}`. Neither, or a target with no folder: `
 **`project.files.search {sessionId, projectId, query, limit}`** → `{files: [{path, name, score, matches}], truncated, source: "git"|"walk"}`.
 - `path` is relative with forward slashes. `matches` is the character indexes of the query in `path`.
 - `limit` default 20, maximum 50. `query` at most 200 characters.
-- Source: `git ls-files -co --exclude-standard` in a repository, else a walk that skips hidden, build and `*-bitbots` folders. At most 50,000 files. Cache per folder for 15 seconds.
+- Source: `git ls-files -co --exclude-standard` in a repository, else a walk that skips hidden, build and `*-retinue` folders. At most 50,000 files. Cache per folder for 15 seconds.
 - Fuzzy subsequence match, preferring matches in the file name, consecutive characters and segment starts. An empty query returns the shortest paths first.
 - Files `names_a_secret` matches are left out (make it `pub(crate)` in `media.rs`).
 
@@ -171,14 +171,14 @@ Both take `{sessionId}` or `{projectId}`. Neither, or a target with no folder: `
 
 - Never run `git commit`, `git push`, `git merge` or switch branches in your worktree. Change nothing outside it, apart from temporary test folders. Don't run `npm install`.
 - Don't edit the skill files: put proposed text in your report.
-- `crates/bloblex-storage/src/lib.rs` has one NUL byte: edit it only with your edit tool. No shell heredocs for anything with backslashes.
+- `crates/retinue-storage/src/lib.rs` has one NUL byte: edit it only with your edit tool. No shell heredocs for anything with backslashes.
 - Keep `every_daemon_log_call_site_is_a_fixed_message` true.
 
 ## Gates
 
-From PowerShell in your worktree, with `BITBOTS_HOOK_BRIDGE` and `BITBOTS_REMOTE_WEB_DIR` removed for the session:
-- `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`
+From PowerShell in your worktree, with `RETINUE_HOOK_BRIDGE` and `RETINUE_REMOTE_WEB_DIR` removed for the session:
+- `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`
 
 Send output to a log file and read the summary lines. Known flaky test: `a_crash_after_a_finished_turn_does_not_fail_that_session`.
 

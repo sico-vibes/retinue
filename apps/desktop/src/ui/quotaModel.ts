@@ -20,7 +20,7 @@ export type QuotaProviderRow = {
   /** Short status when no window is available, or the latest refresh failed. */
   status: string | null
   stale: boolean
-  /** Bitbots may not read this provider's sign-in, so the owner can turn that on. */
+  /** Retinue may not read this provider's sign-in, so the owner can turn that on. */
   readOff: boolean
   fetchedAt: string | null
 }

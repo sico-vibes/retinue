@@ -4,11 +4,11 @@
 > **Status:** historical
 > **Last updated:** 2026-10-15
 
-Owner: OpenCode lane (backend only). Reviewer: Director. **Do not touch `apps/desktop/src`** (the Director builds the UI) **and do not touch `crates/bloblex-daemon/src/team.rs`, `memory.rs`, `automations.rs`, `queue.rs`, `retry.rs`, `questions.rs`** (another lane edits team/leader code in parallel).
-Scope: `crates/bloblex-adapter-acp` (OpenCode runs through it; `crates/bloblex-adapter-opencode/src/lib.rs` is a 5-line re-export), the OpenCode-related parts of `crates/bloblex-daemon/src/main.rs` (catalog, `runtime.capabilities`, session model lock), `crates/bloblex-agent-core` if types need a field, tests, `docs/reference/runtime-capabilities.md`, `docs/evidence/`.
+Owner: OpenCode lane (backend only). Reviewer: Director. **Do not touch `apps/desktop/src`** (the Director builds the UI) **and do not touch `crates/retinue-daemon/src/team.rs`, `memory.rs`, `automations.rs`, `queue.rs`, `retry.rs`, `questions.rs`** (another lane edits team/leader code in parallel).
+Scope: `crates/retinue-adapter-acp` (OpenCode runs through it; `crates/retinue-adapter-opencode/src/lib.rs` is a 5-line re-export), the OpenCode-related parts of `crates/retinue-daemon/src/main.rs` (catalog, `runtime.capabilities`, session model lock), `crates/retinue-agent-core` if types need a field, tests, `docs/reference/runtime-capabilities.md`, `docs/evidence/`.
 
 ## Symptom (owner report)
-In a blob running OpenCode with `DeepSeek V4.1 Flash` (`opencode-go/deepseek-v4.1-flash`) the effort control is disabled and shows the tooltip "OpenCode doesn't let Bitbots pick an effort level yet, so it uses the model's own default." The owner wants an effort selector there, like Codex and Claude have. Today the daemon test (`main.rs` ~L5216) even builds this model with `supportedThinking: []`.
+In a blob running OpenCode with `DeepSeek V4.1 Flash` (`opencode-go/deepseek-v4.1-flash`) the effort control is disabled and shows the tooltip "OpenCode doesn't let Retinue pick an effort level yet, so it uses the model's own default." The owner wants an effort selector there, like Codex and Claude have. Today the daemon test (`main.rs` ~L5216) even builds this model with `supportedThinking: []`.
 
 Facts already known (see `docs/reference/runtime-capabilities.md` O1, O6): `opencode models --verbose` lists per-model `variants`; over ACP, after `session/set_config_option` for `model`, a config option `effort` (category `thought_level`) appears with values like `low|medium|high|default`; `opencode run --variant high` is the CLI-level equivalent. The daemon gates OpenCode effort behind `exec_gate.opencode.thinking` (default off) with evidence `none` (`main.rs` ~L1479 and ~L1499).
 
@@ -30,13 +30,13 @@ Facts already known (see `docs/reference/runtime-capabilities.md` O1, O6): `open
 3. Update the daemon unit tests that assert the old behaviour (`opencode_thinking_support_and_gate_share_one_source_of_truth` and neighbours) and add new ones: a model with variants gets levels and is enabled; a model without variants gets none and a truthful reason string (add a `reason` field for a disabled thinking setting if one does not exist: `"model_has_no_effort_levels"` vs `"provider_unsupported"`, camelCase JSON, so the UI can say which).
 
 ## Task C: apply the selection
-Make sure a chosen level really is sent: at session start and when the session model lock changes, the ACP adapter calls `session/set_config_option` for the effort option (category `thought_level`, discovered by category, not by hard-coded id when category is present), after the model is set (the option only exists after model selection). Unknown/unsupported level -> typed error, never a silent drop. Cover with the fake ACP peer (`crates/bloblex-adapter-acp/tests` or the existing fake binary): effort selection order, missing option, rejected value.
+Make sure a chosen level really is sent: at session start and when the session model lock changes, the ACP adapter calls `session/set_config_option` for the effort option (category `thought_level`, discovered by category, not by hard-coded id when category is present), after the model is set (the option only exists after model selection). Unknown/unsupported level -> typed error, never a silent drop. Cover with the fake ACP peer (`crates/retinue-adapter-acp/tests` or the existing fake binary): effort selection order, missing option, rejected value.
 
 ## Gates (run and report real output)
 ```
-CARGO_TARGET_DIR=D:/b-p1 cargo test -p bloblex-adapter-acp
-CARGO_TARGET_DIR=D:/b-p1 cargo test -p bloblex-daemon
-CARGO_TARGET_DIR=D:/b-p1 cargo test --workspace --exclude bloblex-desktop
+CARGO_TARGET_DIR=D:/b-p1 cargo test -p retinue-adapter-acp
+CARGO_TARGET_DIR=D:/b-p1 cargo test -p retinue-daemon
+CARGO_TARGET_DIR=D:/b-p1 cargo test --workspace --exclude retinue-desktop
 ```
 
 ## Final report (plain text, last message)

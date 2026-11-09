@@ -4,7 +4,7 @@ import { outsideSender } from './messageOrigin'
 import { agentLook, SHAPE_LABELS, type BlobLook } from '../blob/look'
 import { MAX_COMPANION_PEERS } from '../blob/companionLayout'
 import { BlobCanvas, type BlobMood } from '../blob/BlobCanvas'
-import { setAccentColor, setThemeStyle, themeStyle, useThemeStyle } from '../blob/bitbots'
+import { setAccentColor, setThemeStyle, themeStyle, useThemeStyle } from '../blob/retinue'
 import { PixelClouds } from './PixelClouds'
 import { AppWallpaper } from './AppWallpaper'
 import { applyFonts } from './fonts'
@@ -20,7 +20,8 @@ import type { DaemonSchedule } from './automationSchedule'
 import { previewSchedule } from './schedulePreview'
 import { isPendingPermissionLive, nextPermissionDeadline, selectPendingPermission } from './permissionSelection'
 import { ApprovalCard, type PermissionReplyOptions } from './ApprovalCard'
-import bloblexLogo from '../assets/bloblex-128.png'
+import retinueTileDark from '../assets/brand/retinue-tile-dark.png'
+import retinueTileLight from '../assets/brand/retinue-tile-light.png'
 import { sessionsForPauseRequest } from './trayActions'
 import { applyEvent, formatUnknownSafe, isPermissionReplyAllowed, labelize, isAutomation, normalizeQueueState, type Agent, type AutomationRun, type ChatMessage, type ConnectionState, type DaemonEvent, type PermissionRequest, type Project, type Runtime, type Session, type Snapshot } from '../types'
 import { agentColorHex } from './agentColor'
@@ -158,7 +159,7 @@ import { parseUnifiedDiff } from './diffParser'
 import type { QuickSwitcherItem } from './quickSwitcherModel'
 import { entityNoun, useEntityNoun } from './vocabulary'
 import { setRuntimeProviders } from '../blob/haze/runtimeRegistry'
-import { ensureDaemon, selectBackupExportPath, writeBackupExport, fetchSnapshot, getActiveRuntime, getActiveSession, inDesktop, inspectLocalFile, listenForActiveRuntime, listenForActiveSession, listenForDaemonConnection, listenForDaemonEvents, listenForOpenSettings, openInEditor, openProjectFolder, previewMode, quitBloblex, readBlobImport, readClipboardImage, refreshTrayMenu, resolveProjectFile, revealInExplorer, rpc, selectBlobImportPath, selectLocalFile, selectMarkdownExportPath, setActiveRuntime, setActiveSession, setCompanionMode, setCompanionMonitor, setCompanionSizePreset, setCompanionVisibility, showMainSettings, showMainWindow, stagePromptAttachment, startDaemonEventStream, writeMarkdownExport, currentCompanionMonitor } from '../tauri'
+import { ensureDaemon, selectBackupExportPath, writeBackupExport, fetchSnapshot, getActiveRuntime, getActiveSession, inDesktop, inspectLocalFile, listenForActiveRuntime, listenForActiveSession, listenForDaemonConnection, listenForDaemonEvents, listenForOpenSettings, openInEditor, openProjectFolder, previewMode, quitRetinue, readBlobImport, readClipboardImage, refreshTrayMenu, resolveProjectFile, revealInExplorer, rpc, selectBlobImportPath, selectLocalFile, selectMarkdownExportPath, setActiveRuntime, setActiveSession, setCompanionMode, setCompanionMonitor, setCompanionSizePreset, setCompanionVisibility, showMainSettings, showMainWindow, stagePromptAttachment, startDaemonEventStream, writeMarkdownExport, currentCompanionMonitor } from '../tauri'
 
 type AppliedModelState = { sessionId: string; model: string | null; hasSnapshot: boolean; loading: boolean }
 type MessageMenuTarget = { x: number; y: number; sessionId: string; messageId: string; text: string; latest: boolean; references: NonNullable<ChatMessage['references']>; attachments: Array<{ name: string; path: string }>; replyTo: ReplyTarget | null }
@@ -167,7 +168,7 @@ function cachedFont(key: string) { try { return localStorage.getItem(key) ?? '' 
 
 export function App() {
   const companion = new URLSearchParams(location.search).has('companion')
-  useEffect(() => { void applyFonts(cachedFont('bitbots.font'), cachedFont('bitbots.monoFont'), themeStyle()) }, [])
+  useEffect(() => { void applyFonts(cachedFont('retinue.font'), cachedFont('retinue.monoFont'), themeStyle()) }, [])
   const noun = useEntityNoun()
   const Noun = useEntityNoun({ capital: true })
   const platform = usePlatform()
@@ -180,8 +181,8 @@ export function App() {
   /** Off by default: the plan-usage bar along the bottom. */
   // Cached per window so the bar is in place on the first frame instead of
   // arriving with the setting and pushing a border in (8 November 2026).
-  const [usageBarEnabled, setUsageBarEnabled] = useState(() => { try { return localStorage.getItem('bitbots.usageBar') === '1' } catch { return false } })
-  useEffect(() => { try { localStorage.setItem('bitbots.usageBar', usageBarEnabled ? '1' : '0') } catch { /* the cache only avoids a jump */ } }, [usageBarEnabled])
+  const [usageBarEnabled, setUsageBarEnabled] = useState(() => { try { return localStorage.getItem('retinue.usageBar') === '1' } catch { return false } })
+  useEffect(() => { try { localStorage.setItem('retinue.usageBar', usageBarEnabled ? '1' : '0') } catch { /* the cache only avoids a jump */ } }, [usageBarEnabled])
   const [claudeWorkflowsEnabled, setClaudeWorkflowsEnabled] = useState(true)
   /** Separate from the bottom usage bar. */
   const [usageTipsEnabled, setUsageTipsEnabled] = useState(false)
@@ -219,7 +220,7 @@ export function App() {
   const [revertTarget, setRevertTarget] = useState<{ sessionId: string; file: Record<string, unknown> } | null>(null)
   const undoToasts = useUndoToasts()
   const changeExperiment = useCallback((name: ExperimentName, enabled: boolean) => setExperiments((current) => ({ ...current, [name]: enabled })), [])
-  /** True once the daemon has sent `appearance.style`, retiring the legacy bitbots switch. */
+  /** True once the daemon has sent `appearance.style`, retiring the legacy retinue switch. */
   const applyWindowSetting = useCallback((key: string, value: unknown) => {
     if (key === 'composer.sendShortcut') { setSendShortcut(normalizeSendShortcut(value)); return }
     if (key === 'shortcuts.bindings') { setShortcutBindings(normalizeBindings(value)); return }
@@ -244,16 +245,16 @@ export function App() {
     else if (key === 'speech.enabled') setSpeechEnabled(value !== false)
     else if (key === 'speech.model') setSpeechModel(typeof value === 'string' && value ? value : DEFAULT_SPEECH_MODEL_ID)
     else if (key === 'experimental.runtimeLogos') setRuntimeLogos(value === true)
-    else if (key === 'appearance.style') { if (typeof value === 'string') { const style = normalizeThemeStyle(value); setThemeStyle(style); void applyFonts(cachedFont('bitbots.font'), cachedFont('bitbots.monoFont'), style) } }
+    else if (key === 'appearance.style') { if (typeof value === 'string') { const style = normalizeThemeStyle(value); setThemeStyle(style); void applyFonts(cachedFont('retinue.font'), cachedFont('retinue.monoFont'), style) } }
     else if (key === 'appearance.accent') setAccentColor(normalizeAccent(value))
-    else if (key === 'appearance.font' || key === 'appearance.monoFont') { try { localStorage.setItem(key === 'appearance.font' ? 'bitbots.font' : 'bitbots.monoFont', typeof value === 'string' ? value : '') } catch {}; void applyFonts(cachedFont('bitbots.font'), cachedFont('bitbots.monoFont'), themeStyle()) }
+    else if (key === 'appearance.font' || key === 'appearance.monoFont') { try { localStorage.setItem(key === 'appearance.font' ? 'retinue.font' : 'retinue.monoFont', typeof value === 'string' ? value : '') } catch {}; void applyFonts(cachedFont('retinue.font'), cachedFont('retinue.monoFont'), themeStyle()) }
     else if (key === 'appearance.density') hydrateDensity(value)
     else if (key === 'appearance.theme' || key === 'appearance.textSize') {
       try {
-        const saved = JSON.parse(localStorage.getItem('bloblex.appearance') || '{}') as { theme?: ThemeChoice; textSize?: TextSizeChoice }
+        const saved = JSON.parse(localStorage.getItem('retinue.appearance') || '{}') as { theme?: ThemeChoice; textSize?: TextSizeChoice }
         if (key === 'appearance.theme') saved.theme = value === 'dark' || value === 'light' ? value : 'system'
         else saved.textSize = ['small','default','large','larger'].includes(String(value)) ? value as TextSizeChoice : 'default'
-        localStorage.setItem('bloblex.appearance', JSON.stringify(saved))
+        localStorage.setItem('retinue.appearance', JSON.stringify(saved))
         if (!companion) applyAppearance(document.documentElement, saved.theme ?? 'system', saved.textSize ?? 'default')
         else applySurfaceAppearance(document.documentElement, saved.theme ?? 'system', saved.textSize ?? 'default', true)
       } catch { /* Settings remain persisted by the daemon. */ }
@@ -291,7 +292,7 @@ export function App() {
   const launchGeneration = useRef(0)
   const launchAbort = useRef<AbortController | null>(null)
   const [priorAppUse] = useState(() => {
-    try { return ['bloblex.firstRun.connected', 'bloblex.profile.name', 'bloblex.profile.skipped', 'bloblex.sessions.seen', 'bloblex.roster.expanded', 'bloblex.sidebar.pins', 'bloblex.selectedAgentId'].some((key) => localStorage.getItem(key) !== null) }
+    try { return ['retinue.firstRun.connected', 'retinue.profile.name', 'retinue.profile.skipped', 'retinue.sessions.seen', 'retinue.roster.expanded', 'retinue.sidebar.pins', 'retinue.selectedAgentId'].some((key) => localStorage.getItem(key) !== null) }
     catch { return false }
   })
   const [onboardingVisible, setOnboardingVisible] = useState(false)
@@ -345,7 +346,7 @@ export function App() {
   const replyTargetRef = useRef<ReplyTarget | null>(null)
   replyTargetRef.current = replyTarget
   const [attachments, setAttachments] = useState<ComposerAttachment[]>([])
-  // A document, audio or video file attached by path. Bitbots does not read it; the message names it and the agent opens it itself.
+  // A document, audio or video file attached by path. Retinue does not read it; the message names it and the agent opens it itself.
   const [localFile, setLocalFile] = useState<LocalFileRef | null>(null)
   const [localFileError, setLocalFileError] = useState<string | null>(null)
   const attachmentsRef = useRef<ComposerAttachment[]>([])
@@ -432,10 +433,10 @@ export function App() {
     }
   }, [])
   const [permissionClock, setPermissionClock] = useState(() => Date.now())
-  const [inspectorOpen, setInspectorOpen] = useState(() => storageFlag('bloblex.inspector.open'))
+  const [inspectorOpen, setInspectorOpen] = useState(() => storageFlag('retinue.inspector.open'))
   /** The per-bot conversations column; open unless it was closed before. */
-  const [convosOpen, setConvosOpen] = useState(() => { try { return localStorage.getItem('bloblex.conversations.open') !== '0' } catch { return true } })
-  const setConvosVisible = (open: boolean) => { setConvosOpen(open); try { localStorage.setItem('bloblex.conversations.open', open ? '1' : '0') } catch { /* preference only */ } }
+  const [convosOpen, setConvosOpen] = useState(() => { try { return localStorage.getItem('retinue.conversations.open') !== '0' } catch { return true } })
+  const setConvosVisible = (open: boolean) => { setConvosOpen(open); try { localStorage.setItem('retinue.conversations.open', open ? '1' : '0') } catch { /* preference only */ } }
   const [quickSwitcherOpen, setQuickSwitcherOpen] = useState(false)
   const openQuickSwitcher = useCallback(() => setQuickSwitcherOpen(true), [])
   const [pins, setPins] = useState<SidebarPins>(() => companion ? emptyPins() : readPins())
@@ -538,7 +539,7 @@ export function App() {
     void rpc<Record<string, unknown>>('settings.get').then((result) => {
       const values = result.settings && typeof result.settings === 'object' ? result.settings as Record<string, unknown> : result
       if (!active) return
-      for (const key of ['appearance.style', 'appearance.accent', 'appearance.density', 'appearance.font', 'appearance.monoFont', 'appearance.theme', 'appearance.textSize', 'hints.seen', 'onboarding.tour', 'claude.enableWorkflows', 'automations.paused', 'power.keepAwake', 'speech.engine', 'speech.cloud.consent', 'composer.sendShortcut', 'shortcuts.bindings', 'experimental.bitbots', 'experimental.usageBar', 'experimental.usageTips', 'experimental.usageTipDismissals', 'experimental.activityDetails', 'experimental.runtimeLogos', ...EXPERIMENTS.map(({ name }) => `experimental.${name}`), 'companion.pinnedBlobs', 'speech.enabled', 'speech.model', BUSY_SEND_SETTING, 'exec_gate.codex.steer']) applyWindowSetting(key, values[key])
+      for (const key of ['appearance.style', 'appearance.accent', 'appearance.density', 'appearance.font', 'appearance.monoFont', 'appearance.theme', 'appearance.textSize', 'hints.seen', 'onboarding.tour', 'claude.enableWorkflows', 'automations.paused', 'power.keepAwake', 'speech.engine', 'speech.cloud.consent', 'composer.sendShortcut', 'shortcuts.bindings', 'experimental.retinue', 'experimental.usageBar', 'experimental.usageTips', 'experimental.usageTipDismissals', 'experimental.activityDetails', 'experimental.runtimeLogos', ...EXPERIMENTS.map(({ name }) => `experimental.${name}`), 'companion.pinnedBlobs', 'speech.enabled', 'speech.model', BUSY_SEND_SETTING, 'exec_gate.codex.steer']) applyWindowSetting(key, values[key])
       setWindowSettingsLoaded(true)
     }).catch(() => undefined)
     return () => { active = false }
@@ -564,7 +565,7 @@ export function App() {
       setNotificationSettingLoaded(true)
     }).catch(() => { if (active) setNotificationSettingLoaded(true) })
     let unlisten: (() => void) | undefined
-    void listenNative<boolean>('bloblex-notifications-enabled-changed', (payload) => setNotificationsEnabled(payload)).then((stop) => { unlisten = stop })
+    void listenNative<boolean>('retinue-notifications-enabled-changed', (payload) => setNotificationsEnabled(payload)).then((stop) => { unlisten = stop })
     return () => { active = false; unlisten?.() }
   }, [companion])
 
@@ -700,7 +701,7 @@ export function App() {
     if (seenLoaded.current || !snapshot || companion) return
     let stored: SeenSessions | null = null
     try {
-      const raw = localStorage.getItem('bloblex.sessions.seen')
+      const raw = localStorage.getItem('retinue.sessions.seen')
       if (raw) {
         const parsed: unknown = JSON.parse(raw)
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -712,7 +713,7 @@ export function App() {
     seenLoaded.current = true
     setSeenSessions(next)
     if (sessions.length > 0 || priorAppUse) {
-      try { localStorage.setItem('bloblex.sessions.seen', JSON.stringify(next)) } catch { /* Local persistence is best effort. */ }
+      try { localStorage.setItem('retinue.sessions.seen', JSON.stringify(next)) } catch { /* Local persistence is best effort. */ }
     }
   }, [sessions, companion])
 
@@ -757,7 +758,7 @@ export function App() {
   useEffect(() => {
     if (!seenLoaded.current) return
     if (!sessions.length && !priorAppUse) return
-    try { localStorage.setItem('bloblex.sessions.seen', JSON.stringify(seenSessions)) } catch { /* Local persistence is best effort. */ }
+    try { localStorage.setItem('retinue.sessions.seen', JSON.stringify(seenSessions)) } catch { /* Local persistence is best effort. */ }
   }, [seenSessions, sessions.length, priorAppUse])
 
   useEffect(() => {
@@ -860,7 +861,7 @@ export function App() {
     return () => { active = false }
   }, [companion, companionAgent?.id, activeSelectedAgent?.id, connection])
   const previousPermissionCue = useRef<string | null>(null)
-  // The bot's project name; a folder name only for a real project folder, never Bitbots' own per-bot workspace.
+  // The bot's project name; a folder name only for a real project folder, never Retinue's own per-bot workspace.
   const currentProjectName = conversationPlaceName(selectedSession, agents, projects)
   const headerAgent = selectedSession
     ? (selectedSession.agentId ? agents.find((agent) => agent.id === selectedSession.agentId) ?? null : null)
@@ -974,7 +975,7 @@ export function App() {
     const run = async () => {
       setLaunchServiceDown(false)
       setLaunchChecks([])
-      await runSteps([{ id: 'service', label: 'Connecting to the Bitbots service', timeoutMs: LAUNCH_TIMEOUTS.service, run: async (stageSignal) => {
+      await runSteps([{ id: 'service', label: 'Connecting to the Retinue service', timeoutMs: LAUNCH_TIMEOUTS.service, run: async (stageSignal) => {
         await ensureDaemon()
         throwIfLaunchAborted(stageSignal)
         const next = await fetchSnapshot()
@@ -1037,13 +1038,13 @@ export function App() {
 
   useEffect(() => {
     if (companion || launchVisible || onboardingVisible || onboardingCompleteThisRun || connection !== 'connected') return
-    const completeKey = 'bloblex.firstRun.complete'
+    const completeKey = 'retinue.firstRun.complete'
     const hasBlobs = (snapshot?.agents ?? []).length > 0
     const hasSessions = (snapshot?.sessions ?? []).length > 0
     try {
       if (hasBlobs || hasSessions || priorAppUse) {
         localStorage.setItem(completeKey, '1')
-        localStorage.setItem('bloblex.firstRun.connected', '1')
+        localStorage.setItem('retinue.firstRun.connected', '1')
       }
       else if (localStorage.getItem(completeKey) !== '1') setOnboardingVisible(true)
     } catch { if (!hasBlobs && !hasSessions && !priorAppUse) setOnboardingVisible(true) }
@@ -1053,7 +1054,7 @@ export function App() {
     if (companion || launchVisible || onboardingVisible || !pendingCompanionStartup) return
     const hasBlobs = (snapshot?.agents ?? []).length > 0
     let firstRunComplete = false
-    try { firstRunComplete = localStorage.getItem('bloblex.firstRun.complete') === '1' } catch { /* A blocked store defers companion startup until this run completes onboarding. */ }
+    try { firstRunComplete = localStorage.getItem('retinue.firstRun.complete') === '1' } catch { /* A blocked store defers companion startup until this run completes onboarding. */ }
     if (!hasBlobs && !firstRunComplete && !onboardingCompleteThisRun) return
     void setCompanionVisibility(true).catch((reason) => setError(messageOf(reason))).finally(() => setPendingCompanionStartup(false))
   }, [companion, launchVisible, onboardingVisible, onboardingCompleteThisRun, pendingCompanionStartup, snapshot?.agents])
@@ -1160,9 +1161,9 @@ export function App() {
     let cancelled = false
     let unlistenPause: (() => void) | undefined
     let unlistenNotice: (() => void) | undefined
-    void listenNative<string>('bloblex-tray-notice', (payload) => setError(payload)).then((stop) => { if (cancelled) stop(); else unlistenNotice = stop })
-    void listenNative('bloblex-pause-all-requested', () => {
-      if (!window.confirm('Pause all agents? Bitbots will send a cancellation request for every active session. A cancelled turn may not be resumable. Scheduled runs are paused too until you turn them back on in Schedules.')) return
+    void listenNative<string>('retinue-tray-notice', (payload) => setError(payload)).then((stop) => { if (cancelled) stop(); else unlistenNotice = stop })
+    void listenNative('retinue-pause-all-requested', () => {
+      if (!window.confirm('Pause all agents? Retinue will send a cancellation request for every active session. A cancelled turn may not be resumable. Scheduled runs are paused too until you turn them back on in Schedules.')) return
       void (async () => {
         try {
           await rpc('settings.set', { key: 'automations.paused', value: true }).then(() => setSchedulesPaused(true)).catch(() => undefined)
@@ -1204,7 +1205,7 @@ export function App() {
       const theme: ThemeChoice = settings['appearance.theme'] === 'dark' || settings['appearance.theme'] === 'light' ? settings['appearance.theme'] : 'system'
       const size: TextSizeChoice = ['small', 'default', 'large', 'larger'].includes(String(settings['appearance.textSize'])) ? settings['appearance.textSize'] as TextSizeChoice : 'default'
       applySurfaceAppearance(root, theme, size, companion)
-      try { localStorage.setItem('bloblex.appearance', JSON.stringify({ theme, textSize: size })) } catch { /* Daemon settings remain saved. */ }
+      try { localStorage.setItem('retinue.appearance', JSON.stringify({ theme, textSize: size })) } catch { /* Daemon settings remain saved. */ }
     }).catch(() => { appearanceHydrated.current = false })
   }, [connection])
 
@@ -2734,7 +2735,7 @@ ${fileReferenceText(sentFile)}` : typed
   const lastAgentIndex = conversationItems.reduce((last, item, index) => item.kind === 'message' && !isUserMessage(item.value) ? index : last, -1)
   // The details panel describes the open conversation, so it steps aside for the blob editor and Analytics.
   const detailsVisible = inspectorOpen && !blobPage && !analyticsOpen && !tasksOpen && !compareOpen
-  const toggleInspector = () => setInspectorOpen((open) => { localStorage.setItem('bloblex.inspector.open', open ? '0' : '1'); return !open })
+  const toggleInspector = () => setInspectorOpen((open) => { localStorage.setItem('retinue.inspector.open', open ? '0' : '1'); return !open })
   const editingAgent = blobPage?.mode === 'edit' ? agents.find((agent) => agent.id === blobPage.agentId) ?? null : null
   const otherNames = activeAgents(bots).filter((agent) => agent.id !== editingAgent?.id).map((agent) => agent.name)
   const fieldErrors = draft ? validateAgentDraft(draft, otherNames) : {}
@@ -2794,7 +2795,7 @@ ${fileReferenceText(sentFile)}` : typed
     { id: 'usage', kind: 'action', category: 'Go to', icon: 'usage', title: 'Usage', subtitle: 'Plan limits and tokens', searchText: 'Usage limits quota tokens' },
     { id: 'remote-devices', kind: 'action', category: 'Go to', icon: 'remote', title: 'Remote devices', subtitle: 'Reach your employees from a phone', searchText: 'Remote devices phone tablet browser pair mobile settings' },
     { id: 'settings', kind: 'action', category: 'Settings', icon: 'settings', title: 'Settings', subtitle: '', searchText: 'Settings preferences' },
-    { id: 'change-look', kind: 'action', category: 'Settings', icon: 'look', title: 'Change look', subtitle: 'Bitbots, Blobots and more looks, wallpaper, fonts', searchText: 'Change look appearance theme style bitbots blobots accent legacy pop dot frost wallpaper glass font colour' },
+    { id: 'change-look', kind: 'action', category: 'Settings', icon: 'look', title: 'Change look', subtitle: 'Retinue, Stone and more looks, wallpaper, fonts', searchText: 'Change look appearance theme style retinue stone accent legacy pop dot frost wallpaper glass font colour' },
     { id: 'find-agents', kind: 'action', category: 'Settings', icon: 'agents', title: 'Find coding agents', subtitle: 'Scan for Claude Code, Codex and OpenCode', searchText: 'Find coding agents runtime scan claude codex opencode' },
     { id: 'toggle-details', kind: 'action', category: 'Settings', icon: 'details', title: 'Toggle details panel', subtitle: '', searchText: 'Toggle details panel inspector rail' },
     { id: 'whats-new', kind: 'action', category: 'Help', icon: 'whats-new', title: 'What’s new', subtitle: 'Release notes', searchText: 'What is new changelog release notes version' },
@@ -2852,8 +2853,8 @@ ${fileReferenceText(sentFile)}` : typed
   }
   const finishOnboarding = () => {
     try {
-      localStorage.setItem('bloblex.firstRun.complete', '1')
-      localStorage.setItem('bloblex.firstRun.connected', '1')
+      localStorage.setItem('retinue.firstRun.complete', '1')
+      localStorage.setItem('retinue.firstRun.connected', '1')
     } catch { /* The flow remains complete for this run. */ }
     setOnboardingCompleteThisRun(true)
     setOnboardingVisible(false)
@@ -2883,7 +2884,7 @@ ${fileReferenceText(sentFile)}` : typed
     <main className={`app-shell ${detailsVisible ? 'inspector-open' : ''} ${convosOpen && activeSelectedAgent && !schedulesOpen && !tasksOpen && !compareOpen ? 'convos-open' : ''} ${reducedLaunchFade ? 'reduced-launch-fade' : ''}`} style={{ ...(accent ? { '--agent-accent': accent } : {}), ...(reducedLaunchFade ? { '--launch-fade-duration': '180ms' } : {}) } as React.CSSProperties}>
       <aside className="sidebar" aria-label="Agents">
         <div className="sidebar-top">
-          <div className="brand-lockup"><img className="brand-logo" src={bloblexLogo} alt="Bitbots logo" /><strong>Bitbots</strong></div>
+          <div className="brand-lockup"><img className="brand-logo theme-on-dark" src={retinueTileDark} alt="Retinue logo" /><img className="brand-logo theme-on-light" src={retinueTileLight} alt="" /><strong>Retinue</strong></div>
           <div className="sidebar-create-actions">
             <NeedsYouBell permissions={snapshot?.permissions ?? []} sessions={sessions} agents={agents} now={permissionClock} onOpen={(sessionId) => { const target = sessions.find((item) => item.id === sessionId); if (!target) return; if (isSideSession(target)) openSideConversation(sessionId); else { setSideSessionId(null); selectSession(target) } }} />
             <button type="button" className={`icon-button${tasksOpen ? ' active' : ''}`} title="Tasks" aria-label="Tasks" aria-pressed={tasksOpen} disabled={connection !== 'connected'} onClick={() => { setTasksOpen((open) => !open); setSchedulesOpen(false); setAnalyticsOpen(false); setBlobPage(null) }}><ListChecks size={16} /></button>
@@ -2946,7 +2947,7 @@ ${fileReferenceText(sentFile)}` : typed
           onWhatsNew={() => setWhatsNewOpen(true)}
           schedulesActive={schedulesOpen}
           onSettings={() => { setSettingsInitialPage('General'); setSettingsFocus(null); setSettingsSheet(true) }}
-          onQuit={() => void quitBloblex()}
+          onQuit={() => void quitRetinue()}
         />
       </aside>
 
@@ -2977,7 +2978,7 @@ ${fileReferenceText(sentFile)}` : typed
             <button className={`icon-button ${inspectorOpen ? 'active' : ''}`} title="Details" aria-label="Toggle context pane" aria-pressed={inspectorOpen} onClick={toggleInspector}><PanelRight size={16} /></button>
             <div className="more-menu-wrap" onKeyDown={(event) => { if (event.key === 'Escape') { setMoreOpen(false); restoreMoreFocus() } }}>
               <button className="icon-button" title="More options" aria-label="More options" aria-haspopup="menu" aria-expanded={moreOpen} onClick={() => setMoreOpen((open) => !open)}><MoreHorizontal size={17} /></button>
-              {moreOpen && <div className="menu-surface more-menu" role="menu"><button className="menu-item" role="menuitem" disabled={refreshing} onClick={() => { setMoreOpen(false); void refresh() }}><RefreshCw size={15} />Refresh state</button><button className="menu-item" role="menuitem" disabled={!selectedSession} onClick={() => { setMoreOpen(false); showUsage() }}><Gauge size={15} />Usage details</button><button className="menu-item" role="menuitem" disabled={!selectedSession} onClick={() => { setMoreOpen(false); void exportConversation(true) }}><ClipboardCopy size={15} />Copy as Markdown</button><button className="menu-item" role="menuitem" disabled={!selectedSession} onClick={() => { setMoreOpen(false); void exportConversation(false) }}><FileDown size={15} />Export as Markdown…</button>{activeSelectedAgent && <button className="menu-item" role="menuitem" onClick={() => { setMoreOpen(false); openEdit(activeSelectedAgent) }}><Settings2 size={15} />{Noun} settings</button>}{selectedSession && !sideSession && handoffChoices > 0 && <button className="menu-item" role="menuitem" onClick={() => { setMoreOpen(false); setHandoffError(null); setHandoffLimited(null); setHandoffOpen(true) }}><ArrowUpRight size={15} />Continue in another {noun}…</button>}<span className="menu-separator" />{platform.tray && <button role="menuitem" className="menu-item danger" onClick={() => void quitBloblex()}><X size={15} />Quit Bitbots</button>}</div>}
+              {moreOpen && <div className="menu-surface more-menu" role="menu"><button className="menu-item" role="menuitem" disabled={refreshing} onClick={() => { setMoreOpen(false); void refresh() }}><RefreshCw size={15} />Refresh state</button><button className="menu-item" role="menuitem" disabled={!selectedSession} onClick={() => { setMoreOpen(false); showUsage() }}><Gauge size={15} />Usage details</button><button className="menu-item" role="menuitem" disabled={!selectedSession} onClick={() => { setMoreOpen(false); void exportConversation(true) }}><ClipboardCopy size={15} />Copy as Markdown</button><button className="menu-item" role="menuitem" disabled={!selectedSession} onClick={() => { setMoreOpen(false); void exportConversation(false) }}><FileDown size={15} />Export as Markdown…</button>{activeSelectedAgent && <button className="menu-item" role="menuitem" onClick={() => { setMoreOpen(false); openEdit(activeSelectedAgent) }}><Settings2 size={15} />{Noun} settings</button>}{selectedSession && !sideSession && handoffChoices > 0 && <button className="menu-item" role="menuitem" onClick={() => { setMoreOpen(false); setHandoffError(null); setHandoffLimited(null); setHandoffOpen(true) }}><ArrowUpRight size={15} />Continue in another {noun}…</button>}<span className="menu-separator" />{platform.tray && <button role="menuitem" className="menu-item danger" onClick={() => void quitRetinue()}><X size={15} />Quit Retinue</button>}</div>}
             </div>
           </div>
         </header>
@@ -3197,11 +3198,11 @@ ${fileReferenceText(sentFile)}` : typed
       {changesFor && selectedSession?.id === changesFor.sessionId && !companion && <ChangesView sessionId={changesFor.sessionId} initialPath={changesFor.path} botName={activeSelectedAgent?.name ?? 'The employee'} onClose={() => setChangesFor(null)} onSendComments={(text) => sendReviewComments(changesFor.sessionId, text)} onCreatePr={(repository) => { setChangesFor(null); setPullRequestFor({ sessionId: changesFor.sessionId, repository }) }} />}
       {pullRequestFor && selectedSession?.id === pullRequestFor.sessionId && <PullRequestDialog sessionId={pullRequestFor.sessionId} onCreated={() => void refresh()} repository={pullRequestFor.repository} botName={activeSelectedAgent?.name ?? 'The employee'} busy={['working', 'starting', 'waiting_permission', 'cancelling'].includes(selectedSession.state ?? '')} onSend={() => requestPullRequest(pullRequestFor.sessionId, pullRequestFor.repository)} onClose={() => setPullRequestFor(null)} />}
       {archivedBotsOpen && <ArchivedBots onClose={() => setArchivedBotsOpen(false)} onRestore={restoreAgent} onDelete={setPurgeTarget} />}
-      {purgeTarget && <ConfirmDialog title={`Permanently delete ${agents.find((agent) => agent.id === purgeTarget.id)?.name || purgeTarget.name || 'this employee'}?`} body="This permanently removes the employee, all its conversations, and every side-conversation it took part in, including those shown under other employees. Its scheduled automations and private memory are also removed. This cannot be undone. Project files and the coding agent's own history are kept. Stop any running work first." confirmLabel="Delete employee and conversations" cancelLabel="Keep employee" holdToConfirm successTitle="Employee deleted" successBody="The employee and its conversations were permanently removed from Bitbots." onConfirm={async () => { await rpc('agent.purge', { agentId: purgeTarget.id, confirm: true }); await refresh() }} onComplete={() => setPurgeTarget(null)} onCancel={() => setPurgeTarget(null)} />}
+      {purgeTarget && <ConfirmDialog title={`Permanently delete ${agents.find((agent) => agent.id === purgeTarget.id)?.name || purgeTarget.name || 'this employee'}?`} body="This permanently removes the employee, all its conversations, and every side-conversation it took part in, including those shown under other employees. Its scheduled automations and private memory are also removed. This cannot be undone. Project files and the coding agent's own history are kept. Stop any running work first." confirmLabel="Delete employee and conversations" cancelLabel="Keep employee" holdToConfirm successTitle="Employee deleted" successBody="The employee and its conversations were permanently removed from Retinue." onConfirm={async () => { await rpc('agent.purge', { agentId: purgeTarget.id, confirm: true }); await refresh() }} onComplete={() => setPurgeTarget(null)} onCancel={() => setPurgeTarget(null)} />}
       {archiveTarget && <ConfirmDialog title={`Archive ${archiveTarget.name}?`} body={experiments.undo ? "It leaves the sidebar and companion. Its conversations stay saved. You can undo this for eight seconds." : "It leaves the sidebar and companion. Its conversations stay saved. Restore it from Archived employees in your profile menu."} confirmLabel={`Archive ${noun}`} cancelLabel="Keep it" tone="warning" icon={<BlobCanvas decorative color={agentColorHex(archiveTarget.color)} size={34} mood="sleeping" look={agentLook(archiveTarget)} label={`${archiveTarget.name} preview`} />} onConfirm={() => void confirmArchive()} onCancel={() => setArchiveTarget(null)} />}
-      {sessionDeleteTarget && <ConfirmDialog title="Delete this conversation?" body="This removes it and its messages from Bitbots. The coding agent's own history is not touched." confirmLabel="Delete" cancelLabel="Cancel" holdToConfirm successTitle="Conversation deleted" successBody={experiments.undo ? "Deletion is scheduled. Use Undo within eight seconds to keep the conversation." : "This conversation and its messages were removed from Bitbots."} onConfirm={async () => { if (experiments.undo) await deleteConversation(sessionDeleteTarget); else await rpc('session.delete', { sessionId: sessionDeleteTarget.id }) }} onComplete={() => { setSessionDeleteTarget(null); focusSidebarBlob() }} onCancel={() => { const id = sessionDeleteTarget.id; setSessionDeleteTarget(null); focusSidebarSession(id) }} />}
+      {sessionDeleteTarget && <ConfirmDialog title="Delete this conversation?" body="This removes it and its messages from Retinue. The coding agent's own history is not touched." confirmLabel="Delete" cancelLabel="Cancel" holdToConfirm successTitle="Conversation deleted" successBody={experiments.undo ? "Deletion is scheduled. Use Undo within eight seconds to keep the conversation." : "This conversation and its messages were removed from Retinue."} onConfirm={async () => { if (experiments.undo) await deleteConversation(sessionDeleteTarget); else await rpc('session.delete', { sessionId: sessionDeleteTarget.id }) }} onComplete={() => { setSessionDeleteTarget(null); focusSidebarBlob() }} onCancel={() => { const id = sessionDeleteTarget.id; setSessionDeleteTarget(null); focusSidebarSession(id) }} />}
       {textPrompt && <TextPromptDialog {...textPrompt} onCancel={() => setTextPrompt(null)} onSubmit={async (value) => { try { await textPrompt.onSubmit(value); setTextPrompt(null) } catch (reason) { setError(messageOf(reason)) } }} />}
-      {projectDelete && <ConfirmDialog title={`Delete ${projectDelete.name}?`} body="The project is removed from Bitbots, with any approvals saved only for it. Its conversations stay, under No project. The folder on disk is not touched." confirmLabel="Delete project" cancelLabel="Keep it" tone="danger" onConfirm={() => { const project = projectDelete; setProjectDelete(null); const memberIds = agents.filter((agent) => agent.projectId === project.id).map((agent) => agent.id); if (experiments.undo) void removeProject(project, memberIds); else void projectAction('project.delete', { projectId: project.id }) }} onCancel={() => setProjectDelete(null)} />}
+      {projectDelete && <ConfirmDialog title={`Delete ${projectDelete.name}?`} body="The project is removed from Retinue, with any approvals saved only for it. Its conversations stay, under No project. The folder on disk is not touched." confirmLabel="Delete project" cancelLabel="Keep it" tone="danger" onConfirm={() => { const project = projectDelete; setProjectDelete(null); const memberIds = agents.filter((agent) => agent.projectId === project.id).map((agent) => agent.id); if (experiments.undo) void removeProject(project, memberIds); else void projectAction('project.delete', { projectId: project.id }) }} onCancel={() => setProjectDelete(null)} />}
       {pendingBlobImport && <ImportBlobDialog blob={pendingBlobImport} runtimes={runtimes} onCancel={() => { setPendingBlobImport(null); restoreCreateFocus() }} onCreate={(runtimeId) => createImportedBlob(pendingBlobImport, runtimeId)} />}
     </main>
     </>
@@ -3266,7 +3267,7 @@ function ConversationCrumb({ project, title }: { project: string | null; title: 
 
 function EmptyConversation({ connected, hasRuntime, hasAgent, runtimeReady, runtimeStatus, accent, mood, agentName, look, onNewSession, onCreate, onRefresh }: { connected: boolean; hasRuntime: boolean; hasAgent: boolean; runtimeReady: boolean; runtimeStatus?: string; accent: string; mood: BlobMood; agentName: string; look: BlobLook | null; onNewSession: (anchor?: HTMLElement | null) => void; onCreate: () => void; onRefresh: () => void }) {
   const noun = useEntityNoun()
-  const canvas = hasAgent ? <BlobCanvas color={accent} size={128} mood={connected ? mood : 'offline'} effectOverscanTop={135} look={look} label={agentName} /> : <BlobCanvas color="#e6e9ee" size={128} mood={connected ? 'idle' : 'offline'} effectOverscanTop={135} label="Bitbots" />
+  const canvas = hasAgent ? <BlobCanvas color={accent} size={128} mood={connected ? mood : 'offline'} effectOverscanTop={135} look={look} label={agentName} /> : <BlobCanvas color="#e6e9ee" size={128} mood={connected ? 'idle' : 'offline'} effectOverscanTop={135} label="Frost" />
   const needsRuntimeRecovery = hasAgent && !runtimeReady
   const heading = !connected ? 'Connect to your local runtime' : needsRuntimeRecovery ? 'Coding agent needs attention' : hasAgent ? `Start a conversation with ${agentName}` : hasRuntime ? `Create your first ${noun}` : 'Find your coding agent'
   const description = !connected ? 'Reconnect to load the latest state.' : needsRuntimeRecovery ? runtimeStatus === 'error' ? 'Update or repair this CLI in Settings → Coding agents, then scan again.' : 'This coding agent is offline. Open Settings → Coding agents and scan again before starting a conversation.' : hasAgent ? 'Your coding agent starts when you send the first message.' : hasRuntime ? `An ${noun} is a teammate on one of your coding agents.` : 'Scan this computer for Claude Code, Codex or OpenCode.'
@@ -3379,13 +3380,13 @@ function readStoredAgentId() {
     if (params.get('preset') === 'message-links' || params.has('scene')) return 'agent-codex'
     if (params.get('agent')) return params.get('agent')
   }
-  try { return localStorage.getItem('bloblex.selectedAgentId') } catch { return null }
+  try { return localStorage.getItem('retinue.selectedAgentId') } catch { return null }
 }
 
 function writeStoredAgentId(id: string | null) {
   try {
-    if (id) localStorage.setItem('bloblex.selectedAgentId', id)
-    else localStorage.removeItem('bloblex.selectedAgentId')
+    if (id) localStorage.setItem('retinue.selectedAgentId', id)
+    else localStorage.removeItem('retinue.selectedAgentId')
   } catch { /* A blocked Storage API must not break in-memory selection. */ }
 }
 
@@ -3487,7 +3488,7 @@ function ActivityItem({ item, onDiff, runtime, onSignedIn }: { item: Conversatio
     {friendly?.detail && <p>{friendly.detail}</p>}
     {friendly?.action?.kind === 'sign-in' && runtime && <SignInHelp provider={runtime.provider} runtimeId={runtime.id} onChecked={onSignedIn} />}
     {detail && <p>{detail}</p>}
-    {item.activityKind === 'turn' && activity.delivery === 'unknown' && <p className="activity-delivery-note">Bitbots could not confirm the employee received this message, so it may have reached it. It will not be sent again on its own; check the conversation before sending it again.</p>}
+    {item.activityKind === 'turn' && activity.delivery === 'unknown' && <p className="activity-delivery-note">Retinue could not confirm the employee received this message, so it may have reached it. It will not be sent again on its own; check the conversation before sending it again.</p>}
     {typeof activity.exitCode === 'number' && <small>Exit code {activity.exitCode}</small>}
     {previewPath && <button type="button" className="ghost-button small activity-diff-button" aria-expanded={previewing} onClick={() => setPreviewing((value) => !value)}>{previewing ? 'Hide preview' : 'Preview file'}</button>}
     {previewing && previewPath && <MediaPreview path={previewPath} />}
@@ -3595,7 +3596,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
   sessionRef.current = session
   dictationSurfaceRef.current = dictationSurface
   const clock = useClock(10_000)
-  // Wave 13: Claude Code sessions the owner started outside Bitbots, when watching is on.
+  // Wave 13: Claude Code sessions the owner started outside Retinue, when watching is on.
   const outsideSessions = useOutsideSessions(connected)
   const derived = deriveCompanionStatus({ connected, runtime, session, permissionPending: !!permission, composing: !!draft.trim(), now: clock })
   const displayMood = derived.mood
@@ -3623,7 +3624,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
     let cancelled = false
     let unlisten: (() => void) | undefined
     let timer = 0
-    void listenNative<boolean>('bloblex-companion-visible-changed', (payload) => {
+    void listenNative<boolean>('retinue-companion-visible-changed', (payload) => {
       if (!payload) return
       setPopIn(true)
       window.clearTimeout(timer)
@@ -3878,7 +3879,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
     if (!isNative() || !speechEnabled) return
     let unlisten: (() => void) | undefined
     let cancelled = false
-    void currentWebviewWindow().listen('bloblex-dictation-toggle', () => {
+    void currentWebviewWindow().listen('retinue-dictation-toggle', () => {
       if (chatOpenRef.current) return
       openViewRef.current('chat')
       setDictateOnOpen(true)
@@ -4080,7 +4081,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
     const unsubs: Array<() => void> = []
     const add = (unlisten: () => void) => { if (disposed) unlisten(); else unsubs.push(unlisten) }
     void (async () => {
-      add(await listenNative<{ surface: string }>('bloblex-dictation-surface', (payload) => {
+      add(await listenNative<{ surface: string }>('retinue-dictation-surface', (payload) => {
         const isCompanion = payload.surface === 'companion'
         setDictationSurface(isCompanion ? 'companion' : 'none')
         if (isCompanion) {
@@ -4090,7 +4091,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
           playDictationCue('record-start')
         }
       }))
-      add(await listenNative<{ type: string; text?: string }>('bloblex-dictation', (payload) => {
+      add(await listenNative<{ type: string; text?: string }>('retinue-dictation', (payload) => {
         if (dictationSurfaceRef.current !== 'companion') return
         const { type, text } = payload
         if (type === 'loading') setDictationWarming(true)
@@ -4110,7 +4111,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
           window.setTimeout(() => { setDictationPhase('idle'); setDictationSurface('none') }, 2400)
         }
       }))
-      add(await listenNative<{ level: number }>('bloblex-dictation-level', (payload) => setDictationLevel(payload.level)))
+      add(await listenNative<{ level: number }>('retinue-dictation-level', (payload) => setDictationLevel(payload.level)))
     })().catch(() => undefined)
     return () => { disposed = true; unsubs.forEach((unlisten) => unlisten()) }
   }, [])
@@ -4129,7 +4130,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
   const peekNames = (peek?.ids ?? []).map((id) => agents.find((item) => item.id === id)?.name).filter((value): value is string => !!value)
   const dragChips = dragPath ? dropChips(dragPath, dragSize) : null
   const color = agent ? agentColorHex(agent.color) : ''
-  const name = agent?.name ?? (runtime ? labelize(runtime.provider) : 'Bitbots')
+  const name = agent?.name ?? (runtime ? labelize(runtime.provider) : 'Retinue')
   const peers = activeAgents(agents).filter((item) => item.id !== agent?.id).slice(0, 4)
   const waitingAgents = waitingAgentsOf(activeAgents(agents), sessions, runtimes, connected)
   const openNextWaiting = () => { const next = nextWaitingAgent(waitingAgents, agent?.id); if (next) { playCompanionCue('blip'); onSelectAgent(next); setView('chat') } }
@@ -4294,7 +4295,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
               </div>
             </div>
             {soundError && <p className="companion-drop-error cset-error" role="alert">{soundError}</p>}
-            <div className="cset-footer"><button type="button" className="btn primary" onClick={() => onOpenSettings()}>Open Bitbots settings</button><button type="button" className="btn secondary" onClick={() => void setCompanionVisibility(false)}>Hide companion</button></div>
+            <div className="cset-footer"><button type="button" className="btn primary" onClick={() => onOpenSettings()}>Open Retinue settings</button><button type="button" className="btn secondary" onClick={() => void setCompanionVisibility(false)}>Hide companion</button></div>
   </>
   // Every bot is listed; the bots chosen under "Teammates on the island" come first, after the CEO.
   const pinRank = (id: string) => { const at = pinned.indexOf(id); return at < 0 ? pinned.length : at }
@@ -4307,13 +4308,13 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
     </div>
   const dropPane = <div className="island-card drop-card over">
       <span className="card-bot">{focusBlob(58)}</span>
-      <div className="card-stack"><div className="title">Drop to hand this file to {name}</div><div className="drop-tags">{dragChips ? <><span>{dragChips.name}</span><span>{dragChips.type}</span><span>{dragChips.size}</span></> : <><span>Name</span><span>Type</span><span>Size</span></>}</div><div className="sub">Bitbots checks the path only. It never reads file contents.</div></div>
+      <div className="card-stack"><div className="title">Drop to hand this file to {name}</div><div className="drop-tags">{dragChips ? <><span>{dragChips.name}</span><span>{dragChips.type}</span><span>{dragChips.size}</span></> : <><span>Name</span><span>Type</span><span>Size</span></>}</div><div className="sub">Retinue checks the path only. It never reads file contents.</div></div>
     </div>
   const sidePane = !sideSession ? null : <div className="island-card chat-card companion-chat-view companion-side-view">
       <div className="companion-side-head" data-companion-no-drag="">
         <button type="button" className="icon-btn" aria-label="Back to the conversation" title="Back" onClick={() => setSideId(null)}><ChevronLeft size={13} /></button>
         <SideConversationHeader peer={agents.find((item) => item.id === sideSession.link?.peerAgentId)} peerName={agents.find((item) => item.id === sideSession.link?.peerAgentId)?.name ?? sideSession.link?.peerName ?? 'Teammate'} target={agents.find((item) => item.id === sideSession.agentId)} targetName={agents.find((item) => item.id === sideSession.agentId)?.name ?? 'Teammate'} topic={sideSession.link?.topic ?? sideSession.title ?? null} />
-        <button type="button" className="icon-btn" aria-label="Open in Bitbots" title="Open in Bitbots" onClick={() => onOpenSession?.(sideSession.id)}><ArrowUpRight size={11} /></button>
+        <button type="button" className="icon-btn" aria-label="Open in Retinue" title="Open in Retinue" onClick={() => onOpenSession?.(sideSession.id)}><ArrowUpRight size={11} /></button>
       </div>
       <div className="chat-log companion-side-log" data-companion-no-drag="">
         {!Array.isArray(sideSession.messages) && <p className="companion-empty" role="status">Loading the conversation…</p>}
@@ -4323,7 +4324,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
     </div>
   const shell = <div className="companion-shell">
     <aside className="cs-roster" aria-label={`All ${nouns}`}>
-      <div className="cs-brand" data-tauri-drag-region><span data-tauri-drag-region>Bitbots</span><NeedsYouBadge count={waitingAgents.length} compact onOpen={openNextWaiting} /></div>
+      <div className="cs-brand" data-tauri-drag-region><span data-tauri-drag-region>Retinue</span><NeedsYouBadge count={waitingAgents.length} compact onOpen={openNextWaiting} /></div>
       <div className="cs-bots" data-companion-no-drag="">{roster.map(({ item, state, session: rowSession }, rowIndex) => {
         const focused = item.id === agent?.id
         return <button key={item.id} type="button" className={`cs-bot${focused ? ' on' : ''}${state === 'offline' ? ' offline' : ''}${state === 'waiting' ? ' state-waiting' : ''}`} aria-keyshortcuts={[rowIndex < 9 ? `Control+${rowIndex + 1}` : '', state === 'waiting' && roster.findIndex((entry) => entry.state === 'waiting') === rowIndex ? 'N' : ''].filter(Boolean).join(' ') || undefined} aria-current={focused || undefined} aria-label={`${item.name}${state === 'waiting' ? ', needs you' : state === 'working' ? ', working' : ''}`} onClick={() => { selectTeamBlob(item); openView('chat') }}>
@@ -4347,7 +4348,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
         <ApprovalPill mode={approvalMode} compact />
         <span className="cs-head-actions" data-companion-no-drag="">
           <button type="button" aria-label="New conversation" title="New conversation" disabled={!canStart} onClick={(event) => { openView('chat'); onNewSession(event.currentTarget) }}><Plus size={14} /></button>
-          <button type="button" aria-label="Open in Bitbots" title="Open in Bitbots" onClick={onOpenMain}><ArrowUpRight size={14} /></button>
+          <button type="button" aria-label="Open in Retinue" title="Open in Retinue" onClick={onOpenMain}><ArrowUpRight size={14} /></button>
           <button type="button" className="cs-larger" aria-label={large ? 'Restore size' : 'Make larger'} aria-pressed={large} title={large ? 'Restore size' : 'Make larger'} onClick={toggleLarge}>{large ? <Minimize2 size={14} /> : <Maximize2 size={14} />}</button>
           <button type="button" className="companion-collapse" aria-label="Collapse companion" title="Collapse" disabled={!!permission} onClick={toggleExpanded}><ChevronDown size={14} /></button>
         </span>
@@ -4389,7 +4390,7 @@ function formatBytes(bytes: number) { return bytes < 1024 ? `${bytes} B` : bytes
 function formatCount(value: number) { return new Intl.NumberFormat(undefined, { notation: value >= 10_000 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(value) }
 
 /** The user-facing sentence for a message the daemon refused, never a raw code. */
-const AMBIGUOUS_SEND_COPY = 'Bitbots could not confirm the employee received this. It may already have reached it, so check the conversation before sending it again.'
+const AMBIGUOUS_SEND_COPY = 'Retinue could not confirm the employee received this. It may already have reached it, so check the conversation before sending it again.'
 /** How long a burst of `replay.gap` events waits before it becomes one reload. */
 const GAP_RELOAD_DELAY_MS = 250
 

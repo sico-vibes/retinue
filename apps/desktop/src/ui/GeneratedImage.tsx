@@ -79,7 +79,7 @@ function Thumbnail({ sessionId, meta, compact }: { sessionId: string | null | un
   const [open, setOpen] = useState(false)
   const trigger = useRef<HTMLButtonElement>(null)
   const fallbackName = meta.name ?? 'Generated image'
-  if (!inDesktop) return <div className="media-card"><span className="media-card-icon" aria-hidden="true"><ImageOff size={16} /></span><span className="media-card-text"><strong title={fallbackName}>{fallbackName}</strong><small>Open Bitbots on your computer to see this image.</small></span></div>
+  if (!inDesktop) return <div className="media-card"><span className="media-card-icon" aria-hidden="true"><ImageOff size={16} /></span><span className="media-card-text"><strong title={fallbackName}>{fallbackName}</strong><small>Open Retinue on your computer to see this image.</small></span></div>
   if (state.phase === 'loading') return <div className="media-card loading" aria-busy="true" aria-label={`Loading ${fallbackName}`}><LoaderCircle size={15} className="spinning" aria-hidden="true" /><span>Loading {fallbackName}</span></div>
   if (state.phase === 'error' || state.reply.status !== 'ok' || !state.reply.dataUrl) {
     const line = state.phase === 'error' ? state.message : state.reply.reason ?? 'This image cannot be shown.'

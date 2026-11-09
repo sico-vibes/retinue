@@ -10,7 +10,7 @@ superseded and are in git history. These diagrams describe the intended behaviou
 [PROTOCOL.md](PROTOCOL.md); they do not claim the flows are implemented. Section numbers below
 (for example `PROTOCOL §4.3`) refer to that document. Participants are **Device** (the PWA),
 **Tailscale** (`tailscaled` on the host, which terminates HTTPS and forwards to loopback),
-**Gateway** (the second listener in `bitbotsd`) and **Daemon** (in-process dispatch); **Owner**
+**Gateway** (the second listener in `retinued`) and **Daemon** (in-process dispatch); **Owner**
 is the human on the host making a local decision.
 
 ---

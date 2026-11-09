@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UpdateInfo } from '../updatesContract'
 import { listenForUpdateAvailable, updatesGetState } from '../tauri'
 
-export const DISMISSED_UPDATE_VERSION_KEY = 'bloblex.update.dismissedVersion'
+export const DISMISSED_UPDATE_VERSION_KEY = 'retinue.update.dismissedVersion'
 
 export function readDismissedUpdateVersion(): string | null {
   try {

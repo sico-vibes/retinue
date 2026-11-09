@@ -3,7 +3,7 @@
 // those and the handful of choices the editor offers.
 
 import { entityNoun } from './vocabulary'
-import { themeStyle } from '../blob/bitbots'
+import { themeStyle } from '../blob/retinue'
 
 export type SchedulePreset = 'daily' | 'weekdays' | 'weekly' | 'hours' | 'once' | 'custom'
 

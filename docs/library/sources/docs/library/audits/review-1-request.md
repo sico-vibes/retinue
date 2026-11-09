@@ -1,6 +1,6 @@
 # Review request 1: the documentation library
 
-You are reviewing the documentation of the Bitbots repository in the worktree `D:\fx50` (branch `docs-library`). Read-only: change nothing. Reply with concrete problems, each with a file path and a line where possible, and a proposed fix. Group the reply into: structure, naming, style guide, index, document samples, factual or link problems, missing coverage. Mark each point as **must fix** (wrong, broken or misleading) or **should fix** (inconsistent or unclear). Do not repeat praise.
+You are reviewing the documentation of the Retinue repository in the worktree `D:\fx50` (branch `docs-library`). Read-only: change nothing. Reply with concrete problems, each with a file path and a line where possible, and a proposed fix. Group the reply into: structure, naming, style guide, index, document samples, factual or link problems, missing coverage. Mark each point as **must fix** (wrong, broken or misleading) or **should fix** (inconsistent or unclear). Do not repeat praise.
 
 ## What was done
 

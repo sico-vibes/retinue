@@ -90,7 +90,7 @@ Every control below exists because of that sentence, and the product says it in 
 - A user who turns approvals from remote on, sets bypass mode and loses a phone. The product
   warns, and bypass mode is already a typed-confirmation setting.
 - Data the user chooses to paste into a chat.
-- Tailscale itself being broken. Bitbots relies on WireGuard and the tailnet's access rules.
+- Tailscale itself being broken. Retinue relies on WireGuard and the tailnet's access rules.
 
 ## 8. Review checklist before P1 ships
 
@@ -141,8 +141,8 @@ Source: [REVIEW_NOTES.md](REVIEW_NOTES.md). These rows continue the table in sec
 |---|---|---|---|
 | T28 | A local process spoofs `tailscaled`: it connects straight to `127.0.0.1:<remote.port>` and forges `Tailscale-User-Login` or `Origin` | The cookie is required on every `/api/*` request; the login header and `Origin` are extra checks, never proof on their own; pairing still needs the live code and the owner's approval | A local process that can read the browser's cookie store already owns the user's account |
 | T29 | Other tailnet members, or people the node is shared with, reach the serve address | They need a pairing code and the owner's approval; the approval shows their Tailscale login; the Remote page says that everyone on the tailnet can reach the address and links to Tailscale's access rules | A member who shoulder-surfs a code still has to get past the owner's approval |
-| T30 | Accidental Funnel exposes the gateway to the internet | Bitbots never runs `tailscale funnel`; it checks Funnel is off for its port at start and on each status refresh, and stops serving if Funnel appears | The owner turns Funnel on by hand between checks; the cookie and `Origin` checks still apply |
-| T31 | Bitbots clobbers the user's own `tailscale serve` setup | Never `serve reset`; add and remove only our own handler; fall back from 443 to 8443 when 443 is taken; refuse rather than overwrite | Tailscale CLI changes; covered by tests that assert the exact commands issued |
+| T30 | Accidental Funnel exposes the gateway to the internet | Retinue never runs `tailscale funnel`; it checks Funnel is off for its port at start and on each status refresh, and stops serving if Funnel appears | The owner turns Funnel on by hand between checks; the cookie and `Origin` checks still apply |
+| T31 | Retinue clobbers the user's own `tailscale serve` setup | Never `serve reset`; add and remove only our own handler; fall back from 443 to 8443 when 443 is taken; refuse rather than overwrite | Tailscale CLI changes; covered by tests that assert the exact commands issued |
 | T32 | Cookie theft (malware, a shared browser profile, a backup of browser data) | `HttpOnly`, `Secure`, `SameSite=Strict`, `__Host-` prefix; only its SHA-256 is stored; login check when the header is present; one live socket per device; idle expiry; one-click revoke | A stolen cookie used from another node with no login header, until revoked |
 | T33 | The owner's Tailscale account is taken over | An attacker can add nodes, but still needs a pairing code and the owner's approval on the desktop; existing cookies stay bound to their recorded login; the Remote page recommends two-factor sign-in for Tailscale | An attacker who also controls a paired device acts at its tier |
 
@@ -169,7 +169,7 @@ Source: [REVIEW_NOTES.md](REVIEW_NOTES.md). These rows continue the table in sec
 
 Native is the second Remote method ([AGENTS.md](../../AGENTS.md), amendment of 17 October 2026,
 later). While it is on, the gateway's own listener binds the host's interfaces on
-`remote.nativePort` (default 48621), serves HTTPS only with a certificate Bitbots generates, and
+`remote.nativePort` (default 48621), serves HTTPS only with a certificate Retinue generates, and
 may be reachable from the whole internet once the owner forwards the port (by hand or through
 UPnP with consent). Everything in §4–§11 still applies; this section covers what is new. Facts
 below come from the lane reports ([FIX35_C1](../history/fix-35/c1-report.md), [FIX35_C2](../history/fix-35/c2-report.md))
@@ -184,10 +184,10 @@ mobile data or an outside attacker.
 | N4 | Man in the middle on first contact | TLS is mandatory (plain HTTP refused); the browser warns once because the certificate is self-made, and Settings › Remote shows the SHA-256 fingerprint to compare | An owner who clicks through the warning without comparing the fingerprint on a hostile network |
 | N5 | Theft of the TLS key | The key lives in the data folder with user-only access (`icacls /inheritance:r /grant:r <user>:F` on Windows, mode 0600 elsewhere); "New certificate" replaces it and changes the fingerprint | Malware running as the user can read it, and the cookie store too |
 | N6 | Cross-site use of a device cookie, or a hostile name pointed at the host (DNS rebinding) | `Origin` (when sent; a safe `GET` may omit it) and `Host` must name the certificate's own addresses; a Tailscale origin is refused under Native and the reverse; cookies keep `Secure`, `HttpOnly`, `SameSite=Strict` | None known beyond §9 |
-| N7 | UPnP opens more than Bitbots asked for, or leaves a mapping behind | Only with the owner's consent; maps only `remote.nativePort` over TCP; removed on disable and at daemon shutdown; the lease is renewed while on | A crash between mapping and removal leaves the forward until the lease ends; a router with a broken UPnP stack |
-| N8 | Firewall changes without the owner knowing | One inbound rule, `Bitbots-Remote`, for the Native port only, added and removed only through an elevated prompt the owner accepts; no console window | The owner widens the rule by hand |
-| N9 | Bitbots contacting third parties (IP echo, relays, DNS) | None: the external address comes from the router (UPnP) or the owner; carrier-NAT and private addresses are detected locally; the self-test is the owner opening `/api/ping` from a phone | — |
-| N10 | `/api/ping` as a probe | Answers only a fixed, content-free marker, `{"ok":true,"app":"bitbots","role":"remote-gateway"}` (FIX39 P3; nothing about the host, owner or account); records "reached from" as a public address or "this network"; rate-limited like other unauthenticated routes | Anyone who can reach the port learns that something answers there, which the sign-in page shows anyway |
+| N7 | UPnP opens more than Retinue asked for, or leaves a mapping behind | Only with the owner's consent; maps only `remote.nativePort` over TCP; removed on disable and at daemon shutdown; the lease is renewed while on | A crash between mapping and removal leaves the forward until the lease ends; a router with a broken UPnP stack |
+| N8 | Firewall changes without the owner knowing | One inbound rule, `Retinue-Remote`, for the Native port only, added and removed only through an elevated prompt the owner accepts; no console window | The owner widens the rule by hand |
+| N9 | Retinue contacting third parties (IP echo, relays, DNS) | None: the external address comes from the router (UPnP) or the owner; carrier-NAT and private addresses are detected locally; the self-test is the owner opening `/api/ping` from a phone | — |
+| N10 | `/api/ping` as a probe | Answers only a fixed, content-free marker, `{"ok":true,"app":"retinue","role":"remote-gateway"}` (FIX39 P3; nothing about the host, owner or account); records "reached from" as a public address or "this network"; rate-limited like other unauthenticated routes | Anyone who can reach the port learns that something answers there, which the sign-in page shows anyway |
 | N11 | A signed-out device learns which method is on | `/api/me` refusals name `native` or `tailscale` and nothing else (no host name, no device data) | The method is visible from the address anyway |
 | N12 | Test runs open firewall prompts or bind the internet | Under `#[cfg(test)]` the listener binds `127.0.0.1` only; no test runs real `netsh`, PowerShell or UPnP discovery | — |
 
@@ -216,9 +216,9 @@ Implementer-tested means the package's own unit, mounted and fake-process tests.
 
 - **Origin: no change.** The FIX39 packages did not alter the `Origin` rule in [PROTOCOL.md](PROTOCOL.md) §4.1. The rule that safe reads may omit `Origin` comes from FIX38 and still stands.
 - **Tool steps (P2).** Over Remote, a tool step's `title` is replaced by a generic "Tool" unless the device is allowed tool output. `label`, `pattern`, `url`, `path` and `command` are withheld by default. Titles such as "Ran cargo test C:/…" can carry paths and command text. The shared policy goldens prove this in both Rust and TypeScript.
-- **Ping marker (P3).** `GET /api/ping` answers a fixed marker that names the app and its role and nothing else. It lets one Bitbots copy recognise another on the same port.
-- **Remote discard of a task branch (P10, finding 6, not yet reviewed).** `proposal.decide` with `discard: true` on a `merge` proposal removes a task's copy and branch. The operator tier may call `proposal.decide` when approvals from remote are on, so a paired operator device can discard a task branch. The discard is bounded to that repository's own `<repo>-bitbots` copy and `bitbots/*` branch, and it is refused while the task is still working. Whether a phone should be able to discard at all is an owner decision.
-- **One copy only (P3).** A second copy of Bitbots that already serves Remote is refused, not shared. The daemon exits when its app exits (a parent watchdog), so a stale process cannot keep a port. Single-instance focus was not exercised live.
+- **Ping marker (P3).** `GET /api/ping` answers a fixed marker that names the app and its role and nothing else. It lets one Retinue copy recognise another on the same port.
+- **Remote discard of a task branch (P10, finding 6, not yet reviewed).** `proposal.decide` with `discard: true` on a `merge` proposal removes a task's copy and branch. The operator tier may call `proposal.decide` when approvals from remote are on, so a paired operator device can discard a task branch. The discard is bounded to that repository's own `<repo>-retinue` copy and `retinue/*` branch, and it is refused while the task is still working. Whether a phone should be able to discard at all is an owner decision.
+- **One copy only (P3).** A second copy of Retinue that already serves Remote is refused, not shared. The daemon exits when its app exits (a parent watchdog), so a stale process cannot keep a port. Single-instance focus was not exercised live.
 - **Wide layout (P3).** The wide browser layout is a presentation change. It does not change what any device may call.
 
 ### 14.2 Local diagnostics (P12)
@@ -244,7 +244,7 @@ The task board (`task.create`, `task.list`, `task.get`, `task.update`, `task.dis
 
 ## 16. Machine links and handoff (31 October 2026)
 
-A machine link is one Bitbots daemon acting as a paired device of another, through that machine's gateway. It adds no listener and no relay, and it uses the same pairing, owner approval and tiers as a phone. These are the new things it can do, and what stops each going wrong.
+A machine link is one Retinue daemon acting as a paired device of another, through that machine's gateway. It adds no listener and no relay, and it uses the same pairing, owner approval and tiers as a phone. These are the new things it can do, and what stops each going wrong.
 
 | Risk | What stops it |
 |---|---|
@@ -256,9 +256,9 @@ A machine link is one Bitbots daemon acting as a paired device of another, throu
 | A handoff granting Full access | A created bot's mode is capped. No conversation mode travels, and neither do environment values, tokens, or host paths. |
 | Both machines running one conversation | Only one can: a lease on the giving machine blocks new turns during the move, and the taking machine can't run its copy until the giving machine has confirmed. |
 | Lost work in a move | A push is never forced and never to the base branch. A rejected push ends the move and nothing changes hands. Uncommitted files are only committed with the owner's consent. A fetch only fast-forwards, and refuses when it would lose local commits. |
-| A branch name from another machine reaching git | It must start `bitbots/`, pass `git check-ref-format --branch`, and never start with `-`. |
+| A branch name from another machine reaching git | It must start `retinue/`, pass `git check-ref-format --branch`, and never start with `-`. |
 
-**`.bitbots.json`.** A repository is someone else's input, and a setup script is code. The file does nothing until the owner trusts its exact bytes, a change stops it counting, it can never turn on Full access, and it's read from the project's own folder, never a conversation's copy. Only `project.sharedSettings.trust` and `.write` can record that trust, and it never travels in a backup or to a device.
+**`.retinue.json`.** A repository is someone else's input, and a setup script is code. The file does nothing until the owner trusts its exact bytes, a change stops it counting, it can never turn on Full access, and it's read from the project's own folder, never a conversation's copy. Only `project.sharedSettings.trust` and `.write` can record that trust, and it never travels in a backup or to a device.
 
 **What this doesn't cover.** A link at `operator` can pull any eligible conversation's text from that machine, and push its task branch to that machine's `origin`. That's what the owner approves when choosing that tier. Reading another machine's conversations is the same trust as reading them from a phone: paired machines are the owner's own. The review owed before a non-beta release (sections 8, 11 and 13) now covers this section too.
 
@@ -278,7 +278,7 @@ Push goes through the phone maker's push service (FCM, Mozilla, WNS, Apple), so 
 | The VAPID private key leaking | It is generated once into `<data>/remote-push-key.pem` with `apply_key_permissions`, never returned by any method, never in a backup (every `remote.*` key is refused) and never logged. `Default`/`Debug` print the public point only. |
 | A phone subscribing while signed out | `push.*` are gateway-only calls with `tiers.json` rows, so a request without a paired device cookie is refused before it reaches the daemon. |
 
-**What this doesn't cover.** The push service learns that this install sends a notification, when, and to which subscription, and it can drop or delay it. Bitbots cannot know a notification was read. A bot's own name appears in the title, because the owner chose it.
+**What this doesn't cover.** The push service learns that this install sends a notification, when, and to which subscription, and it can drop or delay it. Retinue cannot know a notification was read. A bot's own name appears in the title, because the owner chose it.
 
 ## 18. Webhook triggers (31 October 2026)
 
@@ -291,11 +291,11 @@ The route sits outside the `Origin` check, because a sender is a machine with no
 | Learning whether an id exists, or is enabled | Every failure answers exactly what an unknown id answers: the same `404` with the same body (`not_found`). A missing, malformed or wrong signature, an old timestamp, a replay, an unknown id and a disabled webhook are indistinguishable in status and body. |
 | A timing oracle distinguishing "unknown id" from "wrong signature" | The HMAC is computed on every request that reaches the handler, with the automation's real secret when there is one and a fixed placeholder key otherwise, so the work is one HMAC either way. Two small differences remain (an enabled webhook costs one credential-store read, and a too-large body is refused before the HMAC); both are documented residual risk. |
 | Forging a signature | HMAC-SHA-256 over `"<timestamp>." + body`, compared in constant time (`verify_slice`), with the 32-byte secret held in the Windows credential store through section 5. The secret is shown once when the webhook is enabled, and no RPC can return it again. |
-| Replaying a captured request | `X-Bitbots-Timestamp` must be within 300 seconds of the host's clock, and each accepted signature is remembered for 600 seconds; a second use is a failure. The cache is memory only, so a restart forgets it, and the 300-second window bounds what that forgets. |
+| Replaying a captured request | `X-Retinue-Timestamp` must be within 300 seconds of the host's clock, and each accepted signature is remembered for 600 seconds; a second use is a failure. The cache is memory only, so a restart forgets it, and the 300-second window bounds what that forgets. |
 | A stranger flooding the route to burn CPU or bury the activity log | The per-source token bucket refuses the flood before any work. A failed signature counts toward that source's own lockout (5 failures in 60 seconds → that source is shelved for 60 seconds). While shelved it costs one HMAC and no database write, no audit line and no failure accounting. It is **per source and never global**, so a stranger cannot pause anyone else, and a request whose signature is **valid is never refused by the webhook lockout**, so the real sender always runs. The worst case for a sender that shares a NAT with the attacker is 60 seconds of suppressed failure lines — not a refused request. |
 | The run escaping an automation's fences | A webhook run goes through the existing automation path (`start_run`): the automation's own `plan`/`auto` mode (never `bypass`), its `maxRuntimeSecs`, single-flight, the global pause, and the concurrency limit. A paused, disabled or already-running automation answers `202` and does nothing but one content-free activity line, so a valid signature cannot tell "ran" from "skipped". |
 | The request body injecting instructions | `includeBody` is off by default. When on, the body reaches the prompt only inside a delimited block as inert quoted data (`&`, `<` and `>` escaped, exactly as `knowledge.rs` `inert` does for a recap), preceded by one sentence saying it is data. The body is at most 64 KiB and is never stored, logged, put in an event or echoed in a response. |
-| The secret leaking | It lives only in the credential store, under `Bitbots/webhook-<automation id>`, and is shown once in the reply to `automation.webhook.enable`. It is absent from the automation DTO, every event, a backup (only the enabled flag and `includeBody` travel, if at all) and a diagnostics bundle. |
+| The secret leaking | It lives only in the credential store, under `Retinue/webhook-<automation id>`, and is shown once in the reply to `automation.webhook.enable`. It is absent from the automation DTO, every event, a backup (only the enabled flag and `includeBody` travel, if at all) and a diagnostics bundle. |
 | A webhook enabled by accident | `automation.webhook.enable` needs `confirm: true`, and every `automation.webhook.*` method is `never` for a paired device, so only the desktop can turn one on or rotate its secret. |
 
 **What this doesn't cover.** A sender that keeps the secret can start the automation whenever it likes, within the automation's own caps; revoking is `automation.webhook.rotate` or `disable`, and the owner's only signal is the run history. The gateway is not a hardened public web server: the token bucket and the lockout are memory-only, so a restart forgets them, and a distributed flood across many addresses is bounded only by the daemon's capacity (row N3). A webhook does not authenticate *who* sent it, only that someone held the secret. And the HMAC proves knowledge of the secret, not confidentiality: the body arrives in clear inside TLS, so anyone who breaks the certificate trust sees it.

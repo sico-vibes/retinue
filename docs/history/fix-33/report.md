@@ -8,14 +8,14 @@ Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort. Worktree `C:\fx40
 `lane/fix33-wp7`. Spec: `docs/history/fix-33/small-backend-spec.md`. No `git commit`, no push, no UI
 components or CSS touched, `AGENTS.md` untouched.
 
-`CARGO_TARGET_DIR=C:/Users/Sico Vibes/Desktop/DevCN/bloblex/target` and
+`CARGO_TARGET_DIR=C:/Users/Sico Vibes/Desktop/DevCN/retinue/target` and
 `RUST_MIN_STACK=33554432` were left as given.
 
 ---
 
 ## 1. `runtime.capabilities` tolerates a bot on another runtime
 
-**Files.** `crates/bloblex-daemon/src/main.rs`
+**Files.** `crates/retinue-daemon/src/main.rs`
 
 - `capability_selected_model` (around `main.rs:1535`): the agent's saved model is now used only
   when `agent["runtimeId"] == runtime_id`. A stale `agentId` no longer pulls another runtime's
@@ -42,7 +42,7 @@ updating (grep confirms the string is gone from the daemon). Verified by test.
 
 ## 2. The model-facing noun is always "bot"
 
-**Files.** `crates/bloblex-daemon/src/team.rs`, plus call sites in `automations.rs`, `memory.rs`,
+**Files.** `crates/retinue-daemon/src/team.rs`, plus call sites in `automations.rs`, `memory.rs`,
 `main.rs`.
 
 - `team::entity_noun(plural: bool)` (`team.rs:83`) now always returns `bot` / `bots`; the
@@ -50,18 +50,18 @@ updating (grep confirms the string is gone from the daemon). Verified by test.
   removed, so the ~30 call sites were updated (`entity_noun(st, …)` → `entity_noun(…)`), and the
   test-only `team::mcp_tools_for_test` no longer takes an unused `st`.
 - Test `team_prose_follows_the_appearance_style` was replaced by `team_prose_always_says_bot`
-  (`main.rs:4142`). It sets `appearance.style = "blobots"`, then asserts `entity_noun(false) ==
+  (`main.rs:4142`). It sets `appearance.style = "stone"`, then asserts `entity_noun(false) ==
   "bot"`, `entity_noun(true) == "bots"`, that the runtime instructions still say "a bot: one of
   the user's AI teammates", and that the instructions are byte-identical before and after the
   style change. Verified by test.
 
 **Note for the report as requested:** the instruction text no longer changes with the look, so a
-Blobots user's next turn re-sends instructions once (OpenCode respawns once). Expected.
+Stone user's next turn re-sends instructions once (OpenCode respawns once). Expected.
 
 ## 3. New RPC `session.environment`
 
-**Files.** `crates/bloblex-daemon/src/experiments.rs` (`git_command` made `pub(crate)`),
-`crates/bloblex-daemon/src/main.rs` (dispatch arm + handler), `apps/desktop/src/remote/remoteTiers.ts`.
+**Files.** `crates/retinue-daemon/src/experiments.rs` (`git_command` made `pub(crate)`),
+`crates/retinue-daemon/src/main.rs` (dispatch arm + handler), `apps/desktop/src/remote/remoteTiers.ts`.
 
 - Dispatch arm `"session.environment" => session_environment(st,&p).await` at `main.rs:868`
   (8-space indentation, so the remote parity parser sees it).
@@ -93,7 +93,7 @@ when `git` is not on PATH). The git test covers: a temp dir after `git init` + o
 
 ## 4. Cloud dictation warm-up (no request to the endpoint)
 
-**Files.** `crates/bloblex-speech/src/cloud.rs`, `apps/desktop/src-tauri/src/speech.rs`,
+**Files.** `crates/retinue-speech/src/cloud.rs`, `apps/desktop/src-tauri/src/speech.rs`,
 `apps/desktop/src-tauri/src/lib.rs`, `apps/desktop/src/tauri.ts`.
 
 - `cloud.rs`: one shared `static CLIENT: OnceLock<reqwest::Client>` built once by
@@ -136,19 +136,19 @@ by test for `cloud.rs`; `speech.rs` is **not** verified here (see the desktop ga
 
 All run from `C:\fx40`.
 
-1. **`RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`**
-   — exit 0. 43 test binaries, **530 passed, 0 failed**. Highlights: `bloblex-daemon` 161,
-   `bloblex-storage` 92, `bloblex-speech` 58, adapter/acp suites 19/28/14/4, codex 13/33/5,
+1. **`RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`**
+   — exit 0. 43 test binaries, **530 passed, 0 failed**. Highlights: `retinue-daemon` 161,
+   `retinue-storage` 92, `retinue-speech` 58, adapter/acp suites 19/28/14/4, codex 13/33/5,
    claude 18/13/6, runtime 27, usage 19, agent-core 8, daemon_smoke 1.
 
-2. **`cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`** — exit 0,
+2. **`cargo clippy --workspace --exclude retinue-desktop -- -D warnings`** — exit 0,
    `Finished`. **No warnings at all** (nothing pre-existing to report). Also ran
-   `cargo clippy -p bloblex-daemon -p bloblex-speech --all-targets -- -D warnings` clean, so the
+   `cargo clippy -p retinue-daemon -p retinue-speech --all-targets -- -D warnings` clean, so the
    new test code is warning-free too.
 
-3. **`cargo test -p bloblex-desktop --lib`** — **cannot build from this worktree**, exit 101. The
+3. **`cargo test -p retinue-desktop --lib`** — **cannot build from this worktree**, exit 101. The
    Tauri build script fails before compiling:
-   `resource path 'binaries\bitbotsd-x86_64-pc-windows-msvc.exe' doesn't exist`
+   `resource path 'binaries\retinued-x86_64-pc-windows-msvc.exe' doesn't exist`
    (`tauri.conf.json` `externalBin` sidecar is a gitignored build artifact, not present here). Per
    the spec this was not worked around, so the `speech.rs` command and its unit test, and the
    `lib.rs` registration, are **not compiler-verified in this worktree**.
@@ -158,14 +158,14 @@ All run from `C:\fx40`.
 5. **`cd apps/desktop && npx vitest run src/remote`** — exit 0, 3 files, **47 passed, 0 failed**
    (includes `remoteTiers.parity.test.ts`, which now finds a tier row for `session.environment`).
 
-An extra sanity check, `cargo check -p bloblex-daemon -p bloblex-speech --tests`, is clean.
+An extra sanity check, `cargo check -p retinue-daemon -p retinue-speech --tests`, is clean.
 
 ## Not done / unsure
 
-- **Desktop crate unverified.** `bloblex-desktop` cannot build in this worktree (missing sidecar),
+- **Desktop crate unverified.** `retinue-desktop` cannot build in this worktree (missing sidecar),
   so `dictation_cloud_warm`, `cloud_warm_payload` and the command registration are only
   reasoned-through, not compiled. `cloud::warm` and the singleton do have passing tests in
-  `bloblex-speech`.
+  `retinue-speech`.
 - **Command name.** The plan (`robust-dazzling-taco.md` Part 3, line 110) calls it
   `speech_cloud_warm`; the FIX33 spec says `dictation_cloud_warm`. I followed the spec. The
   Director's boot call and `tauri.ts` wrapper must use `dictation_cloud_warm` /

@@ -1,7 +1,7 @@
 //! The companion's open/close state machine.
 //!
 //! Ported from `src/blob/engine/island/fsm.ts` (`IslandStateMachine`) and the
-//! Bitbots adapter in `src/blob/companionFsm.ts`. The four states are the same
+//! Retinue adapter in `src/blob/companionFsm.ts`. The four states are the same
 //! (`hidden`, `petit`, `home`, `welcome`); `home-chat` in `companionLayout.ts` is
 //! a view of `home`, not a state, so it is not modelled here.
 //!
@@ -138,7 +138,7 @@ impl CompanionFsm {
         match self.mode {
             Mode::Hidden => {}
             Mode::Petit => {
-                // The Bitbots adapter cancels the compact auto-hide: a freely
+                // The Retinue adapter cancels the compact auto-hide: a freely
                 // positioned overlay must not vanish into an unknown spot.
             }
             Mode::Home => self.schedule(Pending::HomeCollapse, self.home_to_petit, now),
@@ -338,7 +338,7 @@ mod tests {
 
     #[test]
     fn the_compact_bar_never_hides_itself() {
-        // The Bitbots adapter's own change: a freestanding overlay must not
+        // The Retinue adapter's own change: a freestanding overlay must not
         // vanish into an unknown desktop position.
         let mut fsm = CompanionFsm::new();
         fsm.reveal(at(0));

@@ -12,9 +12,9 @@ The design is sound and the git handling is careful. Findings 1 to 3 must be fix
 
 What is right, so Sol does not touch it:
 - Every git call is an argument list through `experiments::git_command` (hidden window on Windows), and its output is never logged. The worktree record holds paths, a branch and a commit, with no conversation text.
-- `verify` bounds merge and discard to a registered linked worktree of the named repo, inside `<repo>-bitbots`, on a `bitbots/*` branch. `discard` runs it too. The forged-branch and outside-folder tests are real behaviour tests.
+- `verify` bounds merge and discard to a registered linked worktree of the named repo, inside `<repo>-retinue`, on a `retinue/*` branch. `discard` runs it too. The forged-branch and outside-folder tests are real behaviour tests.
 - Merge refuses a dirty or wrong-branch main checkout, never forces, and aborts on conflict. A failed approve leaves the proposal pending. That matches the existing "fix the card and retry" rule in `decide`.
-- Remote: no new method or event, so `tiers.json` is correctly unchanged. `permission.requested` is already path-reduced by `remote/policy.rs:649-652`. No credentials, recap text or command text in payloads or logs. The commit message is the fixed `Bitbots task <slug>`.
+- Remote: no new method or event, so `tiers.json` is correctly unchanged. `permission.requested` is already path-reduced by `remote/policy.rs:649-652`. No credentials, recap text or command text in payloads or logs. The commit message is the fixed `Retinue task <slug>`.
 - Storage: both `CHECK` lists, the whitelist and the rebuild condition are updated. The extended migration test fails on the old code, because the rebuilt table would reject `merge`.
 - UI: the merge card reuses the existing proposal classes. `.proposal-value.mono` exists (`proposalCard.css:19`). There are no star or sparkle icons (`GitMerge` only), and there is no new CSS to theme.
 - Scope: `storage/lib.rs` is justified, and the `pub(crate) TeamAdapter` in `main.rs` is test-only. `docs/history/fix-39/audit-impl-brief.md` shows as modified, but it is not in the report and is not a Sol change, so leave it out of the merge.
@@ -22,9 +22,9 @@ What is right, so Sol does not touch it:
 ## Findings
 
 ### 1. MUST FIX — a follow-up to a merged or discarded task runs in a folder that no longer exists
-`crates/bloblex-daemon/src/proposals.rs:249-256` (`apply_merge` cleanup), `:723-724` (discard), `team.rs:517-531` (`delegate`, existing branch).
+`crates/retinue-daemon/src/proposals.rs:249-256` (`apply_merge` cleanup), `:723-724` (discard), `team.rs:517-531` (`delegate`, existing branch).
 
-After merge or discard, the side session's `projectPath` is still `<repo>-bitbots/<slug>`, which has been deleted. `delegate` reuses the latest side conversation with the bot whenever no topic or id is given (`side_session_for`, `storage/lib.rs:1872`). A natural next step is the Manager saying "ask Builder to also fix X", and the Manager does that right after a merge. That follow-up resumes a session whose cwd is gone, so the CLI spawn fails. The report lists this under "Not checked" and says the brief requires removal. Removing the copy is required. Leaving the session pointing at it is not.
+After merge or discard, the side session's `projectPath` is still `<repo>-retinue/<slug>`, which has been deleted. `delegate` reuses the latest side conversation with the bot whenever no topic or id is given (`side_session_for`, `storage/lib.rs:1872`). A natural next step is the Manager saying "ask Builder to also fix X", and the Manager does that right after a merge. That follow-up resumes a session whose cwd is gone, so the CLI spawn fails. The report lists this under "Not checked" and says the brief requires removal. Removing the copy is required. Leaving the session pointing at it is not.
 
 Fix, either one:
 - (preferred) Add a small storage setter for the session's project path. On merge and on discard, set it back to the repo root. The record is already cleared by `clear_worktree_record`, so this finishes the job.
@@ -102,7 +102,7 @@ I read the follow-up section and the diff against all seven findings. I did not 
 - **Finding 4:** done. The dirty-checkout message (`worktree.rs:211`) no longer tells the owner to stash.
 - **Finding 5:** recorded in the report, no code change needed.
 - **Finding 6:** recorded for the threat-model owner.
-- **Finding 7:** done. The report lists tests for a merge conflict, a diverged history that gets a merge commit, and an already-merged branch. I checked the finding-2 test in the diff, not these three. The `--no-ff` merge commit now uses a fixed `Bitbots` identity, which is a correct change.
+- **Finding 7:** done. The report lists tests for a merge conflict, a diverged history that gets a merge commit, and an already-merged branch. I checked the finding-2 test in the diff, not these three. The `--no-ff` merge commit now uses a fixed `Retinue` identity, which is a correct change.
 
 No remaining must-fix items.
 

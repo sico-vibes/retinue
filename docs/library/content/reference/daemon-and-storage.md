@@ -1,7 +1,7 @@
 # Daemon and storage
 
-> **What this is:** what the `bitbotsd` daemon owns, how it starts, and how the SQLite store is laid out and migrated.
-> **Status:** current; checked against `crates/bloblex-daemon` and `crates/bloblex-storage` on 19 October 2026, and the task tables added on 22 October 2026
+> **What this is:** what the `retinued` daemon owns, how it starts, and how the SQLite store is laid out and migrated.
+> **Status:** current; checked against `crates/retinue-daemon` and `crates/retinue-storage` on 19 October 2026, and the task tables added on 22 October 2026
 > **Last updated:** 2026-10-22
 
 ## Purpose
@@ -14,18 +14,18 @@ This separation is what makes the companion, a remote phone and the main window 
 
 ### Startup
 
-1. The desktop shell starts `bitbotsd.exe` as a child process.
+1. The desktop shell starts `retinued.exe` as a child process.
 2. The daemon opens the database, runs migrations, recovers interrupted runs and queue state, and starts the scheduler.
 3. It binds `127.0.0.1` on an ephemeral port.
 4. It writes one bootstrap JSON object to stdout before any log:
-   `{"type":"bloblexd.ready","protocolVersion":1,"address":"127.0.0.1:49152","capability":"…"}`.
+   `{"type":"retinued.ready","protocolVersion":1,"address":"127.0.0.1:49152","capability":"…"}`.
 5. The shell reads the address and capability and starts proxying renderer calls.
 
 The capability is random and 256-bit. It exists in daemon memory and the shell's child-process channel only. It is never persisted, logged or sent to the renderer.
 
 ### Request handling
 
-`POST /v1/rpc` accepts `{v, id, method, params}`. The daemon checks the capability, routes through `dispatch()` (`crates/bloblex-daemon/src/main.rs:819`), and answers `{v, id, ok, result}` or `{v, id, ok:false, error:{code, message}}`.
+`POST /v1/rpc` accepts `{v, id, method, params}`. The daemon checks the capability, routes through `dispatch()` (`crates/retinue-daemon/src/main.rs:819`), and answers `{v, id, ok, result}` or `{v, id, ok:false, error:{code, message}}`.
 
 `GET /v1/events` upgrades to a WebSocket. The client sends `{v:1, afterSequence:n}` immediately; the daemon registers the live subscription before replaying persisted events after the cursor, so the snapshot/subscribe race is closed. A client that gets `replayAvailable:false` must fetch a fresh snapshot.
 
@@ -51,11 +51,11 @@ Window placement, tray menus, global shortcuts, file dialogs, notifications, mic
 
 ### Location
 
-The database path is `BLOBLEX_DB_PATH` when set (`crates/bloblex-daemon/src/main.rs:4272`). Otherwise the daemon uses `%LOCALAPPDATA%\Bitbots\bloblex.db` (`crates/bloblex-daemon/src/main.rs:4275`), and the desktop's data folder is `%LOCALAPPDATA%\Bitbots` (`apps/desktop/src-tauri/src/lib.rs:909`). The development script points `BLOBLEX_DB_PATH` at `dev-data\bloblex.db` under its Cargo target (`scripts/dev-windows.ps1`). Tests and development point the variable at a scratch file. Never run a migration experiment against the real data folder.
+The database path is `RETINUE_DB_PATH` when set (`crates/retinue-daemon/src/main.rs:4272`). Otherwise the daemon uses `%LOCALAPPDATA%\Retinue\retinue.db` (`crates/retinue-daemon/src/main.rs:4275`), and the desktop's data folder is `%LOCALAPPDATA%\Retinue` (`apps/desktop/src-tauri/src/lib.rs:909`). The development script points `RETINUE_DB_PATH` at `dev-data\retinue.db` under its Cargo target (`scripts/dev-windows.ps1`). Tests and development point the variable at a scratch file. Never run a migration experiment against the real data folder.
 
 ### Schema
 
-The store is SQLite. The core tables are created by the schema functions in `crates/bloblex-storage/src/lib.rs`:
+The store is SQLite. The core tables are created by the schema functions in `crates/retinue-storage/src/lib.rs`:
 
 - `hosts`, `runtimes`, `runtime_profiles`
 - `sessions`, `turns`, `messages`, `tool_calls`, `file_changes`
@@ -75,13 +75,13 @@ Most records carry a JSON `data` column for additive fields, so a new field rare
 
 ### Migrations
 
-Schema changes are versioned functions, each with an idempotency guard (a `pragma_table_info` check or an existence test), a ledger row in `schema_migrations`, and a `PRAGMA user_version` bump. Most migrations that change structure take a verified backup before the DDL (`verified_backup` at `crates/bloblex-storage/src/lib.rs:57` and `:129`). An additive column may skip it: `migrate_context_failure_class` (`:1218`) only adds `turns.failure_class_v2` and takes no backup.
+Schema changes are versioned functions, each with an idempotency guard (a `pragma_table_info` check or an existence test), a ledger row in `schema_migrations`, and a `PRAGMA user_version` bump. Most migrations that change structure take a verified backup before the DDL (`verified_backup` at `crates/retinue-storage/src/lib.rs:57` and `:129`). An additive column may skip it: `migrate_context_failure_class` (`:1218`) only adds `turns.failure_class_v2` and takes no backup.
 
 A migration validates the schema after the DDL and again after commit where the function does so. A failed validation returns an error rather than leaving a half-open database.
 
 ### Backup and restore
 
-`crates/bloblex-daemon/src/backup.rs` exports a JSON document with a checksum over the contents. It covers bots as a secret-free projection, live memory, skills as base64 files, automations and the allowlisted settings. Import validates the envelope and checksum, maps each provider to a local runtime, reports conflicts, and applies the result in one transaction. Skill files are staged on disk before they are committed.
+`crates/retinue-daemon/src/backup.rs` exports a JSON document with a checksum over the contents. It covers bots as a secret-free projection, live memory, skills as base64 files, automations and the allowlisted settings. Import validates the envelope and checksum, maps each provider to a local runtime, reports conflicts, and applies the result in one transaction. Skill files are staged on disk before they are committed.
 
 The preview store keeps at most two parsed documents for ten minutes and is single-use on import. A newer format version is refused; a checksum mismatch is refused with "The backup file is damaged or was edited."
 
@@ -93,14 +93,14 @@ Every persisted event has a globally increasing sequence. `app_events` is the du
 
 | Path | Responsibility |
 | --- | --- |
-| `crates/bloblex-daemon/src/main.rs` | Startup, capability, dispatch, turn driver, settings. |
-| `crates/bloblex-daemon/src/queue.rs` | Durable prompts and send-later. |
-| `crates/bloblex-daemon/src/retry.rs` | Usage-limit recovery and bounded retries. |
-| `crates/bloblex-daemon/src/automations.rs` | Scheduler and runs. |
-| `crates/bloblex-daemon/src/memory.rs`, `skills.rs` | Durable notes and the skill pool. |
-| `crates/bloblex-daemon/src/backup.rs` | Export, preview, import. |
-| `crates/bloblex-daemon/src/remote/` | Gateway and both methods. |
-| `crates/bloblex-storage/src/lib.rs` | Schema, migrations, queries. |
+| `crates/retinue-daemon/src/main.rs` | Startup, capability, dispatch, turn driver, settings. |
+| `crates/retinue-daemon/src/queue.rs` | Durable prompts and send-later. |
+| `crates/retinue-daemon/src/retry.rs` | Usage-limit recovery and bounded retries. |
+| `crates/retinue-daemon/src/automations.rs` | Scheduler and runs. |
+| `crates/retinue-daemon/src/memory.rs`, `skills.rs` | Durable notes and the skill pool. |
+| `crates/retinue-daemon/src/backup.rs` | Export, preview, import. |
+| `crates/retinue-daemon/src/remote/` | Gateway and both methods. |
+| `crates/retinue-storage/src/lib.rs` | Schema, migrations, queries. |
 
 ## Gotchas
 

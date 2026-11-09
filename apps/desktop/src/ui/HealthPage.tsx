@@ -26,7 +26,7 @@ export function HealthPage() {
     setProblem(null)
     return rpc<{ checks?: unknown[] }>('doctor.run', {})
       .then((result) => setChecks((result?.checks ?? []).filter(isCheck)))
-      .catch(() => { setChecks([]); setProblem('The health check could not run. Is the Bitbots service connected?') })
+      .catch(() => { setChecks([]); setProblem('The health check could not run. Is the Retinue service connected?') })
   }, [])
   useEffect(() => { void run() }, [run])
   const fix = async (check: HealthCheck) => {

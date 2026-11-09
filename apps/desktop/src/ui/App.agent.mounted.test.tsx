@@ -58,7 +58,7 @@ vi.mock('../tauri', () => ({
   stagePromptAttachment: h.stagePromptAttachment,
   selectLocalFile: vi.fn(), inspectLocalFile: vi.fn(),
   openInEditor: vi.fn(), revealInExplorer: vi.fn(), resolveProjectFile: vi.fn(),
-  quitBloblex: vi.fn(), setCloseToTray: vi.fn(),
+  quitRetinue: vi.fn(), setCloseToTray: vi.fn(),
   updatesGetState: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesSetPreferences: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesCheck: async () => ({ status: 'up_to_date' as const, checkedAt: '2026-10-02T00:00:00.000Z' }),
@@ -86,7 +86,7 @@ vi.mock('../blob/BlobCanvas', async () => {
 })
 
 import { App } from './App'
-import { setThemeStyle } from '../blob/bitbots'
+import { setThemeStyle } from '../blob/retinue'
 import { friendlyErrorText } from './errorCopy'
 import type { Agent, DaemonEvent, Runtime, Session, Snapshot } from '../types'
 
@@ -141,7 +141,7 @@ async function settleMicrotasks() {
 // choice would.
 function showTeamView() {
   const read = localStorage.getItem.bind(localStorage)
-  try { localStorage.getItem = ((key: string) => key === 'bitbots.sidebar.view' ? 'bots' : read(key)) as typeof localStorage.getItem } catch { /* a stub that refuses assignment keeps its own answers */ }
+  try { localStorage.getItem = ((key: string) => key === 'retinue.sidebar.view' ? 'bots' : read(key)) as typeof localStorage.getItem } catch { /* a stub that refuses assignment keeps its own answers */ }
 }
 
 function mountApp(search = '') {
@@ -253,8 +253,8 @@ beforeEach(() => {
   h.updateError = null
   h.sessionError = null
   for (const mock of Object.values(h)) if (typeof mock === 'function' && 'mockReset' in mock) (mock as ReturnType<typeof vi.fn>).mockReset()
-  // The blob look editor is the classic (Blobots) one here; Bitbots is tested elsewhere.
-  setThemeStyle('blobots')
+  // The blob look editor is the classic (Stone) one here; Retinue is tested elsewhere.
+  setThemeStyle('stone')
   configure()
 })
 
@@ -327,7 +327,7 @@ describe('blob roster and editor', () => {
     configure(snapshot({ runtimes: [codexRuntime], agents: [], sessions: [] }))
     const view = startApp()
     await view.settle()
-    await click(view.host.querySelector('.look-orb-choice[data-look="blobots"]'))
+    await click(view.host.querySelector('.look-orb-choice[data-look="stone"]'))
     await click(buttonNamed(view.host, 'Continue'))
     await click(buttonNamed(view.host, 'Skip'))
     expect(view.host.querySelector('[data-provider="codex"]')).not.toBeNull()
@@ -439,8 +439,8 @@ describe('blob roster and editor', () => {
     const cases: Array<[string, string]> = [
       ['conflict: taken', 'Another employee already uses this name.'],
       ['invalid_argument: bad', 'Check the name, description, colour, and runtime, then try again.'],
-      ['internal: boom', 'Bitbots could not save that change. Nothing was applied.'],
-      ['unauthorized: no', 'Bitbots could not reach the local daemon. Reconnect and try again.'],
+      ['internal: boom', 'Retinue could not save that change. Nothing was applied.'],
+      ['unauthorized: no', 'Retinue could not reach the local daemon. Reconnect and try again.'],
       ['mystery: no', 'The local daemon request failed.'],
     ]
     for (const [error, message] of cases) {
@@ -626,7 +626,7 @@ describe('blob roster and editor', () => {
     configure(snapshot({ runtimes:[claudeRuntime, codexRuntime, failedRuntime], sessions:[empty] }))
     h.getActiveSession.mockResolvedValue(empty.id)
     h.getActiveRuntime.mockResolvedValue(failedRuntime.id)
-    vi.mocked(localStorage.getItem).mockImplementation((key) => key === 'bloblex.selectedAgentId' ? opencode.id : null)
+    vi.mocked(localStorage.getItem).mockImplementation((key) => key === 'retinue.selectedAgentId' ? opencode.id : null)
     const view = startApp(); await view.settle()
     expect(view.host.querySelector('.session-first-state h2')?.textContent).toContain('needs attention')
     expect(view.host.querySelector('.session-first-state')?.textContent).toContain('Update or repair this CLI')
@@ -683,9 +683,9 @@ describe('blob roster and editor', () => {
     expect(rows(view.host)[0]?.getAttribute('data-agent-id')).toBe('agent-claude')
   })
 
-  it('restores the agent stored in bloblex.selectedAgentId', async () => {
+  it('restores the agent stored in retinue.selectedAgentId', async () => {
     vi.stubGlobal('localStorage', {
-      getItem: vi.fn((key: string) => key === 'bloblex.selectedAgentId' ? 'agent-codex' : null),
+      getItem: vi.fn((key: string) => key === 'retinue.selectedAgentId' ? 'agent-codex' : null),
       setItem: vi.fn(),
       removeItem: vi.fn(),
       clear: vi.fn(),
@@ -884,8 +884,8 @@ describe('blob roster and editor', () => {
   })
 
   it.each([{ agents: [] }, { agents: [claude] }])('shows Manager setup with zero or existing employees despite an earlier Later ($agents.length employees)', async ({ agents }) => {
-    sessionStorage.setItem('bitbots.managerSetup.later', '1')
-    localStorage.getItem = vi.fn((key: string) => key === 'bloblex.firstRun.complete' ? '1' : null)
+    sessionStorage.setItem('retinue.managerSetup.later', '1')
+    localStorage.getItem = vi.fn((key: string) => key === 'retinue.firstRun.complete' ? '1' : null)
     configure(snapshot({ agents, sessions: [] }))
     const view = startApp()
     await view.settle()

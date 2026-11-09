@@ -634,35 +634,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e4b40c7323adcfc0a41c4b88143ed58346ff65a288fc144329c5c45e05d70c6"
 
 [[package]]
-name = "bitbots-native"
-version = "0.1.0"
-dependencies = [
- "arboard",
- "async-channel 2.5.0",
- "bloblex-speech",
- "chrono",
- "cpal",
- "embed-resource",
- "futures-util",
- "gpui",
- "iana-time-zone",
- "image",
- "log",
- "portable-pty",
- "raw-window-handle",
- "reqwest",
- "resvg",
- "rusqlite",
- "serde",
- "serde_json",
- "tokio",
- "tokio-tungstenite",
- "uuid",
- "windows 0.57.0",
- "windows-sys 0.59.0",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -681,26 +652,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7eff00be299a18769011411c9def0d827e8f2d7bf0c3dbf53633147a8867fd1f"
 dependencies = [
  "no_std_io2",
-]
-
-[[package]]
-name = "bloblex-speech"
-version = "0.1.0-beta.50"
-dependencies = [
- "base64 0.22.1",
- "chrono",
- "cpal",
- "reqwest",
- "rustls",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "sherpa-onnx",
- "thiserror 2.0.21",
- "tokio",
- "tracing",
- "webpki-roots 0.26.11",
- "zeroize",
 ]
 
 [[package]]
@@ -5083,6 +5034,55 @@ dependencies = [
  "svgtypes",
  "tiny-skia",
  "usvg",
+]
+
+[[package]]
+name = "retinue-native"
+version = "0.1.0"
+dependencies = [
+ "arboard",
+ "async-channel 2.5.0",
+ "chrono",
+ "cpal",
+ "embed-resource",
+ "futures-util",
+ "gpui",
+ "iana-time-zone",
+ "image",
+ "log",
+ "portable-pty",
+ "raw-window-handle",
+ "reqwest",
+ "resvg",
+ "retinue-speech",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-tungstenite",
+ "uuid",
+ "windows 0.57.0",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "retinue-speech"
+version = "0.1.0-beta.50"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "cpal",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sherpa-onnx",
+ "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "webpki-roots 0.26.11",
+ "zeroize",
 ]
 
 [[package]]

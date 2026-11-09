@@ -6,11 +6,11 @@ import type { Agent, Runtime } from '../types'
 import { PROVIDER_GUIDES } from './providerGuides'
 import { helpTipBubble, viewText } from './testSelect'
 
-vi.mock('../blob/BlobCanvas', () => ({ BlobCanvas: () => <div aria-label="Bitbots onboarding companion" /> }))
+vi.mock('../blob/BlobCanvas', () => ({ BlobCanvas: () => <div aria-label="Retinue onboarding companion" /> }))
 const mocks = vi.hoisted(() => ({ rpc: vi.fn() }))
 vi.mock('../tauri', () => ({ rpc: mocks.rpc }))
 import { FirstRunOnboarding } from './FirstRunOnboarding'
-import { setThemeStyle } from '../blob/bitbots'
+import { setThemeStyle } from '../blob/retinue'
 
 const runtime = { id: 'runtime-codex', provider: 'codex', version: '1.2', authState: 'authenticated' } as Runtime
 let root: Root | null = null
@@ -38,17 +38,17 @@ describe('FirstRunOnboarding', () => {
   it('offers Haze and Stone orbs and waits for a choice', async () => {
     const { host: mounted } = mount({ runtimes: [runtime] })
     const cards = [...mounted.querySelectorAll<HTMLElement>('.look-orb-choice')]
-    expect(cards.map((card) => card.dataset.look)).toEqual(['haze', 'blobots'])
-    expect([...mounted.querySelectorAll<SVGElement>('.look-orb-choice .look-orb')].map((orb) => orb.dataset.look)).toEqual(['haze', 'blobots'])
+    expect(cards.map((card) => card.dataset.look)).toEqual(['haze', 'stone'])
+    expect([...mounted.querySelectorAll<SVGElement>('.look-orb-choice .look-orb')].map((orb) => orb.dataset.look)).toEqual(['haze', 'stone'])
     expect(mounted.querySelector('.look-orb-choice .blob-canvas-frame')).toBeNull()
     expect(cards.map((card) => card.getAttribute('aria-label'))).toEqual(['Haze', 'Stone'])
     expect(mounted.querySelector('.look-card-copy, .look-tag')).toBeNull()
     expect(button('Continue').disabled).toBe(true)
     expect(mounted.querySelector('.look-preview')?.getAttribute('data-open')).toBe('false')
     await act(async () => { cards[1].click(); await Promise.resolve() })
-    expect(mocks.rpc).toHaveBeenCalledWith('settings.set', { key: 'appearance.style', value: 'blobots' })
+    expect(mocks.rpc).toHaveBeenCalledWith('settings.set', { key: 'appearance.style', value: 'stone' })
     expect(mounted.querySelector('.look-preview')?.getAttribute('data-open')).toBe('true')
-    expect(document.documentElement.dataset.style).toBe('blobots')
+    expect(document.documentElement.dataset.style).toBe('stone')
     expect(button('Continue').disabled).toBe(false)
     await act(async () => { cards[0].click(); await Promise.resolve() })
     expect(document.documentElement.dataset.style).toBe('haze')
@@ -135,7 +135,7 @@ describe('FirstRunOnboarding', () => {
     expect(mounted.textContent).toContain('Meet your CEO')
     expect(mounted.textContent).toContain('plans the work with you')
     expect(button('Create CEO')).toBeTruthy()
-    act(() => setThemeStyle('blobots'))
+    act(() => setThemeStyle('stone'))
     expect(mounted.textContent).toContain('plans the work with you')
     expect(mounted.textContent).not.toMatch(/\bblob\b/i)
     expect(button('Create CEO')).toBeTruthy()

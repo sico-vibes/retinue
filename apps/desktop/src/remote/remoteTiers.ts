@@ -8,12 +8,12 @@
 // policy being enforced is a P1 gateway job.
 //
 // The table is kept honest by `remoteTiers.parity.test.ts`, which reads the
-// daemon's dispatch in `crates/bloblex-daemon/src/main.rs` and fails when a
+// daemon's dispatch in `crates/retinue-daemon/src/main.rs` and fails when a
 // dispatched method has no rule here, or a rule has outlived its dispatch arm.
 //
 // Since FIX29 (WP6a) the data itself lives in `./tiers.json`, next to this
 // file, so the same policy can be loaded by the Rust daemon
-// (`crates/bloblex-daemon/src/remote/policy.rs`, same bytes via `include_str!`)
+// (`crates/retinue-daemon/src/remote/policy.rs`, same bytes via `include_str!`)
 // without two hand-kept copies drifting. This module loads the JSON and exposes
 // it through the same names and behaviour as before. `paramRules` in the JSON
 // name one of the three checks defined below by id; each side implements those
@@ -106,7 +106,7 @@ export const runtimeModelsRule: ParamRule = {
 // The raw file is validated once, at import, so a typo in a class, a tier, a
 // params id or a duplicate method fails loudly instead of quietly changing what
 // a device may do. `PolicyData` is the shape this module expects; the Rust port
-// in `crates/bloblex-daemon/src/remote/policy.rs` deserializes the same file.
+// in `crates/retinue-daemon/src/remote/policy.rs` deserializes the same file.
 
 interface PolicyMethodRow {
   method: string

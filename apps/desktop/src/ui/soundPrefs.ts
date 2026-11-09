@@ -11,9 +11,9 @@ import { rpc } from '../tauri'
 export const SOUNDS_ENABLED_KEY = 'companion.soundsEnabled'
 export const SOUND_VOLUME_KEY = 'companion.soundVolume'
 /** Carries the boolean companion-sounds switch between windows. */
-export const SOUNDS_CHANGED_EVENT = 'bloblex-sounds-changed'
+export const SOUNDS_CHANGED_EVENT = 'retinue-sounds-changed'
 /** Carries `{ volume, preview? }` between windows. */
-export const SOUND_VOLUME_CHANGED_EVENT = 'bloblex-sound-volume-changed'
+export const SOUND_VOLUME_CHANGED_EVENT = 'retinue-sound-volume-changed'
 
 export interface SoundPrefs {
   soundsEnabled: boolean

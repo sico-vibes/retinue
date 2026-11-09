@@ -13,16 +13,16 @@ You have no chat history. Everything you need is here, in the repository, and in
 
 - Never run `git commit`, `git push`, `git reset` or check out other branches. Leave changes in the working tree.
 - Work only inside `D:\fx40c`. Do not touch `D:\Basem's\Coding\Blolblex` or `D:\fx40t`.
-- Another lane (Themes) works in parallel on the app looks. Do NOT edit: `ui/appearance.ts`, `blob/bitbots.ts`, `blob/bitbots.test.ts`, `ui/App.tsx`, `ui/SettingsSheet.tsx`, `ui/FirstRunOnboarding.tsx`, `ui/LaunchIntro.tsx`, `ui/LookPicker.tsx`, `ui/LookPreview.tsx`, `ui/PixelClouds.tsx`, `index.html`, `ui/theme.css`, `ui/bitbots.css`, any other app-wide stylesheet, `apps/desktop/src-tauri/**`, `preview/fixtureBridge.ts`, `package.json`, the lockfile, `crates/bloblex-daemon/src/main.rs`, `crates/bloblex-daemon/src/backup.rs`, `apps/desktop/src/remote/tiers.json`. In `crates/bloblex-storage/src/lib.rs` edit only `valid_look` and its test.
-- Do not call `useBitbots()` / `bitbotsEnabled()` in new or changed code (the Themes lane is changing their meaning to "legacy pixel look"). To know the app look, call `useThemeStyle()` from `blob/bitbots.ts` and treat the value as a plain string: the Themes lane is widening it to `'bitbots' | 'blobots' | 'legacy' | 'pop' | 'dot'`.
+- Another lane (Themes) works in parallel on the app looks. Do NOT edit: `ui/appearance.ts`, `blob/retinue.ts`, `blob/retinue.test.ts`, `ui/App.tsx`, `ui/SettingsSheet.tsx`, `ui/FirstRunOnboarding.tsx`, `ui/LaunchIntro.tsx`, `ui/LookPicker.tsx`, `ui/LookPreview.tsx`, `ui/PixelClouds.tsx`, `index.html`, `ui/theme.css`, `ui/retinue.css`, any other app-wide stylesheet, `apps/desktop/src-tauri/**`, `preview/fixtureBridge.ts`, `package.json`, the lockfile, `crates/retinue-daemon/src/main.rs`, `crates/retinue-daemon/src/backup.rs`, `apps/desktop/src/remote/tiers.json`. In `crates/retinue-storage/src/lib.rs` edit only `valid_look` and its test.
+- Do not call `useRetinue()` / `retinueEnabled()` in new or changed code (the Themes lane is changing their meaning to "legacy pixel look"). To know the app look, call `useThemeStyle()` from `blob/retinue.ts` and treat the value as a plain string: the Themes lane is widening it to `'frost' | 'stone' | 'legacy' | 'pop' | 'dot'`.
 - Keep comments sparse and in the style of the surrounding code. Plain English UI copy, sentence case.
 
 ## Background (facts from a code map)
 
 - `blob/BlobCanvas.tsx:340-344` dispatches between `BitbotCanvas` (robot heads from `vendor/robot-heads`, canvas, heavy) and `ClassicBlobCanvas` (glossy blobs, `blobEngine.ts`) on the app look. Props `BlobCanvasProps` at L15-40 (`color`, `size`, `mood`, `className`, `label`, `decorative`, `mini`, `greeting`, `track`, `look`, `style`, `dragRegion`, ...). Mood list: `blob/characterState.ts:1` (18 moods).
 - The classic blob's status corner: `blobEngine.ts` `drawBadge` (L877-935), position `blobGeometry.ts:1-2` (`BADGE_OFFSET {x:-0.82, y:-0.66}` of the body radius, `BADGE_RADIUS 0.34`), colours table `C` (L70-84) and per-state badge in `ENGINE_STATES` (L91-110): working / thinking / searching / listening = animated three dots; approval = "!"; error = red dot; finished = green dot; online = green dot; ratelimit = orange dot; sleeping = no badge, floating "z"; offline = dimmed; fileReady = clip; fileSending = arrow; fileError = "!". Mood → state mapping: `BlobCanvas.tsx:42-61`. Mini avatars draw a plain dot.
-- Look model `blob/look/index.ts`: `BlobLook { shape, seed?, traits?, bot? }` (L17-24); `normalizeLook` (L55-72), `agentLook` (L75-78), `sameLook` / `lookKey` (L85-92) rebuild from known keys only, so a new key is dropped unless added there. `ui/blobShare.ts:57` likewise. The daemon rejects unknown look keys: `crates/bloblex-storage/src/lib.rs:5358-5383` (`valid_look`, top-level allowlist at L5361) and its test near L7934. `proposals.rs:839` caps a look at 8192 bytes (no change needed). `team.rs:961` describes the look fields to the Manager tool.
-- Editors: `ui/LookEditor.tsx` (stage at size 148 with mood buttons, tabs, the 8-shape grid, eye sliders; uses `useBitbots()` at L55 to switch to `BotEditor`), `ui/BotEditor.tsx` (robot outline / shell / trim / screen).
+- Look model `blob/look/index.ts`: `BlobLook { shape, seed?, traits?, bot? }` (L17-24); `normalizeLook` (L55-72), `agentLook` (L75-78), `sameLook` / `lookKey` (L85-92) rebuild from known keys only, so a new key is dropped unless added there. `ui/blobShare.ts:57` likewise. The daemon rejects unknown look keys: `crates/retinue-storage/src/lib.rs:5358-5383` (`valid_look`, top-level allowlist at L5361) and its test near L7934. `proposals.rs:839` caps a look at 8192 bytes (no change needed). `team.rs:961` describes the look fields to the Manager tool.
+- Editors: `ui/LookEditor.tsx` (stage at size 148 with mood buttons, tabs, the 8-shape grid, eye sliders; uses `useRetinue()` at L55 to switch to `BotEditor`), `ui/BotEditor.tsx` (robot outline / shell / trim / screen).
 - Avatars are rendered through `BlobCanvas` in about 25 places (team sidebar at 50px, mini avatars 16-22px, message authors 20px, onboarding 112px, editor 148px). Changing `BlobCanvas` changes them all.
 
 ## What the owner wants
@@ -38,7 +38,7 @@ Every bot gets an **art style**, chosen per bot in its editor. Robots: four opti
 | `blob` | Glossy blob | existing `ClassicBlobCanvas` (unchanged) |
 | `painted` | Hand-painted | NEW SVG, from `paintedBots.tsx` (with changes below) |
 
-When a bot has no `art`, it follows the app look: `bitbots` → `robot-flat`, `blobots` → `blob`, `legacy` → `robot`, `pop` → `robot-pop`, `dot` → `robot-dot`, anything else → `blob`.
+When a bot has no `art`, it follows the app look: `frost` → `robot-flat`, `stone` → `blob`, `legacy` → `robot`, `pop` → `robot-pop`, `dot` → `robot-dot`, anything else → `blob`.
 
 ## C1. Data model
 
@@ -87,7 +87,7 @@ Port `paintedBots.tsx` (flat paint, darker crescent on the lower right through t
 
 1. `LookEditor.tsx`: add a **Style** control at the top: "Automatic (follows the app look)" plus two groups, Robots (3D robot, Flat robot, Pop robot, Dot robot) and Blobs (Glossy blob, Hand-painted). Each option shows a small live preview in the bot's colour. It writes `look.art` (Automatic removes it).
 2. Below it, show controls for the resolved art: `robot` → the existing `BotEditor` controls; `blob` → the existing shape grid and Fine-tune tab; `painted` → a 12-shape grid (`look.paint`) with labels; flat / pop / dot robots → colour only (the bot colour control that exists today). Shuffle / Surprise me work per art (painted: random shape + colour; flat robots: colour).
-3. Replace the `useBitbots()` branch in `LookEditor.tsx` with the resolved art. Keep locked bots read-only exactly as today.
+3. Replace the `useRetinue()` branch in `LookEditor.tsx` with the resolved art. Keep locked bots read-only exactly as today.
 4. Keep the mood buttons on the stage working for every art.
 
 ## C6. Character sheet
@@ -102,8 +102,8 @@ Run, from `D:\fx40c`, and paste the tail of each result in your report:
 
 - `npm run typecheck`
 - `npm test`
-- `$env:CARGO_TARGET_DIR='D:\fx40c\target'; cargo test -p bloblex-storage`
-- `$env:CARGO_TARGET_DIR='D:\fx40c\target'; cargo test -p bloblex-daemon team`
+- `$env:CARGO_TARGET_DIR='D:\fx40c\target'; cargo test -p retinue-storage`
+- `$env:CARGO_TARGET_DIR='D:\fx40c\target'; cargo test -p retinue-daemon team`
 
 All must pass. Do not weaken or delete tests to make them pass; if a test pins old behaviour the owner changed, update it and say so.
 

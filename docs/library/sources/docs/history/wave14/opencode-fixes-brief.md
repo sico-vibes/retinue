@@ -7,7 +7,7 @@
 - Never run `git commit`.
 - Change nothing outside the worktree.
 
-**Read first:** `.claude/skills/bitbots-development/SKILL.md`, with its `references/codebase-map.md` and `references/lessons.md`.
+**Read first:** `.claude/skills/retinue-development/SKILL.md`, with its `references/codebase-map.md` and `references/lessons.md`.
 
 **Research:** this session's scratchpad holds `opencode-effort-review.md` (Haiku's research, with file:line evidence), the probes `acp_probe.py` and `acp_probe2.py`, the test-daemon driver `mcp_smoke.py`, and the `shim\` folder (an `opencode` wrapper that logs ACP traffic). The scratchpad is `C:\Users\SicoZ\AppData\Local\Temp\claude\D--Basem-s-Coding-Blolblex\78f0ecdc-5dc6-4b6e-808c-ffcc0b851c54\scratchpad`. OpenCode's source is cloned at `scratchpad\opencode`, T3 Code's at `scratchpad\t3code`.
 
@@ -17,9 +17,9 @@
 
 This is reproduced and logged; the logs were taken through the shim (29 October 2026).
 
-- **When it happens:** a bot with instructions (its own, or Bitbots' team instructions, which every bot gets when there are several) switches OpenCode to the injected `bloblex` agent before setting effort.
-- **The sequence:** Bitbots sends model, then `mode=bloblex`, then `effort=high`. OpenCode accepts each call.
-- **The failure:** in 3 of 4 runs, the effort reply echoes `currentValue: "default"` instead of `"high"`. `select()` in `crates/bloblex-adapter-acp/src/lib.rs` (around 760–800) then fails the turn with `ERR_EFFORT_REJECTED`.
+- **When it happens:** a bot with instructions (its own, or Retinue's team instructions, which every bot gets when there are several) switches OpenCode to the injected `retinue` agent before setting effort.
+- **The sequence:** Retinue sends model, then `mode=retinue`, then `effort=high`. OpenCode accepts each call.
+- **The failure:** in 3 of 4 runs, the effort reply echoes `currentValue: "default"` instead of `"high"`. `select()` in `crates/retinue-adapter-acp/src/lib.rs` (around 760–800) then fails the turn with `ERR_EFFORT_REJECTED`.
 - **Without instructions** there is no mode switch, and it never failed.
 - **Where it starts:** OpenCode's agent switch publishes a model without the variant. When that event lands after the effort call, it replaces the model and drops the variant (OpenCode `packages/cli/src/acp/sessions.ts` 54–91, `config-option.ts` 118–132).
 
@@ -49,23 +49,23 @@ Run a throwaway daemon from PowerShell; loopback HTTP from the Bash tool is rese
 
 ```
 $env:SMOKE_MODEL="opencode-go/deepseek-v4.1-flash"; $env:SMOKE_EFFORT="high"; $env:SMOKE_INSTR="1"; $env:SMOKE_AGAIN="5"
-python -u -I <scratchpad>\mcp_smoke.py D:\wv15\target\debug\bitbotsd.exe
+python -u -I <scratchpad>\mcp_smoke.py D:\wv15\target\debug\retinued.exe
 ```
 
 Optionally also set `SMOKE_SHIM=<scratchpad>\shim` to log the traffic to `shim\acp-*.log`. All 6 conversations must answer "bong". Before the fix, 3 of 4 failed.
 
-## 2. OpenCode's `question` tool always fails inside Bitbots
+## 2. OpenCode's `question` tool always fails inside Retinue
 
-- **Why it fails:** Bitbots sends `clientCapabilities: {}` in `initialize` (`lib.rs` ~480 and `catalog.rs` ~161). OpenCode 2.2 asks questions through ACP elicitation (`elicitation/create`, form mode), which needs `clientCapabilities.elicitation.form`. Without it, the question is cancelled and shows as a failed tool card. The bot then carries on in text.
-- **Do now:** add `"permission": {"question": "deny"}` to the injected `OPENCODE_CONFIG_CONTENT` (`exec::config_content`). Bots then rely on Bitbots' own `ask_user` team tool where it is offered.
+- **Why it fails:** Retinue sends `clientCapabilities: {}` in `initialize` (`lib.rs` ~480 and `catalog.rs` ~161). OpenCode 2.2 asks questions through ACP elicitation (`elicitation/create`, form mode), which needs `clientCapabilities.elicitation.form`. Without it, the question is cancelled and shows as a failed tool card. The bot then carries on in text.
+- **Do now:** add `"permission": {"question": "deny"}` to the injected `OPENCODE_CONFIG_CONTENT` (`exec::config_content`). Bots then rely on Retinue's own `ask_user` team tool where it is offered.
   - **Check by probe first** that the config deny wins over the build agent's built-in `question: allow` (`scratchpad\opencode\packages\core\src\plugin\agent.ts:60`; precedence in `permission.ts` 86–96 and 159–164). A real OpenCode turn whose prompt asks it to use its question tool should show the tool refused, or not offered.
   - **If the deny does not win**, report it, and do not ship a half-measure.
 - **The card:** hide tool cards for a refused or failed `question` call where ACP tool updates are translated, so no failed card appears.
-- **Later (not this brief):** support elicitation as a real Bitbots question card.
+- **Later (not this brief):** support elicitation as a real Retinue question card.
 
 ## 3. The MCP should say why a turn failed
 
-`crates/bloblex-daemon/src/external.rs`:
+`crates/retinue-daemon/src/external.rs`:
 
 - **`wait_for_turn`:** when the turn ended in an error, include `error: {message, detail}`, the same text the app shows ("Something went wrong…" and its Details line). It survives a reload, so find where it is stored.
 - **`read_conversation`:** include error notices as `{role: "error", text}`.
@@ -74,8 +74,8 @@ Optionally also set `SMOKE_SHIM=<scratchpad>\shim` to log the traffic to `shim\a
 
 ## Gates (from `D:\wv15`)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`
 - `npm run typecheck`
 - `npm test`
 

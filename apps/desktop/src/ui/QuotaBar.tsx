@@ -78,7 +78,7 @@ export function QuotaBar({ quotas, signedOut = [], refreshing, onRefresh, onOpen
   refreshing: boolean
   onRefresh: () => void
   onOpenDetails: () => void
-  /** Opens the setting that lets Bitbots read usage for this provider. */
+  /** Opens the setting that lets Retinue read usage for this provider. */
   onTurnOn?: () => void
 }) {
   const [open, setOpen] = useState(false)

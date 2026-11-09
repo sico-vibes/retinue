@@ -2,7 +2,7 @@
 
 docs/guides/windows-development.md:28 — Says updater keys and release hosting still need configuration, contradicting the beta.35 note at line 30 and the release checklist. Update the sentence to distinguish the still-open Windows code signing and clean-install work from the configured updater. **Must fix**
 
-crates/bloblex-storage/src/lib.rs:1218 — The architecture claim that schema-changing migrations take a verified backup is too broad: `migrate_context_failure_class` alters the schema without calling `verified_backup`. Qualify the claim to migrations that use the backup step, or ensure this migration also backs up. **Must fix**
+crates/retinue-storage/src/lib.rs:1218 — The architecture claim that schema-changing migrations take a verified backup is too broad: `migrate_context_failure_class` alters the schema without calling `verified_backup`. Qualify the claim to migrations that use the backup step, or ensure this migration also backs up. **Must fix**
 
 docs/reference/architecture.md:35,44 — The migration and Native TLS citations use shortened paths (`lib.rs` and `native.rs`), contrary to the style guide’s repository-relative citation rule. Use full paths consistently. **Should fix**
 

@@ -21,7 +21,7 @@ not touched.
 
 ## Counts
 
-Dispatch arms in `crates/bloblex-daemon/src/main.rs` (`async fn dispatch`, 86 method strings):
+Dispatch arms in `crates/retinue-daemon/src/main.rs` (`async fn dispatch`, 86 method strings):
 
 | Class | Dispatched methods | Rules |
 | --- | --- | --- |
@@ -32,7 +32,7 @@ Dispatch arms in `crates/bloblex-daemon/src/main.rs` (`async fn dispatch`, 86 me
 | **total** | **86** | **73** |
 
 `mcp.*` has no dispatch arm: the daemon answers it earlier, in the `/v1/rpc` handler
-(`crates/bloblex-daemon/src/main.rs:324`, `if req.method.starts_with("mcp.")`), so its family rule is
+(`crates/retinue-daemon/src/main.rs:324`, `if req.method.starts_with("mcp.")`), so its family rule is
 matched through that prefix guard rather than a match arm.
 
 Family rules used where the spec enumerated a family: `exec.snapshot.*` (3 methods), `usage.*` (2),
@@ -85,7 +85,7 @@ and has 73 rows. FIX19 can fill `<!-- TIER-TABLE -->` from this.
   defensible reading.
 - **Path reduction.** Per the spec ("absolute filesystem paths"), only absolute paths are reduced;
   relative `projectPath` values pass through. The last two segments are joined with `/`, and a drive
-  prefix counts as a segment (`C:\Users\sam\repos\bloblex` → `repos/bloblex`; `C:\repo` → `C:/repo`).
+  prefix counts as a segment (`C:\Users\sam\repos\retinue` → `repos/retinue`; `C:\repo` → `C:/repo`).
 - **Instruction guard.** `instructions` is replaced only when it is a non-empty string; empty string
   and non-string values are passed through unchanged, as written.
 

@@ -39,12 +39,12 @@ function useEnvironment(sessionId: string | null) {
 }
 
 function readOpen(id: string) {
-  try { return localStorage.getItem(`bloblex.rail.${id}`) !== '0' } catch { return true }
+  try { return localStorage.getItem(`retinue.rail.${id}`) !== '0' } catch { return true }
 }
 
 function Card({ id, title, aside, children }: { id: string; title: string; aside?: ReactNode; children: ReactNode }) {
   const [open, setOpen] = useState(() => readOpen(id))
-  const toggle = () => setOpen((current) => { try { localStorage.setItem(`bloblex.rail.${id}`, current ? '0' : '1') } catch { /* preference only */ } return !current })
+  const toggle = () => setOpen((current) => { try { localStorage.setItem(`retinue.rail.${id}`, current ? '0' : '1') } catch { /* preference only */ } return !current })
   return <section className="rail-card" aria-labelledby={`rail-${id}`}>
     <header className="rail-card-head">
       <button type="button" id={`rail-${id}`} className="rail-card-toggle" aria-expanded={open} onClick={toggle}>{title}{open ? <ChevronDown size={12} aria-hidden="true" /> : <ChevronRight size={12} aria-hidden="true" />}</button>

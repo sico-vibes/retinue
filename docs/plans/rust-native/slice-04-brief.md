@@ -1,4 +1,4 @@
-# Brief: Bitbots in Rust (GPUI), slice 4 — tasks, schedules, changes, terminal and pull requests
+# Brief: Retinue in Rust (GPUI), slice 4 — tasks, schedules, changes, terminal and pull requests
 
 **Lane:** Gogo (OpenCode Go DeepSeek V4.1 Flash, high), in its own git worktree. **Two other lanes run at the same time:**
 - slice 6 (Settings), in another Gogo conversation;
@@ -22,7 +22,7 @@ Keep to the file ownership below.
 - `CARGO_TARGET_DIR=C:\bbn\target4`, your own.
 - If something is impossible at the pinned GPUI rev, take the smallest working alternative and say so.
 
-**Read first:** `.claude/skills/bitbots-development/references/native-gpui.md`, especially "Traps that kill or blank the window":
+**Read first:** `.claude/skills/retinue-development/references/native-gpui.md`, especially "Traps that kill or blank the window":
 - double update;
 - never consuming state in render;
 - `min_h(0)`;

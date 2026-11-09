@@ -44,14 +44,14 @@ Two correctness gaps remain, both because the code keys on the **side session**,
 
 ## You own
 
-`crates/bloblex-daemon/src/questions.rs`, `crates/bloblex-daemon/src/delegations.rs`, `crates/bloblex-daemon/src/team.rs` (only `after_turn` and what it needs), `crates/bloblex-storage/src/lib.rs` (question and `delegation_*`/queue-lookup helpers only), `crates/bloblex-daemon/src/main.rs` (only the `QuestionAnswer` hook inside `session_prompt_impl`, a few lines). Never touch `checkpoints.rs`, `media.rs`, `workspace.rs`, `experiments.rs`, `queue.rs` (read it; if a change there is unavoidable, make it minimal and say so), `apps/`, `docs/`, `.claude/`.
+`crates/retinue-daemon/src/questions.rs`, `crates/retinue-daemon/src/delegations.rs`, `crates/retinue-daemon/src/team.rs` (only `after_turn` and what it needs), `crates/retinue-storage/src/lib.rs` (question and `delegation_*`/queue-lookup helpers only), `crates/retinue-daemon/src/main.rs` (only the `QuestionAnswer` hook inside `session_prompt_impl`, a few lines). Never touch `checkpoints.rs`, `media.rs`, `workspace.rs`, `experiments.rs`, `queue.rs` (read it; if a change there is unavoidable, make it minimal and say so), `apps/`, `docs/`, `.claude/`.
 
 ## Verification you may run (only these)
 
 ```powershell
 $env:RUST_MIN_STACK='33554432'
-cargo check -p bloblex-storage --message-format short
-cargo check -p bloblex-daemon --message-format short
+cargo check -p retinue-storage --message-format short
+cargo check -p retinue-daemon --message-format short
 ```
 Fix every warning you introduce; long timeouts.
 

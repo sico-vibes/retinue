@@ -14,9 +14,9 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { EVENT_POLICY, METHOD_RULES } from './remoteTiers'
 
-const MAIN_RS = fileURLToPath(new URL('../../../../crates/bloblex-daemon/src/main.rs', import.meta.url))
-const DAEMON_SRC = fileURLToPath(new URL('../../../../crates/bloblex-daemon/src', import.meta.url))
-const STORAGE_SRC = fileURLToPath(new URL('../../../../crates/bloblex-storage/src', import.meta.url))
+const MAIN_RS = fileURLToPath(new URL('../../../../crates/retinue-daemon/src/main.rs', import.meta.url))
+const DAEMON_SRC = fileURLToPath(new URL('../../../../crates/retinue-daemon/src', import.meta.url))
+const STORAGE_SRC = fileURLToPath(new URL('../../../../crates/retinue-storage/src', import.meta.url))
 
 interface ParsedDispatch {
   /** Every concrete method string named by a dispatch arm. */

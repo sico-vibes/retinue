@@ -17,7 +17,7 @@ param([Parameter(ValueFromRemainingArguments = $true)][string[]]$RelayArgs)
 
 $ErrorActionPreference = 'Stop'
 $realHome = $env:USERPROFILE
-$cleanHome = Join-Path $env:LOCALAPPDATA 'bloblex-cursor-home'
+$cleanHome = Join-Path $env:LOCALAPPDATA 'retinue-cursor-home'
 New-Item -ItemType Directory -Force $cleanHome | Out-Null
 
 $junction = Join-Path $cleanHome '.cursor'

@@ -6,7 +6,7 @@
 
 ## Purpose
 
-A **session** is the daemon's record of a conversation. A **turn** is one prompt and the work that follows. The daemon owns both; the provider CLI owns its own thread or session id, which Bitbots stores so it can resume.
+A **session** is the daemon's record of a conversation. A **turn** is one prompt and the work that follows. The daemon owns both; the provider CLI owns its own thread or session id, which Retinue stores so it can resume.
 
 The hard part is not starting a turn. It is deciding what to do when a turn is slow, a provider is overloaded, a usage window closes, the app restarts, or the user sends while the bot is already working. This page covers those paths.
 
@@ -62,7 +62,7 @@ When a turn completes on an idle session, the queue drains once. `turn.error` or
 
 ### Deletion
 
-`session.delete` removes Bitbots' record and its child data. It is refused while the session is starting, working, cancelling or waiting for approval. It does not touch the coding agent's own history.
+`session.delete` removes Retinue's record and its child data. It is refused while the session is starting, working, cancelling or waiting for approval. It does not touch the coding agent's own history.
 
 ## The durable queue
 

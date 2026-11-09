@@ -5,7 +5,7 @@ import '../ui/styles.css'
 import '../ui/shell.css'
 import '../ui/companion.css'
 import { DictationIsland, type IslandPhase } from '../ui/DictationIsland'
-import { setThemeStyle } from '../blob/bitbots'
+import { setThemeStyle } from '../blob/retinue'
 import { isThemeStyle, type ThemeStyle } from '../ui/appearance'
 
 // Browser preview of the dictation island: a live loop that behaves like a real

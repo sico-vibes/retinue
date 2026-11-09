@@ -65,7 +65,7 @@ const RESERVED = new Set(['Ctrl+A', 'Ctrl+C', 'Ctrl+V', 'Ctrl+X', 'Ctrl+Y', 'Ctr
 
 /** Why these keys can't be a shortcut, or null. */
 export function shortcutProblem(keys: string): string | null {
-  if (RESERVED.has(keys)) return `${keys} is already used for typing or by Bitbots itself.`
+  if (RESERVED.has(keys)) return `${keys} is already used for typing or by Retinue itself.`
   const hasModifier = keys.startsWith('Ctrl+') || keys.startsWith('Alt+')
   if (!hasModifier && !/(^|\+)F([1-9]|1[0-2])$/.test(keys)) return 'Include Ctrl or Alt, or use a function key.'
   return null

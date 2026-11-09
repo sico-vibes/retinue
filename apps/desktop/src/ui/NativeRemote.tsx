@@ -60,7 +60,7 @@ export function NativeAccountGroup({ native, busy, onSave }: { native: RemoteNat
         <button type="button" className="secondary-button small" onClick={() => { setUsername(native.username ?? ''); setEditing(true) }}>Change password</button>
       </SettingsRow>
       : <form className="remote-account-form" onSubmit={(event) => { event.preventDefault(); void save() }}>
-        <p className="remote-account-intro">Devices sign in with these. Bitbots keeps only a scrambled copy of the password; it can’t show it back to you.</p>
+        <p className="remote-account-intro">Devices sign in with these. Retinue keeps only a scrambled copy of the password; it can’t show it back to you.</p>
         <label className="settings-field"><span>Username</span><input className="text-input" autoComplete="username" value={username} maxLength={64} onChange={(event) => setUsername(event.target.value)} /></label>
         <label className="settings-field"><span>Password <small>{MIN_PASSWORD}+ characters</small></span><input className="text-input" type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         <label className="settings-field"><span>Password again</span><input className="text-input" type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /></label>
@@ -73,7 +73,7 @@ export function NativeAccountGroup({ native, busy, onSave }: { native: RemoteNat
   </SettingsGroup>
 }
 
-/** Where a device opens Bitbots, and the certificate it should see. */
+/** Where a device opens Retinue, and the certificate it should see. */
 export function NativeAddresses({ native, busy, onRegenerate }: { native: RemoteNativeStatus; busy: boolean; onRegenerate: () => void }) {
   const first = native.urls[0]
   return <div className="remote-native-addresses">
@@ -83,7 +83,7 @@ export function NativeAddresses({ native, busy, onRegenerate }: { native: Remote
       {native.urls.length === 0 && <small>No address yet. Check the connection steps below.</small>}
       <div className="remote-native-urls">{native.urls.map((url) => <CopyText key={url} text={url} label={url} />)}</div>
       {native.fingerprint && <div className="remote-native-fingerprint">
-        <span><ShieldCheck size={13} aria-hidden="true" />Certificate <HelpTip align="start" text="The browser will warn that the certificate isn't trusted, because Bitbots made it itself. Check that the fingerprint in the browser's certificate details matches this one, then continue. You only do this once per device." /></span>
+        <span><ShieldCheck size={13} aria-hidden="true" />Certificate <HelpTip align="start" text="The browser will warn that the certificate isn't trusted, because Retinue made it itself. Check that the fingerprint in the browser's certificate details matches this one, then continue. You only do this once per device." /></span>
         <code>{native.fingerprint}</code>
         <button type="button" className="ghost-button small" disabled={busy} onClick={onRegenerate}><RefreshCw size={12} aria-hidden="true" />New certificate</button>
       </div>}
@@ -121,30 +121,30 @@ export function connectSteps(native: RemoteNativeStatus, on: boolean): ConnectSt
   const forward = `Forward TCP port ${port} to this computer in your router’s settings.`
   const upnp = native.upnp ?? { consent: false, state: 'off' as const }
   const router: ConnectStep = !upnp.consent
-    ? { id: 'router', tone: 'todo', title: 'Router forwarding', detail: `${forward} Or let Bitbots ask the router for you.` }
+    ? { id: 'router', tone: 'todo', title: 'Router forwarding', detail: `${forward} Or let Retinue ask the router for you.` }
     : upnp.state === 'mapped'
-      ? { id: 'router', tone: 'ok', title: `Your router forwards port ${port}`, detail: 'Bitbots asked the router, and removes the forward when Remote turns off.' }
+      ? { id: 'router', tone: 'ok', title: `Your router forwards port ${port}`, detail: 'Retinue asked the router, and removes the forward when Remote turns off.' }
       : upnp.state === 'no_gateway'
         ? { id: 'router', tone: 'warn', title: 'No router answered', detail: `Automatic forwarding (UPnP) may be off on your router. ${forward}` }
         : upnp.state === 'failed'
           ? { id: 'router', tone: 'warn', title: 'The router said no', detail: `${upnp.error ? `It answered “${upnp.error}”. ` : ''}${forward}` }
-          : { id: 'router', tone: 'todo', title: 'Router forwarding', detail: on ? 'Asking the router…' : `Bitbots asks your router to forward port ${port} when Remote turns on.` }
+          : { id: 'router', tone: 'todo', title: 'Router forwarding', detail: on ? 'Asking the router…' : `Retinue asks your router to forward port ${port} when Remote turns on.` }
   const steps: ConnectStep[] = [router]
   const firewall = native.firewall ?? 'unknown'
   if (firewall === 'allowed') steps.push({ id: 'firewall', tone: 'ok', title: 'Windows Firewall lets it in', detail: `An inbound rule allows TCP port ${port}.` })
   else if (firewall === 'missing') steps.push({ id: 'firewall', tone: 'warn', title: 'Windows Firewall blocks it', detail: `Other devices can’t get in until Windows allows port ${port}. Windows asks you to confirm.` })
-  else if (firewall === 'unknown') steps.push({ id: 'firewall', tone: 'todo', title: 'Windows Firewall not checked', detail: `Bitbots couldn’t read the firewall. Allow port ${port} if devices can’t connect.` })
+  else if (firewall === 'unknown') steps.push({ id: 'firewall', tone: 'todo', title: 'Windows Firewall not checked', detail: `Retinue couldn’t read the firewall. Allow port ${port} if devices can’t connect.` })
   const ip = native.externalIp ?? null
   if (ip && native.cgnat && native.cgnatReason === 'carrier_nat') steps.push({ id: 'address', tone: 'warn', title: 'Your provider shares your address', detail: `${ip} is shared by your internet provider (carrier-grade NAT), so devices away from this network can’t reach this computer. Use Tailscale instead, or ask your provider for a public IP address.` })
   else if (ip && native.cgnat) steps.push({ id: 'address', tone: 'warn', title: 'That address is private', detail: `${ip} only works on this network. Enter the public address shown on your router’s status page.` })
-  else if (ip) steps.push({ id: 'address', tone: 'ok', title: `Public address ${ip}`, detail: native.externalIpSource === 'manual' ? 'Entered by you. If your provider changes it, update it here.' : 'From your router. Bitbots checks it every 10 minutes.' })
-  else steps.push({ id: 'address', tone: 'todo', title: 'Public address unknown', detail: 'Let Bitbots ask your router, or enter the public address shown on your router’s status page.' })
+  else if (ip) steps.push({ id: 'address', tone: 'ok', title: `Public address ${ip}`, detail: native.externalIpSource === 'manual' ? 'Entered by you. If your provider changes it, update it here.' : 'From your router. Retinue checks it every 10 minutes.' })
+  else steps.push({ id: 'address', tone: 'todo', title: 'Public address unknown', detail: 'Let Retinue ask your router, or enter the public address shown on your router’s status page.' })
   if (on) {
     const url = outsideUrl(native)
     const howTo = url ? `On your phone, turn off Wi-Fi and open ${url}/api/ping.` : 'Once there is an address, open it on your phone with Wi-Fi off.'
     const from = native.lastReachedFrom
     if (native.lastReachedAt && from && from !== 'this network') steps.push({ id: 'test', tone: 'ok', title: `Reached from ${from}`, detail: `A device outside this network got through at ${clock(native.lastReachedAt)}.` })
-    else if (native.lastReachedAt) steps.push({ id: 'test', tone: 'todo', title: 'Reached from this network only', detail: `At ${clock(native.lastReachedAt)}. That proves Bitbots answers, not that the internet can reach it. ${howTo}` })
+    else if (native.lastReachedAt) steps.push({ id: 'test', tone: 'todo', title: 'Reached from this network only', detail: `At ${clock(native.lastReachedAt)}. That proves Retinue answers, not that the internet can reach it. ${howTo}` })
     else steps.push({ id: 'test', tone: 'todo', title: 'Test from outside', detail: `${howTo} When it gets through, it shows here.` })
   }
   return steps

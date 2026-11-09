@@ -12,7 +12,7 @@ Status: implemented, all listed gates green. The lane did **not** run `git commi
 
 ## What changed (file:function)
 
-### `crates/bloblex-daemon/src/main.rs`
+### `crates/retinue-daemon/src/main.rs`
 
 - **`AppState`** gains three fields: `activation_locks` (`Mutex<HashMap<String, Arc<Mutex<()>>>>`),
   `starting_cancels` (`Mutex<HashSet<String>>`) and `warm_lru` (`Mutex<Vec<String>>`). Both
@@ -66,12 +66,12 @@ Status: implemented, all listed gates green. The lane did **not** run `git commi
   the LRU too.
 - **`ensure_session_active`** is deleted (only the old prompt path used it).
 
-### `crates/bloblex-daemon/src/catalog.rs`
+### `crates/retinue-daemon/src/catalog.rs`
 
 - `runtime_usable` is now `pub(crate)` so `session_warm` can reuse the same usability rule as the
   catalog prewarm (`online|ready|available|connected` and not signed out).
 
-### `crates/bloblex-speech/src/cloud.rs`
+### `crates/retinue-speech/src/cloud.rs`
 
 - `warm()` wraps `lookup_host(("chatgpt.com", 443))` in a **3 second** `tokio::time::timeout`; a
   timeout reports `dns_ok: false` instead of holding the warm-up open. New test
@@ -150,12 +150,12 @@ helpers `install_send_adapter`, `online_rt_test`, `idle_send_session`, `wait_for
 
 ## Gates (run from `C:\fx42` with the lane's `CARGO_TARGET_DIR=C:/fxtarget` and `RUST_MIN_STACK=33554432`)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-  — **all green**: daemon `bitbotsd` **180 passed / 0 failed** (was 170 before this WP), `daemon_smoke`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+  — **all green**: daemon `retinued` **180 passed / 0 failed** (was 170 before this WP), `daemon_smoke`
   1, storage 92, speech 59, runtime 27, usage 19, agent-core 8, security 2, protocol 2, process 2, wsl 2,
   acp 19+28+14+4, claude 18+13+6, codex 13+33+5, opencode 0, budget 3, hook 0, doc-tests 0.
   No failures, no ignored.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — **Finished** with no warnings.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — **Finished** with no warnings.
 - `cd apps/desktop && npx tsc -b` — **clean** (no output).
 - `cd apps/desktop && npx vitest run src/remote` — **3 files / 47 tests passed**, including
   `remoteTiers.parity.test.ts` (the new `session.warm` dispatch arm has a matching rule, and the

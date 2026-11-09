@@ -20,7 +20,7 @@ afterEach(() => {
   for (const style of injected.splice(0)) style.remove()
   document.documentElement.className = ''
   document.documentElement.removeAttribute('data-style')
-  document.documentElement.removeAttribute('data-bitbots')
+  document.documentElement.removeAttribute('data-retinue')
   document.documentElement.removeAttribute('data-surface-theme')
   document.body.innerHTML = ''
 })
@@ -28,19 +28,19 @@ function tokens() {
   const style = getComputedStyle(document.documentElement)
   return Object.fromEntries(['--surface-app', '--surface-panel', '--surface-raised', '--text-1', '--text-2', '--text-3', '--line', '--accent', '--font-ui', '--companion-text-settings', '--companion-text-activity'].map((key) => [key, style.getPropertyValue(key).trim()]))
 }
-function setLook(look: 'haze' | 'blobots', theme = 'dark', surface: 'companion' | 'dictation' = 'companion') {
+function setLook(look: 'haze' | 'stone', theme = 'dark', surface: 'companion' | 'dictation' = 'companion') {
   const root = document.documentElement
   root.className = `${surface}-surface`
   root.dataset.style = look
   root.dataset.surfaceTheme = theme
-  delete root.dataset.bitbots
+  delete root.dataset.retinue
 }
 
 describe('mounted look tokens on companion and dictation surfaces', () => {
-  // Frost (bitbots) and its companion tokens were retired on 27 October 2026.
+  // Frost (frost) and its companion tokens were retired on 27 October 2026.
   it('preserves the Stone palette on the companion surface', () => {
     inject(files.theme)
-    setLook('blobots', 'light')
+    setLook('stone', 'light')
     expect(tokens()).toMatchObject({ '--surface-app': '#0e0e0e', '--text-1': '#f4f4f4', '--text-2': '#a6a6a6' })
   })
 
@@ -58,7 +58,7 @@ describe('mounted look tokens on companion and dictation surfaces', () => {
     document.body.append(host)
     const before = [getComputedStyle(capsule).height, getComputedStyle(island).height]
     inject(files.haze)
-    for (const look of ['haze', 'blobots'] as const) {
+    for (const look of ['haze', 'stone'] as const) {
       setLook(look)
       expect([getComputedStyle(capsule).height, getComputedStyle(island).height]).toEqual(before)
     }

@@ -5,12 +5,12 @@ import os from 'node:os'
 import path from 'node:path'
 
 const exe = process.env.OPENCODE_EXE || (process.env.APPDATA + '\npm\node_modules\opencode-ai\bin\opencode.exe')
-const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bloblex-live-opencode-'))
+const work = fs.mkdtempSync(path.join(os.tmpdir(), 'retinue-live-opencode-'))
 const model = process.env.OC_MODEL || 'opencode-go/deepseek-v4.1-flash'
 const config = {
   $schema: 'https://opencode.ai/config.json',
   model,
-  agent: { bloblexlive: { mode: 'primary', model, prompt: 'Rule: when the user says "status", reply with exactly PLUM-6612 and nothing else.' } },
+  agent: { retinuelive: { mode: 'primary', model, prompt: 'Rule: when the user says "status", reply with exactly PLUM-6612 and nothing else.' } },
 }
 const env = { ...process.env, OPENCODE_CONFIG_CONTENT: JSON.stringify(config) }
 const child = spawn(exe, ['acp', '--cwd', work], { cwd: work, env, stdio: ['pipe', 'pipe', 'pipe'] })
@@ -37,7 +37,7 @@ const notify = (method, params) => child.stdin.write(JSON.stringify({ jsonrpc: '
 const opt = (res) => (res.result?.configOptions || []).map((o) => ({ id: o.id, cur: o.currentValue, values: (o.options || []).map((x) => x.value ?? x.id).slice(0, 8), n: (o.options || []).length }))
 
 const report = { model }
-const init = await call('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'BitbotsLiveCheck', version: '0.0.1' } })
+const init = await call('initialize', { protocolVersion: 1, clientCapabilities: {}, clientInfo: { name: 'RetinueLiveCheck', version: '0.0.1' } })
 notify('initialized', {})
 report.initialize = init.error ? { error: init.error.message?.slice(0, 120) } : { agent: init.result?.agentInfo?.name, version: init.result?.agentInfo?.version, caps: Object.keys(init.result?.agentCapabilities || {}) }
 

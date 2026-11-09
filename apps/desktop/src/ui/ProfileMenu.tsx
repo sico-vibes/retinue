@@ -6,7 +6,7 @@ import { startTour } from './tour/startTour'
 import { useRemoteStatus } from '../remote/useRemote'
 import type { ConnectionState } from '../types'
 
-const NAME_KEY = 'bloblex.profile.name'
+const NAME_KEY = 'retinue.profile.name'
 
 export function readProfileName() {
   try { return localStorage.getItem(NAME_KEY)?.trim() ?? '' } catch { return '' }
@@ -110,8 +110,8 @@ export function ProfileMenu({ connection, usageActive, schedulesActive = false, 
 
   return <div className="sidebar-foot" ref={wrapRef}>
     {editing && <form className="profile-onboarding" aria-label="Your name" onSubmit={saveName}>
-      <strong>{name ? 'Edit your name' : 'Welcome to Bitbots'}</strong>
-      <p>{name ? 'This name is shown in the sidebar and stays on this device.' : 'What should Bitbots call you? It stays on this device.'}</p>
+      <strong>{name ? 'Edit your name' : 'Welcome to Retinue'}</strong>
+      <p>{name ? 'This name is shown in the sidebar and stays on this device.' : 'What should Retinue call you? It stays on this device.'}</p>
       <input className="text-input" aria-label="Your name" value={draft} maxLength={40} placeholder="Your name" onChange={(event) => setDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape') dismissEditor() }} />
       <div className="profile-onboarding-actions">
         <button type="button" className="ghost-button small" onClick={dismissEditor}>{name ? 'Cancel' : 'Not now'}</button>
@@ -147,7 +147,7 @@ export function ProfileMenu({ connection, usageActive, schedulesActive = false, 
       <button type="button" role="menuitem" className="menu-item" onClick={() => run(startTour)}><Compass size={15} />Take the tour</button>
       <span className="menu-separator" role="separator" />
       <button type="button" role="menuitem" className="menu-item" onClick={() => run(() => { setDraft(name); setEditing(true) })}><Pencil size={15} />{name ? 'Edit name' : 'Add your name'}</button>
-      {platform.tray && <button type="button" role="menuitem" className="menu-item danger" onClick={() => run(onQuit)}><LogOut size={15} />Quit Bitbots</button>}
+      {platform.tray && <button type="button" role="menuitem" className="menu-item danger" onClick={() => run(onQuit)}><LogOut size={15} />Quit Retinue</button>}
     </div>}
     </div>
   </div>

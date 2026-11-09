@@ -443,12 +443,12 @@ pub fn provider_of(runtimes: &BTreeMap<String, String>, runtime_id: &str) -> Opt
     runtimes.get(runtime_id).cloned()
 }
 
-/// The app's own mark (`apps/desktop/src/assets/bloblex-128.png`), for the
+/// The app's own mark (`apps/desktop/src/assets/brand/retinue-tile-dark-128.png`), for the
 /// sidebar's brand row.
 static BRAND_MARK: std::sync::LazyLock<Arc<gpui::Image>> = std::sync::LazyLock::new(|| {
     Arc::new(gpui::Image::from_bytes(
         gpui::ImageFormat::Png,
-        include_bytes!("../../desktop/src/assets/bloblex-128.png").to_vec(),
+        include_bytes!("../../desktop/src/assets/brand/retinue-tile-dark-128.png").to_vec(),
     ))
 });
 

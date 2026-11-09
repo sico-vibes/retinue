@@ -39,7 +39,7 @@ starts with the Manager's knowledge rather than a blank slate.
   `kind:"profile"` proposal when the fact is locked. `recall_about_user
   { category? }` reads the profile back, grouped. Values that look like secrets
   are refused (`memory::contains_secret_marker`, reused via
-  `bloblex_security::contains_secret_marker`).
+  `retinue_security::contains_secret_marker`).
 - **User RPCs.** `manager.profile.list`, `manager.profile.set { id?, category,
   key, value, locked }` (a new key is `said`, an edit is `corrected`),
   `manager.profile.delete { id }`. Event `manager.profile.changed`.
@@ -70,9 +70,9 @@ starts with the Manager's knowledge rather than a blank slate.
 
 ## 3. Context for every Manager turn
 
-- New module `crates/bloblex-daemon/src/knowledge.rs` owns the profile, the
+- New module `crates/retinue-daemon/src/knowledge.rs` owns the profile, the
   playbook and the prompt blocks.
-- `knowledge::context_for_prompt` returns a per-turn `<bloblex_manager>` suffix
+- `knowledge::context_for_prompt` returns a per-turn `<retinue_manager>` suffix
   **only** for a session whose agent is the Manager. It contains the profile
   grouped by category (locked first, ≤ 3000 chars, then "(call
   recall_about_user for more)"), the current playbook (≤ 6000 chars) and the
@@ -80,7 +80,7 @@ starts with the Manager's knowledge rather than a blank slate.
   when its hash changes, and the hash is cleared on a context reset
   (`knowledge::forget_context`, wired into the resume-fallback path, the
   `ContextChanged` path and session deletion, beside `memory`/`skills`).
-- The block is **not** part of `<bloblex_team>`, so profile and playbook edits
+- The block is **not** part of `<retinue_team>`, so profile and playbook edits
   never change the instruction hash (proved by a test).
 - The Manager's runtime paragraph gained one sentence naming
   `remember_about_user` / `recall_about_user` / `update_playbook`, so the tools
@@ -97,9 +97,9 @@ starts with the Manager's knowledge rather than a blank slate.
   (`knowledge::announce_model_change`). Ordinary bots keep the plain "fresh
   session" behaviour.
 - The first prompt of the new provider session carries a one-off
-  `<bloblex_handover>` block (profile, playbook, active projects and bots, the
+  `<retinue_handover>` block (profile, playbook, active projects and bots, the
   pending proposals, and the last 10 approved/rejected decisions with dates).
-  It is consumed once; the per-turn `<bloblex_manager>` hash is recorded at the
+  It is consumed once; the per-turn `<retinue_manager>` hash is recorded at the
   same time so the knowledge is not repeated verbatim on that prompt.
 
 ## 5. Non-visual TypeScript
@@ -117,7 +117,7 @@ starts with the Manager's knowledge rather than a blank slate.
 
 ## D2 hardening (Director's review)
 
-In `crates/bloblex-daemon/src/proposals.rs` `apply_project`:
+In `crates/retinue-daemon/src/proposals.rs` `apply_project`:
 
 - Both `existing` and `new` require an **absolute** folder path; a relative path
   is refused with `invalid_argument` and the message **"Choose a full folder
@@ -128,7 +128,7 @@ In `crates/bloblex-daemon/src/proposals.rs` `apply_project`:
 
 ## Tests
 
-Storage (`crates/bloblex-storage/src/lib.rs`, `memory_tests`):
+Storage (`crates/retinue-storage/src/lib.rs`, `memory_tests`):
 
 - `the_proposal_kind_check_widens_to_profile_and_keeps_old_rows` — rebuilding
   the D2 `proposals` table (no `profile`) widens the CHECK and copies every row,
@@ -141,7 +141,7 @@ Storage (`crates/bloblex-storage/src/lib.rs`, `memory_tests`):
   text is refused.
 - `the_manager_handover_flag_round_trips_on_a_session`.
 
-Daemon (`crates/bloblex-daemon/src/main.rs`, `phase2a_tests`):
+Daemon (`crates/retinue-daemon/src/main.rs`, `phase2a_tests`):
 
 - `manager_profile_tools_save_update_and_propose_locked_changes` — the four
   knowledge tools are Manager-only (hidden and refused otherwise); a new key is
@@ -154,12 +154,12 @@ Daemon (`crates/bloblex-daemon/src/main.rs`, `phase2a_tests`):
   appends a `manager` version; the user `set`/`revert` append `user` versions and
   history is complete.
 - `manager_context_block_is_only_for_the_manager_and_resent_only_when_it_changes`
-  — the `<bloblex_manager>` block is only for the Manager, is not re-sent
+  — the `<retinue_manager>` block is only for the Manager, is not re-sent
   unchanged, re-sends after a profile or playbook edit or a context reset,
   respects the caps, and an edit never changes the instruction hash.
 - `a_manager_handover_is_delivered_once_and_announced` — the notice has
   `reason:"manager_handover"` and `contextLost:false`, only the Manager is
-  armed, the next prompt carries `<bloblex_handover>` (profile, playbook, pending
+  armed, the next prompt carries `<retinue_handover>` (profile, playbook, pending
   and decisions) exactly once, and it is never persisted.
 - `project_proposals_require_a_full_folder_path_and_refuse_a_file` — a relative
   `existing` or `new` path is `invalid_argument` ("Choose a full folder path.")
@@ -174,14 +174,14 @@ parity test fails the build if a dispatched method or an emitted event has no
 
 Run in this worktree with `CARGO_TARGET_DIR=C:\fxt\d3`, after the final edit:
 
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` —
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` —
   **clean** (exit 0, `Finished`).
 - `cd apps/desktop && npx tsc -b` — **clean** (exit 0).
 - `cd apps/desktop && npx vitest run src/remote src/preview` — **13 files, 207
   tests passed**.
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop
-  --no-fail-fast` — **exit 0, all suites ok, 0 failed** (325 in `bloblex-daemon`,
-  103 in `bloblex-storage`, every other binary ok; no `FAILED`, no `panicked`,
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop
+  --no-fail-fast` — **exit 0, all suites ok, 0 failed** (325 in `retinue-daemon`,
+  103 in `retinue-storage`, every other binary ok; no `FAILED`, no `panicked`,
   no build errors). The full gate was run and waited for **after** the last
   source edit.
 
@@ -193,7 +193,7 @@ the full gate re-run to green.
 ## Unverified / notes
 
 - **UI is not touched.** No screen renders the profile, the playbook, the
-  `<bloblex_manager>` context or the `<bloblex_handover>` notice; the Director's
+  `<retinue_manager>` context or the `<retinue_handover>` notice; the Director's
   UI does that. The types, the tier rows and the fixtures are in place.
 - **`manager.profile.set` is keyed by `(category, key)`.** The optional `id`
   parameter is accepted but not required; the row is identified by its unique
@@ -206,7 +206,7 @@ the full gate re-run to green.
   (`knowledge::announce_model_change`) is the single place to extend if that
   changes.
 - **The Manager's side conversations** (where the Manager is the asking peer)
-  also receive the `<bloblex_manager>` block, because their `agentId` is the
+  also receive the `<retinue_manager>` block, because their `agentId` is the
   Manager. This is intended ("for the Manager only") but is not exercised by a
   test.
 - **`insert_proposal`'s kind allowlist** was widened to include `profile`

@@ -8,7 +8,7 @@ Two small fixes left over from FIX40 (see `docs/history/fix-40/report.md`, "Foll
 
 ## 1. "No extra options" line padding
 
-`apps/desktop/src/ui/AppearancePage.tsx` renders `<p className="appearance-quiet">This look has no extra options yet.</p>` directly inside a `.settings-card` for every look except Bitbots (Frost). The `p` has no horizontal padding, so its text sits flush against the card's left edge (most visible in Pop, `src/ui/themes/pop.css`, which draws a 2px card border).
+`apps/desktop/src/ui/AppearancePage.tsx` renders `<p className="appearance-quiet">This look has no extra options yet.</p>` directly inside a `.settings-card` for every look except Retinue (Frost). The `p` has no horizontal padding, so its text sits flush against the card's left edge (most visible in Pop, `src/ui/themes/pop.css`, which draws a 2px card border).
 
 - In `apps/desktop/src/ui/appearancePage.css`, give that paragraph the same inner padding as a settings row (`.settings-row` in `src/ui/settings.css` uses `padding: 12px 16px`) and `margin: 0`, so it lines up with other rows in Classic, Legacy, Pop and Dot.
 - Scope the rule to the paragraph (for example `p.appearance-quiet` or `.settings-card > .appearance-quiet`) so the `small` elements that share the `.appearance-quiet` colour rule are not affected.

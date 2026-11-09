@@ -105,7 +105,7 @@ export function commandMessage(command: SlashCommand, remainder: string): string
 export type ExecutionPickerKind = 'model' | 'effort'
 
 /** The window event `SessionExecutionControls` listens for to open a picker. */
-export const EXECUTION_PICKER_EVENT = 'bloblex:exec-picker'
+export const EXECUTION_PICKER_EVENT = 'retinue:exec-picker'
 
 export function requestExecutionPicker(kind: ExecutionPickerKind) {
   window.dispatchEvent(new CustomEvent(EXECUTION_PICKER_EVENT, { detail: kind }))

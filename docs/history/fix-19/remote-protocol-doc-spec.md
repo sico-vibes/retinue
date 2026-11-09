@@ -8,9 +8,9 @@ Written 15 October 2026. Docs-only lane: do not change code. The Director writes
 spec, architecture, threat model and UX flows; this lane writes the wire-level protocol so
 it is grounded in how the daemon actually works today.
 
-Read first: `docs/ipc-contract.md`, `crates/bloblex-daemon/src/main.rs` (transport at the
+Read first: `docs/ipc-contract.md`, `crates/retinue-daemon/src/main.rs` (transport at the
 `/v1/rpc` and `/v1/events` routes, `events.replay`, WebSocket handshake with `afterSequence`,
-`replay.gap`, broadcast capacity), `crates/bloblex-storage/src/lib.rs` (persisted event
+`replay.gap`, broadcast capacity), `crates/retinue-storage/src/lib.rs` (persisted event
 sequence), `apps/desktop/src/remote/remoteContract.ts`.
 
 ## Target document

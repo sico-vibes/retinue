@@ -1,4 +1,4 @@
-//! The preset employees Bitbots ships, and the CEO's hire proposals.
+//! The preset employees Retinue ships, and the CEO's hire proposals.
 //!
 //! The catalogue is `apps/desktop/src/team/presets.json`, the same file the
 //! daemon reads (`include_str!` there, `include_str!` here), so the window shows

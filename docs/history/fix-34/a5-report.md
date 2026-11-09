@@ -10,7 +10,7 @@ private `CARGO_TARGET_DIR=C:/fxt/a5`. No `git commit` was run. No file under
 
 Status: implemented and gated. Two honest gaps are recorded under **Unverified**.
 
-## Part 1 — daemon (`crates/bloblex-daemon/src/main.rs`)
+## Part 1 — daemon (`crates/retinue-daemon/src/main.rs`)
 
 ### Failure classification
 
@@ -58,7 +58,7 @@ already flagged), and it runs **before** the `turn.error` event is emitted.
 ```
 
    It removes the marker (setting `authState` to `unknown`, dropping `authFailedAt`),
-   publishes and only then re-runs `bloblex_runtime::discover()`; the discovered entry for
+   publishes and only then re-runs `retinue_runtime::discover()`; the discovered entry for
    that runtime (if any) is persisted and published. If discovery finds no entry for that
    runtime, the runtime stays `unknown` rather than the stale `sign_in_failed`.
 
@@ -67,16 +67,16 @@ already flagged), and it runs **before** the `turn.error` event is emitted.
 clear above) goes through `persist_runtime_discovery`, which now inherits a stored
 `sign_in_failed` (and its `authFailedAt`) into the freshly probed value. This is where the
 spec's "discovery must not overwrite `sign_in_failed` with `authenticated`" is enforced —
-`bloblex_runtime::auth_status` is a pure probe that only ever sees what the CLI claims
+`retinue_runtime::auth_status` is a pure probe that only ever sees what the CLI claims
 (`claude auth status` answers `loggedIn: true` with an expired refresh token), so it has no
 stored state to protect and was left untouched.
 
 ### Storing the class
 
 `turns.failure_class` has a `CHECK` constraint that predates this work, so
-`bloblex-storage::update_turn_outcome` filters the class through the existing additive
+`retinue-storage::update_turn_outcome` filters the class through the existing additive
 column: `failure_class_v2` now accepts `unauthenticated` as well as `context`
-(`crates/bloblex-storage/src/lib.rs`). `turn_failure_class`, `session_detail` and
+(`crates/retinue-storage/src/lib.rs`). `turn_failure_class`, `session_detail` and
 analytics read `COALESCE(failure_class_v2, failure_class)`, so the stored turn keeps
 `failureClass: "unauthenticated"`. `analytics_failure_class` still buckets it as `other`
 (the analytics bucket set is unchanged and untouched).
@@ -100,20 +100,20 @@ command string never does. Unknown values are rejected before anything is built.
 
 | provider | `login` (PowerShell script) | `install` |
 | --- | --- | --- |
-| `claude` | `echo 'Bitbots: at the Claude Code prompt type /login, finish signing in, then retry here.'; claude` | `irm https://claude.ai/install.ps1 \| iex` then chained login |
+| `claude` | `echo 'Retinue: at the Claude Code prompt type /login, finish signing in, then retry here.'; claude` | `irm https://claude.ai/install.ps1 \| iex` then chained login |
 | `codex` | `codex login` | `irm https://chatgpt.com/codex/install.ps1 \| iex` then chained login |
 | `opencode` | `opencode auth login` | `npm install -g opencode-ai` then chained login; without `npm.cmd` on PATH → error naming `https://opencode.ai/docs/` |
 
 Launch (visible window, no `CREATE_NO_WINDOW`), prefer:
 
 ```
-wt.exe new-tab --title "Bitbots: <Provider> sign-in" powershell -NoExit -Command <script>
+wt.exe new-tab --title "Retinue: <Provider> sign-in" powershell -NoExit -Command <script>
 ```
 
 fall back when `wt.exe` is not on PATH:
 
 ```
-cmd.exe /c start Bitbots powershell -NoExit -Command "<script>"
+cmd.exe /c start Retinue powershell -NoExit -Command "<script>"
 ```
 
 The `cmd` fallback quotes the script as one argument so cmd cannot act on the `|` in an
@@ -135,7 +135,7 @@ TypeScript wrappers (non-visual only):
 
 ## Tests
 
-Daemon (`crates/bloblex-daemon/src/main.rs`, module `phase2a_tests`):
+Daemon (`crates/retinue-daemon/src/main.rs`, module `phase2a_tests`):
 
 - `expired_sign_in_is_classified_and_a_completed_turn_clears_it` — an auth message through
   `forward_events` yields `runtime.changed` (flagged) **before** `turn.error`, then
@@ -150,7 +150,7 @@ Daemon (`crates/bloblex-daemon/src/main.rs`, module `phase2a_tests`):
   discovered `authenticated` state and drops `authFailedAt`; an empty discovery leaves
   `unknown`; a missing runtime and an empty `runtimeId` are `not_found` / `invalid_argument`.
 
-Storage (`crates/bloblex-storage/src/lib.rs`):
+Storage (`crates/retinue-storage/src/lib.rs`):
 `unauthenticated_failure_class_round_trips_in_the_additive_column` — `turn_failure_class`
 and the `session_detail` turn DTO both report `unauthenticated`.
 
@@ -167,29 +167,29 @@ event policy allow-list) and `remoteTauri.parity.test.ts` (export parity) pass.
 
 | Gate | Result |
 | --- | --- |
-| `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast` | **pass** — exit 0, 43 test binaries, **666 passed / 0 failed / 0 ignored**, no `FAILED`, no `panicked` |
-| `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` | **pass** — clean, no warnings |
+| `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast` | **pass** — exit 0, 43 test binaries, **666 passed / 0 failed / 0 ignored**, no `FAILED`, no `panicked` |
+| `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` | **pass** — clean, no warnings |
 | `cd apps/desktop && npx tsc -b` | **pass** — exit 0 |
 | `cd apps/desktop && npx vitest run src/remote` | **pass** — 11 files, **184 passed** |
-| `cargo test -p bloblex-desktop --lib` | **ran once, then blocked** — see below |
+| `cargo test -p retinue-desktop --lib` | **ran once, then blocked** — see below |
 
-### `cargo test -p bloblex-desktop --lib`
+### `cargo test -p retinue-desktop --lib`
 
 The worktree has no `apps/desktop/src-tauri/binaries/` and no `apps/desktop/dist/`, so the
 gate fails in the build script exactly as expected in a worktree:
 
 ```
-resource path `binaries\bitbotsd-x86_64-pc-windows-msvc.exe` doesn't exist
+resource path `binaries\retinued-x86_64-pc-windows-msvc.exe` doesn't exist
 ```
 
 To prove the new native code compiles and its tests pass rather than reporting an
-unverified file, I built `bitbotsd` and `bitbots-hook` into `C:/fxt/a5/debug`, staged copies
-as `binaries/bitbotsd-x86_64-pc-windows-msvc.exe` / `binaries/bitbots-hook-x86_64-pc-windows-msvc.exe`,
+unverified file, I built `retinued` and `retinue-hook` into `C:/fxt/a5/debug`, staged copies
+as `binaries/retinued-x86_64-pc-windows-msvc.exe` / `binaries/retinue-hook-x86_64-pc-windows-msvc.exe`,
 added a one-line stub `apps/desktop/dist/index.html` (tauri's `generate_context!` requires
 `frontendDist` to exist), ran:
 
 ```
-cargo test -p bloblex-desktop --lib   →  running 58 tests; test result: ok. 58 passed; 0 failed
+cargo test -p retinue-desktop --lib   →  running 58 tests; test result: ok. 58 passed; 0 failed
 ```
 
 including all five `runtime_terminal_tests`. The staged sidecars and the stub `dist/` were
@@ -222,9 +222,9 @@ counts.
   Flagging or clearing a runtime therefore also triggers the existing quota poll. That is
   the consequence of the required event, not a new path; the poll is already gated and
   backed off.
-- `runtime.auth.clear` runs a full `bloblex_runtime::discover()` (all providers) and keeps
+- `runtime.auth.clear` runs a full `retinue_runtime::discover()` (all providers) and keeps
   only the named runtime's entry. A per-provider probe does not exist in
-  `bloblex-runtime`, so this reuses the existing scan rather than adding one.
+  `retinue-runtime`, so this reuses the existing scan rather than adding one.
 - One full-suite `vitest run src/remote` run failed
   `RemoteApp.mounted.test.tsx > pairs: formats the code, waits for the owner…`
   (`.rm-waiting` undefined). It passed alone and passed on the next full run, and the test
@@ -244,7 +244,7 @@ command separator: the Claude login hint (`echo …; claude`) and every chained 
 `|` and quotes are PowerShell's business and wt does not interpret them:
 
 ```
-echo 'Bitbots: …retry here.'\; claude
+echo 'Retinue: …retry here.'\; claude
 irm https://chatgpt.com/codex/install.ps1 | iex\; codex login
 ```
 
@@ -254,13 +254,13 @@ untouched.
 ### 2. The `cmd.exe /c start … "<script>"` fallback is gone
 
 Replaced by spawning PowerShell directly. **The Part 2 table's
-`cmd.exe /c start Bitbots powershell -NoExit -Command "<script>"` line and the
+`cmd.exe /c start Retinue powershell -NoExit -Command "<script>"` line and the
 "quoted `cmd start` fallback argv" test description above are superseded.**
 
 | | before | now |
 | --- | --- | --- |
 | program | `cmd.exe` | `powershell.exe` |
-| args | `/c start Bitbots powershell -NoExit -Command "<script>"` | `-NoExit -Command <script>` |
+| args | `/c start Retinue powershell -NoExit -Command "<script>"` | `-NoExit -Command <script>` |
 | quoting | hand-quoted (`format!("\"{script}\"")`) | none — one argv entry, quoted by `std::process::Command` |
 | window | whatever `start` gave it | `creation_flags(0x00000010)` (`CREATE_NEW_CONSOLE`) |
 | result `terminal` | `"powershell"` | `"powershell"` (unchanged) |
@@ -304,18 +304,18 @@ Nothing is launched by any test.
 
 | Gate | Result |
 | --- | --- |
-| `cargo test -p bloblex-desktop --lib` | **pass** (after staging, see below) — `test result: ok. 59 passed; 0 failed`, including all six `runtime_terminal_tests` |
-| `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` | **pass** — clean; the excluded crates are unchanged by this follow-up, so it was served from cache (`Finished in 1.07s`) |
+| `cargo test -p retinue-desktop --lib` | **pass** (after staging, see below) — `test result: ok. 59 passed; 0 failed`, including all six `runtime_terminal_tests` |
+| `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` | **pass** — clean; the excluded crates are unchanged by this follow-up, so it was served from cache (`Finished in 1.07s`) |
 
 As before, the worktree has no `apps/desktop/src-tauri/binaries/` and no `apps/desktop/dist/`,
 so the lib gate fails in the build script exactly as expected in a worktree:
 
 ```
-resource path `binaries\bitbotsd-x86_64-pc-windows-msvc.exe` doesn't exist
+resource path `binaries\retinued-x86_64-pc-windows-msvc.exe` doesn't exist
 ```
 
 To prove the new native code compiles and its tests pass, I staged the same throwaway copies
-as last time (`C:/fxt/a5/debug/{bitbotsd,bitbots-hook}.exe` as the two
+as last time (`C:/fxt/a5/debug/{retinued,retinue-hook}.exe` as the two
 `binaries/*-x86_64-pc-windows-msvc.exe` sidecars, plus a one-line stub
 `apps/desktop/dist/index.html`), ran the gate, then **removed** both staged directories
 (both gitignored) and restored the `gen/schemas/*.json` the build rewrites. `git status` is

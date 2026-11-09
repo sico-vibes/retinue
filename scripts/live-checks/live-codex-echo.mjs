@@ -3,13 +3,13 @@ import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bloblex-live-codex-echo-'))
+const work = fs.mkdtempSync(path.join(os.tmpdir(), 'retinue-live-codex-echo-'))
 const child = spawn('codex', ['app-server', '--listen', 'stdio://'], { cwd: work, stdio: ['pipe', 'pipe', 'pipe'], shell: true })
 let id = 0, buf = ''
 const pending = new Map()
 child.stdout.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); try { const m = JSON.parse(l); if (m.id !== undefined && pending.has(m.id) && (m.result !== undefined || m.error !== undefined)) { pending.get(m.id)(m); pending.delete(m.id) } } catch {} } })
 const call = (method, params) => new Promise((res) => { const i = ++id; pending.set(i, res); child.stdin.write(JSON.stringify({ jsonrpc: '2.0', id: i, method, params }) + '\n') })
-await call('initialize', { clientInfo: { name: 'BitbotsLiveCheck', version: '0.0.1' }, capabilities: { experimentalApi: false } })
+await call('initialize', { clientInfo: { name: 'RetinueLiveCheck', version: '0.0.1' }, capabilities: { experimentalApi: false } })
 child.stdin.write(JSON.stringify({ jsonrpc: '2.0', method: 'initialized', params: {} }) + '\n')
 const echo = (r) => r.error ? { error: (r.error.message || '').slice(0, 140) } : { model: r.result.model, reasoningEffort: r.result.reasoningEffort, serviceTier: r.result.serviceTier }
 const out = {}

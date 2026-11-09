@@ -187,12 +187,12 @@ Also protected: `docs/qa-schema/`, `docs/fixtures/` (data, byte-identical).
 | `docs/FIX6_OPENCODE_INSTRUCTIONS_RESPAWN_SPEC.md` | `docs/history/fix-06/opencode-instructions-respawn-spec.md` | spec | OpenCode instructions | historical | 2026-10-14 |
 | `docs/FIX7_OPENCODE_USAGE_AND_SIGNIN_SPEC.md` | `docs/history/fix-07/opencode-usage-and-signin-spec.md` | spec | OpenCode usage and sign-in | historical | 2026-10-15 |
 | `docs/FIX8_DELEGATION_TIMELINE_ORDER_SPEC.md` | `docs/history/fix-08/delegation-timeline-order-spec.md` | spec | Delegation timeline | historical | 2026-10-14 |
-| `docs/FIX9_RENAME_REPORT.md` | `docs/history/fix-09/rename-report.md` | report | Rename to Bitbots | historical | 2026-10-15 |
-| `docs/FIX9_RENAME_SPEC.md` | `docs/history/fix-09/rename-spec.md` | spec | Rename to Bitbots | historical | 2026-10-15 |
+| `docs/FIX9_RENAME_REPORT.md` | `docs/history/fix-09/rename-report.md` | report | Rename to Retinue | historical | 2026-10-15 |
+| `docs/FIX9_RENAME_SPEC.md` | `docs/history/fix-09/rename-spec.md` | spec | Rename to Retinue | historical | 2026-10-15 |
 | `docs/APPROVAL_MODES.md` | `docs/reference/approval-modes.md` | reference | Permissions and approval | current | 2026-10-15 |
 | `docs/runtime-capabilities.md` | `docs/reference/runtime-capabilities.md` | reference | Runtime capabilities | current evidence record | 2026-10-15 |
 | `docs/PHASE_5_CONTRACT.md` | `docs/reference/phase-5-analytics-contract.md` | reference | Usage and cost analytics | superseded in part | 2026-10-14 |
-| `docs/BITBOTS_THEME_SPEC.md` | `docs/design/bitbots-theme-spec.md` | design rule | Themes (pixel re-skin) | historical | 2026-10-13 |
+| `docs/RETINUE_THEME_SPEC.md` | `docs/design/retinue-theme-spec.md` | design rule | Themes (pixel re-skin) | historical | 2026-10-13 |
 | `docs/UI_POLISH_WAVE.md` | `docs/design/ui-polish-wave.md` | design rule | UI polish wave | historical | 2026-10-15 |
 | `docs/windows-development.md` | `docs/guides/windows-development.md` | guide | Desktop development on Windows | current | 2026-10-15 |
 | `scripts/live-checks/README.md` | `docs/guides/live-checks.md` | guide | Live CLI checks | current | 2026-10-15 |
@@ -233,9 +233,9 @@ Also protected: `docs/qa-schema/`, `docs/fixtures/` (data, byte-identical).
 - **Continuation notes.** `FIX1_DICTATION_CONTINUE`, `FIX1_TEAM_CONTINUE`, `FIX35_C2_FINISH`, `FIX35_C3_FOLLOWUP` and similar notes are short follow-ups for a finished spec; they stay with their wave.
 - **Two runtime-capabilities evidence files.** [docs/evidence/task2-grok-runtime-capabilities.md](../../evidence/task2-grok-runtime-capabilities.md) and [docs/evidence/task2-luna-runtime-capabilities-original.md](../../evidence/task2-luna-runtime-capabilities-original.md) differ in author and date. The second is marked "original". Both are protected (evidence); phase 3 adds status lines only.
 - **Missing titles.** [docs/PHASE_2B_SPEC.md](../../history/phases/phase-2b-spec.md), [docs/runtime-capabilities.md](../../reference/runtime-capabilities.md), [docs/DIRECTOR_LOG.md](../../history/director-log.md) and the evidence file `task2-luna-runtime-capabilities-original.md` have no level-one heading. Phase 3 adds one.
-- **Superseded design.** [docs/BITBOTS_THEME_SPEC.md](../../design/bitbots-theme-spec.md) (the pixel re-skin, 13 October) is superseded by the FIX40 looks and themes. The current rules are in [DESIGN.md](../../design/design-system.md).
+- **Superseded design.** [docs/RETINUE_THEME_SPEC.md](../../design/retinue-theme-spec.md) (the pixel re-skin, 13 October) is superseded by the FIX40 looks and themes. The current rules are in [DESIGN.md](../../design/design-system.md).
 - **Obsolete budget clauses.** Several historical specs describe budgets. `AGENTS.md` (12 October amendment) retires them, and `budget.*` returns `unsupported`. Historical records keep their text and gain a one-line note.
-- **Old names.** Earlier records say Bloblex, blobs and "Fix 1A" style headings. Historical records keep their wording; current documents use the current names (see [STYLE.md](../../STYLE.md) once written).
+- **Old names.** Earlier records say Retinue, blobs and "Fix 1A" style headings. Historical records keep their wording; current documents use the current names (see [STYLE.md](../../STYLE.md) once written).
 
 ## Pre-existing dangling mentions (not changed)
 

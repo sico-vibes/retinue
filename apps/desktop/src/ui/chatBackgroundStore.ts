@@ -10,8 +10,8 @@ export const CHAT_BACKGROUND_OPACITY_MIN = 0.05
 export const CHAT_BACKGROUND_OPACITY_MAX = 0.65
 export const DEFAULT_CHAT_BACKGROUND: ChatBackgroundPrefs = { hasImage: false, effect: 'none', scope: 'all', emptyOpacity: 0.24, sessionOpacity: 0.24 }
 
-const PREFS_KEY = 'bitbots.chatBackground'
-const DB_NAME = 'bitbots-chat-background'
+const PREFS_KEY = 'retinue.chatBackground'
+const DB_NAME = 'retinue-chat-background'
 const STORE = 'images'
 const IMAGE_KEY = 'current'
 const MAX_FILE_BYTES = 25 * 1024 * 1024

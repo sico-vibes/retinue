@@ -25,7 +25,7 @@ const tick = () => act(async () => { await new Promise((resolve) => setTimeout(r
 
 const PREVIEW = {
   generatedAt: '2026-10-18T20:00:00.000Z',
-  fileName: 'bitbots-diagnostics-2026-10-18.zip',
+  fileName: 'retinue-diagnostics-2026-10-18.zip',
   files: [
     { name: 'README.txt', sizeBytes: 900 },
     { name: 'environment.json', sizeBytes: 640 },
@@ -41,7 +41,7 @@ beforeEach(() => {
   mocks.write.mockReset()
   mocks.rpc.mockResolvedValue(PREVIEW)
   mocks.select.mockResolvedValue('diagnostics-token')
-  mocks.write.mockResolvedValue({ path: 'C:\\Users\\you\\Documents\\bitbots-diagnostics-2026-10-18.zip', sizeBytes: 48512, files: [] })
+  mocks.write.mockResolvedValue({ path: 'C:\\Users\\you\\Documents\\retinue-diagnostics-2026-10-18.zip', sizeBytes: 48512, files: [] })
 })
 
 afterEach(() => { if (root) act(() => root.unmount()); host?.remove() })
@@ -72,7 +72,7 @@ describe('the Export diagnostics preview', () => {
     await tick()
     expect(mocks.select).toHaveBeenCalledTimes(1)
     expect(mocks.write).toHaveBeenCalledWith('diagnostics-token')
-    expect(document.body.textContent).toContain('Saved to C:\\Users\\you\\Documents\\bitbots-diagnostics-2026-10-18.zip')
+    expect(document.body.textContent).toContain('Saved to C:\\Users\\you\\Documents\\retinue-diagnostics-2026-10-18.zip')
   })
 
   it('says so when the list cannot be read and never enables saving', async () => {

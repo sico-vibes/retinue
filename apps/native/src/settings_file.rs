@@ -99,7 +99,7 @@ mod tests {
 
     #[test]
     fn a_missing_settings_file_reads_as_empty() {
-        let path = std::env::temp_dir().join("bitbots-native-does-not-exist/settings.json");
+        let path = std::env::temp_dir().join("retinue-native-does-not-exist/settings.json");
         assert!(read_folded_projects(&path).is_empty());
         let settings = read(&path);
         assert_eq!(settings.theme, ThemeChoice::System, "a new install follows Windows");
@@ -108,7 +108,7 @@ mod tests {
 
     #[test]
     fn folded_projects_survive_a_round_trip() {
-        let folder = std::env::temp_dir().join(format!("bitbots-native-settings-{}", std::process::id()));
+        let folder = std::env::temp_dir().join(format!("retinue-native-settings-{}", std::process::id()));
         let path = folder.join("native-settings.json");
         let mut folded = BTreeSet::new();
         folded.insert("shop".to_owned());
@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn the_appearance_choice_survives_and_leaves_the_folds_alone() {
-        let folder = std::env::temp_dir().join(format!("bitbots-native-appearance-{}", std::process::id()));
+        let folder = std::env::temp_dir().join(format!("retinue-native-appearance-{}", std::process::id()));
         let path = folder.join("native-settings.json");
         let mut folded = BTreeSet::new();
         folded.insert("shop".to_owned());

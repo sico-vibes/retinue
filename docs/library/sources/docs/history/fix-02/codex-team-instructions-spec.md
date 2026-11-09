@@ -16,13 +16,13 @@ in a **new** conversation would have been told it is the leader and offered
 
 ## 2. Root cause
 
-`team::attach` (`crates/bloblex-daemon/src/team.rs`) builds a `<bloblex_team>`
+`team::attach` (`crates/retinue-daemon/src/team.rs`) builds a `<retinue_team>`
 block from the *current* database state: the blob's role and description, the
 user's name, the project, **whether this blob is the leader**, and who the leader
 is. It is prepended to the blob's own instructions in `ExecOptions.instructions`
 on every `session.new`, `session.resume` and `session.prompt`.
 
-The Codex adapter (`crates/bloblex-adapter-codex/src/lib.rs`) installs
+The Codex adapter (`crates/retinue-adapter-codex/src/lib.rs`) installs
 instructions **only** as `developerInstructions` on `thread/start`
 (`start_params`, ~line 677). Afterwards:
 
@@ -31,7 +31,7 @@ instructions **only** as `developerInstructions` on `thread/start`
   when it differs it only reports `instructions: applied:false,
   reason:"instructions_change_requires_new_thread"` and sends nothing.
 - The daemon stores `sessions.codex_thread_instruction_sha256` once, with
-  `COALESCE(...)`, so it never advances (`crates/bloblex-storage/src/lib.rs`
+  `COALESCE(...)`, so it never advances (`crates/retinue-storage/src/lib.rs`
   ~line 1653).
 
 So any change after a thread started (leader flag toggled, role edited, project
@@ -48,7 +48,7 @@ operational state the model must be able to rely on.
 ## 3. Goal
 
 After the team context (or any instruction text) changes, the **next turn** on an
-existing Codex thread runs under the new text, and Bitbots says so only when it
+existing Codex thread runs under the new text, and Retinue says so only when it
 has evidence. A new thread behaves exactly as today.
 
 Non-goals: Claude and OpenCode (their paths are separate; do not touch them),
@@ -131,7 +131,7 @@ surface.
 
 ## 7. Tests (fake peers only; no installed CLI, no network)
 
-In `crates/bloblex-adapter-codex/tests/app_server.rs` and unit tests:
+In `crates/retinue-adapter-codex/tests/app_server.rs` and unit tests:
 
 - Changed hash on an existing thread: `turn/start` carries `collaborationMode`
   with the new `developer_instructions`, `mode:"default"`, the known model.
@@ -163,10 +163,10 @@ copy is missing. This is UI/UX and is done separately.
 ## 9. Gates
 
 ```
-cargo test -p bloblex-adapter-codex
-cargo test -p bloblex-storage
-cargo test -p bloblex-daemon           # set RUST_MIN_STACK=33554432 on this machine
-cargo clippy -p bloblex-adapter-codex -p bloblex-storage -p bloblex-daemon --all-targets -- -D warnings
+cargo test -p retinue-adapter-codex
+cargo test -p retinue-storage
+cargo test -p retinue-daemon           # set RUST_MIN_STACK=33554432 on this machine
+cargo clippy -p retinue-adapter-codex -p retinue-storage -p retinue-daemon --all-targets -- -D warnings
 ```
 
 `cargo fmt --check` fails on the repository at HEAD; report only, do not reformat.

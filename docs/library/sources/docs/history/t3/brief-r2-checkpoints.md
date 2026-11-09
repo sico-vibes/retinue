@@ -12,13 +12,13 @@ You are an implementation lane. You work ONLY in the git worktree `D:\t4b` (bran
 
 ## Why
 
-`session.checkpoints.revertTurn` (in `crates/bloblex-daemon/src/checkpoints.rs`) reverts several files of a turn in one call, newest first, stopping at the first failure. That can leave a turn half undone, the check and the apply are two separate git steps, and the daemon cannot rewind the provider's own conversation state (`providerStateRestore` is always false). The owner decided: do not offer a whole-turn restore. Keep the read-only per-file report and the existing single-file `file.revert`.
+`session.checkpoints.revertTurn` (in `crates/retinue-daemon/src/checkpoints.rs`) reverts several files of a turn in one call, newest first, stopping at the first failure. That can leave a turn half undone, the check and the apply are two separate git steps, and the daemon cannot rewind the provider's own conversation state (`providerStateRestore` is always false). The owner decided: do not offer a whole-turn restore. Keep the read-only per-file report and the existing single-file `file.revert`.
 
 ## You own
 
-- `crates/bloblex-daemon/src/checkpoints.rs`
-- `crates/bloblex-daemon/src/experiments.rs` (only if a helper becomes unused and would warn)
-- `crates/bloblex-daemon/src/main.rs`: ONLY delete the dispatch arm `"session.checkpoints.revertTurn" => checkpoints::revert_turn(st, &p).await,` and keep `"session.checkpoints"`.
+- `crates/retinue-daemon/src/checkpoints.rs`
+- `crates/retinue-daemon/src/experiments.rs` (only if a helper becomes unused and would warn)
+- `crates/retinue-daemon/src/main.rs`: ONLY delete the dispatch arm `"session.checkpoints.revertTurn" => checkpoints::revert_turn(st, &p).await,` and keep `"session.checkpoints"`.
 
 ## Work
 
@@ -34,7 +34,7 @@ You are an implementation lane. You work ONLY in the git worktree `D:\t4b` (bran
 
 ```powershell
 $env:RUST_MIN_STACK='33554432'
-cargo check -p bloblex-daemon --message-format short
+cargo check -p retinue-daemon --message-format short
 ```
 
 ## Report (`D:\t4b\target\lane\report.md`)

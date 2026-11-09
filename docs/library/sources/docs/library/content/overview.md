@@ -1,22 +1,22 @@
-# What Bitbots is
+# What Retinue is
 
 > **What this is:** the shape of the product in one page: what you install, what a bot is, and how the pieces fit together.
 > **Status:** current; written for v0.1.0-beta.36 and updated for `main` on 22 October 2026 (unreleased work is marked)
 > **Last updated:** 2026-10-22
 
-Bitbots is a local Windows desktop app for working with coding agents. It puts a team of bots in front of Claude Code, Codex and OpenCode, keeps their conversations in one window, and adds a small floating companion that shows what the team is doing.
+Retinue is a local Windows desktop app for working with coding agents. It puts a team of bots in front of Claude Code, Codex and OpenCode, keeps their conversations in one window, and adds a small floating companion that shows what the team is doing.
 
-It is not a hosted service. The app, your conversations and the coding agents' own sign-ins all stay on your machine. Bitbots does not copy a coding agent's sign-in into the app.
+It is not a hosted service. The app, your conversations and the coding agents' own sign-ins all stay on your machine. Retinue does not copy a coding agent's sign-in into the app.
 
-![The main window in the default Bitbots look, with fixture data](../assets/screens/main-bitbots-dark.png)
+![The main window in the default Retinue look, with fixture data](../assets/screens/main-retinue-dark.png)
 
 *The main window in the Frost look. Every screenshot in this library uses the browser preview with fixture data, not a real account.*
 
 ## The pieces
 
 - **The app window** is where you work. It shows your bots and projects, the conversations, and the conversation itself.
-- **The background service** runs alongside the app. It keeps your conversations, answers permission requests and stores your history. You do not start it yourself; Bitbots does.
-- **The coding agents** are the command-line tools you already use. Bitbots starts one only when a turn needs it, and each tool keeps its own sign-in.
+- **The background service** runs alongside the app. It keeps your conversations, answers permission requests and stores your history. You do not start it yourself; Retinue does.
+- **The coding agents** are the command-line tools you already use. Retinue starts one only when a turn needs it, and each tool keeps its own sign-in.
 - **The companion** is a small always-on-top window with a bot face, short status, approvals and a compact chat.
 
 A **bot** is a saved character with a name, a colour, an art style and instructions, plus the coding agent, model and permission settings it uses. A bot can own many conversations. A **conversation** is one thread with a coding agent; a **turn** is one prompt and everything that follows.
@@ -29,15 +29,15 @@ Work for the bots can also be tracked on the **Tasks** board, opened from the si
 
 The main window is three columns: bots and projects, conversations, and the conversation itself. A details panel can show the coding agent, files and conversation facts. Settings has ten tabs in four groups: App, Bots, Connections and System.
 
-The two **looks** change the whole app: Bitbots (Frost) and Blobots. A bot's **art** is separate: 3D robot, 2D robot, Glossy or Hand-painted. The look decides the default art for a bot that has not chosen one; an explicit choice always wins.
+The two **looks** change the whole app: Retinue (Frost) and Stone. A bot's **art** is separate: 3D robot, 2D robot, Glossy or Hand-painted. The look decides the default art for a bot that has not chosen one; an explicit choice always wins.
 
 ![Settings › Appearance: the look cards and the Wallpaper row](../assets/screens/settings-appearance.png)
 
-*Settings › Appearance. The two orb choices are Bitbots and Blobots. Names appear on hover or keyboard focus. Fixture data.*
+*Settings › Appearance. The two orb choices are Retinue and Stone. Names appear on hover or keyboard focus. Fixture data.*
 
 ## Where your work lives
 
-Your conversations, bots, notes, skills and settings are stored on this computer. The coding agents keep their own accounts; Bitbots never asks for or stores their passwords. Your choices in Settings are saved as you make them and apply the next time you open Bitbots.
+Your conversations, bots, notes, skills and settings are stored on this computer. The coding agents keep their own accounts; Retinue never asks for or stores their passwords. Your choices in Settings are saved as you make them and apply the next time you open Retinue.
 
 ## Remote access is optional
 

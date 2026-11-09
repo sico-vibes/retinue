@@ -21,15 +21,15 @@ The app downloads newer versions (betas and pre-releases included on the beta ch
   - Nothing at all when there is no update. The companion window shows nothing.
 - **Settings › Updates** shows the same state, keeps "Check now", and the auto-check toggle reads "Download updates automatically".
 - **Events:** `updates.state { phase: idle|checking|downloading|ready|installing|error, version?, downloadedBytes?, totalBytes?, message? }` from native to the UI; the UI subscribes once.
-- **Release pipeline:** from the next release on, releases must be **signed for the updater** (not Authenticode): build with `createUpdaterArtifacts: true` and the updater key in `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (or `%USERPROFILE%\.bloblex-release\updater.key` and `updater.pass`), run `scripts/make-update-manifest.mjs`, attach `latest.json` and the `.sig` to the release, and `gh release upload channel-beta latest.json --clobber`. Make `scripts/release-windows.ps1` (or a new `scripts/release-manual-signed.ps1`) do exactly that for an unsigned-Authenticode but updater-signed beta, with `-DryRun`. **Never print, log or commit key material.** The Director runs the release; you only make the script and check it with `-DryRun` against a fake bundle dir.
+- **Release pipeline:** from the next release on, releases must be **signed for the updater** (not Authenticode): build with `createUpdaterArtifacts: true` and the updater key in `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (or `%USERPROFILE%\.retinue-release\updater.key` and `updater.pass`), run `scripts/make-update-manifest.mjs`, attach `latest.json` and the `.sig` to the release, and `gh release upload channel-beta latest.json --clobber`. Make `scripts/release-windows.ps1` (or a new `scripts/release-manual-signed.ps1`) do exactly that for an unsigned-Authenticode but updater-signed beta, with `-DryRun`. **Never print, log or commit key material.** The Director runs the release; you only make the script and check it with `-DryRun` against a fake bundle dir.
 
 ## Tests
 - Rust (`updates.rs` tests): the scheduler only runs when `auto_check` is on; a newer version moves `checking → downloading → ready`; no install happens without the command; an error yields `error` with a safe message.
-- `cargo test -p bloblex-desktop --lib` must pass.
+- `cargo test -p retinue-desktop --lib` must pass.
 - Mounted test for the badge component: each phase renders the right label; "Restart to update" calls the install command.
 
 ## Gates
-- `cargo test -p bloblex-desktop --lib 2>&1 | grep "test result"` and `cargo clippy -p bloblex-desktop -- -D warnings` for the code you changed (pre-existing lints elsewhere in the crate may remain; list them).
+- `cargo test -p retinue-desktop --lib 2>&1 | grep "test result"` and `cargo clippy -p retinue-desktop -- -D warnings` for the code you changed (pre-existing lints elsewhere in the crate may remain; list them).
 - `cd apps/desktop && npx tsc -b && npx vitest run --maxWorkers=3 2>&1 | grep -E "Test Files|Tests |FAIL"` and `npm run build`
 
 Write `docs/history/fix-37/g5-report.md`, including the exact release commands the Director should run.

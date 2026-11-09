@@ -48,8 +48,8 @@ import { applySoundPrefs, previewSoundVolume, saveSoundsEnabled, saveSoundVolume
 import { focusModeFromSettings, saveFocusMode, subscribeFocusMode } from './companionPrefs'
 import { clearCompanionPosition } from './companionPositions'
 import { useEntityNoun } from './vocabulary'
-import { useThemeStyle } from '../blob/bitbots'
-import './bitbotsUi.css'
+import { useThemeStyle } from '../blob/retinue'
+import './retinueUi.css'
 
 export type SettingsPageId = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Secrets' | 'Updates' | 'Backup' | 'Health'
 
@@ -71,7 +71,7 @@ const NAV: Array<{ label: string; tabs: SettingsTab[] }> = [
   ] },
   { label: 'Connections', tabs: [
     { label: 'Remote access', icon: Smartphone, pages: [{ id: 'Remote', label: 'Remote' }, { id: 'Machines', label: 'Machines' }] },
-    { label: 'Integrations', icon: Cable, pages: [{ id: 'Connections', label: 'Bitbots MCP' }, { id: 'Secrets', label: 'Secrets' }] },
+    { label: 'Integrations', icon: Cable, pages: [{ id: 'Connections', label: 'Retinue MCP' }, { id: 'Secrets', label: 'Secrets' }] },
   ] },
   { label: 'System', tabs: [
     { label: 'System', icon: Wrench, pages: [{ id: 'Updates', label: 'Updates' }, { id: 'Backup', label: 'Backup' }, { id: 'Health', label: 'Health check' }] },
@@ -288,7 +288,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
     let active = true
     let unlisten: (() => void) | undefined
     if (inDesktop) {
-      void listenNative<boolean>('bloblex-companion-visible-changed', (payload) => {
+      void listenNative<boolean>('retinue-companion-visible-changed', (payload) => {
         companionVisibilityRevision.current += 1
         setCompanionVisible(payload)
       }).then((stop) => {
@@ -334,7 +334,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
     setSpeechProgress((current) => ({ ...current, [modelId]: 0 }))
     let unlisten: (() => void) | undefined
     try {
-      unlisten = await listenNative<{ modelId: string; completed: number; total: number }>('bloblex-speech-download', (payload) => {
+      unlisten = await listenNative<{ modelId: string; completed: number; total: number }>('retinue-speech-download', (payload) => {
         if (payload.modelId !== modelId) return
         setSpeechProgress((current) => ({ ...current, [modelId]: payload.total ? payload.completed / payload.total : 0 }))
       })
@@ -414,7 +414,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
   const setNotifications = (enabled: boolean) => guarded(async () => {
     await rpc('settings.set', { key: 'notifications.enabled', value: enabled })
     setNotificationsEnabled(enabled)
-    try { await emitNative('bloblex-notifications-enabled-changed', enabled) } catch { /* The main window refreshes the saved preference on reconnect. */ }
+    try { await emitNative('retinue-notifications-enabled-changed', enabled) } catch { /* The main window refreshes the saved preference on reconnect. */ }
   })
   const updateCompanionMonitor = (monitorName: string) => guarded(async () => {
     await setCompanionMonitor(monitorName)
@@ -576,7 +576,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
               {platform.autostart && <SettingsRow label="Start with Windows">
                 <button type="button" className={`toggle ${startWithWindows ? 'on' : ''}`} role="switch" aria-label="Start with Windows" aria-checked={startWithWindows} onClick={() => void updateAutostart(!startWithWindows)} disabled={saving || !autostartLoaded}><i /></button>
               </SettingsRow>}
-              {platform.tray && <SettingsRow label="Close to tray" hint="Closing the window keeps Bitbots running in the tray.">
+              {platform.tray && <SettingsRow label="Close to tray" hint="Closing the window keeps Retinue running in the tray.">
                 <button type="button" className={`toggle ${closeToTray ? 'on' : ''}`} role="switch" aria-label="Close to tray" aria-checked={closeToTray} onClick={() => void updateCloseToTray(!closeToTray)} disabled={saving}><i /></button>
               </SettingsRow>}
             </SettingsGroup>}
@@ -602,7 +602,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
             <SettingsGroup title="Usage">
               <SettingsRow label="Usage bar" hint="Each coding agent's plan limits along the bottom of the window.">{pageSwitch('Usage bar', usageBarEnabled, 'experimental.usageBar', (next) => onUsageBarChange?.(next))}</SettingsRow>
               <SettingsRow label="Usage tips" hint="A notice above the message box when a coding agent reports 75%, 90% or 100% of a limit.">{pageSwitch('Usage tips', usageTipsEnabled, 'experimental.usageTips', (next) => onUsageTipsChange?.(next))}</SettingsRow>
-              <SettingsRow label="Read sign-ins for usage" hint="Lets Bitbots use Claude Code's and OpenCode's saved sign-ins to ask each one for your usage. They're never stored, logged or copied. Codex reports its own.">{pageSwitch('Read sign-ins for usage', readSignIns, 'usage.readCliSignIns', setReadSignIns)}</SettingsRow>
+              <SettingsRow label="Read sign-ins for usage" hint="Lets Retinue use Claude Code's and OpenCode's saved sign-ins to ask each one for your usage. They're never stored, logged or copied. Codex reports its own.">{pageSwitch('Read sign-ins for usage', readSignIns, 'usage.readCliSignIns', setReadSignIns)}</SettingsRow>
             </SettingsGroup>
             {platform.editor && <SettingsGroup title="Editor">
               <form className="settings-form" onSubmit={(event) => void saveEditor(event)}>
@@ -638,8 +638,8 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
               <SettingsRow label="Show companion">
                 <button type="button" className={`toggle ${companionVisible ? 'on' : ''}`} role="switch" aria-label="Show companion" aria-checked={companionVisible} onClick={() => void setCompanion(!companionVisible)} disabled={saving}><i /></button>
               </SettingsRow>
-              <SettingsRow label="Open the companion when Bitbots starts">
-                <button type="button" className={`toggle ${companionOpenAtStartup ? 'on' : ''}`} role="switch" aria-label="Open the companion when Bitbots starts" aria-checked={companionOpenAtStartup} onClick={() => void saveSetting('companion.openAtStartup', !companionOpenAtStartup).then((failure) => { if (!failure) setCompanionOpenAtStartup(!companionOpenAtStartup) })} disabled={saving}><i /></button>
+              <SettingsRow label="Open the companion when Retinue starts">
+                <button type="button" className={`toggle ${companionOpenAtStartup ? 'on' : ''}`} role="switch" aria-label="Open the companion when Retinue starts" aria-checked={companionOpenAtStartup} onClick={() => void saveSetting('companion.openAtStartup', !companionOpenAtStartup).then((failure) => { if (!failure) setCompanionOpenAtStartup(!companionOpenAtStartup) })} disabled={saving}><i /></button>
               </SettingsRow>
               <SettingsRow label="Show/hide with Ctrl+Alt+B">
                 <button type="button" className={`toggle ${companionHotkey ? 'on' : ''}`} role="switch" aria-label="Show/hide with Ctrl+Alt+B" aria-checked={companionHotkey} onClick={() => void setHotkey(!companionHotkey)} disabled={saving}><i /></button>
@@ -723,7 +723,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
             </SettingsGroup>
             <HarnessUpdatesNotice runtimes={runtimes} onRefresh={onRefresh} />
             <SettingsGroup title="Claude Code">
-              <SettingsRow label="Dynamic workflows and Ultracode" hint="New Claude Code sessions ask for workflows, which also makes the Ultracode effort available. Bitbots doesn't edit Claude's config.">{pageSwitch('Claude dynamic workflows', claudeWorkflowsEnabled, 'claude.enableWorkflows', (next) => onClaudeWorkflowsChange?.(next))}</SettingsRow>
+              <SettingsRow label="Dynamic workflows and Ultracode" hint="New Claude Code sessions ask for workflows, which also makes the Ultracode effort available. Retinue doesn't edit Claude's config.">{pageSwitch('Claude dynamic workflows', claudeWorkflowsEnabled, 'claude.enableWorkflows', (next) => onClaudeWorkflowsChange?.(next))}</SettingsRow>
             </SettingsGroup>
             <SettingsGroup title="Custom launchers">
               {profiles.map((profile, index) => <div className="settings-row" key={String(profile.id ?? index)}>
@@ -818,7 +818,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
             </SettingsGroup>
           </>}
 
-          {consentFor && <ConfirmDialog title="Use cloud dictation?" body="Each recording is sent to OpenAI's ChatGPT transcription service using your signed-in Codex account, which Bitbots reads from Codex's own file on this computer. Recordings, text and the sign-in are not stored or logged by Bitbots. If the cloud is unavailable, dictation uses the on-device model when it is installed. Choose On device in Settings to stop." confirmLabel="Allow cloud" cancelLabel="Keep on device" onCancel={() => setConsentFor(null)} onConfirm={async () => { const engine = consentFor; setConsentFor(null); await applySpeechEngine(engine, true) }} />}
+          {consentFor && <ConfirmDialog title="Use cloud dictation?" body="Each recording is sent to OpenAI's ChatGPT transcription service using your signed-in Codex account, which Retinue reads from Codex's own file on this computer. Recordings, text and the sign-in are not stored or logged by Retinue. If the cloud is unavailable, dictation uses the on-device model when it is installed. Choose On device in Settings to stop." confirmLabel="Allow cloud" cancelLabel="Keep on device" onCancel={() => setConsentFor(null)} onConfirm={async () => { const engine = consentFor; setConsentFor(null); await applySpeechEngine(engine, true) }} />}
           {!loading && page === 'Skills' && <SkillsPage connected={inDesktop} />}
 
           {!loading && page === 'Backup' && <BackupPage connected={inDesktop} />}
@@ -829,7 +829,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
 
         </div>
       </section>
-      {profileDeleteTarget && <ConfirmDialog title={`Remove ${profileDeleteTarget.name}?`} body="This removes the custom launcher profile from Bitbots. It does not uninstall the coding agent." confirmLabel="Remove" cancelLabel="Keep launcher" holdToConfirm successTitle="Launcher removed" successBody="The custom launcher profile was removed from Bitbots." onConfirm={async () => { await deleteProfile(profileDeleteTarget.id) }} onComplete={() => setProfileDeleteTarget(null)} onCancel={() => setProfileDeleteTarget(null)} />}
+      {profileDeleteTarget && <ConfirmDialog title={`Remove ${profileDeleteTarget.name}?`} body="This removes the custom launcher profile from Retinue. It does not uninstall the coding agent." confirmLabel="Remove" cancelLabel="Keep launcher" holdToConfirm successTitle="Launcher removed" successBody="The custom launcher profile was removed from Retinue." onConfirm={async () => { await deleteProfile(profileDeleteTarget.id) }} onComplete={() => setProfileDeleteTarget(null)} onCancel={() => setProfileDeleteTarget(null)} />}
       {diagnosticsOpen && <DiagnosticsDialog onClose={() => setDiagnosticsOpen(false)} />}
       {confirmFullDefault && <ConfirmDialog title="Make Full access the default?" body={`Every ${noun} without its own setting will run commands and change files without asking you, in every project. Scheduled work still stays on safe actions. You can still set any ${noun} to ask.`} confirmLabel="Make it the default" cancelLabel="Keep the current default" tone="danger" onConfirm={() => void saveDefaultMode('bypass', true)} onCancel={() => setConfirmFullDefault(false)} />}
     </div>

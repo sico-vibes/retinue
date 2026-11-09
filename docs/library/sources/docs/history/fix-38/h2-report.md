@@ -19,7 +19,7 @@ Several causes stacked; the "flash then jump" was the cross-window round-trip.
 
 1. **A click created and persisted a conversation at once.**
    `selectAgent` (`apps/desktop/src/ui/App.tsx:2033`) called `ensureConversation`,
-   which called the daemon's `agent.conversation` (`crates/bloblex-daemon/src/team.rs:629`).
+   which called the daemon's `agent.conversation` (`crates/retinue-daemon/src/team.rs:629`).
    That creates a real session **titled with the bot's name**
    (`team.rs:636`, `new_session(...,"title":agent_name(&agent))`) before a single
    message. The preview fixture did the same (`apps/desktop/src/preview/fixtureBridge.ts:983`).

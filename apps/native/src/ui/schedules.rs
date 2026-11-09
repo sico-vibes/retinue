@@ -1008,7 +1008,7 @@ impl Root {
             .border_color(colors.line)
             .child(div().flex_1().flex().flex_col().child(div().font_weight(FontWeight::MEDIUM).child("Pause all schedules")).child(
                 div().text_size(px(theme::FS_XS)).text_color(colors.text_3).child(
-                    "Schedules run only while Bitbots is running and your computer is awake. Missed runs become one run when you're back.",
+                    "Schedules run only while Retinue is running and your computer is awake. Missed runs become one run when you're back.",
                 ),
             ))
             .child(

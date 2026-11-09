@@ -7,12 +7,12 @@ import {
 } from '../blob/look'
 import { SwatchGrid } from './SwatchGrid'
 import { useEntityNoun } from './vocabulary'
-import './bitbotsUi.css'
+import './retinueUi.css'
 
 const CREDIT_URL = 'https://github.com/fayazara/robot-heads'
 
 /**
- * The robot's look while Bitbots mode is on: one of four outlines and three
+ * The robot's look while Retinue mode is on: one of four outlines and three
  * colours. The antenna and the speed are deliberately not offered; they are
  * the same for every robot.
  */

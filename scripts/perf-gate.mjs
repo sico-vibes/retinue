@@ -3,7 +3,7 @@
 // Measures three things that a release can quietly make worse, and fails when a
 // budget in `perf-budgets.json` is exceeded:
 //
-// * cold start: from spawning `bitbotsd` to its ready line, on a seeded
+// * cold start: from spawning `retinued` to its ready line, on a seeded
 //   database (200 conversations, 2,000 messages);
 // * snapshot size: the bytes of `app.snapshot`, with and without `lazy`, on
 //   that same database;
@@ -15,12 +15,12 @@
 // state from the one before it.
 //
 // Usage:
-//   node scripts/perf-gate.mjs [--daemon <bitbotsd>] [--seed <perf-seed>]
+//   node scripts/perf-gate.mjs [--daemon <retinued>] [--seed <perf-seed>]
 //                              [--runs 3] [--json] [--keep]
 //   node scripts/perf-gate.mjs --self-test      # fails on purpose, with a 1 ms budget
 //
 // The binaries must be built first (CI does this in its own step):
-//   cargo build -p bloblex-daemon --bin bitbotsd -p bloblex-storage --bin perf-seed
+//   cargo build -p retinue-daemon --bin retinued -p retinue-storage --bin perf-seed
 import { spawn, spawnSync } from 'node:child_process'
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import http from 'node:http'
@@ -66,14 +66,14 @@ function findBinary(explicit, envNames, name) {
   const found = attempts.find((candidate) => candidate && existsSync(candidate))
   if (!found) {
     console.error(`perf-gate: could not find ${name}${exe}. Build it first, or pass it explicitly:`)
-    console.error(`  cargo build -p bloblex-daemon --bin bitbotsd -p bloblex-storage --bin perf-seed`)
-    console.error(`  node scripts/perf-gate.mjs --daemon <path to bitbotsd> --seed <path to perf-seed>`)
+    console.error(`  cargo build -p retinue-daemon --bin retinued -p retinue-storage --bin perf-seed`)
+    console.error(`  node scripts/perf-gate.mjs --daemon <path to retinued> --seed <path to perf-seed>`)
     process.exit(2)
   }
   return found
 }
 
-const daemonPath = findBinary(options.daemon, ['BITBOTSD', 'BLOBLEX_DAEMON_BIN'], 'bitbotsd')
+const daemonPath = findBinary(options.daemon, ['RETINUED', 'RETINUE_DAEMON_BIN'], 'retinued')
 const seedPath = findBinary(options.seed, ['PERF_SEED_BIN'], 'perf-seed')
 
 function runSeed(database) {
@@ -90,7 +90,7 @@ function measureRun(database) {
   return new Promise((resolve, reject) => {
     const startedAt = process.hrtime.bigint()
     const child = spawn(daemonPath, [], {
-      env: { ...process.env, BLOBLEX_DB_PATH: database },
+      env: { ...process.env, RETINUE_DB_PATH: database },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })
@@ -132,7 +132,7 @@ function measureRun(database) {
         if (!line.startsWith('{')) continue
         let parsed
         try { parsed = JSON.parse(line) } catch { continue }
-        if (parsed.type !== 'bloblexd.ready') continue
+        if (parsed.type !== 'retinued.ready') continue
         ready = { coldStartMs: Number(process.hrtime.bigint() - startedAt) / 1e6, address: parsed.address, capability: parsed.capability }
         // The snapshot follows on the same process: a second start would measure
         // a different database state and a warm file cache.
@@ -180,7 +180,7 @@ function median(values) {
 }
 
 async function main() {
-  const work = mkdtempSync(path.join(os.tmpdir(), 'bitbots-perf-'))
+  const work = mkdtempSync(path.join(os.tmpdir(), 'retinue-perf-'))
   const database = path.join(work, 'seed.db')
   const seeded = runSeed(database)
   const keep = options.keep

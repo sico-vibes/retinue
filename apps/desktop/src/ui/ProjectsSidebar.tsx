@@ -20,7 +20,7 @@ import { isManager, isSideSession, projectOfSession, sessionIsBusy } from './tea
 import { TeamMenu, type MenuItem } from './TeamSidebar'
 import './projectsSidebar.css'
 
-const FOLDED_KEY = 'bitbots.sidebar.foldedProjects'
+const FOLDED_KEY = 'retinue.sidebar.foldedProjects'
 const RECENT_PER_BOT = 4
 
 const stampOf = (session: Session) => String(session.updatedAt ?? session.createdAt ?? '')

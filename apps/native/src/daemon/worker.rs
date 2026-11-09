@@ -168,7 +168,7 @@ pub fn start(db_path: PathBuf) -> (DaemonHandle, async_channel::Receiver<Update>
     let (command_tx, command_rx) = async_channel::unbounded();
     let (update_tx, update_rx) = async_channel::unbounded();
     let thread = std::thread::Builder::new()
-        .name("bitbots-daemon".to_owned())
+        .name("retinue-daemon".to_owned())
         .spawn(move || {
             let runtime = match tokio::runtime::Builder::new_current_thread().enable_all().build() {
                 Ok(runtime) => runtime,
@@ -325,11 +325,11 @@ async fn serve_commands(
             _ = poll.tick() => {
                 match child.try_wait() {
                     Ok(Some(status)) => {
-                        return Outcome::Died(format!("The Bitbots daemon stopped ({}).", describe_exit(&status)));
+                        return Outcome::Died(format!("The Retinue daemon stopped ({}).", describe_exit(&status)));
                     }
                     Ok(None) => {}
                     Err(error) => {
-                        return Outcome::Died(format!("The Bitbots daemon could not be watched: {error}."));
+                        return Outcome::Died(format!("The Retinue daemon could not be watched: {error}."));
                     }
                 }
             }
@@ -587,7 +587,7 @@ mod tests {
     fn an_exit_is_described_without_any_secret() {
         // The description is built from the exit status only; there is no path,
         // capability or address to leak.
-        let text = "The Bitbots daemon stopped (exit code 0).";
+        let text = "The Retinue daemon stopped (exit code 0).";
         assert!(!text.contains("Bearer"));
     }
 }

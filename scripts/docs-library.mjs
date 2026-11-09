@@ -1,4 +1,4 @@
-// Build the Bitbots documentation library: one portable, offline HTML file.
+// Build the Retinue documentation library: one portable, offline HTML file.
 //
 //   node scripts/docs-library.mjs build
 //   node scripts/docs-library.mjs check
@@ -28,7 +28,7 @@ const definitions = [
   ['Learn', 'Quickstart', 'rocket', ['guides/five-minute-path', 'overview', 'glossary']],
   [
     'Learn',
-    'Working with Bitbots',
+    'Working with Retinue',
     'layout-dashboard',
     [
       'guides/looks-and-appearance',
@@ -575,7 +575,7 @@ async function makeHtml(documents, sections, revision) {
   const tokens = await readFile(path.join(library, 'assets', 'tokens.css'), 'utf8');
   const styles = await readFile(path.join(library, 'assets', 'viewer.css'), 'utf8');
   const client = await readFile(path.join(library, 'assets', 'viewer.js'), 'utf8');
-  const logo = (await readFile(path.join(library, 'assets', 'bitbots.png'))).toString('base64');
+  const logo = (await readFile(path.join(library, 'assets', 'retinue.png'))).toString('base64');
   const bundle = jsonForHtml({
     documents,
     sections: sections.map((section) => ({
@@ -591,26 +591,26 @@ async function makeHtml(documents, sections, revision) {
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<meta name="description" content="Bitbots documentation: install, bots, looks, approvals, the daemon, Remote access and the project records."/>
+<meta name="description" content="Retinue documentation: install, bots, looks, approvals, the daemon, Remote access and the project records."/>
 <meta name="color-scheme" content="dark light"/>
-<title>Bitbots documentation</title>
+<title>Retinue documentation</title>
 <link rel="icon" href="data:image/png;base64,${logo}"/>
 <style>${tokens}
 ${styles}</style>
-<script>try{document.documentElement.dataset.theme=localStorage.getItem('bitbots-docs-theme')==='light'?'light':'dark'}catch{}</script>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem('retinue-docs-theme')==='light'?'light':'dark'}catch{}</script>
 </head>
 <body>
 <a class="skip-link" href="#main-content">Skip to content</a>
-<header class="navbar"><div class="navbar-inner"><div class="navbar-left"><button class="mobile-menu" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">${icon('menu')}</button><a class="navbar-link" href="#overview">Bitbots</a><a class="navbar-link" href="${shortcut}">Docs</a><a class="navbar-link" href="#project/README">Project documents</a></div><a class="wordmark" href="${shortcut}" aria-label="Bitbots Docs home"><img alt="" src="data:image/png;base64,${logo}" width="26" height="26"/>Bitbots <span>Docs</span></a><div class="navbar-right"><button class="search-button" type="button" data-open-search aria-label="Search documentation">${icon('search')}<span class="navbar-search-label">Search</span><kbd>Ctrl K</kbd></button></div></div></header>
+<header class="navbar"><div class="navbar-inner"><div class="navbar-left"><button class="mobile-menu" type="button" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">${icon('menu')}</button><a class="navbar-link" href="#overview">Retinue</a><a class="navbar-link" href="${shortcut}">Docs</a><a class="navbar-link" href="#project/README">Project documents</a></div><a class="wordmark" href="${shortcut}" aria-label="Retinue Docs home"><img alt="" src="data:image/png;base64,${logo}" width="26" height="26"/>Retinue <span>Docs</span></a><div class="navbar-right"><button class="search-button" type="button" data-open-search aria-label="Search documentation">${icon('search')}<span class="navbar-search-label">Search</span><kbd>Ctrl K</kbd></button></div></div></header>
 <button class="menu-scrim" hidden aria-label="Close navigation"></button>
 <div class="docs-layout">
 <nav class="sidebar" id="sidebar" aria-label="Documentation"><button class="small-button mobile-close" type="button" data-close-menu>${icon('x')} Close</button><a class="nav-link" href="#project/README">${icon('chevron-left')} All documents</a>${renderNavigation(sections, first.id)}<p class="sidebar-note">${documents.length} documents. Local-first, fully searchable.<br/>Source snapshot ${escapeHtml(revision)}.</p></nav>
 <main class="main-content" id="main-content">${renderArticle(first)}</main>
 <aside class="toc-rail" aria-label="On this page"><div class="toc-inner"><h2 class="toc-title">On this page</h2><nav id="toc-links">${tocFor(first)}</nav></div></aside>
 </div>
-<footer class="footer"><div class="footer-inner"><div class="footer-wordmark">Bitbots<span>Docs</span></div><div class="footer-columns"><div><h2>Get started</h2><a href="${shortcut}">Five-minute path</a><a href="#overview">What Bitbots is</a><a href="#glossary">Glossary</a></div><div><h2>Use it</h2><a href="#guides/looks-and-appearance">Looks and appearance</a><a href="#guides/bots">Bots</a><a href="#guides/conversations-and-approvals">Conversations and approvals</a></div><div><h2>Understand it</h2><a href="#reference/architecture">Architecture</a><a href="#reference/ipc-and-events">IPC and events</a><a href="#reference/settings">Settings</a></div><div><h2>More</h2><a href="#reference/remote-gateway">Remote gateway</a><a href="#reference/release-and-updates">Release and updates</a><a href="#library">Library guide</a></div></div><div class="footer-bottom">Bitbots. Documentation built from this local checkout. No network access is used.</div></div></footer>
+<footer class="footer"><div class="footer-inner"><div class="footer-wordmark">Retinue<span>Docs</span></div><div class="footer-columns"><div><h2>Get started</h2><a href="${shortcut}">Five-minute path</a><a href="#overview">What Retinue is</a><a href="#glossary">Glossary</a></div><div><h2>Use it</h2><a href="#guides/looks-and-appearance">Looks and appearance</a><a href="#guides/bots">Bots</a><a href="#guides/conversations-and-approvals">Conversations and approvals</a></div><div><h2>Understand it</h2><a href="#reference/architecture">Architecture</a><a href="#reference/ipc-and-events">IPC and events</a><a href="#reference/settings">Settings</a></div><div><h2>More</h2><a href="#reference/remote-gateway">Remote gateway</a><a href="#reference/release-and-updates">Release and updates</a><a href="#library">Library guide</a></div></div><div class="footer-bottom">Retinue. Documentation built from this local checkout. No network access is used.</div></div></footer>
 <button class="theme-toggle" type="button" aria-label="Switch to light theme">${icon('sun')}</button>
-<dialog class="search-dialog" aria-labelledby="search-label"><div class="search-field">${icon('search')}<label class="sr-only" id="search-label" for="docs-search">Search Bitbots documentation</label><input id="docs-search" type="search" placeholder="Search documentation…" autocomplete="off" aria-controls="search-results"/><button type="button" data-close-search aria-label="Close search">Esc</button></div><div class="search-results" id="search-results" role="region" aria-label="Search results"></div><div class="search-hint"><span>↑ ↓ Navigate</span><span>Enter Open</span><span>Esc Close</span><span id="search-count" role="status"></span></div></dialog>
+<dialog class="search-dialog" aria-labelledby="search-label"><div class="search-field">${icon('search')}<label class="sr-only" id="search-label" for="docs-search">Search Retinue documentation</label><input id="docs-search" type="search" placeholder="Search documentation…" autocomplete="off" aria-controls="search-results"/><button type="button" data-close-search aria-label="Close search">Esc</button></div><div class="search-results" id="search-results" role="region" aria-label="Search results"></div><div class="search-hint"><span>↑ ↓ Navigate</span><span>Enter Open</span><span>Esc Close</span><span id="search-count" role="status"></span></div></dialog>
 <div class="toast" role="status" aria-live="polite" hidden></div>
 <noscript><p>Enable JavaScript for navigation and local search. Every source is also available as Markdown in the sources folder.</p></noscript>
 <script id="docs-data" type="application/json">${bundle}</script>
@@ -836,7 +836,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       process.exitCode = 1;
     });
     server.listen(port, '127.0.0.1', () =>
-      console.log(`Bitbots Docs: http://127.0.0.1:${port}`),
+      console.log(`Retinue Docs: http://127.0.0.1:${port}`),
     );
   } else throw new Error(`Unknown command: ${command}. Use build, check or serve.`);
 }

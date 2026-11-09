@@ -4,7 +4,7 @@
 > **Status:** historical
 > **Last updated:** 2026-10-17
 
-The owner kept getting Windows Firewall "Allow access?" prompts while the lane ran tests: the Native Remote tests turn Native on, and `crates/bloblex-daemon/src/remote/native.rs` binds `0.0.0.0` (and `[::]`). Windows asks once per newly built test executable. **Never run `git commit`.** Keep context small: grep and read only the ranges you need.
+The owner kept getting Windows Firewall "Allow access?" prompts while the lane ran tests: the Native Remote tests turn Native on, and `crates/retinue-daemon/src/remote/native.rs` binds `0.0.0.0` (and `[::]`). Windows asks once per newly built test executable. **Never run `git commit`.** Keep context small: grep and read only the ranges you need.
 
 ## Change
 - Make the Native bind host a field of the Native/remote state, defaulting to the production value (`0.0.0.0`, plus `[::]`). Under `#[cfg(test)]` (or through the test constructor the remote tests already use) set it to `127.0.0.1` and skip the IPv6 wildcard. Production code paths must still bind `0.0.0.0`.
@@ -13,7 +13,7 @@ The owner kept getting Windows Firewall "Allow access?" prompts while the lane r
 - Make sure no test runs real `netsh`, `powershell` or UPnP discovery (fakes only).
 
 ## Gates
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"` (foreground; wait)
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"` (foreground; wait)
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
 
 Append a short note to `docs/history/fix-35/c2-report.md`.

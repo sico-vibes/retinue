@@ -8,23 +8,23 @@ You are an implementation lane. You work ONLY in the git worktree `D:\t3d` (bran
 2. **No git writes.** Never `git commit`, `git add`, `git push`, `git reset`, `git stash`, `git checkout`, `git rebase`. Leave changes in the working tree.
 3. Do not touch any path outside `D:\t3d`. Do not start, stop or kill any process you did not start. Never print secrets or message content in logs.
 4. Only edit the files listed under "You own". If another file must change, say so in the report.
-5. Keep tool output small (pipe cargo through `--message-format short`; never cat whole big files: `crates/bloblex-daemon/src/main.rs` is 12,900 lines, so use search and `sed -n`/Read with offsets). Keep a work log at `D:\t3d\target\lane\worklog.md` (one line per step).
+5. Keep tool output small (pipe cargo through `--message-format short`; never cat whole big files: `crates/retinue-daemon/src/main.rs` is 12,900 lines, so use search and `sed -n`/Read with offsets). Keep a work log at `D:\t3d\target\lane\worklog.md` (one line per step).
 
 ## Background you need
 
-Bitbots is a Tauri desktop app; a Rust daemon (`crates/bloblex-daemon`, binary `bitbotsd`) owns sessions, turns, SQLite storage (`crates/bloblex-storage`). The daemon exposes JSON RPC methods through `dispatch()` in `crates/bloblex-daemon/src/main.rs` (look for `"delegation.list" => delegations::rpc(st, method, &p).await` near line 831; errors use `derr(code, message, StatusCode)`).
+Retinue is a Tauri desktop app; a Rust daemon (`crates/retinue-daemon`, binary `retinued`) owns sessions, turns, SQLite storage (`crates/retinue-storage`). The daemon exposes JSON RPC methods through `dispatch()` in `crates/retinue-daemon/src/main.rs` (look for `"delegation.list" => delegations::rpc(st, method, &p).await` near line 831; errors use `derr(code, message, StatusCode)`).
 
-The **Manager** bot delegates work to teammate bots with a `message_blob` tool (`crates/bloblex-daemon/src/team.rs`, the function around line 560-625 records a row, then `deliver()` ~line 730 prompts the teammate's "side conversation" or queues the brief until the teammate is idle). Each assignment is one row in the durable `delegations` table (`crates/bloblex-daemon/src/delegations.rs` + `bloblex-storage/src/lib.rs` `delegation_*` methods near line 3417-3540): status `queued -> running -> completed|failed|cancelled|interrupted`. When the teammate's turn ends, `team::after_turn` (team.rs ~line 815) calls `delegations::after_turn`, then relays "[Reply from X] ..." back to the Manager's conversation (`deliver(origin, ...)`), which starts the Manager's next turn.
+The **Manager** bot delegates work to teammate bots with a `message_blob` tool (`crates/retinue-daemon/src/team.rs`, the function around line 560-625 records a row, then `deliver()` ~line 730 prompts the teammate's "side conversation" or queues the brief until the teammate is idle). Each assignment is one row in the durable `delegations` table (`crates/retinue-daemon/src/delegations.rs` + `retinue-storage/src/lib.rs` `delegation_*` methods near line 3417-3540): status `queued -> running -> completed|failed|cancelled|interrupted`. When the teammate's turn ends, `team::after_turn` (team.rs ~line 815) calls `delegations::after_turn`, then relays "[Reply from X] ..." back to the Manager's conversation (`deliver(origin, ...)`), which starts the Manager's next turn.
 
 Read `delegations.rs` completely first (it is 195 lines), then the callers listed above.
 
 ## You own (and may edit)
 
-- `crates/bloblex-daemon/src/delegations.rs`
-- `crates/bloblex-daemon/src/team.rs` (delegation-related code only: `deliver`, `queue_delivery`, `restore_queued`, the drain, `after_turn`, and the queue struct; do not restructure unrelated Manager tools)
-- `crates/bloblex-storage/src/lib.rs` (only `delegation_*` functions, the `delegations` schema/migration, and `StorageError` if needed)
-- `crates/bloblex-daemon/src/workspace.rs` (NEW file, for item 4)
-- `crates/bloblex-daemon/src/main.rs`: ONLY (a) the `mod workspace;` line next to the other `mod` lines, (b) new dispatch arms next to the existing `"delegation.list"` arm and next to `"session.repository"`. Do not change anything else in main.rs. Another lane edits other parts of main.rs at the same time; keep your main.rs edits to those few lines so they merge.
+- `crates/retinue-daemon/src/delegations.rs`
+- `crates/retinue-daemon/src/team.rs` (delegation-related code only: `deliver`, `queue_delivery`, `restore_queued`, the drain, `after_turn`, and the queue struct; do not restructure unrelated Manager tools)
+- `crates/retinue-storage/src/lib.rs` (only `delegation_*` functions, the `delegations` schema/migration, and `StorageError` if needed)
+- `crates/retinue-daemon/src/workspace.rs` (NEW file, for item 4)
+- `crates/retinue-daemon/src/main.rs`: ONLY (a) the `mod workspace;` line next to the other `mod` lines, (b) new dispatch arms next to the existing `"delegation.list"` arm and next to `"session.repository"`. Do not change anything else in main.rs. Another lane edits other parts of main.rs at the same time; keep your main.rs edits to those few lines so they merge.
 
 Never touch: `media.rs`, `checkpoints.rs`, `experiments.rs`, `repository.rs`, anything under `apps/`, `docs/`, `.claude/`.
 
@@ -85,7 +85,7 @@ session.workspace { "sessionId": String }
 Rules:
 - `mode == "isolated"` only when the session's `link.worktree` object exists AND its `path` equals the session's `projectPath` (canonicalized, case-insensitive on Windows). Otherwise `"shared"` for any git or non-git folder that is simply the project folder, and `"unknown"` only if the session has no project path.
 - `isolationFailure`: today `prepare_worktree()` in team.rs (~line 560) silently returns `None` when it cannot make a worktree and the delegation then runs in the shared folder. Make that failure visible: when `prepare_worktree` returns `None` *for a reason* (git missing, folder not a repo, dirty/unsupported state, `git worktree add` failed), store a short plain-English reason in the new side conversation's `link` as `"worktreeError"` (a string, one line, max 200 chars, no paths of the user's home directory, no command output beyond the first line), and surface it here. Look at `prepare_worktree` and `crate::worktree` to see which cases return None; distinguish "not applicable" (a non-git folder, or no other task is working there, which is NOT a failure and gets no `worktreeError`) from "tried and failed" (which does). If the function cannot tell the cases apart without a big refactor, record a failure only for the "git worktree add failed" and "git unavailable" branches and say so in the report.
-- All git calls: plain argument lists via the project's existing helper for git commands (grep `fn git_command` in `crates/bloblex-daemon/src/` and reuse it), `current_dir` set to the project folder, no shell, run inside `tokio::task::spawn_blocking`, output read only to branch on it and never logged. Bound runtime (a stuck git must not hang the RPC: use the existing timeout pattern if the helper has one, otherwise cap with `tokio::time::timeout(Duration::from_secs(5), ...)`).
+- All git calls: plain argument lists via the project's existing helper for git commands (grep `fn git_command` in `crates/retinue-daemon/src/` and reuse it), `current_dir` set to the project folder, no shell, run inside `tokio::task::spawn_blocking`, output read only to branch on it and never logged. Bound runtime (a stuck git must not hang the RPC: use the existing timeout pattern if the helper has one, otherwise cap with `tokio::time::timeout(Duration::from_secs(5), ...)`).
 - Never write to the repository or the worktree. Read-only.
 - Register `"session.workspace" => workspace::rpc(...)` (or a free async fn) in main.rs next to `"session.repository"`.
 
@@ -95,8 +95,8 @@ From `D:\t3d`:
 
 ```powershell
 $env:RUST_MIN_STACK='33554432'
-cargo check -p bloblex-daemon --message-format short
-cargo check -p bloblex-storage --message-format short
+cargo check -p retinue-daemon --message-format short
+cargo check -p retinue-storage --message-format short
 ```
 
 `cargo check` without `--tests` is allowed. Fix every warning you introduce. The first build can take many minutes: use a long timeout. Do NOT run clippy with `--all-targets`.

@@ -102,7 +102,7 @@ export const GROUPS: Group[] = [
     scene('proposal-bot', 'Create an employee', 'Scout', 'Press Edit to see the form.'),
     scene('proposal-project', 'Create a project', 'Marketing site'),
     scene('proposal-task', 'Assign a task', 'Effort picker research'),
-    scene('proposal-merge', 'Merge a finished task', 'bitbots/effort-picker'),
+    scene('proposal-merge', 'Merge a finished task', 'retinue/effort-picker'),
     scene('proposal-update', 'Update an employee', 'Lead designer'),
     scene('proposal-playbook', 'Change the playbook', 'licences'),
     scene('proposal-profile', 'Remember something about you', 'Direct, plain English'),

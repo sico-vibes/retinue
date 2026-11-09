@@ -3,7 +3,7 @@ import { RobotHead } from '../vendor/robot-heads'
 import type { BlobCanvasProps } from './BlobCanvas'
 import { GREETING_REFERENCE } from './greetingScene'
 import { moodWithFileReference } from './characterState'
-import { robotStateFor } from './bitbots'
+import { robotStateFor } from './retinue'
 import { resolveBot } from './look/bot'
 
 
@@ -21,7 +21,7 @@ function seedFraction(seed: string | null | undefined) {
 }
 
 /**
- * The Bitbots renderer: the same props as the classic blob canvas, drawn as a
+ * The Retinue renderer: the same props as the classic blob canvas, drawn as a
  * pixel-LED robot head. State shows on the robot's own face, so there are no
  * corner glyphs. The antenna is always off and the speed always 1.
  */

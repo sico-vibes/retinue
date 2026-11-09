@@ -1,5 +1,5 @@
-// robot-heads 0.3.0 (MIT, Copyright (c) 2026 Fayaz Ahmed), vendored by Bitbots.
-// Bitbots changes, both for cost: (1) the shared loop draws at most ~30 times a
+// robot-heads 0.3.0 (MIT, Copyright (c) 2026 Fayaz Ahmed), vendored by Retinue.
+// Retinue changes, both for cost: (1) the shared loop draws at most ~30 times a
 // second instead of at the display's refresh rate; (2) avatars of 80px or less
 // draw at up to 1.5x instead of 2x and update at ~15 fps. Nothing else is modified.
 import { jsx as Kt } from "react/jsx-runtime";
@@ -798,10 +798,10 @@ function Yt(n) {
 }
 const ht = { x: NaN, y: NaN }, pt = /* @__PURE__ */ new Set();
 let lt = 0, vt = 0, hn = !1;
-const BLOBLEX_FRAME_MS = 1000 / 30;
+const RETINUE_FRAME_MS = 1000 / 30;
 function bn(n) {
   lt = 0;
-  if (vt && n - vt < BLOBLEX_FRAME_MS - 2) {
+  if (vt && n - vt < RETINUE_FRAME_MS - 2) {
     pt.size && (lt = requestAnimationFrame(bn));
     return;
   }
@@ -908,7 +908,7 @@ const ss = xn(function({
     }
     let acc = 0;
     return Wn((y) => {
-      // Bitbots: avatars of 80px or less update at ~15 fps; their motion is small.
+      // Retinue: avatars of 80px or less update at ~15 fps; their motion is small.
       acc += y;
       if (Z.current.box <= 80 && acc < 1 / 15 - 0.004) return;
       y = acc, acc = 0;

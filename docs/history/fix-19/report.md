@@ -13,10 +13,10 @@ or configuration file was changed. The only file added is `docs/remote/PROTOCOL.
 `renderTierTableMarkdown()`.
 
 Sources read before writing: `docs/design/design-system.md`, `docs/ipc-contract.md`,
-`crates/bloblex-daemon/src/main.rs` (`/v1/rpc` and `/v1/events`, `events.replay`,
+`crates/retinue-daemon/src/main.rs` (`/v1/rpc` and `/v1/events`, `events.replay`,
 `ws_client` handshake and `afterSequence`, `replay.gap`, `events.replay.complete`,
 `broadcast::channel(1024)`, `main_rpc` auth and error mapping, attachment limits and
-magic bytes), `crates/bloblex-storage/src/lib.rs` (`app_events` sequence, `push_event`,
+magic bytes), `crates/retinue-storage/src/lib.rs` (`app_events` sequence, `push_event`,
 `replay_events`), `apps/desktop/src/remote/remoteContract.ts`, and `docs/history/fix-18/remote-tiers-spec.md`.
 
 ## Unsure about (five lines)

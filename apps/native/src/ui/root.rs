@@ -66,7 +66,7 @@ pub enum FocusTarget {
     ProjectName,
 }
 
-/// The first-run question: the installed Bitbots has a database, this app does
+/// The first-run question: the installed Retinue has a database, this app does
 /// not. Asked once, in the window, before any daemon starts.
 pub struct FirstRunQuestion {
     pub source: PathBuf,
@@ -175,7 +175,7 @@ pub struct QuickState {
     pub index: usize,
 }
 
-/// One file, shown inside the window: a picture, or text Bitbots read itself.
+/// One file, shown inside the window: a picture, or text Retinue read itself.
 /// Nothing a message names is ever started as a program.
 pub struct FilePreview {
     pub title: String,
@@ -363,7 +363,7 @@ impl Root {
         let needs_question = !db_path.exists() && installed.is_file();
         // The live check has nobody at the keyboard to answer the prompt, so it
         // names its answer up front. It takes the same code path the buttons do.
-        let first_run_choice = std::env::var("BITBOTS_NATIVE_FIRST_RUN").ok();
+        let first_run_choice = std::env::var("RETINUE_NATIVE_FIRST_RUN").ok();
         let first_run = match first_run_choice.as_deref() {
             Some("empty") => None,
             Some("copy") => {
@@ -712,7 +712,7 @@ impl Root {
         if let Some(daemon) = self.daemon.as_ref() {
             daemon.send(command);
         } else {
-            self.error = Some("The local Bitbots daemon is not running.".to_owned());
+            self.error = Some("The local Retinue daemon is not running.".to_owned());
         }
     }
 
@@ -942,7 +942,7 @@ impl Root {
         cx.notify();
     }
 
-    /// Open a link from a message, only when it is one Bitbots opens.
+    /// Open a link from a message, only when it is one Retinue opens.
     pub(crate) fn open_link(&mut self, url: String, cx: &mut Context<Self>) {
         if let Err(error) = crate::files::open_link(&url) {
             self.error = Some(error);
@@ -1305,7 +1305,7 @@ impl Root {
         // names one up front. It takes the same path a click does.
         if !self.opened_env_session {
             self.opened_env_session = true;
-            if let Some(id) = std::env::var("BITBOTS_NATIVE_OPEN_SESSION").ok().filter(|id| !id.is_empty()) {
+            if let Some(id) = std::env::var("RETINUE_NATIVE_OPEN_SESSION").ok().filter(|id| !id.is_empty()) {
                 if let Some(session) = snapshot.session(&id) {
                     crate::trace::log(format!("live check: opening conversation {id}"));
                     self.session_id = Some(id.clone());
@@ -1851,8 +1851,8 @@ impl Root {
 
     pub(crate) fn ask_copy_data_again(&mut self, cx: &mut Context<Self>) {
         self.confirm = Some(Confirm {
-            title: "Copy my Bitbots data again".to_owned(),
-            body: "This stops the daemon, backs up the preview's own database beside itself, then copies the installed Bitbots database and restarts. Only the database file is copied, never tokens or credentials.".to_owned(),
+            title: "Copy my Retinue data again".to_owned(),
+            body: "This stops the daemon, backs up the preview's own database beside itself, then copies the installed Retinue database and restarts. Only the database file is copied, never tokens or credentials.".to_owned(),
             confirm_label: "Copy again".to_owned(),
             action: ConfirmAction::CopyDataAgain,
         });
@@ -1907,7 +1907,7 @@ impl Root {
         match result {
             Ok(backup) => {
                 self.notice = Some(format!(
-                    "Copied the Bitbots data. The earlier database is at {}.",
+                    "Copied the Retinue data. The earlier database is at {}.",
                     backup.display()
                 ));
             }
@@ -1942,8 +1942,8 @@ impl Root {
     }
 }
 
-/// Copy the installed Bitbots database with SQLite's online backup API, which is
-/// safe while Bitbots is running. The database file only: never secrets, tokens
+/// Copy the installed Retinue database with SQLite's online backup API, which is
+/// safe while Retinue is running. The database file only: never secrets, tokens
 /// or the credential store.
 pub fn copy_database(source: &std::path::Path, target: &std::path::Path) -> Result<(), String> {
     if target.exists() {
@@ -1952,9 +1952,9 @@ pub fn copy_database(source: &std::path::Path, target: &std::path::Path) -> Resu
     if let Some(folder) = target.parent() {
         std::fs::create_dir_all(folder).map_err(|error| format!("Could not prepare the app's folder: {error}"))?;
     }
-    crate::trace::log(format!("copying the Bitbots database from {}", source.display()));
+    crate::trace::log(format!("copying the Retinue database from {}", source.display()));
     let from = rusqlite::Connection::open(source)
-        .map_err(|error| format!("Could not open the Bitbots database: {error}"))?;
+        .map_err(|error| format!("Could not open the Retinue database: {error}"))?;
     let mut to = rusqlite::Connection::open(target)
         .map_err(|error| format!("Could not create the preview database: {error}"))?;
     {
@@ -1969,7 +1969,7 @@ pub fn copy_database(source: &std::path::Path, target: &std::path::Path) -> Resu
     Ok(())
 }
 
-/// "Copy my Bitbots data again": stop (the caller does that), move the old file
+/// "Copy my Retinue data again": stop (the caller does that), move the old file
 /// **and its write-ahead log and shared-memory sidecars** aside, copy the
 /// installed one, and say where the backup went.
 ///
@@ -1977,12 +1977,12 @@ pub fn copy_database(source: &std::path::Path, target: &std::path::Path) -> Resu
 /// `-wal` can survive, and SQLite would replay it onto the fresh copy.
 pub fn install_copy(source: &std::path::Path, target: &std::path::Path) -> Result<PathBuf, String> {
     if !source.is_file() {
-        return Err("The installed Bitbots has no database on this computer.".to_owned());
+        return Err("The installed Retinue has no database on this computer.".to_owned());
     }
     let mut backup = target.with_extension("db.before-copy");
     if backup.exists() || sidecar(&backup, "-wal").exists() {
         let stamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
-        backup = target.with_file_name(format!("bloblex.db.before-copy-{stamp}"));
+        backup = target.with_file_name(format!("retinue.db.before-copy-{stamp}"));
     }
     if target.exists() {
         std::fs::rename(target, &backup).map_err(|error| format!("Could not set the old database aside: {error}"))?;
@@ -1997,7 +1997,7 @@ pub fn install_copy(source: &std::path::Path, target: &std::path::Path) -> Resul
     if let Some(folder) = target.parent() {
         std::fs::create_dir_all(folder).map_err(|error| format!("Could not prepare the app's folder: {error}"))?;
     }
-    let from = rusqlite::Connection::open(source).map_err(|error| format!("Could not open the Bitbots database: {error}"))?;
+    let from = rusqlite::Connection::open(source).map_err(|error| format!("Could not open the Retinue database: {error}"))?;
     let mut to = rusqlite::Connection::open(target).map_err(|error| format!("Could not create the preview database: {error}"))?;
     {
         let copy = rusqlite::backup::Backup::new(&from, &mut to)
@@ -2477,7 +2477,7 @@ impl Root {
                     .text_size(px(theme::FS_XS))
                     .text_color(colors.status_working)
                     .child(SharedString::from(format!(
-                        "The Bitbots daemon stopped. Restarting in {} s (attempt {attempt} of {}).",
+                        "The Retinue daemon stopped. Restarting in {} s (attempt {attempt} of {}).",
                         delay_ms.div_ceil(1000),
                         crate::daemon::BACKOFF_MS.len()
                     )))
@@ -2500,7 +2500,7 @@ impl Root {
                         .text_size(px(theme::FS_XS))
                         .text_color(colors.status_danger)
                         .child(div().flex_1().truncate().child(SharedString::from(format!(
-                            "{reason} It stopped {} times, so Bitbots will not start it again by itself.",
+                            "{reason} It stopped {} times, so Retinue will not start it again by itself.",
                             crate::daemon::BACKOFF_MS.len()
                         ))))
                         .child(retry)
@@ -2548,14 +2548,14 @@ impl Root {
             .bg(colors.panel)
             .border_1()
             .border_color(colors.line)
-            .child(div().text_size(px(theme::FS_XL)).font_weight(gpui::FontWeight::SEMIBOLD).child("Start Bitbots (Rust preview)"))
+            .child(div().text_size(px(theme::FS_XL)).font_weight(gpui::FontWeight::SEMIBOLD).child("Start Retinue (Rust preview)"))
             .child(
                 div()
                     .text_color(colors.text_2)
-                    .child("The installed Bitbots has data on this computer. This preview keeps its own database, so the two never share one."),
+                    .child("The installed Retinue has data on this computer. This preview keeps its own database, so the two never share one."),
             )
             .when_some(error, |this, error| this.child(div().text_color(colors.status_danger).child(error)))
-            .child(self.button("Start with a copy of my Bitbots data", colors, true, cx))
+            .child(self.button("Start with a copy of my Retinue data", colors, true, cx))
             .child(self.button("Start empty", colors, false, cx))
             .child(div().text_color(colors.text_3).text_size(px(theme::FS_XS)).child("Only the database file is copied, never tokens or credentials."))
     }
@@ -2675,9 +2675,9 @@ mod tests {
 
     #[test]
     fn a_copy_is_skipped_when_the_target_already_exists() {
-        let folder = std::env::temp_dir().join(format!("bitbots-native-copy-{}", std::process::id()));
+        let folder = std::env::temp_dir().join(format!("retinue-native-copy-{}", std::process::id()));
         std::fs::create_dir_all(&folder).unwrap();
-        let target = folder.join("bloblex.db");
+        let target = folder.join("retinue.db");
         std::fs::write(&target, b"already here").unwrap();
         // The source does not even exist: the target wins and nothing is touched.
         let source = folder.join("missing.db");
@@ -2688,7 +2688,7 @@ mod tests {
 
     #[test]
     fn copying_again_sets_the_old_database_aside_and_says_where() {
-        let folder = std::env::temp_dir().join(format!("bitbots-native-again-{}", std::process::id()));
+        let folder = std::env::temp_dir().join(format!("retinue-native-again-{}", std::process::id()));
         std::fs::create_dir_all(&folder).unwrap();
         let source = folder.join("installed.db");
         let target = folder.join("preview.db");
@@ -2709,7 +2709,7 @@ mod tests {
 
     #[test]
     fn copying_again_moves_the_write_ahead_log_and_shared_memory_beside_the_backup() {
-        let folder = std::env::temp_dir().join(format!("bitbots-native-sidecars-{}", std::process::id()));
+        let folder = std::env::temp_dir().join(format!("retinue-native-sidecars-{}", std::process::id()));
         std::fs::create_dir_all(&folder).unwrap();
         let source = folder.join("installed.db");
         let target = folder.join("preview.db");
@@ -2741,7 +2741,7 @@ mod tests {
 
     #[test]
     fn copying_again_without_an_installed_database_says_so() {
-        let folder = std::env::temp_dir().join(format!("bitbots-native-none-{}", std::process::id()));
+        let folder = std::env::temp_dir().join(format!("retinue-native-none-{}", std::process::id()));
         std::fs::create_dir_all(&folder).unwrap();
         let error = install_copy(&folder.join("missing.db"), &folder.join("preview.db")).unwrap_err();
         assert!(error.contains("no database"));

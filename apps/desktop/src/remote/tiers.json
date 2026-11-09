@@ -215,7 +215,7 @@
       "method": "preset.list",
       "class": "read",
       "minTier": "viewer",
-      "why": "The preset employees Bitbots ships: id, nickname, portrait, role, department, tags and description, plus which bot each one made. The same list a window shows, and it names no folder or setting.",
+      "why": "The preset employees Retinue ships: id, nickname, portrait, role, department, tags and description, plus which bot each one made. The same list a window shows, and it names no folder or setting.",
       "params": null
     },
     {
@@ -775,7 +775,7 @@
       "method": "outside.enable",
       "class": "never",
       "minTier": null,
-      "why": "Only the owner at the computer may let Bitbots change Claude Code's settings.",
+      "why": "Only the owner at the computer may let Retinue change Claude Code's settings.",
       "params": null
     },
     {
@@ -789,28 +789,28 @@
       "method": "outside.sessions",
       "class": "never",
       "minTier": null,
-      "why": "Sessions started outside Bitbots are the computer's own terminals; they stay on the host in this slice.",
+      "why": "Sessions started outside Retinue are the computer's own terminals; they stay on the host in this slice.",
       "params": null
     },
     {
       "method": "external.status",
       "class": "never",
       "minTier": null,
-      "why": "The Bitbots MCP lets a Claude Code session on the host drive the app; its status, command and file paths are the owner's at the computer.",
+      "why": "The Retinue MCP lets a Claude Code session on the host drive the app; its status, command and file paths are the owner's at the computer.",
       "params": null
     },
     {
       "method": "external.enable",
       "class": "never",
       "minTier": null,
-      "why": "Only the owner at the computer may let an outside Claude Code session drive Bitbots.",
+      "why": "Only the owner at the computer may let an outside Claude Code session drive Retinue.",
       "params": null
     },
     {
       "method": "external.disable",
       "class": "never",
       "minTier": null,
-      "why": "Only the owner at the computer may change who can drive Bitbots from outside.",
+      "why": "Only the owner at the computer may change who can drive Retinue from outside.",
       "params": null
     },
     {
@@ -831,7 +831,7 @@
       "method": "external.rotate",
       "class": "never",
       "minTier": null,
-      "why": "Only the owner at the computer may replace the Bitbots MCP's token.",
+      "why": "Only the owner at the computer may replace the Retinue MCP's token.",
       "params": null
     },
     {
@@ -845,7 +845,7 @@
       "method": "ext.*",
       "class": "never",
       "minTier": null,
-      "why": "The Bitbots MCP is a local stdio server for the owner's own Claude Code session; its token is not a remote device credential.",
+      "why": "The Retinue MCP is a local stdio server for the owner's own Claude Code session; its token is not a remote device credential.",
       "params": null
     },
     {
@@ -1496,7 +1496,7 @@
       "method": "handoff.*",
       "class": "handoff",
       "minTier": "operator",
-      "why": "Moving a conversation to another computer commits and pushes its own task branch, so it needs an operator device, and only a paired Bitbots machine may ask; a phone or browser is always refused. It carries no host path, environment value, thinking or tool output.",
+      "why": "Moving a conversation to another computer commits and pushes its own task branch, so it needs an operator device, and only a paired Retinue machine may ask; a phone or browser is always refused. It carries no host path, environment value, thinking or tool output.",
       "params": null
     },
     {

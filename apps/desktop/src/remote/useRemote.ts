@@ -172,7 +172,7 @@ export function useRemote(enabled = true) {
     setNativeAccount: (username: string, password: string) => run(async () => { await rpc('remote.native.account.set', { username, password }) }),
     setNativePort: (port: number) => run(async () => { await rpc('remote.native.port.set', { port }) }),
     regenerateNativeCert: () => run(async () => { await rpc('remote.native.cert.regenerate') }),
-    /** Native Remote: let Bitbots ask the router (UPnP) to forward the port. */
+    /** Native Remote: let Retinue ask the router (UPnP) to forward the port. */
     setNativeUpnp: (enabled: boolean) => run(async () => { await rpc('remote.native.upnp.set', { enabled }) }),
     /** Native Remote: the public address typed by the owner, or null to clear it. */
     setNativeExternalIp: (ip: string | null) => run(async () => { await rpc('remote.native.externalIp.set', { ip }) }),

@@ -1,4 +1,4 @@
-//! Build script for the Bitbots desktop app.
+//! Build script for the Retinue desktop app.
 //!
 //! `tauri.conf.json` bundles `bundle.resources: { "../dist-remote/": "remote-web/" }`
 //! (FIX29 WP6c), but `apps/desktop/dist-remote/` is gitignored and only
@@ -30,7 +30,7 @@ const PLACEHOLDER_HTML: &str = "\
   <head>
     <meta charset=\"utf-8\">
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-    <title>Bitbots remote</title>
+    <title>Retinue remote</title>
   </head>
   <body>
     <p>The remote app was not built. Run npm run build:remote.</p>

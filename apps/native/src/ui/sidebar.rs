@@ -75,7 +75,7 @@ impl Root {
             .items_center()
             .gap(px(8.0))
             .child(gpui::img(art::brand_mark()).size(px(20.0)).flex_none().rounded(px(5.0)))
-            .child(div().flex_1().text_size(px(theme::FS_SM)).font_weight(gpui::FontWeight::SEMIBOLD).child("Bitbots"))
+            .child(div().flex_1().text_size(px(theme::FS_SM)).font_weight(gpui::FontWeight::SEMIBOLD).child("Frost"))
             .child(bell)
             .child(icon_button("brand-tasks", Glyph::LIST_CHECKS, matches!(self.page, crate::ui::root::Page::Tasks), colors, |root, _window, cx| root.open_tasks(cx), cx))
             .child(

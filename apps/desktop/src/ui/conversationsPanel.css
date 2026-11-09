@@ -1,5 +1,5 @@
 /* The per-bot conversations column between the sidebar and the chat.
-   One set of tree numbers, shared by both looks: the Bitbots look only swaps the
+   One set of tree numbers, shared by both looks: the Retinue look only swaps the
    stroke (colour, dotted, square corner) and the row border that insets it. */
 .conversations-panel { --convo-indent: 14px; --convo-row-edge: 0px; --convo-line: var(--line-strong); --convo-line-style: solid; --convo-radius: 6px; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--line); background: var(--surface-panel); }
 .app-shell:not(.convos-open) .conversations-panel { border-right-color: transparent; visibility: hidden; }
@@ -49,7 +49,7 @@
 /* The elbow hangs off the child row itself, from its top to its middle, so a
    taller (two-line) row still meets the guide, and it runs one indent across to
    the child's own guide column. `--convo-row-edge` is the row border that
-   insets the row's padding box in the Bitbots look. */
+   insets the row's padding box in the Retinue look. */
 .convo-children > .convo-item > .convo-row::before { position: absolute; z-index: 1; top: 0; bottom: 50%; left: calc(var(--convo-guide-x) - var(--convo-row-edge)); width: var(--convo-indent); border-left: 1px var(--convo-line-style) var(--convo-line); border-bottom: 1px var(--convo-line-style) var(--convo-line); border-bottom-left-radius: var(--convo-radius); content: ""; pointer-events: none; }
 /* A row with no arrow of its own has no guide column to meet, so the elbow runs
    on to the row's first content: the avatars of a bot-to-bot conversation. */

@@ -451,7 +451,7 @@ describe('effort availability', () => {
     await act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
     const trigger = host.querySelector<HTMLButtonElement>('.session-effort-trigger')!
     expect(trigger.getAttribute('aria-disabled')).toBe('true')
-    expect(document.body.querySelector('.tip-bubble')?.textContent).toContain("OpenCode doesn't let Bitbots pick an effort level")
+    expect(document.body.querySelector('.tip-bubble')?.textContent).toContain("OpenCode doesn't let Retinue pick an effort level")
     await act(async () => { trigger.click() })
     expect(host.querySelector('[role="dialog"]')).toBeNull()
   })
@@ -478,7 +478,7 @@ describe('effort availability', () => {
     act(() => root.render(<SessionExecutionControls session={{ ...session, modelLock:{ model:'alpha', thinking:'max', enableWorkflows:false } }} agent={agent} onSessionUpdated={() => undefined} onError={() => undefined} />)); mounted.push({ root, host })
     await act(async () => { await Promise.resolve(); await Promise.resolve() })
     await act(async () => { host.querySelector<HTMLButtonElement>('.session-effort-trigger')!.click() })
-    expect(host.querySelector('.session-effort-note')?.textContent).toContain('Bitbots did not enable workflows for this conversation')
+    expect(host.querySelector('.session-effort-note')?.textContent).toContain('Retinue did not enable workflows for this conversation')
     expect(host.querySelector('.session-effort-note')?.textContent).toContain('new conversations')
   })
 })
@@ -516,7 +516,7 @@ describe('locked employee execution controls', () => {
     const effort = host.querySelector<HTMLButtonElement>('.session-effort-trigger')!
     expect(effort.getAttribute('aria-disabled')).toBe('true')
     expect(effort.getAttribute('title')).toBeNull()
-    expect(document.body.querySelector('.tip-bubble')?.textContent).toContain("OpenCode doesn't let Bitbots pick an effort level")
+    expect(document.body.querySelector('.tip-bubble')?.textContent).toContain("OpenCode doesn't let Retinue pick an effort level")
   })
 })
 

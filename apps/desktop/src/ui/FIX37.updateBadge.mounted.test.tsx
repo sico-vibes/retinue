@@ -95,7 +95,7 @@ describe('update badge', () => {
     const node = badge(view.host)!
     expect(node.tagName).toBe('SPAN')
     expect(node.textContent).toBe('Downloading update · 42%')
-    expect(node.getAttribute('title')).toBe('Bitbots 0.1.0-beta.32')
+    expect(node.getAttribute('title')).toBe('Retinue 0.1.0-beta.32')
     expect(node.querySelector('svg[aria-hidden="true"]')).not.toBeNull()
     // Nothing to press while the download runs.
     expect(view.host.querySelector('button')).toBeNull()
@@ -116,7 +116,7 @@ describe('update badge', () => {
     await view.settle()
     const button = view.host.querySelector<HTMLButtonElement>('[data-update-badge="ready"]')!
     expect(button.textContent).toBe('Restart to update')
-    expect(button.getAttribute('title')).toBe('Bitbots 0.1.0-beta.32')
+    expect(button.getAttribute('title')).toBe('Retinue 0.1.0-beta.32')
     await act(async () => { button.click() })
     await view.settle()
     expect(h.updatesInstall).toHaveBeenCalledTimes(1)
@@ -167,7 +167,7 @@ describe('update badge', () => {
     expect(button.classList.contains('is-compact')).toBe(true)
     expect(button.textContent).toBe('Restart')
     expect(button.getAttribute('aria-label')).toBe('Restart to update')
-    expect(button.getAttribute('title')).toBe('Restart to update — Bitbots 0.1.0-beta.34')
+    expect(button.getAttribute('title')).toBe('Restart to update — Retinue 0.1.0-beta.34')
     expect(button.querySelector('svg[aria-hidden="true"]')).not.toBeNull()
 
     // A downloading badge keeps the ring and a short label too.

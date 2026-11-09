@@ -4,11 +4,11 @@ Worktree `D:\t4b` (branch `t4/checkpoints`). Edited files: `checkpoints.rs`
 (new in this worktree, untracked) and the one named dispatch arm in `main.rs`.
 `experiments.rs` was **not** edited.
 
-`cargo check -p bloblex-daemon --message-format short` passes with no warnings.
+`cargo check -p retinue-daemon --message-format short` passes with no warnings.
 
 ## What changed (path:line)
 
-### `crates/bloblex-daemon/src/checkpoints.rs`
+### `crates/retinue-daemon/src/checkpoints.rs`
 
 - **1–14** module doc comment rewritten: the module is a read-only report; undo is
   per file through `file.revert` only; no whole-turn restore, with the reasons
@@ -32,7 +32,7 @@ Worktree `D:\t4b` (branch `t4/checkpoints`). Edited files: `checkpoints.rs`
 - **145–224 (old)** `revert_turn` and `refusal` deleted in full. No
   `git checkout/reset/stash/clean` exists anywhere in the module, before or after.
 
-### `crates/bloblex-daemon/src/main.rs`
+### `crates/retinue-daemon/src/main.rs`
 
 - **line 1058 (old)**: deleted `"session.checkpoints.revertTurn" => checkpoints::revert_turn(st, &p).await,`.
   `"session.checkpoints"` at line 1057 and the `file.revert` arm (1041–1056) are
@@ -97,8 +97,8 @@ needs no edit.
 ## Cargo check — last 15 lines (first, uncached run)
 
 ```
-    Checking bloblex-adapter-codex v0.1.0-beta.38 (D:\t4b\crates\bloblex-adapter-codex)
-    Checking bloblex-adapter-claude v0.1.0-beta.38 (D:\t4b\crates\bloblex-adapter-claude)
+    Checking retinue-adapter-codex v0.1.0-beta.38 (D:\t4b\crates\retinue-adapter-codex)
+    Checking retinue-adapter-claude v0.1.0-beta.38 (D:\t4b\crates\retinue-adapter-claude)
     Checking idna_adapter v1.2.2
     Checking idna v1.1.0
     Checking url v2.5.8
@@ -106,11 +106,11 @@ needs no edit.
     Checking hyper v1.11.1
     Checking hyper-util v0.1.21
     Checking hyper-tls v0.6.0
-    Checking bloblex-storage v0.1.0-beta.38 (D:\t4b\crates\bloblex-storage)
+    Checking retinue-storage v0.1.0-beta.38 (D:\t4b\crates\retinue-storage)
     Checking axum v0.8.9
     Checking igd-next v0.18.0
     Checking reqwest v0.12.28
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\t4b\crates\bloblex-daemon)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\t4b\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 23s
 ```
 
@@ -120,7 +120,7 @@ unused-import warning).
 
 ## Stale tests (not edited, none run)
 
-- `crates/bloblex-daemon/src/checkpoints.rs` has **no** `#[cfg(test)]` block and
+- `crates/retinue-daemon/src/checkpoints.rs` has **no** `#[cfg(test)]` block and
   never had one, so nothing became stale there.
 - No Rust or TypeScript test refers to `session.checkpoints`, `revertTurn`,
   `revert_turn`, `workspaceRestore` or `workspaceReason` (checked with ripgrep over
@@ -145,7 +145,7 @@ unused-import warning).
    `workspaceReason` and the `revertTurn` method; the docs lane should replace
    them with the new capability keys, the `diffComplete` field and a note that
    undo is `file.revert` only.
-4. `.claude/skills/bitbots-development/references/codebase-map.md` line 42 names
+4. `.claude/skills/retinue-development/references/codebase-map.md` line 42 names
    `session.checkpoints.revertTurn` as a daemon method; that line should lose it.
 
 ## Tests
@@ -153,5 +153,5 @@ unused-import warning).
 **I ran no tests of any kind.** No `cargo test`, no `cargo check --tests`, no
 `cargo clippy --all-targets`, no `npm test`/`vitest`, no scratch probes, no
 screenshots, no browser, no app run. The only command executed against the code
-was the two `cargo check -p bloblex-daemon --message-format short` runs above.
+was the two `cargo check -p retinue-daemon --message-format short` runs above.
 No git writes were made (`status` and `diff` reads only).

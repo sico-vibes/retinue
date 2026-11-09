@@ -1,4 +1,4 @@
-# Bitbots E2E plan: configurable blobs, sessions tree, token analytics, provider quota, release
+# Retinue E2E plan: configurable blobs, sessions tree, token analytics, provider quota, release
 
 > **What this is:** The whole-product plan (E2E v2): the phases, the dated checkpoints and the open work.
 > **Status:** current plan; its status section is dated 5 to 6 October 2026, and the release figure in the kept status paragraph (beta.23) is out of date; see [implementation-status.md](../operations/implementation-status.md)
@@ -47,20 +47,20 @@ The UI and code facts below describe that checkpoint, before Tasks 1–3; report
   - The sidebar lists one blob per detected CLI (`runtimeRows` in [apps/desktop/src/ui/App.tsx](../../apps/desktop/src/ui/App.tsx)).
 - **Daemon:**
   - `session.new` takes only `{ runtimeId, projectPath, title }`.
-  - [crates/bloblex-agent-core/src/lib.rs](../../crates/bloblex-agent-core/src/lib.rs) `NewSessionRequest` / `PromptRequest` carry no model, effort, speed or instructions.
+  - [crates/retinue-agent-core/src/lib.rs](../../crates/retinue-agent-core/src/lib.rs) `NewSessionRequest` / `PromptRequest` carry no model, effort, speed or instructions.
   - `runtime.profile.*` holds launcher profiles (executable and fixed args), not personas.
 - **Adapters:** all launch with fixed args.
   - Claude: `-p --output-format stream-json ...`
   - Codex: `app-server --listen stdio://`, with `thread/start` = cwd, approval and sandbox only.
   - OpenCode: `acp --cwd`; ACP can emit `usage_update` with context-window `used`/`size` and cost that appears cumulative for the session. It does not expose input/output/cache token buckets in that update; successful-run cost semantics remain unverified.
-- **Storage** ([crates/bloblex-storage/src/lib.rs](../../crates/bloblex-storage/src/lib.rs)):
+- **Storage** ([crates/retinue-storage/src/lib.rs](../../crates/retinue-storage/src/lib.rs)):
   - `sessions.project_path` exists.
   - `usage_events` already holds model and tokens, plus `usage_valuations` by basis.
   - `usage.summary` only returns global totals. There is no breakdown by agent, day or model.
-- **Discovery:** `discover()` in [crates/bloblex-runtime/src/lib.rs](../../crates/bloblex-runtime/src/lib.rs) does not list models.
+- **Discovery:** `discover()` in [crates/retinue-runtime/src/lib.rs](../../crates/retinue-runtime/src/lib.rs) does not list models.
 - **Icons:**
-  - `assets/icon/bloblex.png` is a 963x958 PNG with alpha and transparent rounded corners already present; it shows a black rounded-square plate with a white blob.
-  - `bloblex.ico` and `tray.png` are still the old ones. `tray.png` is embedded via `include_bytes!` at [apps/desktop/src-tauri/src/lib.rs](../../apps/desktop/src-tauri/src/lib.rs) around line 1361.
+  - `assets/icon/retinue-master.png` is a 963x958 PNG with alpha and transparent rounded corners already present; it shows a black rounded-square plate with a white blob.
+  - `retinue.ico` and `tray.png` are still the old ones. `tray.png` is embedded via `include_bytes!` at [apps/desktop/src-tauri/src/lib.rs](../../apps/desktop/src-tauri/src/lib.rs) around line 1361.
 
 ## Target data model
 
@@ -92,8 +92,8 @@ flowchart LR
 
 ## Phase 1: Logo and icons (small, independent) — DONE (`7f10e60`)
 
-- Add `scripts/prepare-logo.ps1` (System.Drawing). Preserve the source alpha silhouette and rounded corners; retain exact alpha on pixels at or below 250 and treat higher alpha as opaque for matte processing. Remove only opaque near-white pixels connected to the border. Write the result centered and padded to `assets/icon/bloblex-master.png` at 1024x1024.
-- Generate `bloblex.ico` from the master with 16/24/32/48/64/128/256 entries. The script writes the PNG-compressed ICO directly, without a new dependency.
+- Add `scripts/prepare-logo.ps1` (System.Drawing). Preserve the source alpha silhouette and rounded corners; retain exact alpha on pixels at or below 250 and treat higher alpha as opaque for matte processing. Remove only opaque near-white pixels connected to the border. Write the result centered and padded to `assets/icon/retinue-master.png` at 1024x1024.
+- Generate `retinue.ico` from the master with 16/24/32/48/64/128/256 entries. The script writes the PNG-compressed ICO directly, without a new dependency.
 - Produce `tray.png` at 32 px and the 128 px sidebar PNG from the same alpha-preserving master.
 - Replace the CSS `BlobMark` in the sidebar header with the logo image.
 - **Gate:** icons visible in the build, the installer and the tray, with no white halo on a dark taskbar.
@@ -145,7 +145,7 @@ Phase 2b may start after Phase 1.5, which is recorded in `docs/reference/runtime
 
 **Model catalog:**
 
-- **Bitbots design assumption:** add `runtime.models { runtimeId, refresh? }` RPC with a 60 s cache; the TTL is a local caching choice, not a verified CLI capability.
+- **Retinue design assumption:** add `runtime.models { runtimeId, refresh? }` RPC with a 60 s cache; the TTL is a local caching choice, not a verified CLI capability.
   - Codex: prefer authenticated app-server `model/list`, including per-model effort choices/defaults and service tiers (efforts are per model and can include `ultra`); retain `codex debug models` only as a diagnostics fallback. The RPC exists in the installed schema but its response has not yet been live-compared with `debug models`.
   - Claude: headless stream-json `control_request` `list_models` works (Director-verified, no model call). Model counts and the `default` alias are host-dependent and must not be hard-coded: QA reported 12 models on the real profile with `default` resolving to `claude-sonnet-5-5` (not Director-verified); an isolated empty home returned 5 models with `default` resolving to `claude-opus-5-5`. If the control response fails, return a static catalog with `fallback: true`; keep custom IDs editable.
   - OpenCode: `opencode models --verbose`, including provider/model metadata and each model's optional variant keys. Real host, Director-verified, 2026-10-02: 52 models, 33 with variants. Hide the reasoning selector for models without variants. ACP selection is config option `effort` after that model is selected, including synthetic `default`; a successful turn that shows the effort was applied is gated below.

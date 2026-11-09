@@ -1,7 +1,7 @@
 // The remote PWA build: `npx vite build --config vite.remote.config.ts`
 // (or `npm run build:remote`). Input `remote.html`, output `dist-remote/`, which
 // the desktop installer ships as the Tauri resource `remote-web/` and the daemon
-// serves from `BITBOTS_REMOTE_WEB_DIR` (FIX29 WP6b).
+// serves from `RETINUE_REMOTE_WEB_DIR` (FIX29 WP6b).
 //
 // Two things this config must guarantee:
 //   1. nothing from `@tauri-apps` (or a `__TAURI` global) reaches the bundle —
@@ -55,7 +55,7 @@ function listPublicFiles(dir: string): string[] {
 function remoteServiceWorkerManifest(): Plugin {
   let publicDir = ''
   return {
-    name: 'bitbots:remote-sw-manifest',
+    name: 'retinue:remote-sw-manifest',
     apply: 'build',
     enforce: 'post',
     configResolved(config: ResolvedConfig) {
@@ -87,7 +87,7 @@ function remoteServiceWorkerManifest(): Plugin {
 function forbidNativeMarkers(): Plugin {
   const FORBIDDEN = ['@tauri-apps', '__TAURI', '__TAURI_INTERNALS__']
   return {
-    name: 'bitbots:remote-forbid-native',
+    name: 'retinue:remote-forbid-native',
     apply: 'build',
     generateBundle(_options, bundle) {
       for (const [name, output] of Object.entries(bundle)) {

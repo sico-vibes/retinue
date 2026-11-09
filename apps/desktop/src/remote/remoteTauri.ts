@@ -185,7 +185,7 @@ export async function companionResizeBegin(edge: CompanionEdge): Promise<void> {
 export async function companionResizeStep(): Promise<void> { /* a device has no companion window */ }
 export async function companionResizeEnd(): Promise<[number, number] | null> { return null }
 export async function setCompanionSizePreset(preset: 'large' | 'normal' | 'default'): Promise<boolean> { return preset === 'large' }
-export async function quitBloblex(): Promise<void> { /* a device cannot quit the host */ }
+export async function quitRetinue(): Promise<void> { /* a device cannot quit the host */ }
 export async function startDaemonEventStream(): Promise<void> { /* the socket opens with the first listener */ }
 export async function ensureDaemon(): Promise<void> { /* the host runs the daemon */ }
 

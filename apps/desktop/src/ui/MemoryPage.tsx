@@ -12,7 +12,7 @@ import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
 import { Select } from './Select'
 import { ConfirmDialog } from './BlobPage'
 import { entityNoun, useEntityNoun } from './vocabulary'
-import { themeStyle } from '../blob/bitbots'
+import { themeStyle } from '../blob/retinue'
 import './memory.css'
 
 export const ABOUT_LIMIT = 1500

@@ -23,7 +23,7 @@ Tests: `WorkingBotsPanel.mounted.test.tsx` covers cross-bot rows, faces, elapsed
 - `agentForm.ts:153`: creation preserves an explicit `null` (the owner's "Use the team default" choice). Duplication also sends an explicit inherited value when the source inherited, preventing the new default from silently escalating a copied bot.
 - `apps/desktop/src/ui/FirstRunOnboarding.tsx:37`, `ManagerSetupCard.tsx:24`: Manager setup uses the same creation default. Both screens say "Full access" plainly and explain that team changes still require approval. `App.tsx` no longer forcibly changes the setup draft to Ask first.
 - `apps/desktop/src/ui/BlobSettings.tsx:46` and `BotWizard.tsx:92`: creation permission choice and review use the Full access name; the permission description keeps the automation limitation clear.
-- `crates/bloblex-daemon/src/main.rs:1715`: the shared new-bot creation helper assigns bypass only when the field is absent. Existing rows are not migrated or updated; explicit ask/auto/bypass/null choices remain intact. `manager.ensure` no longer forces Ask first when creating a new Manager and still returns an existing Manager unchanged.
+- `crates/retinue-daemon/src/main.rs:1715`: the shared new-bot creation helper assigns bypass only when the field is absent. Existing rows are not migrated or updated; explicit ask/auto/bypass/null choices remain intact. `manager.ensure` no longer forces Ask first when creating a new Manager and still returns an existing Manager unchanged.
 
 Only the new-bot default and its associated tests changed in `main.rs`. No turn path, tool routing, automation policy or proposal ceiling changed. Manager proposals already supply their restricted permission explicitly.
 
@@ -42,8 +42,8 @@ Tests: mounted General setting load/save; mounted App sends both preferences and
 
 | Gate | Final result |
 |---|---|
-| `cargo test --workspace --exclude bloblex-desktop --no-fail-fast` | **788 passed, 0 failed, 0 ignored**, including 389 daemon tests and the parent-watchdog integration test. |
-| `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` | **Passed**, exit 0. |
+| `cargo test --workspace --exclude retinue-desktop --no-fail-fast` | **788 passed, 0 failed, 0 ignored**, including 389 daemon tests and the parent-watchdog integration test. |
+| `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` | **Passed**, exit 0. |
 | `npx tsc -b --pretty false` | **Passed**, exit 0; also rerun by the production build. |
 | `npx vitest run --maxWorkers=3` with the isolation/timeout flags below | **172 files, 1,268 tests passed**, no skips, exit 0. |
 | `npm run build` with the isolation flags below | **Passed**, exit 0. Vite reported its large-chunk warning (main JS about 1.28 MB); no build error. |
@@ -64,7 +64,7 @@ Dependency directories in this worktree are junctions into the main checkout. A 
 
 ## File scope
 
-P9's decisions add creation defaults and a General setting beyond recommendation 11's original App/conversation/selectors list. The minimal additional production files are: `agentForm.ts` (shared creation/default serialization), `FirstRunOnboarding.tsx`, `ManagerSetupCard.tsx`, `BlobSettings.tsx`, `BotWizard.tsx` (creation/default copy), `SettingsSheet.tsx`, `settingsIndex.ts` (preference/search), `SessionRail.tsx` (panel slot), and new `WorkingBotsPanel.tsx`, `workingBotsPanel.css`, `busySend.ts` (isolated presentation/delivery helpers). Associated mounted/unit tests changed or were added; `approvalModes.mounted.test.tsx` only follows the revised permission description. `main.rs` edits are restricted to new-bot/Manager creation defaults and directly associated tests. No changes to `team.rs`, `proposals.rs`, storage, adapters, Tauri, Remote policy, DESIGN/PRODUCT/notices, other documentation, installed Bitbots or its data.
+P9's decisions add creation defaults and a General setting beyond recommendation 11's original App/conversation/selectors list. The minimal additional production files are: `agentForm.ts` (shared creation/default serialization), `FirstRunOnboarding.tsx`, `ManagerSetupCard.tsx`, `BlobSettings.tsx`, `BotWizard.tsx` (creation/default copy), `SettingsSheet.tsx`, `settingsIndex.ts` (preference/search), `SessionRail.tsx` (panel slot), and new `WorkingBotsPanel.tsx`, `workingBotsPanel.css`, `busySend.ts` (isolated presentation/delivery helpers). Associated mounted/unit tests changed or were added; `approvalModes.mounted.test.tsx` only follows the revised permission description. `main.rs` edits are restricted to new-bot/Manager creation defaults and directly associated tests. No changes to `team.rs`, `proposals.rs`, storage, adapters, Tauri, Remote policy, DESIGN/PRODUCT/notices, other documentation, installed Retinue or its data.
 
 Work stayed in `C:/fx91` and `C:/fxt/a2`. The only process manually stopped was the hung P9 test binary from this Cargo target, after checking its exact executable path and parent PID. No commits were made.
 
@@ -84,8 +84,8 @@ Findings F1 to F7 from `docs/history/fix-39/p9-audit.md` are applied. I took ove
 
 | Gate | Result |
 |---|---|
-| `cargo test --workspace --exclude bloblex-desktop --no-fail-fast` (`CARGO_TARGET_DIR=C:/fxt/a2`, `RUST_MIN_STACK=33554432`, `RUST_TEST_THREADS=3`) | **788 passed, 0 failed** |
-| `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` | **Passed**, exit 0 |
+| `cargo test --workspace --exclude retinue-desktop --no-fail-fast` (`CARGO_TARGET_DIR=C:/fxt/a2`, `RUST_MIN_STACK=33554432`, `RUST_TEST_THREADS=3`) | **788 passed, 0 failed** |
+| `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` | **Passed**, exit 0 |
 | `npx tsc -b --pretty false` | **Passed**, exit 0 |
 | `npx vitest run --maxWorkers=3 --testTimeout=30000` | **172 files, 1272 tests passed**, exit 0 |
 | `npm run build` | **Passed**, exit 0 (Vite large-chunk warning only) |

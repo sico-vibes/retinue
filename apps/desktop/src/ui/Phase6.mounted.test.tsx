@@ -27,8 +27,8 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => { root?.unmount() }); root = null; host.remove(); document.body.innerHTML = '' })
 
 describe('visual replies', () => {
-  it('only a bitbots-visual fence opens drawn', () => {
-    expect(visualFence('bitbots-visual', '<b>x</b>')).toEqual({ start: 'preview' })
+  it('only a retinue-visual fence opens drawn', () => {
+    expect(visualFence('retinue-visual', '<b>x</b>')).toEqual({ start: 'preview' })
     expect(visualFence('html', '<b>x</b>')).toEqual({ start: 'code' })
     expect(visualFence('svg', '<svg></svg>')).toEqual({ start: 'code' })
     expect(visualFence('svg', 'not a picture')).toBeNull()

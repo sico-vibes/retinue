@@ -26,7 +26,7 @@ describe('what is new', () => {
   it('orders betas numerically and opens only after an update with a note', () => {
     expect(compareVersions('0.1.0-beta.30', '0.1.0-beta.9')).toBeGreaterThan(0)
     expect(compareVersions('0.1.0', '0.1.0-beta.30')).toBeGreaterThan(0)
-    const notes = releaseNotes({ '../../../../docs/releases/0.1.0-beta.9.md': '# Bitbots 0.1.0-beta.9\n\nOld', '../../../../docs/releases/0.1.0-beta.30.md': '# Bitbots 0.1.0-beta.30\n\nNew' })
+    const notes = releaseNotes({ '../../../../docs/releases/0.1.0-beta.9.md': '# Retinue 0.1.0-beta.9\n\nOld', '../../../../docs/releases/0.1.0-beta.30.md': '# Retinue 0.1.0-beta.30\n\nNew' })
     expect(notes.map((note) => note.version)).toEqual(['0.1.0-beta.30', '0.1.0-beta.9'])
     expect(notes[0]!.text).toBe('New')
     expect(shouldShowWhatsNew('0.1.0-beta.29', '0.1.0-beta.30', notes)).toBe(true)

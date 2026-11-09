@@ -46,7 +46,7 @@ export const SCHEDULE_OUTCOME_LABEL: Record<TaskScheduleOutcome, string> = {
 }
 
 /** Shown under every time or schedule control; the second sentence is what the daemon really does (`SCHEDULE_GRACE_SECS`). */
-export const SCHEDULE_DISCLAIMER = 'Runs only while Bitbots is open and this computer is on and awake. A run that is missed by more than five minutes is skipped, not run late.'
+export const SCHEDULE_DISCLAIMER = 'Runs only while Retinue is open and this computer is on and awake. A run that is missed by more than five minutes is skipped, not run late.'
 
 export const TIME_LIMIT_CHOICES = [
   { value: 900, label: '15 minutes' }, { value: 1800, label: '30 minutes' }, { value: 3600, label: '1 hour' }, { value: 7200, label: '2 hours' },

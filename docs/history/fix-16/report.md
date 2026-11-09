@@ -65,11 +65,11 @@ raw `{ payload }` event shape the call site already destructures.
 ### Direct `@tauri-apps/*` → native bridge
 
 - `ui/App.tsx` — removed the four `@tauri-apps` imports. `invoke`→`invokeNative` (opener,
-  `companion_visible`, `set_keep_awake` ×2); `listen`→`listenNative` (`bloblex-companion-visible-changed`
-  ×2, `bloblex-notifications-enabled-changed`, `bloblex-tray-notice`,
-  `bloblex-pause-all-requested`, `bloblex-sound-volume-changed`, `bloblex-sounds-changed`,
-  `bloblex-dictation-surface`/`-dictation`/`-level`/`-engine`); `emit`→`emitNative`
-  (`bloblex-sounds-changed`, `bloblex-sound-volume-changed`); `isTauri()`→`isNative()`;
+  `companion_visible`, `set_keep_awake` ×2); `listen`→`listenNative` (`retinue-companion-visible-changed`
+  ×2, `retinue-notifications-enabled-changed`, `retinue-tray-notice`,
+  `retinue-pause-all-requested`, `retinue-sound-volume-changed`, `retinue-sounds-changed`,
+  `retinue-dictation-surface`/`-dictation`/`-level`/`-engine`); `emit`→`emitNative`
+  (`retinue-sounds-changed`, `retinue-sound-volume-changed`); `isTauri()`→`isNative()`;
   `getCurrentWindow()`→`currentWindow()`; `getCurrentWebviewWindow()`→`currentWebviewWindow()`.
   Event handlers changed from `({ payload }) => …` to `(payload) => …`.
 - `ui/dictation.ts` — `invoke`→`invokeNative` (`speech_models`, `speech_cloud_status`,
@@ -83,14 +83,14 @@ raw `{ payload }` event shape the call site already destructures.
 - `ui/LookEditor.tsx` — `invoke`→`invokeNative` (credit opener). Still reads `inDesktop`.
 - `ui/SettingsSheet.tsx` — `invoke`→`invokeNative` (`companion_hotkey_registered` ×2,
   `companion_visible`, `speech_models`, `speech_model_status`, `speech_model_download`,
-  `set_companion_hotkey`); `listen`→`listenNative` (`bloblex-companion-visible-changed`,
-  `bloblex-speech-download`); `emit`→`emitNative` (`bloblex-notifications-enabled-changed`,
-  `bloblex-sounds-changed`, `bloblex-sound-volume-changed` ×2).
+  `set_companion_hotkey`); `listen`→`listenNative` (`retinue-companion-visible-changed`,
+  `retinue-speech-download`); `emit`→`emitNative` (`retinue-notifications-enabled-changed`,
+  `retinue-sounds-changed`, `retinue-sound-volume-changed` ×2).
 
 ### `usePlatform()` flags (§4) — native-only surfaces
 
 - `ui/App.tsx` — companion sidebar card (`platform.companion`); update banner
-  (`platform.updater`); more-menu "Quit Bitbots" (`platform.tray`); desktop composer
+  (`platform.updater`); more-menu "Quit Retinue" (`platform.tray`); desktop composer
   dictation button (`platform.nativeSpeech`); companion composer dictation button
   (`platform.nativeSpeech`); Files-pane "Open in editor" / "Reveal in File Explorer"
   (`platform.editor`). `FilesPane` and `Companion` each call `usePlatform()` above their
@@ -98,7 +98,7 @@ raw `{ payload }` event shape the call site already destructures.
 - `ui/SettingsSheet.tsx` — "Start with Windows" (`platform.autostart`); "Close to tray"
   (`platform.tray`); "Companion display" + the "Companion" group (`platform.companion`);
   the "Editor" group (`platform.editor`); the updates panel (`platform.updater`).
-- `ui/ProfileMenu.tsx` — "Quit Bitbots" (`platform.tray`).
+- `ui/ProfileMenu.tsx` — "Quit Retinue" (`platform.tray`).
 
 ## Tests updated
 
@@ -110,7 +110,7 @@ raw `{ payload }` event shape the call site already destructures.
 ## Judgement calls
 
 - **Quit's flag.** There is no lifecycle/`process` capability in the fixed interface, so both
-  "Quit Bitbots" items are gated on `platform.tray` — the only app-shell/lifecycle flag.
+  "Quit Retinue" items are gated on `platform.tray` — the only app-shell/lifecycle flag.
   Desktop and preview have `tray: true`, so nothing changes there; a browser hides it.
 - **Preview detection.** The "fixture bridge is aliased" signal is `previewMode` imported from
   `../tauri` (the real module exports `false`; the fixture bridge exports `true`). Under

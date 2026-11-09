@@ -17,7 +17,7 @@ type Entry = { value: unknown; at: number }
 export const CATALOG_FRESH_MS = 5 * 60_000
 /** At most this many entries are mirrored to localStorage. */
 const MAX_PERSISTED = 40
-const STORAGE_KEY = 'bitbots.catalogCache.v1'
+const STORAGE_KEY = 'retinue.catalogCache.v1'
 
 const entries = new Map<string, Entry>()
 const inflight = new Map<string, Promise<unknown>>()

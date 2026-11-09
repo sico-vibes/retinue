@@ -25,7 +25,7 @@ Nothing under `apps/desktop/src` (TypeScript), `crates/`, `tauri.conf.json` or `
 2. **Contract shapes** — `TerminalOpened` (`pty.rs:47`) `{ id, pid, shell, cwd }`, `TerminalInfo` (`pty.rs:56`) `{ id, pid, shell, cwd, running, exitCode }`, both `#[serde(rename_all = "camelCase")]`, all commands `Result<_, String>` with short English errors. Events are `OutputEvent { id, seq, data }` (`pty.rs:67`) and `ExitEvent { id, exitCode }` (`pty.rs:75`), emitted only with `app.emit_to("main", …)` (`pty.rs:472`, `pty.rs:478`) — never broadcast.
 3. **Working directory bounds** — `project_dir` (`pty.rs:166`) rejects empty, `> 4096` bytes (`"The project path is too long."`), non-canonicalizable (`"The project folder could not be found."`) and non-directories (`"The project path is not a folder."`). `folder_inside` (`pty.rs:182`) canonicalizes `cwd`, requires `is_dir`, and requires `canonical.starts_with(root)` on the *canonical* paths (`"The terminal folder must be inside this project."`); no `cwd` (or an empty/blank one) defaults to the project root. `user_path` (`pty.rs:201`) strips the verbatim `\\?\` prefix and rejects `\\?\UNC\…`, other non-drive `\\?\` paths (volumes, GLOBALROOT) and bare `\\`/`\\.\` paths, so the shell is started in `D:\x` and `TerminalOpened.cwd` is `D:\x`, not `\\?\D:\x`.
 4. **Fixed shell list** — `choose_shell` (`pty.rs:235`): `powershell` → `powershell.exe -NoLogo` (default), `pwsh` → `pwsh.exe -NoLogo` only when `on_path("pwsh.exe")` finds it on `PATH` (else `"PowerShell 7 is not installed."`), `cmd` → `cmd.exe` with no args, unknown → `"Choose PowerShell, PowerShell 7 or Command Prompt."`. **No `-NoProfile`** (users keep their profile; the reference had it). Non-Windows maps the same ids to `/bin/sh`. The chosen id is returned in `TerminalOpened.shell`.
-5. **Environment hygiene** — `sanitize_environment` (`pty.rs:257`) walks the process environment and calls `env_remove` for every name starting with `BLOBLEX_` or `BITBOTS_` (compared upper-case so case variants on Windows are caught too) and for `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`; `TERM=xterm-256color` and `COLORTERM=truecolor` are set on non-Windows only. Nothing about the environment is ever logged.
+5. **Environment hygiene** — `sanitize_environment` (`pty.rs:257`) walks the process environment and calls `env_remove` for every name starting with `RETINUE_` or `RETINUE_` (compared upper-case so case variants on Windows are caught too) and for `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`; `TERM=xterm-256color` and `COLORTERM=truecolor` are set on non-Windows only. Nothing about the environment is ever logged.
 6. **Limits** — 6 live terminals (`MAX_TERMINALS`), error `"Close a terminal before opening another one."` (`pty.rs:340-343`). Write is capped at 64 KiB (`"Terminal input is too large."`), resize at 1..=500 cols / 1..=300 rows (`"The terminal size is outside the supported range."`), open defaults are 80×24. Ended terminals are pruned on `terminal_open` and on `terminal_list`; a session that just ended is still reported **once** by `terminal_list` with `running: false` and its `exitCode` before it is pruned (`pty.rs:672-678`), so the UI can read the code; `terminal_close` also removes it. The 4096-byte path bound and a 64-byte id bound are enforced everywhere.
 7. **Output streaming** — one pty reader (`relay`, `pty.rs:417`) does the blocking reads only, and the per-terminal pump thread (`pty.rs:431`) coalesces: it waits for the first chunk, then keeps draining up to 16 KiB or 8 ms before one `terminal://output` event. Reads are 8 KiB so a burst is never one event per 8-byte read. The incomplete UTF-8 tail is kept across reads by `decode_utf8_chunk` (`pty.rs:487`, the reference's version, kept) and flushed once as U+FFFD at end of stream. `seq` starts at 1 and increments by exactly 1 per event. `Throttle` (`pty.rs:518`) holds the pipe back at 4 MiB/s (the pty stalls, not the UI). No transcript is kept and nothing is written to disk.
 8. **ConPTY `ESC[6n`** — deliberately not answered in Rust; xterm.js answers it through `terminal_write`, as the brief specifies.
@@ -39,13 +39,13 @@ Only the allowed production-target check was run, from `D:\t3p`, after creating 
 
 ```powershell
 $env:TAURI_CONFIG='{"bundle":{"externalBin":[]}}'
-cargo check -p bloblex-desktop --message-format short
+cargo check -p retinue-desktop --message-format short
 ```
 
 Last 15 lines of the final run (full log at `D:\t3p\target\lane\check.log`):
 
 ```
-    Checking bloblex-desktop v0.1.0-beta.38 (D:\t3p\apps\desktop\src-tauri)
+    Checking retinue-desktop v0.1.0-beta.38 (D:\t3p\apps\desktop\src-tauri)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.23s
 ```
 
@@ -60,7 +60,7 @@ The first run in this lane compiled the whole dependency graph, including `Check
 - **`terminal_close` is `async`** and does the 2 s taskkill / 2 s pump join on `spawn_blocking`, so a wedged shell can never freeze the window. `terminal_open`, `terminal_write`, `terminal_resize` and `terminal_list` stay synchronous.
 - **`terminal_resize` on an ended terminal is `Ok(())`** (a resize observer firing after exit is not an error); only `terminal_write` returns `"The terminal has closed."`.
 - **`terminal_close` on an unknown id is `Ok(())`** — the close path is idempotent, as double-clicks in the UI would otherwise raise errors.
-- **Case-insensitive secret prefixes** (`BLOBLEX_`/`BITBOTS_` upper-cased before the check) so a lowercase variant on Windows cannot leak.
+- **Case-insensitive secret prefixes** (`RETINUE_`/`RETINUE_` upper-cased before the check) so a lowercase variant on Windows cannot leak.
 - **Extra error strings** the brief did not spell out: `"PowerShell 7 is not installed."`, `"That folder is not on a local drive."` (UNC/device/volume), `"The terminal folder could not be found."`, `"The terminal folder is not a folder."`, `"A terminal could not be opened on this device."`, `"The selected shell could not be started."`, `"The terminal could not be started."`, `"The terminal could not be resized."`, `"The terminal service is unavailable."`, `"The terminal input is unavailable."`.
 - **Argument naming for the UI.** Tauri maps JS camelCase to the Rust snake_case parameters (the repo already relies on this: `resolve_project_file` is called with `{ path, projectRoot }`, `show_main_settings` with `{ sessionId, page }`). So the xterm.js side must invoke `terminal_open` with `{ projectPath, cwd, shell, cols, rows }`; the other four names are single words and unchanged.
 - **No capability change needed.** `capabilities/default.json` already grants `core:event:allow-listen` to the main window, and app commands need no capability entry.

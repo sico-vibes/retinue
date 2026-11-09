@@ -17,8 +17,8 @@ export function FileReferenceChip({ file }: { file: { fileName: string; path: st
       <small>{file.size} · sent as a path</small>
       {canPreview && <button type="button" className="file-reference-open" aria-expanded={open} onClick={() => setOpen((value) => !value)}>{open ? 'Hide preview' : 'Preview'}</button>}
     </div>
-    {!relative && <p className="file-reference-note">This file is outside the project, so Bitbots does not preview it. The agent can open it only if its permissions allow.</p>}
-    {relative && !canPreview && <p className="file-reference-note">Bitbots cannot preview this kind of file. The agent can open it by its path.</p>}
+    {!relative && <p className="file-reference-note">This file is outside the project, so Retinue does not preview it. The agent can open it only if its permissions allow.</p>}
+    {relative && !canPreview && <p className="file-reference-note">Retinue cannot preview this kind of file. The agent can open it by its path.</p>}
     {open && relative && <MediaPreview path={relative} />}
   </div>
 }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { activityTitle, loadedSkillName } from './ActivityDetails'
 import type { ConversationItem } from './conversation'
 
-const step = (tool: string, input?: unknown) => ({ kind: 'activity', activity: { kind: 'tool', detail: { tool: `bloblex · ${tool}`, input } } }) as unknown as ConversationItem
+const step = (tool: string, input?: unknown) => ({ kind: 'activity', activity: { kind: 'tool', detail: { tool: `retinue · ${tool}`, input } } }) as unknown as ConversationItem
 
 describe('skill tool steps', () => {
   it('names the skill an employee loaded, from an object or JSON input', () => {

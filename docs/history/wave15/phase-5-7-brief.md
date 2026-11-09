@@ -18,7 +18,7 @@ Keep the contract exactly. If something can't work as written, pick the smallest
 
 **Rule:** "omitted" and explicit `null` are the same unless an item says otherwise.
 
-**All new RPCs:** `tiers.json` class `never`, events `drop`, except where a section says otherwise. None go on the Bitbots MCP.
+**All new RPCs:** `tiers.json` class `never`, events `drop`, except where a section says otherwise. None go on the Retinue MCP.
 
 **Every command** is an argument list with no shell, has a time limit that really kills it, sets `GIT_TERMINAL_PROMPT=0` where git is involved, and never reads, passes or prints a credential. No message text, secret values, tokens or paths in logs.
 
@@ -35,7 +35,7 @@ Keep the contract exactly. If something can't work as written, pick the smallest
 
 ### Several accounts per provider
 
-An account is a named config folder for one provider. Table `accounts(id, provider, name, created_at)`, in new `crates/bloblex-storage/src/phase5.rs`. The folder is `<data>/accounts/<id>`, user-only. The default account is the CLI's own folder, has no row, and can't be deleted.
+An account is a named config folder for one provider. Table `accounts(id, provider, name, created_at)`, in new `crates/retinue-storage/src/phase5.rs`. The folder is `<data>/accounts/<id>`, user-only. The default account is the CLI's own folder, has no row, and can't be deleted.
 
 - **`account.list {}`** → `{accounts: [{id, provider, name, signedIn, label, plan, bots}]}`, where `bots` is how many bots use it.
 - **`account.create {provider, name}`** → `{account}`. `provider` must be a known provider. `name` is 1 to 60 characters.
@@ -65,9 +65,9 @@ Table `custom_models(id, provider, model_id, label, efforts_json)`, in `phase5.r
 
 ## 3. More ACP providers (Lane B)
 
-Today `crates/bloblex-adapter-acp` serves OpenCode, and many places match on `"claude" | "codex" | "opencode"`.
+Today `crates/retinue-adapter-acp` serves OpenCode, and many places match on `"claude" | "codex" | "opencode"`.
 
-- One table in `crates/bloblex-runtime`: `{provider, displayName, command, args, signInCommand, installHint}`. Add **Gemini CLI** (`gemini --experimental-acp`, provider `gemini`) and **Qwen Code** (`qwen --experimental-acp`, provider `qwen`). Check their current flags from their own documentation, and say what you found.
+- One table in `crates/retinue-runtime`: `{provider, displayName, command, args, signInCommand, installHint}`. Add **Gemini CLI** (`gemini --experimental-acp`, provider `gemini`) and **Qwen Code** (`qwen --experimental-acp`, provider `qwen`). Check their current flags from their own documentation, and say what you found.
 - Discovery finds them like the others. Not installed means not listed, the same as today.
 - A provider in this table works through the existing ACP adapter: sessions, turns, tools, approvals, models from `session/new`. Replace the `match`es that must know it (`main.rs` `provider_mode`, `provider_display_name`, capability rows, sign-in text). Give unknown capabilities the honest "not supported".
 - OpenCode's own behaviour doesn't change.
@@ -79,10 +79,10 @@ Today `crates/bloblex-adapter-acp` serves OpenCode, and many places match on `"c
 
 ## 4. Codex schema (Lane B)
 
-- `scripts/codex-schema.ps1` runs `codex app-server generate-json-schema --out <dir>` (check the real command for codex-cli 0.165.0) and writes `crates/bloblex-adapter-codex/schema/`, with `VERSION` holding the CLI version. Commit-ready, deterministic, and no absolute paths inside.
+- `scripts/codex-schema.ps1` runs `codex app-server generate-json-schema --out <dir>` (check the real command for codex-cli 0.165.0) and writes `crates/retinue-adapter-codex/schema/`, with `VERSION` holding the CLI version. Commit-ready, deterministic, and no absolute paths inside.
 - A test parses the pinned schema and checks that **every method the adapter sends and every notification it handles** is in it. So an update that removes one fails the test.
 - Runtime discovery compares the installed version with `VERSION`. `runtime.list` gains `protocol: {pinned, installed, match}` for Codex. A mismatch isn't a refusal.
-- `doctor.rs` reports a mismatch as a warning: "Codex x is newer than the version Bitbots was checked against (y)."
+- `doctor.rs` reports a mismatch as a warning: "Codex x is newer than the version Retinue was checked against (y)."
 
 **Tests:** `every_method_the_adapter_uses_is_in_the_pinned_schema`, `a_method_missing_from_the_schema_fails`, `a_newer_codex_is_a_warning_not_a_refusal`, `the_pinned_schema_holds_no_absolute_paths`.
 
@@ -90,7 +90,7 @@ Today `crates/bloblex-adapter-acp` serves OpenCode, and many places match on `"c
 
 Environment values point at the Windows Credential Manager instead of plain text.
 
-- Use `CredWriteW`, `CredReadW`, `CredDeleteW`, `CredEnumerateW` through `windows-sys`, target name `Bitbots/<name>`, type generic, persist local machine. `name` is 1 to 64 of `[A-Za-z0-9_.-]`. Value at most 2,048 bytes (the API's limit for generic credentials).
+- Use `CredWriteW`, `CredReadW`, `CredDeleteW`, `CredEnumerateW` through `windows-sys`, target name `Retinue/<name>`, type generic, persist local machine. `name` is 1 to 64 of `[A-Za-z0-9_.-]`. Value at most 2,048 bytes (the API's limit for generic credentials).
 - **`secret.list {}`** → `{secrets: [{name, updatedAt, usedBy}]}`. Names only. There is **no RPC that returns a value**.
 - **`secret.set {name, value, confirm}`:** no `confirm: true` is `invalid_argument`. An existing name is replaced.
 - **`secret.delete {name, confirm}`:** a bot using it: `conflict` naming the bots.
@@ -123,7 +123,7 @@ Content-free. Web Push from the daemon to the paired PWA. **Off by default**, be
 - Implement RFC 8291 (`aes128gcm`) and RFC 8292 (VAPID) with small pure-Rust crates. No OpenSSL.
 - **Setting:** `remote.push.enabled`, default `false`. Not exportable. `remote.push.get {}` → `{enabled, publicKey, devices}`. `remote.push.set {enabled, confirm}`: turning on needs `confirm: true`.
 - **From a device** (tier `viewer`, exact `tiers.json` rows, class `read` for the first and `chat` for the rest): `push.key {}` → `{publicKey, enabled}`; `push.subscribe {endpoint, p256dh, auth}`; `push.unsubscribe {}`.
-- **Subscriptions:** table `remote_push(device_id PK, endpoint, p256dh, auth, created_at, failed_at)`, in new `crates/bloblex-storage/src/phase6.rs`. One per device. Revoking a device deletes it.
+- **Subscriptions:** table `remote_push(device_id PK, endpoint, p256dh, auth, created_at, failed_at)`, in new `crates/retinue-storage/src/phase6.rs`. One per device. Revoking a device deletes it.
 - **The endpoint is untrusted.** It must be `https`, with no user or password, on a known push host: `fcm.googleapis.com`, `*.push.services.mozilla.com`, `*.notify.windows.com`, `web.push.apple.com`. Else `invalid_argument`. No redirects, no proxy, a 10-second limit and a small response cap.
 - **Sending:** when a conversation starts needing the owner (a permission or question arrives) or a turn fails. Payload exactly `{"title":"Rae needs you","sessionId":"…"}`, or "Rae's turn failed". **Never message text, tool names, paths or project names.** At most one per conversation per 60 seconds. Quiet hours send nothing. A push service answer of 404 or 410 deletes that subscription.
 - Failures are counted, and logged only as fixed text.
@@ -140,7 +140,7 @@ Starts an automation from a signed request. Only reachable while Remote is on.
 
 - An automation gains `webhook: {enabled, includeBody}`. **`automation.webhook.enable {id, confirm}`** → `{url, secret}`, shown once. **`automation.webhook.rotate`**, **`automation.webhook.disable`**. The secret lives in the credential store through section 5. All `never`.
 - **Route:** `POST /api/hook/<id>` on the gateway, outside the Origin check, inside the abuse limits. Body at most 64 KiB.
-- **Signature:** `X-Bitbots-Timestamp`, and `X-Bitbots-Signature: sha256=<hmac of "timestamp.body">`. Constant-time compare. Timestamp within 5 minutes. A replay cache of signatures for 10 minutes. Every failure answers the same 404 as an unknown id, and failures count toward the source's lockout.
+- **Signature:** `X-Retinue-Timestamp`, and `X-Retinue-Signature: sha256=<hmac of "timestamp.body">`. Constant-time compare. Timestamp within 5 minutes. A replay cache of signatures for 10 minutes. Every failure answers the same 404 as an unknown id, and failures count toward the source's lockout.
 - **Running it** goes through the existing automation path: its caps, the global pause, a mode that's never bypass. Disabled, paused or already running: answer `202` and do nothing else, with a content-free activity line.
 - **The body is untrusted.** `includeBody` is off by default. When on, it reaches the prompt only as quoted inert data, in the existing delimited form (see `knowledge.rs` `inert`).
 - A scheduled and a webhook trigger can coexist. The double-fire rule still holds.
@@ -149,10 +149,10 @@ Starts an automation from a signed request. Only reachable while Remote is on.
 
 ## 9. CI and performance (Lane D)
 
-- `.github/workflows/ci.yml`, on push and pull request to `main`, on `windows-latest`: `npm ci`, typecheck, `npm test`, `cargo test --workspace --exclude bloblex-desktop`, clippy with `-D warnings`, `npm run build`, `build:remote`, `docs:check`. Set `RUST_MIN_STACK=33554432`. Cache cargo and npm. Pin action versions to full commit hashes. `permissions: contents: read`. No secrets. Read `references/verification.md` for the known flaky tests, and give those a single retry rather than skipping them.
+- `.github/workflows/ci.yml`, on push and pull request to `main`, on `windows-latest`: `npm ci`, typecheck, `npm test`, `cargo test --workspace --exclude retinue-desktop`, clippy with `-D warnings`, `npm run build`, `build:remote`, `docs:check`. Set `RUST_MIN_STACK=33554432`. Cache cargo and npm. Pin action versions to full commit hashes. `permissions: contents: read`. No secrets. Read `references/verification.md` for the known flaky tests, and give those a single retry rather than skipping them.
 - **Check `apps/desktop/src-tauri/binaries`**: it's untracked locally, so make sure the workspace tests don't need it on a clean checkout, and say what you found.
 - **Performance gate:** `scripts/perf-gate.mjs` and `perf-budgets.json` at the root:
-  - **Cold start:** the time from starting `bitbotsd` to its ready line, on a seeded database.
+  - **Cold start:** the time from starting `retinued` to its ready line, on a seeded database.
   - **Snapshot size:** `app.snapshot` bytes, with `lazy` and without, on the same database (200 conversations, 2,000 messages).
   - **Render time:** a 1,000-message conversation mounted in a test (`apps/desktop/src/ui/perf.mounted.test.tsx`, which is yours to add).
   - Budgets are set from your measurements plus a sensible margin. Say what they are. Exceeding one fails. Generous on CI, since its machines vary: take the median of 3.
@@ -166,7 +166,7 @@ Starts an automation from a signed request. Only reachable while Remote is on.
 - **`main.rs`:** A adds dispatch arms after `"runtime.profile.delete"`. B changes only what it must. C adds to the remote arm. S after `"project.scaffold"`. `mod` lines beside the others, one per line, in your own block with a comment naming the phase.
 - **`tiers.json`:** A after `runtime.profile.list`. C after `remote.activity.list`. S after `settings.get`.
 - **`docs/ipc-contract.md`:** each lane adds its own section at the end, titled for its sections.
-- **`crates/bloblex-storage/src/lib.rs`:** one `mod` line and one ensure call each, on their own lines. It has one NUL byte, so edit it only with your edit tool.
+- **`crates/retinue-storage/src/lib.rs`:** one `mod` line and one ensure call each, on their own lines. It has one NUL byte, so edit it only with your edit tool.
 - **`Cargo.toml`:** add your own dependencies. I'll join `Cargo.lock`.
 
 ## Rules
@@ -181,9 +181,9 @@ Starts an automation from a signed request. Only reachable while Remote is on.
 
 ## Gates
 
-From PowerShell, with `BITBOTS_HOOK_BRIDGE` and `BITBOTS_REMOTE_WEB_DIR` removed:
-- While working: only your own tests, `cargo test -p bloblex-daemon <name>`.
-- In your last chunk: `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude bloblex-desktop --no-fail-fast`, then `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`.
+From PowerShell, with `RETINUE_HOOK_BRIDGE` and `RETINUE_REMOTE_WEB_DIR` removed:
+- While working: only your own tests, `cargo test -p retinue-daemon <name>`.
+- In your last chunk: `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude retinue-desktop --no-fail-fast`, then `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`.
 
 Known flaky: `a_crash_after_a_finished_turn_does_not_fail_that_session`, `stopping_a_turn_stops_its_setup_script`.
 

@@ -1,6 +1,6 @@
-# FIX9 rename report: Bloblex to Bitbots
+# FIX9 rename report: Retinue to Retinue
 
-> **What this is:** Report on FIX9: the rename from Bloblex to Bitbots.
+> **What this is:** Report on FIX9: the rename from Retinue to Retinue.
 > **Status:** historical
 > **Last updated:** 2026-10-15
 
@@ -10,20 +10,20 @@ worktree.
 
 ## Summary
 
-The product name is now **Bitbots**. Every place a person reads the product
-name has been renamed case-correctly ("Bloblex" to "Bitbots", "Bloblex's" to
-"Bitbots'", "bloblex"/"BLOBLEX" in prose to the same case). Identifiers, paths,
+The product name is now **Retinue**. Every place a person reads the product
+name has been renamed case-correctly ("Retinue" to "Retinue", "Retinue's" to
+"Retinue'", "retinue"/"RETINUE" in prose to the same case). Identifiers, paths,
 protocol values and URLs are unchanged. The word "blob" (the characters, "Blob
 page", "blob settings") is untouched, as the spec directs; the secondary theme
-name Blobots is FIX10's work.
+name Stone is FIX10's work.
 
-`README.md` gained the note "Bitbots (formerly Bloblex)" under its title.
+`README.md` gained the note "Retinue (formerly Retinue)" under its title.
 
 ## Gates
 
 - `npm run typecheck` - pass.
 - `npm run test` (desktop) - pass, 553 tests in 89 files.
-- `cargo test --workspace --exclude bloblex-desktop` - see "Gate results" below.
+- `cargo test --workspace --exclude retinue-desktop` - see "Gate results" below.
 
 ## Files changed (119)
 
@@ -53,8 +53,8 @@ name Blobots is FIX10's work.
   `ui/SessionExecutionControls.mounted.test.tsx`,
   `ui/sessionActions.mounted.test.tsx`, `ui/updates.mounted.test.tsx`,
   `ui/agentForm.test.ts`
-- `vendor/robot-heads/index.js` (the "vendored by Bloblex" comments only; the
-  `BLOBLEX_FRAME_MS` constant is untouched).
+- `vendor/robot-heads/index.js` (the "vendored by Retinue" comments only; the
+  `RETINUE_FRAME_MS` constant is untouched).
 
 **Desktop native** (`apps/desktop/src-tauri/src`)
 - `lib.rs` (error strings, tray tooltip and menu, companion/dictation window
@@ -63,20 +63,20 @@ name Blobots is FIX10's work.
   and its assertion).
 
 **Rust crates**
-- `crates/bloblex-adapter-acp/src/{catalog.rs,exec.rs,lib.rs}`
-- `crates/bloblex-adapter-claude/src/lib.rs` and its wire fixture
+- `crates/retinue-adapter-acp/src/{catalog.rs,exec.rs,lib.rs}`
+- `crates/retinue-adapter-claude/src/lib.rs` and its wire fixture
   `tests/wire/fixtures/permission-deny.ndjson`
-- `crates/bloblex-adapter-codex/src/lib.rs`
-- `crates/bloblex-agent-core/src/lib.rs`
-- `crates/bloblex-daemon/src/{automations.rs,main.rs,mcp_bridge.rs,quota_sources.rs,retry.rs,team.rs}`
+- `crates/retinue-adapter-codex/src/lib.rs`
+- `crates/retinue-agent-core/src/lib.rs`
+- `crates/retinue-daemon/src/{automations.rs,main.rs,mcp_bridge.rs,quota_sources.rs,retry.rs,team.rs}`
   and `tests/daemon_smoke.rs`
-- `crates/bloblex-speech/{Cargo.toml,src/capture.rs,src/catalog.rs,src/cloud.rs,src/lib.rs}`
-- `crates/bloblex-storage/src/lib.rs`
+- `crates/retinue-speech/{Cargo.toml,src/capture.rs,src/catalog.rs,src/cloud.rs,src/lib.rs}`
+- `crates/retinue-storage/src/lib.rs`
 
 **Scripts**
 - `scripts/live-checks/{live-cloud-dictation,live-codex-echo,live-codex,live-composer,live-opencode-effort,live-opencode}.mjs`
 - `scripts/make-update-manifest.mjs` and `scripts/make-update-manifest.test.mjs`
-  (the updater note text `Bloblex <version>` to `Bitbots <version>` and the
+  (the updater note text `Retinue <version>` to `Retinue <version>` and the
   assertions that check it)
 - `scripts/native-smoke/tray.ps1`, `scripts/release-windows.ps1`
 
@@ -108,43 +108,43 @@ name Blobots is FIX10's work.
 Grouped by kind. All were left exactly as written.
 
 **Crates, binaries and packages**
-- Cargo package/crate names (`bloblex-*`), binary names (`bloblexd`,
-  `bloblex-hook`), `Cargo.toml` `name`, `Cargo.lock`, `bundle.externalBin`.
-- npm names `bloblex` and `@bloblex/desktop`, `package-lock.json`.
-- Rust `use bloblex_*` paths, `bloblex_*` module references and Rust test
+- Cargo package/crate names (`retinue-*`), binary names (`retinued`,
+  `retinue-hook`), `Cargo.toml` `name`, `Cargo.lock`, `bundle.externalBin`.
+- npm names `retinue` and `@retinue/desktop`, `package-lock.json`.
+- Rust `use retinue_*` paths, `retinue_*` module references and Rust test
   function names (for example
-  `claude_catalog_probe_targets_bloblex_sonnet_default_and_keys_workflows_to_that_probe`).
+  `claude_catalog_probe_targets_retinue_sonnet_default_and_keys_workflows_to_that_probe`).
 
 **Tauri, OS and data identifiers**
-- Bundle identifier `com.bloblex.desktop` (and `com.bloblex.desktop.dev`).
-- The app-data directory name `Bloblex`: `%LOCALAPPDATA%\Bloblex`,
-  `%TEMP%\Bloblex`, `Bloblex/bloblex.db`, `Bloblex/private-tmp`,
-  `Bloblex/speech-models`, `C:/Bloblex/workspaces/...` fixture path.
-- Tauri command `quit_bloblex`, tray id `bloblex-tray`, icon file names
-  `bloblex.ico` and `bloblex-master.png`.
+- Bundle identifier `com.retinue.desktop` (and `com.retinue.desktop.dev`).
+- The app-data directory name `Retinue`: `%LOCALAPPDATA%\Retinue`,
+  `%TEMP%\Retinue`, `Retinue/retinue.db`, `Retinue/private-tmp`,
+  `Retinue/speech-models`, `C:/Retinue/workspaces/...` fixture path.
+- Tauri command `quit_retinue`, tray id `retinue-tray`, icon file names
+  `retinue.ico` and `retinue-master.png`.
 
 **Environment variables**
-- `BLOBLEX_*` (for example `BLOBLEX_DB_PATH`, `BLOBLEX_DAEMON_ADDR`,
-  `BLOBLEX_WIRE_RECORD`, `BLOBLEX_STAGE_DESTINATION`) and the vendored constant
-  `BLOBLEX_FRAME_MS`.
+- `RETINUE_*` (for example `RETINUE_DB_PATH`, `RETINUE_DAEMON_ADDR`,
+  `RETINUE_WIRE_RECORD`, `RETINUE_STAGE_DESTINATION`) and the vendored constant
+  `RETINUE_FRAME_MS`.
 
 **Protocol and wire values**
-- MCP server name `bloblex` (`SERVER_NAME`, `serverInfo.name`), the MCP tool
-  titles `bloblex · list_blobs` / `bloblex · message_blob`, and the Claude
-  tool-prefix needles `mcp__bloblex__` / `bloblex_*` in `is_team_tool_permission`.
-- The ACP mode value `bloblex` (`AGENT_NAME`, config-option `value`) and its
+- MCP server name `retinue` (`SERVER_NAME`, `serverInfo.name`), the MCP tool
+  titles `retinue · list_blobs` / `retinue · message_blob`, and the Claude
+  tool-prefix needles `mcp__retinue__` / `retinue_*` in `is_team_tool_permission`.
+- The ACP mode value `retinue` (`AGENT_NAME`, config-option `value`) and its
   recorded wire options.
-- Dictation `originator: bloblex` and the `bloblex-desktop/<version>`
+- Dictation `originator: retinue` and the `retinue-desktop/<version>`
   User-Agent (kept by the 12 and 14 October AGENTS amendments).
-- Frontend event names (`bloblex-*`), the drag MIME type
-  `application/x-bloblex-agent`, localStorage/sessionStorage keys
-  (`bloblex.appearance`, `bloblex.bitbots`, `bloblex.selectedAgentId`), and the
-  look seed `'bloblex'`.
-- Frontend symbol names `quitBloblex` and `bloblexLogo`.
+- Frontend event names (`retinue-*`), the drag MIME type
+  `application/x-retinue-agent`, localStorage/sessionStorage keys
+  (`retinue.appearance`, `retinue.retinue`, `retinue.selectedAgentId`), and the
+  look seed `'retinue'`.
+- Frontend symbol names `quitRetinue` and `retinueLogo`.
 
 **URLs and release assets**
 - Git remote / repo slug `sico-vibes/bloblex` and the updater endpoint URLs.
-- Published installer names `Bloblex_0.1.0-beta.N_x64-setup.exe` (including the
+- Published installer names `Retinue_0.1.0-beta.N_x64-setup.exe` (including the
   ones in `scripts/make-update-manifest.test.mjs`).
 
 **Records left as written**
@@ -160,42 +160,42 @@ Grouped by kind. All were left exactly as written.
 These read as the product name to a person but are, or are tied to, an
 identifier, so they were left and are listed here per the spec:
 
-- **ACP and Codex `clientInfo.name = "Bloblex"`** in the `initialize`
-  handshake (`crates/bloblex-adapter-acp/src/catalog.rs:161`,
-  `crates/bloblex-adapter-acp/src/lib.rs:461`,
-  `crates/bloblex-adapter-codex/src/lib.rs:699,1268,1332`) and the recorded
+- **ACP and Codex `clientInfo.name = "Retinue"`** in the `initialize`
+  handshake (`crates/retinue-adapter-acp/src/catalog.rs:161`,
+  `crates/retinue-adapter-acp/src/lib.rs:461`,
+  `crates/retinue-adapter-codex/src/lib.rs:699,1268,1332`) and the recorded
   `dir:"in"` lines in the wire fixtures under
-  `crates/bloblex-adapter-{acp,codex}/tests/wire/fixtures/`. It is the client
+  `crates/retinue-adapter-{acp,codex}/tests/wire/fixtures/`. It is the client
   identity sent to a provider (visible in provider logs) and part of the wire
   protocol; the replay tests compare it byte-for-byte.
-- **The ACP mode display name** `{ value: "bloblex", name: "Bloblex" }` in
-  `crates/bloblex-adapter-acp/tests/fixtures/fake-acp-agent.mjs:43`. The `value`
+- **The ACP mode display name** `{ value: "retinue", name: "Retinue" }` in
+  `crates/retinue-adapter-acp/tests/fixtures/fake-acp-agent.mjs:43`. The `value`
   is the mode identifier; the display `name` matches it. The recorded
   `effort-echo.ndjson` uses the lower-case identifier.
-- **MCP tool titles** `bloblex · list_blobs` / `bloblex · message_blob` shown in
+- **MCP tool titles** `retinue · list_blobs` / `retinue · message_blob` shown in
   the conversation UI (`apps/desktop/src/preview/fixtureBridge.ts:132-133`,
   `apps/desktop/src/ui/sessionActions.mounted.test.tsx:48`); they are built from
-  the MCP server name `bloblex`.
-- **`originator: bloblex`** in the cloud-dictation client, kept by the AGENTS
+  the MCP server name `retinue`.
+- **`originator: retinue`** in the cloud-dictation client, kept by the AGENTS
   amendment; the `originator` value is a protocol identity.
-- **`quit_bloblex`** (Tauri command) and the **`bloblex-tray`** id appear in
+- **`quit_retinue`** (Tauri command) and the **`retinue-tray`** id appear in
   source and logs; both are identifiers.
-- **Data-directory paths** such as `%LOCALAPPDATA%\Bloblex` that appear inside
+- **Data-directory paths** such as `%LOCALAPPDATA%\Retinue` that appear inside
   otherwise user-facing documentation and error copy.
 
 ## Left for other owners (not renamed here)
 
 - `apps/desktop/src/ui/FirstRunOnboarding.tsx`, `SettingsSheet.tsx`,
   `SettingsSheet.appearance.mounted.test.tsx` and
-  `FirstRunOnboarding.mounted.test.tsx` still read "Bloblex"; the FIX10 lane's
+  `FirstRunOnboarding.mounted.test.tsx` still read "Retinue"; the FIX10 lane's
   owners rename them, and their mounted tests were left matching so the suite
   stays green.
-- `apps/desktop/src/ui/theme.css` still has a "Bloblex design tokens" comment;
+- `apps/desktop/src/ui/theme.css` still has a "Retinue design tokens" comment;
   CSS is owned by the theme/Director work.
-- `apps/desktop/src/blob/bitbots.ts` and `blob/bitbots.test.ts` (the
-  `bloblex.bitbots` cache key is an identifier anyway).
+- `apps/desktop/src/blob/retinue.ts` and `blob/retinue.test.ts` (the
+  `retinue.retinue` cache key is an identifier anyway).
 - The daemon `settings.set` handler and settings validation in
-  `crates/bloblex-daemon/src/main.rs` were not touched.
+  `crates/retinue-daemon/src/main.rs` were not touched.
 
 ## Gate results
 

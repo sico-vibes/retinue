@@ -22,11 +22,11 @@ Hard design facts you must respect:
 
 ## You own
 
-- `crates/bloblex-daemon/src/questions.rs`
-- `crates/bloblex-daemon/src/team.rs` (`mcp_rpc` gating, `after_turn` guard, `runtime_instructions` side block)
-- `crates/bloblex-daemon/src/delegations.rs`
-- `crates/bloblex-storage/src/lib.rs` (only question/permission lookups and `delegation_*` helpers you need)
-- `crates/bloblex-daemon/src/main.rs`: only if a one-line change is unavoidable; say so in the report.
+- `crates/retinue-daemon/src/questions.rs`
+- `crates/retinue-daemon/src/team.rs` (`mcp_rpc` gating, `after_turn` guard, `runtime_instructions` side block)
+- `crates/retinue-daemon/src/delegations.rs`
+- `crates/retinue-storage/src/lib.rs` (only question/permission lookups and `delegation_*` helpers you need)
+- `crates/retinue-daemon/src/main.rs`: only if a one-line change is unavoidable; say so in the report.
 
 Never touch `checkpoints.rs`, `media.rs`, `workspace.rs`, `experiments.rs`, `apps/`, `docs/`, `.claude/`.
 
@@ -55,8 +55,8 @@ In `runtime_instructions`' side-conversation block add: `If you need a decision 
 
 ```powershell
 $env:RUST_MIN_STACK='33554432'
-cargo check -p bloblex-storage --message-format short
-cargo check -p bloblex-daemon --message-format short
+cargo check -p retinue-storage --message-format short
+cargo check -p retinue-daemon --message-format short
 ```
 Fix every warning you introduce. Use long timeouts.
 

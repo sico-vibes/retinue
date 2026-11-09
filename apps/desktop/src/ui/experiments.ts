@@ -1,6 +1,6 @@
 import type { JsonRecord, Session, Snapshot } from '../types'
 import { entityNoun } from './vocabulary'
-import { themeStyle } from '../blob/bitbots'
+import { themeStyle } from '../blob/retinue'
 import { keysFor, sendRows, SHORTCUT_ACTIONS, type SendShortcut, type ShortcutBindings } from './shortcuts'
 
 // Optional features. They used to live on an Experimental tab; each now sits on the Settings tab it belongs to

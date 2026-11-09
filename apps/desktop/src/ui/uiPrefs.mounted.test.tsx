@@ -53,7 +53,7 @@ describe('uiPrefs density', () => {
     setDensity('roomy')
     expect(density()).toBe('roomy')
     expect(document.documentElement.dataset.density).toBe('roomy')
-    expect(localStorage.getItem('bitbots.density')).toBe('roomy')
+    expect(localStorage.getItem('retinue.density')).toBe('roomy')
     expect(save).toHaveBeenCalledWith('settings.set', { key: 'appearance.density', value: 'roomy' })
   })
 
@@ -62,7 +62,7 @@ describe('uiPrefs density', () => {
     hydrateDensity('gigantic')
     hydrateDensity(7)
     expect(density()).toBe('default')
-    expect(localStorage.getItem('bitbots.density')).toBeNull()
+    expect(localStorage.getItem('retinue.density')).toBeNull()
     expect(save).not.toHaveBeenCalled()
   })
 
@@ -81,7 +81,7 @@ describe('uiPrefs hints', () => {
     markHintSeen('companion.drag')
     expect(hintSeen('companion.drag')).toBe(true)
     markHintSeen('companion.drag')
-    expect(JSON.parse(localStorage.getItem('bitbots.hints')!)).toEqual(['companion.drag'])
+    expect(JSON.parse(localStorage.getItem('retinue.hints')!)).toEqual(['companion.drag'])
     expect(save).toHaveBeenCalledTimes(1)
     expect(save).toHaveBeenCalledWith('settings.set', { key: 'hints.seen', value: ['companion.drag'] })
   })
@@ -93,13 +93,13 @@ describe('uiPrefs hints', () => {
     expect(hintSeen('companion.drag')).toBe(true)
     expect(hintSeen('ok')).toBe(true)
     expect(hintSeen('Bad Id')).toBe(false)
-    expect(JSON.parse(localStorage.getItem('bitbots.hints')!)).toEqual(['companion.drag', 'ok'])
+    expect(JSON.parse(localStorage.getItem('retinue.hints')!)).toEqual(['companion.drag', 'ok'])
     expect(save).not.toHaveBeenCalled()
   })
 
   it('caps the list at 64 and drops the oldest', () => {
     for (let index = 0; index < 70; index++) markHintSeen(`hint-${index}`)
-    const stored = JSON.parse(localStorage.getItem('bitbots.hints')!) as string[]
+    const stored = JSON.parse(localStorage.getItem('retinue.hints')!) as string[]
     expect(stored).toHaveLength(64)
     expect(stored[0]).toBe('hint-6')
     expect(stored.at(-1)).toBe('hint-69')
@@ -137,7 +137,7 @@ describe('uiPrefs tour', () => {
     expect(tourState()).toEqual({ version: 1, done: false, step: 2 })
     setTourState({ done: true })
     expect(tourState()).toEqual({ version: 1, done: true, step: 2 })
-    expect(JSON.parse(localStorage.getItem('bitbots.tour')!)).toEqual({ version: 1, done: true, step: 2 })
+    expect(JSON.parse(localStorage.getItem('retinue.tour')!)).toEqual({ version: 1, done: true, step: 2 })
     expect(save).toHaveBeenLastCalledWith('settings.set', { key: 'onboarding.tour', value: { version: 1, done: true, step: 2 } })
   })
 

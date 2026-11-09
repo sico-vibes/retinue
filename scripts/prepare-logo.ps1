@@ -1,5 +1,5 @@
 param(
-    [string]$Source = '..\assets\icon\bloblex.png'
+    [string]$Source = '..\assets\icon\retinue-master.png'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -7,10 +7,10 @@ Add-Type -AssemblyName System.Drawing
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $iconDir = Join-Path $repoRoot 'assets\icon'
-$masterPath = Join-Path $iconDir 'bloblex-master.png'
-$icoPath = Join-Path $iconDir 'bloblex.ico'
+$masterPath = Join-Path $iconDir 'retinue-master.png'
+$icoPath = Join-Path $iconDir 'retinue.ico'
 $trayPath = Join-Path $iconDir 'tray.png'
-$sidebarPath = Join-Path $repoRoot 'apps\desktop\src\assets\bloblex-128.png'
+$sidebarPath = Join-Path $repoRoot 'apps\desktop\src\assets\brand\retinue-tile-dark-128.png'
 $Source = if ([System.IO.Path]::IsPathRooted($Source)) { [System.IO.Path]::GetFullPath($Source) } else { [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot $Source)) }
 $outputPaths = @($masterPath, $icoPath, $trayPath, $sidebarPath) | ForEach-Object { [System.IO.Path]::GetFullPath($_) }
 if ($outputPaths -contains $Source) { throw "-Source cannot resolve to one of this script's output paths: $Source" }

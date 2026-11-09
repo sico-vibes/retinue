@@ -8,13 +8,13 @@
 
 Automations and skills are on by default. Memory has its own switch (Settings › Memory and skills, **Memory**) because it changes what a bot sees in a prompt. Skills need a folder with a `SKILL.md`, or a skill folder from a coding agent.
 
-All three are stored by Bitbots on this computer. None of them needs an account beyond the bot's normal coding agent, and none of their writes are available to a remote device.
+All three are stored by Retinue on this computer. None of them needs an account beyond the bot's normal coding agent, and none of their writes are available to a remote device.
 
 ## Automations
 
 ### What an automation is
 
-An automation is a saved prompt plus a schedule. At its due time Bitbots opens a normal bot conversation, sends the prompt and records the run. The automation uses the bot's model and effort and pins them for the run.
+An automation is a saved prompt plus a schedule. At its due time Retinue opens a normal bot conversation, sends the prompt and records the run. The automation uses the bot's model and effort and pins them for the run.
 
 Create one from the automations view:
 
@@ -25,11 +25,11 @@ Create one from the automations view:
 5. Choose an approval mode for the run: **plan** or **auto**. Full access and Ask first are not allowed for automations.
 6. Set a maximum runtime in seconds (60 to 14,400) and whether it is enabled.
 
-There is a global **Pause all automations** switch, and Bitbots runs at most 1 to 3 automations at once, under the overall limit of four turns.
+There is a global **Pause all automations** switch, and Retinue runs at most 1 to 3 automations at once, under the overall limit of four turns.
 
 ### What happens on a run
 
-Bitbots checks the schedule every 10 seconds. A missed occurrence becomes one run; it never tries to catch up with a burst. An automation that is already running records a skipped run, and one that cannot start because the overall limit or a user turn is busy stays due for up to 15 minutes, then records a skipped run.
+Retinue checks the schedule every 10 seconds. A missed occurrence becomes one run; it never tries to catch up with a burst. An automation that is already running records a skipped run, and one that cannot start because the overall limit or a user turn is busy stays due for up to 15 minutes, then records a skipped run.
 
 A run's status is running, completed, failed, skipped, cancelled, timeout or interrupted. After an unclean exit, a run left running is marked interrupted and does not count as a failure. After a failure the automation retries at 30 seconds, then 60 seconds; after three consecutive failures it pauses itself.
 
@@ -38,7 +38,7 @@ A run's status is running, completed, failed, skipped, cancelled, timeout or int
 - The run's approval mode is always plan or auto, whatever the bot's own mode is.
 - An action the automatic approval rules would not approve is refused and recorded with the automation and run.
 - A question that would need an answer is dismissed so the run can finish.
-- The run has no tools for changing schedules; a normal conversation can ask Bitbots to create an automation, but it arrives disabled and waiting for your approval.
+- The run has no tools for changing schedules; a normal conversation can ask Retinue to create an automation, but it arrives disabled and waiting for your approval.
 - Archiving or deleting a bot pauses its automations; it never deletes them.
 
 ## Memory
@@ -75,7 +75,7 @@ A bot can search, read, write, update and forget notes. It only sees reviewed no
 
 ### What a skill is
 
-A skill is a folder with a `SKILL.md` at its root: a name (lower-case letters, digits and hyphens, up to 64 characters), a description up to 1,024 characters, a body, and any files the skill needs. Bitbots copies the body and files into its own folder; it never runs a skill automatically.
+A skill is a folder with a `SKILL.md` at its root: a name (lower-case letters, digits and hyphens, up to 64 characters), a description up to 1,024 characters, a body, and any files the skill needs. Retinue copies the body and files into its own folder; it never runs a skill automatically.
 
 The pool is shared: one copy serves every bot. A global switch turns the pool on or off, and each bot can opt out of an individual skill. A skill that already exists in a coding agent's own skill folder is not offered twice.
 
@@ -87,7 +87,7 @@ The pool is shared: one copy serves every bot. A global switch turns the pool on
 
 A bot can list the skills it can see, load one, and read its files. Loading a skill gives the bot the folder, the description, the body and the file list, so a bot that can run commands can use the skill's scripts under its normal permissions.
 
-Bitbots refuses linked folders, reserved device names, more than 200 files and more than 20 MB, and keeps a complete copy only after the import succeeds.
+Retinue refuses linked folders, reserved device names, more than 200 files and more than 20 MB, and keeps a complete copy only after the import succeeds.
 
 ## Check the result
 
@@ -107,6 +107,6 @@ Bitbots refuses linked folders, reserved device names, more than 200 files and m
 
 **A skill will not import.** It is too large, contains a linked folder, has an invalid name or description, or its folder has no `SKILL.md`. The import result names the skipped item.
 
-**A skill loads but its script fails.** Bitbots copied the files but does not provide the runtime the script expects. The bot runs it with its normal permissions and reports the error; install the missing dependency in the environment the bot uses.
+**A skill loads but its script fails.** Retinue copied the files but does not provide the runtime the script expects. The bot runs it with its normal permissions and reports the error; install the missing dependency in the environment the bot uses.
 
 How it works: [conversation lifecycle](../reference/sessions-and-turns.md) keeps the queue and automation timing; [approvals and permissions](../reference/approvals-and-permissions.md) explains the automatic rules.

@@ -20,7 +20,7 @@
 - Naming: lower-case kebab-case for moved files. Root files, `docs/README.md` and `docs/STYLE.md` keep upper case.
 - 191 files moved with `git mv` (the full map is in the inventory). `docs/README.md` stays and was rewritten.
 - References rewritten by script: link targets recomputed from each file's new location; full old paths and unique bare names rewritten in prose; in code files only comment lines were touched.
-- Code edits (comment text only, 6 lines in 6 files): `apps/desktop/src/remote/serviceWorker.test.ts`, `crates/bloblex-adapter-acp/tests/live/mod.rs`, `crates/bloblex-adapter-claude/tests/live/mod.rs`, `crates/bloblex-adapter-codex/tests/live/mod.rs`, `crates/bloblex-daemon/src/main.rs`, `crates/bloblex-speech/src/cloud.rs`.
+- Code edits (comment text only, 6 lines in 6 files): `apps/desktop/src/remote/serviceWorker.test.ts`, `crates/retinue-adapter-acp/tests/live/mod.rs`, `crates/retinue-adapter-claude/tests/live/mod.rs`, `crates/retinue-adapter-codex/tests/live/mod.rs`, `crates/retinue-daemon/src/main.rs`, `crates/retinue-speech/src/cloud.rs`.
 - Byte-order marks removed from four moved files (text only).
 - Line endings normalised to CRLF, matching the working copy.
 
@@ -58,7 +58,7 @@
 
 ## Owner task: root tidy-up (19 October 2026)
 
-- Moved with `git mv`: `DESIGN.md` to `docs/design/design-system.md`; `PRODUCT.md` to `docs/design/product.md`; `SESSION_HANDOFF.md` to `docs/operations/session-handoff.md`; `THIRD_PARTY_NOTICES.md` to `docs/legal/third-party-notices.md`; `bitbots.png` to `assets/icon/bitbots.png`; `Bloblex_UI_Concept.png` to `docs/design/archive/bloblex-ui-concept.png`; `docs/qa-frontend.png` to `docs/design/archive/qa-frontend.png`.
+- Moved with `git mv`: `DESIGN.md` to `docs/design/design-system.md`; `PRODUCT.md` to `docs/design/product.md`; `SESSION_HANDOFF.md` to `docs/operations/session-handoff.md`; `THIRD_PARTY_NOTICES.md` to `docs/legal/third-party-notices.md`; `retinue.png` to `assets/icon/retinue-master.png`; `Retinue_UI_Concept.png` to `docs/design/archive/retinue-ui-concept.png`; `docs/qa-frontend.png` to `docs/design/archive/qa-frontend.png`.
 - Root now holds only `.gitignore`, `AGENTS.md`, `Cargo.lock`, `Cargo.toml`, `README.md`, `package-lock.json`, `package.json` (tracked).
-- References updated by script in Markdown (links and plain mentions), the project skill, `docs/library/content/`, `docs/library/README.md` and the four code comments. Not touched: `docs/library/sources`, `index.html`, `catalog.json`, `docs/library/audits` (lane records; one link repaired), `fixtureBridge.ts`, `scripts/docs-library.mjs` (reads the library's own copy `docs/library/assets/bitbots.png`).
+- References updated by script in Markdown (links and plain mentions), the project skill, `docs/library/content/`, `docs/library/README.md` and the four code comments. Not touched: `docs/library/sources`, `index.html`, `catalog.json`, `docs/library/audits` (lane records; one link repaired), `fixtureBridge.ts`, `scripts/docs-library.mjs` (reads the library's own copy `docs/library/assets/retinue.png`).
 - Added `docs/design/archive/README.md`; added a Documentation section to `README.md` linking `docs/DOCUMENTATION.html` (not yet built).

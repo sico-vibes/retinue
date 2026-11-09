@@ -1,12 +1,12 @@
-; FIX11: installer hooks for the Bloblex -> Bitbots identity change.
+; FIX11: installer hooks for the Retinue -> Retinue identity change.
 ;
 ; The generated NSIS installer (from tauri-bundler's installer.nsi) derives the
 ; install directory and the uninstall key from the product name:
-;   * install dir (currentUser): $LOCALAPPDATA\${PRODUCTNAME}  -> %LOCALAPPDATA%\Bitbots
+;   * install dir (currentUser): $LOCALAPPDATA\${PRODUCTNAME}  -> %LOCALAPPDATA%\Retinue
 ;   * uninstall key:             HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCTNAME}
 ;
-; The old app shipped as "Bloblex", so it registered its uninstall entry under
-; ...\Uninstall\Bloblex. Bitbots registers under ...\Uninstall\Bitbots and the
+; The old app shipped as "Retinue", so it registered its uninstall entry under
+; ...\Uninstall\Retinue. Retinue registers under ...\Uninstall\Retinue and the
 ; reinstall page therefore does not see the old install. This hook removes it
 ; before the new files are copied, so the two do not sit side by side each with
 ; its own "Start with Windows" entry.
@@ -17,19 +17,19 @@
 ; uninstaller).
 
 !macro NSIS_HOOK_PREINSTALL
-  ; Never touch anything while the installer is updating Bitbots in place.
+  ; Never touch anything while the installer is updating Retinue in place.
   ${If} $UpdateMode <> 1
-    ReadRegStr $R9 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Bloblex" "UninstallString"
+    ReadRegStr $R9 HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\Retinue" "UninstallString"
     ${If} $R9 != ""
-      DetailPrint "Removing the previous Bloblex install..."
+      DetailPrint "Removing the previous Retinue install..."
       ; Stop the old app and its daemon and hook sidecars if they are running.
-      nsExec::ExecToLog 'taskkill /F /IM Bloblex.exe /IM bloblexd.exe /IM bloblex-hook.exe /T'
+      nsExec::ExecToLog 'taskkill /F /IM Retinue.exe /IM retinued.exe /IM retinue-hook.exe /T'
       Pop $0
       ; $R9 already carries its own surrounding quotes from the registry.
       nsExec::ExecToLog '$R9 /S'
       Pop $0
       ${If} $0 != 0
-        DetailPrint "The previous Bloblex uninstaller returned $0. Continuing."
+        DetailPrint "The previous Retinue uninstaller returned $0. Continuing."
       ${EndIf}
     ${EndIf}
   ${EndIf}

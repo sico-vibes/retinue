@@ -215,11 +215,11 @@ describe('fast mode', () => {
     rpc.mockImplementation(async (method: string) => method === 'runtime.models' ? catalog : {})
     const host = mount(<SessionExecutionControls session={session} agent={agent} onSessionUpdated={() => undefined} onError={() => undefined} />)
     await flush()
-    await act(async () => { window.dispatchEvent(new CustomEvent('bloblex:exec-picker', { detail: 'model' })) })
+    await act(async () => { window.dispatchEvent(new CustomEvent('retinue:exec-picker', { detail: 'model' })) })
     expect(host.querySelector('.composer-menu.model-menu')).not.toBeNull()
     await act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
     expect(host.querySelector('.composer-menu.model-menu')).toBeNull()
-    await act(async () => { window.dispatchEvent(new CustomEvent('bloblex:exec-picker', { detail: 'effort' })) })
+    await act(async () => { window.dispatchEvent(new CustomEvent('retinue:exec-picker', { detail: 'effort' })) })
     expect(host.querySelector('.session-effort-popover')).not.toBeNull()
   })
 })
@@ -289,10 +289,10 @@ describe('composer attachments', () => {
   })
 
   it('retries only a "not ready yet" refusal, and shows a placeholder at once for a missing file', async () => {
-    expect(transientImageFailure('The local Bitbots daemon is not running.')).toBe(true)
+    expect(transientImageFailure('The local Retinue daemon is not running.')).toBe(true)
     expect(transientImageFailure('Daemon request failed: connection refused')).toBe(true)
     expect(transientImageFailure('not_found: The image file is no longer available.')).toBe(false)
-    rpc.mockImplementationOnce(async () => { throw new Error('The local Bitbots daemon is not running.') })
+    rpc.mockImplementationOnce(async () => { throw new Error('The local Retinue daemon is not running.') })
       .mockImplementationOnce(async () => ({ dataUrl: 'data:image/png;base64,iVBORw0KGgo=' }))
     const host = mount(<MessageAttachments attachments={[{ name:'shot.png' }]} sessionId="session" messageId="message-1" />)
     // While the daemon starts, the row keeps loading rather than claiming the image is gone.

@@ -6,7 +6,7 @@
 
 Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort, own worktree. Director reviews, runs the gates on the merged result and commits. **Do not run `git commit`.** Read `AGENTS.md` (16 October amendment) first.
 
-Read before coding: `crates/bloblex-daemon/src/team.rs` (`workspace_for` ~97, `message_blob` ~423, `side_session` and the side-session fallback, `after_turn` ~599, `agent_conversation` ~639, `team_rpc` and its `agent.team.update` arm ~670); `crates/bloblex-daemon/src/main.rs` (`new_session`, the resume/activation path after WP2, `session_prompt_impl` Phase A, the dispatch arm at ~632); `crates/bloblex-daemon/src/experiments.rs` `automatic_title`; `crates/bloblex-storage/src/lib.rs` session queries and `ensure_*` functions; `apps/desktop/src/remote/remoteTiers.ts`.
+Read before coding: `crates/retinue-daemon/src/team.rs` (`workspace_for` ~97, `message_blob` ~423, `side_session` and the side-session fallback, `after_turn` ~599, `agent_conversation` ~639, `team_rpc` and its `agent.team.update` arm ~670); `crates/retinue-daemon/src/main.rs` (`new_session`, the resume/activation path after WP2, `session_prompt_impl` Phase A, the dispatch arm at ~632); `crates/retinue-daemon/src/experiments.rs` `automatic_title`; `crates/retinue-storage/src/lib.rs` session queries and `ensure_*` functions; `apps/desktop/src/remote/remoteTiers.ts`.
 
 ## Why
 The owner wants a conversation panel per bot: every conversation the user had with that bot in its project, auto-titled from the first prompt, with rename/delete/new, and bot-to-bot conversations nested under the conversation that started them. Today each bot has one "main" conversation (newest non-archived, non-side, non-automation session), a new one archives the old, side links lose where they started (`originSessionId` is overwritten on every continue, `team.rs:451`), and a project without a path makes the workspace `<data>/workspaces/<agent uuid>`, so the UI shows a UUID.
@@ -59,8 +59,8 @@ One row per conversation, newest first:
 - Update the `agent.conversation` test only if its behaviour changes (it should not).
 
 ## Gates
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote`
 Use the private `CARGO_TARGET_DIR` the brief gives you.
 

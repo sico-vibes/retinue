@@ -14,7 +14,7 @@ For each item 1–24:
 - **Check the design:** will it actually fix what the owner sees? Is it safe (security rules in `AGENTS.md`: Remote, capability, no credentials in logs, approvals)? Does it break another item or existing behaviour? Is the test plan strong enough to prove it (tests that would fail on today's code)?
 - Flag anything the research missed in the owner's words.
 
-Item 20 (context lost after a restart, and the owner's question about T3 Code / ACP) and item 22 (an MCP to control Bitbots) need a clear, plain answer the Director can pass to the owner. Check them especially carefully.
+Item 20 (context lost after a restart, and the owner's question about T3 Code / ACP) and item 22 (an MCP to control Retinue) need a clear, plain answer the Director can pass to the owner. Check them especially carefully.
 
 ## Then produce, for the implementer (GPT Sol 6.1)
 

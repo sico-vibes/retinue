@@ -17,7 +17,7 @@ Verified 2 October 2026 against the CLIs installed on this machine: Claude Code 
 
 Evidence is a command plus a trimmed excerpt, or `file:line` in this repo or in the installed package. Excerpts are shortened. Nothing here is a credential, auth file, or account email.
 
-Checked-in Codex schemas at `docs/qa-schema/codex-0.159.3/` match a fresh `codex app-server generate-json-schema` written only under `%TEMP%\bloblex-cap-codex-schema` (ThreadStartParams, ThreadResumeParams, and TurnStartParams property sets are equal; `model/list` is present).
+Checked-in Codex schemas at `docs/qa-schema/codex-0.159.3/` match a fresh `codex app-server generate-json-schema` written only under `%TEMP%\retinue-cap-codex-schema` (ThreadStartParams, ThreadResumeParams, and TurnStartParams property sets are equal; `model/list` is present).
 
 ## Claude Code 2.1.286
 
@@ -28,15 +28,15 @@ Checked-in Codex schemas at `docs/qa-schema/codex-0.159.3/` match a fresh `codex
 | C3 | Instructions via `--append-system-prompt-file`, out of argv, and how they survive resume | PARTIAL | `claude --help` (`--system-prompt-snapshot`); flag probe | File flags exist. Default snapshot keeps the first prompt and ignores a different prompt on later launches until compaction. Resume was not executed. |
 | C4 | Model catalog is stream-json `list_models`, else a static fallback | CONFIRMED | stdin `control_request` on a `-p` stream-json process | `list_models` works. A static fallback is unnecessary for 2.1.286. There is no models subcommand. |
 | C5 | No speed / service-tier flag | CONFIRMED | `claude --help`; `--speed` and `--service-tier` rejected | Hide the speed picker. Some models still advertise `supportsFastMode`, and usage objects can report `speed`, but no spawn flag was found. |
-| C6 | How the Claude adapter launches, and which flags can be added | CONFIRMED | `crates/bloblex-adapter-claude/src/lib.rs:202-221` and `:373-382` | Add `--model`, `--effort`, and `--append-system-prompt-file` beside the existing permission flags. Do not let the user replace protocol or permission flags. |
+| C6 | How the Claude adapter launches, and which flags can be added | CONFIRMED | `crates/retinue-adapter-claude/src/lib.rs:202-221` and `:373-382` | Add `--model`, `--effort`, and `--append-system-prompt-file` beside the existing permission flags. Do not let the user replace protocol or permission flags. |
 | C7 | stream-json `result` carries input/output/cache tokens, total cost, and model | CONFIRMED | Zod schema strings in `claude.exe` 2.1.286 | Read `usage.*`, `total_cost_usd`, and `modelUsage` keys. The result object has no top-level `model`. Not observed on a live completion. |
 
 ### C1
 
-`claude --help` says `--model` takes "an alias for the latest model (e.g. 'fable', 'opus', or 'sonnet') or a model's full name." `--model haiku|fable|sonnet|opus` and `--model bloblex-not-a-model`, each with `-p` and no prompt, were accepted as flags. The invalid id warned and then failed only because no prompt was supplied:
+`claude --help` says `--model` takes "an alias for the latest model (e.g. 'fable', 'opus', or 'sonnet') or a model's full name." `--model haiku|fable|sonnet|opus` and `--model retinue-not-a-model`, each with `-p` and no prompt, were accepted as flags. The invalid id warned and then failed only because no prompt was supplied:
 
 ```text
-"bloblex-not-a-model" isn't described by this version's model catalog; ...
+"retinue-not-a-model" isn't described by this version's model catalog; ...
 Until then auto-compact keeps this session within 200k tokens
 ```
 
@@ -123,7 +123,7 @@ The success `result` schema in `claude.exe` includes `total_cost_usd`, `usage`, 
 | X5 | How "fast" is expressed | CONFIRMED | `codex debug models`; `TurnStartParams.serviceTierForTurn` | The catalog id is `priority` (name "Fast"), not the string `fast`. |
 | X6 | Developer instructions persist across resume and per turn | PARTIAL | start/resume params vs `TurnStartParams` | Re-pass `developerInstructions` on start and resume. It is not a `turn/start` field. Persistence without re-sending was not executed. |
 | X7 | Token-usage notification names and fields | CONFIRMED | `ThreadTokenUsageUpdatedNotification.json`; adapter `lib.rs:159-172` | Notification is `thread/tokenUsage/updated`. It has no model and no dollar cost. |
-| X8 | How the Codex adapter calls `thread/start` today | CONFIRMED | `crates/bloblex-adapter-codex/src/lib.rs:46-48` and `:278` | Today it sends only cwd, approvalPolicy, and sandbox. |
+| X8 | How the Codex adapter calls `thread/start` today | CONFIRMED | `crates/retinue-adapter-codex/src/lib.rs:46-48` and `:278` | Today it sends only cwd, approvalPolicy, and sandbox. |
 
 ### X1
 
@@ -198,7 +198,7 @@ Method `thread/tokenUsage/updated`. Params: `threadId`, `turnId`, `tokenUsage.la
 
 ### X8
 
-Spawn (`lib.rs:46-48`): `app-server --listen stdio://`. Initialize (`lib.rs:232`): `initialize` with `clientInfo` Bitbots 0.1.0 and `capabilities.experimentalApi: false`, then `initialized`. `thread/start` (`lib.rs:278`):
+Spawn (`lib.rs:46-48`): `app-server --listen stdio://`. Initialize (`lib.rs:232`): `initialize` with `clientInfo` Retinue 0.1.0 and `capabilities.experimentalApi: false`, then `initialized`. `thread/start` (`lib.rs:278`):
 
 ```json
 {"cwd":"<project>","approvalPolicy":"on-request","sandbox":"workspace-write"}
@@ -216,11 +216,11 @@ Spawn (`lib.rs:46-48`): `app-server --listen stdio://`. Initialize (`lib.rs:232`
 | O4 | Per-session instructions and whether they persist across turns | PARTIAL | debug config + ACP mode list | Put the prompt on a custom agent and set mode to that agent. Cross-turn survival was not executed. |
 | O5 | OpenCode reports no usage/cost on ACP | REFUTED | `ACPUsage.sendUpdate` in `opencode.exe` | Count `session/update` `usage_update` (`used`, `size`, `cost`). Do not treat every run as unreported. A live event was not captured. |
 | O6 | Variant values per model and how ACP selects them | CONFIRMED | verbose variants; ACP `effort` option after `set_config_option` | Map thinking to config option id `effort`, which appears only after a model that has variants is selected. |
-| O7 | How the OpenCode and ACP adapters launch | CONFIRMED | `bloblex-adapter-opencode` and `bloblex-adapter-acp` | Spawn is `acp --cwd`. `session/new` sends only cwd and `mcpServers`. |
+| O7 | How the OpenCode and ACP adapters launch | CONFIRMED | `retinue-adapter-opencode` and `retinue-adapter-acp` | Spawn is `acp --cwd`. `session/new` sends only cwd and `mcpServers`. |
 
 ### O1
 
-`opencode models --verbose` printed `provider/model` headers and a JSON object each. Shape: `id`, `providerID`, `name`, `api`, `status`, `cost` (`input`, `output`, `cache.read`, `cache.write`), `limit` (`context`, sometimes `input`, `output`), `capabilities` (including `reasoning`), `variants`. All eight were `providerID: opencode` and reported cost 0 (free catalog prices, not a Bitbots default). Variants:
+`opencode models --verbose` printed `provider/model` headers and a JSON object each. Shape: `id`, `providerID`, `name`, `api`, `status`, `cost` (`input`, `output`, `cache.read`, `cache.write`), `limit` (`context`, sometimes `input`, `output`), `capabilities` (including `reasoning`), `variants`. All eight were `providerID: opencode` and reported cost 0 (free catalog prices, not a Retinue default). Variants:
 
 | id | variant keys |
 | --- | --- |
@@ -249,10 +249,10 @@ resolved:
 {
   "model": "opencode/big-pickle",
   "agent": {
-    "bloblex-cap": {
+    "retinue-cap": {
       "mode": "primary",
       "model": "opencode/big-pickle",
-      "prompt": "BLOBLEX_CAP_MARKER reply only OK"
+      "prompt": "RETINUE_CAP_MARKER reply only OK"
     }
   }
 }
@@ -265,10 +265,10 @@ Minimal config that did this:
   "$schema": "https://opencode.ai/config.json",
   "model": "opencode/big-pickle",
   "agent": {
-    "bloblex-cap": {
+    "retinue-cap": {
       "mode": "primary",
       "model": "opencode/big-pickle",
-      "prompt": "BLOBLEX_CAP_MARKER reply only OK"
+      "prompt": "RETINUE_CAP_MARKER reply only OK"
     }
   }
 }
@@ -282,7 +282,7 @@ No model completion was used. The username field from the resolved config is omi
 
 `initialize` result: `protocolVersion: 1`, `agentInfo` OpenCode 1.18.34, `agentCapabilities.loadSession: true`, `sessionCapabilities` close/fork/list/resume, `promptCapabilities` embeddedContext and image. No model list on initialize.
 
-`session/new` params used by Bitbots (`cwd`, `mcpServers: []`) succeeded. Result keys were only `sessionId` and `configOptions` (no `models` / `availableModels` object on this response):
+`session/new` params used by Retinue (`cwd`, `mcpServers: []`) succeeded. Result keys were only `sessionId` and `configOptions` (no `models` / `availableModels` object on this response):
 
 - `model` select, current `opencode/big-pickle`, 9 values. The extra id versus `models --verbose` was `opencode/fledge-alpha-free`.
 - `mode` select, current `build`, values `build` and `plan`.
@@ -291,11 +291,11 @@ No model completion was used. The username field from the resolved config is omi
 
 `session/set_model` requires `modelId` (string). `{"sessionId","modelId":"opencode/big-pickle"}` returned an empty result. `model` instead of `modelId` returned invalid params: `modelId` expected string, received undefined.
 
-The client notification `initialized` is rejected (`Method not found`). `session/new` still works if that notification is skipped. Bitbots sends it today (`bloblex-adapter-acp/src/lib.rs:357`).
+The client notification `initialized` is rejected (`Method not found`). `session/new` still works if that notification is skipped. Retinue sends it today (`retinue-adapter-acp/src/lib.rs:357`).
 
 ### O4
 
-Instructions travel as an agent `prompt` inside `OPENCODE_CONFIG_CONTENT`, not as ACP prompt text. On a second handshake with the O2 config, `mode` values were `build`, `bloblex-cap`, and `plan`, and current mode stayed `build`. The custom prompt is therefore not active until `session/set_config_option` sets `configId: "mode"` to that agent. The env is process-scoped, so a new spawn (including resume, which spawns again) must set it again and select the mode again. No second turn was sent, so survival inside one process was not observed. There is no instructions field on `session/prompt`.
+Instructions travel as an agent `prompt` inside `OPENCODE_CONFIG_CONTENT`, not as ACP prompt text. On a second handshake with the O2 config, `mode` values were `build`, `retinue-cap`, and `plan`, and current mode stayed `build`. The custom prompt is therefore not active until `session/set_config_option` sets `configId: "mode"` to that agent. The env is process-scoped, so a new spawn (including resume, which spawns again) must set it again and select the mode again. No second turn was sent, so survival inside one process was not observed. There is no instructions field on `session/prompt`.
 
 ### O5
 
@@ -315,11 +315,11 @@ Verbose `variants` are above. Over ACP they show up as config option id `effort`
 
 ### O7
 
-`bloblex-adapter-opencode/src/lib.rs:1-5` re-exports `AcpAdapter`. Spawn (`bloblex-adapter-acp/src/lib.rs:44-48`): `executable` + runtime args + `acp --cwd <project>`. `new_session` (`lib.rs:350-362`): `initialize` (`protocolVersion: 1`, empty client capabilities, clientInfo Bitbots 0.1.0), notify `initialized`, then `session/new` with `cwd` and `mcpServers: []`. `prompt` (`lib.rs:435-438`): `session/prompt` with `prompt: [{type:text, text}]`. Probe capabilities set `usage: false` (`lib.rs:336`). No model, mode, effort, or config env is set today.
+`retinue-adapter-opencode/src/lib.rs:1-5` re-exports `AcpAdapter`. Spawn (`retinue-adapter-acp/src/lib.rs:44-48`): `executable` + runtime args + `acp --cwd <project>`. `new_session` (`lib.rs:350-362`): `initialize` (`protocolVersion: 1`, empty client capabilities, clientInfo Retinue 0.1.0), notify `initialized`, then `session/new` with `cwd` and `mcpServers: []`. `prompt` (`lib.rs:435-438`): `session/prompt` with `prompt: [{type:text, text}]`. Probe capabilities set `usage: false` (`lib.rs:336`). No model, mode, effort, or config env is set today.
 
 ## Z1. Setting mechanisms
 
-Provider-side proof means a field the runtime itself returns, not Bitbots' snapshot of what it intended to send.
+Provider-side proof means a field the runtime itself returns, not Retinue's snapshot of what it intended to send.
 
 | Runtime | Setting | Mechanism | Scope | Provider-side proof |
 | --- | --- | --- | --- | --- |
@@ -344,7 +344,7 @@ Provider-side proof means a field the runtime itself returns, not Bitbots' snaps
 
 ## Z2. Custom-arg allowlists
 
-Allowlists only. Anything not listed is rejected. Paths in allowlisted file flags must be files Bitbots created, not a user-supplied path.
+Allowlists only. Anything not listed is rejected. Paths in allowlisted file flags must be files Retinue created, not a user-supplied path.
 
 **Claude spawn allowlist:** `--model`, `--effort`, `--fallback-model`, `--append-system-prompt-file`, `--system-prompt-snapshot`.
 
@@ -358,7 +358,7 @@ Allowlists only. Anything not listed is rejected. Paths in allowlisted file flag
 
 **Never user-controlled for OpenCode argv:** `acp`, `--cwd`, `--port`, `--hostname`, `--auto`, `--pure`, `-m` / `--model` on the TUI entrypoint, `-c` / `--continue`, `-s` / `--session`, `--prompt`, `--agent`.
 
-**Env:** reject secret-looking keys the same way `settings.set` already does. Never log env values or instruction text. `OPENCODE_CONFIG_CONTENT` is Bitbots-owned, not a user-supplied env blob.
+**Env:** reject secret-looking keys the same way `settings.set` already does. Never log env values or instruction text. `OPENCODE_CONFIG_CONTENT` is Retinue-owned, not a user-supplied env blob.
 
 ## Z3. Corrections `docs/plans/e2e-plan-v2.md` needs
 
@@ -398,33 +398,33 @@ Versions and help, PowerShell, repo not used as the CLI cwd unless noted:
 - `codex --version` → `codex-cli 0.159.3`
 - `opencode --version` → `1.18.34`
 - `Get-Command claude, codex, opencode`
-- `claude --help` → `%TEMP%\bloblex-cap-claude-help.txt`
-- `codex --help` → `%TEMP%\bloblex-cap-codex-help.txt`
-- `opencode --help` → `%TEMP%\bloblex-cap-opencode-help.txt`
+- `claude --help` → `%TEMP%\retinue-cap-claude-help.txt`
+- `codex --help` → `%TEMP%\retinue-cap-codex-help.txt`
+- `opencode --help` → `%TEMP%\retinue-cap-opencode-help.txt`
 - `codex debug --help`
 - `codex app-server --help`
 - `codex app-server generate-json-schema --help`
 - `opencode acp --help`
 - `opencode debug --help`
 - `opencode debug paths`
-- `opencode debug paths` again with `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, and `XDG_CACHE_HOME` under `%TEMP%\bloblex-cap-xdg`
+- `opencode debug paths` again with `XDG_DATA_HOME`, `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, and `XDG_CACHE_HOME` under `%TEMP%\retinue-cap-xdg`
 
-Claude flag probes in `%TEMP%\bloblex-cap-claude-wd`, no prompt, so they stopped before a completion: `--permission-mode` default, manual, and bogus; `--effort` low, medium, high, xhigh, max, and bogus; `--model` haiku, fable, sonnet, opus, and `bloblex-not-a-model`; `--append-system-prompt-file`, `--system-prompt-file`, `--append-system-prompt`, `--system-prompt`; `--speed fast`; `--service-tier fast`. Each was `claude.exe` plus `-p` except the file flags, which consumed `-p` as the path.
+Claude flag probes in `%TEMP%\retinue-cap-claude-wd`, no prompt, so they stopped before a completion: `--permission-mode` default, manual, and bogus; `--effort` low, medium, high, xhigh, max, and bogus; `--model` haiku, fable, sonnet, opus, and `retinue-not-a-model`; `--append-system-prompt-file`, `--system-prompt-file`, `--append-system-prompt`, `--system-prompt`; `--speed fast`; `--service-tier fast`. Each was `claude.exe` plus `-p` except the file flags, which consumed `-p` as the path.
 
-Claude `list_models`, twice, cwd `%TEMP%\bloblex-cap-claude-list`, flags `-p --output-format stream-json --input-format stream-json --verbose --permission-mode default --permission-prompt-tool stdio --no-session-persistence`, stdin only the control request, then the process was killed. No user prompt.
+Claude `list_models`, twice, cwd `%TEMP%\retinue-cap-claude-list`, flags `-p --output-format stream-json --input-format stream-json --verbose --permission-mode default --permission-prompt-tool stdio --no-session-persistence`, stdin only the control request, then the process was killed. No user prompt.
 
 Codex and OpenCode catalogs:
 
-- `codex debug models` → `%TEMP%\bloblex-cap-codex-models.json`
-- `codex app-server generate-json-schema --out %TEMP%\bloblex-cap-codex-schema`
-- `opencode models --verbose` → `%TEMP%\bloblex-cap-opencode-models.txt`
+- `codex debug models` → `%TEMP%\retinue-cap-codex-models.json`
+- `codex app-server generate-json-schema --out %TEMP%\retinue-cap-codex-schema`
+- `opencode models --verbose` → `%TEMP%\retinue-cap-opencode-models.txt`
 - `opencode debug config` with `OPENCODE_CONFIG_CONTENT` set only for that process, then cleared
 
 ACP handshakes, no `session/prompt`, XDG dirs under `%TEMP%`:
 
-- `%TEMP%\bloblex-cap-acp-wd` and `%TEMP%\bloblex-cap-xdg`: initialize, `initialized`, `session/new`, `session/set_model`
-- `%TEMP%\bloblex-cap-acp-wd2` and `%TEMP%\bloblex-cap-xdg2`: `session/set_config_option` model, then `session/set_model` with `modelId` and with `model`
-- `%TEMP%\bloblex-cap-acp-wd3` and `%TEMP%\bloblex-cap-xdg3`: `session/new` with `OPENCODE_CONFIG_CONTENT` defining agent `bloblex-cap`
+- `%TEMP%\retinue-cap-acp-wd` and `%TEMP%\retinue-cap-xdg`: initialize, `initialized`, `session/new`, `session/set_model`
+- `%TEMP%\retinue-cap-acp-wd2` and `%TEMP%\retinue-cap-xdg2`: `session/set_config_option` model, then `session/set_model` with `modelId` and with `model`
+- `%TEMP%\retinue-cap-acp-wd3` and `%TEMP%\retinue-cap-xdg3`: `session/new` with `OPENCODE_CONFIG_CONTENT` defining agent `retinue-cap`
 
 Read-only package and schema inspection: Claude `package.json`, `sdk-tools.d.ts`, `cli-wrapper.cjs`, `README.md`; string scans of `claude.exe` and `opencode.exe`; `docs/qa-schema/codex-0.159.3/v2/ThreadStartParams.json`, `ThreadResumeParams.json`, `TurnStartParams.json`, `ThreadStartResponse.json`, `ThreadTokenUsageUpdatedNotification.json`, `ModelListParams.json`, `ModelListResponse.json`, `ConfigReadResponse.json`, `ThreadSettingsUpdatedNotification.json`; adapter sources listed above.
 
@@ -432,5 +432,5 @@ Live model calls: **none**.
 
 Writes outside the temp dir, then what was done about them:
 
-- The `list_models` probes created `%USERPROFILE%\.claude\sessions` and `.last-cleanup` even with `--no-session-persistence`. On this machine `USERPROFILE` is `C:\Users\user\AppData\Local\bloblex-cursor-home`. Those new session files and `.last-cleanup` were deleted. The pre-existing `backups\.claude.json.backup.*` was left unread and in place.
+- The `list_models` probes created `%USERPROFILE%\.claude\sessions` and `.last-cleanup` even with `--no-session-persistence`. On this machine `USERPROFILE` is `C:\Users\user\AppData\Local\retinue-cursor-home`. Those new session files and `.last-cleanup` were deleted. The pre-existing `backups\.claude.json.backup.*` was left unread and in place.
 - `opencode models --verbose`, `opencode debug paths`, and `opencode acp --help` ran before `XDG_*` was set. They left a default `opencode.jsonc` (schema stub only), `.gitignore`, `opencode.db` (+ `-shm`/`-wal`), and a `log` directory under that same home's `.config\opencode` and `.local\share\opencode`. Those files were not deleted. Later ACP handshakes used temp XDG dirs. `~/.codex` under that home was not created. No `login`, `logout`, or `config set` was run.

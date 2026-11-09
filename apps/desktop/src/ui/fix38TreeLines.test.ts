@@ -68,8 +68,8 @@ describe('conversation branch lines', () => {
     for (const body of [rule(panel, GUIDE), rule(panel, ELBOW)]) {
       expect(body).toMatch(/1px var\(--convo-line-style\) var\(--convo-line\)/)
     }
-    // The Frost (Bitbots) look that swapped the stroke was retired by the owner on 27 October 2026.
-    expect(panel).not.toContain('data-bitbots')
+    // The Frost (Retinue) look that swapped the stroke was retired by the owner on 27 October 2026.
+    expect(panel).not.toContain('data-retinue')
   })
 
   it('no longer hides the arrow under the old 17px elbow', () => {

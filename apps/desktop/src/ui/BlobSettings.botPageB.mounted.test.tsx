@@ -172,7 +172,7 @@ describe('B7 folder wording and recent folders', () => {
   })
 
   it('offers recent folders and the Browse button, remembering the choice', async () => {
-    localStorage.setItem('bitbots.recentFolders', JSON.stringify(['C:/one', 'C:/two']))
+    localStorage.setItem('retinue.recentFolders', JSON.stringify(['C:/one', 'C:/two']))
     openProjectFolder.mockResolvedValue('C:/three')
     const view = mount(<Harness />)
     await view.settle()
@@ -185,7 +185,7 @@ describe('B7 folder wording and recent folders', () => {
     await act(async () => { (buttonNamed(view.host, 'Browse…') as HTMLButtonElement).click() })
     await view.settle()
     expect(view.host.querySelector<HTMLInputElement>('[aria-label="Working folder"]')?.value).toBe('C:/three')
-    expect(JSON.parse(localStorage.getItem('bitbots.recentFolders') ?? '[]')[0]).toBe('C:/three')
+    expect(JSON.parse(localStorage.getItem('retinue.recentFolders') ?? '[]')[0]).toBe('C:/three')
   })
 })
 
@@ -256,7 +256,7 @@ describe('B10 technical details disclosure', () => {
     await act(async () => { toggle.click() })
     expect(toggle.getAttribute('aria-expanded')).toBe('true')
     expect((view.host.querySelector('#bot-details-content') as HTMLElement).hidden).toBe(false)
-    expect(localStorage.getItem('bitbots.botPage.detailsOpen')).toBe('true')
+    expect(localStorage.getItem('retinue.botPage.detailsOpen')).toBe('true')
   })
 })
 

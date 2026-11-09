@@ -48,7 +48,7 @@ export function WebhookPanel({ automationId, name, webhook, onChanged }: { autom
       {state.enabled && <>
         {url ? <CopyLine label="Address" value={url} /> : <p>Turn Remote on to get an address for this webhook.</p>}
         {secret
-          ? <div role="status"><CopyLine label="Secret" value={secret} /><small className="project-settings-note">Copy this now. It won't be shown again. Sign each request with HMAC-SHA-256 over <code>timestamp.body</code>, in <code>X-Bitbots-Timestamp</code> and <code>X-Bitbots-Signature: sha256=…</code>.</small></div>
+          ? <div role="status"><CopyLine label="Secret" value={secret} /><small className="project-settings-note">Copy this now. It won't be shown again. Sign each request with HMAC-SHA-256 over <code>timestamp.body</code>, in <code>X-Retinue-Timestamp</code> and <code>X-Retinue-Signature: sha256=…</code>.</small></div>
           : <small className="project-settings-note">The secret was shown when it was made. Rotate it if you've lost it, and senders using the old one stop working.</small>}
         <label className="new-project-check"><input type="checkbox" checked={state.includeBody} disabled={busy} onChange={(event) => void call('automation.webhook.update', { includeBody: event.target.checked })} /><span>Give the employee the request's body, as data. Whoever sends it chooses what it says, so leave this off unless you need it.</span></label>
         <div className="webhook-actions">

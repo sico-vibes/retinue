@@ -23,7 +23,7 @@ You are an **implementer**: GPT Sol 6.1 at high effort, working in your own git 
 - Keep your context small: grep, then read only the ranges you need.
 
 ## Gates (run them all; foreground; wait for each)
-- Rust (if you changed Rust): `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`, then `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`. If you changed `src-tauri`, also run `cargo test -p bloblex-desktop --lib`.
+- Rust (if you changed Rust): `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`, then `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`. If you changed `src-tauri`, also run `cargo test -p retinue-desktop --lib`.
 - UI: `cd apps/desktop && npx tsc -b && npx vitest run --maxWorkers=3 2>&1 | grep -E "Test Files|Tests |FAIL"`, then `npm run build`. If you changed the remote app, also run `npm run build:remote`.
 
 ## Report

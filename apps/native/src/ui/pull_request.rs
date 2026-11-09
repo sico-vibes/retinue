@@ -270,7 +270,7 @@ impl Root {
                 card = card.child(row);
             }
             if let Some(reason) = reason {
-                card = card.child(note(colors, format!("Bitbots can't open this one itself: {reason}")));
+                card = card.child(note(colors, format!("Retinue can't open this one itself: {reason}")));
             }
             // The facts the owner is agreeing to.
             let mut facts: Vec<(String, String)> = Vec::new();

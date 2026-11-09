@@ -224,7 +224,7 @@ pub fn show_in_folder(path: &Path) -> Result<(), String> {
 /// never goes through a file handler: only `http`/`https` survive
 /// `safe_http_url`, and Windows' own "open" verb sends those to the browser.
 pub fn open_link(url: &str) -> Result<(), String> {
-    let url = crate::ui::markdown::safe_http_url(url).ok_or_else(|| "That link is not one Bitbots opens.".to_owned())?;
+    let url = crate::ui::markdown::safe_http_url(url).ok_or_else(|| "That link is not one Retinue opens.".to_owned())?;
     shell_open(&url)
 }
 
@@ -286,7 +286,7 @@ pub fn previewable_name(name: &str) -> bool {
 pub const PREVIEW_READ_BYTES: u64 = 200 * 1024;
 pub const PREVIEW_MAX_LINES: usize = 4_000;
 
-/// The preview a file's name and bytes allow, or `None` when Bitbots will not
+/// The preview a file's name and bytes allow, or `None` when Retinue will not
 /// show it (a program, an archive, a PDF, a video).
 pub fn preview_kind(name: &str, bytes: &[u8]) -> Option<PreviewKind> {
     if image_format(bytes).is_some() {
@@ -323,7 +323,7 @@ pub fn read_preview(path: &Path) -> Result<(PreviewKind, Vec<u8>), String> {
         .read_to_end(&mut bytes)
         .map_err(|_| "That file could not be read.".to_owned())?;
     let name = path.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_default();
-    let kind = preview_kind(&name, &bytes).ok_or_else(|| "Bitbots cannot show this kind of file.".to_owned())?;
+    let kind = preview_kind(&name, &bytes).ok_or_else(|| "Retinue cannot show this kind of file.".to_owned())?;
     bytes.truncate(PREVIEW_READ_BYTES as usize);
     Ok((kind, bytes))
 }
@@ -405,7 +405,7 @@ mod tests {
 
     #[test]
     fn a_staged_image_is_written_and_says_where() {
-        let folder = std::env::temp_dir().join(format!("bitbots-native-attach-{}", std::process::id()));
+        let folder = std::env::temp_dir().join(format!("retinue-native-attach-{}", std::process::id()));
         let png = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
         let path = stage_attachment(&folder, &png, "pasted image.png").expect("staged");
         assert!(path.exists());
@@ -418,14 +418,14 @@ mod tests {
 
     #[test]
     fn a_file_outside_the_project_is_refused() {
-        let root = std::env::temp_dir().join(format!("bitbots-native-files-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("retinue-native-files-{}", std::process::id()));
         let inner = root.join("inside.txt");
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(&inner, b"hello").unwrap();
         let root_text = root.to_string_lossy().to_string();
         let inside = canonical_project_file("inside.txt", Some(&root_text)).expect("a relative file in the project");
         assert!(inside.ends_with("inside.txt"));
-        let outside = std::env::temp_dir().join("bitbots-native-outside.txt");
+        let outside = std::env::temp_dir().join("retinue-native-outside.txt");
         std::fs::write(&outside, b"no").unwrap();
         assert!(canonical_project_file(&outside.to_string_lossy(), Some(&root_text)).is_err());
         assert!(canonical_project_file(&root_text, Some(&root_text)).is_err(), "a folder is not a file");
@@ -461,7 +461,7 @@ mod spawn_guard {
     const ALLOWED: [(&str, &str); 3] = [
         ("files.rs", "explorer.exe /select, only: it highlights a file and runs nothing"),
         ("notify.rs", "reg add, to register the notification app id once"),
-        ("supervisor.rs", "bitbotsd.exe, the daemon this window owns"),
+        ("supervisor.rs", "retinued.exe, the daemon this window owns"),
     ];
 
     fn sources(dir: &Path, found: &mut Vec<PathBuf>) {
@@ -498,7 +498,7 @@ mod spawn_guard {
         for (file, line) in &sites {
             assert!(
                 ALLOWED.iter().any(|(allowed, _)| allowed == file),
-                "{file}:{line} starts a program, and only files.rs (explorer /select,), notify.rs (reg) and supervisor.rs (bitbotsd) may"
+                "{file}:{line} starts a program, and only files.rs (explorer /select,), notify.rs (reg) and supervisor.rs (retinued) may"
             );
         }
     }

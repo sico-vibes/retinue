@@ -5,7 +5,7 @@
 > **Last updated:** 2026-10-15
 
 Owner: OpenCode lane (backend only). Reviewer: Director. Parent plan: `docs/plans/improvement-plan.md` Phase 6. Builds on Phases 1-5 (durable queue, MCP bridge tool list, session links). The UI is built by the Director against this contract; do not touch `apps/`.
-Scope: `crates/bloblex-storage`, `crates/bloblex-daemon` (`team.rs`, `main.rs`, `queue.rs`), `docs/`. No new dependencies.
+Scope: `crates/retinue-storage`, `crates/retinue-daemon` (`team.rs`, `main.rs`, `queue.rs`), `docs/`. No new dependencies.
 
 ## Rules
 - Work only in this worktree. **Never run `git commit`, `git push`, `git checkout`, `git stash`.** Leave changes uncommitted. Attach/read only files inside this worktree.
@@ -23,7 +23,7 @@ Why: OpenCode over ACP has no question tool of its own. The bridge's tool call t
 - The existing UI contract for question cards must not change: the same `permission.requested` payload and the same reply RPC. The only visible differences are that the session may be `completed`/`idle` while the card is pending, and that `expiresAt` is set.
 
 ## Part 2: hand-off draft
-- Bitbots keeps one main conversation per blob, so a hand-off must **not** create a new session. RPC `session.handoff.draft {fromSessionId, note?}` is read-only: it validates the source (`not_found` for missing/archived, side conversations are allowed as a source) and returns `{draft, carried:{messages:N, truncated:bool}, fromAgentId, title}`.
+- Retinue keeps one main conversation per blob, so a hand-off must **not** create a new session. RPC `session.handoff.draft {fromSessionId, note?}` is read-only: it validates the source (`not_found` for missing/archived, side conversations are allowed as a source) and returns `{draft, carried:{messages:N, truncated:bool}, fromAgentId, title}`.
 - `draft` is a ready-to-edit first message for another blob: `Continue from <source blob>'s conversation "<title>".` followed by `note` when present, then a bounded excerpt of the source transcript (the last 8 user and assistant messages, each clipped to 600 characters, whole excerpt at most 4000 characters, oldest first, thinking and notices excluded, never tool output or file contents). Reuse the excerpt/snapshot helper behind quoted replies if it fits; otherwise write a small one.
 - It stores nothing and sends nothing. The UI selects the target blob's own conversation and places `draft` in its composer for the user to edit and send.
 
@@ -32,7 +32,7 @@ Why: OpenCode over ACP has no question tool of its own. The bridge's tool call t
 
 ## Gates (run and report real output)
 ```
-CARGO_TARGET_DIR=D:/b-p1 RUST_MIN_STACK=33554432 cargo test -p bloblex-storage -p bloblex-daemon -p bloblex-agent-core -p bloblex-adapter-claude -p bloblex-adapter-codex -p bloblex-adapter-acp
+CARGO_TARGET_DIR=D:/b-p1 RUST_MIN_STACK=33554432 cargo test -p retinue-storage -p retinue-daemon -p retinue-agent-core -p retinue-adapter-claude -p retinue-adapter-codex -p retinue-adapter-acp
 ```
 
 ## Final report (plain text, last message)
@@ -45,7 +45,7 @@ CARGO_TARGET_DIR=D:/b-p1 RUST_MIN_STACK=33554432 cargo test -p bloblex-storage -
 - Tests: column added idempotently to an existing database; create/update validation (bad value -> `invalid_argument`); DTO and event carry the field; export/import of a blob setup is unchanged (do not add the field to shared blob files).
 
 ## Part 4: automation sessions are never a blob's main conversation (small, mandatory)
-Sessions linked `{"kind":"automation"}` (created by Phase 4A) carry the blob's `agentId`. Bitbots keeps one main conversation per blob, so the daemon must never pick an automation session as that blob's main conversation:
+Sessions linked `{"kind":"automation"}` (created by Phase 4A) carry the blob's `agentId`. Retinue keeps one main conversation per blob, so the daemon must never pick an automation session as that blob's main conversation:
 - `agent.conversation` (and any helper it uses, e.g. the "newest open non-side session" selection) must skip sessions whose link kind is `automation` (and `handoff`, if any exist from earlier drafts), the same way it skips `side`. When the blob has no other session it creates one as today.
 - `agent.list`/snapshot summaries that report a blob's "current conversation", unread/attention state or `busy` must not let an automation session replace the main conversation. A running automation may still make the blob count as working; keep that behaviour if it already exists.
 - Tests: a blob with an old main conversation and a newer automation session still returns the old one from `agent.conversation`; with only an automation session it creates a fresh main conversation; archived/deleted cases unchanged. Also assert side-conversation behaviour is unchanged.

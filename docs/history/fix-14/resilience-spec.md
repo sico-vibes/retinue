@@ -40,8 +40,8 @@ warnings and the toast helper. Table-driven tests with at least 15 inputs.
 ## 2. Offline and daemon-down banner
 
 A single slim banner under the header (`role="status"`, `aria-live="polite"`) when
-the connection state is not `connected`: "Reconnecting to Bitbots..." with a
-spinner glyph and attempt count after the third try, "Bitbots could not be
+the connection state is not `connected`: "Reconnecting to Retinue..." with a
+spinner glyph and attempt count after the third try, "Retinue could not be
 reached" plus a **Retry now** button after a failure. It disappears with a short
 "Back online" confirmation (1.5 s). The composer stays usable for drafting but
 Send is disabled with the tooltip "Waiting for the connection". Use the existing
@@ -69,6 +69,6 @@ focusable, the timer pauses on hover and focus. Tests per action.
 ## Gates
 
 `npm run typecheck`, `npm run test`, `cargo clippy --workspace --exclude
-bloblex-desktop --all-targets -- -D warnings` only if you touched Rust.
+retinue-desktop --all-targets -- -D warnings` only if you touched Rust.
 Never commit. Leave the diff and write `docs/history/fix-14/report.md` with one line per
 numbered section (done / partly / not done and why) and the list of call sites.

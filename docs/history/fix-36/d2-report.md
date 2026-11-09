@@ -16,7 +16,7 @@ assigning a task, and later the playbook) is written down as a proposal and
 surfaced as an ordinary permission card. Nothing is created before the owner
 approves it.
 
-## 1. Storage (`crates/bloblex-storage/src/lib.rs`)
+## 1. Storage (`crates/retinue-storage/src/lib.rs`)
 
 - **Schema (additive, no `user_version` bump).** New `ensure_proposal_schema`
   creates
@@ -55,7 +55,7 @@ approves it.
 
 ## 2. Daemon
 
-### New module `crates/bloblex-daemon/src/proposals.rs`
+### New module `crates/retinue-daemon/src/proposals.rs`
 
 - **Tool schemas** for the Manager: `propose_project`, `propose_bot`,
   `assign_task`, `project_status`.
@@ -142,7 +142,7 @@ approves it.
 
 ## Tests
 
-Storage (`crates/bloblex-storage/src/lib.rs`, `memory_tests`):
+Storage (`crates/retinue-storage/src/lib.rs`, `memory_tests`):
 
 - `proposals_are_cards_the_question_sweep_ignores_and_a_decision_resolves_them`
   — a proposal is a durable row and a `kind:"proposal"` card in the snapshot;
@@ -151,7 +151,7 @@ Storage (`crates/bloblex-storage/src/lib.rs`, `memory_tests`):
   announcement; only a pending proposal can be decided and a decision resolves
   the card and stores `result`.
 
-Daemon (`crates/bloblex-daemon/src/main.rs`, `phase2a_tests`):
+Daemon (`crates/retinue-daemon/src/main.rs`, `phase2a_tests`):
 
 - `manager_proposals_wait_for_approval_and_create_nothing_first` — a non-manager
   is refused all three tools with the Manager-named error; the Manager is
@@ -194,14 +194,14 @@ parity test fails the build if a dispatched method or an emitted event has no
 
 Run in this worktree with `CARGO_TARGET_DIR=C:\fxt\d2`, after the final edit:
 
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` —
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` —
   **clean** (exit 0).
 - `cd apps/desktop && npx tsc -b` — **clean** (exit 0).
 - `cd apps/desktop && npx vitest run src/remote src/preview` — **13 files, 207
   tests passed**.
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-  — **all suites ok, 0 failed** (99 in `bloblex-storage`, 320 in
-  `bloblex-daemon`, every other binary ok; no `FAILED`, no `panicked`, no build
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+  — **all suites ok, 0 failed** (99 in `retinue-storage`, 320 in
+  `retinue-daemon`, every other binary ok; no `FAILED`, no `panicked`, no build
   errors). The full gate was run and waited for **after** the last source edit.
 
 ## Unverified / notes

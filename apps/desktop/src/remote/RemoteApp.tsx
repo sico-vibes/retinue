@@ -13,7 +13,7 @@ import { StatusDot } from '../ui/StatusDot'
 import { isAutomationSession, isSideSession, mainSessionFor } from '../ui/teamSelectors'
 import { useEntityNoun } from '../ui/vocabulary'
 import { BUCKET_LABEL, queuedLabel, useDelegations, type DelegationRecord } from '../ui/delegations'
-import logo from '../assets/bloblex-128.png'
+import logo from '../assets/brand/retinue-tile-dark.png'
 import type { RemoteMethodId, RemoteTier } from './remoteContract'
 import type { RemoteConnectionStatus, RemoteMe } from './remoteTransport'
 import { codeFromHash, createPreviewDeviceApi, describeThisDevice, errorCode, previewDeviceOptionsFromUrl, type RemoteDeviceApi } from './deviceApi'
@@ -292,7 +292,7 @@ export function RemoteApp({ device: deviceProp, pollMs = PAIR_POLL_MS }: { devic
               <span><strong>{hostName}</strong><small>{online ? TIER_WORD[tier] : connection === 'offline' ? 'Offline' : 'Connecting…'}</small></span>
             </div>}
         </header>
-        {!online && <p className="rm-connection" role="status">{connection === 'offline' ? `Offline. Bitbots will reconnect to ${hostName} when the network is back.` : `Reconnecting to ${hostName}…`}</p>}
+        {!online && <p className="rm-connection" role="status">{connection === 'offline' ? `Offline. Retinue will reconnect to ${hostName} when the network is back.` : `Reconnecting to ${hostName}…`}</p>}
         {me?.quietHoursActive && <p className="rm-connection quiet" role="status">Quiet hours: this device can read but not send.</p>}
         <div className={wide ? 'rm-workspace' : 'rm-content'}>
         {(wide || screen === 'bots') && <aside className="rm-roster" aria-label={nouns}>
@@ -357,7 +357,7 @@ function ConnectScreen({ notice, onConnect, nouns }: { notice: string | null; on
   return <main className="rm-connect">
     <img src={logo} alt="" width="56" height="56" />
     <h1>Connect to your computer</h1>
-    <p>On the computer, open Bitbots, go to Settings › Remote and choose “Show pairing code”. Scanning its QR code fills the code in for you.</p>
+    <p>On the computer, open Retinue, go to Settings › Remote and choose “Show pairing code”. Scanning its QR code fills the code in for you.</p>
     {notice && <p className="rm-notice" role="alert">{notice}</p>}
     <label className="rm-field">Pairing code
       <input className="rm-code" inputMode="text" autoCapitalize="characters" autoComplete="off" spellCheck={false} placeholder="XXXX-XXXX" value={code}
@@ -387,7 +387,7 @@ function SignInScreen({ notice, onSignIn, nouns }: { notice: string | null; onSi
   return <main className="rm-connect">
     <img src={logo} alt="" width="56" height="56" />
     <h1>Sign in to your computer</h1>
-    <p>Use the username and password set in Bitbots on the computer, under Settings › Remote.</p>
+    <p>Use the username and password set in Retinue on the computer, under Settings › Remote.</p>
     {notice && <p className="rm-notice" role="alert">{notice}</p>}
     <form className="rm-form" onSubmit={(event) => { event.preventDefault(); void submit() }}>
       <label className="rm-field">Username
@@ -413,7 +413,7 @@ function WaitingScreen({ name, back, onCancel }: { name: string; back: string; o
   return <main className="rm-connect rm-waiting" aria-live="polite">
     <span className="rm-waiting-icon" aria-hidden="true"><Monitor size={26} /></span>
     <h1>Approve on your computer</h1>
-    <p>Bitbots on your computer is asking whether to let <b>{name || 'this device'}</b> in. Choose what it may do and approve it there.</p>
+    <p>Retinue on your computer is asking whether to let <b>{name || 'this device'}</b> in. Choose what it may do and approve it there.</p>
     <span className="rm-waiting-dots" aria-hidden="true"><i /><i /><i /></span>
     <button type="button" className="rm-secondary" onClick={onCancel}>{back}</button>
   </main>
@@ -449,7 +449,7 @@ function BotsScreen({ hostName, agents, sessions, runtimes, online, loaded, wait
         </li>
       })}
     </ul>
-    {loaded && agents.length === 0 && <p className="rm-empty">No {nouns} on this computer yet. Create one in Bitbots on the computer and it will appear here.</p>}
+    {loaded && agents.length === 0 && <p className="rm-empty">No {nouns} on this computer yet. Create one in Retinue on the computer and it will appear here.</p>}
   </section>
 }
 
@@ -547,7 +547,7 @@ function DeviceScreen({ me, noun, onLogout, layoutOverride, onLayoutChange }: { 
     </dl>
     <div className="rm-card">
       <span className="rm-card-icon"><Download size={18} aria-hidden="true" /></span>
-      <div><strong>Install Bitbots on this device</strong><small>On iPhone choose Share, then “Add to Home Screen”. On Android choose “Install app” in the browser menu. It opens full screen like an app.</small></div>
+      <div><strong>Install Retinue on this device</strong><small>On iPhone choose Share, then “Add to Home Screen”. On Android choose “Install app” in the browser menu. It opens full screen like an app.</small></div>
     </div>
     <PushCard />
     <p className="rm-hint rm-device-hint">What this device may do is set on the computer, in Settings › Remote. An {noun} that needs approval waits there unless this device may approve.</p>

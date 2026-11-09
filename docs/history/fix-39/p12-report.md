@@ -11,7 +11,7 @@ Spec: `docs/history/fix-39/decisions.md` § "P12: local diagnostics". No `git co
 
 ### 1. Rolling log files (daemon and shell), `logs/` in the app data folder
 
-- **Daemon:** new `crates/bloblex-daemon/src/diagnostics.rs`.
+- **Daemon:** new `crates/retinue-daemon/src/diagnostics.rs`.
   - `log_dir()` (line 51) puts every log under `<data dir>/logs`.
   - `init_logging()` (line 167) builds a `tracing_appender::rolling::RollingFileAppender` with
     `Rotation::DAILY`, prefix `daemon`, suffix `log`, `max_log_files(14)`, wraps it in
@@ -20,7 +20,7 @@ Spec: `docs/history/fix-39/decisions.md` § "P12: local diagnostics". No `git co
     overrides both).
   - `prune_logs()` (line 228) deletes the oldest `daemon.*.log` / `desktop.*.log` files until
     the folder is back at or under `MAX_LOG_BYTES` (20 MB). The newest file is always kept.
-- **Daemon wiring:** `crates/bloblex-daemon/src/main.rs`
+- **Daemon wiring:** `crates/retinue-daemon/src/main.rs`
   - `mod diagnostics;` (line 39).
   - the tracing subscriber moved out of `main()` and into `run()` (line 4118–4125) so the
     data folder and the saved setting are known; the `WorkerGuard` is held for the process
@@ -28,8 +28,8 @@ Spec: `docs/history/fix-39/decisions.md` § "P12: local diagnostics". No `git co
   - `"diagnostics.preview" | "diagnostics.export"` routed to `diagnostics::rpc` (line 823).
   - `validate_setting` accepts only `info`/`debug` for `diagnostics.logLevel` (line 1351).
 - **Shell:** `apps/desktop/src-tauri/src/lib.rs`
-  - `bitbots_data_dir()` (line 810) resolves the same folder as the daemon
-    (`%LOCALAPPDATA%\Bitbots`, or `BLOBLEX_DB_PATH`'s parent), so the daemon's export picks up
+  - `retinue_data_dir()` (line 810) resolves the same folder as the daemon
+    (`%LOCALAPPDATA%\Retinue`, or `RETINUE_DB_PATH`'s parent), so the daemon's export picks up
     the shell's file too.
   - `log_shell()` (line 820) appends one daily file `desktop.<date>.log`, prunes the shell's
     own files to 20 MB, and passes every line through `redact_log_line()` (line 839).
@@ -41,7 +41,7 @@ Spec: `docs/history/fix-39/decisions.md` § "P12: local diagnostics". No `git co
 - `diagnostics::redact()` (line 74) plus `RedactingWriter` (line 85) scrub secret-shaped
   material from every chunk that reaches the file: `Bearer …`, `sk-…`/`xai-…`/`api-…` keys,
   `$argon2id$…`/`$scrypt$…`/`$pbkdf2$…` blobs, `token|secret|password|credential|api_key|
-  authorization|cookie = value`, and `bloblex*=…` cookies. Ids, error classes, provider
+  authorization|cookie = value`, and `retinue*=…` cookies. Ids, error classes, provider
   names, versions, timings, exit codes and paths without credentials are untouched.
 - `scrub_events()` (line 131) removes message/prompt/delta/thinking/content/command/output/
   diff/recap/summary/reason/record/automation/requested/applied/result/detail/failure text and
@@ -85,7 +85,7 @@ Spec: `docs/history/fix-39/decisions.md` § "P12: local diagnostics". No `git co
 
 ## Tests that prove it
 
-Daemon (`crates/bloblex-daemon/src/main.rs`, `mod fix39_p12_tests`, line 10477; pure units in
+Daemon (`crates/retinue-daemon/src/main.rs`, `mod fix39_p12_tests`, line 10477; pure units in
 `diagnostics.rs`):
 
 - `diagnostics_export_never_carries_text_tokens_or_credentials` — builds the zip from a temp data
@@ -95,11 +95,11 @@ Daemon (`crates/bloblex-daemon/src/main.rs`, `mod fix39_p12_tests`, line 10477; 
   with a token and a password into the temp `logs/` folder first, so it also proves the export
   re-redacts an old/foreign file.
 - `diagnostics_preview_lists_the_same_contents_before_saving` — preview lists `README.txt`,
-  `events.json`, etc. with sizes and a `bitbots-diagnostics-<date>.zip` name, and carries no
+  `events.json`, etc. with sizes and a `retinue-diagnostics-<date>.zip` name, and carries no
   private text.
 - `the_hidden_log_level_setting_accepts_only_info_and_debug`.
 - `every_log_call_site_is_a_fixed_message` — scans every `tracing::` and `log_shell("` call site in
-  `crates/bloblex-daemon/src` and `apps/desktop/src-tauri/src` and fails if any of them logs a
+  `crates/retinue-daemon/src` and `apps/desktop/src-tauri/src` and fails if any of them logs a
   value named text/prompt/content/message/command/secret/token/cookie/password/credential.
 - `redaction_removes_tokens_and_credentials_but_keeps_ids`, `the_redacting_writer_never_writes_a_secret_to_the_file`,
   `scrubbing_removes_message_command_and_recap_text`, `scrubbing_settings_keeps_preferences_and_removes_secrets`,
@@ -122,17 +122,17 @@ All tests point at temporary folders (`std::env::temp_dir()`); no owner data is 
 
 ## Gate results
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast` — all
-  crates ok, `bloblex-daemon` 380 passed / 0 failed (after the two diagnostics fixes; three
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast` — all
+  crates ok, `retinue-daemon` 380 passed / 0 failed (after the two diagnostics fixes; three
   unrelated timing tests — `catalog_cached_only_never_waits`,
   `session_environment_reports_a_git_branch`, `the_per_device_rate_limit_stops_a_flood` — failed
   once under parallel load and pass alone and in the final full run).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
-- `cargo test -p bloblex-desktop --lib` — 59 passed / 0 failed.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
+- `cargo test -p retinue-desktop --lib` — 59 passed / 0 failed.
 - `cd apps/desktop && npx tsc -b` — clean.
 - `npx vitest run --maxWorkers=3` — 170 files, 1245 tests, all passed.
 - `npm run build` and `npm run build:remote` — both built.
-- Live smoke: started `bitbotsd.exe` with a temp `BLOBLEX_DB_PATH`; it created
+- Live smoke: started `retinued.exe` with a temp `RETINUE_DB_PATH`; it created
   `<dir>/logs/daemon.2026-10-18.log` as expected.
 
 ## What I could not check
@@ -152,7 +152,7 @@ All tests point at temporary folders (`std::env::temp_dir()`); no owner data is 
 - `apps/desktop/src/preview/fixtureBridge.ts`, `apps/desktop/src/remote/remoteTauri.ts` — the two
   export-parity tests require every `../tauri` export to exist in both bridges.
 - `apps/desktop/src/ui/settingsIndex.ts` — one search entry for the new row.
-- `Cargo.lock` — `tracing-appender 0.2.5` and `zip 2` for `bloblex-daemon` (`zip 2.4.2` was already
+- `Cargo.lock` — `tracing-appender 0.2.5` and `zip 2` for `retinue-daemon` (`zip 2.4.2` was already
   in the lock via `sherpa-onnx-sys`).
 - Generated Tauri schema files under `apps/desktop/src-tauri/gen/schemas/` show as modified only
   because the build rewrote their line endings; `git diff` is empty for them.
@@ -171,14 +171,14 @@ were added on top.
 
 ### F1 — `permission.requested` question text reached `events.json`
 
-- `crates/bloblex-daemon/src/diagnostics.rs:184` `scrub_events` is now an
+- `crates/retinue-daemon/src/diagnostics.rs:184` `scrub_events` is now an
   **allowlist** (`EVENT_SAFE_KEYS`, line 126) rather than a denylist: an event key
   is copied only if it names an id, enum-ish state, error class, provider,
   version, timing, counter or flag. Every other key (the `questions` array and
   its `question`/`header`/`options`/`label`/`description`, and also `title`,
   `detail`, `input`, `arguments`, `content`, `patch`, paths, …) is dropped. A
   string under `payload` is never kept.
-- `crates/bloblex-daemon/src/main.rs:10534` the export test now pushes a real
+- `crates/retinue-daemon/src/main.rs:10534` the export test now pushes a real
   `permission.requested` shape (`questions: [{question, header, options:[{label,
   description}]}]`), from the daemon's own branch at `main.rs:3975`, and asserts
   none of that text is in the zip while `perm-1`, `s-2` and `kind` survive.
@@ -218,7 +218,7 @@ were added on top.
 
 ### F5 — the call-site test could pass while checking nothing
 
-- `crates/bloblex-daemon/src/main.rs:10630` `every_log_call_site_is_a_fixed_message`
+- `crates/retinue-daemon/src/main.rs:10630` `every_log_call_site_is_a_fixed_message`
   now asserts each root has Rust sources and at least one call site and that at
   least one `tracing::` call was seen; it also matches bare
   `warn!/error!/info!/debug!/trace!(` and any `log_shell(`, and skips the `fn
@@ -229,7 +229,7 @@ were added on top.
 ### F6 — `debug` turned on every dependency
 
 - `diagnostics.rs:51` `log_directive` returns `info` for the default and
-  `bloblex_daemon=debug,info` for the hidden `debug` level, so a dependency's
+  `retinue_daemon=debug,info` for the hidden `debug` level, so a dependency's
   (hyper, h2, rustls, reqwest, tungstenite) debug output never reaches the file
   or the zip. `init_logging` uses it (`diagnostics.rs:253`); `RUST_LOG` still
   overrides.
@@ -278,11 +278,11 @@ while the F7 fix was incomplete. Restoring the fixes made all of them pass.
 
 ## Gate results (re-run after the fixes)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
   (`CARGO_TARGET_DIR=C:/fxt/a1`, `TEMP=C:/fxt/a1/tmp`) — all crates ok;
-  `bloblex-daemon` 385 passed / 0 failed (was 380; +5 new diagnostics tests).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
-- `cargo test -p bloblex-desktop --lib` — 61 passed / 0 failed (was 59; +2 new
+  `retinue-daemon` 385 passed / 0 failed (was 380; +5 new diagnostics tests).
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
+- `cargo test -p retinue-desktop --lib` — 61 passed / 0 failed (was 59; +2 new
   shell tests).
 - `cd apps/desktop && npx tsc -b` — clean.
 - `npx vitest run --maxWorkers=3` — 170 files, 1247 tests, all passed (was 1245;
@@ -300,8 +300,8 @@ while the F7 fix was incomplete. Restoring the fixes made all of them pass.
 
 ## Files touched by this follow-up
 
-Only files already in P12's list: `crates/bloblex-daemon/src/diagnostics.rs`,
-`crates/bloblex-daemon/src/main.rs`, `apps/desktop/src-tauri/src/lib.rs`,
+Only files already in P12's list: `crates/retinue-daemon/src/diagnostics.rs`,
+`crates/retinue-daemon/src/main.rs`, `apps/desktop/src-tauri/src/lib.rs`,
 `apps/desktop/src/ui/DiagnosticsDialog.tsx` and
 `apps/desktop/src/ui/DiagnosticsDialog.mounted.test.tsx` (new in P12), plus this
 report.
@@ -311,43 +311,43 @@ report.
 # F6 follow-up (re-check)
 
 Sonnet's re-check of the follow-up failed F6: the daemon's crate/tracing target
-is the Cargo `[[bin]]` name **`bitbotsd`** (`crates/bloblex-daemon/Cargo.toml`),
-not the package name `bloblex_daemon`, so the directive
-`bloblex_daemon=debug,info` matched no target and the hidden `debug` level
+is the Cargo `[[bin]]` name **`retinued`** (`crates/retinue-daemon/Cargo.toml`),
+not the package name `retinue_daemon`, so the directive
+`retinue_daemon=debug,info` matched no target and the hidden `debug` level
 silently behaved like `info` for the daemon's own logs too.
 
 ## What changed (this third pass)
 
-- `crates/bloblex-daemon/src/diagnostics.rs`:
-  - new `LOG_TARGET: &str = "bitbotsd"` const (line 53) documenting that the
+- `crates/retinue-daemon/src/diagnostics.rs`:
+  - new `LOG_TARGET: &str = "retinued"` const (line 53) documenting that the
     target is the `[[bin]]` name, not the package name; `log_directive` now
-    returns `bitbotsd=debug,info` (line 58–60).
-  - doc comment above `log_directive` corrected (`bitbotsd=debug,info`).
+    returns `retinued=debug,info` (line 58–60).
+  - doc comment above `log_directive` corrected (`retinued=debug,info`).
   - `the_log_directive_does_not_enable_dependencies_debug` assertion updated to
-    `bitbotsd=debug,info` (line 597).
+    `retinued=debug,info` (line 597).
   - new test `the_debug_directive_enables_the_daemon_target_but_no_dependency`
     (line 607): builds a real `EnvFilter` from `log_directive("debug")` and
     asks it about two static `Metadata` targets via
-    `<EnvFilter as Layer<Registry>>::register_callsite` — `bitbotsd` at DEBUG
+    `<EnvFilter as Layer<Registry>>::register_callsite` — `retinued` at DEBUG
     must be `Interest::always`, `hyper` at DEBUG must be `Interest::never`, and
-    `log_directive("info")` leaves `bitbotsd` DEBUG `Interest::never`.
+    `log_directive("info")` leaves `retinued` DEBUG `Interest::never`.
 - `docs/history/fix-39/p12-report.md`: this note.
 
 ## Failing-first evidence
 
 With the test metadata target temporarily set to the old wrong name
-`bloblex_daemon`, the new test failed exactly as the bug predicts:
+`retinue_daemon`, the new test failed exactly as the bug predicts:
 `the daemon's own debug logs must be enabled: Interest(Never)`. Restored to
-`bitbotsd`, it passes. (`bloblex_daemon=debug,info` was matching nothing.)
+`retinued`, it passes. (`retinue_daemon=debug,info` was matching nothing.)
 
 ## Gate results (re-run)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop
   --no-fail-fast` (`CARGO_TARGET_DIR=C:/fxt/a1`, `TEMP=C:/fxt/a1/tmp`) — all
-  crates ok; `bloblex-daemon` **386 passed / 0 failed** (was 385; +1 new test).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
+  crates ok; `retinue-daemon` **386 passed / 0 failed** (was 385; +1 new test).
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
 - No UI or `src-tauri` source changed this pass, so the UI and
-  `bloblex-desktop` lib gates were not re-run (they passed unchanged in the
+  `retinue-desktop` lib gates were not re-run (they passed unchanged in the
   previous pass).
 
 ## What this pass could not check

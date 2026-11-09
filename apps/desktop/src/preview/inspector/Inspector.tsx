@@ -7,13 +7,13 @@ import '../../ui/theme.css'
 import './inspector.css'
 import { GROUPS, SCENARIOS, type Scenario, type Step } from './scenarios'
 
-type Look = { style: 'haze' | 'blobots'; theme: 'dark' | 'light' }
+type Look = { style: 'haze' | 'stone'; theme: 'dark' | 'light' }
 type Compare = 'off' | 'looks' | 'themes'
 type Note = { text?: string; reviewed?: boolean }
 type CheckResult = { id: string; ok: boolean; detail: string }
 
-const NOTES_KEY = 'bitbots.inspector.notes'
-const PREFS_KEY = 'bitbots.inspector.prefs'
+const NOTES_KEY = 'retinue.inspector.notes'
+const PREFS_KEY = 'retinue.inspector.prefs'
 const SIZES = { fit: 'Fit the pane', 1600: '1600 wide', 1280: '1280 wide', 1024: '1024 wide', 800: '800 wide', 600: '600 wide', 390: 'Phone, 390' } as const
 type SizeId = keyof typeof SIZES
 
@@ -186,7 +186,7 @@ function Inspector() {
 
   const look: Look = { style: prefs.style, theme: prefs.theme }
   const frames: Array<{ look: Look; label?: string }> = prefs.compare === 'looks'
-    ? [{ look: { ...look, style: 'haze' }, label: 'Haze' }, { look: { ...look, style: 'blobots' }, label: 'Stone' }]
+    ? [{ look: { ...look, style: 'haze' }, label: 'Haze' }, { look: { ...look, style: 'stone' }, label: 'Stone' }]
     : prefs.compare === 'themes'
       ? [{ look: { ...look, theme: 'dark' }, label: 'Dark' }, { look: { ...look, theme: 'light' }, label: 'Light' }]
       : [{ look }]
@@ -212,7 +212,7 @@ function Inspector() {
   return <div className="ins-app" data-theme={prefs.theme}>
     <nav className="ins-index" aria-label="Screens and states" ref={list}>
       <header>
-        <h1>Bitbots inspector</h1>
+        <h1>Retinue inspector</h1>
         <p>{SCENARIOS.length} states · {reviewed} reviewed · {noted} noted</p>
         <input type="search" value={query} placeholder="Search" aria-label="Search states" onChange={(event) => setQuery(event.target.value)} />
       </header>
@@ -233,7 +233,7 @@ function Inspector() {
 
     <main className="ins-main">
       <div className="ins-bar" role="toolbar" aria-label="How to show this state">
-        <Choice label="Look" value={prefs.style} options={[['haze', 'Haze'], ['blobots', 'Stone']]} onChange={(style) => updatePrefs({ style: style as Look['style'] })} disabled={prefs.compare === 'looks'} />
+        <Choice label="Look" value={prefs.style} options={[['haze', 'Haze'], ['stone', 'Stone']]} onChange={(style) => updatePrefs({ style: style as Look['style'] })} disabled={prefs.compare === 'looks'} />
         <Choice label="Theme" value={prefs.theme} options={[['dark', 'Dark'], ['light', 'Light']]} onChange={(theme) => updatePrefs({ theme: theme as Look['theme'] })} disabled={prefs.compare === 'themes'} />
         <Choice label="Side by side" value={prefs.compare} options={[['off', 'Off'], ['looks', 'Looks'], ['themes', 'Themes']]} onChange={(compare) => updatePrefs({ compare: compare as Compare })} />
         <label className="ins-size">Window

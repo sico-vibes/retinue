@@ -5,7 +5,7 @@
 > **Last updated:** 2026-10-15
 
 Written 15 October 2026. Owner directive: implement the UI/UX recommendations.
-Product is Bitbots; the characters are "bots" in Bitbots and "blobs" in Blobots
+Product is Retinue; the characters are "bots" in Retinue and "blobs" in Stone
 (`ui/vocabulary.ts`, `entityNoun`, `useEntityNoun`; another lane may still be
 landing that wording, so use the helper for any new noun and never hard-code
 "blob" or "bot").
@@ -20,7 +20,7 @@ is done (the Director codes against it). Then part B.
 
 ## Part A: preferences plumbing (logic, no visuals)
 
-Three new daemon settings, validated in `crates/bloblex-storage/src/lib.rs` next to
+Three new daemon settings, validated in `crates/retinue-storage/src/lib.rs` next to
 `appearance.style`, broadcast like the other `appearance.*` / window-level
 preferences, with Rust tests (valid, invalid, unset, broadcast):
 
@@ -30,9 +30,9 @@ preferences, with Rust tests (valid, invalid, unset, broadcast):
 | `hints.seen` | array of at most 64 strings, each `[a-z0-9._-]{1,48}` | unset = `[]` |
 | `onboarding.tour` | object `{ version: integer 0..=999, done: boolean, step: integer 0..=20 }` | unset = `{version:0,done:false,step:0}` |
 
-Add `apps/desktop/src/ui/uiPrefs.ts` mirroring the pattern of `blob/bitbots.ts`
-(in-window mirror, localStorage first-paint cache under `bitbots.density`,
-`bitbots.hints`, `bitbots.tour`, every storage access in try/catch):
+Add `apps/desktop/src/ui/uiPrefs.ts` mirroring the pattern of `blob/retinue.ts`
+(in-window mirror, localStorage first-paint cache under `retinue.density`,
+`retinue.hints`, `retinue.tour`, every storage access in try/catch):
 
 ```ts
 export type Density = 'compact' | 'default' | 'roomy'
@@ -71,7 +71,7 @@ fits. Do not restyle anything not listed.
    tooltip "Choose which model this conversation uses". The greyed effort pill reads
    "Effort" with the tooltip "Available after you pick a model". Accept: a test for
    both labels.
-2. **Bitbots titles in light mode.** In `ui/bitbots.css`, headings and
+2. **Retinue titles in light mode.** In `ui/retinue.css`, headings and
    `.chat-title-text` below 16 px use weight 900 of Doto in light mode so they are
    not pale; verify contrast of `--text-1` on `--surface-app` is unchanged.
 3. **Profile row.** `ProfileMenu.tsx`: when a name is set show initials and the name
@@ -96,7 +96,7 @@ fits. Do not restyle anything not listed.
    Got it button. Uses `useHintSeen('companion.drag')`. Accept: hint appears once.
 8. **Sound preview.** `SoundVolumeSlider.tsx`: after the slider is released play one
    short cue at the new volume through the existing preview path
-   (`bloblex-sound-volume-changed` with `preview: true`); add a small "Play sample"
+   (`retinue-sound-volume-changed` with `preview: true`); add a small "Play sample"
    ghost button in the row. Accept: button triggers the preview event.
 9. **Accessible names with state.** Avatars announce the character's state: in
    `BlobCanvas`/`BitbotCanvas` the `aria-label` is "`<name>`, `<state>`" (for
@@ -107,7 +107,7 @@ fits. Do not restyle anything not listed.
     override per file), avatars hold a still pose, the preview window and tour
     (when it lands) do not slide. Accept: a mounted test that asserts the media
     query override exists for the three loops found.
-11. **Transitions in Bitbots.** `bitbots.css` forces `steps(4)` on everything. Keep
+11. **Transitions in Retinue.** `retinue.css` forces `steps(4)` on everything. Keep
     it for small things (hover, toggles, chips) but use `ease-out` for panels,
     dialogs, menus and the preview (`.settings-sheet`, `.blob-dialog`, `.menu-surface`,
     `.select-menu`, `.quick-switcher`, `.look-preview`, `.sp-window`). Accept: those
@@ -115,7 +115,7 @@ fits. Do not restyle anything not listed.
 
 ## Gates
 
-`npm run typecheck`, `npm run test`, `cargo test -p bloblex-storage -p bloblex-daemon`,
-`cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`.
+`npm run typecheck`, `npm run test`, `cargo test -p retinue-storage -p retinue-daemon`,
+`cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`.
 Never commit. Leave the diff and write `docs/history/fix-13/report.md`: final API of part A
 first, then one line per part B item (done / partly / not done and why).

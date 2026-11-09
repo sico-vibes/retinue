@@ -8,7 +8,7 @@ import { SafeMarkdown } from './SafeMarkdown'
 import './whatsNew.css'
 
 const NOTES = import.meta.glob('../../../../docs/releases/*.md', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>
-export const WHATS_NEW_SEEN_KEY = 'bitbots.whatsNew.seen'
+export const WHATS_NEW_SEEN_KEY = 'retinue.whatsNew.seen'
 
 export interface ReleaseNote { version: string; text: string }
 

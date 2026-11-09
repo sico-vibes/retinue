@@ -59,7 +59,7 @@ Relay is local-development-only in this lane. Pairing requires desktop approval.
 
 ## Native shell
 
-PTY commands are native-only: `pty_spawn({projectPath,cwd?,shell?}) -> {ptyId,pid}`, `pty_write({ptyId,data})`, `pty_resize({ptyId,cols,rows})`, `pty_status({ptyId})`, `pty_kill({ptyId})`. Events are `pty_output({ptyId,data,sequence})` and `pty_exit({ptyId,exitCode})`. Sessions are memory-only, hidden docks keep running, and shutdown reaps child process trees. The shell environment removes Bitbots capability variables.
+PTY commands are native-only: `pty_spawn({projectPath,cwd?,shell?}) -> {ptyId,pid}`, `pty_write({ptyId,data})`, `pty_resize({ptyId,cols,rows})`, `pty_status({ptyId})`, `pty_kill({ptyId})`. Events are `pty_output({ptyId,data,sequence})` and `pty_exit({ptyId,exitCode})`. Sessions are memory-only, hidden docks keep running, and shutdown reaps child process trees. The shell environment removes Retinue capability variables.
 
 Chat background assets have a separate local namespace from wallpapers: `select_chat_background_image({}) -> selectionToken?`, `chat_background_import({selectionToken})`, `chat_background_read({}) -> binary image response`, and `chat_background_clear({})`. The shell-issued opaque selection token prevents the renderer from supplying arbitrary paths. Import validates size, MIME signature, decoding and dimensions, uses atomic replacement, and does not upload the image. The remote bridge must refuse these calls.
 

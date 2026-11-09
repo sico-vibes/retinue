@@ -43,7 +43,7 @@ export function MachineGroups({ machines, selected, onOpen }: { machines: readon
   </section>)}</>
 }
 
-const CHANNEL = 'bitbots-open-machine-bot'
+const CHANNEL = 'retinue-open-machine-bot'
 
 /** The companion opens another machine's bot in the full app, the way it opens Changes. */
 export async function openMachineBotInMainWindow(machineId: string, botId: string): Promise<void> {

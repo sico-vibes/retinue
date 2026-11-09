@@ -2,7 +2,7 @@ import { applyWindowBackdrop, windowBackdropState } from '../tauri'
 import type { WindowBackdrop } from '../types'
 
 /** Last effect the shell reported, so the next start paints the matching tint on the first frame (index.html reads it). */
-export const BACKDROP_CACHE_KEY = 'bitbots.backdrop'
+export const BACKDROP_CACHE_KEY = 'retinue.backdrop'
 
 type Backdrop = Pick<WindowBackdrop, 'effect' | 'active'>
 type BackdropApi = { apply: (enabled: boolean, dark: boolean) => Promise<Backdrop>; state: () => Promise<Backdrop> }

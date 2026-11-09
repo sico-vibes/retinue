@@ -15,9 +15,9 @@ export interface TourState { version: number; done: boolean; step: number }
 /** Bumped when the tour changes shape; a stored tour from an older run is ignored. */
 export const TOUR_VERSION = 1
 
-const DENSITY_KEY = 'bitbots.density'
-const HINTS_KEY = 'bitbots.hints'
-const TOUR_KEY = 'bitbots.tour'
+const DENSITY_KEY = 'retinue.density'
+const HINTS_KEY = 'retinue.hints'
+const TOUR_KEY = 'retinue.tour'
 /** Mirrors the daemon's cap, so the mirror and the daemon never disagree. */
 const MAX_HINTS = 64
 const HINT_ID = /^[a-z0-9._-]{1,48}$/

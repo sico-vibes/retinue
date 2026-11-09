@@ -14,7 +14,7 @@ Read: `AGENTS.md`, `docs/history/fix-39/decisions.md`, the P3 section and items 
 |---|---|
 | 23 message passthrough and sweep | Done. `useRemote.ts:144` and the three named copies (`ManagerPage`, `MemoryPage`, `SchedulesView`) now use `rpcFailure(reason).message`. The sweep also covers the extra `MemoryPage` and `SchedulesView` catch sites. |
 | 23 bind first, probe after failure | Done (`remote/mod.rs` `bind_gateway`, `enable`). The probe runs only when the configured endpoint is occupied, ignores proxies and redirects, and has a 500 ms timeout and a 1 KiB body cap. |
-| 23 Bitbots-owned port gives conflict plus `port_in_use`, no `serve` | Done, and tested (`tests.rs:2092`, asserts no `--bg` call). |
+| 23 Retinue-owned port gives conflict plus `port_in_use`, no `serve` | Done, and tested (`tests.rs:2092`, asserts no `--bg` call). |
 | 23 foreign listener gives fallback port, persisted, serve argv uses it | Done, and tested (`tests.rs:2114`). |
 | 23 fixed `/api/ping` marker | Done (`web.rs:577`). It is content-free. |
 | 23 `starting` and `not_running`, `NeedsLogin` stays `logged_out` | Done (`tailscale.rs`), including the non-zero-exit-with-status case. Stderr is never echoed. |
@@ -31,7 +31,7 @@ Fix: treat `ErrorKind::PermissionDenied` like `AddrInUse` for the candidate loop
 
 **F2 (fix, small). A recovered conflict leaves `link = "error"`.**
 `remote/mod.rs`, `refresh_tailscale`. After the other copy quits, "Check again" clears `gateway_conflict_port` and the Ready branch clears `inner.error` only when `inner.link == "error"`, but it leaves `link` at `"error"`. `link` stays `error` with no message until the next `enable`. Pre-existing semantics for other errors, but this change made it reachable on the happy recovery path.
-Fix: in the Ready branch, when `inner.link == "error"` and Remote is not enabled, set `inner.link = "off"`. Add one assertion to `fix39_another_bitbots_gateway_refuses_enable_without_serving` (or a sibling test): after the gateway is gone, `remote.status` reports `tailscale = ready` and `link = off`.
+Fix: in the Ready branch, when `inner.link == "error"` and Remote is not enabled, set `inner.link = "off"`. Add one assertion to `fix39_another_retinue_gateway_refuses_enable_without_serving` (or a sibling test): after the gateway is gone, `remote.status` reports `tailscale = ready` and `link = off`.
 
 **F3 (note, no change required). The ownership probe hits the other copy's `/api/ping`.**
 `ping_get` (`web.rs:565-577`) records "this network" as the reach origin and emits `remote.changed` when that copy runs Native. A conflict probe from loopback can therefore make the other copy show "Reached from this network". It is only possible when the other copy runs Native on this same configured port, which `enable` already forbids by skipping the Native port. I mention it so nobody is surprised; it needs no fix.
@@ -40,7 +40,7 @@ Fix: in the Ready branch, when `inner.link == "error"` and Remote is not enabled
 `lib.rs`, `run`: `migrate::migrate_before_start()` runs before `tauri::Builder`, so a second launch executes the local-data migration before the single-instance check. It looks idempotent (the legacy directory is gone after the first run), but I did not exercise it. Update-then-restart can also race the first process's mutex: the relaunched shell could treat the dying shell as the "first instance" and exit without a window. This is audit risk 10, and the report lists it as unverified. Treat it as a release blocker for the next build: test update-then-restart on a throwaway build.
 
 Everything else I read is correct:
-- Watchdog: `INFINITE` is `u32::MAX`. The handle is closed. A daemon without `BLOBLEX_PARENT_PID` keeps the sender alive, so a dropped sender is never read as a parent exit. A bad pid fails startup loudly. The 5 s bound with `process::exit(0)` is correct.
+- Watchdog: `INFINITE` is `u32::MAX`. The handle is closed. A daemon without `RETINUE_PARENT_PID` keeps the sender alive, so a dropped sender is never read as a parent exit. A bad pid fails startup loudly. The 5 s bound with `process::exit(0)` is correct.
 - Debounce worker: handles timeout, flush and disconnect, and writes pending state on disconnect.
 - Wide-layout CSS: the phone rules are unchanged except that the roster padding (14 px) matches the old `.rm-main` padding.
 
@@ -70,7 +70,7 @@ Hot files: `main.rs` is touched only in `run` (watchdog and one `select!` arm). 
 ## 5. Security rules
 
 - No new daemon method or event, so no `tiers.json` row is needed. Parity tests are green per the report.
-- `/api/ping` returns the fixed `{"ok":true,"app":"bitbots","role":"remote-gateway"}`: no host, owner or account data.
+- `/api/ping` returns the fixed `{"ok":true,"app":"retinue","role":"remote-gateway"}`: no host, owner or account data.
 - New daemon error text names only a port number. No credentials, conversation text or command text. Tailscale stderr is not echoed, and status JSON is not logged.
 - Gateway stays loopback-only. Fallback candidates are loopback, and the Native port is skipped. No approval path changed.
 - The watchdog opens the parent with `SYNCHRONIZE` only.
@@ -79,7 +79,7 @@ Hot files: `main.rs` is touched only in `run` (watchdog and one `select!` arm). 
 
 - No sparkle or star icons were added.
 - The wide CSS uses theme tokens (`--surface-*`, `--line`, `--text-*`) that `theme.css` defines for both themes. The remote bundle has no look switch, so "both looks" applies only to the desktop `RemoteSettings` strings, which are plain text.
-- `Select` is new to the remote bundle. `.select-trigger` styling comes from `theme.css`, `shell.css` and `bitbots.css`. The remote `main.tsx` loads only `theme.css`, `styles.css`, `accent.css` and `polish.css`. The Director must look at the Layout control in the phone and wide views, in both themes. If it renders unstyled, add the minimum trigger and menu rules to `remote.css`.
+- `Select` is new to the remote bundle. `.select-trigger` styling comes from `theme.css`, `shell.css` and `retinue.css`. The remote `main.tsx` loads only `theme.css`, `styles.css`, `accent.css` and `polish.css`. The Director must look at the Layout control in the phone and wide views, in both themes. If it renders unstyled, add the minimum trigger and menu rules to `remote.css`.
 
 ## 7. Docs owed (for the Haiku lane, not Sol)
 

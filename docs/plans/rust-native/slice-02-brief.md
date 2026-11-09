@@ -1,8 +1,8 @@
-# Brief: Bitbots in Rust (GPUI), slice 2 — the look, the team and new projects
+# Brief: Retinue in Rust (GPUI), slice 2 — the look, the team and new projects
 
-**Lane:** Gogo (OpenCode Go DeepSeek V4.1 Flash, high), in its own git worktree, assigned through the Bitbots MCP. The Director (Claude) mentors you, reviews every diff, checks the window, runs the gates and commits.
+**Lane:** Gogo (OpenCode Go DeepSeek V4.1 Flash, high), in its own git worktree, assigned through the Retinue MCP. The Director (Claude) mentors you, reviews every diff, checks the window, runs the gates and commits.
 
-**Owner's goal (8 November 2026):** "a 1:1 rust version from what we have thus far with all the functions and UI and everything in place." Slice 1 (`apps/native`, commit `f5424db`) gave an installable core. Slice 2 makes it *look* like Bitbots, adds hiring and new projects, and makes it installable with a shortcut.
+**Owner's goal (8 November 2026):** "a 1:1 rust version from what we have thus far with all the functions and UI and everything in place." Slice 1 (`apps/native`, commit `f5424db`) gave an installable core. Slice 2 makes it *look* like Retinue, adds hiring and new projects, and makes it installable with a shortcut.
 
 **Rules (unchanged from slice 1):**
 - Never run `git commit`, `push`, `merge`, `stash` or `reset`, and never switch branches. Change nothing outside your worktree.
@@ -11,7 +11,7 @@
 - If something here is impossible at the pinned GPUI rev, pick the smallest working alternative and say so. If a decision is the owner's or the Director's, stop and ask.
 - Build output stays on C: (`CARGO_TARGET_DIR=C:\bbn\target`). Run long builds in the foreground and report in the same turn.
 
-**Read first:** your slice 1 code in `apps/native`, `.claude/skills/bitbots-development/references/native-gpui.md`, `references/design-language.md`, and `docs/plans/hiring-brief.md` (the hiring RPCs).
+**Read first:** your slice 1 code in `apps/native`, `.claude/skills/retinue-development/references/native-gpui.md`, `references/design-language.md`, and `docs/plans/hiring-brief.md` (the hiring RPCs).
 
 ## 1. Portraits and logos
 
@@ -60,32 +60,32 @@ Port `ui/TeamPage.tsx` and `teamPage.css`. It opens in the main area, replacing 
 
 ## 6. Proposals in the conversation
 
-Slice 1 shows "Open this in Bitbots to answer" for proposals. Port `ui/ProposalCard.tsx` for:
+Slice 1 shows "Open this in Retinue to answer" for proposals. Port `ui/ProposalCard.tsx` for:
 - `hire` proposals, grouped by `groupId` as `hireSiblings` does: each candidate with portrait, nickname, role and reason, Hire and Skip, plus **Hire all N**.
 - `bot` proposals: name, role and Create or Skip.
 
-Use the same RPCs the React card calls. Questions can still say "Open this in Bitbots to answer".
+Use the same RPCs the React card calls. Questions can still say "Open this in Retinue to answer".
 
 ## 7. Settings, first pass
 
 A Settings page (gear button at the bottom of the sidebar) with only:
 - Appearance: theme (System, Light, Dark) and density (Compact, Regular, Roomy).
-- Data: where the native database is, and "Copy my Bitbots data again", which stops the daemon, backs the old file up beside itself, copies with the backup API and restarts. Confirm first.
+- Data: where the native database is, and "Copy my Retinue data again", which stops the daemon, backs the old file up beside itself, copies with the backup API and restarts. Confirm first.
 - About: version and the daemon's version.
 
 ## 8. Daemon resilience
 
-- If `bitbotsd` exits unexpectedly, show a notice, restart it with backoff (1, 2, 5, 10 s, then stop and offer Retry), and reload the snapshot. A clean shutdown on window close doesn't restart.
+- If `retinued` exits unexpectedly, show a notice, restart it with backoff (1, 2, 5, 10 s, then stop and offer Retry), and reload the snapshot. A clean shutdown on window close doesn't restart.
 - Unit test the backoff schedule.
 
 ## 9. Install
 
 `cargo-packager` isn't available offline. Instead add `apps/native/scripts/install.ps1`, shipped inside the zip:
-- copies the folder to `%LOCALAPPDATA%\Programs\Bitbots Native`;
-- creates a Start menu shortcut "Bitbots (Rust preview)" with the app icon;
+- copies the folder to `%LOCALAPPDATA%\Programs\Retinue Native`;
+- creates a Start menu shortcut "Retinue (Rust preview)" with the app icon;
 - `-Uninstall` removes both, never the data folder.
 
-Also embed the app icon in `bitbots-native.exe` (`winres` or `embed-resource` in `build.rs`; if the apostrophe path breaks the resource compiler, the package script builds from a short-path copy as slice 1 already notes). `package.ps1` produces `Bitbots-Native-<version>.zip` with `install.ps1` and a short `README.txt`.
+Also embed the app icon in `retinue-native.exe` (`winres` or `embed-resource` in `build.rs`; if the apostrophe path breaks the resource compiler, the package script builds from a short-path copy as slice 1 already notes). `package.ps1` produces `Retinue-Native-<version>.zip` with `install.ps1` and a short `README.txt`.
 
 ## 10. Tests and gates
 
@@ -97,13 +97,13 @@ Also embed the app icon in `bitbots-native.exe` (`winres` or `embed-resource` in
 - the theme choice (System follows appearance, explicit choice wins);
 - density tokens per level.
 
-**Gates:** `cargo build --release`, `cargo test` and `cargo clippy --all-targets -- -D warnings` in `apps/native`, and `cargo check -p bloblex-daemon` unchanged.
+**Gates:** `cargo build --release`, `cargo test` and `cargo clippy --all-targets -- -D warnings` in `apps/native`, and `cargo check -p retinue-daemon` unchanged.
 
 **Live check:** against a temporary database, start empty:
 1. create a project;
 2. hire two presets into it, and one of them into a second project;
 3. confirm through `project.members` that there's one agent with two memberships;
-4. kill `bitbotsd` and confirm it restarts and the snapshot reloads;
+4. kill `retinued` and confirm it restarts and the snapshot reloads;
 5. close with no leftover process.
 
 Run `install.ps1` and then `install.ps1 -Uninstall` once, and report the paths.

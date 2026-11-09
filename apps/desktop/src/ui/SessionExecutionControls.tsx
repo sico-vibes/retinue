@@ -164,7 +164,7 @@ export function SessionExecutionControls({ session, agent, locked = false, onSes
         // The conversation has the new model by now, so show that first. Saving it as the bot's default for
         // new conversations is a second step, and its failure must not turn this success into an error.
         if (applied && mounted.current) onSessionUpdated(result.session!)
-        try { await writeBot() } catch { if (applied && mounted.current) onError('The model changed for this conversation, but Bitbots could not save it as the default for new ones.') }
+        try { await writeBot() } catch { if (applied && mounted.current) onError('The model changed for this conversation, but Retinue could not save it as the default for new ones.') }
         return applied
       } else {
         // Effort and speed write two rows: the conversation's own lock and the
@@ -183,7 +183,7 @@ export function SessionExecutionControls({ session, agent, locked = false, onSes
       const current = currentSessionId.current === sessionId && sessionGeneration.current === generation && result.session?.id === sessionId
       if (current && mounted.current) onSessionUpdated(result.session!)
       // The conversation has the value; only the bot's default failed.
-      if (botWriteFailed && mounted.current && currentSessionId.current === sessionId) onError('The setting changed for this conversation, but Bitbots could not save it as the default for its new ones.')
+      if (botWriteFailed && mounted.current && currentSessionId.current === sessionId) onError('The setting changed for this conversation, but Retinue could not save it as the default for its new ones.')
       return current
     } catch (reason) {
       // The daemon saw context this view had not: ask before retrying with the
@@ -281,8 +281,8 @@ export function SessionExecutionControls({ session, agent, locked = false, onSes
       modelName={modelLabel}
       efforts={efforts}
       defaultThinking={selectedModel?.defaultThinking ?? null}
-      unavailableReason={catalogUnavailable ? 'Runtime model capabilities are unavailable. Bitbots cannot verify or change effort levels without a validated catalog.' : selectedModel ? null : catalog ? 'The selected model is not in the validated runtime catalog. Bitbots cannot verify selectable effort levels.' : 'Runtime model capabilities are still unavailable.'}
-      lockedReason={!model ? MODEL_FIRST_REASON : thinkingLocked === 'no-levels' ? `${selectedModel?.displayName ?? 'This model'} has no effort levels, so it always runs at its own default.` : thinkingLocked ? `${providerBrand(catalog?.provider ?? "").name || "This runtime"} doesn't let Bitbots pick an effort level yet, so it uses the model's own default.` : null}
+      unavailableReason={catalogUnavailable ? 'Runtime model capabilities are unavailable. Retinue cannot verify or change effort levels without a validated catalog.' : selectedModel ? null : catalog ? 'The selected model is not in the validated runtime catalog. Retinue cannot verify selectable effort levels.' : 'Runtime model capabilities are still unavailable.'}
+      lockedReason={!model ? MODEL_FIRST_REASON : thinkingLocked === 'no-levels' ? `${selectedModel?.displayName ?? 'This model'} has no effort levels, so it always runs at its own default.` : thinkingLocked ? `${providerBrand(catalog?.provider ?? "").name || "This runtime"} doesn't let Retinue pick an effort level yet, so it uses the model's own default.` : null}
       locked={locked}
       workflowEnabled={rawSessionLock.enableWorkflows === true}
       value={thinking}
@@ -487,10 +487,10 @@ function EffortControl({ provider, providerStyle, modelName, efforts, defaultThi
           <SessionEffortMeter trackRef={trackRef} style={providerStyle} count={efforts.length} position={displayedPosition} recommendedIndex={-1} top={atTop} dragging={mode === 'drag'} settling={mode === 'settle'} valueText={mode === 'rest' && visibleIndex < 0 ? visibleLabel : labelizeEffort(efforts[stop] ?? '', provider)} disabled={disabled} onPointerDown={beginPointer} onPointerMove={movePointer} onPointerUp={finishPointer} onPointerCancel={abandonPointer} onLostPointerCapture={abandonPointer} onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />
           <div className="session-effort-labels" role="group" aria-label="Effort levels">{efforts.map((effort, index) => <button type="button" key={`${effort}-${index}`} className={`${visibleIndex === index ? 'selected' : ''} ${isTopTierEffort(effort) ? 'ultra' : ''}`} aria-pressed={visibleIndex === index} disabled={disabled} onClick={() => choose(effort)}><EffortIcon value={effort} size={12} /><span>{labelizeEffort(effort, provider)}</span></button>)}</div>
         </div>
-        {provider.toLowerCase() === 'claude' && !efforts.includes('ultracode') && <p className="session-effort-note">{workflowEnabled ? 'Claude Code did not report Ultracode for this model. The model needs catalog-reported Extra high support; managed policy may also keep it unavailable.' : 'Ultracode needs a model with catalog-reported Extra high and Claude dynamic workflows. Bitbots did not enable workflows for this conversation; its setting applies to new conversations. Claude config or managed policy may still provide it. Max remains separate.'}</p>}
+        {provider.toLowerCase() === 'claude' && !efforts.includes('ultracode') && <p className="session-effort-note">{workflowEnabled ? 'Claude Code did not report Ultracode for this model. The model needs catalog-reported Extra high support; managed policy may also keep it unavailable.' : 'Ultracode needs a model with catalog-reported Extra high and Claude dynamic workflows. Retinue did not enable workflows for this conversation; its setting applies to new conversations. Claude config or managed policy may still provide it. Max remains separate.'}</p>}
         {lastIsUltra && atTop && <p className="session-effort-note">{providerStyle === 'claude' ? 'Claude Code reported Ultracode for this model. It runs at Extra high with dynamic workflows enabled for this session. Standard Max remains separate.' : 'Ultra is a separate catalog effort, distinct from Max.'}</p>}
         {unlistedValue && <div className="session-effort-recovery" role="alert"><span>Saved {labelizeEffort(unlistedValue, provider)} is not supported by {modelName}.</span><button type="button" className="ghost-button small" disabled={disabled} onClick={() => choose(defaultThinking ?? null)}>{defaultThinking ? `Use model default · ${labelizeEffort(defaultThinking, provider)}` : 'Reset to model default'}</button></div>}
-      </> : <div className="session-effort-unavailable"><strong>{unlistedValue ? `Saved selection: ${labelizeEffort(unlistedValue, provider)}` : 'Model default'}</strong><p>{unavailableReason ?? 'This model does not report selectable effort levels. Bitbots cannot change effort for it.'}</p>{unlistedValue && <button type="button" className="ghost-button small" disabled={disabled} onClick={() => choose(defaultThinking ?? null)}>Reset to model default</button>}{defaultThinking && <p>Model default: {labelizeEffort(defaultThinking, provider)}.</p>}</div>}
+      </> : <div className="session-effort-unavailable"><strong>{unlistedValue ? `Saved selection: ${labelizeEffort(unlistedValue, provider)}` : 'Model default'}</strong><p>{unavailableReason ?? 'This model does not report selectable effort levels. Retinue cannot change effort for it.'}</p>{unlistedValue && <button type="button" className="ghost-button small" disabled={disabled} onClick={() => choose(defaultThinking ?? null)}>Reset to model default</button>}{defaultThinking && <p>Model default: {labelizeEffort(defaultThinking, provider)}.</p>}</div>}
     </div>}
   </div>
 }

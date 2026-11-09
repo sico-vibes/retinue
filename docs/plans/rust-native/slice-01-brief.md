@@ -1,6 +1,6 @@
-# Brief: Bitbots in Rust (GPUI), slice 1 — an installable core
+# Brief: Retinue in Rust (GPUI), slice 1 — an installable core
 
-**Lane:** Gogo (OpenCode Go DeepSeek V4.1 Flash, high), in its own git worktree, assigned through the Bitbots MCP. The Director (Claude) mentors you, reviews every diff, runs the gates and commits.
+**Lane:** Gogo (OpenCode Go DeepSeek V4.1 Flash, high), in its own git worktree, assigned through the Retinue MCP. The Director (Claude) mentors you, reviews every diff, runs the gates and commits.
 
 **Owner's goal (8 November 2026):** "create the alternative rust version so I can install it and test it … a 1:1 rust version from what we have thus far with all the functions and UI and everything in place."
 
@@ -15,19 +15,19 @@ Later slices add the remaining screens, one at a time.
 **Rules:**
 - Never run `git commit`, `push`, `merge`, `stash` or `reset`, and never switch branches. Change nothing outside your worktree.
 - Never print or log tokens, the daemon capability or credentials.
-- Don't modify `crates/` or `apps/desktop/`. You may *read* them as the reference, and depend on `crates/bloblex-protocol` by path if useful.
+- Don't modify `crates/` or `apps/desktop/`. You may *read* them as the reference, and depend on `crates/retinue-protocol` by path if useful.
 - If something in this brief is impossible, pick the smallest working alternative and say so in your report. If you are stuck on a decision only the owner or the Director can make, stop and ask.
 - Run long builds in the foreground and report in the same turn.
 
 **Read first:**
 - `AGENTS.md`;
-- `.claude/skills/bitbots-development/SKILL.md`, with `references/design-language.md` and `references/codebase-map.md`;
+- `.claude/skills/retinue-development/SKILL.md`, with `references/design-language.md` and `references/codebase-map.md`;
 - `docs/research/rust-native-ui-port.md`, especially sections 1, 2 and 4;
 - `docs/ipc-contract.md` (the daemon API you will call).
 
 ## Where it lives
 
-- **Crate location:** a new crate at `apps/native` (package and binary `bitbots-native`). Make it **its own Cargo workspace**, not a member of the root workspace. Add `exclude = ["apps/native"]` to the root `Cargo.toml` only if cargo needs it. This keeps GPUI's dependencies and toolchain out of the existing gates.
+- **Crate location:** a new crate at `apps/native` (package and binary `retinue-native`). Make it **its own Cargo workspace**, not a member of the root workspace. Add `exclude = ["apps/native"]` to the root `Cargo.toml` only if cargo needs it. This keeps GPUI's dependencies and toolchain out of the existing gates.
 - **Toolchain:** `rustc` here is 1.94. If GPUI needs a newer one, add `apps/native/rust-toolchain.toml` and say so.
 - **GPUI:** use GPUI from Zed's repository as a git dependency **pinned to one commit** (`rev = "…"`), plus `gpui-component` (longbridge) pinned the same way if it helps (markdown, inputs, scroll views). Record both revs and why in `apps/native/README.md`.
 - **Build output:** put build output on C: to save D: (`CARGO_TARGET_DIR=C:\bbn\target`). The worktree path contains an apostrophe. If any build step (resource compiler, manifest embedding) fails because of it, copy the crate to a short path such as `C:\bbn\src` and build there, as `references/verification.md` describes.
@@ -36,19 +36,19 @@ Later slices add the remaining screens, one at a time.
 
 Port the shell's supervisor logic from `apps/desktop/src-tauri/src/lib.rs`: `start_daemon` (around line 329), `ReadyLine`, `connection`, and the RPC and event calls (`daemon_rpc`, the events WebSocket).
 
-**Finding the daemon.** Look for `bitbotsd.exe`, in this order:
-1. beside `bitbots-native.exe`;
-2. in dev, `<repo>/target/release/bitbotsd.exe`, then `<repo>/target/debug/bitbotsd.exe`.
+**Finding the daemon.** Look for `retinued.exe`, in this order:
+1. beside `retinue-native.exe`;
+2. in dev, `<repo>/target/release/retinued.exe`, then `<repo>/target/debug/retinued.exe`.
 
 If it is missing, show a clear message in the window, not a panic.
 
 **Starting it:**
-- Spawn it with `BLOBLEX_PARENT_PID=<our pid>` and `CREATE_NO_WINDOW`.
+- Spawn it with `RETINUE_PARENT_PID=<our pid>` and `CREATE_NO_WINDOW`.
 - Read the one JSON bootstrap line from stdout (10 s timeout) and check `protocolVersion == 1`, an address starting `127.0.0.1:` and a non-empty capability, exactly as the shell does.
 - Keep draining stdout and stderr.
 
-**Its own data.** Set `BLOBLEX_DB_PATH=%LOCALAPPDATA%\Bitbots Native\bloblex.db`, so this app never shares a live database with the installed Bitbots. On first run, when that file doesn't exist yet and `%LOCALAPPDATA%\Bitbots\bloblex.db` does, ask once in the window:
-- **Start with a copy of my Bitbots data:** copy it with SQLite's online backup API (`rusqlite::backup`), which is safe even while Bitbots runs.
+**Its own data.** Set `RETINUE_DB_PATH=%LOCALAPPDATA%\Retinue Native\retinue.db`, so this app never shares a live database with the installed Retinue. On first run, when that file doesn't exist yet and `%LOCALAPPDATA%\Retinue\retinue.db` does, ask once in the window:
+- **Start with a copy of my Retinue data:** copy it with SQLite's online backup API (`rusqlite::backup`), which is safe even while Retinue runs.
 - **Start empty.**
 
 Copy the database file only. Never copy secrets, tokens or the credential store.
@@ -63,7 +63,7 @@ Copy the database file only. Never copy secrets, tokens or the credential store.
 ## 2. The window and the look (Haze, dark first)
 
 **Window:**
-- One main window, 1360×860, minimum 1000×680, titled "Bitbots (Rust preview)".
+- One main window, 1360×860, minimum 1000×680, titled "Retinue (Rust preview)".
 - Backdrop: GPUI's `WindowBackgroundAppearance` (Mica Alt or Blurred), falling back to an opaque dark surface.
 
 **Tokens.** Create `src/theme.rs` with the Haze dark tokens taken from `apps/desktop/src/ui/themes/haze.css` (lines 5–36) and `ui/theme.css`: surfaces, hover and selected surfaces, lines, the three text levels, status colours, radii, font sizes.
@@ -113,7 +113,7 @@ Port the reading and sending path of `ui/App.tsx`.
   - It sends with `session.prompt {sessionId, text}`. For a bot with no conversation yet, it creates one first.
   - While a turn runs, show **Stop** (`session.cancel`, or whatever the React app calls; check `App.tsx`).
   - IME must work (type Japanese through the Windows IME as a check).
-- **Approvals:** when the selected session has a waiting permission (from the snapshot or events), show a simple card with Allow and Deny (`permission.reply`), so a turn can't hang. Proposals and questions can show "Open this in Bitbots to answer" for now.
+- **Approvals:** when the selected session has a waiting permission (from the snapshot or events), show a simple card with Allow and Deny (`permission.reply`), so a turn can't hang. Proposals and questions can show "Open this in Retinue to answer" for now.
 - **Empty states:**
   - no bots: "No employees yet";
   - no conversation: "Start a conversation" with the composer still usable.
@@ -121,14 +121,14 @@ Port the reading and sending path of `ui/App.tsx`.
 ## 4. Packaging so the owner can install it
 
 **Script.** Add `apps/native/scripts/package.ps1`. It:
-1. builds `bitbotsd` in release from the repo root (`cargo build -p bloblex-daemon --release`, with its own target dir on C:);
-2. builds `bitbots-native` in release;
-3. puts both executables, plus the daemon's runtime files the shell bundles (check `apps/desktop/src-tauri/tauri.conf.json` `bundle.externalBin` and resources; include only what the daemon needs to run chats), into `dist/Bitbots-Native-<version>/`;
+1. builds `retinued` in release from the repo root (`cargo build -p retinue-daemon --release`, with its own target dir on C:);
+2. builds `retinue-native` in release;
+3. puts both executables, plus the daemon's runtime files the shell bundles (check `apps/desktop/src-tauri/tauri.conf.json` `bundle.externalBin` and resources; include only what the daemon needs to run chats), into `dist/Retinue-Native-<version>/`;
 4. zips that folder.
 
-**Installer.** If `cargo-packager` (or NSIS through it) works offline here, also make an installer that installs per user to `%LOCALAPPDATA%\Programs\Bitbots Native` with a Start menu shortcut. If not, the zip is enough for this slice; say which you produced.
+**Installer.** If `cargo-packager` (or NSIS through it) works offline here, also make an installer that installs per user to `%LOCALAPPDATA%\Programs\Retinue Native` with a Start menu shortcut. If not, the zip is enough for this slice; say which you produced.
 
-**Identity.** The app icon is `apps/desktop/src-tauri/icons/icon.ico`. The product name is "Bitbots (Rust preview)", so it never replaces the installed Bitbots.
+**Identity.** The app icon is `apps/desktop/src-tauri/icons/icon.ico`. The product name is "Retinue (Rust preview)", so it never replaces the installed Retinue.
 
 ## 5. Tests and gates
 
@@ -140,12 +140,12 @@ Port the reading and sending path of `ui/App.tsx`.
 
 **Gates:**
 - `cargo build --release` and `cargo clippy --all-targets -- -D warnings` in `apps/native`;
-- the existing `cargo check -p bloblex-daemon` still passes, since you don't touch it.
+- the existing `cargo check -p retinue-daemon` still passes, since you don't touch it.
 
-**Live check.** Run the built app once against a temporary database (`BLOBLEX_DB_PATH` pointing to a temp file, start empty). It should:
+**Live check.** Run the built app once against a temporary database (`RETINUE_DB_PATH` pointing to a temp file, start empty). It should:
 1. start the daemon;
 2. show the empty state;
-3. close cleanly with no leftover `bitbotsd` process.
+3. close cleanly with no leftover `retinued` process.
 
 Say what you saw. You can't see the screen, so describe what you checked through logs.
 
@@ -158,4 +158,4 @@ Say what you saw. You can't see the screen, so describe what you checked through
 - Where the package or installer is.
 - Every decision this brief didn't specify.
 - What is unverified.
-- A short "GPUI patterns we used" note (entity and context, views, async tasks, lists, text input) for the skill, written as proposed text for `.claude/skills/bitbots-development/references/` (a new `native-gpui.md`).
+- A short "GPUI patterns we used" note (entity and context, views, async tasks, lists, text input) for the skill, written as proposed text for `.claude/skills/retinue-development/references/` (a new `native-gpui.md`).

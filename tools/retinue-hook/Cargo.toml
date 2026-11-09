@@ -1,0 +1,12 @@
+[package]
+name = "retinue-hook"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "retinue-hook"
+path = "src/main.rs"
+
+[dependencies]
+serde_json.workspace = true
+tokio.workspace = true

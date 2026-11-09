@@ -1,6 +1,6 @@
-# Pins the Codex app-server protocol schema for `bloblex-adapter-codex`.
+# Pins the Codex app-server protocol schema for `retinue-adapter-codex`.
 #
-#   pwsh scripts/codex-schema.ps1            # write crates/bloblex-adapter-codex/schema
+#   pwsh scripts/codex-schema.ps1            # write crates/retinue-adapter-codex/schema
 #   pwsh scripts/codex-schema.ps1 -Check     # fail if the pin is not what this CLI generates
 #
 # The adapter speaks the app-server protocol and asks for experimental fields
@@ -9,7 +9,7 @@
 # talks. `codex-cli 0.165.0` is what this pin was made with.
 #
 # Four generated files carry the method names: `ClientRequest` and
-# `ClientNotification` are what Bitbots sends, `ServerRequest` and
+# `ClientNotification` are what Retinue sends, `ServerRequest` and
 # `ServerNotification` are what it handles. `schema/VERSION` is the CLI version,
 # and `schema/compat/` holds the two notification types older builds emit under
 # names the current bundle no longer lists (see `src/protocol.rs`).
@@ -27,7 +27,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-if (-not $OutDir) { $OutDir = Join-Path $repoRoot 'crates\bloblex-adapter-codex\schema' }
+if (-not $OutDir) { $OutDir = Join-Path $repoRoot 'crates\retinue-adapter-codex\schema' }
 
 # Four protocol documents, copied as generated, plus two compatibility types.
 $documents = @(
@@ -63,7 +63,7 @@ $match = [regex]::Match($versionLine, '(\d+\.\d+\.\d+)')
 if (-not $match.Success) { throw "codex did not report a version: $versionLine" }
 $version = $match.Groups[1].Value
 
-$temp = Join-Path ([System.IO.Path]::GetTempPath()) ('bitbots-codex-schema-' + [guid]::NewGuid().ToString('N'))
+$temp = Join-Path ([System.IO.Path]::GetTempPath()) ('retinue-codex-schema-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $temp -Force | Out-Null
 try {
     & $codex app-server generate-json-schema --experimental --out $temp

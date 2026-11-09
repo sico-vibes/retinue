@@ -32,7 +32,7 @@ The owner's review of beta.33, plus feedback from a friend testing the app. The 
 19. **Permissions in a running sub-conversation:** the friend changed the Haiku bot's permissions, but in the bot-to-bot conversation it kept saying it had no permission (paths "still denied after the retry"). A sub-conversation started with "Ask first" kept it. There must be a way to change permissions mid sub-conversation, and the Manager should be able to change a sub-conversation's permission itself (with approval as per the Manager rules).
 20. **Context lost after a restart:** after an error ("The coding agent took too long. No answer arrived in time."), the friend restarted the app; reopening the same conversation said "Started a fresh session. The agent no longer has earlier context." The owner asks: how can the same conversation lose its context? Is the way we connect to providers the problem? Does T3 Code (`https://github.com/pingdotgg/t3code`) do it better (theirs works), should we use ACP, or something else?
 21. **The Manager as orchestrator:** it must know the projects in the user's workspace; projects should be **taggable** so the Manager knows which bots to use for which job.
-22. **MCP to control Bitbots:** can bots or the Manager control Bitbots itself through an MCP, the way T3 Code does? The owner wants to know whether this is possible.
+22. **MCP to control Retinue:** can bots or the Manager control Retinue itself through an MCP, the way T3 Code does? The owner wants to know whether this is possible.
 
 ## Remote
 

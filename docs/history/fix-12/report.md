@@ -1,6 +1,6 @@
-# FIX12 report — the characters are "bots" in Bitbots and "blobs" in Blobots
+# FIX12 report — the characters are "bots" in Retinue and "blobs" in Stone
 
-> **What this is:** Report on FIX12: the characters are "bots" in Bitbots and "blobs" in Blobots.
+> **What this is:** Report on FIX12: the characters are "bots" in Retinue and "blobs" in Stone.
 > **Status:** historical
 > **Last updated:** 2026-10-15
 
@@ -11,8 +11,8 @@ Implemented 15 October 2026. Spec: [docs/history/fix-12/vocabulary-spec.md](voca
 The look decides the word, as the spec directs, through the existing helper:
 
 - `entityNoun(style, { plural?, capital? })` and `useEntityNoun({ plural?, capital? })` in
-  `apps/desktop/src/ui/vocabulary.ts`. Default look (Bitbots, and the value when
-  `appearance.style` is unset) reads **bot**; Blobots reads **blob**.
+  `apps/desktop/src/ui/vocabulary.ts`. Default look (Retinue, and the value when
+  `appearance.style` is unset) reads **bot**; Stone reads **blob**.
 - React components read the noun with `useEntityNoun()`. Event handlers, effects and
   non-React helpers read `entityNoun(themeStyle())` at the moment of use, never at
   module load, so a look change is picked up without a restart.
@@ -20,7 +20,7 @@ The look decides the word, as the spec directs, through the existing helper:
   `CLIENT_MESSAGES` lost `nameTaken` in favour of `nameTakenMessage()`, and the
   `EXPERIMENTS` `hint`/`help` fields became getters (`hint()` / `help()`).
 - The daemon reads the same setting through `team::entity_noun(&st, plural)`
-  (`crates/bloblex-daemon/src/team.rs`), which reads `st.db.settings()["appearance.style"]`.
+  (`crates/retinue-daemon/src/team.rs`), which reads `st.db.settings()["appearance.style"]`.
   It is `pub(crate)` so `main.rs`, `automations.rs` and `memory.rs` use it too.
 
 ## Counts
@@ -45,20 +45,20 @@ Classified from `git grep -n -i "blob" apps/desktop/src`:
 - Component, file and CSS names: `BlobCanvas`, `BlobPage`, `BlobSettings`, `BlobOverview`,
   `BlobSessions`, `blobShare`, `BlobLook`, `BlobMood`, `blob-canvas`, `blob-dialog`,
   `blob-muted`, `blob-page-*`, `hidden-blob`, `blob-group`, `blob-field`, etc.
-- `data-*` attributes and state keys: `companion.pinnedBlobs`, `application/x-bloblex-agent`,
+- `data-*` attributes and state keys: `companion.pinnedBlobs`, `application/x-retinue-agent`,
   `blob:` tree ids, `experimental.*`, `pinned/expanded` JSON `blobs` map.
-- `localStorage` keys: `bloblex.*` (`firstRun.*`, `sidebar.pins`, `selectedAgentId`,
+- `localStorage` keys: `retinue.*` (`firstRun.*`, `sidebar.pins`, `selectedAgentId`,
   `inspector.open`, `analytics.view`, `appearance`, `update.dismissedVersion`, …) and the
-  `bitbots.style` / `bitbots.accent` cache keys (plus the legacy `bloblex.bitbots`).
+  `retinue.style` / `retinue.accent` cache keys (plus the legacy `retinue.retinue`).
 - RPC methods, params and events: `list_blobs`, `message_blob`, `create_blob`, `update_blob`,
   `blob` tool argument, `blob_created` / `blob_reply` / `blob_message` event kinds,
-  `bloblex-*` window events, `BLOB_SHARE_FORMAT = 'bloblex.blob.v1'`, the `blob` /
-  `project` / `shared` memory scopes, and `appearance.style` values `bitbots` / `blobots`.
-- The look names **Bitbots** and **Blobots**, and the look character labels
+  `retinue-*` window events, `BLOB_SHARE_FORMAT = 'retinue.blob.v1'`, the `blob` /
+  `project` / `shared` memory scopes, and `appearance.style` values `frost` / `stone`.
+- The look names **Retinue** and **Stone**, and the look character labels
   `Bitbot` / `Blobot` in `LookPicker.tsx` and the "Preview of the … look" aria label
   (`LookPreview.tsx`). These name the looks, not the character.
-- External products: the `blobatar` and `robot-heads` credits and the `bloblex` product/
-  MCP server name (`SERVER_NAME`), and all `bloblex_*` / `mcp__bloblex__` tool prefixes.
+- External products: the `blobatar` and `robot-heads` credits and the `retinue` product/
+  MCP server name (`SERVER_NAME`), and all `retinue_*` / `mcp__retinue__` tool prefixes.
 - Code comments and doc comments (not read by users) were left alone.
 - Non-React identifiers such as the local `blob` variable holding a `File`/`Blob` object
   in `ComposerControls.tsx` (the DOM `Blob` type) were left alone.
@@ -66,7 +66,7 @@ Classified from `git grep -n -i "blob" apps/desktop/src`:
 ## Ambiguous, and the call made
 
 - `LookPicker.tsx` blurb "Soft blobs, rounded corners and a calmer feel." describes the
-  **Blobots** look specifically, so it keeps "blobs" even while Bitbots is active.
+  **Stone** look specifically, so it keeps "blobs" even while Retinue is active.
 - `apps/desktop/src/preview/gallery.tsx` and `preview/main.tsx` are development-only
   gallery pages ("Import a blob", "Blob shapes"). They are not the product UI and were not
   part of the FIX12 commit; they still read "blob".
@@ -82,12 +82,12 @@ Classified from `git grep -n -i "blob" apps/desktop/src`:
   AnalyticsView, App.analytics, App.companion, App.lifecycle, approvalModes,
   CompanionTeam, ComposerControls, conversationMarkdown, FirstRunOnboarding, MemoryPage,
   SchedulesView, and the daemon's `team_*` tests).
-- `App.agent.mounted.test.tsx` runs in the classic (**Blobots**) look on purpose
-  (`setBitbotsEnabled(false)` in `beforeEach`), so its "blob" assertions still hold; the one
-  onboarding flow that picks the Bitbots look now asserts "Create bot".
+- `App.agent.mounted.test.tsx` runs in the classic (**Stone**) look on purpose
+  (`setRetinueEnabled(false)` in `beforeEach`), so its "blob" assertions still hold; the one
+  onboarding flow that picks the Retinue look now asserts "Create bot".
 - Added `FirstRunOnboarding.mounted.test.tsx` "labels the character with the chosen look's
-  word and follows a look change": "Create bot" in Bitbots, then "Create blob" after
-  `setThemeStyle('blobots')`, without a remount.
+  word and follows a look change": "Create bot" in Retinue, then "Create blob" after
+  `setThemeStyle('stone')`, without a remount.
 - Added `SettingsSheet.appearance.mounted.test.tsx` "follows the look in its copy without a
   restart": a Settings switch's label flips between "Notify when a bot finishes…" and
   "Notify when a blob finishes…".
@@ -104,12 +104,12 @@ Classified from `git grep -n -i "blob" apps/desktop/src`:
 - `npm run test` — pass (97 files, 615 tests). Note: on this shared machine the suite can
   time out under the default parallelism while another lane is compiling; a run with
   `--maxWorkers=2` and an idle machine both pass.
-- `cargo test -p bloblex-daemon --bins` — pass (156 tests).
-- `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings` — pass.
+- `cargo test -p retinue-daemon --bins` — pass (156 tests).
+- `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings` — pass.
 
 ## Note on provenance
 
-This report was written after commit `9dc52b6` ("feat: the characters are bots in Bitbots
-and blobs in Blobots (FIX12)") had already been made from this lane's worktree by the
+This report was written after commit `9dc52b6` ("feat: the characters are bots in Retinue
+and blobs in Stone (FIX12)") had already been made from this lane's worktree by the
 Director's session, and after the worktree itself had been removed and recreated at that
 commit. The lane did not run `git commit`.

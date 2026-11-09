@@ -13,7 +13,7 @@ Every item in the spec is built and wired: rolling daily logs, the 20 MB cap, th
 ## Findings that must be fixed
 
 ### F1. `permission.requested` events leak the agent's question text into `events.json`
-`crates/bloblex-daemon/src/diagnostics.rs:110-116` (`CONTENT_KEYS`) and `crates/bloblex-daemon/src/main.rs:3975`.
+`crates/retinue-daemon/src/diagnostics.rs:110-116` (`CONTENT_KEYS`) and `crates/retinue-daemon/src/main.rs:3975`.
 The question flow emits `permission.requested` with a `questions` array (the agent's question text, headers and option labels/descriptions). `questions` is not in `CONTENT_KEYS`, and the nested keys (`question`, `header`, `options`, `label`, `description`) are not either, so all of it goes into the zip in clear. That is conversation content, and the dialog tells the owner it is removed ("message and command text removed"). Other free-text keys also missing from the list: `input`, `toolInput`, `arguments`, `question`, `answer`, `answers`, `description`, `note`, `error`, `errorMessage`, `snippet`, `preview`, `patch`, `label`.
 Fix: add those keys, and add a test event shaped like the real `permission.requested` question payload (`questions: [{question, header, options:[{label, description}]}]`) to `diagnostics_export_never_carries_text_tokens_or_credentials`. The denylist approach is fragile in general; the better design for `events.json` is an **allowlist** of safe keys (`sessionId`, `turnId`, `runtimeId`, `agentId`, `id`, `provider`, `state`, `status`, `code`, `failureClass`, `exitCode`, `risk`, `category`, `kind`, timestamps, numeric counters, `type`, `sequence`, `eventId`, `v`). If Sol keeps the denylist, say so in the report and add the keys above.
 
@@ -35,12 +35,12 @@ Fix: match whole words or known suffixes: exact `token`, `*Token` / `*_token` wh
 ## Smaller fixes
 
 ### F5. The "no user text in log call sites" test can pass while checking nothing
-`crates/bloblex-daemon/src/main.rs` (`every_log_call_site_is_a_fixed_message`, about line 10593).
-It reads `../../crates/bloblex-daemon/src` and `../../apps/desktop/src-tauri/src`; `source_files` returns an empty list when a path does not exist and the loop silently passes. Add `assert!(scanned > 0)` per root (and at least one `tracing::` call found). It also only matches the literal `tracing::` and `log_shell("`, so `use tracing::warn;` followed by a bare `warn!(...)`, and `log_shell(level, &format!(...))` with a variable first argument, are not covered. Either also match `\b(warn|info|error|debug|trace)!\(` and `log_shell(`, or state that limitation in a comment. Today's call sites (`main.rs:666,677,776,787,4199`, `experiments.rs:124`, `remote/connectivity.rs:423`, `remote/web.rs:955`, and the shell's `log_shell` lines) are all fixed messages, `{error}` from storage, or a folder path, so nothing is wrong now.
+`crates/retinue-daemon/src/main.rs` (`every_log_call_site_is_a_fixed_message`, about line 10593).
+It reads `../../crates/retinue-daemon/src` and `../../apps/desktop/src-tauri/src`; `source_files` returns an empty list when a path does not exist and the loop silently passes. Add `assert!(scanned > 0)` per root (and at least one `tracing::` call found). It also only matches the literal `tracing::` and `log_shell("`, so `use tracing::warn;` followed by a bare `warn!(...)`, and `log_shell(level, &format!(...))` with a variable first argument, are not covered. Either also match `\b(warn|info|error|debug|trace)!\(` and `log_shell(`, or state that limitation in a comment. Today's call sites (`main.rs:666,677,776,787,4199`, `experiments.rs:124`, `remote/connectivity.rs:423`, `remote/web.rs:955`, and the shell's `log_shell` lines) are all fixed messages, `{error}` from storage, or a folder path, so nothing is wrong now.
 
 ### F6. `debug` enables debug logging for every dependency
 `diagnostics.rs:179-180`.
-`EnvFilter::new("debug")` turns on hyper, h2, rustls, reqwest and tungstenite debug output. The redactor catches `bearer …` and `token=…`, but the log folder and the zip would then carry connection/URL detail from the Remote and dictation paths that nobody reviewed. Use a scoped directive: `info` by default and `bloblex=debug,info` (check the exact crate target names, for example `bloblex_daemon`) for the hidden `debug` level. Add a one-line test of the directive string.
+`EnvFilter::new("debug")` turns on hyper, h2, rustls, reqwest and tungstenite debug output. The redactor catches `bearer …` and `token=…`, but the log folder and the zip would then carry connection/URL detail from the Remote and dictation paths that nobody reviewed. Use a scoped directive: `info` by default and `retinue=debug,info` (check the exact crate target names, for example `retinue_daemon`) for the hidden `debug` level. Add a one-line test of the directive string.
 
 ### F7. Shell redaction is weaker than the daemon's
 `apps/desktop/src-tauri/src/lib.rs:839-868`.
@@ -54,7 +54,7 @@ It reads `../../crates/bloblex-daemon/src` and `../../apps/desktop/src-tauri/src
 
 ## Checked and fine
 
-- **Spec coverage:** daily rotation with 14-file and 20 MB caps (newest always kept); `info` default and `debug` through the validated hidden setting (documented as applying at the next start); shell file `desktop.<date>.log` in the same `logs/` folder, and the shell and daemon resolve the same data folder (`bitbots_data_dir` matches the daemon's `BLOBLEX_DB_PATH` / `%LOCALAPPDATA%\Bitbots` rule); the zip carries README, environment (no executable paths, version reduced to digits), settings, the last 200 events, and the logs re-redacted on the way in.
+- **Spec coverage:** daily rotation with 14-file and 20 MB caps (newest always kept); `info` default and `debug` through the validated hidden setting (documented as applying at the next start); shell file `desktop.<date>.log` in the same `logs/` folder, and the shell and daemon resolve the same data folder (`retinue_data_dir` matches the daemon's `RETINUE_DB_PATH` / `%LOCALAPPDATA%\Retinue` rule); the zip carries README, environment (no executable paths, version reduced to digits), settings, the last 200 events, and the logs re-redacted on the way in.
 - **Save path:** the renderer never supplies a path. The new `SelectedFilePurpose::DiagnosticsExport` is single-use and not interchangeable with the backup purposes (tested); the write is a temp file plus rename. The zip travels as base64 over the loopback RPC and the renderer receives only a summary.
 - **Remote:** `diagnostics.preview` and `diagnostics.export` are `class: "never"` in `tiers.json`; both new `../tauri` exports exist in `remoteTauri.ts` and `fixtureBridge.ts` for the parity tests. `settings.set` is already never-remote, so the log-level setting cannot be changed remotely.
 - **Scope:** `main.rs` changes are limited to the module line, the RPC route, the setting validation, moving the tracing set-up into `run()` and the test module; `lib.rs` changes are the shell log, the two commands and the `write_bytes_file` refactor (the backup writer keeps its behaviour). The extra files (`base64` in the shell's `Cargo.toml`, the two bridges, `settingsIndex.ts`, `Cargo.lock`) are justified by the report. The generated Tauri schema files show only line-ending churn; make sure the Director does not commit them.
@@ -68,7 +68,7 @@ It reads `../../crates/bloblex-daemon/src` and `../../apps/desktop/src-tauri/src
 2. F2: omit `profile.about` and `internal.*` from `settings.json`, with a test.
 3. F3: make the secret regex accept a quoted key (JSON), with tests.
 4. F4: narrow `is_secret_key` so token counters and commit hashes survive, with a test.
-5. F5 to F9 as described. Re-run the daemon diagnostics tests, `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`, the `bloblex-desktop` lib tests, and `DiagnosticsDialog.mounted.test.tsx`, then update `docs/history/fix-39/p12-report.md`.
+5. F5 to F9 as described. Re-run the daemon diagnostics tests, `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`, the `retinue-desktop` lib tests, and `DiagnosticsDialog.mounted.test.tsx`, then update `docs/history/fix-39/p12-report.md`.
 
 
 ## Re-check (Sonnet), verbatim
@@ -81,12 +81,12 @@ One must-fix remains. The F1–F5 and F7–F9 fixes check out when I read the co
 
 **Must fix**
 
-1. **F6 is wrong, so the `debug` level does nothing.** `crates/bloblex-daemon/src/diagnostics.rs:53` returns `bloblex_daemon=debug,info`.
-   - The daemon's binary is `[[bin]] name = "bitbotsd"` (`crates/bloblex-daemon/Cargo.toml:7`), and there is no lib target. Its crate name, and so its `module_path!()` and tracing target, is `bitbotsd`.
-   - The build output confirms it: `C:\fxt\a1\debug\deps` holds only `bitbotsd*.d` and no `bloblex_daemon*.d`.
+1. **F6 is wrong, so the `debug` level does nothing.** `crates/retinue-daemon/src/diagnostics.rs:53` returns `retinue_daemon=debug,info`.
+   - The daemon's binary is `[[bin]] name = "retinued"` (`crates/retinue-daemon/Cargo.toml:7`), and there is no lib target. Its crate name, and so its `module_path!()` and tracing target, is `retinued`.
+   - The build output confirms it: `C:\fxt\a1\debug\deps` holds only `retinued*.d` and no `retinue_daemon*.d`.
    - The directive therefore matches nothing, and the hidden `debug` setting behaves exactly like `info`.
-   - Change it to `bitbotsd=debug,info` at `diagnostics.rs:53`. Update the assertion at `diagnostics.rs:589` and the doc comment at `diagnostics.rs:48-50`.
-   - Add a test that would catch this. For example, build an `EnvFilter` from `log_directive("debug")` and check that `bitbotsd` is enabled at debug while a dependency target such as `hyper` is not. Alternatively, derive the name from `module_path!()`.
+   - Change it to `retinued=debug,info` at `diagnostics.rs:53`. Update the assertion at `diagnostics.rs:589` and the doc comment at `diagnostics.rs:48-50`.
+   - Add a test that would catch this. For example, build an `EnvFilter` from `log_directive("debug")` and check that `retinued` is enabled at debug while a dependency target such as `hyper` is not. Alternatively, derive the name from `module_path!()`.
 
 **Checked and fine**
 
@@ -95,7 +95,7 @@ One must-fix remains. The F1–F5 and F7–F9 fixes check out when I read the co
 - **F3:** The regex now accepts a quoted key (`diagnostics.rs:75`), and the JSON test is at `diagnostics.rs:558`.
 - **F4:** `inputTokens`, `outputTokens`, `contextTokens`, `tokenCount` and `commitHash` are no longer treated as secrets. `token`, `*Token`, `tokenHash`, and a key named exactly `hash` are still redacted.
 - **F5:** The scan test now asserts it found sources and call sites per root, matches bare `warn!` through `trace!` and `log_shell(`, and skips the definition line (`main.rs:10630-10683`). It still ends the inspected call at the next `);`, which the report says.
-- **F7:** The shell redactor now redacts every `Bearer`, and the keyed forms (`=`, `:`, JSON) for `token`, `password`, `secret`, `capability`, `credential`, `authorization`, `cookie`, `api_key` and `apikey` (`lib.rs:862-917`). I traced the slicing and the loops, and they stay on char boundaries and always advance. It still has no `sk-…` or `bloblex_remote=` rules, and `Bearer` is matched only as `Bearer ` or `bearer `. That is acceptable, since the shell logs only fixed messages.
+- **F7:** The shell redactor now redacts every `Bearer`, and the keyed forms (`=`, `:`, JSON) for `token`, `password`, `secret`, `capability`, `credential`, `authorization`, `cookie`, `api_key` and `apikey` (`lib.rs:862-917`). I traced the slicing and the loops, and they stay on char boundaries and always advance. It still has no `sk-…` or `retinue_remote=` rules, and `Bearer` is matched only as `Bearer ` or `bearer `. That is acceptable, since the shell logs only fixed messages.
 - **F8:** The shell prunes only when the day changes (`lib.rs:829,853`).
 - **F9:** The dialog focuses its first button on open, and its capture-phase Escape handler calls `stopPropagation` (`DiagnosticsDialog.tsx:21,31-42`).
 
@@ -104,7 +104,7 @@ One must-fix remains. The F1–F5 and F7–F9 fixes check out when I read the co
 
 PASS
 
-- `crates/bloblex-daemon/src/diagnostics.rs:53` sets `LOG_TARGET = "bitbotsd"`, and `log_directive("debug")` (line 58) now returns `bitbotsd=debug,info`.
-- That matches the real target. `Cargo.toml:6-8` has `[[bin]] name = "bitbotsd"` with `path = "src/main.rs"`, and there is no `src/lib.rs`, so `diagnostics` is a module of the bin crate (`main.rs:39`).
-- The tests at lines 594-654 check this. One asserts the exact string. The other builds a real `EnvFilter` and checks that a `bitbotsd` DEBUG callsite is always enabled, a `hyper` DEBUG callsite is never enabled, and `info` leaves `bitbotsd` DEBUG off.
+- `crates/retinue-daemon/src/diagnostics.rs:53` sets `LOG_TARGET = "retinued"`, and `log_directive("debug")` (line 58) now returns `retinued=debug,info`.
+- That matches the real target. `Cargo.toml:6-8` has `[[bin]] name = "retinued"` with `path = "src/main.rs"`, and there is no `src/lib.rs`, so `diagnostics` is a module of the bin crate (`main.rs:39`).
+- The tests at lines 594-654 check this. One asserts the exact string. The other builds a real `EnvFilter` and checks that a `retinued` DEBUG callsite is always enabled, a `hyper` DEBUG callsite is never enabled, and `info` leaves `retinued` DEBUG off.
 - I read the code and tests only. I didn't run them, and I wrote no files.

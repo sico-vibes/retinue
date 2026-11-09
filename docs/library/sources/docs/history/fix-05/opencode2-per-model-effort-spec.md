@@ -4,8 +4,8 @@
 > **Status:** historical
 > **Last updated:** 2026-10-14
 
-Written 14 October 2026. Backend only (`crates/bloblex-adapter-acp`, and
-`crates/bloblex-daemon` only if a compile or contract fix strictly needs it).
+Written 14 October 2026. Backend only (`crates/retinue-adapter-acp`, and
+`crates/retinue-daemon` only if a compile or contract fix strictly needs it).
 Follows FIX3 (`acp --cwd` removal, beta.24).
 
 ## 1. Symptoms (owner, on beta.24 with OpenCode 2.0.28)
@@ -73,7 +73,7 @@ The model list (115) equals `opencode models` (115).
    model. Read the session code in `exec.rs` and confirm the order is model first,
    then effort (effort options depend on the model). If it sets effort before the
    model, fix the order and say so.
-7. Do not touch `crates/bloblex-runtime`, `apps/`, or any UI file.
+7. Do not touch `crates/retinue-runtime`, `apps/`, or any UI file.
 
 ## 5. Tests (fake CLI only; never the real opencode beyond `--version`/`--help`)
 
@@ -94,9 +94,9 @@ The model list (115) equals `opencode models` (115).
 ## 6. Gates
 
 ```
-cargo test -p bloblex-adapter-acp
-cargo test -p bloblex-daemon          # RUST_MIN_STACK=33554432 on this machine
-cargo clippy -p bloblex-adapter-acp --all-targets   # report the delta only; HEAD is not clean
+cargo test -p retinue-adapter-acp
+cargo test -p retinue-daemon          # RUST_MIN_STACK=33554432 on this machine
+cargo clippy -p retinue-adapter-acp --all-targets   # report the delta only; HEAD is not clean
 ```
 
 `cargo fmt --check` fails on HEAD; report only.

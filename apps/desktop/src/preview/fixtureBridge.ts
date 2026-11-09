@@ -11,7 +11,7 @@ import { parseCapabilities, parseExecSnapshot, parseModelCatalog } from '../exec
 import type { UsageAnalyticsRequest } from '../analyticsTypes'
 import { IDLE_UPDATE_PHASE, parseUpdateChannel, type UpdateChannel, type UpdateInfo, type UpdatePhaseState, type UpdateProgress, type UpdatesState } from '../updatesContract'
 import { entityNoun } from '../ui/vocabulary'
-import { themeStyle } from '../blob/bitbots'
+import { themeStyle } from '../blob/retinue'
 import { REMOTE_METHODS } from '../remote/remoteContract'
 import type { RemoteMethod, RemoteStatus, RemoteTailscaleState } from '../remote/remoteContract'
 import { createRemoteSimulator } from './remoteFixture'
@@ -28,7 +28,7 @@ const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).
 const flags = () => new URLSearchParams(location.search)
 const fixturePreset = () => flags().get('preset')
 const setPreviewSelection = (agentId: string) => {
-  try { localStorage.setItem('bloblex.selectedAgentId', agentId) } catch { /* Preview selection is optional. */ }
+  try { localStorage.setItem('retinue.selectedAgentId', agentId) } catch { /* Preview selection is optional. */ }
 }
 
 // Remote mode preview: one shared simulator, seeded once from the URL. Flags are
@@ -125,7 +125,7 @@ One employee per responsibility, two to six employees, each role explained in a 
 const fixturePlaybookVersions: Array<Record<string, unknown>> = [
   { version: 1, text: fixturePlaybookSeed, author: 'default', createdAt: '2026-10-16T08:00:00Z' },
 ]
-const composerPreviewStorageKey = 'bloblex.preview.composer-session.v1'
+const composerPreviewStorageKey = 'retinue.preview.composer-session.v1'
 const PREVIEW_HINTS = ['companion.drag', 'approval.first', 'plan.first', 'context.high', 'team.first']
 
 let agents: Agent[] = [
@@ -142,7 +142,7 @@ let sessions: Session[] = [
     messages: [
       { id: 'm1', role: 'user', content: 'Can you make the invoice parser tests pass?', createdAt: minutesAgo(9), ...(fixturePreset() === 'mcp' ? { meta: { origin: { kind: 'mcp', client: 'claude-code' } } } : {}) },
       { id: 'm2', role: 'assistant', content: 'Sure. I found two failing cases in **tests/invoice.test.ts**: the currency field is parsed before the locale is known, and totals use floats.\n\nI will switch totals to integer minor units and parse the locale first.', createdAt: minutesAgo(8) },
-      ...(fixturePreset() === 'visual' ? [{ id: 'visual-1', role: 'assistant', content: "Here is a mock of the card.\n\n```bitbots-visual\n<div style=\"padding:16px;border-radius:12px;background:#eef\"><h3 style=\"margin:0\">Invoice 104</h3><p>Paid on 31 October</p><script>document.body.innerHTML=\"SCRIPT RAN\"</script></div>\n```\n\nAnd as SVG:\n\n```svg\n<svg width=\"120\" height=\"60\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"120\" height=\"60\" rx=\"10\" fill=\"#7a7\"/></svg>\n```", createdAt: new Date().toISOString(), sequence: 100 }] : []),
+      ...(fixturePreset() === 'visual' ? [{ id: 'visual-1', role: 'assistant', content: "Here is a mock of the card.\n\n```retinue-visual\n<div style=\"padding:16px;border-radius:12px;background:#eef\"><h3 style=\"margin:0\">Invoice 104</h3><p>Paid on 31 October</p><script>document.body.innerHTML=\"SCRIPT RAN\"</script></div>\n```\n\nAnd as SVG:\n\n```svg\n<svg width=\"120\" height=\"60\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"120\" height=\"60\" rx=\"10\" fill=\"#7a7\"/></svg>\n```", createdAt: new Date().toISOString(), sequence: 100 }] : []),
       ...(fixturePreset() === 'generated-image' ? [
         { id: 'img-failed', role: 'notice', content: "The image couldn't be generated: The image didn't arrive.", createdAt: minutesAgo(8), meta: { kind: 'generated_image', mediaId: 'img-failed', status: 'failed', detail: "The image didn't arrive." } },
         { id: 'img-ready', role: 'notice', content: 'Generated an image: sunrise.png', createdAt: minutesAgo(7), meta: { kind: 'generated_image', mediaId: 'img-ready', status: 'ready', name: 'sunrise.png', bytes: 182_400, mediaType: 'image/png', provider: 'codex' } },
@@ -237,11 +237,11 @@ sessions.push({
     { id: 'team-r1', sequence: 4, turnId: 'team-tB', role: 'user', content: '[Reply from Pololo]\nNothing pixel-exact exists as a package. Closest: a PostHog ReasoningLevelDropdown (MIT) and a model selector on 21st.dev with Effort, Context and Fast toggles.', createdAt: minutesAgo(12), meta: { kind: 'blob_reply', fromAgentId: 'agent-pololo', fromName: 'Pololo', sideSessionId: teamSideId } },
     { id: 'team-a2', sequence: 5, turnId: 'team-tB', role: 'assistant', content: 'Pololo found it — nothing is a pixel-exact drop-in, but these are the useful hits:\n\n- **PostHog ReasoningLevelDropdown** (MIT): Faster ↔ Smarter, notched snaps, a Default badge.\n- **AI Model Select** on 21st.dev: Effort, Context and Fast in one popover.\n\nMy take: fork the PostHog one. Want me to plan the port?', createdAt: minutesAgo(11) },
     { id: 'team-u2', sequence: 6, turnId: 'team-tC', role: 'user', content: 'Yes, plan it.', createdAt: minutesAgo(3) },
-    { id: 'team-p1', sequence: 7, turnId: 'team-tC', role: 'plan', content: '1. Vendor the ReasoningLevelDropdown into `src/ui/effort`.\n2. Replace its token colours with Bitbots theme tokens.\n3. Wire it to the session lock and add keyboard tests.', createdAt: minutesAgo(2), meta: { kind: 'plan' } },
+    { id: 'team-p1', sequence: 7, turnId: 'team-tC', role: 'plan', content: '1. Vendor the ReasoningLevelDropdown into `src/ui/effort`.\n2. Replace its token colours with Retinue theme tokens.\n3. Wire it to the session lock and add keyboard tests.', createdAt: minutesAgo(2), meta: { kind: 'plan' } },
   ],
   tools: [
-    { id: 'team-tool-1', turnId: 'team-tA', kind: 'mcpToolCall', title: 'bloblex · list_blobs', state: 'completed', startedAt: minutesAgo(29.5), detail: { tool: 'bloblex · list_blobs', result: 'Your team:\n- Codex (you) [leader] — CTO\n- Pololo — UI/UX Designer · available' } },
-    { id: 'team-tool-2', turnId: 'team-tA', kind: 'mcpToolCall', title: 'bloblex · message_blob', state: 'completed', startedAt: minutesAgo(29.2), detail: { tool: 'bloblex · message_blob', input: '{\n  "blob": "Pololo",\n  "message": "Find an open-source effort picker like the 21st.dev one…"\n}', result: 'Sent to Pololo. Their reply will arrive here as a message starting with "[Reply from Pololo]".' } },
+    { id: 'team-tool-1', turnId: 'team-tA', kind: 'mcpToolCall', title: 'retinue · list_blobs', state: 'completed', startedAt: minutesAgo(29.5), detail: { tool: 'retinue · list_blobs', result: 'Your team:\n- Codex (you) [leader] — CTO\n- Pololo — UI/UX Designer · available' } },
+    { id: 'team-tool-2', turnId: 'team-tA', kind: 'mcpToolCall', title: 'retinue · message_blob', state: 'completed', startedAt: minutesAgo(29.2), detail: { tool: 'retinue · message_blob', input: '{\n  "blob": "Pololo",\n  "message": "Find an open-source effort picker like the 21st.dev one…"\n}', result: 'Sent to Pololo. Their reply will arrive here as a message starting with "[Reply from Pololo]".' } },
     { id: 'team-tool-3', turnId: 'team-tB', kind: 'commandExecution', title: 'rg -n "ReasoningLevel" node_modules/@posthog', state: 'completed', startedAt: minutesAgo(11), detail: { command: 'rg -n "ReasoningLevel" node_modules/@posthog', output: 'node_modules/@posthog/ui/ReasoningLevelDropdown.tsx:12:export function ReasoningLevelDropdown(', exitCode: 0 } },
     { id: 'team-tool-4', turnId: 'team-tB', kind: 'webSearch', title: 'Searched: 21st.dev model select effort', state: 'completed', startedAt: minutesAgo(10.5), detail: { query: '21st.dev model select effort' } },
   ],
@@ -280,11 +280,11 @@ else if (flags().has('clean')) void import('../ui/chatBackgroundStore').then((mo
 // `?clean`: no first-run hints, tour or What's New over the screen being inspected.
 if (flags().has('clean')) {
   try {
-    localStorage.removeItem('bitbots.whatsNew.seen')
-    localStorage.setItem('bitbots.tour', JSON.stringify({ version: 1, done: true, step: 0 }))
-    localStorage.setItem('bloblex.firstRun.complete', '1')
-    localStorage.removeItem('bitbots.drafts.v1')
-    localStorage.setItem('bloblex.inspector.open', '0')
+    localStorage.removeItem('retinue.whatsNew.seen')
+    localStorage.setItem('retinue.tour', JSON.stringify({ version: 1, done: true, step: 0 }))
+    localStorage.setItem('retinue.firstRun.complete', '1')
+    localStorage.removeItem('retinue.drafts.v1')
+    localStorage.setItem('retinue.inspector.open', '0')
   } catch { /* Preview storage is optional. */ }
 }
 const teamQuestion: PermissionRequest = { id: 'perm-question', sessionId: teamMainId, runtimeId: 'runtime-codex', status: 'pending', kind: 'question', title: 'Codex has a question', choices: ['answer', 'dismiss'], questions: [{ id: 'q-direction', header: 'Direction', question: 'Which direction should the effort picker follow?', options: [{ label: 'PostHog fork', description: 'Closest behaviour, MIT licensed' }, { label: '21st.dev model select', description: 'One popover for effort, context and fast' }, { label: 'Build our own' }], multiSelect: false, allowOther: true }] }
@@ -301,7 +301,7 @@ export function launchFixtureData(mode: typeof launchFixtureModes[number]) {
   const warning = mode === 'done-warning'
   const progress = mode === 'in-progress'
   const checks = [
-    { id: 'service', label: 'Connecting to the Bitbots service', state: mode === 'service-down' ? 'failed' : progress ? 'ok' : 'ok', detail: mode === 'service-down' ? 'Service did not respond' : 'Connected and loaded the latest state' },
+    { id: 'service', label: 'Connecting to the Retinue service', state: mode === 'service-down' ? 'failed' : progress ? 'ok' : 'ok', detail: mode === 'service-down' ? 'Service did not respond' : 'Connected and loaded the latest state' },
     { id: 'discovery', label: 'Finding coding agents', state: progress ? 'running' : 'ok', detail: progress ? 'In progress' : '3 coding agents found' },
     { id: 'auth:runtime-claude', label: 'Checking Claude Code sign-in', state: progress ? 'running' : 'ok', detail: progress ? 'In progress' : 'Signed in' },
     { id: 'models:runtime-codex', label: 'Loading Codex models', state: progress ? 'running' : 'ok', detail: progress ? 'In progress' : 'Loaded 12 models' },
@@ -440,9 +440,9 @@ function fixtureMachines(): Array<Record<string, unknown>> {
   ] }]
 }
 let fixtureAbandoned = [
-  { id: 'wt-1', repo: 'C:/work/site', path: 'C:/work/site-bitbots/fix-the-header', branch: 'bitbots/fix-the-header', reason: 'conversation_deleted', dirtyFiles: 0, commitsAhead: 0, lastActivityAt: '2026-10-20T10:00:00Z' },
-  { id: 'wt-2', repo: 'C:/work/site', path: 'C:/work/site-bitbots/try-a-new-rail', branch: 'bitbots/try-a-new-rail', reason: 'conversation_deleted', dirtyFiles: 2, commitsAhead: 3, lastActivityAt: '2026-10-22T10:00:00Z' },
-  { id: 'wt-3', repo: 'C:/work/korus', path: 'C:/work/korus-bitbots/invoice-tests', branch: 'bitbots/invoice-tests', reason: 'conversation_archived', dirtyFiles: 0, commitsAhead: 1, lastActivityAt: '2026-10-25T10:00:00Z' },
+  { id: 'wt-1', repo: 'C:/work/site', path: 'C:/work/site-retinue/fix-the-header', branch: 'retinue/fix-the-header', reason: 'conversation_deleted', dirtyFiles: 0, commitsAhead: 0, lastActivityAt: '2026-10-20T10:00:00Z' },
+  { id: 'wt-2', repo: 'C:/work/site', path: 'C:/work/site-retinue/try-a-new-rail', branch: 'retinue/try-a-new-rail', reason: 'conversation_deleted', dirtyFiles: 2, commitsAhead: 3, lastActivityAt: '2026-10-22T10:00:00Z' },
+  { id: 'wt-3', repo: 'C:/work/korus', path: 'C:/work/korus-retinue/invoice-tests', branch: 'retinue/invoice-tests', reason: 'conversation_archived', dirtyFiles: 0, commitsAhead: 1, lastActivityAt: '2026-10-25T10:00:00Z' },
 ]
 let fixtureClone: { id: string; url: string; target: string; state: string; detail: string | null; project: null } | null = null
 
@@ -455,7 +455,7 @@ async function fixtureRepository(sessionId: string) {
   if (mode === 'error') return { ...base, error: 'git is not installed or could not be started.' }
   if (mode === 'clean') return base
   const files = [
-    { path: `${root}/src/App.tsx`, repositoryPath: 'src/App.tsx', change: 'modified', addedLines: 12, removedLines: 3, diff: repositoryDiff('src/App.tsx', ['const title = "Bitbots"', 'render(title)'], ['render()']), binary: false, truncated: false },
+    { path: `${root}/src/App.tsx`, repositoryPath: 'src/App.tsx', change: 'modified', addedLines: 12, removedLines: 3, diff: repositoryDiff('src/App.tsx', ['const title = "Retinue"', 'render(title)'], ['render()']), binary: false, truncated: false },
     { path: `${root}/src/rail.ts`, repositoryPath: 'src/rail.ts', change: 'added', addedLines: 10_352, removedLines: 0, diff: repositoryDiff('src/rail.ts', ['export const rail = 1'], []), binary: false, truncated: true },
     { path: `${root}/docs/notes.md`, repositoryPath: 'docs/notes.md', change: 'added', addedLines: 41, removedLines: 0, diff: repositoryDiff('docs/notes.md', ['# Notes'], []), binary: false, truncated: false },
     { path: `${root}/old/legacy.ts`, repositoryPath: 'old/legacy.ts', change: 'deleted', addedLines: 0, removedLines: 94, diff: null, binary: false, truncated: false },
@@ -510,15 +510,15 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     if (flags().has('usage-bar')) fixtureSettings['experimental.usageBar'] = true
     if (flags().has('logos')) fixtureSettings['experimental.runtimeLogos'] = true
     if (flags().get('style')) fixtureSettings['appearance.style'] = flags().get('style')
-    if (flags().get('style') && ['haze','blobots'].includes(String(flags().get('style')))) localStorage.setItem('bitbots.style', String(flags().get('style')))
-    if (['system','dark','light'].includes(String(flags().get('theme')))) { fixtureSettings['appearance.theme'] = flags().get('theme'); try { const saved = JSON.parse(localStorage.getItem('bloblex.appearance') ?? '{}'); localStorage.setItem('bloblex.appearance', JSON.stringify({ ...saved, theme: flags().get('theme') })) } catch {} }
+    if (flags().get('style') && ['haze','stone'].includes(String(flags().get('style')))) localStorage.setItem('retinue.style', String(flags().get('style')))
+    if (['system','dark','light'].includes(String(flags().get('theme')))) { fixtureSettings['appearance.theme'] = flags().get('theme'); try { const saved = JSON.parse(localStorage.getItem('retinue.appearance') ?? '{}'); localStorage.setItem('retinue.appearance', JSON.stringify({ ...saved, theme: flags().get('theme') })) } catch {} }
     if (flags().get('accent')) fixtureSettings['appearance.accent'] = flags().get('accent')
     if (flags().get('density')) fixtureSettings['appearance.density'] = flags().get('density')
     for (const key of ['wallpaper','glass','font','monoFont']) { const value = flags().get(key); if (value) fixtureSettings[`appearance.${key}`] = value }
-    if (flags().get('wallpaper')) localStorage.setItem('bitbots.wallpaper', String(flags().get('wallpaper')))
-    if (flags().get('glass')) localStorage.setItem('bitbots.glass', String(flags().get('glass')))
-    if (flags().get('font')) localStorage.setItem('bitbots.font', String(flags().get('font')))
-    if (flags().get('monoFont')) localStorage.setItem('bitbots.monoFont', String(flags().get('monoFont')))
+    if (flags().get('wallpaper')) localStorage.setItem('retinue.wallpaper', String(flags().get('wallpaper')))
+    if (flags().get('glass')) localStorage.setItem('retinue.glass', String(flags().get('glass')))
+    if (flags().get('font')) localStorage.setItem('retinue.font', String(flags().get('font')))
+    if (flags().get('monoFont')) localStorage.setItem('retinue.monoFont', String(flags().get('monoFont')))
     if (flags().has('seen-hints')) fixtureSettings['hints.seen'] = ['companion.drag']
     if (flags().has('clean')) { fixtureSettings['hints.seen'] = PREVIEW_HINTS; fixtureSettings['onboarding.tour'] = { version: 1, done: true, step: 0 } }
     if (flags().has('hints-reset')) fixtureSettings['hints.seen'] = []
@@ -549,7 +549,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   if (method === 'session.git.revertUndo') return { files: withStaged(await fixtureRepository(String(params.sessionId ?? ''))).files } as T
   if (method === 'session.pr.draft') {
     const reason = flags().get('pr') === 'nogh' ? "The GitHub CLI isn't signed in." : null
-    return { ready: !reason, reason, gh: { available: !reason, login: reason ? null : 'preview-user' }, repoRoot: 'C:/Users/me/work/site', branch: 'feature/rail', base: 'main', isWorktree: true, remote: 'origin', commitsAhead: 2, uncommitted: 6, title: 'Tidy the rail', body: '## Changes\n- Tidy the rail\n- Fix the header\n\n## Files\n6 files, +10,407 \u2212105\n\nMade with Bitbots.', existingUrl: flags().get('pr') === 'open' ? 'https://github.com/preview/site/pull/12' : null } as T
+    return { ready: !reason, reason, gh: { available: !reason, login: reason ? null : 'preview-user' }, repoRoot: 'C:/Users/me/work/site', branch: 'feature/rail', base: 'main', isWorktree: true, remote: 'origin', commitsAhead: 2, uncommitted: 6, title: 'Tidy the rail', body: '## Changes\n- Tidy the rail\n- Fix the header\n\n## Files\n6 files, +10,407 \u2212105\n\nMade with Retinue.', existingUrl: flags().get('pr') === 'open' ? 'https://github.com/preview/site/pull/12' : null } as T
   }
   if (method === 'session.pr.create') {
     await new Promise((resolve) => window.setTimeout(resolve, 700))
@@ -567,7 +567,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   if (method === 'account.rename') { fixtureAccounts = fixtureAccounts.map((item) => item.id === params.id ? { ...item, name: String(params.name) } : item); return { ok: true } as T }
   if (method === 'account.delete') { fixtureAccounts = fixtureAccounts.filter((item) => item.id !== params.id); return { ok: true } as T }
   if (method === 'account.check') { fixtureAccounts = fixtureAccounts.map((item) => item.id === params.id ? { ...item, signedIn: true, label: 'work@example.com', plan: 'pro' } : item); return { ok: true } as T }
-  if (method === 'account.signIn') return { command: `$env:CLAUDE_CONFIG_DIR='C:\\Users\\you\\AppData\\Local\\Bitbots\\accounts\\${params.id}'; claude auth login` } as T
+  if (method === 'account.signIn') return { command: `$env:CLAUDE_CONFIG_DIR='C:\\Users\\you\\AppData\\Local\\Retinue\\accounts\\${params.id}'; claude auth login` } as T
   if (method === 'model.custom.list') return { models: fixtureCustomModels.filter((item) => item.provider === params.provider) } as T
   if (method === 'model.custom.save') { const model = { id: `preview-model-${fixtureCustomModels.length + 1}`, provider: String(params.provider), modelId: String(params.modelId), label: String(params.label), efforts: params.efforts as string[] }; fixtureCustomModels = [...fixtureCustomModels, model]; return { model } as T }
   if (method === 'model.custom.delete') { fixtureCustomModels = fixtureCustomModels.filter((item) => item.id !== params.id); return { ok: true } as T }
@@ -582,8 +582,8 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   if (method === 'machine.refresh' || method === 'machine.rename') return { ok: true } as T
   if (method === 'machine.remove') { fixtureMachineList = fixtureMachines().filter((item) => item.id !== params.id); return { removed: true, signedOut: true } as T }
   if (method === 'machine.probe') return (String(params.url).includes('ts.net')
-    ? { origin: String(params.url), reachable: true, isBitbots: true, auth: 'code', fingerprint: null, trusted: true }
-    : { origin: String(params.url), reachable: true, isBitbots: true, auth: 'password', fingerprint: 'AB:12:9F:44:0C:7E:D1:52:6A:33:BE:08:91:C4:7F:20:5D:EE:16:48:A9:02:C7:3B:60:1F:84:D5:72:96:BC:0E', trusted: false }) as T
+    ? { origin: String(params.url), reachable: true, isRetinue: true, auth: 'code', fingerprint: null, trusted: true }
+    : { origin: String(params.url), reachable: true, isRetinue: true, auth: 'password', fingerprint: 'AB:12:9F:44:0C:7E:D1:52:6A:33:BE:08:91:C4:7F:20:5D:EE:16:48:A9:02:C7:3B:60:1F:84:D5:72:96:BC:0E', trusted: false }) as T
   if (method === 'machine.pair.begin') {
     fixturePairJob = { id: 'preview-pair', url: String(params.url), state: 'pending', detail: null, machine: null }
     window.setTimeout(() => { fixturePairJob = { ...fixturePairJob!, state: 'approved', machine: { id: 'preview-laptop', name: 'Work laptop' } } }, 2500)
@@ -605,7 +605,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   if (method === 'machine.takeOver.preview') return {
     ready: params.sessionId !== 'preview-remote-1', reason: params.sessionId === 'preview-remote-1' ? 'Rae is working. Stop it or wait, then try again.' : null,
     title: 'Tidy the settings page', bot: { id: 'preview-rae', name: 'Rae', provider: 'claude', model: null, agentId: 'preview-rae', willCreate: flags().get('takeover') === 'newbot' },
-    repo: { identity: 'github.com/example/korus', url: 'https://github.com/example/korus.git', branch: 'bitbots/tidy-the-settings', isWorktree: true, hasRemote: true },
+    repo: { identity: 'github.com/example/korus', url: 'https://github.com/example/korus.git', branch: 'retinue/tidy-the-settings', isWorktree: true, hasRemote: true },
     uncommitted: 2, commitsAhead: 3, project: flags().get('takeover') === 'noproject' ? null : { id: 'korus', name: 'korus' }, needsProject: flags().get('takeover') === 'noproject', runtimeReady: true,
   } as T
   if (method === 'machine.takeOver') {
@@ -960,17 +960,17 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     if (method === 'memory.delete') { target.deletedAt = new Date().toISOString(); notifyFixtureDaemon('memory.deleted', { id: target.id }); return { deleted: true } as T }
     if (method === 'memory.restore') { target.deletedAt = null; notifyFixtureDaemon('memory.changed', { record: { ...target } }); return { record: { ...target } } as T }
   }
-  // Wave 13: watching Claude Code outside Bitbots. `?preset=outside` starts with it on and two sessions.
+  // Wave 13: watching Claude Code outside Retinue. `?preset=outside` starts with it on and two sessions.
   if (method.startsWith('outside.')) {
     const status = () => ({ enabled: fixtureOutside.enabled, installed: fixtureOutside.enabled, settingsPath: 'C:/Users/you/.claude/settings.json', bridgeAvailable: true, problem: null })
     if (method === 'outside.status') return status() as T
     if (method === 'outside.sessions') return { sessions: fixtureOutside.enabled ? fixtureOutside.sessions : [] } as T
-    if (method === 'outside.preview') return { settingsPath: status().settingsPath, exists: true, before: JSON.stringify({ model: 'opus' }, null, 2), after: JSON.stringify({ hooks: { PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: '"C:/Program Files/Bitbots/bitbots-hook.exe" --outside "C:/Users/you/AppData/Roaming/Bitbots/outside-hook.json"', timeout: 5 }] }] }, model: 'opus' }, null, 2) } as T
+    if (method === 'outside.preview') return { settingsPath: status().settingsPath, exists: true, before: JSON.stringify({ model: 'opus' }, null, 2), after: JSON.stringify({ hooks: { PreToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: '"C:/Program Files/Retinue/retinue-hook.exe" --outside "C:/Users/you/AppData/Roaming/Retinue/outside-hook.json"', timeout: 5 }] }] }, model: 'opus' }, null, 2) } as T
     if (method === 'outside.enable') {
       if (params.confirm !== true) throw rpcError('confirmation_required', 'Confirm the change to Claude Code’s settings first.')
       fixtureOutside.enabled = true
       notifyFixtureDaemon('outside.sessions.changed', { sessions: fixtureOutside.sessions })
-      return { status: status(), backupPath: 'C:/Users/you/.claude/settings.json.bitbots-backup-20261028-101500' } as T
+      return { status: status(), backupPath: 'C:/Users/you/.claude/settings.json.retinue-backup-20261028-101500' } as T
     }
     if (method === 'outside.disable') { fixtureOutside.enabled = false; notifyFixtureDaemon('outside.sessions.changed', { sessions: [] }); return { status: status(), backupPath: null, problem: null } as T }
   }
@@ -981,7 +981,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       const age = Date.now() - Date.parse(record.createdAt)
       return { ...record, rows: record.rows.map((row, index) => {
         const done = age > 2500 + index * 2500
-        return { agentId: row.agentId, agentName: nameOf(row.agentId), sessionId: row.sessionId, error: null, state: done ? 'idle' : 'working', reply: done ? `**${nameOf(row.agentId)}'s answer.**\n\nHere is how I would approach it:\n\n1. Read the code that's there.\n2. Change the smallest thing.\n3. Run the tests.` : null, durationMs: done ? 2500 + index * 2500 : null, tokens: done && index % 2 === 0 ? 1200 + index * 340 : null, worktree: record.projectId ? { path: `C:/work/.worktrees/${row.agentId}`, branch: `bitbots/compare-${index + 1}` } : null }
+        return { agentId: row.agentId, agentName: nameOf(row.agentId), sessionId: row.sessionId, error: null, state: done ? 'idle' : 'working', reply: done ? `**${nameOf(row.agentId)}'s answer.**\n\nHere is how I would approach it:\n\n1. Read the code that's there.\n2. Change the smallest thing.\n3. Run the tests.` : null, durationMs: done ? 2500 + index * 2500 : null, tokens: done && index % 2 === 0 ? 1200 + index * 340 : null, worktree: record.projectId ? { path: `C:/work/.worktrees/${row.agentId}`, branch: `retinue/compare-${index + 1}` } : null }
       }) }
     }
     if (method === 'fanout.start') {
@@ -1020,7 +1020,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     const [item] = fixtureStash.splice(index, 1)
     notifyFixtureDaemon('stash.changed', {})
     if (method === 'stash.delete') return { deleted: true } as T
-    if (method === 'stash.restore') return { item: { text: item.text, attachments: item.attachments.map((part) => ({ path: `C:/Bitbots/stash-restored/${part.file}`, name: part.name })) } } as T
+    if (method === 'stash.restore') return { item: { text: item.text, attachments: item.attachments.map((part) => ({ path: `C:/Retinue/stash-restored/${part.file}`, name: part.name })) } } as T
   }
   if (method === 'project.scaffold.status') return { git: true, gh: { available: true, login: 'preview-user', loginChecked: true } } as T
   if (method === 'project.scaffold.login') return { login: 'preview-user', loginChecked: true } as T
@@ -1039,35 +1039,35 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     ] } as T
   }
   if (method === 'diagnostics.issueDraft') {
-    const body = '## What happened\n\n\n## Version\n\nBitbots 0.1.0-beta.43 on Windows 11\n\n## Coding agents\n\n- claude 2.1\n- codex 0.9\n\n## Health check\n\nEverything passed.\n'
+    const body = '## What happened\n\n\n## Version\n\nRetinue 0.1.0-beta.43 on Windows 11\n\n## Coding agents\n\n- claude 2.1\n- codex 0.9\n\n## Health check\n\nEverything passed.\n'
     return { repo: 'sico-vibes/bloblex', title: '', body, url: 'https://github.com/sico-vibes/bloblex/issues/new', gh: { available: true, login: 'preview-user' } } as T
   }
   if (method === 'diagnostics.issuePost') {
     if (params.confirm !== true) throw rpcError('invalid_argument', 'Confirm posting the issue first.')
     return { url: 'https://github.com/sico-vibes/bloblex/issues/1' } as T
   }
-  // Wave 14: the Bitbots MCP. `?preset=mcp` starts with it on and used a few minutes ago.
+  // Wave 14: the Retinue MCP. `?preset=mcp` starts with it on and used a few minutes ago.
   if (method.startsWith('external.')) {
-    const bridge = 'C:/Users/you/AppData/Local/com.bitbots.desktop/bitbots-mcp.exe'
-    const endpoint = 'C:/Users/you/AppData/Local/com.bitbots.desktop/external-mcp.json'
-    const status = () => ({ enabled: fixtureExternal.enabled, tier: fixtureExternal.tier, endpointPath: fixtureExternal.enabled ? endpoint : null, bridgePath: bridge, command: `claude mcp add bitbots -- "${bridge}" mcp-server --endpoint "${endpoint}"`, lastCallAt: fixtureExternal.lastCallAt, lastClient: fixtureExternal.lastClient, allowFullAccess: fixtureExternal.enabled && fixtureExternal.allowFullAccess })
+    const bridge = 'C:/Users/you/AppData/Local/com.retinue.desktop/retinue-mcp.exe'
+    const endpoint = 'C:/Users/you/AppData/Local/com.retinue.desktop/external-mcp.json'
+    const status = () => ({ enabled: fixtureExternal.enabled, tier: fixtureExternal.tier, endpointPath: fixtureExternal.enabled ? endpoint : null, bridgePath: bridge, command: `claude mcp add retinue -- "${bridge}" mcp-server --endpoint "${endpoint}"`, lastCallAt: fixtureExternal.lastCallAt, lastClient: fixtureExternal.lastClient, allowFullAccess: fixtureExternal.enabled && fixtureExternal.allowFullAccess })
     const changed = () => { notifyFixtureDaemon('external.changed', status()); return status() as T }
     if (method === 'external.status') return status() as T
     if (method === 'external.enable') {
-      if (params.confirm !== true) throw rpcError('invalid_argument', 'Confirm turning on the Bitbots MCP first.')
+      if (params.confirm !== true) throw rpcError('invalid_argument', 'Confirm turning on the Retinue MCP first.')
       fixtureExternal.enabled = true
       if (typeof params.tier === 'string') fixtureExternal.tier = params.tier
       return changed()
     }
     if (method === 'external.disable') { fixtureExternal.enabled = false; fixtureExternal.allowFullAccess = false; return changed() }
     if (method === 'external.setFullAccess') {
-      if (!fixtureExternal.enabled) throw rpcError('conflict', 'Turn the Bitbots MCP on first.')
+      if (!fixtureExternal.enabled) throw rpcError('conflict', 'Turn the Retinue MCP on first.')
       if (params.allow === true && params.confirm !== true) throw rpcError('invalid_argument', 'Confirm letting outside sessions give employees Full access first.')
       fixtureExternal.allowFullAccess = params.allow === true
       return changed()
     }
     if (method === 'external.setTier') {
-      if (!fixtureExternal.enabled) throw rpcError('conflict', 'Turn on the Bitbots MCP first.')
+      if (!fixtureExternal.enabled) throw rpcError('conflict', 'Turn on the Retinue MCP first.')
       if (typeof params.tier === 'string') fixtureExternal.tier = params.tier
       return changed()
     }
@@ -1451,7 +1451,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     const title = typeof params.title === 'string' && params.title.trim() ? params.title.trim() : 'New chat'
     // Like the daemon, a lazily created conversation is stored untitled and named
     // from the first message, never with the bot's own name.
-    const session: Session = { id: `session-new-${sessions.length + 1}`, runtimeId: agent.runtimeId, agentId: agent.id, title, projectPath: project?.path ?? `C:/Bloblex/workspaces/${agent.id}`, projectId: project?.id ?? null, projectName: project?.name ?? null, state: 'idle', modelLock: { model: agent.model, thinking: agent.thinking }, contextUsed: null, contextSize: null, updatedAt: new Date().toISOString(), messages: [] }
+    const session: Session = { id: `session-new-${sessions.length + 1}`, runtimeId: agent.runtimeId, agentId: agent.id, title, projectPath: project?.path ?? `C:/Retinue/workspaces/${agent.id}`, projectId: project?.id ?? null, projectName: project?.name ?? null, state: 'idle', modelLock: { model: agent.model, thinking: agent.thinking }, contextUsed: null, contextSize: null, updatedAt: new Date().toISOString(), messages: [] }
     sessions = [...sessions, session]
     return { session, created: true } as T
   }
@@ -1594,7 +1594,7 @@ export async function stagePromptAttachment(bytes: Uint8Array) {
   return `C:/preview/attachments/staged-${stagedAttachmentSerial}.png`
 }
 export async function readClipboardImage() {
-  const response = await fetch('/src/assets/bloblex-128.png')
+  const response = await fetch('/src/assets/brand/retinue-tile-dark.png')
   if (!response.ok) throw new Error('The preview image is unavailable.')
   return new Uint8Array(await response.arrayBuffer())
 }
@@ -1604,7 +1604,7 @@ export async function selectBlobExportPath(_name: string) { return 'preview-blob
 export async function selectBlobImportPath() { return 'preview-blob-import-token' }
 export async function readBlobImport(_selectionToken: string) {
   return JSON.stringify({
-    format: 'bloblex.blob.v1', name: 'Mochi', description: 'Reviews pull requests and keeps the test suite green.', colour: '#f6a04d',
+    format: 'retinue.blob.v1', name: 'Mochi', description: 'Reviews pull requests and keeps the test suite green.', colour: '#f6a04d',
     instructions: 'Read the diff first. Run the tests before you say something works. Keep reviews short and kind.',
     model: 'gpt-6.1-sol', thinking: 'low', speed: null, look: { shape: 'pebble', seed: 'mochi' }, defaultApprovalMode: 'ask', providerId: 'codex',
   }, null, 2)
@@ -1621,7 +1621,7 @@ export type DiagnosticsPreview = { generatedAt: string; fileName: string; files:
 export async function selectDiagnosticsExportPath() { return 'preview-diagnostics-token' }
 export async function writeDiagnosticsExport(_selectionToken: string): Promise<{ path: string; sizeBytes: number; files: { name: string; sizeBytes: number }[] }> {
   return {
-    path: 'C:\\Users\\you\\Documents\\bitbots-diagnostics-2026-10-18.zip',
+    path: 'C:\\Users\\you\\Documents\\retinue-diagnostics-2026-10-18.zip',
     sizeBytes: 48_512,
     files: [
       { name: 'README.txt', sizeBytes: 900 },
@@ -1633,7 +1633,7 @@ export async function writeDiagnosticsExport(_selectionToken: string): Promise<{
   }
 }
 export async function writeBackupExport(_selectionToken: string, _include?: BackupExportRequest) {
-  return { path: 'C:\\Users\\you\\Documents\\bitbots-backup-2026-10-17.bitbots-backup.json', stats: { bots: agents.length, memory: fixtureMemory.length, skills: fixtureSkills.length, automations: 1, settings: 9 } }
+  return { path: 'C:\\Users\\you\\Documents\\retinue-backup-2026-10-17.retinue-backup.json', stats: { bots: agents.length, memory: fixtureMemory.length, skills: fixtureSkills.length, automations: 1, settings: 9 } }
 }
 export async function previewBackupImport(_selectionToken: string) {
   return {
@@ -1736,7 +1736,7 @@ export async function setCompanionMode(mode: string, _animate?: boolean) {
   style.textContent = `:root.companion-surface body { background: radial-gradient(900px 500px at 70% 10%, #3b2f63, #12131a) !important; }
     .companion-root { position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%); width: ${width}px !important; height: ${height}px !important; transition: width .34s, height .34s; }`
 }
-export async function quitBloblex() {}
+export async function quitRetinue() {}
 export async function permissionsPolicyGet() {
   return { defaultMode: 'ask' as const, perAgent: [] }
 }

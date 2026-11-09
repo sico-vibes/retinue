@@ -32,7 +32,7 @@ let root: Root
 const groupTitles = () => [...(host?.querySelectorAll('.settings-group h3') ?? [])].map((node) => node.textContent)
 
 beforeEach(() => {
-  const store = new Map<string, string>([['bloblex.profile.name', 'Ada']])
+  const store = new Map<string, string>([['retinue.profile.name', 'Ada']])
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => store.get(key) ?? null,
     setItem: (key: string, value: string) => { store.set(key, String(value)) },
@@ -70,7 +70,7 @@ describe('browser platform', () => {
     expect(host.querySelector('[aria-label="Close to tray"]')).toBeNull()
     expect(host.querySelector('[aria-label="Companion monitor"]')).toBeNull()
     expect(host.querySelector('[aria-label="Show companion"]')).toBeNull()
-    expect(host.querySelector('[aria-label="Open the companion when Bitbots starts"]')).toBeNull()
+    expect(host.querySelector('[aria-label="Open the companion when Retinue starts"]')).toBeNull()
     expect(host.querySelector('[aria-label="Show/hide with Ctrl+Alt+B"]')).toBeNull()
     expect(host.querySelector('[aria-label="Companion start position"]')).toBeNull()
     // The editor group is gone.

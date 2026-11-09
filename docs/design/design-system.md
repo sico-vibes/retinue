@@ -1,6 +1,6 @@
-# Bitbots Design System
+# Retinue Design System
 
-> **What this is:** The visual design rules for Bitbots: the scene, tokens, layout, controls, companion, and the FIX39 and FIX40 rules. Read it before changing the UI.
+> **What this is:** The visual design rules for Retinue: the scene, tokens, layout, controls, companion, and the FIX39 and FIX40 rules. Read it before changing the UI.
 > **Status:** current
 > **Last updated:** 2026-10-31
 
@@ -14,7 +14,7 @@ Product UI for a developer moving between coding-agent sessions on a desktop. It
 
 - **Say each thing once.** A blob's name, state and model appear in one place per screen. The sidebar row shows the blob and one line (what it is doing now, else its latest conversation). The header shows the blob name and the conversation. The details panel shows the full facts.
 - **One animated blob per place.** Sidebar rows, the details panel head, empty states and the companion each show a blob. Messages, the header and the working indicator do not.
-- **Monochrome chrome.** Black, greys and white. Primary actions are white with black text; toggles are white when on. Color is reserved for blob colors and for status that needs attention (amber for working or approval, red for failure, green only for added lines). *FIX40: this is the Blobots rule. Frost has its own colours; see [FIX40 looks and bot art](#fix40-looks-and-bot-art-19-october-2026).*
+- **Monochrome chrome.** Black, greys and white. Primary actions are white with black text; toggles are white when on. Color is reserved for blob colors and for status that needs attention (amber for working or approval, red for failure, green only for added lines). *FIX40: this is the Stone rule. Frost has its own colours; see [FIX40 looks and bot art](#fix40-looks-and-bot-art-19-october-2026).*
 - **Status dots only when something is happening.** Idle and finished conversations have no dot.
 
 ## Tokens
@@ -52,7 +52,7 @@ Rounded rectangular bill with 14 px compact and 22 px expanded corners, an opaqu
 
 Appearance may use system, dark or light surfaces. Light surfaces use the same semantic tokens with dark text. Type scale tokens may scale proportionally from a 13 px through 16 px body size.
 
-For Blobots, the companion keeps its fixed dark token palette (`:root.companion-surface` in `apps/desktop/src/ui/theme.css`) over transparency when the main window uses the light theme. Frost follows the user's resolved theme in the companion (`apps/desktop/src/ui/themes/frost.css`; FIX41). Update 22 October 2026: Legacy was retired, so no other look applies here.
+For Stone, the companion keeps its fixed dark token palette (`:root.companion-surface` in `apps/desktop/src/ui/theme.css`) over transparency when the main window uses the light theme. Frost follows the user's resolved theme in the companion (`apps/desktop/src/ui/themes/frost.css`; FIX41). Update 22 October 2026: Legacy was retired, so no other look applies here.
 
 ## FIX39 visual rules (18 October 2026)
 
@@ -72,10 +72,10 @@ Rules from the owner's FIX40 request, updated by the screenshot review of 20 Oct
 
 ### Looks and families
 
-- Two looks only (owner, 27 October 2026): **Haze** (`haze`, the primary look and the default for new installs) and **Stone** (stored id `blobots`). Frost (`bitbots`) is retired with its wallpaper and glass settings, as Pop, Dot and Legacy were on 20 October 2026. Saved, cached and backed-up retired choices migrate to Haze (`AGENTS.md`, 27 October amendment).
-- Settings and onboarding offer one row of orbs: Bitbots, Blobots. Names appear on hover and keyboard focus; no card descriptions or family headings.
-- Existing Bitbots and Blobots selections are retained. Retired selections migrate to Bitbots without changing bot records or conversations.
-- The retired `data-bitbots="on"` marker is cleared. Legacy theme CSS and automatic pixel-font loading are removed.
+- Two looks only (owner, 27 October 2026): **Haze** (`haze`, the primary look and the default for new installs) and **Stone** (stored id `stone`). Frost (`frost`) is retired with its wallpaper and glass settings, as Pop, Dot and Legacy were on 20 October 2026. Saved, cached and backed-up retired choices migrate to Haze (`AGENTS.md`, 27 October amendment).
+- Settings and onboarding offer one row of orbs: Retinue, Stone. Names appear on hover and keyboard focus; no card descriptions or family headings.
+- Existing Retinue and Stone selections are retained. Retired selections migrate to Retinue without changing bot records or conversations.
+- The retired `data-retinue="on"` marker is cleared. Legacy theme CSS and automatic pixel-font loading are removed.
 - Stone uses the base tokens in `ui/theme.css`; Haze adds its own tokens and surfaces on top. `ui/themes/frost.css`, the wallpapers and the glass levels were deleted with Frost.
 
 ### Frost (retired 27 October 2026; kept for history)
@@ -96,19 +96,19 @@ Nothing below ships any more: the look, its stylesheet, its wallpapers and its g
 
 - 24 bundled fonts in four categories: sans, friendly and display, mono, and pixel. Latin subsets only, from `@fontsource` packages.
 - A font loads only when it is chosen, or when the font list is on screen. Fonts never enter the main bundle for an unchosen font.
-- Defaults per look: Bitbots uses Inter; Blobots uses its base system fonts. The "Default for this look" option always returns to these.
+- Defaults per look: Retinue uses Inter; Stone uses its base system fonts. The "Default for this look" option always returns to these.
 - A pixel font may be the interface font. The smallest rendered size stays at 11 px.
 
 ### Settings > Appearance
 
 - Order of sections: Look (the orbs), Look options, Colour (Theme and Accent), Text (interface font, code font, text size and density).
-- Look options exist for Bitbots only (wallpaper and glass). Other looks show one quiet line.
+- Look options exist for Retinue only (wallpaper and glass). Other looks show one quiet line.
 - Each look is one orb with a circular selected/focus boundary (below).
 
 ### Bot art
 
 - Four offered arts: 3D robot (`robot`), 2D robot (`robot-pop`), Glossy (`blob`) and Hand-painted (`painted`), plus Automatic. Both robots offer Rectangle, Square, Circle and Hexagon outlines. Saved `robot-flat` and `robot-dot` values remain accepted and resolve to 2D robot.
-- Automatic art follows the look: Bitbots uses 2D robot; Blobots uses Glossy.
+- Automatic art follows the look: Retinue uses 2D robot; Stone uses Glossy.
 - Hand-painted blobs have twelve shapes: Classic, Cube, Star, Flower, Pear, Peanut, Ghost, Bunny, Kitty, UFO, Box bot and Tile. The shape is `look.paint`. Existing bots get a shape derived from their blob shape.
 - The light arts use SVG and CSS. Large Hand-painted avatars also track the pointer through a bounded animation-frame update with listener cleanup; mini avatars have no pointer listener. Reduced motion keeps a still pose.
 - Robot arts change the eyes, not the whole head. Idle has pill eyes that blink. Thinking has smaller eyes glancing to one side. Typing has stepped eye shapes and a row of pixels that types across the visor; the Dot robot renderer (not offered in the picker) shows a pixel wave, never rolling eyes. Waiting has raised, wide eyes in amber. Happy is an arc pair, error is X eyes in red, and sleeping and offline are flat lines (offline is dimmed).
@@ -130,7 +130,7 @@ These rules extend the looks above to the companion and dictation windows. The r
 - Each look styles the overlay windows through its own layer.
 - *Retired with Frost:* light followed `data-surface-theme` for Frost (`apps/desktop/src/ui/themes/frost.css`). Frost's glass blur is switched off for the companion and dictation surfaces (`:not(.companion-surface):not(.dictation-surface)` in the same file), so those windows use a solid tint.
 - *Retired with Frost:* bot-coloured text on light was mixed toward ink (15% bot colour) to keep 4.5:1 (`companion-bot-text-color-share` in the deleted `ui/themes/frost.css`). Not verified against the 4.5:1 target in this pass.
-- Blobots keeps the fixed dark palette in the overlay windows.
+- Stone keeps the fixed dark palette in the overlay windows.
 - No size, layout or animation changes in the overlay windows.
 
 ### Haze: frosted glass (27 October 2026)
@@ -153,4 +153,4 @@ Owner: first "90% transparent and gradient blobs more blended in and bigger", th
 
 ### Rich content, terminal and review cards (T3 wave, 26 October 2026)
 
-Interactive tables and charts, local media previews, the terminal dock, Needs you, the Workspace and Changes by turn rail cards, assignment Stop and Stop and send instead follow the same flat, hairline, token-only rules as every other surface. The detailed rules are in `.claude/skills/bitbots-development/references/design-language.md` ("Rich blocks, media, terminal and review cards").
+Interactive tables and charts, local media previews, the terminal dock, Needs you, the Workspace and Changes by turn rail cards, assignment Stop and Stop and send instead follow the same flat, hairline, token-only rules as every other surface. The detailed rules are in `.claude/skills/retinue-development/references/design-language.md` ("Rich blocks, media, terminal and review cards").

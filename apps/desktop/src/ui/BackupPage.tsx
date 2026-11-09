@@ -106,7 +106,7 @@ export function BackupPage({ connected }: { connected: boolean }) {
       setSkillChoices(Object.fromEntries(next.conflicts.skills.filter((skill) => !skill.same).map((skill) => [skill.name, 'skip' as SkillChoice])))
     } catch (reason) {
       setPreview(null)
-      setImportProblem(messageOf(reason, 'That file could not be read as a Bitbots backup.'))
+      setImportProblem(messageOf(reason, 'That file could not be read as a Retinue backup.'))
     } finally { setReading(false) }
   }
 
@@ -159,7 +159,7 @@ export function BackupPage({ connected }: { connected: boolean }) {
     <SettingsGroup title="Restore">
       <div className="backup-section">
         {!preview && <>
-          <p className="backup-note">Choose a <code>.bitbots-backup.json</code> file. You’ll see what it holds first.</p>
+          <p className="backup-note">Choose a <code>.retinue-backup.json</code> file. You’ll see what it holds first.</p>
           <div className="backup-actions">
             <button type="button" className="secondary-button small" disabled={!connected || reading} onClick={() => void chooseFile()}><FileUp size={13} aria-hidden="true" />{reading ? 'Reading…' : 'Choose a backup…'}</button>
           </div>

@@ -6,18 +6,18 @@
 
 ## Purpose
 
-Settings are non-secret local preferences stored in the `settings` table and read through `settings.get`. They are not provider credentials and must never contain one. The daemon refuses a key that contains `token`, `secret` or `password` in its name (`crates/bloblex-daemon/src/main.rs:1377-1379`).
+Settings are non-secret local preferences stored in the `settings` table and read through `settings.get`. They are not provider credentials and must never contain one. The daemon refuses a key that contains `token`, `secret` or `password` in its name (`crates/retinue-daemon/src/main.rs:1377-1379`).
 
 Two validators matter:
 
-- `validate_setting` in `crates/bloblex-daemon/src/main.rs:1342-1381` runs on `settings.set`. It normalises the accent to lower case and trims `profile.about`.
-- `validate_setting_value` in `crates/bloblex-storage/src/lib.rs:1268-1292` runs on every write, including backup import, so a restored value is held to the same rules as one typed in the app.
+- `validate_setting` in `crates/retinue-daemon/src/main.rs:1342-1381` runs on `settings.set`. It normalises the accent to lower case and trims `profile.about`.
+- `validate_setting_value` in `crates/retinue-storage/src/lib.rs:1268-1292` runs on every write, including backup import, so a restored value is held to the same rules as one typed in the app.
 
 ## How writes work
 
 `settings.set {key, value}` returns `{saved:true}` or an `invalid_argument` error. A real change to a window-level setting emits `settings.changed {key, value}`; `exec_gate.*` emits `{key, enabled}`; `permissions.default_mode` emits `{key, mode}`. A no-op write emits nothing.
 
-`remote.*` keys are refused by `settings.set` and move only through the `remote.*` methods (`crates/bloblex-daemon/src/main.rs:1294-1296`).
+`remote.*` keys are refused by `settings.set` and move only through the `remote.*` methods (`crates/retinue-daemon/src/main.rs:1294-1296`).
 
 ## The keys
 
@@ -25,7 +25,7 @@ Two validators matter:
 
 | Key | Values | Default | What it does |
 | --- | --- | --- | --- |
-| `appearance.style` | `bitbots`, `blobots` | `bitbots` | The look. Any other value is refused (`crates/bloblex-daemon/src/main.rs:1381`). The retired `legacy`, `pop` and `dot` values were removed on 21 October 2026 and are stored as `bitbots` when the database opens and when a backup is restored. |
+| `appearance.style` | `frost`, `stone` | `frost` | The look. Any other value is refused (`crates/retinue-daemon/src/main.rs:1381`). The retired `legacy`, `pop` and `dot` values were removed on 21 October 2026 and are stored as `frost` when the database opens and when a backup is restored. |
 | `appearance.theme` | `system`, `dark`, `light` | `system` | Resolved theme. |
 | `appearance.accent` | empty or `#rrggbb` | empty | User accent; stored lower-case. |
 | `appearance.wallpaper` | `lake`, `dusk`, `bloom`, `sand`, `custom` | `lake` | Frost wallpaper. |
@@ -41,7 +41,7 @@ Validation: style, wallpaper, glass, font, monoFont and accent are in the daemon
 
 | Key | Values | Notes |
 | --- | --- | --- |
-| `companion.openAtStartup` | boolean | Opens the companion when Bitbots starts. |
+| `companion.openAtStartup` | boolean | Opens the companion when Retinue starts. |
 | `companion.startPosition` | `launch` or `last` | Bottom centre or the remembered position. |
 | `companion.hotkey` | boolean | Registers the show/hide shortcut. |
 | `companion.focusMode` | boolean | Suppresses peeks and cues, not approvals. |
@@ -51,7 +51,7 @@ Validation: style, wallpaper, glass, font, monoFont and accent are in the daemon
 | `companion.soundsEnabled` | boolean | Companion cues. |
 | `companion.soundVolume` | number 0–1 | Cue volume. |
 
-Validation: `focusMode` is a JSON boolean and `positions` is checked by `valid_companion_positions` (`crates/bloblex-daemon/src/main.rs:1389-1398`). The other companion keys are stored as sent by the UI; the UI validates their shape.
+Validation: `focusMode` is a JSON boolean and `positions` is checked by `valid_companion_positions` (`crates/retinue-daemon/src/main.rs:1389-1398`). The other companion keys are stored as sent by the UI; the UI validates their shape.
 
 ### Speech and dictation
 
@@ -90,9 +90,9 @@ Each is a boolean stored as `experimental.<name>`. The key keeps its old name; t
 
 `changeReview`, `messageActions`, `search`, `autoTitles`, `undo`, `shortcuts`, `resumeAfterUsageLimits` (default on), `autoRetry`, `memory`, `approvalBadge`, `sidebarModel`, `botLock`.
 
-Since 30 October 2026 the daemon reads `autoTitles`, `undo`, `autoRetry` and `memory` through one rule (`experiments::on` in `crates/bloblex-daemon/src/experiments.rs`): absent means on, and only an explicit `false` turns one off, so a fresh install has the useful experiments and a switch the owner turned off stays off. `resumeAfterUsageLimits` already worked that way. `changeReview`, `messageActions` and `search` are read only by the interface, which sets its own defaults.
+Since 30 October 2026 the daemon reads `autoTitles`, `undo`, `autoRetry` and `memory` through one rule (`experiments::on` in `crates/retinue-daemon/src/experiments.rs`): absent means on, and only an explicit `false` turns one off, so a fresh install has the useful experiments and a switch the owner turned off stays off. `resumeAfterUsageLimits` already worked that way. `changeReview`, `messageActions` and `search` are read only by the interface, which sets its own defaults.
 
-Additional keys used by the interface: `experimental.usageTips`, `experimental.usageTipDismissals`, `experimental.activityDetails`, `experimental.runtimeLogos`, `experimental.usageBar`, `experimental.bitbots`. The first two are validated in storage; the rest are UI preferences.
+Additional keys used by the interface: `experimental.usageTips`, `experimental.usageTipDismissals`, `experimental.activityDetails`, `experimental.runtimeLogos`, `experimental.usageBar`, `experimental.retinue`. The first two are validated in storage; the rest are UI preferences.
 
 ### Shortcuts and the usage bars (30 October 2026)
 
@@ -106,14 +106,14 @@ Validation: all three are in the daemon validator and in the storage validator. 
 
 ### Renamed keys
 
-`SETTING_SHIMS` in `crates/bloblex-storage/src/lib.rs` moves an old setting key to its new name once, at every database open and on backup import. It is empty: as of 30 October 2026 no setting key has ever been renamed.
+`SETTING_SHIMS` in `crates/retinue-storage/src/lib.rs` moves an old setting key to its new name once, at every database open and on backup import. It is empty: as of 30 October 2026 no setting key has ever been renamed.
 
 ### Tasks (22 October 2026)
 
 | Key | Values | Default | What it does |
 | --- | --- | --- | --- |
-| `task.concurrency.max` | integer 1 to 3 | 1 (not stored) | How many tasks may run at once. Bots at once (`concurrency.botsAtOnce`) also applies. Checked in `crates/bloblex-daemon/src/main.rs:1404`. |
-| `task.globalPaused` | boolean | `false` | While `true`, queued tasks do not start. Checked in `crates/bloblex-daemon/src/main.rs:1405`. |
+| `task.concurrency.max` | integer 1 to 3 | 1 (not stored) | How many tasks may run at once. Bots at once (`concurrency.botsAtOnce`) also applies. Checked in `crates/retinue-daemon/src/main.rs:1404`. |
+| `task.globalPaused` | boolean | `false` | While `true`, queued tasks do not start. Checked in `crates/retinue-daemon/src/main.rs:1405`. |
 
 Neither key has a control in the desktop Settings page as of this pass. They are set through `settings.set`. See [task board](task-board.md).
 

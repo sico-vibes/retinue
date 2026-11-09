@@ -41,7 +41,7 @@ import { agentLook } from '../blob/look'
 import { quotaProviderName, quotaRows, type QuotaProviderRow } from './quotaModel'
 import { ProviderLimits } from './QuotaBar'
 import { entityNoun, useEntityNoun } from './vocabulary'
-import { themeStyle } from '../blob/bitbots'
+import { themeStyle } from '../blob/retinue'
 
 const RANGES: AnalyticsRangeDays[] = [7, 30, 90]
 const PANELS = ['overview', 'errors'] as const
@@ -55,7 +55,7 @@ export function AnalyticsView({ agentId = null, sessions, agents, quotas = [], c
   embedded?: boolean
   onBack?: () => void
   onRefreshQuota?: () => void
-  /** Opens the setting that lets Bitbots read a provider's usage. */
+  /** Opens the setting that lets Retinue read a provider's usage. */
   onTurnOnUsage?: () => void
   now?: Date
   timeZone?: string

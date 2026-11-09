@@ -9,7 +9,7 @@ describe('Haze icons', () => {
   it('matches the daemon allowlist (valid_look ICONS)', () => {
     // Pixel icons were retired on 27 October 2026: only the logos and the characters remain.
     expect(HAZE_ICONS).toEqual(['logo', 'logo-tint', 'logo-mono', ...HAZE_CHARACTERS.map(({ id }) => id)])
-    const storageSource = readFileSync(new URL('../../../../../crates/bloblex-storage/src/lib.rs', import.meta.url), 'utf8')
+    const storageSource = readFileSync(new URL('../../../../../crates/retinue-storage/src/lib.rs', import.meta.url), 'utf8')
     const rustIcons = storageSource.match(/const ICONS: \[&str; \d+\] = \[([\s\S]*?)\];/)?.[1]?.match(/"([^"]+)"/g)?.map((entry) => entry.slice(1, -1))
     expect(rustIcons).toEqual(HAZE_ICONS)
     expect(isHazeIcon('px-cat')).toBe(false)

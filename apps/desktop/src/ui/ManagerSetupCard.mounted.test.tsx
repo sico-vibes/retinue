@@ -21,7 +21,7 @@ function mount(runtimes: Runtime[] = [runtime]) {
 
 describe('persistent Manager setup', () => {
   it('ignores a previous Later preference and has no dismiss control', () => {
-    sessionStorage.setItem('bitbots.managerSetup.later', '1')
+    sessionStorage.setItem('retinue.managerSetup.later', '1')
     mount()
     expect(host.textContent).toContain('Meet your CEO')
     expect(host.querySelector('[aria-label="Later"], [aria-label="Close"]')).toBeNull()

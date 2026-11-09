@@ -14,7 +14,7 @@ import {
 } from './make-update-manifest.mjs'
 
 const scriptPath = fileURLToPath(new URL('./make-update-manifest.mjs', import.meta.url))
-const sampleUrl = 'https://github.com/sico-vibes/bloblex/releases/download/v0.1.0-beta.1/Bitbots_0.1.0-beta.1_x64-setup.exe'
+const sampleUrl = 'https://github.com/sico-vibes/bloblex/releases/download/v0.1.0-beta.1/Retinue_0.1.0-beta.1_x64-setup.exe'
 const sampleDate = '2026-10-02T15:00:00.000Z'
 
 function base(overrides = {}) {
@@ -74,10 +74,10 @@ test('accepts pre-release versions and rejects malformed versions', () => {
 })
 
 test('falls back to a one-line note when notes are missing or blank', () => {
-  assert.equal(defaultNotes('0.1.0-beta.1'), 'Bitbots 0.1.0-beta.1')
+  assert.equal(defaultNotes('0.1.0-beta.1'), 'Retinue 0.1.0-beta.1')
   for (const notes of [undefined, null, '', '   \n']) {
     const manifest = buildManifest(base({ notes, version: '0.1.0' }))
-    assert.equal(manifest.notes, 'Bitbots 0.1.0')
+    assert.equal(manifest.notes, 'Retinue 0.1.0')
   }
   const kept = buildManifest(base({ notes: '  Line one\n\nLine two\n' }))
   assert.equal(kept.notes, 'Line one\n\nLine two')
@@ -103,16 +103,16 @@ test('defaults pub_date to ISO 8601 UTC and platform to windows-x86_64', () => {
   const manifest = buildManifest({
     version: '0.1.0-beta.2',
     signature: 'sig',
-    url: 'https://example.com/Bitbots_0.1.0-beta.2_x64-setup.exe',
+    url: 'https://example.com/Retinue_0.1.0-beta.2_x64-setup.exe',
   })
   assert.equal(manifest.platforms['windows-x86_64'].signature, 'sig')
   assert.match(manifest.pub_date, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/)
   assert.ok(Math.abs(Date.parse(manifest.pub_date) - before) < 5000)
-  assert.equal(manifest.notes, 'Bitbots 0.1.0-beta.2')
+  assert.equal(manifest.notes, 'Retinue 0.1.0-beta.2')
 })
 
 async function tempDir() {
-  return mkdtemp(join(tmpdir(), 'bloblex-manifest-'))
+  return mkdtemp(join(tmpdir(), 'retinue-manifest-'))
 }
 
 function runCli(args) {
@@ -164,7 +164,7 @@ test('CLI notes fallback and rejection of bad inputs', async (t) => {
     '--out', outPath,
   ])
   assert.equal(fallback.status, 0, fallback.stderr)
-  assert.equal(JSON.parse(fallback.stdout).notes, 'Bitbots 1.2.3')
+  assert.equal(JSON.parse(fallback.stdout).notes, 'Retinue 1.2.3')
   assert.equal(JSON.parse(await readFile(outPath, 'utf8')).platforms['windows-x86_64'].signature, 'trimmed-sig')
 
   const emptySig = join(root, 'empty.sig')

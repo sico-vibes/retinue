@@ -30,7 +30,7 @@ In the Model group, give instructions their own full-width sub-section:
   nothing if the field is empty, otherwise offers "Replace" or "Add to the end" in a small
   inline choice. Never overwrite silently.
 - **Versions**: keep the last 5 saved versions of the instructions per bot in `localStorage`
-  (`bitbots.instructionHistory.<agentId>`, each `{ at, text }`, newest first, skip duplicates,
+  (`retinue.instructionHistory.<agentId>`, each `{ at, text }`, newest first, skip duplicates,
   cap each text at 20,000 characters). Export `recordInstructionVersion(agentId, text)` and
   `instructionVersions(agentId)`; a **History** popover lists them with time and a first-line
   preview and **Restore** (puts it in the draft, does not save). The one insertion in
@@ -45,7 +45,7 @@ In the Model group, give instructions their own full-width sub-section:
   folder** ("Where this bot works when you start a conversation"). Update every string, hint,
   `aria-label` and test that uses the old words in this file.
 - The working-folder field gets a **Recent** menu of the last 6 folders chosen in this app
-  (`localStorage` `bitbots.recentFolders`, newest first, deduped, valid strings only), plus
+  (`localStorage` `retinue.recentFolders`, newest first, deduped, valid strings only), plus
   the existing Browse button. Export `rememberFolder(path)` and call it when a folder is
   chosen. Tests.
 

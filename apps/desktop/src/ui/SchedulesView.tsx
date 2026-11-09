@@ -143,7 +143,7 @@ export function SchedulesView(props: SchedulesViewProps) {
     <div className="schedules-scroll"><div className="schedules-column">
       <section className="schedules-global" aria-label="Automation controls">
         <div>
-          <strong>Pause all schedules <HelpTip align="start" text="Schedules run only while Bitbots is running and your computer is awake. Missed runs become one run when you're back." /></strong>
+          <strong>Pause all schedules <HelpTip align="start" text="Schedules run only while Retinue is running and your computer is awake. Missed runs become one run when you're back." /></strong>
         </div>
         <button type="button" className={`toggle ${paused ? 'on' : ''}`} role="switch" aria-label="Pause all schedules" aria-checked={paused} disabled={!connected} onClick={() => void act('global', () => onSetPaused(!paused))}><i /></button>
       </section>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useThemeStyle } from '../../blob/bitbots'
+import { useThemeStyle } from '../../blob/retinue'
 import { useHintSeen } from '../uiPrefs'
 import { entityNoun } from '../vocabulary'
 import { Hint } from './Hint'

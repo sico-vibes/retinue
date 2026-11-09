@@ -15,7 +15,7 @@
 ### 1. Surveyed the sources
 
 - Read the reference library design (`scripts/docs-library.mjs`, `assets/viewer.*`, `tokens.css`, `README.md`) without copying its text or branding.
-- Mapped the Bitbots docs tree: 267 Markdown files before this pass, 2.6 MB, already organised by the documentation lane under `docs/reference`, `guides`, `design`, `plans`, `operations`, `audits`, `history`, `evidence`, `releases`, `remote` and `library/audits`.
+- Mapped the Retinue docs tree: 267 Markdown files before this pass, 2.6 MB, already organised by the documentation lane under `docs/reference`, `guides`, `design`, `plans`, `operations`, `audits`, `history`, `evidence`, `releases`, `remote` and `library/audits`.
 - Read `docs/STYLE.md`, `docs/README.md`, `docs/library/audits/inventory.md`, `DESIGN.md`, the Frost/Pop/Dot/Legacy stylesheets, the IPC contract, the approval-mode contract, the updater contract and the FIX20/21/31/32/36/40/41 records.
 
 ### 2. Added the dependency
@@ -34,19 +34,19 @@ Captured with headless Microsoft Edge over the DevTools protocol, after seeding 
 
 | File | URL |
 | --- | --- |
-| `main-bitbots-dark.png` | `/?style=bitbots` |
-| `main-bitbots-light.png` | `/?style=bitbots&theme=light` |
-| `main-blobots.png` | `/?style=blobots&theme=dark` |
+| `main-retinue-dark.png` | `/?style=retinue` |
+| `main-retinue-light.png` | `/?style=retinue&theme=light` |
+| `main-stone.png` | `/?style=stone&theme=dark` |
 | `main-legacy.png` | `/?style=legacy&theme=dark` |
 | `main-pop.png` | `/?style=pop&theme=light` |
 | `main-dot.png` | `/?style=dot&theme=dark` |
-| `settings-appearance.png` | `/?preview-settings&style=bitbots`, then the Appearance page |
+| `settings-appearance.png` | `/?preview-settings&style=retinue`, then the Appearance page |
 | `bot-art-sheet.png` | `/preview.html?theme=dark` (1200×900) |
 | `bot-art-painted.png` | `/preview.html?art=painted&theme=dark` (1200×900) |
-| `companion.png` | `/?companion&mode=home&view=chat&style=bitbots&seen-hints` (720×420) |
+| `companion.png` | `/?companion&mode=home&view=chat&style=retinue&seen-hints` (720×420) |
 | `onboarding.png` | `/launch-preview.html?fixture=onboarding-step-1` |
 | `launch.png` | `/launch-preview.html?fixture=in-progress` |
-| `dictation.png` | `/dictation-preview.html?state=live&style=bitbots` (900×300) |
+| `dictation.png` | `/dictation-preview.html?state=live&style=retinue` (900×300) |
 
 The launch and onboarding captures hide the preview fixture switcher with injected CSS. All captures are demonstration data from fixtures, not a real account. The preview server was stopped after the pass.
 

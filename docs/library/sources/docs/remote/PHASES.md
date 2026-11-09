@@ -15,7 +15,7 @@ Tailscale.
 | Phase | Outcome | Not included |
 |---|---|---|
 | **P0 Design and mock** | Docs; contract types; method-tier policy with a parity test; simulator; Settings > Remote; phone client shell; transport seam | Any network, daemon change |
-| **P1 Tailscale gateway** | Second loopback listener in `bitbotsd`; `tailscale serve` control; owner-confirmed pairing; device cookies; `remote.*` methods; shared `tiers.json` with Rust enforcement; redaction and event allowlist; audit; PWA build (`dist-remote`) with a real service worker, shipped as a Tauri resource; Settings > Remote wired to the daemon | Attachments, push, a multi-computer switcher |
+| **P1 Tailscale gateway** | Second loopback listener in `retinued`; `tailscale serve` control; owner-confirmed pairing; device cookies; `remote.*` methods; shared `tiers.json` with Rust enforcement; redaction and event allowlist; audit; PWA build (`dist-remote`) with a real service worker, shipped as a Tauri resource; Settings > Remote wired to the daemon | Attachments, push, a multi-computer switcher |
 | ~~**P2 Relay**~~ | Removed on 16 October 2026 | — |
 | **P3 Push and polish** | Content-free push notifications; install prompts; notification permission flow; Badging API; a switcher that opens other computers' addresses | Native app stores |
 
@@ -36,14 +36,14 @@ Work packages from the approved plan (WP6a–d). The backend spec is
 - **WP6a policy.** Tier table, event policy and settings allowlist move to `remote/tiers.json`.
   Rust loads it with `include_str!`; `remoteTiers.ts` imports the same JSON. Redactors are
   ported to `policy.rs` and kept equal with golden fixtures run by both Rust and Vitest.
-- **WP6b gateway.** `crates/bloblex-daemon/src/remote/` (`mod`, `policy`, `tailscale`,
+- **WP6b gateway.** `crates/retinue-daemon/src/remote/` (`mod`, `policy`, `tailscale`,
   `pairing`, `web`); tables `remote_devices` and `remote_activity` (capped at 500 rows); the
   settings `remote.enabled`, `remote.port`, `remote.servePort` and `remote.security`, which
   `settings.set` refuses.
 - **WP6c PWA build.** `vite.remote.config.ts` (input `remote.html`, output `dist-remote`,
   public folder `remote-public/` with the manifest and 192, 512 and maskable icons);
   `remoteTauri.ts` on `remoteTransport.ts`; a real service worker; the `remote-web/` Tauri
-  resource and `BITBOTS_REMOTE_WEB_DIR`.
+  resource and `RETINUE_REMOTE_WEB_DIR`.
 - **WP6d docs.** This folder and `docs/ipc-contract.md`, amended 16 October 2026.
 
 ## P1 exit criteria

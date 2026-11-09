@@ -12,8 +12,8 @@ The look cards (Settings → Appearance "Choose a look" and the onboarding "Choo
 
 | Look | Orb |
 |---|---|
-| Bitbots (Frost) | A frosted-glass orb: the Lake wallpaper's colours inside (soft sky blue at the top through lavender to a pale peach horizon, with one or two calm hill silhouettes in the lower half), seen through a translucent white glass layer, with a thin light rim. Flat and quiet: **no glow, no halo, no outer shadow** (the owner dislikes glow). |
-| Blobots | A matte monochrome orb: dark grey with soft, simple shading (lighter top left, darker lower right), like a quiet stone. |
+| Retinue (Frost) | A frosted-glass orb: the Lake wallpaper's colours inside (soft sky blue at the top through lavender to a pale peach horizon, with one or two calm hill silhouettes in the lower half), seen through a translucent white glass layer, with a thin light rim. Flat and quiet: **no glow, no halo, no outer shadow** (the owner dislikes glow). |
+| Stone | A matte monochrome orb: dark grey with soft, simple shading (lighter top left, darker lower right), like a quiet stone. |
 | Legacy | A pixel orb: the circle drawn with stepped, pixel edges (a pixel-grid circle, e.g. via an SVG made of squares or a stepped `clip-path`), dark with the terracotta accent `#e17a56` and a dotted inner ring, crisp (`image-rendering: pixelated` where relevant). |
 | Pop | A retro sticker orb: cream base `#fbf6ec` with diagonal pastel bands (butter `#f6cf5c`, mint `#8fdcb6`, coral `#f59a8c`), a 2px ink outline `#1d1b18` and a hard offset shadow (3px 3px 0 ink, no blur). |
 | Dot | A black orb `#0e0e0e` with a dot-matrix pattern of small grey dots inside (unlit `#333`, a few lit `#f2f2f2`) and one red dot `#ff4b2b`; thin `#262626` rim. |
@@ -22,7 +22,7 @@ The look cards (Settings → Appearance "Choose a look" and the onboarding "Choo
 
 1. New `apps/desktop/src/ui/LookOrb.tsx` (`<LookOrb look={ThemeStyle} size={number} />`, decorative, `aria-hidden`) and `apps/desktop/src/ui/lookOrb.css`. Pure SVG and/or CSS, static (no animation, no canvas, no BlobCanvas), cheap to render, crisp at 40 to 96px, looks the same whatever look the app itself is wearing (do not read app tokens for the orb's own colours), and works on dark and light card backgrounds.
 2. Use it in both places:
-   - `ui/AppearancePage.tsx`: the look cards (`lookCard`) show the orb instead of the mini window. Big cards (Bitbots, Blobots): orb about 72px; "More looks" cards (Legacy, Pop, Dot): about 52px. Layout: the orb on the left, name and one-line description on the right, vertically centred; keep the selected state (the current accent outline) and keyboard behaviour. Remove the mini-window markup and its CSS from `appearancePage.css` (and any helper that only it used).
+   - `ui/AppearancePage.tsx`: the look cards (`lookCard`) show the orb instead of the mini window. Big cards (Retinue, Stone): orb about 72px; "More looks" cards (Legacy, Pop, Dot): about 52px. Layout: the orb on the left, name and one-line description on the right, vertically centred; keep the selected state (the current accent outline) and keyboard behaviour. Remove the mini-window markup and its CSS from `appearancePage.css` (and any helper that only it used).
    - `ui/LookPicker.tsx` (used by onboarding): show the orb instead of its avatar preview, same layout idea. Leave `LookPreview.tsx` and the onboarding's large preview as they are.
 3. Update the mounted tests that assert the old card contents (search the tests for the mini-window class names, `LookAvatar`, or `BlobCanvas` inside look cards) and add a small test that each of the five looks renders an orb with `data-look="<id>"`.
 

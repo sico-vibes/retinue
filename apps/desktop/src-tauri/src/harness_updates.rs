@@ -40,7 +40,7 @@ fn parse_version(value: &str) -> Option<semver::Version> {
 async fn latest_version(package: &'static str) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(LOOKUP_TIMEOUT)
-        .user_agent("Bitbots")
+        .user_agent("Retinue")
         .build()
         .map_err(|error| format!("Could not prepare update check: {error}"))?;
     let response: Value = client

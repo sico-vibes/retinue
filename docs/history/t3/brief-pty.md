@@ -1,4 +1,4 @@
-# Lane PTY: native terminal sessions for the Bitbots desktop shell
+# Lane PTY: native terminal sessions for the Retinue desktop shell
 
 You are an implementation lane. You work ONLY in the git worktree `D:\t3p` (branch `t3/pty`). This brief is self-contained: you have no chat history.
 
@@ -12,9 +12,9 @@ You are an implementation lane. You work ONLY in the git worktree `D:\t3p` (bran
 
 ## Goal
 
-The owner wants a real, user-controlled interactive terminal inside the Bitbots desktop app (Windows ConPTY through the `portable-pty` crate, output streaming, input, resize, lifecycle). The React UI (written by the Director, not you) will render it with xterm.js. You write only the **native Rust side** in the Tauri shell: `apps/desktop/src-tauri`.
+The owner wants a real, user-controlled interactive terminal inside the Retinue desktop app (Windows ConPTY through the `portable-pty` crate, output streaming, input, resize, lifecycle). The React UI (written by the Director, not you) will render it with xterm.js. You write only the **native Rust side** in the Tauri shell: `apps/desktop/src-tauri`.
 
-There is a reference implementation from an earlier, unmerged lane: `C:\Users\SicoZ\.codex\worktrees\bitbots-platform\Blolblex\apps\desktop\src-tauri\src\pty.rs` (read-only; do not edit anything under `C:\Users\SicoZ\.codex`). Read it, and copy the good parts, but fix its weaknesses listed below. `portable-pty` 0.9.0 is already in the offline cargo registry (use `portable-pty = "0.9"`; builds must work offline).
+There is a reference implementation from an earlier, unmerged lane: `C:\Users\SicoZ\.codex\worktrees\retinue-platform\Retinue\apps\desktop\src-tauri\src\pty.rs` (read-only; do not edit anything under `C:\Users\SicoZ\.codex`). Read it, and copy the good parts, but fix its weaknesses listed below. `portable-pty` 0.9.0 is already in the offline cargo registry (use `portable-pty = "0.9"`; builds must work offline).
 
 ## You own (and may edit)
 
@@ -49,7 +49,7 @@ Events (emit ONLY to the `main` window with `app.emit_to("main", ...)`, never br
 
 - **Working directory bounds.** `project_path` must canonicalize to an existing directory (reject longer than 4096 bytes). `cwd`, if given, must canonicalize to a directory *inside* `project_path` (use `starts_with` on the canonical paths); otherwise default to `project_path`. Reject UNC/device paths other than the normal `\\?\` prefix `canonicalize` produces on Windows (strip that verbatim prefix when you pass the cwd to the shell and when you return `cwd` to the UI, so the UI shows `D:\x`, not `\\?\D:\x`).
 - **Fixed shell choices only** (the string comes from the UI; never run an arbitrary executable). Windows: `"powershell"` (`powershell.exe -NoLogo`), `"pwsh"` (`pwsh.exe -NoLogo`, only if it can be found on PATH), `"cmd"` (`cmd.exe`). Default is `powershell`. Non-Windows: `/bin/sh`. Unknown name -> error `"Choose PowerShell, PowerShell 7 or Command Prompt."`. Unlike the reference, do NOT pass `-NoProfile` (users want their profile). Return the chosen shell id in `TerminalOpened.shell`.
-- **Environment hygiene.** Remove every variable that could carry a Bitbots secret from the child environment: any name starting with `BLOBLEX_` or `BITBOTS_` (enumerate `std::env::vars()` and call `env_remove`), plus `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`. Set `TERM=xterm-256color` and `COLORTERM=truecolor` on non-Windows only. Never log the environment.
+- **Environment hygiene.** Remove every variable that could carry a Retinue secret from the child environment: any name starting with `RETINUE_` or `RETINUE_` (enumerate `std::env::vars()` and call `env_remove`), plus `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`. Set `TERM=xterm-256color` and `COLORTERM=truecolor` on non-Windows only. Never log the environment.
 - **Limits.** At most 6 live terminals at once (error `"Close a terminal before opening another one."`). Ended terminals are pruned from the map when a new one is opened or `terminal_list` is called, but keep an ended terminal's record until `terminal_close` or prune so the UI can read its exit code.
 - **Output streaming.** One reader thread per terminal. Coalesce reads: collect up to ~16 KiB or ~8 ms before emitting one event (use a small timed drain; do not emit one event per 8-byte read). Keep an incomplete UTF-8 tail across reads (the reference's `decode_utf8_chunk` is right; keep it). Apply back-pressure (the reference throttles to 1 MiB/s; allow a higher 4 MiB/s ceiling, it is a dev terminal). Do not keep a transcript in memory beyond what is needed, and **write nothing to disk**.
 - **Windows ConPTY handshake.** ConPTY may emit `ESC[6n` (cursor position request) and expect an answer, otherwise the shell can stall; xterm.js answers it from the UI (it writes through `terminal_write`), so the shell needs nothing special. Do not answer it yourself.
@@ -65,7 +65,7 @@ From `D:\t3p`:
 # the build script needs ../dist to exist; create a stub if missing (it is git-ignored)
 if (-not (Test-Path apps\desktop\dist\index.html)) { New-Item -ItemType Directory -Force apps\desktop\dist | Out-Null; Set-Content apps\desktop\dist\index.html '<!doctype html><title>stub</title>' }
 $env:TAURI_CONFIG='{"bundle":{"externalBin":[]}}'
-cargo check -p bloblex-desktop --message-format short
+cargo check -p retinue-desktop --message-format short
 ```
 
 Run `cargo fmt --check` only on `pty.rs` if you want (`rustfmt --check apps/desktop/src-tauri/src/pty.rs --edition 2021`); do not reformat `lib.rs`. `cargo check` is a production-target check: it is allowed. `cargo check --tests` is NOT. Fix every warning your code introduces. The first build compiles many crates and can take 10+ minutes: run it with a generous timeout and be patient.

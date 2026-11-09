@@ -27,8 +27,8 @@ Gates (from the repository root):
    callers. Table-driven tests in `errorCopy.test.ts`: 28 cases (25-row table + 3 behaviour tests).
 2. **Offline and daemon-down banner — done (partly on one detail).** New
    `apps/desktop/src/ui/ConnectionBanner.tsx` renders one slim `role="status" aria-live="polite"`
-   banner under the header from the existing `connection` state: "Reconnecting to Bitbots…" with a
-   spinner and `Attempt N` once `attempts > 3`; "Bitbots could not be reached" with a **Retry now**
+   banner under the header from the existing `connection` state: "Reconnecting to Retinue…" with a
+   spinner and `Attempt N` once `attempts > 3`; "Retinue could not be reached" with a **Retry now**
    button once a try has failed; a 1.5 s "Back online" confirmation on reconnect. `App.tsx` counts
    reconnection tries in the existing 3 s retry loop and marks a failure when tries ≥ 3 still left
    an error on a disconnected connection. The composer stays open for drafting; the textarea no

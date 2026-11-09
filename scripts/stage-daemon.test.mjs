@@ -15,7 +15,7 @@ const hostTriple = hostTripleResult.stdout.match(/^host: (.+)$/m)?.[1]
 assert.ok(hostTriple, 'rustc must report a host target triple')
 
 async function fixture() {
-  const root = await mkdtemp(join(tmpdir(), 'bloblex-stage-daemon-'))
+  const root = await mkdtemp(join(tmpdir(), 'retinue-stage-daemon-'))
   const cargoTarget = join(root, 'custom-cargo-target')
   const destination = join(root, 'staged-output')
   return {
@@ -30,7 +30,7 @@ async function writePair(targetDirectory, profile, contents = {}) {
   const profileDirectory = join(targetDirectory, profile)
   await mkdir(profileDirectory, { recursive: true })
   const result = {}
-  for (const binary of ['bitbotsd', 'bitbots-hook']) {
+  for (const binary of ['retinued', 'retinue-hook']) {
     if (contents[binary] === null) continue
     const bytes = contents[binary] ?? randomBytes(97)
     const source = join(profileDirectory, `${binary}.exe`)
@@ -47,7 +47,7 @@ function runStage(fixture, args = []) {
     env: {
       ...process.env,
       CARGO_TARGET_DIR: fixture.cargoTarget,
-      BLOBLEX_STAGE_DESTINATION: fixture.destination,
+      RETINUE_STAGE_DESTINATION: fixture.destination,
     },
   })
 }
@@ -65,27 +65,27 @@ for (const profile of ['debug', 'release']) {
     const result = runStage(current, profile === 'release' ? ['--release'] : [])
 
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`)
-    for (const binary of ['bitbotsd', 'bitbots-hook']) {
+    for (const binary of ['retinued', 'retinue-hook']) {
       const destination = join(current.destination, `${binary}-${hostTriple}.exe`)
       assert.equal(sha256(await readFile(destination)), sha256(sources[binary].bytes))
       assert.ok(result.stdout.includes(sources[binary].source), `stdout should report staged source ${sources[binary].source}`)
       assert.ok(result.stdout.includes(destination), `stdout should report staged destination ${destination}`)
     }
-    assert.equal(await readFile(sources.bitbotsd.source).then(sha256), sha256(sources.bitbotsd.bytes))
-    assert.equal(await readFile(sources['bitbots-hook'].source).then(sha256), sha256(sources['bitbots-hook'].bytes))
+    assert.equal(await readFile(sources.retinued.source).then(sha256), sha256(sources.retinued.bytes))
+    assert.equal(await readFile(sources['retinue-hook'].source).then(sha256), sha256(sources['retinue-hook'].bytes))
   })
 }
 
 test('fails before copying when either required binary is missing', async (t) => {
   const current = await fixture()
   t.after(() => current.dispose())
-  const sources = await writePair(current.cargoTarget, 'debug', { 'bitbots-hook': null })
+  const sources = await writePair(current.cargoTarget, 'debug', { 'retinue-hook': null })
 
   const result = runStage(current)
 
   assert.notEqual(result.status, 0)
-  assert.match(`${result.stdout}\n${result.stderr}`, /bitbots-hook\.exe/)
+  assert.match(`${result.stdout}\n${result.stderr}`, /retinue-hook\.exe/)
   assert.match(`${result.stdout}\n${result.stderr}`, /cargo build/i)
-  assert.equal(await readFile(join(current.destination, `bitbotsd-${hostTriple}.exe`)).catch(() => null), null)
-  assert.equal(await readFile(sources.bitbotsd.source).then(sha256), sha256(sources.bitbotsd.bytes))
+  assert.equal(await readFile(join(current.destination, `retinued-${hostTriple}.exe`)).catch(() => null), null)
+  assert.equal(await readFile(sources.retinued.source).then(sha256), sha256(sources.retinued.bytes))
 })

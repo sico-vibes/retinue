@@ -9,7 +9,7 @@ Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, worktree `C:\fx51`, private
 
 ## Change
 
-`crates/bloblex-daemon/src/remote/web.rs`
+`crates/retinue-daemon/src/remote/web.rs`
 
 - `StaticFiles::load` now maps `/` to `remote.html` when that file is present,
   and falls back to `index.html` for an older layout. Every collected file keeps
@@ -30,7 +30,7 @@ Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, worktree `C:\fx51`, private
 
 ## Tests
 
-`crates/bloblex-daemon/src/remote/tests.rs`
+`crates/retinue-daemon/src/remote/tests.rs`
 
 - `gateway_with_static_files` now builds the real packaged layout:
   `remote.html`, `remote.webmanifest`, `remote-sw.js`, `assets/app-AbC123.js`.
@@ -47,10 +47,10 @@ Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, worktree `C:\fx51`, private
 
 ## Gate results
 
-- `RUST_MIN_STACK=33554432 cargo test -p bloblex-daemon --no-fail-fast`
+- `RUST_MIN_STACK=33554432 cargo test -p retinue-daemon --no-fail-fast`
   - `292 passed; 0 failed` (lib), `1 passed; 0 failed` (other target). No
     FAILED, no panics. A focused `remote::` run first gave `76 passed; 0 failed`.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
   - `Finished` with no warnings or errors.
 
 ## Honesty notes

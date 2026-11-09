@@ -14,7 +14,7 @@ export const INSTRUCTION_HISTORY_LIMIT = 5
 /** Each saved text is capped so one giant brief cannot fill localStorage. */
 export const INSTRUCTION_TEXT_LIMIT = 20_000
 
-const KEY_PREFIX = 'bitbots.instructionHistory.'
+const KEY_PREFIX = 'retinue.instructionHistory.'
 const AGENT_ID = /^[A-Za-z0-9._:-]{1,128}$/
 
 function storage(): Storage | null {

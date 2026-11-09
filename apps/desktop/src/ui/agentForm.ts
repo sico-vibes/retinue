@@ -6,7 +6,7 @@ import { runtimeUsable, scalarLength } from './rosterSelectors'
 import { normalizeLook, sameLook, type BlobLook } from '../blob/look'
 import { providerBrand } from './providerBrand'
 import { entityNoun } from './vocabulary'
-import { themeStyle } from '../blob/bitbots'
+import { themeStyle } from '../blob/retinue'
 
 export interface AgentDraft {
   name: string
@@ -211,7 +211,7 @@ export function daemonCodeOf(reason: unknown) {
 }
 
 export function messageForDaemonCode(code: string, kind: DaemonFailureKind, options: { archived?: boolean; sentName?: boolean } = {}) {
-  if (code === 'unauthorized') return 'Bitbots could not reach the local daemon. Reconnect and try again.'
+  if (code === 'unauthorized') return 'Retinue could not reach the local daemon. Reconnect and try again.'
   if (code === 'conflict') {
     if (kind === 'session.new') return `This ${entityNoun(themeStyle())} is archived, so a new session cannot be started.`
     if (kind === 'agent.update' && options.archived) return `This ${entityNoun(themeStyle())} is archived and cannot be edited.`
@@ -231,7 +231,7 @@ export function messageForDaemonCode(code: string, kind: DaemonFailureKind, opti
     return 'The local daemon request failed.'
   }
   if (code === 'internal' && (kind === 'agent.create' || kind === 'agent.update' || kind === 'agent.delete')) {
-    return 'Bitbots could not save that change. Nothing was applied.'
+    return 'Retinue could not save that change. Nothing was applied.'
   }
   return 'The local daemon request failed.'
 }

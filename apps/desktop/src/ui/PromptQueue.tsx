@@ -188,7 +188,7 @@ export function ComposerStatus({ items, paused, sessionBusy, notice, nowMs, disa
         {problem && <p className="send-later-problem" role="alert">{problem}</p>}
         <button type="button" className="secondary-button small" onClick={scheduleCustom}>Schedule</button>
       </div>
-      <p className="composer-menu-note">Sends only while Bitbots is running and the computer is awake.</p>
+      <p className="composer-menu-note">Sends only while Retinue is running and the computer is awake.</p>
     </div>}
   </div>
 }

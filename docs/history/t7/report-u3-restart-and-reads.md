@@ -1,13 +1,13 @@
 # Lane U3 report: restart truth, ambiguous sends, orphaned cards, bounded reads
 
 Worktree `D:\u3`, branch `lane/u3`. Six `cargo check` runs of
-`cargo check -p bloblex-daemon -p bloblex-storage`, all clean and warning-free.
+`cargo check -p retinue-daemon -p retinue-storage`, all clean and warning-free.
 **No tests were run, added, edited or deleted. No git writes.**
 
-Files changed: `crates/bloblex-storage/src/lib.rs`, `crates/bloblex-daemon/src/queue.rs`,
-`crates/bloblex-daemon/src/retry.rs`, `crates/bloblex-daemon/src/main.rs` (boot and recovery
+Files changed: `crates/retinue-storage/src/lib.rs`, `crates/retinue-daemon/src/queue.rs`,
+`crates/retinue-daemon/src/retry.rs`, `crates/retinue-daemon/src/main.rs` (boot and recovery
 only), plus one dated lesson in
-`.claude/skills/bitbots-development/references/lessons.md` (required by `AGENTS.md`; it is
+`.claude/skills/retinue-development/references/lessons.md` (required by `AGENTS.md`; it is
 outside the brief's file list — drop that hunk if the Director does not want it in this
 lane). No test code touched, `update_session_model`, `session_prompt_impl`, `delegations.rs`,
 `questions.rs`, `team.rs`, `proposals.rs`, adapters, `apps/` and `docs/` untouched.
@@ -32,7 +32,7 @@ lane). No test code touched, `update_session_model`, `session_prompt_impl`, `del
 ### Verdict / change
 
 - **(a) Wording.** One stable constant, `QUEUE_AMBIGUOUS_ERROR` (`storage:1015`):
-  "Bitbots stopped while sending this. It may already have reached the agent. Check the
+  "Retinue stopped while sending this. It may already have reached the agent. Check the
   conversation before sending it again." The boot rewrite stores it (`storage:4879`).
 - **(b) Marker.** The boot rewrite also runs
   `params_json=json_set(params_json,'$.ambiguous',json('true'))` (`storage:4879`). It lives
@@ -141,7 +141,7 @@ mistake.
 - Boot (`main.rs:4492-4505`) emits, per closed card,
   `permission.resolved {"permissionId", "choice":"expired", "status":"expired",
   "reason":"daemon_restarted"}`, and appends **one** `team::note` per affected conversation:
-  "Bitbots restarted, so this request is no longer waiting. Ask again if it still matters."
+  "Retinue restarted, so this request is no longer waiting. Ask again if it still matters."
   (`{"kind":"permission_expired","reason":"daemon_restarted"}`). Deduplicated with a
   `HashSet` over `closedCards`, so one note per conversation even with several cards.
 - No session has a live provider handle at boot (`st.sessions` is built empty at
@@ -363,7 +363,7 @@ Nothing else was changed: no result shape, no cache.
 
 ## Existing tests that reference what I changed (names only)
 
-Storage (`crates/bloblex-storage/src/lib.rs`):
+Storage (`crates/retinue-storage/src/lib.rs`):
 `restart_recovery_keeps_native_resume_identity_and_expires_approvals` (asserts
 `recover_after_restart() == vec!["s"]`, which is why that function keeps its `Vec<String>`
 return and delegates to `recover_restart_state`), `session_delete_cascades_the_prompt_queue_and_restart_fails_interrupted_sends`
@@ -372,7 +372,7 @@ return and delegates to `recover_restart_state`), `session_delete_cascades_the_p
 `p8_previous_database_migrates_and_recovery_is_claimed_once`,
 `snapshot_after_reopen_excludes_archived_conversations`.
 
-Daemon (`crates/bloblex-daemon/src/main.rs`):
+Daemon (`crates/retinue-daemon/src/main.rs`):
 `p8_killed_turn_continues_on_activation_with_recap_after_resume_failure`,
 `send_now_moves_to_front_when_busy_and_sends_when_idle`,
 `a_failed_queue_item_can_be_retried_with_send_now`,
@@ -383,7 +383,7 @@ Daemon (`crates/bloblex-daemon/src/main.rs`):
 `restart_with_the_feature_off_drops_pending_retries_silently`.
 
 **Warning for the Director (one assertion is now stale, and I may not edit tests):**
-`crates/bloblex-storage/src/lib.rs:8371`, inside
+`crates/retinue-storage/src/lib.rs:8371`, inside
 `session_delete_cascades_the_prompt_queue_and_restart_fails_interrupted_sends`, asserts the
 exact old text "Interrupted by a restart. Check the conversation before sending again.".
 Item 1(a) changes that text on purpose, so the assertion must become
@@ -414,13 +414,13 @@ object (they index fields), and `recover_after_restart`'s type is unchanged.
 
 ---
 
-## Appendix — tails of each `cargo check -p bloblex-daemon -p bloblex-storage`
+## Appendix — tails of each `cargo check -p retinue-daemon -p retinue-storage`
 
 Run 1 (first, full dependency build; last 15 lines of 40 captured):
 
 ```
     Checking tower-http v0.6.11
-    Checking bloblex-security v0.1.0-beta.38 (D:\u3\crates\bloblex-security)
+    Checking retinue-security v0.1.0-beta.38 (D:\u3\crates\retinue-security)
     Checking regex v1.13.1
     Checking sha2 v0.10.9
     Checking rustls-pemfile v2.2.0
@@ -431,39 +431,39 @@ Run 1 (first, full dependency build; last 15 lines of 40 captured):
     Checking igd-next v0.18.0
     Checking axum v0.8.9
     Checking reqwest v0.12.28
-    Checking bloblex-storage v0.1.0-beta.38 (D:\u3\crates\bloblex-storage)
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\u3\crates\bloblex-daemon)
+    Checking retinue-storage v0.1.0-beta.38 (D:\u3\crates\retinue-storage)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\u3\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 18s
 ```
 
 Run 2 (after the queue DTO change; the command prints only what it rebuilt):
 
 ```
-    Checking bloblex-storage v0.1.0-beta.38 (D:\u3\crates\bloblex-storage)
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\u3\crates\bloblex-daemon)
+    Checking retinue-storage v0.1.0-beta.38 (D:\u3\crates\retinue-storage)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\u3\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.64s
 ```
 
 Run 3 (after the automation `continuation_pending` change):
 
 ```
-    Checking bloblex-storage v0.1.0-beta.38 (D:\u3\crates\bloblex-storage)
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\u3\crates\bloblex-daemon)
+    Checking retinue-storage v0.1.0-beta.38 (D:\u3\crates\retinue-storage)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\u3\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.29s
 ```
 
 Run 4 (after switching `queue_session` to `session_brief`):
 
 ```
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\u3\crates\bloblex-daemon)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\u3\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.53s
 ```
 
 Run 5 (after widening `session_brief`):
 
 ```
-    Checking bloblex-storage v0.1.0-beta.38 (D:\u3\crates\bloblex-storage)
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\u3\crates\bloblex-daemon)
+    Checking retinue-storage v0.1.0-beta.38 (D:\u3\crates\retinue-storage)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\u3\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 11.08s
 ```
 

@@ -97,7 +97,7 @@ impl Hotkey {
     /// The line the shell log keeps when a shortcut could not be taken.
     pub fn unavailable_message(self) -> String {
         match self {
-            Hotkey::Companion => "Bitbots companion shortcut unavailable: already in use.".to_owned(),
+            Hotkey::Companion => "Retinue companion shortcut unavailable: already in use.".to_owned(),
             Hotkey::Dictation => "Dictation shortcut unavailable: already in use.".to_owned(),
         }
     }
@@ -133,7 +133,7 @@ pub fn start(wanted: &[Hotkey]) -> (HotkeyManager, Presses) {
     let wanted = wanted.to_vec();
 
     let thread = std::thread::Builder::new()
-        .name("bitbots-hotkeys".to_owned())
+        .name("retinue-hotkeys".to_owned())
         .spawn(move || run(wanted, request_rx, press_tx, ready_tx))
         .expect("the hotkey thread should start");
 

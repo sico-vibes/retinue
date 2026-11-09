@@ -1,6 +1,6 @@
-// Bitbots: the pixel-robot skin for blobs. A blob keeps its own look (the
+// Retinue: the pixel-robot skin for blobs. A blob keeps its own look (the
 // silhouette and face the classic renderer draws); this is the extra styling
-// the robot heads read when Bitbots mode is on. Robots are drawn by the MIT
+// the robot heads read when Retinue mode is on. Robots are drawn by the MIT
 // licensed `robot-heads` library (github.com/fayazara/robot-heads).
 //
 // Only the outline and three colours are the user's to change. The antenna

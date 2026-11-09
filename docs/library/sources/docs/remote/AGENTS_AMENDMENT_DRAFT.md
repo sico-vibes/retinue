@@ -42,7 +42,7 @@ Three standing statements conflict with Remote mode as designed:
 > - **Tailscale is the only way in.** The gateway is published with
 >   `tailscale serve --bg --https=443` (or 8443). Never `tailscale funnel`, never
 >   `tailscale serve reset`, never a non-loopback bind. Turning Remote off removes only
->   Bitbots' own serve handler.
+>   Retinue's own serve handler.
 > - **Authorisation is per device.** Pairing needs a one-time code (5 minutes, 5 attempts) and
 >   the owner's approval on the desktop, where the owner picks the tier (`viewer`, `chat` or
 >   `operator`). The device gets a 256-bit token in an `HttpOnly; Secure; SameSite=Strict`
@@ -68,6 +68,6 @@ Three standing statements conflict with Remote mode as designed:
 1. Accept the amendment as written, or narrow it.
 2. Confirm that approvals from remote are **off** by default and that **Chat** is the
    preselected tier at approval.
-3. Confirm that Tailscale is the only supported transport (no Bitbots relay, no LAN listener).
+3. Confirm that Tailscale is the only supported transport (no Retinue relay, no LAN listener).
 4. Confirm that a device with no `Tailscale-User-Login` header (for example a tagged node) may
    still pair, with the cookie as its only proof.

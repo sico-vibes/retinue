@@ -1,7 +1,7 @@
 // Phase 1: per-project overrides. They are the owner's, set only here: a mode can
 // widen what bots may do in this project, and a setup script is code that runs on
 // this computer, so neither comes from a backup or the CEO. Phase 4: a repository's
-// `.bitbots.json` counts only once the owner has trusted that exact file, and never
+// `.retinue.json` counts only once the owner has trusted that exact file, and never
 // turns on Full access.
 import { useEffect, useState } from 'react'
 import type { ApprovalMode, Project, Runtime } from '../types'
@@ -55,7 +55,7 @@ function ModelRow({ runtime, value, onChange }: { runtime: Runtime; value: strin
 
 export type SharedSettings = { found: boolean; valid: boolean; problems: string[]; settings: { setupScript?: string | null; defaultBot?: string | null; approvalMode?: string | null }; hash: string | null; trusted: boolean; state: 'none' | 'untrusted' | 'trusted' | 'invalid' }
 
-/** The repository's `.bitbots.json`: what it asks for, and whether the owner trusts it. */
+/** The repository's `.retinue.json`: what it asks for, and whether the owner trusts it. */
 export function SharedSettingsSection({ projectId, hasOwnSettings }: { projectId: string; hasOwnSettings: boolean }) {
   const [shared, setShared] = useState<SharedSettings | null>(null)
   const [busy, setBusy] = useState(false)
@@ -79,8 +79,8 @@ export function SharedSettingsSection({ projectId, hasOwnSettings }: { projectId
   const asks = shared.settings ?? {}
   return <div className="project-shared" role="group" aria-label="Settings from the repository">
     <span className="project-settings-heading">Settings from the repository</span>
-    {shared.state === 'none' && <small className="project-settings-note">This repository has no <code>.bitbots.json</code>. Add one to share a setup script, default employee and approvals with your other machines.</small>}
-    {shared.state === 'invalid' && <small className="new-project-error" role="alert">The repository's <code>.bitbots.json</code> can't be read, so it's ignored.</small>}
+    {shared.state === 'none' && <small className="project-settings-note">This repository has no <code>.retinue.json</code>. Add one to share a setup script, default employee and approvals with your other machines.</small>}
+    {shared.state === 'invalid' && <small className="new-project-error" role="alert">The repository's <code>.retinue.json</code> can't be read, so it's ignored.</small>}
     {(shared.state === 'untrusted' || shared.state === 'trusted') && <>
       <ul className="project-shared-list">
         {asks.setupScript && <li><span>Setup script</span><code>{asks.setupScript}</code></li>}

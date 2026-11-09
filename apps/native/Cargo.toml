@@ -1,14 +1,14 @@
 [workspace]
 
 [package]
-name = "bitbots-native"
+name = "retinue-native"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Bitbots in Rust (GPUI): the native preview of the desktop app"
+description = "Retinue in Rust (GPUI): the native preview of the desktop app"
 
 [[bin]]
-name = "bitbots-native"
+name = "retinue-native"
 path = "src/main.rs"
 
 [dependencies]
@@ -35,7 +35,7 @@ windows = { version = "0.57", features = ["Data_Xml_Dom", "UI_Notifications"] }
 # Slice 5: on-device dictation. The engine (sherpa-onnx + cpal) lives behind its
 # `native` feature; the catalog, the lifecycle and the resampling are the same
 # ones the installed app uses, so a model it already downloaded is reused.
-bloblex-speech = { path = "../../crates/bloblex-speech", features = ["native"] }
+retinue-speech = { path = "../../crates/retinue-speech", features = ["native"] }
 # Slice 5: the companion's cues are synthesised, never files. `cpal` is the same
 # audio backend the speech engine uses, addressed directly so a cue does not
 # wait for the dictation stack.

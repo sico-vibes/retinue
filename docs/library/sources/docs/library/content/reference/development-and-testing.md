@@ -1,7 +1,7 @@
 # Development and testing
 
-> **What this is:** how to build, run and check Bitbots on Windows, and the lane rules this repository uses.
-> **Status:** current; from `README.md`, `docs/guides/windows-development.md` and the AGENTS.md amendments of 12 to 22 October 2026. Test counts are not recorded here; see the [session handoff](../../../operations/session-handoff.md) and the verification notes in the repository skill (`.claude/skills/bitbots-development/references/verification.md`).
+> **What this is:** how to build, run and check Retinue on Windows, and the lane rules this repository uses.
+> **Status:** current; from `README.md`, `docs/guides/windows-development.md` and the AGENTS.md amendments of 12 to 22 October 2026. Test counts are not recorded here; see the [session handoff](../../../operations/session-handoff.md) and the verification notes in the repository skill (`.claude/skills/retinue-development/references/verification.md`).
 > **Last updated:** 2026-10-22
 
 ## Purpose
@@ -26,11 +26,11 @@ npm install
 npm run desktop:dev
 ```
 
-`desktop:dev` builds `bitbotsd.exe` and `bitbots-hook.exe`, stages them as Tauri's target-triple-suffixed sidecars, and starts the native app with Vite. It defaults to `target/desktop-dev` and honours an explicit `CARGO_TARGET_DIR`.
+`desktop:dev` builds `retinued.exe` and `retinue-hook.exe`, stages them as Tauri's target-triple-suffixed sidecars, and starts the native app with Vite. It defaults to `target/desktop-dev` and honours an explicit `CARGO_TARGET_DIR`.
 
-The launcher picks a free loopback port from 1420–1435 and passes it to Vite, Tauri and the development CSP. It uses the development identifier `com.bitbots.desktop.dev`, which separates development app data from the installed app. The launcher also defaults `BLOBLEX_DB_PATH` to `dev-data/bloblex.db` under its Cargo target, retaining an explicit override (20 October 2026).
+The launcher picks a free loopback port from 1420–1435 and passes it to Vite, Tauri and the development CSP. It uses the development identifier `com.retinue.desktop.dev`, which separates development app data from the installed app. The launcher also defaults `RETINUE_DB_PATH` to `dev-data/retinue.db` under its Cargo target, retaining an explicit override (20 October 2026).
 
-Never point development or tests at `%LOCALAPPDATA%\Bitbots`. That is the user's real store. A test that writes there is a bug.
+Never point development or tests at `%LOCALAPPDATA%\Retinue`. That is the user's real store. A test that writes there is a bug.
 
 ## The browser preview
 
@@ -45,7 +45,7 @@ Then open:
 | URL | Surface |
 | --- | --- |
 | `http://127.0.0.1:5190/` | Main window. |
-| `/?style=bitbots&theme=light` | A look and theme. |
+| `/?style=retinue&theme=light` | A look and theme. |
 | `/?preview-settings` | Settings sheet. |
 | `/?companion&mode=home&view=chat` | Companion. |
 | `/preview.html` | Art sheet, every art and mood. |
@@ -79,14 +79,14 @@ Backend tests need a private Cargo target and a fresh database:
 
 ```powershell
 $env:CARGO_TARGET_DIR = 'target/qa-desktop'
-cargo test --workspace --exclude bloblex-desktop
+cargo test --workspace --exclude retinue-desktop
 ```
 
 For a package-specific check:
 
 ```powershell
-cargo check -p bloblex-desktop --lib
-cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings
+cargo check -p retinue-desktop --lib
+cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings
 ```
 
 A default test pass does not mean a live provider path ran. A live smoke is opt-in and may consume provider quota; label its result as such.
@@ -139,7 +139,7 @@ A browser screenshot proves the React tree renders with fixtures. It does not pr
 
 - **Do not commit from a lane.** The Director commits after review and gates.
 - **Do not reuse `node_modules` through a junction.** It breaks Vite's temp files and package resolution.
-- **Do not let a test write the real database.** Set `BLOBLEX_DB_PATH`.
+- **Do not let a test write the real database.** Set `RETINUE_DB_PATH`.
 - **Do not treat a screenshot as acceptance.** Label it as a preview result.
 - **A live provider check costs quota.** Ask before running one and record it separately.
 - **The app may already be running.** Rebuilding does not update a running production process; a locked executable is the usual symptom.

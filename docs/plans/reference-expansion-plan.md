@@ -30,7 +30,7 @@ This plan records the accepted expansion as a whole. It does not certify that an
 - Follow public-release compatibility. Reuse suitable MIT/Apache material with notices and provenance; implement OpenBot-derived concepts independently where its license/restrictions do not permit copying.
 - Remote policy stays deny-by-default and content-safe. Never put user prompts, messages, goals, connector results or secrets into activity events. Do not grant new remote methods until the shared tier policy and parity checks are reviewed.
 - All unattended work has a runtime cap, bounded concurrency, global pause and a permission path that never bypasses owner approvals.
-- Run Windows native builds from an apostrophe-free short path and give each worktree its own Cargo target. Use isolated `BLOBLEX_DB_PATH` and disposable projects for integration tests. Do not restart the installed app or touch live user data without owner direction.
+- Run Windows native builds from an apostrophe-free short path and give each worktree its own Cargo target. Use isolated `RETINUE_DB_PATH` and disposable projects for integration tests. Do not restart the installed app or touch live user data without owner direction.
 
 ## State vocabulary
 

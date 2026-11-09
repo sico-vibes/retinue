@@ -1,4 +1,4 @@
-# Bitbots Components
+# Retinue Components
 
 > **What this is:** The parts every screen is built from, and when to use each one. Look at them live in the inspector, under Design system.
 > **Status:** current

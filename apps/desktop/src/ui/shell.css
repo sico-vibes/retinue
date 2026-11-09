@@ -603,7 +603,7 @@
 .archived-bot-skeleton-action .skeleton-block { width: 84px; height: 28px; border-radius: var(--radius-sm); }
 .archived-bot-skeleton-icon .skeleton-block { width: 32px; height: 32px; border-radius: var(--radius-sm); }
 
-/* Wave 14: a message sent through the Bitbots MCP names its sender above the bubble. */
+/* Wave 14: a message sent through the Retinue MCP names its sender above the bubble. */
 .message-via { display: inline-flex; align-items: center; gap: 4px; align-self: flex-end; margin: 0 6px 3px; color: var(--text-3); font-size: var(--fs-2xs); }
 
 
@@ -650,3 +650,8 @@
 .message-author-line { margin: 0 0 4px 2px; display: flex; align-items: baseline; gap: 8px; color: var(--text-1); font-size: var(--fs-sm); }
 .message-author-line strong { font-weight: 600; }
 .message-author-line time { color: var(--text-3); font-size: var(--fs-2xs); }
+
+/* An image with a dark-theme and a light-theme version (the Retinue tiles). */
+.theme-on-light { display: none; }
+:root[data-theme="light"] .theme-on-dark { display: none; }
+:root[data-theme="light"] .theme-on-light { display: revert; }

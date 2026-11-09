@@ -141,7 +141,7 @@ export function PullRequestDialog({ sessionId, repository, botName, busy, onSend
       <h2 id="pr-dialog-title">Create a pull request?</h2>
       <p>{botName} will look at these changes, commit the ones that belong together, push the branch and open a pull request with the tools installed on this computer. It sends you the link, or says what stopped it.</p>
       {draft?.existingUrl && !askInstead && <p className="pr-existing">This branch already has an open pull request. <button type="button" className="rail-link" onClick={() => void openSafeLink(draft.existingUrl as string)}>Open it on GitHub</button></p>}
-      {reason && <p className="pr-dialog-note">Bitbots can't open this one itself: {reason}</p>}
+      {reason && <p className="pr-dialog-note">Retinue can't open this one itself: {reason}</p>}
       <dl className="pr-dialog-facts">
         <div><dt>Repository</dt><dd title={root}>{folder}</dd></div>
         <div><dt>Branch</dt><dd>{repository.detached ? 'Detached HEAD' : repository.branch ?? 'Unknown'}</dd></div>

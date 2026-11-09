@@ -45,17 +45,17 @@ export function ConnectionBanner({ state, attempts = 0, failed = false, onRetry 
   }, [state])
   if (supervisor?.state === 'gave_up') {
     const tryAgain = async () => { setRestarting(true); try { await restartDaemonNow() } catch { /* the next reading says how it went */ } finally { setRestarting(false); onRetry() } }
-    return <div className="connection-banner" role="alert" data-state="failed"><span>The Bitbots service keeps stopping, so it was not restarted again.</span><button type="button" className="ghost-button small" disabled={restarting} onClick={() => void tryAgain()}>{restarting ? 'Starting…' : 'Try again'}</button></div>
+    return <div className="connection-banner" role="alert" data-state="failed"><span>The Retinue service keeps stopping, so it was not restarted again.</span><button type="button" className="ghost-button small" disabled={restarting} onClick={() => void tryAgain()}>{restarting ? 'Starting…' : 'Try again'}</button></div>
   }
   if (supervisor?.state === 'restarting') {
-    return <div className="connection-banner" role="status" aria-live="polite" data-state="reconnecting"><LoaderCircle size={13} className="spinning" aria-hidden="true" /><span>The Bitbots service stopped. Restarting it…{supervisor.attempt > 1 ? ` Attempt ${supervisor.attempt}` : ''}</span></div>
+    return <div className="connection-banner" role="status" aria-live="polite" data-state="reconnecting"><LoaderCircle size={13} className="spinning" aria-hidden="true" /><span>The Retinue service stopped. Restarting it…{supervisor.attempt > 1 ? ` Attempt ${supervisor.attempt}` : ''}</span></div>
   }
   if (state === 'connected') {
     if (!backOnline) return null
     return <div className="connection-banner" role="status" aria-live="polite" data-state="back-online"><span className="connection-dot" aria-hidden="true" />Back online</div>
   }
   if (failed) {
-    return <div className="connection-banner" role="status" aria-live="polite" data-state="failed"><span>Bitbots could not be reached</span><button type="button" className="ghost-button small" onClick={onRetry}>Retry now</button></div>
+    return <div className="connection-banner" role="status" aria-live="polite" data-state="failed"><span>Retinue could not be reached</span><button type="button" className="ghost-button small" onClick={onRetry}>Retry now</button></div>
   }
-  return <div className="connection-banner" role="status" aria-live="polite" data-state="reconnecting"><LoaderCircle size={13} className="spinning" aria-hidden="true" /><span>Reconnecting to Bitbots…{attempts > 3 ? ` Attempt ${attempts}` : ''}</span></div>
+  return <div className="connection-banner" role="status" aria-live="polite" data-state="reconnecting"><LoaderCircle size={13} className="spinning" aria-hidden="true" /><span>Reconnecting to Retinue…{attempts > 3 ? ` Attempt ${attempts}` : ''}</span></div>
 }

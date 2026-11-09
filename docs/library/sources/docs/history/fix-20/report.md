@@ -56,7 +56,7 @@ Rust untouched (`git diff --name-only -- '*.rs'` empty), so no cargo/clippy gate
   `subscribeSoundPrefs`, `saveSoundsEnabled`, `saveSoundVolume(volume, preview)` and
   `previewSoundVolume`. Both the companion settings view (`App.tsx`) and the main Settings
   sheet (`SettingsSheet.tsx`) read and write through it and subscribe to it, and it still
-  broadcasts the same `bloblex-sounds-changed` / `bloblex-sound-volume-changed` events for the
+  broadcasts the same `retinue-sounds-changed` / `retinue-sound-volume-changed` events for the
   other window, so the two controls cannot disagree.
 - Tests: `FIX20.companion.mounted.test.tsx` ("shows the short mood label…", "keeps the
   companion switch and the main Settings sheet on one value"). Existing

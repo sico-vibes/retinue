@@ -2,7 +2,7 @@
 //! from the CEO (one card per candidate, all of one `propose_hires` call sharing
 //! a `groupId`) and a `bot` it proposes to create.
 //!
-//! Every other proposal, and every question, still says to open Bitbots.
+//! Every other proposal, and every question, still says to open Retinue.
 //! Calls `proposal.decide` with the proposal's own id, exactly as the React card.
 
 use gpui::{div, prelude::*, px, AnyElement, Context, FontWeight, SharedString};

@@ -48,7 +48,7 @@ vi.mock('../tauri', () => ({
   listenForOpenSettings: h.listenForOpenSettings,
   openProjectFolder: vi.fn(), selectLocalFile: h.selectLocalFile, inspectLocalFile: h.inspectLocalFile,
   openInEditor: vi.fn(), revealInExplorer: vi.fn(), resolveProjectFile: vi.fn(),
-  quitBloblex: vi.fn(), setCloseToTray: vi.fn(),
+  quitRetinue: vi.fn(), setCloseToTray: vi.fn(),
   updatesGetState: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesSetPreferences: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesCheck: async () => ({ status: 'up_to_date' as const, checkedAt: '2026-10-02T00:00:00.000Z' }),
@@ -76,7 +76,7 @@ vi.mock('../blob/BlobCanvas', async () => {
 })
 
 import { App } from './App'
-import { setThemeStyle } from '../blob/bitbots'
+import { setThemeStyle } from '../blob/retinue'
 import { SettingsSheet } from './SettingsSheet'
 import { resetSoundPrefs } from './soundPrefs'
 import type { Agent, Runtime, Session, Snapshot } from '../types'
@@ -173,7 +173,7 @@ function configure(snapshotValue = snapshot()) {
 
 beforeEach(() => {
   // These cover the classic island (Stone; Frost was retired on 27 October 2026). Haze draws its own shell (App.hazeCompanion.mounted.test.tsx).
-  setThemeStyle('blobots')
+  setThemeStyle('stone')
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-10-02T12:00:00.000Z'))
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
@@ -265,7 +265,7 @@ describe('C6 offline banner and dismissible error', () => {
 
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); await settleMicrotasks() })
     const failed = view.host.querySelector('.connection-banner[data-state="failed"]')
-    expect(failed?.textContent).toContain('Bitbots could not be reached')
+    expect(failed?.textContent).toContain('Retinue could not be reached')
     const before = h.ensureDaemon.mock.calls.length
     const retry = [...(failed?.querySelectorAll('button') ?? [])].find((item) => item.textContent === 'Retry now')!
     await act(async () => { retry.click(); await settleMicrotasks() })

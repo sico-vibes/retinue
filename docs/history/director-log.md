@@ -34,7 +34,7 @@
 
 ## 2026-10-02 - Task 5 (Phase 3 UI spec, impl-b) review
 - `docs/history/phases/phase-3-spec.md` (607 lines, 155 cited lines) written by `impl-b` (Cursor grok-4.7-high). Director re-computed all 12 swatch contrast ratios against the `#111111` sidebar token: they match to two decimals. The four existing provider colours are kept as coral/blue/violet/mint so migrated default agents look unchanged.
-- Decisions accepted: confirmed (not optimistic) saves; no restore control because Phase 2a has no restore RPC; roster ordered by runtime then `sortOrder`; execution fields shown disabled until 2b; every Bitbots `session.new` sends `agentId`.
+- Decisions accepted: confirmed (not optimistic) saves; no restore control because Phase 2a has no restore RPC; roster ordered by runtime then `sortOrder`; execution fields shown disabled until 2b; every Retinue `session.new` sends `agentId`.
 - Open product question for the user (not a blocker): Phase 2a creates default agents only at migration time, so a runtime discovered later (for example a newly installed CLI) has no agent until the user creates one through "Create blob". Decide whether the daemon should auto-create a default agent when a new runtime is first discovered.
 - Dependency note: the spec parses daemon error codes from the Tauri bridge string `"${code}: ${message}"` (`apps/desktop/src-tauri/src/lib.rs`); if the Phase 2a diff changes that string, the Phase 3 error parser must follow.
 
@@ -52,7 +52,7 @@
 - All fixes were applied as a delta on the same Cursor session and re-verified by the Director: typecheck clean, vitest 21 files / 113 tests (was 107), build ok; the Escape mutation was re-run by the Director in the sandbox and is now caught by two tests (2 fail, 111 pass), file restored to identical.
 - Director visual check in the fixture-preview harness (`vite.preview.config.ts`, no native app, no daemon): roster colours per blob (coral/blue/lemon/violet), runtime grouping and labels, create flow with validation, swatch selection ring, custom colour field, "later update" wording for unavailable execution settings, context menu with focus return on Escape, console clean.
 - Accepted deviations (recorded in docs/history/phases/phase-3-spec.md): extra component props, extra "Archive blob" button on the Settings card, benign extra `agent.get` after save, per-option status dot replaced by a dot beside the runtime select.
-- NOT done and needs the user: the native smoke test (section 9 of the spec). Not run because it launches the real app and windows; it must use an isolated `BLOBLEX_DB_PATH`.
+- NOT done and needs the user: the native smoke test (section 9 of the spec). Not run because it launches the real app and windows; it must use an isolated `RETINUE_DB_PATH`.
 - Environment note for future runs: worktrees reached node_modules through junctions (removed with `rmdir` only). Tracked build artifact `apps/desktop/tsconfig.tsbuildinfo` is rewritten by `tsc -b`; restore it with `git checkout -- apps/desktop/tsconfig.tsbuildinfo` before committing (candidate for .gitignore).
 
 ## 2026-10-02 - Tasks 7 and 8 (Phase 2b and Phase 4 specs) review

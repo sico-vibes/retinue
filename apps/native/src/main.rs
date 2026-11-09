@@ -1,5 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-//! Bitbots in Rust (GPUI): the main window, the companion and dictation.
+//! Retinue in Rust (GPUI): the main window, the companion and dictation.
 //!
 //! The main window is slice 1 and 2's (an installable core plus the look, the
 //! team and new projects). Slice 5 adds the floating companion window, its sounds
@@ -42,7 +42,7 @@ fn main() {
         cx.bind_keys(ui::text_input::key_bindings());
         cx.bind_keys(ui::search::key_bindings());
 
-        let db_path = std::env::var_os("BLOBLEX_DB_PATH")
+        let db_path = std::env::var_os("RETINUE_DB_PATH")
             .map(std::path::PathBuf::from)
             .unwrap_or_else(paths::native_db_path);
         trace::log(format!("starting {} (database: {})", paths::PRODUCT_NAME, db_path.display()));
@@ -178,10 +178,10 @@ fn main() {
 
         // A smoke run closes itself, so the close path (and the daemon shutdown
         // it triggers) can be checked without a person at the keyboard.
-        if let Some(seconds) = std::env::var("BITBOTS_NATIVE_SMOKE_SECS").ok().and_then(|value| value.parse::<u64>().ok()) {
+        if let Some(seconds) = std::env::var("RETINUE_NATIVE_SMOKE_SECS").ok().and_then(|value| value.parse::<u64>().ok()) {
             // The companion's hide and show, without a keyboard: the live check
             // cannot press Ctrl+Alt+B when another app already owns it.
-            let toggle_at = std::env::var("BITBOTS_NATIVE_TOGGLE_COMPANION_AT").ok().and_then(|value| value.parse::<u64>().ok());
+            let toggle_at = std::env::var("RETINUE_NATIVE_TOGGLE_COMPANION_AT").ok().and_then(|value| value.parse::<u64>().ok());
             if let Some(at) = toggle_at {
                 let companion_for_smoke = companion_window.entity(cx).expect("the companion view").clone();
                 let hwnd = companion_hwnd;
@@ -221,7 +221,7 @@ fn main() {
                 .detach();
             }
             let dictation_for_smoke = dictation.clone();
-            let dictation_probe = std::env::var("BITBOTS_NATIVE_START_DICTATION").is_ok();
+            let dictation_probe = std::env::var("RETINUE_NATIVE_START_DICTATION").is_ok();
             cx.spawn(async move |cx| {
                 if dictation_probe {
                     cx.background_executor().timer(std::time::Duration::from_millis(1_500)).await;

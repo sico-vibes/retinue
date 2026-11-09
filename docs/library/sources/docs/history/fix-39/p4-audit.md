@@ -17,7 +17,7 @@ I read the diff and the changed code and did not re-run the gates. The report's 
 | Mirrored pill eyes at rest | Done. `faceFit` (`forms.ts:225-238`) gives two equal, upright eyes mirrored about the face centre. The old `eye.lean`, `eye.scale`, `eye.stretch`, `eye.dy`, `gaze.x` and `eye.lean2` pins are ignored. The test pins them at both extremes. |
 | Old stored names migrate | Done. `index.ts:45,58` maps round and sun to circle, organic and cat to pebble, boxy to squircle. `Object.hasOwn` plus a frozen map rejects `constructor` and `__proto__`, and the test covers that. Seed, traits and `bot` survive. |
 | Shuffle never changes the shape | Done. `index.ts:121` keeps the shape and `bot` and drops the pins. The `anyShape` parameter and `shapeForPosition` are gone, and no caller still passes `true`. |
-| Surprise me never changes the shape; changes eyes and colour | Done in classic mode. `LookEditor.tsx:57-65` picks a new swatch different from the current one, and it works when the current colour is a hex. In Bitbots mode `randomBot(shape)` keeps the resolved outline, inferred or explicit. |
+| Surprise me never changes the shape; changes eyes and colour | Done in classic mode. `LookEditor.tsx:57-65` picks a new swatch different from the current one, and it works when the current colour is a hex. In Retinue mode `randomBot(shape)` keeps the resolved outline, inferred or explicit. |
 | Chooser and preview gallery | Done. Four columns, with the CSS (`blobPage.css:156`, plus the mobile rule), arrow-key step and test all agreeing. The gallery uses the eight names. |
 | Templates and defaults | Done. `botTemplates.ts`, `agentForm.ts`, `blobShare.ts`, `agentLook` and `MASCOT_LOOK` all use the new names. |
 | Blobatar credit kept | Done. The header comment in `forms.ts` is updated and still credits blobatar. |
@@ -54,11 +54,11 @@ I read the diff and the changed code and did not re-run the gates. The report's 
 
 ## Scope
 
-- Everything outside the P4 file list is listed in the report and is a one-line change to a new name or to the atomic callback. `App.agent.mounted.test.tsx` is shared with P1, so keep P1's unrelated changes when merging. `bitbots.css`, Rust, `tiers.json` and the hot files (`App.tsx`, `TeamSidebar.tsx`, `main.rs`, `team.rs`, `storage/lib.rs`) are untouched.
+- Everything outside the P4 file list is listed in the report and is a one-line change to a new name or to the atomic callback. `App.agent.mounted.test.tsx` is shared with P1, so keep P1's unrelated changes when merging. `retinue.css`, Rust, `tiers.json` and the hot files (`App.tsx`, `TeamSidebar.tsx`, `main.rs`, `team.rs`, `storage/lib.rs`) are untouched.
 - Dead types remain in `forms.ts` (`CatFeatures`, `glint`, `features`). The engine still reads them (`blobEngine.ts:647,736`), so leave them.
 
 ## Security and visual rules
 
 - No daemon method, event, log or payload changed, so no `tiers.json` row is needed. No credentials or conversation text are touched.
 - No sparkle or star icon was added. The editor keeps `Dices` and `Shuffle`.
-- Classic and Bitbots modes both work in the editor, and the gallery takes `?style=bitbots&theme=light|dark`. This is unverified by eye (see the report), so the Director's screenshot check against the reference stays open.
+- Classic and Retinue modes both work in the editor, and the gallery takes `?style=retinue&theme=light|dark`. This is unverified by eye (see the report), so the Director's screenshot check against the reference stays open.

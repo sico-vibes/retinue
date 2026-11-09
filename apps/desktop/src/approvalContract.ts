@@ -61,9 +61,9 @@ export function visibleApprovalMode(draftMode: ApprovalMode | null | undefined, 
 }
 
 export function approvalDescription(mode: ApprovalMode | null) {
-  if (mode === 'accept_edits') return 'Bitbots approves reading and editing files inside the project and asks about everything else, including every command.'
-  if (mode === 'auto') return 'Bitbots approves low-risk actions inside the project and asks about everything else. Budgets, cancel, and Pause all still apply.'
-  if (mode === 'bypass') return 'Bitbots approves every action without asking, and may launch the provider so it does not ask either. Budgets, cancel, and Pause all still stop the work.'
+  if (mode === 'accept_edits') return 'Retinue approves reading and editing files inside the project and asks about everything else, including every command.'
+  if (mode === 'auto') return 'Retinue approves low-risk actions inside the project and asks about everything else. Budgets, cancel, and Pause all still apply.'
+  if (mode === 'bypass') return 'Retinue approves every action without asking, and may launch the provider so it does not ask either. Budgets, cancel, and Pause all still stop the work.'
   if (mode === 'ask') return 'Every permission request waits for you.'
   return 'Use the default from Settings › Approvals.'
 }

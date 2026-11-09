@@ -1,6 +1,6 @@
-# Brief: Bitbots in Rust (GPUI), slice 3 — everyday conversations and bots
+# Brief: Retinue in Rust (GPUI), slice 3 — everyday conversations and bots
 
-**Lane:** Gogo (OpenCode Go DeepSeek V4.1 Flash, high), in its own git worktree, assigned through the Bitbots MCP. The Director (Claude) mentors you, reviews every diff, screenshots the window, runs the gates and commits.
+**Lane:** Gogo (OpenCode Go DeepSeek V4.1 Flash, high), in its own git worktree, assigned through the Retinue MCP. The Director (Claude) mentors you, reviews every diff, screenshots the window, runs the gates and commits.
 
 **Goal:** after this slice the owner can use the Rust app for a whole working day of chatting with bots without opening the React app. Slices 1 and 2 (`apps/native`, commits `f5424db` and `4b677f3`) are the base.
 
@@ -11,7 +11,7 @@
 - If something is impossible at the pinned GPUI rev, pick the smallest working alternative and say so. Stop and ask on decisions that are the owner's.
 - Build output stays on C: (`CARGO_TARGET_DIR=C:\bbn\target`).
 
-**Read first:** `.claude/skills/bitbots-development/references/native-gpui.md`, and the 2026-11-08 native entry at the end of `references/lessons.md`. It covers `.truncate()`, `min_h(0)` scroll areas and explicit line heights, the three things the last review caught. Apply them everywhere you add UI.
+**Read first:** `.claude/skills/retinue-development/references/native-gpui.md`, and the 2026-11-08 native entry at the end of `references/lessons.md`. It covers `.truncate()`, `min_h(0)` scroll areas and explicit line heights, the three things the last review caught. Apply them everywhere you add UI.
 
 ## 0. Shared primitives first
 
@@ -36,7 +36,7 @@ Port `ui/ComposerControls.tsx`, `ui/SessionExecutionControls.tsx`, `ui/PromptQue
 ## 2. Answering everything in the conversation
 
 - **Approvals:** port `ui/ApprovalCard.tsx`, `approvalUi.tsx` and `PermissionChoiceButton.tsx`, so the card offers every choice the React card offers (allow once, always for this, deny), shows the tool and its input summary, and shows the diff for edits if the React card does.
-- **Questions:** port whatever renders the bot's questions (`AskUserQuestion`-style; find it from `App.tsx`), with options, multi-select and free text, then submit. "Open this in Bitbots to answer" should no longer appear anywhere.
+- **Questions:** port whatever renders the bot's questions (`AskUserQuestion`-style; find it from `App.tsx`), with options, multi-select and free text, then submit. "Open this in Retinue to answer" should no longer appear anywhere.
 - **Other proposal kinds** still unported: list which they are in your report. Port each one that only needs a card and Approve/Skip.
 
 ## 3. Messages
@@ -91,7 +91,7 @@ Port `ui/BotWizard.tsx`, `ui/BotEditor.tsx`, `ui/BlobSettings.tsx` and `ui/LookP
 - the wizard's validation;
 - the popover close rules, as a pure state function.
 
-**Gates:** in `apps/native`, `cargo build --release`, `cargo test` and `cargo clippy --all-targets -- -D warnings`. Also `cargo check -p bloblex-daemon`.
+**Gates:** in `apps/native`, `cargo build --release`, `cargo test` and `cargo clippy --all-targets -- -D warnings`. Also `cargo check -p retinue-daemon`.
 
 **Live check** against a temporary database:
 1. create a bot through the wizard (RPC-level is fine);

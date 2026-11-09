@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Every bot face in Bitbots goes through one component, `BlobCanvas`. It takes the same props everywhere: colour, size, mood, label and an optional look. The renderer is chosen by the bot's art, falling back to the app look. That is what keeps the sidebar, the conversation header, the companion and the character sheet consistent.
+Every bot face in Retinue goes through one component, `BlobCanvas`. It takes the same props everywhere: colour, size, mood, label and an optional look. The renderer is chosen by the bot's art, falling back to the app look. That is what keeps the sidebar, the conversation header, the companion and the character sheet consistent.
 
 Art is not UI chrome. A look never draws a bot; it only decides the default.
 
@@ -38,8 +38,8 @@ A `style` prop overrides the document look for onboarding and look previews. An 
 | Id | Label | Renderer | Default for |
 | --- | --- | --- | --- |
 | `robot` | 3D robot | Canvas, the heavy shaded robot | Explicit choice |
-| `robot-pop` | 2D robot | Inline SVG + CSS, four outlines | Bitbots |
-| `blob` | Glossy | Canvas blob engine, eight shapes | Blobots |
+| `robot-pop` | 2D robot | Inline SVG + CSS, four outlines | Retinue |
+| `blob` | Glossy | Canvas blob engine, eight shapes | Stone |
 | `painted` | Hand-painted | Inline SVG + CSS, twelve bodies | — |
 
 The robot arts share one head language but change the eyes, not the whole head:
@@ -78,7 +78,7 @@ interface BlobLook {
 - **shape** is one of eight: Circle, Pebble, Squircle, Capsule, Triangle, Hexagon, Cloud, Droplet. Older names migrate: `round` and `sun` become Circle, `organic` and `cat` become Pebble, `boxy` becomes Squircle.
 - **seed** fills every trait the user has not pinned. A bot with no look uses its id as the seed, so its face is stable across sessions.
 - **traits** are at most 48 pinned numeric positions with validated keys. They are clamped to 0–0.999999 on import.
-- **bot** is the robot outline and colours for the Bitbots look.
+- **bot** is the robot outline and colours for the Retinue look.
 - **art** is the explicit art.
 - **paint** is the hand-painted body; omitted, it is derived from the blob shape.
 

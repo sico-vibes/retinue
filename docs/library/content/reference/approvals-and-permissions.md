@@ -18,9 +18,9 @@ The mode never raises itself. A migration, discovery, an import or provider outp
 | `auto` | The daemon approves LOW-RISK actions; the owner answers the rest. | Global default, per bot, per conversation (pin). | No |
 | `bypass` | The daemon approves everything, and the provider may be launched in its own no-prompt mode. | The bot editor with a typed confirmation, or an explicit conversation pin. The UI calls it **Full access**. The global default cannot be bypass. | No |
 
-The global key is `permissions.default_mode` and accepts only `ask` or `auto` (`crates/bloblex-daemon/src/main.rs:1368`). A per-bot `approvalMode` is `ask`, `auto`, `bypass` or null (inherit). A conversation can pin `ask`, `auto`, `bypass` or null; null removes the pin (`set_session_permissions`, `crates/bloblex-daemon/src/main.rs:2720-2728`).
+The global key is `permissions.default_mode` and accepts only `ask` or `auto` (`crates/retinue-daemon/src/main.rs:1368`). A per-bot `approvalMode` is `ask`, `auto`, `bypass` or null (inherit). A conversation can pin `ask`, `auto`, `bypass` or null; null removes the pin (`set_session_permissions`, `crates/retinue-daemon/src/main.rs:2720-2728`).
 
-Effective mode = conversation pin, else bot override, else global default (`crates/bloblex-daemon/src/main.rs:1459-1466`). It is re-evaluated on every permission request and every turn start, so a change affects new requests immediately. A mode that changes provider launch flags takes effect at the next turn start, through the adapter's restart or resume path.
+Effective mode = conversation pin, else bot override, else global default (`crates/retinue-daemon/src/main.rs:1459-1466`). It is re-evaluated on every permission request and every turn start, so a change affects new requests immediately. A mode that changes provider launch flags takes effect at the next turn start, through the adapter's restart or resume path.
 
 ## Who may change what
 
@@ -33,7 +33,7 @@ Effective mode = conversation pin, else bot override, else global default (`crat
 | An automation run | Always plan or auto, whatever the bot says. |
 | A remote device | Operator tier may answer a request, only with approvals from remote on. It may not change a mode. |
 
-The older approval-mode contract says bypass is "only settable per blob" (`docs/reference/approval-modes.md`, modes). The daemon's `set_session_permissions` accepts a conversation pin of `bypass` as well (`crates/bloblex-daemon/src/main.rs:2725-2729`); the code is authoritative here, and the interface still requires an explicit choice.
+The older approval-mode contract says bypass is "only settable per blob" (`docs/reference/approval-modes.md`, modes). The daemon's `set_session_permissions` accepts a conversation pin of `bypass` as well (`crates/retinue-daemon/src/main.rs:2725-2729`); the code is authoritative here, and the interface still requires an explicit choice.
 
 ## The auto classifier
 
@@ -86,7 +86,7 @@ A bypass bot is never shown as ordinary.
 ## RPC and events
 
 - `permissions.policy.get` returns `{defaultMode, perAgent:[{agentId, mode, effectiveMode}]}`.
-- `permission.reply {permissionId, choice}` sends an opaque provider-supported choice. The adapter must acknowledge it before Bitbots marks the request resolved.
+- `permission.reply {permissionId, choice}` sends an opaque provider-supported choice. The adapter must acknowledge it before Retinue marks the request resolved.
 - `session.permissions.set` pins a conversation; `null` removes the pin and follows the bot again.
 - `agent.create/update` accept `approvalMode`, with null meaning inherit.
 - `settings.set` of `permissions.default_mode` validates ask or auto and emits `settings.changed` only on a real change.

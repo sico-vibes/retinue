@@ -555,9 +555,9 @@ fn file_chip(file: &FileRef, ctx: &RowContext) -> AnyElement {
     }
 
     let note = if !inside {
-        Some("This file is outside the project, so Bitbots does not show it. The agent can open it only if its permissions allow.")
+        Some("This file is outside the project, so Retinue does not show it. The agent can open it only if its permissions allow.")
     } else if !can_preview {
-        Some("Bitbots cannot show this kind of file. The agent can open it by its path.")
+        Some("Retinue cannot show this kind of file. The agent can open it by its path.")
     } else {
         None
     };
@@ -879,7 +879,7 @@ mod tests {
 
     #[test]
     fn a_file_by_path_becomes_a_chip_and_the_sentence_leaves_the_body() {
-        let text = "Please look at this.\n\nLocal file reference selected by the user: report.pdf (C:/shop/report.pdf, 12.4 KB). File contents were not read by Bitbots. The provider may only access this path if its own process permissions and working directory allow it.";
+        let text = "Please look at this.\n\nLocal file reference selected by the user: report.pdf (C:/shop/report.pdf, 12.4 KB). File contents were not read by Retinue. The provider may only access this path if its own process permissions and working directory allow it.";
         let (body, file) = split_file_reference(text);
         assert_eq!(body, "Please look at this.");
         let file = file.expect("the chip");

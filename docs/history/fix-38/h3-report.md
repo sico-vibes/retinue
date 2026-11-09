@@ -17,7 +17,7 @@ child `<li class="convo-item">` (`conversationsPanel.css`, old lines 38–43):
   bottom-left corner.
 
 Four separate faults made the classic (solid, faint `--line-strong`) stroke
-look broken, while the Bitbots dotted stroke hid most of them:
+look broken, while the Retinue dotted stroke hid most of them:
 
 1. **Fixed 17px elbow against a variable row height.** The elbow's horizontal
    sits 17px below the child `<li>`s top, which is the row's middle only for a
@@ -35,7 +35,7 @@ look broken, while the Bitbots dotted stroke hid most of them:
    guide started at the parent row's bottom edge, unconnected to the expand
    arrow, and a branch nested below another row lost the join altogether.
 
-The Bitbots look "looked right" only because its dotted stroke absorbed these
+The Retinue look "looked right" only because its dotted stroke absorbed these
 1–17px gaps; the geometry was never different.
 
 ## The fix
@@ -53,7 +53,7 @@ The Bitbots look "looked right" only because its dotted stroke absorbed these
 - **Line 51** — the elbow now hangs off the **child row** (`.convo-row::before`)
   with `top: 0; bottom: 50%`, so it meets the row's middle at any row height, a
   two-line child included (fault 1). `--convo-row-edge` offsets the row's 2px
-  Bitbots border so the elbow lines up with the `<li>`-based guide in that look.
+  Retinue border so the elbow lines up with the `<li>`-based guide in that look.
 - **Line 54** — a row with no arrow of its own (`:not(.branch)`) has no guide
   column to meet, so the elbow runs on to the row's first content, the face
   pair (`--convo-indent + 11px`) — the reported "apart from the avatars"
@@ -64,7 +64,7 @@ The Bitbots look "looked right" only because its dotted stroke absorbed these
   further depth (fault 4).
 - **Line 18** — `.convo-twisty` gets `position: relative; z-index: 1` so the
   expand arrow paints over that continuation.
-- **Lines 65–66** — the Bitbots look now only swaps the stroke
+- **Lines 65–66** — the Retinue look now only swaps the stroke
   (`--convo-line: var(--bb-line-strong)`, `--convo-line-style: dotted`,
   `--convo-radius: 0px`) and the row edge (`--convo-row-edge: 2px`); it no
   longer redeclares any geometry, so both looks draw the same tree.
@@ -75,7 +75,7 @@ gets a `branch` class, which the elbow and the continuation above key off.
 Geometry check, classic, child at depth `d` (parent depth `d-1`): guide and
 elbow x = `(d-1)*14 + 9`; a branch elbow ends at `d*14 + 9` (the child's arrow
 column) and the leaf elbow at `d*14 + 20` (the face pair); the elbow's
-horizontal is at the row's middle in every case. The Bitbots look shifts both
+horizontal is at the row's middle in every case. The Retinue look shifts both
 by the same 2px row border, so the joints stay flush there too.
 
 ## Tests
@@ -86,7 +86,7 @@ row-anchored (`top: 0; bottom: 50%`, no fixed height) and takes its stroke from
 `--convo-line` / `--convo-line-style`; the guide spans the item at
 `--convo-guide-x` with `z-index: 1`; the leaf elbow reaches
 `--convo-indent + 11px`; the branch continuation runs `50%` to `0`; the TSX
-marks branch rows; and the Bitbots look overrides only the stroke variables, so
+marks branch rows; and the Retinue look overrides only the stroke variables, so
 both looks share one set of numbers. It also fails if the old `height: 17px`
 elbow returns.
 

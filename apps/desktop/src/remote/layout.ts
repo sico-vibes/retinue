@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 export type RemoteLayout = 'phone' | 'wide'
 export type LayoutOverride = 'auto' | RemoteLayout
-const KEY = 'bitbots.remote.layout'
+const KEY = 'retinue.remote.layout'
 const WIDTH = '(min-width: 900px)'
 const POINTER = '(pointer: fine)'
 

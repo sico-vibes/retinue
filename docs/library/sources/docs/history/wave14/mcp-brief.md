@@ -1,18 +1,18 @@
-# Wave 14 brief: the Bitbots MCP (backend)
+# Wave 14 brief: the Retinue MCP (backend)
 
 Lane: Claude Sonnet 5.5, medium effort. Worktree `D:\wv14`, branch `wave14/mcp`, Cargo target `D:\wv14\target`. You never run `git commit`. The Director reviews your diff, builds the UI and commits. Plan: `docs/plans/expansion-plan-v3.md`, Phase 0.
 
 Before you start, read:
-- `.claude/skills/bitbots-development/SKILL.md`;
+- `.claude/skills/retinue-development/SKILL.md`;
 - its `references/codebase-map.md` and `references/lessons.md`;
 - the Remote rules in `AGENTS.md`.
 
 ## Goal
 
-A Claude Code session outside Bitbots connects with:
+A Claude Code session outside Retinue connects with:
 
 ```
-claude mcp add bitbots -- "<bridge exe>" mcp-server --endpoint "<endpoint file>"
+claude mcp add retinue -- "<bridge exe>" mcp-server --endpoint "<endpoint file>"
 ```
 
 It can then see and drive the owner's running app: list bots, projects and conversations; create a bot; start or continue a conversation (optionally in a new git worktree); steer or stop it; wait for the reply; answer approvals; read turn metrics.
@@ -22,7 +22,7 @@ It can then see and drive the owner's running app: list bots, projects and conve
 Everything here has a precedent in the code: copy those patterns, not new ones.
 
 - **`outside.rs`** (Wave 13):
-  - an off-by-default feature with a hook-only token (`bloblex_security::new_capability`);
+  - an off-by-default feature with a hook-only token (`retinue_security::new_capability`);
   - an endpoint file `{address, token}` in `st.team.data_dir`;
   - `status|enable|disable` RPCs and a `*.changed` event.
 - **`main_rpc`'s `outside.hook` route:** a method that bypasses the capability check but has its own bearer token and setting check.
@@ -64,7 +64,7 @@ Never put the token in any result, event, log or error.
 
 ### Tools, by tier
 
-A tool above the current tier is left out of `tools/list` and refused in `tools/call` (`isError`, "needs the Operator level in Bitbots › Settings › Connections").
+A tool above the current tier is left out of `tools/list` and refused in `tools/call` (`isError`, "needs the Operator level in Retinue › Settings › Connections").
 
 | Tier | Tool | Arguments | Returns (JSON text) |
 |---|---|---|---|
@@ -93,15 +93,15 @@ A tool above the current tier is left out of `tools/list` and refused in `tools/
 
 ### Bridge executable
 
-- **The problem:** the installed daemon runs from a private copy that is deleted later, and a long-lived stdio process would lock the install folder's `bitbotsd.exe` and break updates.
-- **The copy:** when the MCP is enabled, and at daemon start while it is enabled, the daemon copies its own executable to `<data_dir>\bitbots-mcp.exe`. If that file is locked (a client is running it), keep the old copy. The bridge is a thin forwarder, and the tools come from the daemon, so an old copy keeps working. `bridgePath` is that copy.
-- **The subcommand:** `bitbotsd mcp-server --endpoint <file>` reads `{address, token}` from the file on start, and again when a call gets 401, so a rotated token is picked up without a restart. It sends `ext.hello` after `initialize`, with the client's `clientInfo.name`.
+- **The problem:** the installed daemon runs from a private copy that is deleted later, and a long-lived stdio process would lock the install folder's `retinued.exe` and break updates.
+- **The copy:** when the MCP is enabled, and at daemon start while it is enabled, the daemon copies its own executable to `<data_dir>\retinue-mcp.exe`. If that file is locked (a client is running it), keep the old copy. The bridge is a thin forwarder, and the tools come from the daemon, so an old copy keeps working. `bridgePath` is that copy.
+- **The subcommand:** `retinued mcp-server --endpoint <file>` reads `{address, token}` from the file on start, and again when a call gets 401, so a rotated token is picked up without a restart. It sends `ext.hello` after `initialize`, with the client's `clientInfo.name`.
 - **Long waits:** the forwarder's HTTP timeout must allow `wait_for_turn`'s maximum plus a margin.
 
 ### Remote and docs
 
 - **`apps/desktop/src/remote/tiers.json`:** rows for `external.status|enable|disable|setTier|rotate` (`never`) and `external.changed` (`drop`). The `ext.*` methods are not in `dispatch`, so they need no row (like `outside.hook`).
-- **`docs/ipc-contract.md`:** a "Wave 14: Bitbots MCP" section, and the same in the library copy if one exists. Check `npm run docs:check`.
+- **`docs/ipc-contract.md`:** a "Wave 14: Retinue MCP" section, and the same in the library copy if one exists. Check `npm run docs:check`.
 
 ## Tests (daemon; name them like these)
 
@@ -121,8 +121,8 @@ A tool above the current tier is left out of `tools/list` and refused in `tools/
 
 Run them from `D:\wv14`, with `CARGO_TARGET_DIR=D:\wv14\target`:
 
-- `RUST_MIN_STACK=33554432 cargo test -p bloblex-daemon --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test -p retinue-daemon --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`
 - `npm run typecheck`
 - `npx vitest run apps/desktop/src/remote` (the parity test)
 
@@ -135,4 +135,4 @@ The Director runs the full gates after merging.
 - Anything in this contract you had to change, and why. Do not change it silently; the UI is built against it.
 - What you could not verify.
 
-Also give a proposed update for `.claude/skills/bitbots-development/references/lessons.md` and `codebase-map.md`. Write it in your report, not in the files.
+Also give a proposed update for `.claude/skills/retinue-development/references/lessons.md` and `codebase-map.md`. Write it in your report, not in the files.

@@ -5,7 +5,7 @@
 > **Last updated:** 2026-10-12
 
 Owner: OpenCode lane (backend only). Reviewer: Director. Parent plan: `docs/plans/improvement-plan.md` Phase 2. Builds on Phase 2A (durable queue, already in this branch). The UI is built by the Director against this contract; do not touch `apps/`.
-Scope: `crates/bloblex-agent-core`, `crates/bloblex-adapter-codex`, `crates/bloblex-daemon`, `crates/bloblex-storage` (only if needed), `docs/`. No new dependencies.
+Scope: `crates/retinue-agent-core`, `crates/retinue-adapter-codex`, `crates/retinue-daemon`, `crates/retinue-storage` (only if needed), `docs/`. No new dependencies.
 
 ## Rules
 - Work only in this worktree. **Never run `git commit`, `git push`, `git checkout`, `git stash`.** Leave changes uncommitted.
@@ -19,11 +19,11 @@ Steering means "add this to the turn that is running right now". It is only for 
 It is **off by default** and reported as unproven until someone verifies it live: evidence `none`.
 
 ## Data/contract
-### Adapter trait (`bloblex-agent-core`)
+### Adapter trait (`retinue-agent-core`)
 Add a defaulted method to `AgentAdapter`: `async fn steer(&self, handle: &SessionHandle, req: SteerRequest) -> Result<SteerOutcome, AdapterError>` returning `Err(AdapterError::Unsupported("steering is unavailable for this runtime"))` by default. `SteerRequest { turn_id: String, text: String }` (daemon turn id; text only, no attachments). `SteerOutcome` is `Accepted` or `Stale` (the provider says the expected turn is no longer active).
 ### Codex adapter
 Implement `steer` with `turn/steer`, addressed by the thread id and the **provider turn id** the adapter already tracks for the active turn (`expectedTurnId` or the schema's equivalent). A provider "turn is not active / mismatch" error maps to `SteerOutcome::Stale`; other JSON-RPC errors map to `AdapterError::Rejected`/`Process` like existing calls. Emit nothing else: the daemon records the message.
-### Capability and gate (`bloblex-daemon`)
+### Capability and gate (`retinue-daemon`)
 - Add `steer` to the runtime capability table (`runtime_capabilities`, the `table` per provider): `codex` => supported true, scope `turn`, evidence `"none"`; `claude` and `opencode` => supported false with reason "setting is unsupported by this runtime". Gate key `exec_gate.codex.steer`, **default false** (add to the seeded gates list and the `gate_default` logic the same way other gates are; check that `settings.set` accepts the key as a boolean like other `exec_gate.*` keys).
 - RPC `session.steer {sessionId, text}`:
   1. Validate: session exists, not archived, not a side conversation (`read_only`), text 1..=100000 bytes after trim, else `invalid_argument`.
@@ -46,7 +46,7 @@ Create `docs/evidence/codex-turn-steer-2026-10-12.md`: the schema paths and fiel
 
 ## Gates (run and report real output)
 ```
-CARGO_TARGET_DIR=D:/b-p1 RUST_MIN_STACK=33554432 cargo test -p bloblex-storage -p bloblex-daemon -p bloblex-agent-core -p bloblex-adapter-claude -p bloblex-adapter-codex -p bloblex-adapter-acp
+CARGO_TARGET_DIR=D:/b-p1 RUST_MIN_STACK=33554432 cargo test -p retinue-storage -p retinue-daemon -p retinue-agent-core -p retinue-adapter-claude -p retinue-adapter-codex -p retinue-adapter-acp
 ```
 
 ## Final report (plain text, last message)

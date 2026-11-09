@@ -13,7 +13,7 @@ import './terminal.css'
 
 type Tab = { id: string; shell: string; cwd: string; exited: boolean; exitCode: number | null }
 
-const HEIGHT_KEY = 'bitbots.terminal.height'
+const HEIGHT_KEY = 'retinue.terminal.height'
 const MIN_HEIGHT = 140
 const SHELLS: Array<{ id: TerminalShell; label: string }> = [{ id: 'powershell', label: 'PowerShell' }, { id: 'pwsh', label: 'PowerShell 7' }, { id: 'cmd', label: 'Command Prompt' }]
 const shellLabel = (id: string) => SHELLS.find((shell) => shell.id === id)?.label ?? 'Shell'

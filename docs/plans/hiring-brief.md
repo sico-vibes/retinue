@@ -1,17 +1,17 @@
 # Brief: employees, hiring and the CEO (backend)
 
-**Lane:** Gogo (OpenCode Go DeepSeek V4.1 Flash, high) in the owner's Bitbots app, in its own git worktree, assigned through the Bitbots MCP.
+**Lane:** Gogo (OpenCode Go DeepSeek V4.1 Flash, high) in the owner's Retinue app, in its own git worktree, assigned through the Retinue MCP.
 
 **Rules:**
 - Never run `git commit`, `git push`, `git merge`, `git stash` or `git reset`, and never switch branches.
 - Change nothing outside your worktree.
 - Never print tokens, capabilities or credentials.
-- Windows: use `RUST_MIN_STACK=33554432` for cargo tests. `crates/bloblex-storage/src/lib.rs` contains one NUL byte, so edit it with your edit tool, never shell rewrites.
+- Windows: use `RUST_MIN_STACK=33554432` for cargo tests. `crates/retinue-storage/src/lib.rs` contains one NUL byte, so edit it with your edit tool, never shell rewrites.
 - The Director (Claude) builds the UI against the contract below at the same time. Keep the contract exactly. If something can't be done as written, choose the smallest change and say so in your report.
 
 **Read first:**
 - `AGENTS.md` (the top amendments and the Remote rules);
-- `.claude/skills/bitbots-development/SKILL.md`, then `references/codebase-map.md` and `references/lessons.md`.
+- `.claude/skills/retinue-development/SKILL.md`, then `references/codebase-map.md` and `references/lessons.md`.
 
 **Set-up:** copy these two files from the owner's main checkout (`D:\Basem's\Coding\Blolblex`) into the same paths in your worktree. They are not committed yet.
 - `docs/plans/hiring-brief.md` (this file)
@@ -20,14 +20,14 @@
 ## The decision (owner, 8 November 2026)
 
 Bots become **employees**, and projects become the main view.
-- **Presets.** Bitbots ships 28 preset employees in `apps/desktop/src/team/presets.json`. Each preset is a nickname, a Haze portrait, a role, a department, tags, a description and instructions.
+- **Presets.** Retinue ships 28 preset employees in `apps/desktop/src/team/presets.json`. Each preset is a nickname, a Haze portrait, a role, a department, tags, a description and instructions.
 - **Hiring.** The owner **hires** an employee into a project. One employee can be hired into many projects; hiring a preset again reuses the same employee.
 - **The CEO.** The Manager becomes the **CEO**. When a project starts, the CEO can interview the owner and propose whom to hire. If no preset fits, it proposes a new employee with the existing `propose_bot`.
 - Existing bots are employees too.
 
 ## What exists today (build on it)
 
-- **`agents.project_id`** is the bot's default project. A bot's projects are worked out from its conversations plus that default (`Storage::agent_projects`, `crates/bloblex-storage/src/lib.rs:2875`; `agent_last_project_id`, :2909).
+- **`agents.project_id`** is the bot's default project. A bot's projects are worked out from its conversations plus that default (`Storage::agent_projects`, `crates/retinue-storage/src/lib.rs:2875`; `agent_last_project_id`, :2909).
 - **Default project for a new conversation:** `team::default_conversation_project` (`team.rs:1488`).
 - **Tags:** `agents.tags` (JSON, at most 8 lower-case tags of up to 24 characters; check at lib.rs:1571).
 - **Portraits:** the allowlist is `valid_look` (lib.rs:7987). The portrait list is repeated in the tool schemas at `team.rs:1676` and `proposals.rs:72`.
@@ -36,7 +36,7 @@ Bots become **employees**, and projects become the main view.
   - Its defaults are `MANAGER_DESCRIPTION` and `MANAGER_INSTRUCTIONS` (`main.rs:964-966`), created by `manager.ensure` (`main.rs:1023`).
   - Its extra prompt lines are at `team.rs:470-482`, and `DEFAULT_PLAYBOOK` is at lib.rs:894.
 - **Proposals:**
-  - `create_proposal`, `propose_bot` and `apply_bot` are in `crates/bloblex-daemon/src/proposals.rs`.
+  - `create_proposal`, `propose_bot` and `apply_bot` are in `crates/retinue-daemon/src/proposals.rs`.
   - The owner decides with `proposal.decide {id, decision, edits?}` (`main.rs:1528`).
 - **Remote policy:** `apps/desktop/src/remote/tiers.json`. A parity test fails when a daemon method has no row.
 
@@ -62,7 +62,7 @@ project_members(project_id TEXT NOT NULL, agent_id TEXT NOT NULL,
 - The Manager/CEO gets **no** rows: it belongs to every project implicitly.
 - Running the migration twice must change nothing.
 
-**New files:** put this in a new storage module, for example `crates/bloblex-storage/src/phase9.rs`, following the existing `phase*.rs` pattern, so `lib.rs` changes stay small.
+**New files:** put this in a new storage module, for example `crates/retinue-storage/src/phase9.rs`, following the existing `phase*.rs` pattern, so `lib.rs` changes stay small.
 
 ### 2. Preset catalogue
 
@@ -159,7 +159,7 @@ project_members(project_id TEXT NOT NULL, agent_id TEXT NOT NULL,
   - Never hire without a proposal the owner approves.
 - Replace a stored playbook only when it is still exactly the old default.
 
-**Bitbots MCP:** add a read-only `list_presets` tool next to `list_bots`, in the Bitbots MCP server code, with the same output as `preset.list`.
+**Retinue MCP:** add a read-only `list_presets` tool next to `list_bots`, in the Retinue MCP server code, with the same output as `preset.list`.
 
 ## Tests (required)
 
@@ -178,8 +178,8 @@ project_members(project_id TEXT NOT NULL, agent_id TEXT NOT NULL,
 
 Run these in the foreground and report in the same turn:
 
-- `cargo test -p bloblex-storage` and `cargo test -p bloblex-daemon` (with `RUST_MIN_STACK=33554432`)
-- `cargo clippy -p bloblex-daemon -p bloblex-storage --all-targets -- -D warnings`
+- `cargo test -p retinue-storage` and `cargo test -p retinue-daemon` (with `RUST_MIN_STACK=33554432`)
+- `cargo clippy -p retinue-daemon -p retinue-storage --all-targets -- -D warnings`
 - `npm run typecheck` (the tiers JSON is shared with TypeScript)
 
 The first cargo build is cold and takes several minutes.

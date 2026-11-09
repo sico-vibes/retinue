@@ -9,7 +9,7 @@ State at the owner pause on 2026-10-21 (Europe/London): **paused, unmerged, unco
 
 ## Worktree contents
 
-Uncommitted task lane changes are in `crates/bloblex-storage/src/lib.rs`, `crates/bloblex-daemon/{Cargo.toml,src/main.rs,src/team.rs,src/automations.rs,src/backup.rs,src/remote/web.rs}`, `crates/bloblex-adapter-acp/src/{catalog.rs,exec.rs,lib.rs}`, `Cargo.lock`, and new `crates/bloblex-daemon/src/{tasks.rs,platform/}`. Documentation in this worktree includes `tasks-contract.md` and this report. Read-only status at pause showed no other task-lane source paths. This is an incomplete source snapshot; later edits are not covered by earlier test results.
+Uncommitted task lane changes are in `crates/retinue-storage/src/lib.rs`, `crates/retinue-daemon/{Cargo.toml,src/main.rs,src/team.rs,src/automations.rs,src/backup.rs,src/remote/web.rs}`, `crates/retinue-adapter-acp/src/{catalog.rs,exec.rs,lib.rs}`, `Cargo.lock`, and new `crates/retinue-daemon/src/{tasks.rs,platform/}`. Documentation in this worktree includes `tasks-contract.md` and this report. Read-only status at pause showed no other task-lane source paths. This is an incomplete source snapshot; later edits are not covered by earlier test results.
 
 ## Verified commands and limits
 
@@ -17,12 +17,12 @@ These are historical targeted results, not gates on the latest paused source:
 
 | Command | Result | Evidence boundary |
 |---|---|---|
-| `cargo check -p bloblex-storage` | Passed | Before later origin-context and per-device grant edits. |
-| `cargo test -p bloblex-storage task_ledger_tests -- --nocapture` | 5 passed | Covered task draft/dispatch, schedule occurrence idempotency, bounded correction cap and then-current project-grant semantics. Before latest origin/device edits. |
-| `cargo test -p bloblex-storage runtime_preferences_tests -- --nocapture` | 1 passed | Runtime preference storage, before latest source changes. |
-| `cargo test -p bloblex-daemon task_create_is_draft_only_and_dispatch_is_single_idempotent_owner_action -- --nocapture` (`RUST_MIN_STACK=33554432`) | 1 passed | Earlier task dispatch path only; not a full worker/review lifecycle. |
-| `cargo test -p bloblex-daemon runtime_preferences_are_provider_scoped_and_change_only_future_conversations -- --nocapture` (`RUST_MIN_STACK=33554432`) | 1 passed | Provider catalog validation and future-only model preference behavior. |
-| `cargo test -p bloblex-daemon platform:: -- --nocapture` | 12 passed, 1 failed | The frozen older connector snapshot expected one advertised transport; observed two. Platform later supplied a corrected snapshot, which was not rerun here. |
+| `cargo check -p retinue-storage` | Passed | Before later origin-context and per-device grant edits. |
+| `cargo test -p retinue-storage task_ledger_tests -- --nocapture` | 5 passed | Covered task draft/dispatch, schedule occurrence idempotency, bounded correction cap and then-current project-grant semantics. Before latest origin/device edits. |
+| `cargo test -p retinue-storage runtime_preferences_tests -- --nocapture` | 1 passed | Runtime preference storage, before latest source changes. |
+| `cargo test -p retinue-daemon task_create_is_draft_only_and_dispatch_is_single_idempotent_owner_action -- --nocapture` (`RUST_MIN_STACK=33554432`) | 1 passed | Earlier task dispatch path only; not a full worker/review lifecycle. |
+| `cargo test -p retinue-daemon runtime_preferences_are_provider_scoped_and_change_only_future_conversations -- --nocapture` (`RUST_MIN_STACK=33554432`) | 1 passed | Provider catalog validation and future-only model preference behavior. |
+| `cargo test -p retinue-daemon platform:: -- --nocapture` | 12 passed, 1 failed | The frozen older connector snapshot expected one advertised transport; observed two. Platform later supplied a corrected snapshot, which was not rerun here. |
 
 Subsequent task source edits added manager-review fake-adapter coverage, plan-only supervisor configuration, origin-context storage, and per-device grant checks. They were **not compiled or tested**. A prior daemon compile exposed connector-call-signature and environment-string errors; source was adjusted but no clean compile was observed after those edits. There is no authoritative current compile/test result. No live Cargo process was observed at the pause checkpoint; do not infer that earlier processes or logs represent latest source.
 
@@ -42,4 +42,4 @@ The storage and daemon source includes additive task/run/event/idempotency recor
 
 ## Safe continuation
 
-Keep this worktree and the UI/platform worktrees intact. Do not cherry-pick or merge their files by broad copy: the three snapshots contain overlapping ACP, daemon manifest, and platform-module changes. After the owner resumes, reconcile contracts and snapshots file by file, run task-focused tests first with a lane-specific `CARGO_TARGET_DIR`, and use isolated `BLOBLEX_DB_PATH` plus a disposable project for integration. Use a short apostrophe-free path for Windows native builds. Preserve the main checkout's user changes and do not restart the installed app without the owner's direction.
+Keep this worktree and the UI/platform worktrees intact. Do not cherry-pick or merge their files by broad copy: the three snapshots contain overlapping ACP, daemon manifest, and platform-module changes. After the owner resumes, reconcile contracts and snapshots file by file, run task-focused tests first with a lane-specific `CARGO_TARGET_DIR`, and use isolated `RETINUE_DB_PATH` plus a disposable project for integration. Use a short apostrophe-free path for Windows native builds. Preserve the main checkout's user changes and do not restart the installed app without the owner's direction.

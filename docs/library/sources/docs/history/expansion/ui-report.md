@@ -1,6 +1,6 @@
 # UI lane pause report
 
-> **What this is:** the UI worktree's paused implementation and verification state for the accepted Bitbots expansion.
+> **What this is:** the UI worktree's paused implementation and verification state for the accepted Retinue expansion.
 > **Status:** historical record, superseded in part (see update); implementation paused by owner on 21 October 2026
 > **Last updated:** 2026-10-22
 
@@ -8,7 +8,7 @@
 
 ## Context
 
-The UI lane is frozen in `C:\Users\SicoZ\.codex\worktrees\bitbots-ui\Blolblex`, detached at `64344a6` (`beta.36`). Its changes are uncommitted and have not been consolidated into the main checkout. Do not describe the UI implementation as complete or native-verified. The owner authorized only documentation, picture capture and generated-docs work after the pause.
+The UI lane is frozen in `C:\Users\SicoZ\.codex\worktrees\retinue-ui\Retinue`, detached at `64344a6` (`beta.36`). Its changes are uncommitted and have not been consolidated into the main checkout. Do not describe the UI implementation as complete or native-verified. The owner authorized only documentation, picture capture and generated-docs work after the pause.
 
 The desktop fixture preview remained open at `http://127.0.0.1:5174/?preview=1` in exec session `39519` during documentation capture. Do not stop or restart it. Screenshots in `docs/library/assets/expansion-2026-10-21/` are from this fixture preview and synthetic fixture data; they are not native app or live-provider evidence.
 
@@ -53,7 +53,7 @@ The following are the last completed checks before the owner paused implementati
 - `npm run typecheck` passed. A later typecheck found only unused `oauthUrl` state; it was removed, but typecheck was not run again after the subsequent OAuth and inspector changes.
 - `npx vitest run apps/desktop/src/ui/TeamWorkPage.mounted.test.tsx apps/desktop/src/ui/TerminalDock.mounted.test.tsx apps/desktop/src/ui/ChatBackground.mounted.test.tsx apps/desktop/src/ui/GitHubInboxPage.mounted.test.tsx apps/desktop/src/remote/RemoteTasks.mounted.test.tsx apps/desktop/src/preview/fixtureBridge.parity.test.ts apps/desktop/src/remote/remoteTauri.parity.test.ts` passed 26 tests across 7 files. Output is in `ui-targeted-tests.txt`. This run preceded the OAuth-flow, inspector-selection, and task/computer contract amendments; it does not validate them.
 - `npm run build` passed before those final edits. Vite reported a mixed static/dynamic import warning for `tauri.ts` and a main bundle above its 500 kB advisory threshold.
-- `npm run build:remote --workspace @bloblex/desktop` passed before those final edits.
+- `npm run build:remote --workspace @retinue/desktop` passed before those final edits.
 - Browser capture of the synthetic desktop preview completed for the task board in all five looks and both dark/light themes at 1440 px, plus Frost at 1000 px; the tree, timeline and schedules views were also captured at 1440 px. These are documentation pictures only, not a full visual acceptance matrix or production UI run.
 - Additional fixture screenshots were saved for chat-background settings, provider settings, onboarding provider choice, GitHub inbox, Connections, Computer, Remote settings and the PWA's initial pairing screen. The PWA task list and an enabled Relay panel were not captured. A failed terminal toggle lookup produced a main-shell screenshot with no dock, explicitly named to avoid implying terminal evidence.
 - The browser showed the shell, synthetic task data, board layout and objective/timeline screens. All screenshot files are enumerated in `docs/library/assets/expansion-2026-10-21/` in the main checkout; their detailed side-by-side captions are in `docs/library/content/guides/expansion-handoff.md` there.

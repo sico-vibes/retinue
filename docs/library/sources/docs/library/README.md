@@ -1,4 +1,4 @@
-# Bitbots documentation library
+# Retinue documentation library
 
 Open [DOCUMENTATION.html](../DOCUMENTATION.html) in a browser. It is one self-contained file at the top of `docs/`: navigation, search, the light and dark themes, diagrams, screenshots and the Markdown download all work without a server or a network connection.
 
@@ -31,10 +31,10 @@ The build uses the root `marked` dev dependency. It adds no other dependency and
 ## Structure
 
 - `content/`: the new pages, one document per page.
-  - `overview.md` and `glossary.md`: what Bitbots is and the words it uses.
+  - `overview.md` and `glossary.md`: what Retinue is and the words it uses.
   - `guides/`: task-oriented pages for users.
   - `reference/`: how the system works, for developers.
-- `assets/`: the viewer source (`viewer.js`, `viewer.css`, `tokens.css`), the 96 px Bitbots logo from `assets/icon/bloblex-master.png`, `screens/` and `diagrams/`.
+- `assets/`: the viewer source (`viewer.js`, `viewer.css`, `tokens.css`), the 96 px Retinue logo from `assets/icon/retinue-master.png`, `screens/` and `diagrams/`.
 - `audits/`: the documentation lane's inventory, progress log and review records. These are included in the library under Documentation.
 - `sources/`: generated Markdown snapshots, retaining the original repository path. Edit originals, never these copies.
 - `../DOCUMENTATION.html`: the generated viewer with every document, image and diagram embedded. It is the file to open.

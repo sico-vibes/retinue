@@ -69,7 +69,7 @@ describe('remote build output', () => {
     expect(worker).toContain('/remote.html')
     expect(worker).toContain('/remote.webmanifest')
     expect(worker).toContain('/icons/icon-192.png')
-    expect(worker).toContain('bitbots-remote-')
+    expect(worker).toContain('retinue-remote-')
     const precache = /\[(?:"\/[^"]*",?)+\]/.exec(worker)?.[0] ?? ''
     expect(precache.length).toBeGreaterThan(0)
     const cached = JSON.parse(precache) as string[]

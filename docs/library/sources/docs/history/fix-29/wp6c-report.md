@@ -43,7 +43,7 @@ component are untouched. The only edit to a rendered file is `remote.html`, wher
 | `apps/desktop/package.json` | `"build:remote": "vite build --config vite.remote.config.ts"`. |
 | `apps/desktop/remote.html` | Manifest link kept; apple-touch-icon now `/icons/apple-touch-icon-180.png`; added a real `icon`; **inline theme script removed**. |
 | `apps/desktop/src/remote/main.tsx` | Theme handshake moved here; registers the worker; re-exports `onUpdateReady` / `applyUpdate` / `updateIsReady`. |
-| `apps/desktop/src-tauri/tauri.conf.json` | `beforeBuildCommand` → `npm run build && npm run build:remote`; `bundle.resources` → `{ "../dist-remote/": "remote-web/" }` (Tauri 2 object form, as specified for WP6b's `BITBOTS_REMOTE_WEB_DIR`). |
+| `apps/desktop/src-tauri/tauri.conf.json` | `beforeBuildCommand` → `npm run build && npm run build:remote`; `bundle.resources` → `{ "../dist-remote/": "remote-web/" }` (Tauri 2 object form, as specified for WP6b's `RETINUE_REMOTE_WEB_DIR`). |
 | `apps/desktop/tsconfig.json` | `vite.remote.config.ts` added to `include`, so `tsc -b` type-checks the new build config too. |
 | `.gitignore` | `apps/desktop/dist-remote/`. |
 
@@ -56,7 +56,7 @@ component are untouched. The only edit to a rendered file is `remote.html`, wher
 
 The spec said to copy/scale from `src-tauri/icons/`. **That directory does not exist in this
 repository**; the app icons live at `assets/icon/`. The four PNGs were made from
-`assets/icon/bloblex-master.png` (1024×1024) with PowerShell `System.Drawing` — a real resize,
+`assets/icon/retinue-master.png` (1024×1024) with PowerShell `System.Drawing` — a real resize,
 not a rename, and **no npm dependency was added**. `icon-512-maskable.png` draws the artwork at
 80% inside a 512×512 `#0e0e0e` canvas (the maskable safe zone). The build test asserts the real
 PNG header dimensions of all four files.
@@ -95,7 +95,7 @@ connectionStatus(): RemoteConnectionStatus; signedOut(): boolean; dispose(): voi
   read as a sign-out.
 - **Events.** `wss://<same host>/api/events` (`ws:` on an insecure origin). The first message is
   `{"v":1,"afterSequence":<cursor>}`. The cursor is the highest applied `sequence`, held in
-  memory and in `localStorage['bitbots.remote.cursor']` (read and write inside `try/catch`).
+  memory and in `localStorage['retinue.remote.cursor']` (read and write inside `try/catch`).
   A frame whose `sequence` is ≤ the cursor is dropped (the daemon replays over a live
   subscription). Backoff is `min(30 s, 1 s × 2^attempt)` plus up to 250 ms of jitter, and the
   attempt counter resets after 30 s of a healthy socket. A hidden page closes the socket and
@@ -147,8 +147,8 @@ A `resync` on the shared transport refetches `app.snapshot` through the gateway 
 | `/assets/*` or any `…-<hash>.ext` | `cache-first` | Cached copy first; hashed names never change content. |
 | anything else | `network` | Plain network, no cache involvement. |
 
-Cache name is `bitbots-remote-<version>`. `install` precaches the injected list; `activate`
-deletes every `bitbots-remote-*` cache whose name differs and then calls `clients.claim()`.
+Cache name is `retinue-remote-<version>`. `install` precaches the injected list; `activate`
+deletes every `retinue-remote-*` cache whose name differs and then calls `clients.claim()`.
 The worker never calls `skipWaiting` by itself — the page posts `{type:'skip-waiting'}` from
 `applyUpdate()` after the user accepts, and reloads on `controllerchange`.
 
@@ -159,7 +159,7 @@ POST, PUT and DELETE.
 
 ## 4. How the precache list is built
 
-`vite.remote.config.ts` runs `bitbots:remote-sw-manifest` as a `post` `generateBundle` hook:
+`vite.remote.config.ts` runs `retinue:remote-sw-manifest` as a `post` `generateBundle` hook:
 
 1. take every key of the rollup bundle minus `.map` files, minus `remote-sw.js` itself;
 2. add every file in `publicDir` (`remote-public/`), read from disk — rollup never sees these,
@@ -173,7 +173,7 @@ The shipped list has **20 entries**: 14 hashed assets, 4 icons, `/remote.html` a
 `/remote.webmanifest`. In the final build reported here, the version literal is
 `"260cad62daec67e1"` (it changes whenever the list changes).
 
-A second `post` hook, `bitbots:remote-forbid-native`, scans every emitted chunk/asset for
+A second `post` hook, `retinue:remote-forbid-native`, scans every emitted chunk/asset for
 `@tauri-apps`, `__TAURI` and `__TAURI_INTERNALS__` and fails the build on a hit. **Verified to
 fire**: a temporary `@tauri-apps/probe` side effect in `remoteTauri.ts` failed the build with
 `remote build: "@tauri-apps" reached assets/remote-Ski5xsVG.js`; the probe was removed and
@@ -194,12 +194,12 @@ because `src/transport/nativeBridge.ts` imports it, and covering it is strictly 
 |---|---|---|
 | `assets/remote-<hash>.js` | 351.47 kB | 115.07 kB |
 | `assets/remote-<hash>.css` | 43.77 kB | 8.58 kB |
-| `assets/bitbots-<hash>.css` | 54.01 kB | 7.59 kB |
+| `assets/retinue-<hash>.css` | 54.01 kB | 7.59 kB |
 | `remote-sw.js` | 2.27 kB | 1.03 kB |
 | `remote.html` | 1.15 kB | 0.57 kB |
 | 4 icons | 76.6 kB | (PNG, already compressed) |
 | 6 font files + 4 font CSS | 74.6 kB | — |
-| `assets/bloblex-128-<hash>.png` | 5.28 kB | — |
+| `assets/retinue-128-<hash>.png` | 5.28 kB | — |
 
 A test fails if the whole directory exceeds 1.5 MB, so a desktop-only graph cannot drift in
 unnoticed. `remote-sw.js` is a single self-contained classic script — the plugin fails the build

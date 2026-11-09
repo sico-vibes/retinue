@@ -16,7 +16,7 @@ export type ScaffoldStep = { id: string; status: 'done' | 'failed' | 'skipped'; 
 export type ScaffoldResult = { project: Project | null; steps: ScaffoldStep[]; githubUrl: string | null }
 export type GithubVisibility = 'private' | 'public'
 
-export const STEP_LABELS: Record<string, string> = { folder: 'Create the folder', project: 'Add the project to Bitbots', git_init: 'Start a git repository', first_commit: 'Make the first commit', github: 'Create the GitHub repository and push' }
+export const STEP_LABELS: Record<string, string> = { folder: 'Create the folder', project: 'Add the project to Retinue', git_init: 'Start a git repository', first_commit: 'Make the first commit', github: 'Create the GitHub repository and push' }
 
 /** Why a project can't be named this, or null. The daemon checks again. */
 export function folderNameProblem(raw: string): string | null {
@@ -34,7 +34,7 @@ export function scaffoldPlan(name: string, parent: string, git: boolean, github:
   const folder = `${parent.replace(/[\\/]+$/, '')}\\${name.trim()}`
   return [
     `Create the folder ${folder}`,
-    'Add it to Bitbots as a project',
+    'Add it to Retinue as a project',
     ...(git ? ['Start a git repository and commit a README'] : []),
     ...(git && github ? [`Create a ${github} GitHub repository${login ? ` under ${login}` : ''} and push to it`] : []),
   ]

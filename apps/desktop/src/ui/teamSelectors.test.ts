@@ -21,13 +21,13 @@ describe('team selectors', () => {
   // its routing tags. The daemon resolves the same three ways (`team::project_named`).
   it('offers the projects a # can name, by name then by tag', () => {
     const projects: Project[] = [
-      { id: 'p1', name: 'Blolblex', path: 'D:\\b', sortOrder: 0, tags: ['bitbots', 'desktop'] },
-      { id: 'p2', name: 'Blolblex site', path: 'D:\\s', sortOrder: 1 },
+      { id: 'p1', name: 'Retinue', path: 'D:\\b', sortOrder: 0, tags: ['retinue', 'desktop'] },
+      { id: 'p2', name: 'Retinue site', path: 'D:\\s', sortOrder: 1 },
       { id: 'p3', name: 'Storefront', path: 'D:\\w', sortOrder: 2, tags: ['web'] },
     ]
     // Best match first: the exact name, then a name that starts with it.
-    expect(projectMatches(projects, 'blolblex').map((project) => project.id)).toEqual(['p1', 'p2'])
-    expect(projectMatches(projects, 'bitbots').map((project) => project.id)).toEqual(['p1'])
+    expect(projectMatches(projects, 'retinue').map((project) => project.id)).toEqual(['p1', 'p2'])
+    expect(projectMatches(projects, 'desktop').map((project) => project.id)).toEqual(['p1'])
     expect(projectMatches(projects, 'web').map((project) => project.id)).toEqual(['p3'])
     // An empty query lists them all, so opening `#` after `@Vex` shows the choices.
     expect(projectMatches(projects, '').map((project) => project.id)).toEqual(['p1', 'p2', 'p3'])
@@ -36,20 +36,20 @@ describe('team selectors', () => {
 
   it('reads the project a message names from its own words', () => {
     const projects: Project[] = [
-      { id: 'p1', name: 'Blolblex', path: 'D:\\b', sortOrder: 0, tags: ['bitbots', 'shared'] },
-      { id: 'p2', name: 'Blolblex site', path: 'D:\\s', sortOrder: 1, tags: ['shared'] },
+      { id: 'p1', name: 'Retinue', path: 'D:\\b', sortOrder: 0, tags: ['retinue', 'shared'] },
+      { id: 'p2', name: 'Retinue site', path: 'D:\\s', sortOrder: 1, tags: ['shared'] },
       { id: 'p3', name: 'Twin', path: 'D:\\t', sortOrder: 2 },
       { id: 'p4', name: 'twin', path: 'D:\\u', sortOrder: 3 },
     ]
     const id = (text: string) => { const found = projectNamedInText(text, projects); return found && 'project' in found ? found.project.id : found }
-    expect(id('Ask @Codex #Blolblex to look')).toBe('p1')
+    expect(id('Ask @Codex #Retinue to look')).toBe('p1')
     // The longest name wins, so a name inside another name does not steal it.
-    expect(id('#blolblex site, please')).toBe('p2')
-    expect(id('work in #bitbots')).toBe('p1')
+    expect(id('#retinue site, please')).toBe('p2')
+    expect(id('work in #retinue')).toBe('p1')
     // No `#` word, a word inside another word, or an unknown one names nothing.
-    expect(id('Blolblex is fine')).toBeNull()
-    expect(id('issue#Blolblex')).toBeNull()
-    expect(id('#Blolblexes and #123')).toBeNull()
+    expect(id('Retinue is fine')).toBeNull()
+    expect(id('issue#Retinue')).toBeNull()
+    expect(id('#Retinuees and #123')).toBeNull()
     // Several projects fit: the caller refuses instead of guessing, like the daemon.
     expect(id('in #shared')).toEqual({ ambiguous: 'shared' })
     expect(id('in #Twin')).toEqual({ ambiguous: 'Twin' })
@@ -140,10 +140,10 @@ describe('conversationPlaceName', () => {
   it('names the project, never the per-bot workspace id', () => {
     const veve = agent('a1', 'Veve', { projectId: 'p1' })
     const casual = agent('a2', 'Dodo')
-    const workspace = String.raw`C:\Users\me\AppData\Local\Bitbots\workspaces\4cb94b29-dcd1-4196-b7f8-f717274b892f`
+    const workspace = String.raw`C:\Users\me\AppData\Local\Retinue\workspaces\4cb94b29-dcd1-4196-b7f8-f717274b892f`
     expect(conversationPlaceName(session('s1', { agentId: 'a1', projectPath: workspace }), [veve], projects)).toBe('crewspan')
     expect(conversationPlaceName(session('s2', { agentId: 'a2', projectPath: workspace }), [casual], projects)).toBeNull()
-    expect(conversationPlaceName(session('s3', { agentId: 'a2', projectPath: String.raw`D:\code\bloblex` }), [casual], projects)).toBe('bloblex')
+    expect(conversationPlaceName(session('s3', { agentId: 'a2', projectPath: String.raw`D:\code\retinue` }), [casual], projects)).toBe('retinue')
     expect(conversationPlaceName(session('s4', { agentId: 'a2', workspaceLabel: 'Casual' }), [casual], projects)).toBe('Casual')
     expect(conversationPlaceName(null, [], projects)).toBeNull()
   })

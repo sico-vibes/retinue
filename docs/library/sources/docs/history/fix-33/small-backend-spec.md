@@ -10,7 +10,7 @@ Read first: `AGENTS.md` (invariants, the 12 and 14 October amendments), then the
 
 ## 1. `runtime.capabilities` no longer rejects a bot moving to another runtime
 
-File: `crates/bloblex-daemon/src/main.rs`, `runtime_capabilities` (search `agentId does not belong to runtimeId`).
+File: `crates/retinue-daemon/src/main.rs`, `runtime_capabilities` (search `agentId does not belong to runtimeId`).
 
 - When `agentId` names a bot whose saved `runtimeId` differs from the `runtimeId` parameter, do **not** return an error. Instead:
   - ignore the agent when choosing the model in scope (`capability_selected_model` must not use that agent's saved model),
@@ -20,15 +20,15 @@ File: `crates/bloblex-daemon/src/main.rs`, `runtime_capabilities` (search `agent
 
 ## 2. The model-facing noun is always "bot"
 
-File: `crates/bloblex-daemon/src/team.rs`, `entity_noun`.
+File: `crates/retinue-daemon/src/team.rs`, `entity_noun`.
 
 - Always return `bot` / `bots`. Delete the settings read and update the doc comment (owner review, 16 October 2026: the characters are bots in both looks).
-- Update the test that sets `appearance.style = "blobots"` (search `blobots` in the daemon tests) to assert "bot".
-- Note in the report: the instruction text changes once for Blobots users, so their next turn re-sends instructions (OpenCode respawns once). Expected.
+- Update the test that sets `appearance.style = "stone"` (search `stone` in the daemon tests) to assert "bot".
+- Note in the report: the instruction text changes once for Stone users, so their next turn re-sends instructions (OpenCode respawns once). Expected.
 
 ## 3. New RPC `session.environment`
 
-File: `crates/bloblex-daemon/src/main.rs` (dispatch arm + handler). Reuse `experiments::git_command()` (make it `pub(crate)`).
+File: `crates/retinue-daemon/src/main.rs` (dispatch arm + handler). Reuse `experiments::git_command()` (make it `pub(crate)`).
 
 - Params `{ sessionId }`. Result `{ "projectPath": string|null, "gitRepo": bool, "branch": string|null, "detached": bool, "host": string }`.
 - `projectPath` from `st.db.session_detail(sessionId)["projectPath"]`. Unknown session → existing `not_found` mapping.
@@ -42,7 +42,7 @@ File: `crates/bloblex-daemon/src/main.rs` (dispatch arm + handler). Reuse `exper
 
 ## 4. Cloud dictation warm-up (no request to the endpoint)
 
-Files: `crates/bloblex-speech/src/cloud.rs`, `apps/desktop/src-tauri/src/speech.rs`, `apps/desktop/src-tauri/src/lib.rs` (command registration).
+Files: `crates/retinue-speech/src/cloud.rs`, `apps/desktop/src-tauri/src/speech.rs`, `apps/desktop/src-tauri/src/lib.rs` (command registration).
 
 The 14 October exception covers the transcription call only. This change may **not** send any request to `chatgpt.com` ahead of time. Tokens, audio and transcripts are never persisted or logged.
 
@@ -59,9 +59,9 @@ The 14 October exception covers the transcription call only. This change may **n
 
 ## Gates (run them; paste the summaries into the report)
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` (report pre-existing warnings separately, do not fix unrelated code)
-- Desktop crate: `cargo test -p bloblex-desktop --lib` (if it cannot build from this path, say so; do not work around it).
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` (report pre-existing warnings separately, do not fix unrelated code)
+- Desktop crate: `cargo test -p retinue-desktop --lib` (if it cannot build from this path, say so; do not work around it).
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote`
 
 Set `CARGO_TARGET_DIR` to the path the brief gives you so dependencies are reused.

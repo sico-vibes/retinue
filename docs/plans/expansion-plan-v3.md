@@ -1,6 +1,6 @@
 # Expansion plan v3: the connector
 
-Owner request of 29 October 2026. Bitbots becomes the connector for everything the owner runs: other Claude Code sessions drive it through an MCP, it works the same on a second Windows laptop, and it adopts what T3 Code does better. The research behind this plan is the Haiku comparison of T3 Code and Bitbots (29 October 2026) and the OpenCode 2.2 image-generation review.
+Owner request of 29 October 2026. Retinue becomes the connector for everything the owner runs: other Claude Code sessions drive it through an MCP, it works the same on a second Windows laptop, and it adopts what T3 Code does better. The research behind this plan is the Haiku comparison of T3 Code and Retinue (29 October 2026) and the OpenCode 2.2 image-generation review.
 
 Every phase must work in both the **full app** and **companion mode**. Each phase lists what the companion shows.
 
@@ -10,11 +10,11 @@ Every phase must work in both the **full app** and **companion mode**. Each phas
 - **Frontend:** the Director (Claude) does all UI and UX: components, styles, copy, motion, companion, settings and UI tests.
 - The backend lane never runs `git commit`. The Director reviews every diff, runs the gates and commits.
 - **Phase 0** is built by a Sonnet 5.5 subagent of the Director's Claude Code session.
-- **From Phase 1**, the work is assigned through the new MCP to a Sonnet 5.5 (medium) bot inside the owner's running Bitbots app. That bot works in its own git worktree, never in the checkout the running app was built from. The owner confirms before this starts.
+- **From Phase 1**, the work is assigned through the new MCP to a Sonnet 5.5 (medium) bot inside the owner's running Retinue app. That bot works in its own git worktree, never in the checkout the running app was built from. The owner confirms before this starts.
 
-## Phase 0: the Bitbots MCP (first, release on its own)
+## Phase 0: the Retinue MCP (first, release on its own)
 
-An MCP server that lets a Claude Code session outside Bitbots see and drive the owner's running app.
+An MCP server that lets a Claude Code session outside Retinue see and drive the owner's running app.
 
 **What it can do:**
 
@@ -28,7 +28,7 @@ An MCP server that lets a Claude Code session outside Bitbots see and drive the 
 
 **Design:**
 
-- **Transport:** stdio. Claude Code runs `bitbotsd.exe mcp-server`. It reads an endpoint file the daemon writes when the owner turns the MCP on. The calls go to a separate loopback route with its own token.
+- **Transport:** stdio. Claude Code runs `retinued.exe mcp-server`. It reads an endpoint file the daemon writes when the owner turns the MCP on. The calls go to a separate loopback route with its own token.
 - **The daemon capability is never used.** The route is `/rpc` with methods prefixed `ext.`, gated like `outside.hook`.
 - **Off by default.** The owner turns it on in Settings › Connections and picks a level:
   - **View**: read only.
@@ -55,7 +55,7 @@ A bot is no longer owned by a project. The owner builds a few good bots once, an
 - **Sidebar.** It lists bots, with their status, as today. Opening a bot shows its conversations grouped by project, and **New conversation** has a project picker that defaults to the bot's last project.
 - **Context.** Each conversation sees both:
   - **the bot's part:** its identity, instructions, skills and what it knows about the owner;
-  - **the project's part:** the project's own notes and rules, and a `.bitbots.json` in the repo when there is one.
+  - **the project's part:** the project's own notes and rules, and a `.retinue.json` in the repo when there is one.
 
   Memory is split the same way: a note is either about the bot or the owner, or tied to one project. A note tied to one project never appears in another.
 - **Approvals.** **Always allow** offers both scopes: **in this project** or **everywhere for this bot**. The Approvals page shows each rule's scope and lets the owner change it.
@@ -71,7 +71,7 @@ This phase goes before the rest of Phase 1, because the sidebar, memory and appr
 
 ## Phase 1B: from Theo's T3 Code video (filtered for bots, desktop only)
 
-Thread-inbox features (snooze, settle, working sections, bulk settle) and anything mobile are left out: Bitbots has bots with a status, not threads, and the focus is the desktop app.
+Thread-inbox features (snooze, settle, working sections, bulk settle) and anything mobile are left out: Retinue has bots with a status, not threads, and the focus is the desktop app.
 
 - **Fan-out and compare:** one prompt to several bots, with the answers side by side.
 - **Queue a message to send when a usage limit resets.**
@@ -129,11 +129,11 @@ Thread-inbox features (snooze, settle, working sections, bulk settle) and anythi
 
 ## Phase 4: machines (Windows only)
 
-Run Bitbots on a second Windows laptop and use it the same way. Linux is out of scope for now.
+Run Retinue on a second Windows laptop and use it the same way. Linux is out of scope for now.
 
 - **Install and sign-in.** The same installer and updater. A first-run import of a template backup brings the bots, skills and schedules, but no secrets.
 - **Machines registry.** Each install has a machine id and name. Pairing two installs reuses Remote: Tailscale or Native, owner approval, tier per device. One app then lists the other machine's bots under that machine's name.
-- **Repo identity by Git remote.** A project is identified by its normalized remote URL, so the same repo on two machines is one project. An optional `.bitbots.json` in the repo carries shared project settings: setup script, default bot, approval mode.
+- **Repo identity by Git remote.** A project is identified by its normalized remote URL, so the same repo on two machines is one project. An optional `.retinue.json` in the repo carries shared project settings: setup script, default bot, approval mode.
 - **Connection ownership.** Only one machine runs a given conversation; the other shows it read-only, with **Take over**, which hands off with a note.
 - **Handoff between machines:** move a conversation with its handoff note; the worktree branch is pushed first when there is a remote.
 - **Channel switch:** stable or beta, per machine.
@@ -195,4 +195,4 @@ A bot can have a fleet working under it, when asked: "spawn 3 sub-agents as Haik
 
 1. Phase 0, release, owner installs, Director connects and smoke-tests, **owner confirms**.
 2. Then, through the MCP, Phases 1 and 2 (they share no files), then 3, 4, 5, 6, 7 and 8. Each phase is a release candidate on its own.
-3. Every phase: the gates in `.claude/skills/bitbots-development`, the browser preview for UI in Haze and Stone, dark and light, and the companion. Each phase ends with a live check by the owner and the skill update.
+3. Every phase: the gates in `.claude/skills/retinue-development`, the browser preview for UI in Haze and Stone, dark and light, and the companion. Each phase ends with a live check by the owner and the skill update.

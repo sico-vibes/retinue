@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { currentWindow, invokeNative, listenNative } from '../transport/nativeBridge'
 import { playDictationCue } from './dictationSound'
-import { syncThemeStyleFromCache } from '../blob/bitbots'
+import { syncThemeStyleFromCache } from '../blob/retinue'
 import { DictationIsland, type IslandPhase } from './DictationIsland'
 
 type Phase = 'idle' | IslandPhase
@@ -15,7 +15,7 @@ const TAP_MAX_MOVEMENT_PX = 6
  * The floating dictation bubble, in its own always-on-top window, shown by the
  * backend while dictation runs and the companion is hidden. It is a recorder
  * only (timer, level bars, state): the words go to the message box, never here.
- * It grows only to explain an error. Tap to open Bitbots; hold to move it.
+ * It grows only to explain an error. Tap to open Retinue; hold to move it.
  */
 export function DictationBubble() {
   const [phase, setPhase] = useState<Phase>('idle')
@@ -37,10 +37,10 @@ export function DictationBubble() {
       else unsubs.push(unlisten)
     }
     void (async () => {
-      add(await listenNative<{ surface: string }>('bloblex-dictation-surface', (payload) => {
+      add(await listenNative<{ surface: string }>('retinue-dictation-surface', (payload) => {
         responsible.current = payload.surface === 'bubble'
       }))
-      add(await listenNative<DictationEvent>('bloblex-dictation', (payload) => {
+      add(await listenNative<DictationEvent>('retinue-dictation', (payload) => {
         if (!responsible.current) return
         const { type, text } = payload
         if (type === 'ready') {
@@ -75,7 +75,7 @@ export function DictationBubble() {
           playDictationCue('error')
         }
       }))
-      add(await listenNative<{ level: number }>('bloblex-dictation-level', (payload) => setLevel(payload.level)))
+      add(await listenNative<{ level: number }>('retinue-dictation-level', (payload) => setLevel(payload.level)))
     })().catch(() => undefined)
     return () => {
       disposed = true

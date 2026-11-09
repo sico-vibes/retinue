@@ -22,7 +22,7 @@ branch, and each activation wrote another notice.
 
 ### Session data flag `providerTurns`
 
-`crates/bloblex-storage/src/lib.rs`
+`crates/retinue-storage/src/lib.rs`
 
 - `session_provider_turns` (2078): reads `data.providerTurns`, absent = 0.
 - `increment_session_provider_turns` (2085): increments and returns the new
@@ -39,7 +39,7 @@ branch, and each activation wrote another notice.
 
 ### Daemon
 
-`crates/bloblex-daemon/src/main.rs`
+`crates/retinue-daemon/src/main.rs`
 
 - `create_session` (1821): a brand-new provider context is stored with
   `resumable = false` and the create response reports `resumable: false`; the
@@ -114,10 +114,10 @@ Existing tests updated for the new rule:
 
 Run in `C:\fx52` with `CARGO_TARGET_DIR=C:/fxt/a2`.
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`:
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`:
   all suites passed (daemon binary: 295 passed, 0 failed; no `FAILED` or
   `panicked` lines).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`: clean.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`: clean.
   `resume_or_start_fresh` gained one argument, so it carries
   `#[allow(clippy::too_many_arguments)]`.
 
@@ -145,14 +145,14 @@ real context loss would have been announced silently.
 
 ### Changes
 
-- `crates/bloblex-storage/src/lib.rs`:
+- `crates/retinue-storage/src/lib.rs`:
   - `session_had_provider_turns` (2090, new) returns whether the current provider
     context has had a delivered prompt. If the `providerTurns` key is present it
     uses `value > 0` (an explicit 0 still means no turns). If the key is **absent**
     it treats the context as having had turns only when the row already held a
     provider context (`provider_session_id` non-empty or `resumable`) **and** the
     `messages` table holds at least one `user` or `assistant` row.
-- `crates/bloblex-daemon/src/main.rs`: the four reads of the counter now use the
+- `crates/retinue-daemon/src/main.rs`: the four reads of the counter now use the
   new method: `previous_had_turns` in `resume_inner` (1952) and the
   `ContextChanged` handler (3556); the resumable decision on install (2053-2054);
   and `AgentEvent::SessionStarted` (3261).
@@ -179,10 +179,10 @@ message whose resume is rejected records exactly one notice and one
 
 Run in `C:\fx52` with `CARGO_TARGET_DIR=C:/fxt/a2`.
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop
   --no-fail-fast | grep -E "test result|FAILED|panicked"`: all suites passed
   (daemon binary: 296 passed, 0 failed; no `FAILED` or `panicked` lines).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`: clean.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`: clean.
 
 ### Still unverified
 

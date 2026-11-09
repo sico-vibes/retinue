@@ -6,7 +6,7 @@
 
 Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort, in its own worktree. Director reviews, runs the gates on the merged result and commits. **Do not run `git commit`.** Read `AGENTS.md` first (the 16 October amendment: two lanes, the lane never commits).
 
-Read before coding: `crates/bloblex-daemon/src/main.rs` `session_prompt_impl` (~2345), `ensure_session_active` (~2030), `resume_session` (~1854), the `session.cancel` dispatch arm (~897), `finish_turn_failed` (~2736), `new_session`, the test `state()` helper; `crates/bloblex-daemon/src/queue.rs` `send_claimed` (~270-300); `crates/bloblex-daemon/src/team.rs` `deliver` (~580), `after_turn`, `relay_failure`; `crates/bloblex-daemon/src/retry.rs`; `crates/bloblex-daemon/src/catalog.rs` (WP1, already merged: every send-path catalog read is `CachedOnly`).
+Read before coding: `crates/retinue-daemon/src/main.rs` `session_prompt_impl` (~2345), `ensure_session_active` (~2030), `resume_session` (~1854), the `session.cancel` dispatch arm (~897), `finish_turn_failed` (~2736), `new_session`, the test `state()` helper; `crates/retinue-daemon/src/queue.rs` `send_claimed` (~270-300); `crates/retinue-daemon/src/team.rs` `deliver` (~580), `after_turn`, `relay_failure`; `crates/retinue-daemon/src/retry.rs`; `crates/retinue-daemon/src/catalog.rs` (WP1, already merged: every send-path catalog read is `CachedOnly`).
 
 ## Why
 
@@ -55,7 +55,7 @@ In the `session.cancel` arm: when `active_turns` has the session's turn but `st.
 - Remote tier: add `session.warm` to `apps/desktop/src/remote/remoteTiers.ts` as `class: 'chat'`, `minTier: CHAT` (or the existing constant for chat), `why: 'Starts a conversation\'s coding agent ahead of a message.'`, and refuse it during quiet hours if the table supports a quiet-hours flag (it spawns processes). `npx vitest run src/remote` must stay green.
 
 ## 4. Follow-up from the WP7 review
-`crates/bloblex-speech/src/cloud.rs` `warm()`: wrap the DNS lookup in a **3 second** `tokio::time::timeout` so a hung resolver cannot hold the warm-up; a timeout reports `dns_ok: false`. Add a test that `warm()` returns within 5 s (no network needed; it may report `dns_ok` either way).
+`crates/retinue-speech/src/cloud.rs` `warm()`: wrap the DNS lookup in a **3 second** `tokio::time::timeout` so a hung resolver cannot hold the warm-up; a timeout reports `dns_ok: false`. Add a test that `warm()` returns within 5 s (no network needed; it may report `dns_ok` either way).
 
 ## Tests (daemon test module; reuse the existing fake adapters, add a blocking one)
 - `prompt_returns_accepted_before_resume_completes`: an adapter whose `resume_session` waits on a `tokio::sync::Notify`; `session.prompt` returns `accepted` with state `starting`, the user message is saved; after the notify, state becomes `working` and `prompt` is called once.
@@ -75,8 +75,8 @@ In the `session.cancel` arm: when `active_turns` has the session's turn but `st.
 - Log prompt text, paths or provider output beyond what is logged today.
 
 ## Gates (run them; paste summaries into the report)
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote`
 
 Use the `CARGO_TARGET_DIR` the brief gives you (a separate one: do not share it with another worktree).

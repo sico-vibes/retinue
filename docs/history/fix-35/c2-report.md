@@ -5,7 +5,7 @@
 > **Last updated:** 2026-10-17
 
 Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort, worktree `C:\fx56`.
-Builds on C1 (`crates/bloblex-daemon/src/remote/native.rs`, `docs/history/fix-35/c1-report.md`).
+Builds on C1 (`crates/retinue-daemon/src/remote/native.rs`, `docs/history/fix-35/c1-report.md`).
 Spec: `docs/history/fix-35/c2-connectivity-spec.md`. **No `git commit` was run.**
 
 ## What was built
@@ -18,7 +18,7 @@ This change learns and reports each of them, without any third-party service.
 - **UPnP / IGD port mapping** (`remote/connectivity.rs`, new). Behind the owner's
   consent (`remote.native.upnp`, default false) it searches the gateway (5 s
   timeout), adds a TCP mapping external `<port>` → this host's LAN IPv4 `<port>`
-  with description `Bitbots Remote` and a 3600 s lease, renews the lease every
+  with description `Retinue Remote` and a 3600 s lease, renews the lease every
   30 minutes, and removes **only its own** mapping on disable or daemon
   shutdown. A missing gateway or a refused mapping becomes a status, never fatal.
 - **External IP and CGNAT.** The external IP comes only from UPnP
@@ -28,7 +28,7 @@ This change learns and reports each of them, without any third-party service.
   minutes while Native is on; a change updates `native.urls`, regenerates the
   certificate when the new IP is not in the SANs, and emits `remote.changed`.
 - **Windows Firewall.** Inbound-rule detection via
-  `netsh advfirewall firewall show rule name="Bitbots Remote"` (5 s timeout, no
+  `netsh advfirewall firewall show rule name="Retinue Remote"` (5 s timeout, no
   shell, parsed). `remote.native.firewall.add` / `.remove` raise an **elevated**
   `netsh` through `powershell Start-Process -Verb RunAs -Wait` (the owner sees
   UAC) and report `added | removed | declined | failed`, or `unsupported` off
@@ -55,20 +55,20 @@ This change learns and reports each of them, without any third-party service.
 
 ## Files
 
-- `crates/bloblex-daemon/src/remote/connectivity.rs` (new) — mapping lifecycle,
+- `crates/retinue-daemon/src/remote/connectivity.rs` (new) — mapping lifecycle,
   external IP, CGNAT classification, firewall detection/argv, test seams.
-- `crates/bloblex-daemon/src/remote/native.rs` — `EXTERNAL_IP_SETTING`, the
+- `crates/retinue-daemon/src/remote/native.rs` — `EXTERNAL_IP_SETTING`, the
   `ConnectivityState` inside `NativeState`, the C2 fields in `status_block`,
   `enable`/`disable` call into connectivity.
-- `crates/bloblex-daemon/src/remote/web.rs` — the open `/api/ping` route, the
+- `crates/retinue-daemon/src/remote/web.rs` — the open `/api/ping` route, the
   ping handler, `reached_from`, the shared abuse bucket including `/api/ping`,
   and the start-only denied activity lines.
-- `crates/bloblex-daemon/src/remote/mod.rs` — `remote.*` dispatch for the four
+- `crates/retinue-daemon/src/remote/mod.rs` — `remote.*` dispatch for the four
   new RPCs, `discover_gateway` (seam), `TestSeams`, disable calls
   `connectivity::disable`.
-- `crates/bloblex-daemon/src/main.rs` — the four new methods listed in main's
+- `crates/retinue-daemon/src/main.rs` — the four new methods listed in main's
   `remote.*` arm.
-- `crates/bloblex-daemon/src/remote/tests.rs` — the Rust tests below.
+- `crates/retinue-daemon/src/remote/tests.rs` — the Rust tests below.
 - `apps/desktop/src/remote/tiers.json` — the four new RPCs, each `never`.
 - `apps/desktop/src/remote/remoteContract.ts` — the four methods and the C2
   status fields/types (`RemoteNativeUpnp`, `RemoteNativeFirewallState`,
@@ -79,7 +79,7 @@ This change learns and reports each of them, without any third-party service.
 ## Dependencies added
 
 - `igd-next = { version = "0.18", default-features = false, features = ["aio_tokio"] }`
-  (workspace), used by `bloblex-daemon` for UPnP/IGD. `if-addrs` (already a C1
+  (workspace), used by `retinue-daemon` for UPnP/IGD. `if-addrs` (already a C1
   dependency) enumerates the host's LAN IPv4. `async-trait` (already present) is
   used for the `UpnpGateway` trait.
 
@@ -130,19 +130,19 @@ counted by C1's unauthenticated bucket.
 Detection (no shell, parsed; 5 s timeout), from the recorded-output test:
 
 ```
-netsh advfirewall firewall show rule name=Bitbots Remote
+netsh advfirewall firewall show rule name=Retinue Remote
 ```
 
 Add (elevated, the owner sees UAC), argv[0..5] as launched:
 
 ```
-powershell -NoProfile -NonInteractive -Command "Start-Process -FilePath netsh -Verb RunAs -Wait -ArgumentList @('advfirewall','firewall','add','rule','name=Bitbots Remote','dir=in','action=allow','protocol=TCP','localport=48621')"
+powershell -NoProfile -NonInteractive -Command "Start-Process -FilePath netsh -Verb RunAs -Wait -ArgumentList @('advfirewall','firewall','add','rule','name=Retinue Remote','dir=in','action=allow','protocol=TCP','localport=48621')"
 ```
 
 Remove (elevated):
 
 ```
-powershell -NoProfile -NonInteractive -Command "Start-Process -FilePath netsh -Verb RunAs -Wait -ArgumentList @('advfirewall','firewall','delete','rule','name=Bitbots Remote')"
+powershell -NoProfile -NonInteractive -Command "Start-Process -FilePath netsh -Verb RunAs -Wait -ArgumentList @('advfirewall','firewall','delete','rule','name=Retinue Remote')"
 ```
 
 The inner `netsh` argument vector is built by `add_rule_args(port)` /
@@ -151,7 +151,7 @@ the firewall rule name and port cannot break out of the PowerShell list.
 
 ## Tests
 
-Rust (`crates/bloblex-daemon/src/remote/tests.rs`), fakes only — no real router,
+Rust (`crates/retinue-daemon/src/remote/tests.rs`), fakes only — no real router,
 firewall or network:
 
 - `native_cgnat_classification_matches_the_spec` — 100.64.0.1 and
@@ -196,9 +196,9 @@ the tier-parity test covers the four new `never` rows in `tiers.json`.
 
 ## Gates
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-  — every `test result: ok`, 0 failed; `bloblex-daemon` 326 passed.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+  — every `test result: ok`, 0 failed; `retinue-daemon` 326 passed.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote src/preview` —
   `tsc` clean; vitest 207 passed (13 files).
 
@@ -210,7 +210,7 @@ the tier-parity test covers the four new `never` rows in `tiers.json`.
   through the contract loop, not with dedicated C2 assertions.
 - **`remote.native.upnp.set` returns the `native` status block**, not a bare
   `{ok:true}`, matching how the other `native.*` RPCs report.
-- **The firewall removal deletes the rule by name** (`delete rule name=Bitbots
+- **The firewall removal deletes the rule by name** (`delete rule name=Retinue
   Remote`), which is the spec's "likewise for disable".
 - **The firewall `add`/`remove` outcome** is decided by re-reading the rule after
   the elevated command and by the process exit code: an accepted prompt that then
@@ -243,31 +243,31 @@ worktree `C:\fx56`. **No `git commit` was run.**
 ### 1. The firewall rule name (the review finding)
 
 `Start-Process -ArgumentList @(...)` joins its elements with spaces **without
-quoting**, so the old rule name `Bitbots Remote` reached `netsh` as two words and
+quoting**, so the old rule name `Retinue Remote` reached `netsh` as two words and
 the add/delete failed or targeted the wrong rule. The rule is now named
-`Bitbots-Remote` (no space) in `FIREWALL_RULE_NAME`
+`Retinue-Remote` (no space) in `FIREWALL_RULE_NAME`
 (`connectivity.rs:46`), which is what the show, add and delete commands all use.
 
 The corrected argv (only the rule name changed):
 
 ```
-netsh advfirewall firewall show rule name=Bitbots-Remote
+netsh advfirewall firewall show rule name=Retinue-Remote
 
-powershell -NoProfile -NonInteractive -Command "Start-Process -FilePath netsh -Verb RunAs -Wait -ArgumentList @('advfirewall','firewall','add','rule','name=Bitbots-Remote','dir=in','action=allow','protocol=TCP','localport=48621')"
+powershell -NoProfile -NonInteractive -Command "Start-Process -FilePath netsh -Verb RunAs -Wait -ArgumentList @('advfirewall','firewall','add','rule','name=Retinue-Remote','dir=in','action=allow','protocol=TCP','localport=48621')"
 
-powershell -NoProfile -NonInteractive -Command "Start-Process -FilePath netsh -Verb RunAs -Wait -ArgumentList @('advfirewall','firewall','delete','rule','name=Bitbots-Remote')"
+powershell -NoProfile -NonInteractive -Command "Start-Process -FilePath netsh -Verb RunAs -Wait -ArgumentList @('advfirewall','firewall','delete','rule','name=Retinue-Remote')"
 ```
 
 - The old name is still **read** as a rule for the port (detection parses by
   `LocalPort`, not the name), and `remote.native.firewall.remove` now deletes the
   current rule and then the old name, so an upgraded install cleans up:
-  `FIREWALL_RULE_NAMES_TO_DELETE = ["Bitbots-Remote", "Bitbots Remote"]`
+  `FIREWALL_RULE_NAMES_TO_DELETE = ["Retinue-Remote", "Retinue Remote"]`
   (`connectivity.rs:631`). A name with no rule is not an error — the outcome is
   read from the status afterwards, so a missing legacy rule still reports
   `removed`.
 - Because the argument list is joined without quoting, the delete argument for the
   old name keeps its space by being wrapped in double quotes:
-  `... delete rule name="Bitbots Remote"`. `remove_rule_args(name)`
+  `... delete rule name="Retinue Remote"`. `remove_rule_args(name)`
   (`connectivity.rs:617`) quotes a name only when it contains a space; the current
   name is passed unquoted. `show_rule_args(name)` / `add_rule_args(port)` build
   the other two commands.
@@ -276,7 +276,7 @@ powershell -NoProfile -NonInteractive -Command "Start-Process -FilePath netsh -V
   prompt is a deliberate, documented cost, not hidden.
 
 Tests (`native_firewall_parses_recorded_output_and_builds_the_exact_argv`): the
-recorded `Rule Name` is now `Bitbots-Remote`; the old name is also parsed as
+recorded `Rule Name` is now `Retinue-Remote`; the old name is also parsed as
 `allowed`; the show/add/delete argv strings above and the legacy delete string are
 asserted, plus the delete-names list.
 
@@ -311,17 +311,17 @@ reported by `me()`.
 
 ### Gates
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop
-  --no-fail-fast` — every `test result: ok`, 0 failed; `bloblex-daemon` 326
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop
+  --no-fail-fast` — every `test result: ok`, 0 failed; `retinue-daemon` 326
   passed.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote src/preview` —
   `tsc` clean; vitest 214 passed (13 files), up from 207.
 
 ### Unverified
 
 - **The legacy-name delete is asserted by argv only.** No real `netsh`/UAC run
-  proves the quoted `name="Bitbots Remote"` reaches `netsh` as one word, and no
+  proves the quoted `name="Retinue Remote"` reaches `netsh` as one word, and no
   upgraded machine was checked to confirm the old rule is gone. As in C2, the
   elevated path is otherwise unverified end to end.
 - **The sign-in path is not exercised against the daemon.** Only the transport
@@ -333,7 +333,7 @@ reported by `me()`.
 
 The owner kept seeing the Windows Firewall "Allow access?" prompt while the lane
 ran tests: the Native Remote tests turned Native on and
-`crates/bloblex-daemon/src/remote/native.rs` bound `0.0.0.0` (and `[::]`), once
+`crates/retinue-daemon/src/remote/native.rs` bound `0.0.0.0` (and `[::]`), once
 per newly built test executable. **No `git commit` was run.**
 
 - **The bind host is now state, not a literal.** `native::BindHosts { v4, v6 }`
@@ -363,10 +363,10 @@ per newly built test executable. **No `git commit` was run.**
 
 ### Gates
 
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop
-  --no-fail-fast` — every `test result: ok`, 0 failed; `bloblex-daemon` 326
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop
+  --no-fail-fast` — every `test result: ok`, 0 failed; `retinue-daemon` 326
   passed (327 with the new test).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
 
 ### Unverified
 
@@ -386,13 +386,13 @@ per newly built test executable. **No `git commit` was run.**
   daemon no longer pops a console. `elevated_command` adds `-WindowStyle Hidden` to
   its `Start-Process` line so the elevated `netsh` does not flash a console; the UAC
   prompt itself still shows.
-- **One UAC prompt on remove.** `LEGACY_FIREWALL_RULE_NAME` ("Bitbots Remote", with a
+- **One UAC prompt on remove.** `LEGACY_FIREWALL_RULE_NAME` ("Retinue Remote", with a
   space) never shipped — it existed only in this unmerged worktree — so
   `FIREWALL_RULE_NAMES_TO_DELETE` and the quoting branch in `remove_rule_args` are
-  gone. `remove_rule` now runs one elevated delete of `Bitbots-Remote`. Detection is
+  gone. `remove_rule` now runs one elevated delete of `Retinue-Remote`. Detection is
   unchanged: it reads `LocalPort`, so an old rule name would still be seen.
-- **Gates.** `cargo test -p bloblex-daemon` (327 + 1 passed, 0 failed) and
-  `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` both pass.
+- **Gates.** `cargo test -p retinue-daemon` (327 + 1 passed, 0 failed) and
+  `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` both pass.
 
 ## C6 — a signed-out phone learns the method
 
@@ -428,9 +428,9 @@ with an error that carried no method. The refusal now names it. Lane
 
 ### Gates
 
-- `RUST_MIN_STACK=33554432 cargo test -p bloblex-daemon --no-fail-fast` —
-  every `test result: ok`, 0 failed; `bloblex-daemon` 328 passed (327 + 1).
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings` — clean.
+- `RUST_MIN_STACK=33554432 cargo test -p retinue-daemon --no-fail-fast` —
+  every `test result: ok`, 0 failed; `retinue-daemon` 328 passed (327 + 1).
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings` — clean.
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote` — `tsc` clean;
   vitest 194 passed (11 files).
 

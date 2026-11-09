@@ -81,7 +81,7 @@ pub fn show(executor: &gpui::BackgroundExecutor, value: isize) {
 }
 
 /// Bring a window to the front and give it the keyboard, the way the owner's
-/// click on "Open in Bitbots" does.
+/// click on "Open in Retinue" does.
 pub fn activate(executor: &gpui::BackgroundExecutor, value: Option<isize>) {
     let Some(value) = value else { return };
     defer(executor, move || unsafe {

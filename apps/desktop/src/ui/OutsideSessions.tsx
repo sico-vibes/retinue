@@ -1,4 +1,4 @@
-// Wave 13: the companion watches Claude Code sessions the owner started outside Bitbots (in a terminal or an
+// Wave 13: the companion watches Claude Code sessions the owner started outside Retinue (in a terminal or an
 // editor). The daemon owns everything: it shows the exact change to Claude Code's settings, backs the file up,
 // adds or removes only its own hook entries, and reports each session's folder name, tool and state. Prompts,
 // messages and tool inputs are never sent here.
@@ -58,8 +58,8 @@ export function useOutsideSessions(connected: boolean): OutsideSession[] {
 /** One pill per outside session, for the companion. Nothing when there are none. */
 export function OutsideSessionPills({ sessions }: { sessions: readonly OutsideSession[] }) {
   if (!sessions.length) return null
-  return <section className="outside-sessions" aria-label="Outside Bitbots">
-    <span className="outside-sessions-title">Outside Bitbots</span>
+  return <section className="outside-sessions" aria-label="Outside Retinue">
+    <span className="outside-sessions-title">Outside Retinue</span>
     <ul>{sessions.map((session) => <li key={session.id} className={`outside-pill ${session.state}`} title={`Claude Code in ${session.folder || 'a folder'}`}>
       <ProviderLogo provider={session.provider} size={13} />
       <b>{session.folder || 'Claude Code'}</b>
@@ -99,16 +99,16 @@ export function OutsideWatchSetting({ connected }: { connected: boolean }) {
     try {
       const result = await rpc<{ status: OutsideStatus; problem: string | null }>('outside.disable', {})
       setStatus(result.status)
-      setNotice(result.problem ? `Off. ${result.problem}` : 'Off. Bitbots’ hooks were removed from Claude Code’s settings.')
+      setNotice(result.problem ? `Off. ${result.problem}` : 'Off. Retinue’ hooks were removed from Claude Code’s settings.')
     } catch (reason) { failed(reason) } finally { setBusy(false) }
   }
   const on = !!status?.enabled
   return <>
-    <SettingsRow label="Watch Claude Code outside Bitbots" hint="Shows sessions you start in a terminal or editor in the companion: the folder and what they are doing, never what you typed.">
-      <button type="button" className={`toggle ${on ? 'on' : ''}`} role="switch" aria-label="Watch Claude Code outside Bitbots" aria-checked={on} disabled={!connected || busy || !status || (!on && !status.bridgeAvailable)} onClick={() => void (on ? disable() : ask())}><i /></button>
+    <SettingsRow label="Watch Claude Code outside Retinue" hint="Shows sessions you start in a terminal or editor in the companion: the folder and what they are doing, never what you typed.">
+      <button type="button" className={`toggle ${on ? 'on' : ''}`} role="switch" aria-label="Watch Claude Code outside Retinue" aria-checked={on} disabled={!connected || busy || !status || (!on && !status.bridgeAvailable)} onClick={() => void (on ? disable() : ask())}><i /></button>
     </SettingsRow>
     {status?.problem && <p className="memory-problem settings-row-note" role="alert">{status.problem}</p>}
-    {status && !status.bridgeAvailable && !on && <p className="blob-muted settings-row-note">The hook bridge is not installed beside Bitbots, so this is not available here.</p>}
+    {status && !status.bridgeAvailable && !on && <p className="blob-muted settings-row-note">The hook bridge is not installed beside Retinue, so this is not available here.</p>}
     {notice && <p className="backup-done settings-row-note" role="status">{notice}</p>}
     {problem && <p className="memory-problem settings-row-note" role="alert">{problem}</p>}
     {preview && <OutsideConsentDialog preview={preview} busy={busy} onCancel={() => setPreview(null)} onConfirm={() => void enable()} />}
@@ -121,7 +121,7 @@ function OutsideConsentDialog({ preview, busy, onCancel, onConfirm }: { preview:
   return <div className={`sheet-backdrop blob-dialog-backdrop ${entered ? 'is-entered' : ''}`}>
     <section ref={ref} className="blob-dialog outside-consent" role="dialog" aria-modal="true" aria-labelledby="outside-consent-title" tabIndex={-1}>
       <h2 id="outside-consent-title">Change Claude Code’s settings?</h2>
-      <p>Bitbots adds its own hook entries to <code>{preview.settingsPath}</code>, so Claude Code tells the companion when a session you started yourself is working, needs you or is done. {preview.exists ? 'A copy of the current file is saved next to it first. ' : ''}Your other settings and hooks stay, and turning this off removes only Bitbots’ entries.</p>
+      <p>Retinue adds its own hook entries to <code>{preview.settingsPath}</code>, so Claude Code tells the companion when a session you started yourself is working, needs you or is done. {preview.exists ? 'A copy of the current file is saved next to it first. ' : ''}Your other settings and hooks stay, and turning this off removes only Retinue’ entries.</p>
       <details className="outside-consent-file"><summary>Show the new file</summary><pre>{preview.after}</pre></details>
       <div className="blob-dialog-actions">
         <button type="button" className="secondary-button" disabled={busy} onClick={close}>Cancel</button>

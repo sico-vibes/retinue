@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { chooseOption, helpTipText, selectOptions, selectTrigger, selectValue } from './testSelect'
 import { DEFAULT_EXPERIMENTS, EXPERIMENTS } from './experiments'
 import { SettingsSheet } from './SettingsSheet'
-import { setThemeStyle } from '../blob/bitbots'
+import { setThemeStyle } from '../blob/retinue'
 
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), invoke: vi.fn(), setCompanionMonitor: vi.fn(), setCompanionVisibility: vi.fn(), setCloseToTray: vi.fn() }))
 vi.mock('../tauri', () => ({
@@ -59,10 +59,10 @@ describe('General settings mounted controls', () => {
     await act(async () => root.render(<SettingsSheet snapshot={null} initialPage="Appearance" onClose={vi.fn()} onRefresh={vi.fn()} onError={vi.fn()} onOpenAgent={vi.fn()} />))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     expect([...host.querySelectorAll('.look-orb-choice .look-orb-tooltip')].map((button) => button.textContent)).toEqual(['Haze','Stone'])
-    expect([...host.querySelectorAll<SVGElement>('.appearance-page .look-orb')].map((orb) => orb.dataset.look)).toEqual(['haze', 'blobots'])
+    expect([...host.querySelectorAll<SVGElement>('.appearance-page .look-orb')].map((orb) => orb.dataset.look)).toEqual(['haze', 'stone'])
     expect(host.querySelector('.appearance-page .look-window')).toBeNull()
     await act(async () => { [...host.querySelectorAll<HTMLButtonElement>('.look-orb-choice')].find((button) => button.textContent?.includes('Stone'))?.click(); await Promise.resolve() })
-    expect(mocks.rpc).toHaveBeenCalledWith('settings.set', { key: 'appearance.style', value: 'blobots' })
+    expect(mocks.rpc).toHaveBeenCalledWith('settings.set', { key: 'appearance.style', value: 'stone' })
     // Wallpaper and glass belonged to Frost, retired on 27 October 2026.
     expect(host.textContent).not.toContain('Wallpaper')
     expect(host.textContent).not.toContain('Look options')
@@ -71,7 +71,7 @@ describe('General settings mounted controls', () => {
     const font = [...host.querySelectorAll<HTMLButtonElement>('.font-options button')].find((button) => button.textContent === 'Geist')
     await act(async () => { font?.click(); await Promise.resolve() })
     expect(mocks.rpc).toHaveBeenCalledWith('settings.set', { key: 'appearance.font', value: 'geist' })
-    expect(localCache.get('bitbots.font')).toBe('geist')
+    expect(localCache.get('retinue.font')).toBe('geist')
     await act(async () => { host.querySelector<HTMLButtonElement>('[aria-label^="Code font"]')!.click() })
     const codeSearch = host.querySelector<HTMLInputElement>('[aria-label="Search code fonts"]')!
     const codeChoices = codeSearch.parentElement!.querySelector('.font-options')!.textContent ?? ''
@@ -97,7 +97,7 @@ describe('General settings mounted controls', () => {
     mocks.rpc.mockImplementation(async (method: string) => method === 'settings.get' ? { settings: {} } : {})
     const onExperimentChange = vi.fn()
     const initial = DEFAULT_EXPERIMENTS[name]
-    setThemeStyle(name === 'sidebarModel' ? 'blobots' : 'haze')
+    setThemeStyle(name === 'sidebarModel' ? 'stone' : 'haze')
     host = document.createElement('div'); document.body.append(host); root = createRoot(host)
     await act(async () => root.render(<SettingsSheet snapshot={null} initialPage={FEATURE_PAGES[name as keyof typeof FEATURE_PAGES]} onExperimentChange={onExperimentChange} onClose={vi.fn()} onRefresh={vi.fn()} onError={vi.fn()} onOpenAgent={vi.fn()} />))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
@@ -171,7 +171,7 @@ describe('General settings mounted controls', () => {
     expect([...host.querySelectorAll('.settings-nav-label')].map((label) => label.textContent)).toEqual(['App', 'Employees', 'Connections', 'System'])
     expect(host.querySelector('.settings-nav')?.textContent).not.toContain('Experimental')
     expect(host.querySelector('[aria-label="Model and effort under the name"]')).toBeNull()
-    act(() => setThemeStyle('blobots'))
+    act(() => setThemeStyle('stone'))
     expect(host.querySelector<HTMLButtonElement>('[aria-label="Model and effort under the name"]')?.getAttribute('aria-checked')).toBe('false')
     act(() => setThemeStyle('haze'))
   })
@@ -232,7 +232,7 @@ describe('General settings mounted controls', () => {
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
     expect(host.querySelector('[aria-label="Notify when an employee finishes or needs approval"]')).not.toBeNull()
     // The characters are employees in both looks.
-    act(() => setThemeStyle('blobots'))
+    act(() => setThemeStyle('stone'))
     expect(host.querySelector('[aria-label="Notify when an employee finishes or needs approval"]')).not.toBeNull()
     expect(host.querySelector('[aria-label="Notify when a blob finishes or needs approval"]')).toBeNull()
     act(() => setThemeStyle('haze'))
@@ -245,7 +245,7 @@ describe('General settings mounted controls', () => {
     host = document.createElement('div'); document.body.append(host); root = createRoot(host)
     await act(async () => root.render(<SettingsSheet snapshot={null} initialPage="Companion" onClose={vi.fn()} onRefresh={vi.fn()} onError={vi.fn()} onOpenAgent={vi.fn()} />))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    const launchSwitch = host.querySelector<HTMLButtonElement>('[aria-label="Open the companion when Bitbots starts"]')
+    const launchSwitch = host.querySelector<HTMLButtonElement>('[aria-label="Open the companion when Retinue starts"]')
     expect(launchSwitch?.getAttribute('aria-checked')).toBe('false')
     await act(async () => launchSwitch?.click())
     expect(mocks.rpc).toHaveBeenCalledWith('settings.set', { key: 'companion.openAtStartup', value: true })

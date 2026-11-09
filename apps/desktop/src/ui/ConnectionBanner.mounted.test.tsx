@@ -29,7 +29,7 @@ describe('ConnectionBanner', () => {
     const banner = view.host.querySelector('[data-state="reconnecting"]')!
     expect(banner.getAttribute('role')).toBe('status')
     expect(banner.getAttribute('aria-live')).toBe('polite')
-    expect(banner.textContent).toContain('Reconnecting to Bitbots')
+    expect(banner.textContent).toContain('Reconnecting to Retinue')
     expect(banner.textContent).not.toContain('Attempt')
     expect(view.host.querySelector('.spinning')).not.toBeNull()
   })
@@ -43,7 +43,7 @@ describe('ConnectionBanner', () => {
     const onRetry = vi.fn()
     const view = mount(<ConnectionBanner state="disconnected" attempts={3} failed onRetry={onRetry} />)
     const banner = view.host.querySelector('[data-state="failed"]')!
-    expect(banner.textContent).toContain('Bitbots could not be reached')
+    expect(banner.textContent).toContain('Retinue could not be reached')
     const button = [...banner.querySelectorAll('button')].find((item) => item.textContent === 'Retry now')!
     act(() => button.click())
     expect(onRetry).toHaveBeenCalledOnce()
@@ -68,11 +68,11 @@ describe('ConnectionBanner and the daemon supervisor', () => {
     await tick()
     expect(view.host.textContent).toBe('')
     act(() => sup.handler!({ state: 'restarting', attempt: 2, nextRetryMs: 2000, lastExitCode: 1 }))
-    expect(view.host.querySelector('[data-state="reconnecting"]')?.textContent).toBe('The Bitbots service stopped. Restarting it… Attempt 2')
+    expect(view.host.querySelector('[data-state="reconnecting"]')?.textContent).toBe('The Retinue service stopped. Restarting it… Attempt 2')
     act(() => sup.handler!({ state: 'gave_up', attempt: 5, nextRetryMs: null, lastExitCode: 1 }))
     const banner = view.host.querySelector('[data-state="failed"]')!
     expect(banner.getAttribute('role')).toBe('alert')
-    expect(banner.textContent).toContain('The Bitbots service keeps stopping')
+    expect(banner.textContent).toContain('The Retinue service keeps stopping')
     await act(async () => { banner.querySelector<HTMLButtonElement>('button')!.click(); await Promise.resolve() })
     expect(sup.restart).toHaveBeenCalledOnce()
     expect(retry).toHaveBeenCalledOnce()

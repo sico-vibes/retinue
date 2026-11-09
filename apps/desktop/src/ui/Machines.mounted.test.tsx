@@ -28,7 +28,7 @@ import { SharedSettingsSection } from './ProjectSettingsDialog'
 
 const bot = (over = {}) => ({ id: 'rae', name: 'Rae', color: 'mint', role: null, provider: 'claude', model: null, busy: false, activeSessionId: null, conversations: 1, ...over })
 const machine = (over: Partial<Machine> = {}): Machine => ({ id: 'laptop', name: 'Work laptop', url: 'https://laptop.example.ts.net', auth: 'code', fingerprint: null, tier: 'operator', pairedAt: null, lastSeenAt: null, state: 'online', detail: null, version: '1', bots: [bot()], ...over })
-const preview = (over: Partial<TakeOverPreview> = {}): TakeOverPreview => ({ ready: true, reason: null, title: 'T', bot: { id: 'rae', name: 'Rae', provider: 'claude', model: null, agentId: 'rae', willCreate: false }, repo: { identity: 'github.com/a/b', url: 'https://github.com/a/b', branch: 'bitbots/t', isWorktree: true, hasRemote: true }, uncommitted: 0, commitsAhead: 1, project: { id: 'p', name: 'korus' }, needsProject: false, runtimeReady: true, ...over })
+const preview = (over: Partial<TakeOverPreview> = {}): TakeOverPreview => ({ ready: true, reason: null, title: 'T', bot: { id: 'rae', name: 'Rae', provider: 'claude', model: null, agentId: 'rae', willCreate: false }, repo: { identity: 'github.com/a/b', url: 'https://github.com/a/b', branch: 'retinue/t', isWorktree: true, hasRemote: true }, uncommitted: 0, commitsAhead: 1, project: { id: 'p', name: 'korus' }, needsProject: false, runtimeReady: true, ...over })
 
 let root: Root | null = null
 let host: HTMLDivElement
@@ -132,7 +132,7 @@ describe('Settings, Machines', () => {
   })
 
   it('pairs by code on a trusted address', async () => {
-    replies({ 'machine.probe': { origin: 'o', reachable: true, isBitbots: true, auth: 'code', fingerprint: null, trusted: true }, 'machine.pair.begin': { job: { id: 'j', url: 'u', state: 'approved', detail: null, machine: { name: 'Work laptop' } } } })
+    replies({ 'machine.probe': { origin: 'o', reachable: true, isRetinue: true, auth: 'code', fingerprint: null, trusted: true }, 'machine.pair.begin': { job: { id: 'j', url: 'u', state: 'approved', detail: null, machine: { name: 'Work laptop' } } } })
     const onDone = vi.fn()
     await render(<PairMachine onDone={onDone} onCancel={vi.fn()} />)
     await type(document.querySelector<HTMLInputElement>('input')!, 'https://laptop.example.ts.net')
@@ -147,7 +147,7 @@ describe('Settings, Machines', () => {
   })
 
   it('needs the fingerprint compared before a password goes anywhere, and forgets the password', async () => {
-    replies({ 'machine.probe': { origin: 'o', reachable: true, isBitbots: true, auth: 'password', fingerprint: 'AB:CD', trusted: false }, 'machine.pair.begin': { job: { id: 'j', url: 'u', state: 'pending', detail: null, machine: null } }, 'machine.pair.list': { jobs: [] } })
+    replies({ 'machine.probe': { origin: 'o', reachable: true, isRetinue: true, auth: 'password', fingerprint: 'AB:CD', trusted: false }, 'machine.pair.begin': { job: { id: 'j', url: 'u', state: 'pending', detail: null, machine: null } }, 'machine.pair.list': { jobs: [] } })
     await render(<PairMachine onDone={vi.fn()} onCancel={vi.fn()} />)
     await type(document.querySelector<HTMLInputElement>('input')!, 'https://192.168.1.20:48621')
     await click(button('Continue'))
@@ -164,12 +164,12 @@ describe('Settings, Machines', () => {
     expect(document.querySelector('input[type="password"]')).toBeNull()
   })
 
-  it('stops when the address is not Bitbots or can\'t be reached', async () => {
-    replies({ 'machine.probe': { origin: 'o', reachable: true, isBitbots: false, auth: 'code', fingerprint: null, trusted: true } })
+  it('stops when the address is not Retinue or can\'t be reached', async () => {
+    replies({ 'machine.probe': { origin: 'o', reachable: true, isRetinue: false, auth: 'code', fingerprint: null, trusted: true } })
     await render(<PairMachine onDone={vi.fn()} onCancel={vi.fn()} />)
     await type(document.querySelector<HTMLInputElement>('input')!, 'https://a.example')
     await click(button('Continue'))
-    expect(document.body.textContent).toContain('isn\'t a Bitbots machine')
+    expect(document.body.textContent).toContain('isn\'t a Retinue machine')
     expect(called('machine.pair.begin')).toEqual([])
   })
 })
@@ -334,7 +334,7 @@ describe('a repository\'s own settings', () => {
   it('offers to write saved settings, and asks before replacing a file', async () => {
     rpc.mockImplementation(async (method: string, params: { replace?: boolean }) => {
       if (method === 'project.sharedSettings.get') return shared({ found: false, state: 'none', settings: {}, hash: null })
-      if (method === 'project.sharedSettings.write' && !params.replace) throw new Error('A .bitbots.json already exists.')
+      if (method === 'project.sharedSettings.write' && !params.replace) throw new Error('A .retinue.json already exists.')
       return shared({ trusted: true, state: 'trusted' })
     })
     await render(<SharedSettingsSection projectId="p" hasOwnSettings />)
@@ -349,6 +349,6 @@ describe('a repository\'s own settings', () => {
     await render(<SharedSettingsSection projectId="p" hasOwnSettings={false} />)
     await flush()
     expect(button('Write my saved settings to the file')).toBeUndefined()
-    expect(document.body.textContent).toContain('no .bitbots.json')
+    expect(document.body.textContent).toContain('no .retinue.json')
   })
 })

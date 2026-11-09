@@ -218,7 +218,7 @@ impl Companion {
     }
 
     /// Bring the main window forward, for the buttons that say "Open in
-    /// Bitbots" but have no conversation to open.
+    /// Retinue" but have no conversation to open.
     fn activate_main(&self, cx: &mut Context<Self>) {
         let handle = self.shared.read(cx).main_window;
         if let Some(handle) = handle {
@@ -615,8 +615,8 @@ impl Companion {
         cx.notify();
     }
 
-    /// "Open in Bitbots": the main window comes forward on this conversation.
-    pub fn open_in_bitbots(&mut self, cx: &mut Context<Self>) {
+    /// "Open in Retinue": the main window comes forward on this conversation.
+    pub fn open_in_retinue(&mut self, cx: &mut Context<Self>) {
         let (session_id, agent) = {
             let shared = self.shared.read(cx);
             let session_id = shared.session_id().map(str::to_owned);
@@ -849,7 +849,7 @@ impl Companion {
             .into_any_element()
     }
 
-    fn open_in_bitbots_button(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
+    fn open_in_retinue_button(&mut self, colors: Colors, cx: &mut Context<Self>) -> AnyElement {
         div()
             .id("companion-open")
             .flex()
@@ -861,9 +861,9 @@ impl Companion {
             .cursor_pointer()
             .bg(colors.raised)
             .hover(move |style| style.bg(colors.hover))
-            .on_click(cx.listener(|companion, _: &gpui::ClickEvent, _window, cx| companion.open_in_bitbots(cx)))
+            .on_click(cx.listener(|companion, _: &gpui::ClickEvent, _window, cx| companion.open_in_retinue(cx)))
             .child(art::glyph(art::Glyph::CHEVRON, 12.0, colors.text_2))
-            .child(div().text_size(px(theme::FS_2XS)).text_color(colors.text_2).child(SharedString::from("Open in Bitbots")))
+            .child(div().text_size(px(theme::FS_2XS)).text_color(colors.text_2).child(SharedString::from("Open in Retinue")))
             .into_any_element()
     }
 
@@ -884,7 +884,7 @@ impl Companion {
         } else {
             0.0
         };
-        let name = agent.map(|agent| agent.name.clone()).unwrap_or_else(|| "Bitbots".to_owned());
+        let name = agent.map(|agent| agent.name.clone()).unwrap_or_else(|| "Retinue".to_owned());
         let role = agent.map(|agent| agent.role_or_default().to_owned()).unwrap_or_else(|| "Your team".to_owned());
         let mut mark = div().flex_none().flex().items_center().justify_center().size(px(64.0));
         if let Some(agent) = agent {
@@ -1020,7 +1020,7 @@ impl Companion {
             .unwrap_or_default();
         let project = session.and_then(|session| session.project_name.clone());
         let status = self.status_of(shared, agent, session);
-        let bot_name = agent.map(|agent| agent.name.clone()).unwrap_or_else(|| "Bitbots".to_owned());
+        let bot_name = agent.map(|agent| agent.name.clone()).unwrap_or_else(|| "Retinue".to_owned());
         let conversations: Vec<(String, String)> = shared
             .snapshot()
             .zip(focused_id.as_deref())
@@ -1060,7 +1060,7 @@ impl Companion {
                 }
             }))
             .on_mouse_up(MouseButton::Left, cx.listener(|companion, _: &gpui::MouseUpEvent, _window, cx| companion.end_move(cx)))
-            .child(div().text_size(px(theme::FS_XS)).text_color(colors.text_2).child(SharedString::from("Bitbots")));
+            .child(div().text_size(px(theme::FS_XS)).text_color(colors.text_2).child(SharedString::from("Frost")));
         if let Some(pill) = self.needs_you(waiting, true, colors, cx) {
             brand = brand.child(pill);
         }
@@ -1151,7 +1151,7 @@ impl Companion {
         }
         head = head
             .child(self.size_button(colors, cx))
-            .child(self.open_in_bitbots_button(colors, cx))
+            .child(self.open_in_retinue_button(colors, cx))
             .child(self.close_button(colors, cx));
 
         let main = div().flex().flex_col().flex_1().min_w(px(0.0)).h_full().child(head).child(
@@ -1396,7 +1396,7 @@ impl Companion {
                         .child(div().text_size(px(theme::FS_2XS)).text_color(colors.text_2).child(SharedString::from("Later"))),
                 )
                 .child(div().flex_1())
-                .child(self.open_in_bitbots_button(colors, cx)),
+                .child(self.open_in_retinue_button(colors, cx)),
         );
         card.into_any_element()
     }
@@ -1477,7 +1477,7 @@ impl Companion {
                             div()
                                 .text_size(px(theme::FS_2XS))
                                 .text_color(colors.text_3)
-                                .child(SharedString::from("Bitbots checks the path only. It never reads file contents.")),
+                                .child(SharedString::from("Retinue checks the path only. It never reads file contents.")),
                         ),
                 )
                 .into_any_element(),
@@ -1697,7 +1697,7 @@ impl Render for Companion {
                     self.status_of(shared, agent.as_ref(), session.as_ref())
                 };
                 let label = peek_text.clone().unwrap_or_else(|| status.label.clone());
-                let name = agent.as_ref().map(|agent| agent.name.clone()).unwrap_or_else(|| "Bitbots".to_owned());
+                let name = agent.as_ref().map(|agent| agent.name.clone()).unwrap_or_else(|| "Retinue".to_owned());
                 let mut bar = div()
                     .id("companion-compact")
                     .size_full()

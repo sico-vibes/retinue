@@ -9,7 +9,7 @@ struct TempTree(PathBuf);
 impl TempTree {
     fn new() -> Self {
         let path =
-            std::env::temp_dir().join(format!("bloblex-file-inspection-{}", uuid::Uuid::new_v4()));
+            std::env::temp_dir().join(format!("retinue-file-inspection-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&path).expect("create isolated file inspection test directory");
         Self(path)
     }
@@ -29,7 +29,7 @@ impl Drop for TempTree {
 fn returns_canonical_path_name_and_byte_count_without_changing_contents() {
     let tree = TempTree::new();
     let file = tree.path().join("sample file.txt");
-    let contents = "Bitbots local reference — contents stay untouched\n".as_bytes();
+    let contents = "Retinue local reference — contents stay untouched\n".as_bytes();
     fs::write(&file, contents).expect("write fixture");
 
     let inspection = inspect_local_file(file.to_string_lossy().into_owned())
@@ -99,6 +99,6 @@ fn reports_a_file_that_windows_denies_opening_for_shared_read() {
         .expect("inspection must report an exclusive-sharing conflict");
     assert_eq!(
         error,
-        "Bitbots cannot read this file path with the current Windows account."
+        "Retinue cannot read this file path with the current Windows account."
     );
 }

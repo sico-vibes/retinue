@@ -4,8 +4,8 @@
 > **Status:** historical
 > **Last updated:** 2026-10-15
 
-Written 14 October 2026. Backend only (`crates/bloblex-daemon/src/quota_sources.rs`,
-`crates/bloblex-runtime/src/lib.rs`, and their tests). Must keep OpenCode 1.x
+Written 14 October 2026. Backend only (`crates/retinue-daemon/src/quota_sources.rs`,
+`crates/retinue-runtime/src/lib.rs`, and their tests). Must keep OpenCode 1.x
 working exactly as before.
 
 ## 1. Symptoms (owner, beta.26, OpenCode 2.0.28)
@@ -27,11 +27,11 @@ the Zen/Go key); there is no `opencode-go` row and no `auth.json`. So
 `NoCredentials`. (Database columns: `id, integration_id, label, value,
 connector_id, method_id, active, time_created, time_updated`.)
 
-**Sign-in.** `crates/bloblex-runtime/src/lib.rs::auth_status` shells out to
+**Sign-in.** `crates/retinue-runtime/src/lib.rs::auth_status` shells out to
 `opencode auth list` with a 5-second timeout (`safe_status_output`). OpenCode 2
 runs commands against a background service; on this machine a warm `auth list`
 already takes about 1.8 s and a cold one (no service running yet, the normal case
-right after Bitbots starts) is slower, so the call times out and the fallbacks
+right after Retinue starts) is slower, so the call times out and the fallbacks
 (`models --verbose` rejected, plain `models`) only yield a quiet "unknown".
 
 ## 3. Required behavior
@@ -97,9 +97,9 @@ right after Bitbots starts) is slower, so the call times out and the fallbacks
 ## 5. Gates
 
 ```
-cargo test -p bloblex-runtime
-cargo test -p bloblex-daemon          # RUST_MIN_STACK=33554432 on this machine
-cargo clippy -p bloblex-runtime -p bloblex-daemon --no-deps --all-targets -- -D warnings
+cargo test -p retinue-runtime
+cargo test -p retinue-daemon          # RUST_MIN_STACK=33554432 on this machine
+cargo clippy -p retinue-runtime -p retinue-daemon --no-deps --all-targets -- -D warnings
 ```
 
 The workspace is clippy-clean for `-D warnings`; keep it so.

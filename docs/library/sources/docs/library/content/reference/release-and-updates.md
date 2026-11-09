@@ -1,6 +1,6 @@
 # Release and updates
 
-> **What this is:** how a Bitbots release is built, signed for the updater, published and delivered to an installed app.
+> **What this is:** how a Retinue release is built, signed for the updater, published and delivered to an installed app.
 > **Status:** current; from the updater contract and the release scripts on 19 October 2026; the example manifest names the current release (v0.1.0-beta.36)
 > **Last updated:** 2026-10-22
 
@@ -33,7 +33,7 @@ Before a release: `npm run typecheck`, `npm test`, the browser preview check for
 
 ### 3. Sign and manifest
 
-The updater private key and password are read from outside the repository: `%USERPROFILE%\.bloblex-release\updater.key` and `updater.pass`, or `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. They are used only for the bundle build and are never printed, committed or logged.
+The updater private key and password are read from outside the repository: `%USERPROFILE%\.retinue-release\updater.key` and `updater.pass`, or `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. They are used only for the bundle build and are never printed, committed or logged.
 
 `tauri build` produces the NSIS installer and its `.sig`. `scripts/make-update-manifest.mjs` writes `latest.json`:
 
@@ -43,7 +43,7 @@ The updater private key and password are read from outside the repository: `%USE
   "notes": "…",
   "pub_date": "2026-10-19T00:00:00Z",
   "platforms": {
-    "windows-x86_64": { "signature": "…", "url": "https://…/Bitbots_0.1.0-beta.36_x64-setup.exe" }
+    "windows-x86_64": { "signature": "…", "url": "https://…/Retinue_0.1.0-beta.36_x64-setup.exe" }
   }
 }
 ```
@@ -87,7 +87,7 @@ The main checkout's `node_modules` and `target` stay, because they make later ga
 - A network failure, bad signature, missing manifest or no stable release produces a short safe message. A downgrade is never offered.
 - Development builds report "Updates unavailable in development builds" and never check.
 
-The Tauri commands are `updates_get_state`, `updates_set_preferences`, `updates_check` and `updates_install`; the events are `bloblex-update-available` and `bloblex-update-progress` (`docs/operations/updater.md`).
+The Tauri commands are `updates_get_state`, `updates_set_preferences`, `updates_check` and `updates_install`; the events are `retinue-update-available` and `retinue-update-progress` (`docs/operations/updater.md`).
 
 ## Release notes in the app
 

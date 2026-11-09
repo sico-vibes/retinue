@@ -22,7 +22,7 @@ the diff, and `p8-gates.json`, a stale failing gate run) were removed; see §7.
 
 ## 1. Usage limits become a state, not an error (recommendation 3)
 
-- **Classification from every provider.** `crates/bloblex-agent-core/src/recovery.rs`
+- **Classification from every provider.** `crates/retinue-agent-core/src/recovery.rs`
   is new: `provider_recovery` (`:7`) matches documented codes and *specific*
   failure phrases only (401/`unauthorized` → `AuthRequired`; 429 or
   usage/rate-limit phrases → `RateLimited`; 5xx/overload/stream-drop phrases →
@@ -31,23 +31,23 @@ the diff, and `p8-gates.json`, a stale failing gate run) were removed; see §7.
   `provider_retry_after` (`:117`) reads an absolute `resetsAt`/`resetAt` (ISO or
   epoch, ms or s) or a relative `retryAfter`, and keeps an already-expired window
   **negative** so a caller can never turn it into an immediate retry.
-  - Claude: `crates/bloblex-adapter-claude/src/lib.rs:614` now emits
+  - Claude: `crates/retinue-adapter-claude/src/lib.rs:614` now emits
     `RecoveryHint { retry_after_secs }`; `recovery_hint_for_claude_result`
     (`:712`) delegates to `provider_recovery`.
-  - Codex: `crates/bloblex-adapter-codex/src/lib.rs:501` emits the hint with the
+  - Codex: `crates/retinue-adapter-codex/src/lib.rs:501` emits the hint with the
     wait; `recovery_hint_for_codex_error` (`:843`) delegates to
     `provider_recovery` (so `usageLimitExceeded` and nested
     `httpConnectionFailed{500}` now classify instead of being ignored).
-  - OpenCode/ACP: `crates/bloblex-adapter-acp/src/lib.rs:1205-1256` maps both the
+  - OpenCode/ACP: `crates/retinue-adapter-acp/src/lib.rs:1205-1256` maps both the
     protocol-error path and the non-`end_turn` stop reason to a `RecoveryHint`,
     and returns the new `AdapterError::TurnErrorReported` after already queuing an
     ordered `Error`, so the event stream stays the single terminal owner.
-- **A durable state with the reset time.** `crates/bloblex-daemon/src/retry.rs`
+- **A durable state with the reset time.** `crates/retinue-daemon/src/retry.rs`
   `after_failed_turn` (`:216`) claims the turn once, derives the reset from the
   provider wait or the provider's own quota snapshot (`latest_blocked_reset`
   `:515`, `blocked_reset` `:531`), rows it in `sessions.limited_until`, appends one
   "Limited until <time>" notice and emits `session.changed`.
-  `crates/bloblex-storage/src/lib.rs` adds `limited_until`, `continuation_pending`
+  `crates/retinue-storage/src/lib.rs` adds `limited_until`, `continuation_pending`
   and `recovery_count` to `sessions` in `ensure_queue_schema` (`:482-495`) —
   additive and idempotent, so an already-versioned database is migrated too.
   `limitedUntil` is surfaced in `session_list` (`:2532`), `session_detail_locked`
@@ -99,7 +99,7 @@ the diff, and `p8-gates.json`, a stale failing gate run) were removed; see §7.
   (`main.rs:2417`, `:2440`) for every non-`Turn` owner, under the session gate.
   The chain is bounded by `recovery_count < 3`; when the resume failed, P6's
   blind recap is armed with the same `set_session_recap_pending` used by item 20,
-  so the continuation prompt carries `<bloblex_recap>`.
+  so the continuation prompt carries `<retinue_recap>`.
 - **One honest line.** Each scheduled retry appends one notice
   ("Retrying (n of 3)…" / "Rate limit reached. Retrying automatically at …");
   the intermediate turn error is suppressed in the UI (`conversation.ts:97`
@@ -147,11 +147,11 @@ the diff, and `p8-gates.json`, a stale failing gate run) were removed; see §7.
 
 ## 4. Files outside the package's list
 
-- `crates/bloblex-agent-core/src/lib.rs` and `Cargo.toml`: the new
+- `crates/retinue-agent-core/src/lib.rs` and `Cargo.toml`: the new
   `AdapterError::TurnErrorReported` variant (`lib.rs:793`) and `pub mod recovery`
   (`:1391`) plus the `chrono` dependency. The adapter-error surface and the
   shared recovery evidence are only reachable from here.
-- `crates/bloblex-adapter-acp/Cargo.toml`: `chrono` for the timestamp.
+- `crates/retinue-adapter-acp/Cargo.toml`: `chrono` for the timestamp.
 - `apps/desktop/src/types.ts`: `applyEvent` carries `state`/`recoveryHandled`
   from `turn.error` so the UI can show the limited/retrying state.
 - `apps/desktop/src/ui/SettingsSheet.appearance.mounted.test.tsx`: the
@@ -161,10 +161,10 @@ the diff, and `p8-gates.json`, a stale failing gate run) were removed; see §7.
 
 ## 5. Gates (all run on this worktree, foreground)
 
-- `cargo test --workspace --exclude bloblex-desktop --no-fail-fast`: **all pass**,
-  including `bloblex-storage` 114, `bitbotsd` 396, `bloblex-agent-core`,
-  `bloblex-adapter-{claude,codex,acp,opencode}` and the P8 tests above.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`: **clean**.
+- `cargo test --workspace --exclude retinue-desktop --no-fail-fast`: **all pass**,
+  including `retinue-storage` 114, `retinued` 396, `retinue-agent-core`,
+  `retinue-adapter-{claude,codex,acp,opencode}` and the P8 tests above.
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`: **clean**.
 - `cd apps/desktop && npx tsc -b`: **clean**.
 - `npx vitest run --maxWorkers=3`: **1254 passed / 171 files, 0 failed**
   (includes the new `ui/watchdog.test.ts` and the fixed mounted test).
@@ -190,9 +190,9 @@ the diff, and `p8-gates.json`, a stale failing gate run) were removed; see §7.
 
 1. **Mangled copy fixed.** Six strings Sol wrote contained a literal `?` where a
    typographic character belonged:
-   - `crates/bloblex-daemon/src/retry.rs:243` `I?ll` → `I'll`, `:244` `you?re` →
+   - `crates/retinue-daemon/src/retry.rs:243` `I?ll` → `I'll`, `:244` `you?re` →
      `you're`, `:368` `(n of 3)?` → `(n of 3)…`;
-   - `crates/bloblex-agent-core/src/recovery.rs:34` corrected to
+   - `crates/retinue-agent-core/src/recovery.rs:34` corrected to
      `you’re out of extra usage`;
    - `apps/desktop/src/ui/errorCopy.ts:305` `Limited ? try again later` →
      `Limited — try again later`;
@@ -219,7 +219,7 @@ were rerun with `TEMP=C:/fxt/c2/tmp` (results below).
 
 ### F1. An `Error` event with no turn is no longer dropped (correctness)
 
-`crates/bloblex-daemon/src/main.rs:4004-4014`, the `AgentEvent::Error` arm in
+`crates/retinue-daemon/src/main.rs:4004-4014`, the `AgentEvent::Error` arm in
 `forward_events_with_timeouts`. The rewrite did its work only inside
 `if let Some(t) = turn.as_deref()` and then `continue`d, so an adapter error
 arriving with no watched turn changed nothing and emitted nothing. Added the
@@ -235,7 +235,7 @@ and one `turn.error` with `turnId: null`, `failureClass`, `message` and `detail`
 
 ### F2. ACP no longer returns `TurnErrorReported` without queuing an `Error`
 
-`crates/bloblex-adapter-acp/src/lib.rs:1216-1243`. `TurnErrorReported` was
+`crates/retinue-adapter-acp/src/lib.rs:1216-1243`. `TurnErrorReported` was
 returned unconditionally, but the `Error` event was sent only when
 `had_active_turn`; with no active turn the daemon returned early expecting a
 terminal event that never came, leaving the turn `working` and the session busy.
@@ -254,7 +254,7 @@ The decision is now one pure helper, `failed_prompt_terminal(had_active_turn)`
 
 ### F3. ACP sends the `RecoveryHint` only after the cancellation check
 
-`crates/bloblex-adapter-acp/src/lib.rs:1226-1233`. The hint was sent before
+`crates/retinue-adapter-acp/src/lib.rs:1226-1233`. The hint was sent before
 `was_cancelled` was checked, so a cancelled turn could leave a stale hint with no
 `Error` after it. The hint send now sits after the `was_cancelled` early return,
 inside the `had_active_turn` branch and before the `Error`, on the same ordered
@@ -271,9 +271,9 @@ to either string), so no test needed updating.
 
 ### F5. The sweep no longer reads every session each second
 
-`crates/bloblex-storage/src/lib.rs:2712` adds `watchdog_due_sessions(now)`, a
+`crates/retinue-storage/src/lib.rs:2712` adds `watchdog_due_sessions(now)`, a
 small query (`id WHERE state='limited' AND limited_until IS NOT NULL AND
-limited_until<=? AND archived=0`). `crates/bloblex-daemon/src/retry.rs:721`
+limited_until<=? AND archived=0`). `crates/retinue-daemon/src/retry.rs:721`
 (`sweep`) now iterates only those ids instead of `st.db.sessions()` with its
 project sub-selects and JSON extraction. Correctness is unchanged:
 `watchdog_enqueue` still re-checks the condition atomically.
@@ -285,7 +285,7 @@ project sub-selects and JSON extraction. Correctness is unchanged:
 
 ### F6. Garbled doc comment
 
-`crates/bloblex-daemon/src/retry.rs:513-514`. Two stacked, contradictory `///`
+`crates/retinue-daemon/src/retry.rs:513-514`. Two stacked, contradictory `///`
 lines above `latest_blocked_reset` were replaced with one accurate sentence:
 "The latest reset time among a provider's blocked quota windows. A stale snapshot
 is refreshed once; absence never launches a probe."
@@ -315,10 +315,10 @@ the owner's confirmation; N3–N5 are release-note and visual items.
 
 ### Gates (rerun, final state)
 
-- `cargo test --workspace --exclude bloblex-desktop --no-fail-fast`: **all 44
-  suites ok, 0 failed** (daemon `bloblex-daemon` 399, storage 115, adapter-acp
+- `cargo test --workspace --exclude retinue-desktop --no-fail-fast`: **all 44
+  suites ok, 0 failed** (daemon `retinue-daemon` 399, storage 115, adapter-acp
   21, and the rest), including all five new/changed tests listed above.
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`: **clean**
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`: **clean**
   (exit 0, no output).
 - `apps/desktop && npx tsc -b`: **clean** (exit 0).
 - `apps/desktop && npx vitest run --maxWorkers=3`: **1256 passed / 171 files,
@@ -341,8 +341,8 @@ the owner's confirmation; N3–N5 are release-note and visual items.
 
 ### Files touched in this follow-up
 
-`crates/bloblex-daemon/src/main.rs`, `crates/bloblex-daemon/src/retry.rs`,
-`crates/bloblex-adapter-acp/src/lib.rs`, `crates/bloblex-storage/src/lib.rs`,
+`crates/retinue-daemon/src/main.rs`, `crates/retinue-daemon/src/retry.rs`,
+`crates/retinue-adapter-acp/src/lib.rs`, `crates/retinue-storage/src/lib.rs`,
 `apps/desktop/src/ui/SettingsSheet.tsx`, `apps/desktop/src/types.test.ts`,
 `apps/desktop/src/ui/teamSelectors.test.ts`, and this report. All are within
 P8's package list or the UI test files it already owns.

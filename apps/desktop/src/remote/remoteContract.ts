@@ -8,7 +8,7 @@
 // gateway over the tailnet; pairing is owner-confirmed. The daemon-side shapes
 // are fixed by docs/ipc-contract.md:141-165 and docs/remote/PROTOCOL.md:167-207.
 //
-// Naming: "host" is a computer running Bitbots; "device" is a phone, tablet or
+// Naming: "host" is a computer running Retinue; "device" is a phone, tablet or
 // browser that has been paired with a host.
 
 /** What a device may do. Higher tiers include everything below them. */
@@ -85,7 +85,7 @@ export interface RemoteNativeUpnp {
   error?: string
 }
 
-/** The Windows firewall's view of Bitbots' inbound rule (FIX35 C2). */
+/** The Windows firewall's view of Retinue's inbound rule (FIX35 C2). */
 export type RemoteNativeFirewallState = 'allowed' | 'missing' | 'unsupported' | 'unknown'
 
 /** Where the external address came from (FIX35 C2). */

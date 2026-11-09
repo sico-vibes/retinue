@@ -1,17 +1,20 @@
-//! FIX11: move Bloblex-era local data to the Bitbots identity.
+//! FIX11: move the data of every earlier name of this app to the Retinue identity.
+//!
+//! This is the only Rust module that knows the old names (Bloblex and Bitbots).
+//! The owner's data moves once; nothing else in the app reads the old names.
 //!
 //! These functions work on paths alone, so they can be unit-tested with
 //! temporary directories. Nothing here reads, parses or logs file *contents*:
 //! only paths and counts cross these functions.
 //!
-//! Two directories are migrated:
+//! Two directories are migrated, newest name first:
 //!
-//! 1. the Tauri `app_local_data_dir` (`%LOCALAPPDATA%\com.bloblex.desktop`,
-//!    or `...\.dev` in development), which holds the WebView2 profile, staged
-//!    attachments and downloaded speech models; and
-//! 2. the shared data directory `%LOCALAPPDATA%\Bloblex`, which holds the
-//!    SQLite database, the private instruction files and the speech-model
-//!    fallback.
+//! 1. the Tauri `app_local_data_dir` (`%LOCALAPPDATA%\com.bitbots.desktop`
+//!    or `com.bloblex.desktop`, or `...\.dev` in development), which holds the
+//!    WebView2 profile, staged attachments and downloaded speech models; and
+//! 2. the shared data directory `%LOCALAPPDATA%\Bitbots` or `%LOCALAPPDATA%\Bloblex`,
+//!    which holds the SQLite database, the private instruction files and the
+//!    speech-model fallback. Its database file is renamed to `retinue.db`.
 //!
 //! The move runs before the Tauri builder creates the WebView2 profile under
 //! the new identifier, so the profile is carried over rather than recreated.
@@ -32,18 +35,27 @@ use std::{
 };
 
 /// Marker a completed migration leaves in the target directory.
-pub const MARKER_FILE: &str = "migrated-from-bloblex.json";
+pub const MARKER_FILE: &str = "migrated-to-retinue.json";
 
-/// Identifier directories. Kept in step with `tauri.conf.json` and
-/// `scripts/dev-windows.ps1`.
-pub const LEGACY_IDENTIFIER: &str = "com.bloblex.desktop";
-pub const LEGACY_IDENTIFIER_DEV: &str = "com.bloblex.desktop.dev";
-pub const TARGET_IDENTIFIER: &str = "com.bitbots.desktop";
-pub const TARGET_IDENTIFIER_DEV: &str = "com.bitbots.desktop.dev";
+/// Identifier directories of every earlier name, newest first. Kept in step
+/// with `tauri.conf.json` and `scripts/dev-windows.ps1`.
+const LEGACY_IDENTIFIERS: [&str; 2] = ["com.bitbots.desktop", "com.bloblex.desktop"];
+const LEGACY_IDENTIFIERS_DEV: [&str; 2] = ["com.bitbots.desktop.dev", "com.bloblex.desktop.dev"];
+pub const TARGET_IDENTIFIER: &str = "com.retinue.desktop";
+pub const TARGET_IDENTIFIER_DEV: &str = "com.retinue.desktop.dev";
 
-/// The old and new names of the shared data directory.
-pub const LEGACY_DATA_DIR: &str = "Bloblex";
-pub const TARGET_DATA_DIR: &str = "Bitbots";
+/// The shared data directories of every earlier name, newest first, and the
+/// new one.
+const LEGACY_DATA_DIRS: [&str; 2] = ["Bitbots", "Bloblex"];
+pub const TARGET_DATA_DIR: &str = "Retinue";
+
+/// The database file was named after the old product; it moves to the new name.
+const LEGACY_DB_NAME: &str = "bloblex.db";
+pub const DB_NAME: &str = "retinue.db";
+
+/// The start-with-Windows values older installs wrote, and the new one.
+const LEGACY_AUTOSTART_VALUES: [&str; 2] = ["Bitbots", "Bloblex"];
+const TARGET_AUTOSTART_VALUE: &str = "Retinue";
 
 /// How long a failing whole-directory rename is retried before the copy
 /// fallback runs.
@@ -78,34 +90,52 @@ struct Marker {
 /// starting with a fresh profile.
 pub fn migrate_before_start() {
     let Some(local) = local_app_data() else {
-        eprintln!("Bitbots local data migration skipped: LOCALAPPDATA is not set.");
+        eprintln!("Retinue local data migration skipped: LOCALAPPDATA is not set.");
         return;
     };
-    let (legacy_identifier, target_identifier) = if tauri::is_dev() {
-        (LEGACY_IDENTIFIER_DEV, TARGET_IDENTIFIER_DEV)
+    let dev = tauri::is_dev();
+    let (legacy_identifiers, target_identifier): (&[&str], &str) = if dev {
+        (&LEGACY_IDENTIFIERS_DEV, TARGET_IDENTIFIER_DEV)
     } else {
-        (LEGACY_IDENTIFIER, TARGET_IDENTIFIER)
+        (&LEGACY_IDENTIFIERS, TARGET_IDENTIFIER)
     };
     // The identifier directory is a disposable profile: a fresh shell may be
-    // replaced outright.
-    report(
-        "app",
-        migrate_directory(
-            &local.join(legacy_identifier),
-            &local.join(target_identifier),
-            true,
-        ),
-    );
+    // replaced outright. The newest name runs first; an older one is then
+    // skipped because the target already holds the marker.
+    for legacy in legacy_identifiers {
+        report(
+            "app",
+            migrate_directory(&local.join(legacy), &local.join(target_identifier), true),
+        );
+    }
     // Development has its own database; it must not migrate the installed store
     // or rewrite the installed application's autostart entry.
-    if tauri::is_dev() { return; }
+    if dev { return; }
     // The shared directory doubles as the install directory: merge instead of
     // replacing so the installed application is never deleted.
-    report(
-        "shared",
-        migrate_directory(&local.join(LEGACY_DATA_DIR), &local.join(TARGET_DATA_DIR), false),
-    );
+    for legacy in LEGACY_DATA_DIRS {
+        report(
+            "shared",
+            migrate_directory(&local.join(legacy), &local.join(TARGET_DATA_DIR), false),
+        );
+    }
+    rename_legacy_database(&local.join(TARGET_DATA_DIR));
     migrate_autostart();
+}
+
+/// The database file was always named after the old product. Once the data
+/// folder is in place its name moves too, with its write-ahead log, unless the
+/// new name is already there.
+fn rename_legacy_database(directory: &Path) {
+    for suffix in ["", "-wal", "-shm"] {
+        let from = directory.join(format!("{LEGACY_DB_NAME}{suffix}"));
+        let to = directory.join(format!("{DB_NAME}{suffix}"));
+        if from.is_file() && !to.exists() {
+            if let Err(error) = fs::rename(&from, &to) {
+                eprintln!("Retinue could not rename the database file: {error}");
+            }
+        }
+    }
 }
 
 fn local_app_data() -> Option<PathBuf> {
@@ -118,17 +148,17 @@ fn report(scope: &str, outcome: MigrationOutcome) {
     match outcome {
         MigrationOutcome::NotNeeded => {}
         MigrationOutcome::Moved => {
-            eprintln!("Bitbots {scope} data was moved from the Bloblex location.");
+            eprintln!("Retinue {scope} data was moved from an earlier name.");
         }
         MigrationOutcome::Copied { skipped } => {
             eprintln!(
-                "Bitbots {scope} data was copied from the Bloblex location ({} file(s) skipped; the Bloblex folder was kept).",
+                "Retinue {scope} data was copied from an earlier name ({} file(s) skipped; the old folder was kept).",
                 skipped.len()
             );
         }
         MigrationOutcome::Failed(reason) => {
             eprintln!(
-                "Bitbots {scope} data could not be migrated: {reason}. Starting with a fresh profile."
+                "Retinue {scope} data could not be migrated: {reason}. Starting with a fresh profile."
             );
         }
     }
@@ -297,11 +327,11 @@ fn write_marker(
     fs::write(target.join(MARKER_FILE), body)
 }
 
-/// Detects and replaces the old "Bloblex" autostart entry.
+/// Detects and replaces the old autostart entries.
 ///
-/// The old app only ever wrote `HKCU\...\Run\Bloblex` while "Start with
-/// Windows" was on, so the presence of that value is the signal to carry the
-/// setting over to the new `Bitbots` value. `reg.exe` is used because no
+/// Earlier names only ever wrote `HKCU\...\Run\<name>` while "Start with
+/// Windows" was on, so the presence of one of those values is the signal to
+/// carry the setting over to the new `Retinue` value. `reg.exe` is used because no
 /// registry crate is a dependency and, at this point, the Tauri builder (and
 /// with it the autostart plugin) has not started yet.
 #[cfg(windows)]
@@ -324,11 +354,18 @@ fn migrate_autostart() {
             .unwrap_or(false)
     };
 
-    if !run_reg(&["query", RUN_KEY, "/v", "Bloblex"]) {
+    let legacy: Vec<&str> = LEGACY_AUTOSTART_VALUES
+        .iter()
+        .copied()
+        .filter(|name| run_reg(&["query", RUN_KEY, "/v", *name]))
+        .collect();
+    if legacy.is_empty() {
         return;
     }
-    let _ = run_reg(&["delete", RUN_KEY, "/v", "Bloblex", "/f"]);
-    if run_reg(&["query", RUN_KEY, "/v", "Bitbots"]) {
+    for name in &legacy {
+        let _ = run_reg(&["delete", RUN_KEY, "/v", *name, "/f"]);
+    }
+    if run_reg(&["query", RUN_KEY, "/v", TARGET_AUTOSTART_VALUE]) {
         return;
     }
     let Ok(executable) = std::env::current_exe() else {
@@ -336,9 +373,9 @@ fn migrate_autostart() {
     };
     let value = format!("\"{}\"", executable.display());
     if !run_reg(&[
-        "add", RUN_KEY, "/v", "Bitbots", "/t", "REG_SZ", "/d", &value, "/f",
+        "add", RUN_KEY, "/v", TARGET_AUTOSTART_VALUE, "/t", "REG_SZ", "/d", &value, "/f",
     ]) {
-        eprintln!("Bitbots could not re-create the start-with-Windows entry.");
+        eprintln!("Retinue could not re-create the start-with-Windows entry.");
     }
 }
 
@@ -354,7 +391,7 @@ mod tests {
     impl Scratch {
         fn new(label: &str) -> Self {
             let path = std::env::temp_dir().join(format!(
-                "bitbots-migrate-{label}-{}",
+                "retinue-migrate-{label}-{}",
                 uuid::Uuid::new_v4()
             ));
             fs::create_dir_all(&path).unwrap();
@@ -370,6 +407,18 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn the_database_file_takes_the_new_name_with_its_log() {
+        let root = Scratch::new("db-rename");
+        let dir = root.path();
+        fs::write(dir.join(LEGACY_DB_NAME), b"db").unwrap();
+        fs::write(dir.join("bloblex.db-wal"), b"wal").unwrap();
+        rename_legacy_database(dir);
+        assert_eq!(fs::read(dir.join(DB_NAME)).unwrap(), b"db");
+        assert_eq!(fs::read(dir.join("retinue.db-wal")).unwrap(), b"wal");
+        assert!(!dir.join(LEGACY_DB_NAME).exists());
     }
 
     fn read_marker(target: &Path) -> serde_json::Value {

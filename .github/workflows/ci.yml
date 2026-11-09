@@ -1,6 +1,6 @@
 name: CI
 
-# The gates the Director runs by hand (`.claude/skills/bitbots-development/references/verification.md`),
+# The gates the Director runs by hand (`.claude/skills/retinue-development/references/verification.md`),
 # on every push and pull request to main. No secrets are used and the token is read-only.
 on:
   push:
@@ -65,7 +65,7 @@ jobs:
         # or a second failure, still fails the build.
         run: |
           $log = Join-Path $env:RUNNER_TEMP 'cargo-test.log'
-          cargo test --workspace --exclude bloblex-desktop --no-fail-fast 2>&1 | Tee-Object -FilePath $log
+          cargo test --workspace --exclude retinue-desktop --no-fail-fast 2>&1 | Tee-Object -FilePath $log
           if ($LASTEXITCODE -eq 0) { exit 0 }
           $flaky = @(
             'a_crash_after_a_finished_turn_does_not_fail_that_session',
@@ -80,7 +80,7 @@ jobs:
           }
           foreach ($name in $failed) {
             Write-Host "retrying $name once"
-            cargo test -p bloblex-daemon $name -- --exact --nocapture
+            cargo test -p retinue-daemon $name -- --exact --nocapture
             if ($LASTEXITCODE -ne 0) {
               Write-Host "::error::$name failed twice"
               exit 1
@@ -88,19 +88,19 @@ jobs:
           }
 
       - name: Clippy
-        run: cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings
+        run: cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings
 
       - name: Build the production bundle
         run: npm run build
 
       - name: Build the phone PWA
-        run: npm run build:remote --workspace @bloblex/desktop
+        run: npm run build:remote --workspace @retinue/desktop
 
       - name: Documentation library
         run: npm run docs:check
 
       - name: Build the performance-gate binaries
-        run: cargo build -p bloblex-daemon --bin bitbotsd -p bloblex-storage --bin perf-seed
+        run: cargo build -p retinue-daemon --bin retinued -p retinue-storage --bin perf-seed
 
       - name: Performance gate
         run: npm run perf

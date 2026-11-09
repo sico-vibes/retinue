@@ -39,7 +39,7 @@ interface SwMessageEvent {
   data: unknown
 }
 
-const CACHE_PREFIX = 'bitbots-remote-'
+const CACHE_PREFIX = 'retinue-remote-'
 
 // --- injected at build time -------------------------------------------------
 // Both literals are rewritten by `vite.remote.config.ts` after the bundle is
@@ -108,10 +108,10 @@ sw.addEventListener('push', (raw) => {
   const event = raw as SwEvent & { data?: { json(): { title?: unknown; sessionId?: unknown } } | null }
   let body: { title?: unknown; sessionId?: unknown } = {}
   try { body = event.data?.json() ?? {} } catch { /* a notice we can't read still says something */ }
-  const title = typeof body.title === 'string' && body.title ? body.title : 'Bitbots'
+  const title = typeof body.title === 'string' && body.title ? body.title : 'Retinue'
   const sessionId = typeof body.sessionId === 'string' ? body.sessionId : null
   const worker = self as unknown as { registration: { showNotification(title: string, options: unknown): Promise<void> } }
-  event.waitUntil(worker.registration.showNotification(title, { tag: sessionId ?? 'bitbots', icon: '/icons/icon-192.png', data: { sessionId } }))
+  event.waitUntil(worker.registration.showNotification(title, { tag: sessionId ?? 'retinue', icon: '/icons/icon-192.png', data: { sessionId } }))
 })
 
 sw.addEventListener('notificationclick', (raw) => {

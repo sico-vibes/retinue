@@ -7,7 +7,7 @@ Owner request, 30 October 2026: "Start Phase 1", with two backend lanes in paral
 - **Lane B (Gogo, OpenCode Go DeepSeek V4.1 Flash, high):** the usage-bar sign-in read, experiment defaults, the new shortcut settings, and settings compatibility shims.
 - **Frontend:** the Director, building against this contract at the same time in the main checkout.
 
-Each lane has its own worktree and does only its own items. Both will touch `crates/bloblex-daemon/src/main.rs` and `crates/bloblex-storage/src/lib.rs`, so keep edits small and local, and don't reformat or move code you aren't changing. The Director merges both.
+Each lane has its own worktree and does only its own items. Both will touch `crates/retinue-daemon/src/main.rs` and `crates/retinue-storage/src/lib.rs`, so keep edits small and local, and don't reformat or move code you aren't changing. The Director merges both.
 
 **Rules for both lanes**
 - Keep the contract exactly. If something can't work as written, pick the smallest change and say so in the report.
@@ -49,7 +49,7 @@ Today a mode is `ask`, `auto` or `bypass` (Full access), and `permissions.defaul
 - Only the desktop may set them: the Manager's `update_project` tool, `propose_project`, the MCP and remote devices can't. Check `project.update`'s `tiers.json` row and params, and strip or refuse `overrides` on every other path.
 - Remote devices never see `overrides`: strip it from project DTOs in redaction, with a test.
 - **Backup import never brings `overrides` in**, and an export doesn't include `setupScript`.
-- A repository's `.bitbots.json` can't set any of them.
+- A repository's `.retinue.json` can't set any of them.
 
 **Model.** When a new conversation starts in a project (`new_session`, with an `agentId`, not unattended): if `overrides.models` has an entry for the bot's provider and that provider's catalog offers the model, the conversation's model is that one. If the catalog doesn't offer it, or the provider has no entry, it uses the bot's model, and that case is not an error. Existing conversations don't change. An explicit `model` in the call wins.
 
@@ -98,7 +98,7 @@ Both are included in backups, like other appearance settings. **Tests:** `send_s
 
 Old setting keys are read and moved, the way the look migration does.
 
-- First find out which keys have been renamed: search `git log -S` and `git log -p` over `main.rs`, `crates/bloblex-storage/src/lib.rs` and the UI's `settings.set` calls, and list what you find, with the commit.
+- First find out which keys have been renamed: search `git log -S` and `git log -p` over `main.rs`, `crates/retinue-storage/src/lib.rs` and the UI's `settings.set` calls, and list what you find, with the commit.
 - Add one table in storage: old key, new key, and optionally a value mapping. At `Storage::open`, in one transaction: if the old key exists and the new one doesn't, write the new one with the mapped value; then delete the old key. If both exist, the new value wins and the old key goes. It runs every open and does nothing when there's nothing to move. Backup import runs through the same table.
 - If you find no renamed key, the table starts empty. Say so, and test the mechanism with test-only entries. Don't invent renames.
 
@@ -106,12 +106,12 @@ Old setting keys are read and moved, the way the look migration does.
 
 ## Gates
 
-From PowerShell in your worktree, with `BITBOTS_HOOK_BRIDGE` and `BITBOTS_REMOTE_WEB_DIR` removed for the session (the running app sets them, and two tests then fail):
+From PowerShell in your worktree, with `RETINUE_HOOK_BRIDGE` and `RETINUE_REMOTE_WEB_DIR` removed for the session (the running app sets them, and two tests then fail):
 
-- `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude bloblex-desktop --no-fail-fast`
-- `cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings`
+- `$env:RUST_MIN_STACK='33554432'; cargo test --workspace --exclude retinue-desktop --no-fail-fast`
+- `cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings`
 
-Known flaky test: `a_crash_after_a_finished_turn_does_not_fail_that_session`. There is no `node_modules` in a worktree, so the Director runs the npm gates after merging. Don't use shell heredocs for anything with backslashes. `crates/bloblex-storage/src/lib.rs` contains one NUL byte, so edit it with your edit tool.
+Known flaky test: `a_crash_after_a_finished_turn_does_not_fail_that_session`. There is no `node_modules` in a worktree, so the Director runs the npm gates after merging. Don't use shell heredocs for anything with backslashes. `crates/retinue-storage/src/lib.rs` contains one NUL byte, so edit it with your edit tool.
 
 ## Report
 

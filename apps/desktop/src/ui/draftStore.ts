@@ -14,7 +14,7 @@
 //   so an older send's answer never clears a newer one.
 import { useCallback, useSyncExternalStore } from 'react'
 
-export const DRAFT_STORAGE_KEY = 'bitbots.drafts.v1'
+export const DRAFT_STORAGE_KEY = 'retinue.drafts.v1'
 export const DRAFT_TTL_MS = 2 * 60 * 60 * 1000
 export const MAX_DRAFTS = 40
 export const MAX_PERSISTED_CHARS = 100_000

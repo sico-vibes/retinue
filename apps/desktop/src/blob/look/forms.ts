@@ -5,7 +5,7 @@
 // src/styles/blob.ts at a7fd546), MIT License, Copyright (c) 2026 Alain. See
 // docs/legal/third-party-notices.md. Eye trait keys retain stored tuning; body geometry
 // is now fixed and symmetric. The outlines are sampled into
-// point lists instead of SVG path strings, because the Bitbots engine draws on
+// point lists instead of SVG path strings, because the Retinue engine draws on
 // a canvas and morphs the outline (the mailbox state) point by point.
 
 import type { Traits } from './seed'

@@ -1,7 +1,7 @@
 import type { Session } from '../types'
 import { buildConversationItems } from './conversation'
 import { entityNoun } from './vocabulary'
-import { themeStyle } from '../blob/bitbots'
+import { themeStyle } from '../blob/retinue'
 
 export function conversationMarkdown(session: Session, blobName: string, exportedAt = new Date()): string {
   const projectPath = session.projectPath ?? ''

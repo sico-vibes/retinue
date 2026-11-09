@@ -7,7 +7,7 @@
 Lane: OpenCode `opencode-go/deepseek-v4.1-flash`, high effort, own worktree, private `CARGO_TARGET_DIR`. **Do not run `git commit`.** Read `AGENTS.md` first. Keep your context small: grep and read only the ranges you need (`main.rs` is very large); pipe long output through `tail`/`grep`.
 
 ## Problem (found by the Director)
-Existing conversations show "Started a fresh session. The agent no longer has earlier context." several times in a row. Text: `context_change_notice()` (`crates/bloblex-daemon/src/main.rs` ~181). Written on two paths: the adapter `AgentEvent::ContextChanged` handler (~3523-3534) and the daemon resume path (~2074-2078, `if resume_fallback && !lazy_first_activation`).
+Existing conversations show "Started a fresh session. The agent no longer has earlier context." several times in a row. Text: `context_change_notice()` (`crates/retinue-daemon/src/main.rs` ~181). Written on two paths: the adapter `AgentEvent::ContextChanged` handler (~3523-3534) and the daemon resume path (~2074-2078, `if resume_fallback && !lazy_first_activation`).
 
 Loop: the UI calls `session.warm` 400 ms after a conversation is selected. `session_warm` (~2211-2238) runs `activate_session(.., Owner::Warm)` → `resume_inner` (~1921). `WARM_MAX = 2` (~2178) closes the oldest warmed session when a third is warmed. On a fallback, `resume_inner` saves the new provider id as resumable (~2037) and clears `lazyStart` (~2038) even though no prompt was sent. Claude never writes a session that had no prompt, so the next resume of that id is rejected (`ResumeRejected`, Branch A ~2005-2007) and another notice is written; non-resumable rows (OpenCode without `loadSession`) take Branch B (~2008-2016) every time.
 
@@ -26,8 +26,8 @@ Keep `session.resume_rejected` and other events' behaviour for sessions that did
 - Codex-style `ContextChanged` with a never-prompted session → no notice; after a turn → one notice.
 
 ## Gates
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
 
 ## Report
 `docs/history/fix-34/a2-report.md`: changes with line references, tests, gates, what stays unverified (real CLIs).

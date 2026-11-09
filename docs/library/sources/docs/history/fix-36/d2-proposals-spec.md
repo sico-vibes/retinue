@@ -35,8 +35,8 @@ Every consequential action needs the owner's approval: creating a project, creat
 - Proposal expiry after 24 h (injectable clock).
 
 ## Gates
-- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude bloblex-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
-- `cargo clippy --workspace --exclude bloblex-desktop -- -D warnings`
+- `RUST_MIN_STACK=33554432 cargo test --workspace --exclude retinue-desktop --no-fail-fast 2>&1 | grep -E "test result|FAILED|panicked"`
+- `cargo clippy --workspace --exclude retinue-desktop -- -D warnings`
 - `cd apps/desktop && npx tsc -b && npx vitest run src/remote src/preview` (add `PermissionRequest.proposal` to `apps/desktop/src/types.ts` and a fixture proposal to `apps/desktop/src/preview/fixtureBridge.ts`)
 
 ## Report

@@ -26,8 +26,8 @@ export const TAILSCALE_FIX: Record<Exclude<RemoteTailscaleState, 'ready'>, { tit
   not_running: { title: 'Tailscale is not running', steps: ['Open Tailscale on this computer, then check again.'] },
   logged_out: { title: 'Tailscale is signed out', steps: ['Open Tailscale from the system tray and sign in.', 'Use the same account on your phone.'] },
   https_disabled: { title: 'HTTPS is off for your tailnet', steps: ['Open the Tailscale admin console and go to DNS.', 'Turn on MagicDNS and HTTPS Certificates, then check again.'] },
-  port_in_use: { title: 'The Remote port is busy', steps: ['Read the message below: another copy of Bitbots or another HTTPS service may be using this port.', 'Quit the other copy, or free the HTTPS port, then check again.'] },
-  funnel_on: { title: 'Tailscale Funnel is on', steps: ['Funnel would publish Bitbots to the whole internet, so Remote will not start.', 'Run "tailscale funnel reset" or turn Funnel off in Tailscale, then check again.'] },
+  port_in_use: { title: 'The Remote port is busy', steps: ['Read the message below: another copy of Retinue or another HTTPS service may be using this port.', 'Quit the other copy, or free the HTTPS port, then check again.'] },
+  funnel_on: { title: 'Tailscale Funnel is on', steps: ['Funnel would publish Retinue to the whole internet, so Remote will not start.', 'Run "tailscale funnel reset" or turn Funnel off in Tailscale, then check again.'] },
 }
 
 function DeviceIcon({ kind }: { kind: DeviceKind }) {
@@ -149,7 +149,7 @@ export function RemoteSettings({ onOpenPower }: { onOpenPower?: () => void }) {
     return <>
       {intro}
       <SettingsGroup title="Status">
-        <SettingsRow label="Not available in this version" hint="This version of Bitbots cannot host devices yet. Nothing is published to your network." />
+        <SettingsRow label="Not available in this version" hint="This version of Retinue cannot host devices yet. Nothing is published to your network." />
       </SettingsGroup>
     </>
   }
@@ -213,7 +213,7 @@ export function RemoteSettings({ onOpenPower }: { onOpenPower?: () => void }) {
       {request && <div className="remote-request" role="alertdialog" aria-labelledby="remote-request-title">
         <span className="remote-paired-icon" aria-hidden="true"><DeviceIcon kind={request.kind} /></span>
         <div className="remote-request-copy">
-          <strong id="remote-request-title">{request.kind === 'machine' ? `${request.name}, your other Bitbots machine, wants to link` : `${request.name} wants to connect`}</strong>
+          <strong id="remote-request-title">{request.kind === 'machine' ? `${request.name}, your other Retinue machine, wants to link` : `${request.name} wants to connect`}</strong>
           <small>{request.platform}{request.login ? ` · signed in to Tailscale as ${request.login}` : ''}{native ? ' · signed in with your password' : ''} · answer within {countdown(request.expiresAt, now)}</small>
           {request.kind === 'machine' && <small>It will see your {nouns} and conversations. Choose {TIER_LABEL.operator} if it may also take conversations over.</small>}
           <div className="remote-request-actions">
@@ -278,7 +278,7 @@ export function RemoteSettings({ onOpenPower }: { onOpenPower?: () => void }) {
     {state.error && <p className="settings-banner error" role="alert">{state.error}</p>}
 
     {consent && <ConfirmDialog title="Turn on Remote?" confirmLabel="Turn on" cancelLabel="Not now"
-      body={native ? `Bitbots will listen on this computer’s network addresses. Anyone who can reach the port sees a sign-in page; only someone with your password, and a device you then approve here, gets in. Wrong passwords are slowed down and locked out. A message from an approved device can make an ${noun} work on this computer, within the approval mode you have set. You can turn this off at any time.` : `Bitbots will be published on your private Tailscale network. Only devices signed in to your Tailscale can reach it, and each one must be paired and approved by you here. A message from a paired device can make an ${noun} work on this computer, within the approval mode you have set. You can turn this off at any time.`}
+      body={native ? `Retinue will listen on this computer’s network addresses. Anyone who can reach the port sees a sign-in page; only someone with your password, and a device you then approve here, gets in. Wrong passwords are slowed down and locked out. A message from an approved device can make an ${noun} work on this computer, within the approval mode you have set. You can turn this off at any time.` : `Retinue will be published on your private Tailscale network. Only devices signed in to your Tailscale can reach it, and each one must be paired and approved by you here. A message from a paired device can make an ${noun} work on this computer, within the approval mode you have set. You can turn this off at any time.`}
       onConfirm={() => { setConsent(false); void remote.enable() }} onCancel={() => setConsent(false)} />}
     {revoking && <ConfirmDialog title={`Remove ${revoking.name}?`} confirmLabel="Remove" cancelLabel="Keep" tone="danger"
       body="It is signed out now and has to pair again to come back. Conversations stay on this computer."

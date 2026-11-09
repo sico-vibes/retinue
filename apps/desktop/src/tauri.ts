@@ -19,7 +19,7 @@ export const inDesktop = isTauri()
 export const previewMode = false
 
 export async function rpc<T>(method: string, params: JsonRecord = {}): Promise<T> {
-  if (!inDesktop) throw new Error('The local Bitbots daemon is available only in the desktop app.')
+  if (!inDesktop) throw new Error('The local Retinue daemon is available only in the desktop app.')
   return invoke<T>('daemon_rpc', { method, params })
 }
 
@@ -86,13 +86,13 @@ export type BackupExportRequest = BackupInclude & { agentIds?: string[] }
 
 export type BackupStats = { bots: number; memory: number; skills: number; automations: number; settings: number }
 
-/** Save dialog for a `.bitbots-backup.json`; returns an opaque selection token. A bot template suggests the bot's name. */
+/** Save dialog for a `.retinue-backup.json`; returns an opaque selection token. A bot template suggests the bot's name. */
 export async function selectBackupExportPath(suggestedName?: string): Promise<string | null> {
   if (!inDesktop) return null
   return invoke<string | null>('select_backup_export_path', { suggestedName: suggestedName ?? null })
 }
 
-/** Open dialog for a `.bitbots-backup.json`; returns an opaque selection token. */
+/** Open dialog for a `.retinue-backup.json`; returns an opaque selection token. */
 export async function selectBackupImportPath(): Promise<string | null> {
   if (!inDesktop) return null
   return invoke<string | null>('select_backup_import_path')
@@ -272,8 +272,8 @@ export async function setCompanionSizePreset(preset: 'large' | 'normal' | 'defau
   return inDesktop ? invoke<boolean>('set_companion_size_preset', { preset }) : preset === 'large'
 }
 
-export async function quitBloblex(): Promise<void> {
-  if (inDesktop) await invoke('quit_bloblex')
+export async function quitRetinue(): Promise<void> {
+  if (inDesktop) await invoke('quit_retinue')
 }
 
 export async function startDaemonEventStream(): Promise<void> {
@@ -317,7 +317,7 @@ export async function listenForActiveRuntime(handler: (runtimeId: string | null)
 
 export async function listenForOpenSettings(handler: (page: SettingsPageName | null) => void): Promise<UnlistenFn> {
   if (!inDesktop) return () => undefined
-  return listen('bloblex-open-settings', (event) => handler(settingsPageFromEvent(event.payload)))
+  return listen('retinue-open-settings', (event) => handler(settingsPageFromEvent(event.payload)))
 }
 
 export async function listenForDaemonEvents(handler: (event: DaemonEvent) => void): Promise<UnlistenFn> {
@@ -388,7 +388,7 @@ export async function updatesInstall(): Promise<void> {
 
 export async function listenForUpdateAvailable(handler: (info: UpdateInfo) => void): Promise<UnlistenFn> {
   if (!inDesktop) return () => undefined
-  return listen('bloblex-update-available', (event) => {
+  return listen('retinue-update-available', (event) => {
     const info = parseUpdateInfo(event.payload)
     if (info) handler(info)
   })
@@ -409,7 +409,7 @@ export async function updatesPhase(): Promise<UpdatePhaseState | null> {
 
 export async function listenForUpdateProgress(handler: (progress: UpdateProgress) => void): Promise<UnlistenFn> {
   if (!inDesktop) return () => undefined
-  return listen('bloblex-update-progress', (event) => {
+  return listen('retinue-update-progress', (event) => {
     const progress = parseUpdateProgress(event.payload)
     if (progress) handler(progress)
   })
@@ -474,17 +474,17 @@ export async function cancelDictation(owner = 'desktop'): Promise<void> {
 
 export async function listenForDictation(handler: (event: DictationEventPayload) => void): Promise<UnlistenFn> {
   if (!inDesktop) return () => undefined
-  return listen<DictationEventPayload>('bloblex-dictation', (event) => handler(event.payload))
+  return listen<DictationEventPayload>('retinue-dictation', (event) => handler(event.payload))
 }
 
 export async function listenForDictationToggle(handler: () => void): Promise<UnlistenFn> {
   if (!inDesktop) return () => undefined
-  return listen('bloblex-dictation-toggle', () => handler())
+  return listen('retinue-dictation-toggle', () => handler())
 }
 
 export async function listenForSpeechDownload(handler: (progress: { modelId: string; completed: number; total: number }) => void): Promise<UnlistenFn> {
   if (!inDesktop) return () => undefined
-  return listen<{ modelId: string; completed: number; total: number }>('bloblex-speech-download', (event) => handler(event.payload))
+  return listen<{ modelId: string; completed: number; total: number }>('retinue-speech-download', (event) => handler(event.payload))
 }
 
 /** Main-window owned waiting badge; non-Windows platforms keep the tray tooltip. */

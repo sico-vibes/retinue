@@ -58,7 +58,7 @@ export function PushCard() {
   }
   if (state === 'loading') return null
   const copy: Record<Exclude<PushState, 'loading'>, string> = {
-    unsupported: 'This browser can\'t show notifications. On iPhone, add Bitbots to your Home Screen first.',
+    unsupported: 'This browser can\'t show notifications. On iPhone, add Retinue to your Home Screen first.',
     'off-at-computer': 'Turn them on first at the computer, in Settings › Remote.',
     blocked: 'Notifications are blocked for this site. Allow them in your browser\'s settings.',
     off: 'Get a notice when an employee needs you. It says only the employee\'s name, never what it\'s doing.',

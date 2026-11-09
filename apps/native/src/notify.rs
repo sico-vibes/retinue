@@ -6,14 +6,14 @@
 //! "Needs your approval: <title>", with the bot's name above it.
 //!
 //! An unpackaged Win32 app may only raise a toast under an app id Windows knows,
-//! so the first notification registers `Bitbots.Native` under the owner's own
+//! so the first notification registers `Retinue.Native` under the owner's own
 //! `AppUserModelId` key. A refusal here is never fatal: the caller falls back to
 //! its own line in the window.
 
 use std::sync::Once;
 
 /// The app id the window's notifications arrive under.
-pub const APP_ID: &str = "Bitbots.Native";
+pub const APP_ID: &str = "Retinue.Native";
 
 /// What a notification says, from the transition that caused it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -79,7 +79,7 @@ fn register_app_id() {
                 "/t",
                 "REG_SZ",
                 "/d",
-                "Bitbots",
+                "Retinue",
                 "/f",
             ])
             .stdout(std::process::Stdio::null())

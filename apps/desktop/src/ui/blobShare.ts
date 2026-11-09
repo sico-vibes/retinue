@@ -2,9 +2,9 @@ import type { Agent } from '../types'
 import { agentColorHex } from './agentColor'
 import { agentLook, normalizeLook, type BlobLook } from '../blob/look'
 import { entityNoun } from './vocabulary'
-import { themeStyle } from '../blob/bitbots'
+import { themeStyle } from '../blob/retinue'
 
-export const BLOB_SHARE_FORMAT = 'bloblex.blob.v1'
+export const BLOB_SHARE_FORMAT = 'retinue.blob.v1'
 export const BLOB_SHARE_MAX_BYTES = 64 * 1024
 
 export interface SharedBlob {
@@ -45,7 +45,7 @@ export function parseSharedBlob(text: string): SharedBlob {
   let parsed: unknown
   try { parsed = JSON.parse(text) } catch { throw new Error(`This ${noun} file is not valid JSON.`) }
   if (!isRecord(parsed)) throw new Error(`This ${noun} file must contain an object.`)
-  if (parsed.format === 'bitbots.backup') throw new Error(`This is a full ${noun} file with its notes and schedules. Import it in Settings › Backup.`)
+  if (parsed.format === 'retinue.backup') throw new Error(`This is a full ${noun} file with its notes and schedules. Import it in Settings › Backup.`)
   if (parsed.format !== BLOB_SHARE_FORMAT) throw new Error(`This ${noun} file uses an unsupported format version.`)
   const name = requiredText(parsed.name, 60, 'name')
   const description = optionalText(parsed.description, 255, 'description')

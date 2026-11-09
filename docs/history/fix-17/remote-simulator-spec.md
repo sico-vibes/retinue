@@ -31,12 +31,12 @@ export function createRemoteSimulator(options?: { now?: () => number; random?: (
 
 Behaviour (all through injected `now`/`random`/`timers` so tests are deterministic):
 
-- `remote.status`: returns `RemoteStatus`. `hostName` "Work PC", relay "relay.bitbots.app".
+- `remote.status`: returns `RemoteStatus`. `hostName` "Work PC", relay "relay.retinue.app".
 - `remote.enable`: `link` goes `connecting` then `online` after 700 ms; latency 24 to 60 ms
   (jitter every 5 s while online emits `remote.changed`). `remote.disable` goes straight to
   `off`, disconnects every device (events), keeps the device list.
 - `remote.pair.begin`: returns a `PairingOffer`, code 8 chars from an unambiguous alphabet
-  (no 0/O/1/I) grouped `XXXX-XXXX`, `qrPayload` like `bitbots://pair?r=<relay>&c=<code>&h=<hostId>`,
+  (no 0/O/1/I) grouped `XXXX-XXXX`, `qrPayload` like `retinue://pair?r=<relay>&c=<code>&h=<hostId>`,
   expires after `PAIRING_CODE_TTL_MS`. Beginning again replaces the offer. `remote.pair.cancel`
   clears it. Pairing while disabled is an error `{ code: 'remote_disabled' }`.
 - `simulatePairingCompleted`: only when an offer is live; creates a device (default name

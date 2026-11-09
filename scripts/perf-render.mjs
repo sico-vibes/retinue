@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process'
 
 const result = spawnSync('npx', ['vitest', 'run', 'src/ui/perf.mounted.test.tsx', '--testTimeout=300000'], {
   cwd: new URL('../apps/desktop/', import.meta.url),
-  env: { ...process.env, BITBOTS_PERF_RENDER: '1' },
+  env: { ...process.env, RETINUE_PERF_RENDER: '1' },
   stdio: 'inherit',
   shell: process.platform === 'win32',
 })

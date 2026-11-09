@@ -12,9 +12,9 @@ Package P4: item 4, TypeScript shape system, editor and preview. No Rust changes
 - **Mirrored pill-style eyes:** `forms.ts:225` fits two equal, vertical, unrotated eyes mirrored around the face centre. Size, height, spacing, roundness and vertical placement remain tunable. Old body, lean, horizontal-gaze and asymmetry pins no longer distort the silhouette or make the resting eyes asymmetric. `apps/desktop/src/blob/look/index.ts:139` exposes only the applicable eye controls.
 - **Stored-name migration:** `index.ts:45` and `index.ts:55` migrate `round` and `sun` to `circle`, `organic` and `cat` to `pebble`, and `boxy` to `squircle`. The other five old names remain canonical. Seed, valid traits and explicit robot styling survive normalization. Unknown names, including inherited object-property names, are rejected. Default agent looks use Circle (`index.ts:75`).
 - **Shape-preserving Shuffle:** `index.ts:121` replaces the eye seed and drops pinned tuning, retaining both the classic shape and alternate robot styling. It also avoids reusing the immediately previous seed if the random value collides.
-- **Shape-preserving Surprise me:** `apps/desktop/src/ui/LookEditor.tsx:57` gives classic looks new eye tuning and a palette colour different from the current swatch, including when that swatch was supplied as hex. In Bitbots mode it passes the currently resolved robot outline to `randomBot`, which now randomizes colours only (`apps/desktop/src/blob/look/bot.ts:119`). The new names also have robot mappings (`bot.ts:92`).
+- **Shape-preserving Surprise me:** `apps/desktop/src/ui/LookEditor.tsx:57` gives classic looks new eye tuning and a palette colour different from the current swatch, including when that swatch was supplied as hex. In Retinue mode it passes the currently resolved robot outline to `randomBot`, which now randomizes colours only (`apps/desktop/src/blob/look/bot.ts:119`). The new names also have robot mappings (`bot.ts:92`).
 - **Atomic appearance draft:** `LookEditor.tsx:49` can send the new colour with the look in one callback. Both callers consume it in one draft update (`apps/desktop/src/ui/BlobSettings.tsx:240`, `apps/desktop/src/ui/FirstRunOnboarding.tsx:137`). Calling the old separate callbacks for one click overwrote the newly shuffled eyes with the previous draft; a failing-first mounted regression demonstrated this.
-- **Chooser, defaults and gallery:** the chooser uses four columns and matching arrow-key movement (`LookEditor.tsx:127`, `apps/desktop/src/ui/blobPage.css:156`). Templates use the new names (`apps/desktop/src/ui/botTemplates.ts:34`, `:91`, `:148`). The character sheet uses the eight-name list (`apps/desktop/src/preview/main.tsx:35`), defaults explicitly to classic rendering, and accepts `?style=bitbots` and `?theme=light` (`main.tsx:12`). Draft, duplicate and legacy-import defaults use Circle. The renderer's completion-spin table recognizes Squircle.
+- **Chooser, defaults and gallery:** the chooser uses four columns and matching arrow-key movement (`LookEditor.tsx:127`, `apps/desktop/src/ui/blobPage.css:156`). Templates use the new names (`apps/desktop/src/ui/botTemplates.ts:34`, `:91`, `:148`). The character sheet uses the eight-name list (`apps/desktop/src/preview/main.tsx:35`), defaults explicitly to classic rendering, and accepts `?style=retinue` and `?theme=light` (`main.tsx:12`). Draft, duplicate and legacy-import defaults use Circle. The renderer's completion-spin table recognizes Squircle.
 
 ## Tests
 
@@ -35,7 +35,7 @@ Final coverage:
 - `apps/desktop/src/ui/LookEditor.mounted.test.tsx:30`: chooser order, selection and four-column keyboard movement.
 - `LookEditor.mounted.test.tsx:72`: Surprise me keeps the selected classic tile and emits a new colour and seed.
 - `LookEditor.mounted.test.tsx:87`: a real parent draft retains both the new eyes and colour after one click.
-- `LookEditor.mounted.test.tsx:107`: both inferred and explicit Bitbots outlines remain selected after Surprise me.
+- `LookEditor.mounted.test.tsx:107`: both inferred and explicit Retinue outlines remain selected after Surprise me.
 - Existing renderer, motion, duplicate, template and share tests were updated for canonical names; the share test still imports an old `sun` look and verifies its migrated export.
 
 ## Gates
@@ -63,21 +63,21 @@ Additional existing tests updated for renamed shapes or changed API:
 
 - `apps/desktop/src/blob/BitbotCanvas.mounted.test.tsx`
 - `apps/desktop/src/blob/BlobCanvas.mounted.test.tsx` (Cloud's three lobes replace the removed Sun-petal assertion)
-- `apps/desktop/src/blob/bitbots.test.ts`
+- `apps/desktop/src/blob/retinue.test.ts`
 - `apps/desktop/src/blob/characterMotion.test.ts` (Cloud remains a shape distinct from the Circle default for the squash check)
 - `apps/desktop/src/ui/agentForm.test.ts`
 - `apps/desktop/src/ui/App.agent.mounted.test.tsx` (three shape-name lines only; P1 also owns this file, so retain its unrelated changes when merging)
 - `apps/desktop/src/ui/blobShare.test.ts`
 - `apps/desktop/src/ui/botTemplates.test.ts`
 
-No `bitbots.css`, Rust, policy, design or product documents were changed. This report is the only changed documentation file. No new daemon method/event was added.
+No `retinue.css`, Rust, policy, design or product documents were changed. This report is the only changed documentation file. No new daemon method/event was added.
 
 ## Remaining verification and merge dependency
 
 - **Merge P2 before shipping P4.** This worktree's Rust shape validator is intentionally untouched. P2 must accept `circle`, `pebble` and `squircle`, alongside all old names, before these looks can be saved to the daemon.
 - The reference at `https://grokbots.ai/studio` was fetched successfully as HTML/text. The browser tool had no available browsers (the in-app-browser open failed; browser inventory was empty), so neither the reference nor this implementation was inspected visually. No reference pictures or SVGs were supplied. Geometry follows the owner's named set and the audited design; visual equivalence is not claimed.
-- The Director still needs to compare the gallery and editor with the reference in both themes and both looks. Useful gallery variants are `/preview.html?theme=dark`, `?theme=light`, and the same URLs with `&style=bitbots`; classic is the gallery default.
-- No live installed Bitbots, user data, native windows, tailnet or phone were exercised. No processes were ended. Independent diff audit remains the Director's next pipeline step.
+- The Director still needs to compare the gallery and editor with the reference in both themes and both looks. Useful gallery variants are `/preview.html?theme=dark`, `?theme=light`, and the same URLs with `&style=retinue`; classic is the gallery default.
+- No live installed Retinue, user data, native windows, tailnet or phone were exercised. No processes were ended. Independent diff audit remains the Director's next pipeline step.
 
 ## Follow-up (P4 audit findings)
 

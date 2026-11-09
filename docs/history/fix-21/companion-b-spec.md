@@ -31,8 +31,8 @@ write `docs/history/fix-21/report.md` with one line per item (done / partly / no
   Add a switch to the companion settings view and to the main Settings sheet beside the
   companion sound row, both reading and writing through one helper (follow the pattern of
   `ui/soundPrefs.ts`). Register the key in the daemon/storage validation the same way
-  `companion.soundsEnabled` is (read `crates/bloblex-storage/src/lib.rs` and
-  `crates/bloblex-daemon/src/main.rs` settings validation; boolean only) with Rust tests, and
+  `companion.soundsEnabled` is (read `crates/retinue-storage/src/lib.rs` and
+  `crates/retinue-daemon/src/main.rs` settings validation; boolean only) with Rust tests, and
   mirror it in `preview/fixtureBridge.ts`.
 - Pure helper `ui/companionPeek.ts`: `detectFinished(prev, next, focusedId)` returning the
   finished agent ids, with table tests.
@@ -94,6 +94,6 @@ write `docs/history/fix-21/report.md` with one line per item (done / partly / no
 
 ## Gates
 
-`npm run typecheck`, `npm run test`; `cargo test -p bloblex-storage -p bloblex-daemon` and
-`cargo clippy --workspace --exclude bloblex-desktop --all-targets -- -D warnings` if you touch
+`npm run typecheck`, `npm run test`; `cargo test -p retinue-storage -p retinue-daemon` and
+`cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings` if you touch
 Rust. Add or update tests for every item.

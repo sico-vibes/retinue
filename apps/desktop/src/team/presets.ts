@@ -1,4 +1,4 @@
-// The preset employees Bitbots ships (owner, 8 November 2026). The same JSON
+// The preset employees Retinue ships (owner, 8 November 2026). The same JSON
 // is read by the daemon (`include_str!`), so the catalogue has one source.
 import catalogue from './presets.json'
 

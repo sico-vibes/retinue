@@ -28,8 +28,8 @@ describe('employee art', () => {
 
   it('uses Glossy as the default art in every look', () => {
     expect(defaultArtForStyle('haze')).toBe('blob')
-    expect(defaultArtForStyle('bitbots')).toBe('blob')
-    expect(defaultArtForStyle('blobots')).toBe('blob')
+    expect(defaultArtForStyle('frost')).toBe('blob')
+    expect(defaultArtForStyle('stone')).toBe('blob')
     expect(defaultArtForStyle('legacy')).toBe('blob')
     expect(defaultArtForStyle('pop')).toBe('blob')
     expect(defaultArtForStyle('dot')).toBe('blob')
@@ -38,10 +38,10 @@ describe('employee art', () => {
   })
 
   it('lets an explicit choice override the app look, and ignores a bad one', () => {
-    expect(resolveArt({ art: 'painted' }, 'blobots')).toBe('painted')
-    expect(resolveArt({}, 'blobots')).toBe('blob')
-    for (const art of RETIRED_ROBOT_ARTS) expect(resolveArt({ art }, 'blobots')).toBe('robot')
-    expect(resolveArt({ art: 'nonsense' }, 'blobots')).toBe('blob')
+    expect(resolveArt({ art: 'painted' }, 'stone')).toBe('painted')
+    expect(resolveArt({}, 'stone')).toBe('blob')
+    for (const art of RETIRED_ROBOT_ARTS) expect(resolveArt({ art }, 'stone')).toBe('robot')
+    expect(resolveArt({ art: 'nonsense' }, 'stone')).toBe('blob')
   })
 
   it('derives the painted body from the blob shape and prefers an explicit one', () => {

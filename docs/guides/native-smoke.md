@@ -7,8 +7,8 @@
 Helpers used for the native smoke test in docs/operations/native-smoke-results.md. They need only Node 22+ and PowerShell.
 
 - Launch the app against an ISOLATED database with the WebView2 debug port open:
-  `$env:BLOBLEX_DB_PATH = "<scratch>\bloblex.db"; $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9333'; npm run desktop:dev`
-  Never point `BLOBLEX_DB_PATH` at `%LOCALAPPDATA%\Bloblex\bloblex.db`.
+  `$env:RETINUE_DB_PATH = "<scratch>\retinue.db"; $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9333'; npm run desktop:dev`
+  Never point `RETINUE_DB_PATH` at `%LOCALAPPDATA%\Retinue\retinue.db`.
 - `cdp.mjs`: list/screenshot/eval/click/type/key against the app's webviews over the debug port (`node cdp.mjs targets`, `shot <index> out.png`, `click <index> "<selector>" [text]`).
 - `winenum.ps1 -ProcId <pid>`: visible native windows of the app with rectangles and styles; `region.ps1`: capture a screen rectangle and report corner pixels (transparency check); `mousedrag.ps1`: synthesized drag.
 - `tray.ps1`: finds the tray icon via UI Automation (open the hidden-icons overflow first).

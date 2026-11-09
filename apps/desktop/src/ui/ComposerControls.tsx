@@ -191,7 +191,7 @@ export function AttachButton({ supported, disabled, count, onFiles }: { supporte
  * The one attachment control. A single paperclip opens a small menu with the two
  * kinds of attachment, which travel differently: an image is read, checked and
  * sent as bytes (only to coding agents that accept images, up to the per-message
- * limit); a document, audio or video file is sent as a path only, which Bitbots
+ * limit); a document, audio or video file is sent as a path only, which Retinue
  * does not read and the coding agent opens if its permissions allow. Each choice
  * is disabled on its own, with the reason shown, so the control itself stays
  * available whenever either kind is. Drag and paste still add images directly.
@@ -218,7 +218,7 @@ export function AttachMenu({ imagesSupported, imagesDisabled, imageCount, fileDi
       </button>
       <button type="button" role="menuitem" className="composer-menu-item rich" disabled={fileDisabled} onClick={() => { close(false); onPickFile() }}>
         <span className="composer-menu-icon"><FileText size={15} aria-hidden="true" /></span>
-        <span className="composer-menu-text"><strong>File by path</strong><small>Document, audio or video. Bitbots does not read it; the coding agent opens it if its permissions allow.</small></span>
+        <span className="composer-menu-text"><strong>File by path</strong><small>Document, audio or video. Retinue does not read it; the coding agent opens it if its permissions allow.</small></span>
       </button>
       {onGenerateImage && <>
         <div className="composer-menu-separator" role="separator" />

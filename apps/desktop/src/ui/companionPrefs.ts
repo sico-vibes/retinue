@@ -9,7 +9,7 @@ import { rpc } from '../tauri'
 
 export const FOCUS_MODE_KEY = 'companion.focusMode'
 /** Carries the boolean Focus-mode switch between windows. */
-export const FOCUS_MODE_CHANGED_EVENT = 'bloblex-companion-focus-changed'
+export const FOCUS_MODE_CHANGED_EVENT = 'retinue-companion-focus-changed'
 
 export const DEFAULT_FOCUS_MODE = false
 

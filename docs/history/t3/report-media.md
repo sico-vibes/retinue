@@ -4,16 +4,16 @@ Worktree `D:\t3m`, branch `t3/media`. Everything is left uncommitted in the work
 
 **I ran no tests of any kind** (no `cargo test`, no `cargo check --tests`, no clippy, no vitest, no browser, no screenshots,
 no probe or SQLite experiment). No `git` write of any kind (no add/commit/push/checkout/stash/reset). The only commands
-run were reads/searches and `cargo check -p bloblex-daemon --message-format short`.
+run were reads/searches and `cargo check -p retinue-daemon --message-format short`.
 
 ## Files changed
 
 | File | Change |
 |---|---|
-| `crates/bloblex-daemon/src/media.rs` | NEW — `media.preview` (349 lines) |
-| `crates/bloblex-daemon/src/checkpoints.rs` | NEW — `session.checkpoints`, `session.checkpoints.revertTurn` (224 lines) |
-| `crates/bloblex-daemon/src/experiments.rs` | `reverse_file` factored into `prepare_reverse`; new `reverse_file_check` (behaviour of `reverse_file` unchanged) |
-| `crates/bloblex-daemon/src/main.rs` | two `mod` lines and three dispatch arms only (5 added lines in total) |
+| `crates/retinue-daemon/src/media.rs` | NEW — `media.preview` (349 lines) |
+| `crates/retinue-daemon/src/checkpoints.rs` | NEW — `session.checkpoints`, `session.checkpoints.revertTurn` (224 lines) |
+| `crates/retinue-daemon/src/experiments.rs` | `reverse_file` factored into `prepare_reverse`; new `reverse_file_check` (behaviour of `reverse_file` unchanged) |
+| `crates/retinue-daemon/src/main.rs` | two `mod` lines and three dispatch arms only (5 added lines in total) |
 
 `main.rs` edits, exactly as the brief allows:
 - `main.rs:47-49` — `// Authorised media preview and the per-turn checkpoint report.` + `mod media;` + `mod checkpoints;`
@@ -21,7 +21,7 @@ run were reads/searches and `cargo check -p bloblex-daemon --message-format shor
 - `main.rs:1056-1057` — `"session.checkpoints" => checkpoints::session_checkpoints(st, &p).await,` and
   `"session.checkpoints.revertTurn" => checkpoints::revert_turn(st, &p).await,` (directly under the `"file.revert"` arm)
 
-`git diff -U0 -- crates/bloblex-daemon/src/main.rs | rg "media|checkpoints"` shows only those five added lines; no other lane's
+`git diff -U0 -- crates/retinue-daemon/src/main.rs | rg "media|checkpoints"` shows only those five added lines; no other lane's
 main.rs work was touched.
 
 ## Item 1 — `media.preview` (`media.rs`)
@@ -47,11 +47,11 @@ reads `st.db.session_detail(sessionId)` for `projectPath`, then does **all** fil
 7. Denied names (`names_a_secret`, `media.rs:240`), case-insensitive, on the path below the root: any component equal to `.git`,
    `node_modules`, `.ssh`, `.aws`, `.gnupg`; file name starting with `.env`; ending `.pem .key .pfx .p12 .kdbx`; equal to
    `id_rsa`, `id_ed25519`, `.npmrc`, `.pypirc`, `credentials`, `auth.json`, `secrets.json` → `blocked`,
-   "Bitbots does not preview files that may hold secrets."
+   "Retinue does not preview files that may hold secrets."
 8. Regular file only: `metadata.is_file()` false (directory, device, the root itself) → `unavailable`, "That path is not a file."
    Empty → `unavailable`, "That file is empty." (`size` is reported from here on, including for `tooLarge`).
 9. Extension allowlist (`kind_for`, `media.rs:113`): unknown extension → `unsupported`, kind `unsupported`,
-   "Bitbots can't preview .&lt;ext&gt; files yet." (`.`, without an extension, reads "untyped").
+   "Retinue can't preview .&lt;ext&gt; files yet." (`.`, without an extension, reads "untyped").
 10. Size caps (`size_limit`, `media.rs:355`): image 8 MiB, svg 1 MiB, audio 16 MiB, video 24 MiB, pdf 16 MiB → `tooLarge`,
     "That file is too large to preview (limit N MB).", before any read. Text is not refused: the first 256 KiB are read and
     `truncated` is `size > 256 KiB`.
@@ -124,7 +124,7 @@ behaviour of `reverse_file` is unchanged. `ReversePatch` (`experiments.rs:147`) 
    "That path is not a file." (an empty file keeps the brief's "That file is empty.").
 3. A path equal to the project root has an empty relative tail and is refused as "That path is not a file." rather than falling
    into the secrets rule.
-4. Unknown extension with no extension at all reads "Bitbots can't preview untyped files yet."
+4. Unknown extension with no extension at all reads "Retinue can't preview untyped files yet."
 5. Audio/video are verified by refusing a file whose bytes plainly belong to another family (image, PDF, ZIP, `MZ`, ELF), rather
    than requiring a container signature — the brief's "otherwise trust the extension".
 6. `language` is the lowercased extension with a few dozen aliases (`yml`→`yaml`, `htm`→`html`, `jsonc`→`json`,
@@ -156,24 +156,24 @@ parity test is now stale (I did not edit it, as instructed). It needs, in `tiers
 ```
 
 Until those rows exist, the gateway refuses all three remotely (unknown method → `forbidden_remote`), which is the safe default.
-No other file needed changing: `bloblex-storage` already exposes `session_detail`, `files[].turnId`, `detail.diff`,
+No other file needed changing: `retinue-storage` already exposes `session_detail`, `files[].turnId`, `detail.diff`,
 `detail.reverted` and `mark_file_reverted`, so no storage read was added and none was missing.
 
 ## Verification
 
 ```
 $env:RUST_MIN_STACK='33554432'
-cargo check -p bloblex-daemon --message-format short
+cargo check -p retinue-daemon --message-format short
 ```
 
 ```
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\t3m\crates\bloblex-daemon)
+    Checking retinue-daemon v0.1.0-beta.38 (D:\t3m\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.68s
 ```
 
 That is the last 15 lines (the whole tail) of the final run; the full log is `target\lane\cargo-check.log`. The earlier run in
 this lane compiled every dependency and reported two real errors of mine (`experiments.rs` `directory` type, a needless `mut` in
-`media.rs`), both fixed. The final result is **zero warnings and zero errors** from `cargo check -p bloblex-daemon`
+`media.rs`), both fixed. The final result is **zero warnings and zero errors** from `cargo check -p retinue-daemon`
 (no `--tests`, no clippy).
 
 ## What I could not verify

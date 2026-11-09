@@ -1,8 +1,8 @@
 # Lane DELEGATION — report
 
-Worktree `D:\t3d` (branch `t3/daemon`). Files touched: `crates/bloblex-daemon/src/delegations.rs`,
-`crates/bloblex-daemon/src/team.rs`, `crates/bloblex-daemon/src/workspace.rs` (new),
-`crates/bloblex-storage/src/lib.rs` (delegation ledger only), `crates/bloblex-daemon/src/main.rs`
+Worktree `D:\t3d` (branch `t3/daemon`). Files touched: `crates/retinue-daemon/src/delegations.rs`,
+`crates/retinue-daemon/src/team.rs`, `crates/retinue-daemon/src/workspace.rs` (new),
+`crates/retinue-storage/src/lib.rs` (delegation ledger only), `crates/retinue-daemon/src/main.rs`
 (four small anchors plus the one extracted helper the brief allows).
 
 **I ran no tests.** No `cargo test`, no `--tests`, no clippy `--all-targets`, no vitest, no
@@ -151,7 +151,7 @@ claim and dedupe) made `deliver()` treat a reply as the assignment's own deliver
 
 ## Item 4 — workspace report
 
-New `crates/bloblex-daemon/src/workspace.rs`, registered as `main.rs:1170`
+New `crates/retinue-daemon/src/workspace.rs`, registered as `main.rs:1170`
 `"session.workspace" => workspace::rpc(st, &p).await` next to `"session.repository"`, and
 `mod workspace;` at `main.rs:63`.
 
@@ -205,12 +205,12 @@ repo, so a manual `session.workspace` call against a live daemon is the cheap co
 2. `docs/ipc-contract.md` — `delegation.cancel`, `delegation.cancelGroup`, `session.workspace`, and
    the new `reply_state` invariant, are undocumented today (`docs/` is off-limits to this lane).
 3. If the UI wants the reply state on the delegation DTO, add `'replyState',reply_state` to
-   `DELEGATION_COLUMNS` in `crates/bloblex-storage/src/lib.rs:1002` (my lane deliberately left the
+   `DELEGATION_COLUMNS` in `crates/retinue-storage/src/lib.rs:1002` (my lane deliberately left the
    wire shape unchanged).
 
 ## Existing tests / fixtures affected (not edited)
 
-- **Signature kept only for tests:** `crates/bloblex-daemon/src/team_p10_tests.rs:85, 90, 96, 98,
+- **Signature kept only for tests:** `crates/retinue-daemon/src/team_p10_tests.rs:85, 90, 96, 98,
   203` call `crate::team::prepare_worktree(...)` and assert `is_none()`/`is_some()`. The real
   function is now `prepare_worktree_attempt`; `prepare_worktree` survives as a `#[cfg(test)]`
   one-line shim with the same signature, so those tests compile and mean what they meant.
@@ -222,7 +222,7 @@ repo, so a manual `session.workspace` call against a live daemon is the cheap co
   `row_a_reply_to_a_busy_origin_adds_no_waiting_notice` (no ledger row → `TurnEnd::Ungoverned` →
   relayed and queued silently, as before). `row_a_drain_releases_another_conversations_delivery`
   uses `enqueue_for_test` (no `delegationId`) so the new terminal check never fires.
-- Nothing in `crates/bloblex-storage` tests the delegation ledger, so the new column does not make
+- Nothing in `crates/retinue-storage` tests the delegation ledger, so the new column does not make
   a storage test stale.
 - Stale-by-design, left untouched as instructed: none found.
 
@@ -238,12 +238,12 @@ repo, so a manual `session.workspace` call against a live daemon is the cheap co
 ## Verification (the only commands run)
 
 ```
-> cargo check -p bloblex-storage --message-format short
-    Checking bloblex-storage v0.1.0-beta.38 (D:\t3d\crates\bloblex-storage)
+> cargo check -p retinue-storage --message-format short
+    Checking retinue-storage v0.1.0-beta.38 (D:\t3d\crates\retinue-storage)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.29s
 
-> cargo check -p bloblex-daemon --message-format short
-    Checking bloblex-daemon v0.1.0-beta.38 (D:\t3d\crates\bloblex-daemon)
+> cargo check -p retinue-daemon --message-format short
+    Checking retinue-daemon v0.1.0-beta.38 (D:\t3d\crates\retinue-daemon)
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.89s
 ```
 

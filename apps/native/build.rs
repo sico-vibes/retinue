@@ -148,20 +148,20 @@ fn render(svg: &Path, size: u32) -> Vec<u8> {
     png
 }
 
-/// The app icon in `bitbots-native.exe`, so Explorer, the Start menu shortcut
-/// and the taskbar show the Bitbots mark rather than a blank document.
+/// The app icon in `retinue-native.exe`, so Explorer, the Start menu shortcut
+/// and the taskbar show the Retinue mark rather than a blank document.
 ///
 /// The checkout path contains an apostrophe, which Windows' resource compiler
 /// objects to on some machines; the icon is cosmetic, so a failure is a warning
 /// and the package script builds from a short path when it can.
 fn embed_icon(repo: &Path, out: &Path) {
-    let icon = repo.join("assets").join("icon").join("bloblex.ico");
+    let icon = repo.join("assets").join("icon").join("retinue.ico");
     if !icon.is_file() {
-        println!("cargo:warning=assets/icon/bloblex.ico is missing; the app has no icon");
+        println!("cargo:warning=assets/icon/retinue.ico is missing; the app has no icon");
         return;
     }
     println!("cargo:rerun-if-changed={}", icon.display());
-    let rc = out.join("bitbots-native.rc");
+    let rc = out.join("retinue-native.rc");
     let escaped = icon.to_string_lossy().replace('\\', "\\\\");
     fs::write(&rc, format!("1 ICON \"{escaped}\"\n")).expect("writing the app icon resource");
     match embed_resource::compile(&rc, embed_resource::NONE).manifest_optional() {

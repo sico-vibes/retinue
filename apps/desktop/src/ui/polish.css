@@ -34,7 +34,7 @@
 :root[data-accent="custom"] input[type="range"] { accent-color: var(--user-accent); }
 :root[data-accent="custom"] input[type="checkbox"], :root[data-accent="custom"] input[type="radio"] { accent-color: var(--user-accent); }
 
-/* ── Quieter scrollbars (Blobots; Bitbots styles its own) ──────────────── */
+/* ── Quieter scrollbars (Stone; Retinue styles its own) ──────────────── */
 :root * { scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
 
 @media (prefers-reduced-motion: reduce) {

@@ -69,7 +69,7 @@ describe('shortcuts', () => {
     expect(matchesShortcut(key({ ctrlKey: true, code: 'KeyK', key: 'k' }), null)).toBe(false)
   })
 
-  it('refuses keys needed for typing or owned by Bitbots, and plain keys', () => {
+  it('refuses keys needed for typing or owned by Retinue, and plain keys', () => {
     for (const taken of ['Ctrl+C', 'Ctrl+V', 'Ctrl+Z', 'Ctrl+Enter', 'Ctrl+E', 'Ctrl+Alt+B']) expect(shortcutProblem(taken), taken).toContain('already used')
     expect(shortcutProblem('K')).toContain('Include Ctrl or Alt')
     expect(shortcutProblem('Shift+K')).toContain('Include Ctrl or Alt')

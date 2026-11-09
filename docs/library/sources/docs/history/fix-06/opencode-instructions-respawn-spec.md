@@ -4,7 +4,7 @@
 > **Status:** historical
 > **Last updated:** 2026-10-14
 
-Written 14 October 2026. Backend only (`crates/bloblex-adapter-acp`; the daemon
+Written 14 October 2026. Backend only (`crates/retinue-adapter-acp`; the daemon
 only if a contract or compile fix strictly needs it).
 
 ## 1. Symptom (owner, beta.25, OpenCode 2.0.28)
@@ -28,7 +28,7 @@ if c.spawned_instructions != Some(instructions) {
 ```
 
 The instructions are not only the blob's own text: `team::attach`
-(`crates/bloblex-daemon/src/team.rs`) prepends a `<bloblex_team>` block built from
+(`crates/retinue-daemon/src/team.rs`) prepends a `<retinue_team>` block built from
 current state: the blob's role and description, the user's name, its project, and
 **whether it is the team leader and who the leader is**. Any change to those
 between the session's start and a later turn (making a blob the leader, which also
@@ -100,9 +100,9 @@ with its history.
 ## 5. Gates
 
 ```
-cargo test -p bloblex-adapter-acp
-cargo test -p bloblex-daemon          # RUST_MIN_STACK=33554432 on this machine
-cargo clippy -p bloblex-adapter-acp -p bloblex-daemon --no-deps --all-targets -- -D warnings
+cargo test -p retinue-adapter-acp
+cargo test -p retinue-daemon          # RUST_MIN_STACK=33554432 on this machine
+cargo clippy -p retinue-adapter-acp -p retinue-daemon --no-deps --all-targets -- -D warnings
 ```
 
 The tree is clippy-clean for `-D warnings`; keep it that way (no new findings).

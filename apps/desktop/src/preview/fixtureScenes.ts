@@ -79,7 +79,7 @@ Get-ChildItem -Recurse | Where-Object { $_.Length -gt 1MB }
 \`\`\`
 
 \`\`\`json
-{ "name": "bitbots", "version": "0.1.0-beta.46", "private": true, "tiers": ["viewer", "chat", "operator"] }
+{ "name": "retinue", "version": "0.1.0-beta.46", "private": true, "tiers": ["viewer", "chat", "operator"] }
 \`\`\`
 
 \`\`\`diff
@@ -93,15 +93,15 @@ A code block with no language at all.
 
 const RICH = `A bar chart, a line chart and a data table, as an employee can send them:
 
-\`\`\`bitbots-chart
+\`\`\`retinue-chart
 { "type": "bar", "title": "Tests by package", "data": [{ "label": "daemon", "value": 949 }, { "label": "storage", "value": 151 }, { "label": "ui", "value": 1682 }, { "label": "adapters", "value": 120 }] }
 \`\`\`
 
-\`\`\`bitbots-chart
+\`\`\`retinue-chart
 { "type": "line", "title": "Cold start, in ms", "data": [{ "label": "beta.42", "value": 410 }, { "label": "beta.43", "value": 380 }, { "label": "beta.44", "value": 395 }, { "label": "beta.45", "value": 360 }, { "label": "beta.46", "value": 352 }] }
 \`\`\`
 
-\`\`\`bitbots-table
+\`\`\`retinue-table
 { "title": "Releases", "caption": "The last three betas", "columns": ["Version", "Headline", "Tests"], "rows": [["beta.44", "Machines and handoff", 2901], ["beta.45", "Accounts, secrets, webhooks", 3050], ["beta.46", "Sub-bots", 3141]] }
 \`\`\`
 
@@ -115,7 +115,7 @@ Tom,3,0.07
 
 const VISUAL = `A mock as a visual reply. Scripts inside it never run:
 
-\`\`\`bitbots-visual
+\`\`\`retinue-visual
 <div style="padding:16px;border-radius:12px;background:#eef;color:#223"><h3 style="margin:0">Invoice 104</h3><p style="margin:6px 0 0">Paid on 31 October</p><script>document.body.innerHTML="SCRIPT RAN"</script></div>
 \`\`\`
 
@@ -154,7 +154,7 @@ const SCENES: Record<string, () => Scene> = {
     user('A message with a few lines.\n\nIt has a blank line, and\na single line break too.'),
     user(LONG_PARAGRAPH),
     user('Mentioning @Pololo and @Claude, with `inline code` and a path C:\\work\\korus\\src\\App.tsx.'),
-    user('Sent from another app through the Bitbots connection.', { meta: { origin: { kind: 'mcp', client: 'claude-code' } } }),
+    user('Sent from another app through the Retinue connection.', { meta: { origin: { kind: 'mcp', client: 'claude-code' } } }),
     user('Here are two screenshots.', { attachments: [{ name: 'screenshot-1.png' }, { name: 'a-very-long-file-name-that-has-to-be-shortened-somewhere.png' }] }),
     user('Change this part, please.', { meta: { annotations: [{ quote: 'I will switch totals to integer minor units and parse the locale first.', note: 'Keep the old rounding for refunds.' }, { quote: 'Running the suite now.', note: 'Only the invoice suite.' }] } }),
     bot('A reply with reactions under it.', { reactions: [{ emoji: '👍', count: 1 }, { emoji: '🎉', count: 1 }] }),
@@ -190,7 +190,7 @@ const SCENES: Record<string, () => Scene> = {
     user('Please continue where you stopped.', { meta: { kind: 'auto_retry' } }),
     notice('Running the setup script…', { kind: 'setup_script', status: 'running' }),
     notice('The setup script failed: npm ci exited with code 1.', { kind: 'setup_script', status: 'failed', detail: 'npm ci exited with code 1.' }),
-    notice("This conversation's separate copy of the project had been emptied, so it was restored from bitbots/task.", { kind: 'worktree', direction: 'restored' }),
+    notice("This conversation's separate copy of the project had been emptied, so it was restored from retinue/task.", { kind: 'worktree', direction: 'restored' }),
     notice('Created Scout.', { kind: 'blob_created', agentId: 'agent-pololo', name: 'Scout' }),
     bot('And a normal reply after them all.'),
   ] }),
@@ -205,7 +205,7 @@ const SCENES: Record<string, () => Scene> = {
     tool('s-web', 'webSearch', 'Searched: effort picker react', 'completed', { query: 'effort picker react' }),
     tool('s-mcp', 'mcpToolCall', 'github · list_pull_requests', 'completed', { tool: 'github · list_pull_requests', input: '{\n  "state": "open"\n}', result: '3 open pull requests' }),
     tool('s-mcp-fail', 'mcpToolCall', 'github · merge', 'failed', { tool: 'github · merge', error: 'Not allowed: the branch is protected.' }),
-    tool('s-skill', 'mcpToolCall', 'bloblex · load_skill', 'completed', { tool: 'bloblex · load_skill', input: '{\n  "name": "pdf"\n}', result: 'Loaded.' }),
+    tool('s-skill', 'mcpToolCall', 'retinue · load_skill', 'completed', { tool: 'retinue · load_skill', input: '{\n  "name": "pdf"\n}', result: 'Loaded.' }),
     tool('s-agent', 'Agent', 'Agent', 'completed', { tool: 'Agent', subagent: { type: 'general-purpose', model: 'haiku', description: 'Count the invoice fixtures' }, output: 'Async agent launched successfully. (internal)\nagentId: a1 (internal ID)\nThe agent is working in the background.\nThere are 12 invoice fixtures.' }),
     tool('s-agent-read', 'read', 'Read', 'completed', { path: 'tests/fixtures/invoices.json' }, { parentToolCallId: 's-agent' }),
     tool('s-agent-grep', 'search', 'Search', 'completed', { query: 'invoice', output: '12 matches' }, { parentToolCallId: 's-agent' }),
@@ -237,7 +237,7 @@ const SCENES: Record<string, () => Scene> = {
   'proposal-bot': () => ({ title: 'Proposal: an employee', state: 'waiting_permission', messages: lead(), permissions: [proposal('bot', { name: 'Scout', role: 'Research', description: 'Finds references and open-source options.', instructions: 'Search first. Answer concisely, with sources.', provider: 'opencode', model: 'opencode-go/preview', thinking: 'high', approvalMode: 'ask', project: 'project-board', tags: ['research', 'ui'], look: { shape: 'cloud', seed: 'scout' } }, 'Create the employee "Scout"')] }),
   'proposal-project': () => ({ title: 'Proposal: a project', state: 'waiting_permission', messages: lead(), permissions: [proposal('project', { name: 'Marketing site', description: 'The public site and its copy.', folder: { mode: 'new', path: '' }, tags: ['web'] }, 'Create the project "Marketing site"')] }),
   'proposal-task': () => ({ title: 'Proposal: a task', state: 'waiting_permission', messages: lead(), permissions: [proposal('task', { bot: 'agent-pololo', botName: 'Pololo', project: 'project-board', projectName: 'Board', topic: 'Effort picker research', brief: 'Find an open-source effort picker like the 21st.dev one, and report the best three.', doneGoal: 'Three ranked options, each with a licence.', reportBack: 'A short list with links.' }, 'Assign "Effort picker research"')] }),
-  'proposal-merge': () => ({ title: 'Proposal: merge', state: 'waiting_permission', messages: lead(), permissions: [proposal('merge', { action: 'merge', worktree: 'C:/work/korus-bitbots/task', repo: 'C:/work/korus', branch: 'bitbots/effort-picker', baseBranch: 'main', baseCommit: 'abc1234', conversation: SCENE_SESSION_ID, botName: 'Pololo', taskTitle: 'Effort picker research', files: ['src/ui/effort/Dropdown.tsx', 'src/ui/effort/dropdown.css', 'docs/effort-picker.md'], diffSummary: '3 files changed, 212 insertions, 4 deletions' }, 'Merge "Effort picker research"')] }),
+  'proposal-merge': () => ({ title: 'Proposal: merge', state: 'waiting_permission', messages: lead(), permissions: [proposal('merge', { action: 'merge', worktree: 'C:/work/korus-retinue/task', repo: 'C:/work/korus', branch: 'retinue/effort-picker', baseBranch: 'main', baseCommit: 'abc1234', conversation: SCENE_SESSION_ID, botName: 'Pololo', taskTitle: 'Effort picker research', files: ['src/ui/effort/Dropdown.tsx', 'src/ui/effort/dropdown.css', 'docs/effort-picker.md'], diffSummary: '3 files changed, 212 insertions, 4 deletions' }, 'Merge "Effort picker research"')] }),
   'proposal-update': () => ({ title: 'Proposal: update an employee', state: 'waiting_permission', messages: lead(), permissions: [proposal('bot', { action: 'update', blob: 'agent-pololo', targetName: 'Pololo', role: 'Lead designer', thinking: 'max', approvalMode: 'auto', instructions: 'Lead the design work, and ask before changing tokens.' }, 'Update Pololo')] }),
   'proposal-playbook': () => ({ title: 'Proposal: the playbook', state: 'waiting_permission', messages: lead(), permissions: [proposal('playbook', { reason: 'You asked me to always check licences first.', text: '# How I work\n\nI am the Manager. I check licences before suggesting a library.\n\n## Proposing a team\n\nOne employee per responsibility.' }, 'Change the playbook')] }),
   'proposal-profile': () => ({ title: 'Proposal: your profile', state: 'waiting_permission', messages: lead(), permissions: [proposal('profile', { category: 'style', key: 'tone', value: 'Direct, plain English. No filler.' }, 'Remember your tone')] }),
@@ -258,7 +258,7 @@ const SCENES: Record<string, () => Scene> = {
     ledger('a', 'running', 'Research the picker', 'agent-pololo'),
     ledger('b', 'queued', 'Write the copy', 'agent-claude', { queueReason: 'slots' }),
     ledger('c', 'queued', 'Check the licences', 'agent-opencode', { queueReason: 'busy' }),
-    ledger('d', 'completed', 'Update the fixtures', 'agent-invoice', { doneGoal: 'All 14 fixtures pass.', workspace: { path: 'C:/work/korus-bitbots/fixtures', worktree: { repo: 'C:/work/korus', branch: 'bitbots/fixtures', path: 'C:/work/korus-bitbots/fixtures' } } }),
+    ledger('d', 'completed', 'Update the fixtures', 'agent-invoice', { doneGoal: 'All 14 fixtures pass.', workspace: { path: 'C:/work/korus-retinue/fixtures', worktree: { repo: 'C:/work/korus', branch: 'retinue/fixtures', path: 'C:/work/korus-retinue/fixtures' } } }),
     ledger('e', 'failed', 'Draw the icon', 'agent-pololo', { error: 'The coding agent stopped unexpectedly.' }),
     ledger('f', 'cancelled', 'Review the plan', 'agent-claude'),
     ledger('g', 'interrupted', 'Tidy the docs', 'agent-opencode'),

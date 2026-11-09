@@ -52,7 +52,7 @@ vi.mock('../tauri', () => ({
   openProjectFolder: vi.fn(), stagePromptAttachment: vi.fn(),
   selectLocalFile: vi.fn(), inspectLocalFile: vi.fn(),
   openInEditor: vi.fn(), revealInExplorer: vi.fn(), resolveProjectFile: vi.fn(),
-  quitBloblex: vi.fn(), setCloseToTray: vi.fn(),
+  quitRetinue: vi.fn(), setCloseToTray: vi.fn(),
   updatesGetState: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesSetPreferences: async () => ({ currentVersion: '0.1.0', channel: 'beta' as const, autoCheck: true, lastCheckedAt: null, available: null, devBuild: false }),
   updatesCheck: async () => ({ status: 'up_to_date' as const, checkedAt: '2026-10-02T00:00:00.000Z' }),
@@ -77,7 +77,7 @@ vi.mock('../blob/BlobCanvas', async () => {
 })
 
 import { App } from './App'
-import { setThemeStyle } from '../blob/bitbots'
+import { setThemeStyle } from '../blob/retinue'
 import { DRAFT_STORAGE_KEY, DRAFT_TTL_MS, getDraft, resetDraftStoreForTests, flushDraftsForTests } from './draftStore'
 import type { Agent, Runtime, Session, Snapshot } from '../types'
 
@@ -128,7 +128,7 @@ async function settleMicrotasks() {
 // choice would.
 function showTeamView() {
   const read = localStorage.getItem.bind(localStorage)
-  try { localStorage.getItem = ((key: string) => key === 'bitbots.sidebar.view' ? 'bots' : read(key)) as typeof localStorage.getItem } catch { /* a stub that refuses assignment keeps its own answers */ }
+  try { localStorage.getItem = ((key: string) => key === 'retinue.sidebar.view' ? 'bots' : read(key)) as typeof localStorage.getItem } catch { /* a stub that refuses assignment keeps its own answers */ }
 }
 
 function mountApp(search = '') {
@@ -216,7 +216,7 @@ beforeEach(() => {
   h.daemonEventHandlers = []
   createdSessions = []
   for (const mock of Object.values(h)) if (typeof mock === 'function' && 'mockReset' in mock) (mock as ReturnType<typeof vi.fn>).mockReset()
-  setThemeStyle('blobots')
+  setThemeStyle('stone')
   configure()
 })
 

@@ -20,7 +20,7 @@ Three items must be fixed before merge, because each one is a real regression or
 ### Must fix (3)
 
 **F1. A locked bot can no longer enter or leave plan mode, so "Approve plan" breaks.**
-`crates/bloblex-daemon/src/main.rs:2498`: the new lock check in `update_session_model` runs for every request, including `{ planMode }`. The Plan pill (`App.tsx:1621`, `setPlanMode`) and `approvePlan` (`App.tsx:1628`) both use `session.model.update { planMode }`, and the Plan pill is not disabled for a locked bot (`App.tsx:2558`).
+`crates/retinue-daemon/src/main.rs:2498`: the new lock check in `update_session_model` runs for every request, including `{ planMode }`. The Plan pill (`App.tsx:1621`, `setPlanMode`) and `approvePlan` (`App.tsx:1628`) both use `session.model.update { planMode }`, and the Plan pill is not disabled for a locked bot (`App.tsx:2558`).
 - A locked bot's conversation shows the red lock error on every Plan click.
 - `approvePlan` calls `setPlanMode(false)`, which fails and is swallowed. It then sends "Approved. Go ahead and implement the plan." while the session is still in plan mode. A locked bot can never leave plan mode.
 - Plan mode is a per-conversation work mode, not one of the lock's listed settings: model, effort, speed, permission, rename, instructions, runtime, project, archive and the Manager's changes (`docs/history/fix-39/research-audit.md` item 13, "Decided").
@@ -28,10 +28,10 @@ Three items must be fixed before merge, because each one is a real regression or
 Fix: in `update_session_model`, apply the lock check only when the request carries `model`, `thinking`, `serviceTier` or `approvalMode`. A request with only `planMode` passes. Add a daemon test: a locked bot accepts `{ planMode: true }` and refuses `{ serviceTier: "fast" }`.
 
 **F2. `agent.team.update` lets a locked bot be moved out of its project or have its leader flag changed.**
-`crates/bloblex-daemon/src/team.rs:715`: `settings_change` is `projectId` non-null `||` `role` present.
+`crates/retinue-daemon/src/team.rs:715`: `settings_change` is `projectId` non-null `||` `role` present.
 - `projectId: null` (the "Unassigned" target) is not refused. Dragging a locked bot onto Unassigned works: `placeAgent` (`App.tsx:2086`) sends `projectId: null`, and the menu's "Move to" is disabled but drag-and-drop is not. The test `row_agent_team_update_keeps_layout_writes_but_refuses_settings` only tries a non-null project.
 - `leader` is not guarded. It is a team-role setting, and setting it clears the old leader.
-- `project.delete` (`crates/bloblex-storage/src/lib.rs:1747`, which runs `UPDATE agents SET project_id=NULL`) also changes a locked bot's project. It is missing from the report's writer table.
+- `project.delete` (`crates/retinue-storage/src/lib.rs:1747`, which runs `UPDATE agents SET project_id=NULL`) also changes a locked bot's project. It is missing from the report's writer table.
 
 Fix:
 - Refuse when `projectId` is present with a value different from the stored one (null included), or when `leader` or `role` is present with a value different from the stored one. Comparing with the stored value keeps drops inside the same project working as layout.
@@ -66,7 +66,7 @@ Fix:
 
 **S5. Harden `apply_permission`.** `proposals.rs:460`: at approval time it re-checks only `link.kind == "side"` and the lock. `proposal.decide` accepts `edits` merged into the payload (`proposals.rs:499`), so an edited `conversation` could point at any side conversation. Re-check that `link.peerAgentId` is the proposing Manager (the proposal's `agent_id`), as `propose_permission` does. Low risk because the owner approves, but the two checks should match.
 
-**S6. Item 19 sub-point 5 has no owner.** The denial text (`bloblex_agent_core::permission_summary`) is outside P5's file list and the report flags it. The Director should assign it to P6 or Wave D, or the friend's "still denied" complaint stays half-fixed.
+**S6. Item 19 sub-point 5 has no owner.** The denial text (`retinue_agent_core::permission_summary`) is outside P5's file list and the report flags it. The Director should assign it to P6 or Wave D, or the friend's "still denied" complaint stays half-fixed.
 
 **S7. Sidebar model line is not reactive.** `TeamSidebar.tsx:234` reads `readCachedCatalogModels` synchronously. If the catalog arrives after the first render, rows keep the raw model id until something else re-renders them. Subscribe through the cache's `useSyncExternalStore` hook, or re-read when the catalog changes. Cosmetic.
 
@@ -127,7 +127,7 @@ Gaps:
 ### Visual rules
 
 - No sparkle or star icons were added. The lock uses `Lock` / `LockOpen`, the tab uses `FlaskConical`, the card uses `ShieldCheck`. The Manager's star is untouched.
-- Themes: the `.lock-badge` uses theme tokens plus light-theme and selected-row overrides. It has no `data-bitbots` override like `.leader-badge` at `bitbots.css:296`, but it is already circular. The Director's screenshots should confirm both looks and both themes, including S3.
+- Themes: the `.lock-badge` uses theme tokens plus light-theme and selected-row overrides. It has no `data-retinue` override like `.leader-badge` at `retinue.css:296`, but it is already circular. The Director's screenshots should confirm both looks and both themes, including S3.
 
 
 ## Re-check (Sonnet), verbatim
@@ -136,7 +136,7 @@ The auditor re-checked the follow-up and replied:
 
 The Re-check section isn't in `docs/history/fix-39/p5-audit.md`. My Bash append and my Edit were both denied, so I wrote nothing.
 
-My verdict is PASS. I checked F1, F2, F3, S1–S5, S7, S8 and the update badge against the code, and each is fixed. I did not re-run the gates. S3's layout fix is only pinned by a CSS test, so the Director's screenshots, including the badge at 1024 px, are still owed. S6 is still unassigned: the denial text in `bloblex_agent_core` is outside P5's files.
+My verdict is PASS. I checked F1, F2, F3, S1–S5, S7, S8 and the update badge against the code, and each is fixed. I did not re-run the gates. S3's layout fix is only pinned by a CSS test, so the Director's screenshots, including the badge at 1024 px, are still owed. S6 is still unassigned: the denial text in `retinue_agent_core` is outside P5's files.
 
 If you grant write access to that file, I'll append the section.
 

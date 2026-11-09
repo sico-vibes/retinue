@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // Source-level checks for the reduced-motion audit (item 10) and the eased
-// panel/menu transitions in Bitbots (item 11). These read the stylesheets as
+// panel/menu transitions in Retinue (item 11). These read the stylesheets as
 // text, because the behaviour they describe is a media-query and a cascade that
 // happy-dom does not evaluate.
 import { readFileSync } from 'node:fs'
@@ -45,7 +45,7 @@ describe('reduced motion audit', () => {
   })
 })
 
-describe('Bitbots panel transitions', () => {
+describe('Retinue panel transitions', () => {
   it('keeps the eased preview timing in the look picker stylesheet', () => {
     const css = read('lookPicker.css')
     expect(css).toMatch(/\.look-preview\s*\{[\s\S]*?transition-timing-function:\s*cubic-bezier/)

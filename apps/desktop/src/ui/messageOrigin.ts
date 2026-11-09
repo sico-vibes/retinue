@@ -1,4 +1,4 @@
-// Wave 14: a message sent through the Bitbots MCP carries `origin: { kind: 'mcp', client }`, at the top level
+// Wave 14: a message sent through the Retinue MCP carries `origin: { kind: 'mcp', client }`, at the top level
 // or in `meta`. The transcript and the companion show who sent it, so a message from an outside session never
 // reads as one the owner typed.
 

@@ -6,7 +6,7 @@ import { parseUnifiedDiff, sideBySideRows, type DiffLine } from './diffParser'
 import './diffBody.css'
 
 export type DiffMode = 'unified' | 'split'
-const MODE_KEY = 'bitbots.diff.mode'
+const MODE_KEY = 'retinue.diff.mode'
 
 function readMode(): DiffMode {
   try { return localStorage.getItem(MODE_KEY) === 'split' ? 'split' : 'unified' } catch { return 'unified' }

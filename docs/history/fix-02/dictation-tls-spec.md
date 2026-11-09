@@ -13,7 +13,7 @@ ruled out.
 
 ## Problem
 
-Cloud dictation (`crates/bloblex-speech/src/cloud.rs`, `CloudTranscriber`) is
+Cloud dictation (`crates/retinue-speech/src/cloud.rs`, `CloudTranscriber`) is
 answered with `403` + `cf-mitigated: challenge`. The on-device engine is the
 default and the fallback, so dictation works; the ChatGPT engine is dead on this
 machine.
@@ -34,7 +34,7 @@ and
 
 ## Change
 
-`crates/bloblex-speech` only.
+`crates/retinue-speech` only.
 
 1. `Cargo.toml`: `reqwest` gains `rustls-tls`; add `rustls 0.23` (ring) and
    `webpki-roots 0.26`. All already in the workspace lock.
@@ -44,7 +44,7 @@ and
    default and keeps the handshake minimal — it is **not** the reason the
    request passes, and the code says so.
 3. Nothing else: same URL, same multipart body, `model=gpt-transcribe`,
-   `originator: bloblex`, our User-Agent, the cookie jar, the single
+   `originator: retinue`, our User-Agent, the cookie jar, the single
    cookie-carrying retry, the `Challenged` mapping, the cooldown and the honest
    message all stay.
 
@@ -59,9 +59,9 @@ and
 
 ## Gates and what they returned
 
-- `cargo test -p bloblex-speech`: 56 passed (2 new).
-- `cargo test --workspace --exclude bloblex-desktop`: all pass except
-  `bloblex-daemon --bin bloblexd`, which aborts with `STATUS_STACK_OVERFLOW`.
+- `cargo test -p retinue-speech`: 56 passed (2 new).
+- `cargo test --workspace --exclude retinue-desktop`: all pass except
+  `retinue-daemon --bin retinued`, which aborts with `STATUS_STACK_OVERFLOW`.
   **Pre-existing**: reproduced with this change stashed. Needs its own ticket.
 - Live before/after with the shipped client: `challenged` → `ok`, twice.
 - Outstanding for the Director: desktop-crate check from a plain path (the

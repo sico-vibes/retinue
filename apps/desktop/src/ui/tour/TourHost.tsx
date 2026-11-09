@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BlobCanvas } from '../../blob/BlobCanvas'
-import { useThemeStyle } from '../../blob/bitbots'
+import { useThemeStyle } from '../../blob/retinue'
 import { TOUR_VERSION, setTourState, useTourState } from '../uiPrefs'
 import { entityNoun } from '../vocabulary'
 import { GuidedTour, TourInvite, type TourEnd } from './GuidedTour'

@@ -37,7 +37,7 @@ Every later line is a message:
   not sleep on it.
 - `msg` is the message body.
 
-With neither `--replay` nor `BLOBLEX_WIRE_RECORD` set, the fake binaries behave
+With neither `--replay` nor `RETINUE_WIRE_RECORD` set, the fake binaries behave
 exactly as before.
 
 ## Replay
@@ -69,23 +69,23 @@ deterministic counter (1, 2, 3 …), and Claude echoes the provider request id.
 
 ## Recorder (developer only)
 
-`BLOBLEX_WIRE_RECORD=<path>` makes a fake write its own live behaviour to
-`<path>` in the same format (header included); `BLOBLEX_WIRE_SCENARIO=<name>`
+`RETINUE_WIRE_RECORD=<path>` makes a fake write its own live behaviour to
+`<path>` in the same format (header included); `RETINUE_WIRE_SCENARIO=<name>`
 sets the header's scenario label. Only the three fake binaries honour it; the
 production adapters never read it.
 
-The wire tests support regeneration directly: when `BLOBLEX_WIRE_RECORD` is
+The wire tests support regeneration directly: when `RETINUE_WIRE_RECORD` is
 exported, each test points the fake at its own fixture path and runs the fake
 live instead of replaying. Run one crate at a time and single-threaded so the
 process-wide environment variable cannot leak between scenarios (PowerShell;
 bash users set the same variables with `export`):
 
 ```powershell
-$env:BLOBLEX_WIRE_RECORD="1"
-cargo test -p bloblex-adapter-claude --test wire_replay -- --test-threads=1 --skip wire_fixtures
-cargo test -p bloblex-adapter-codex  --test wire_replay -- --test-threads=1 --skip wire_fixtures
-cargo test -p bloblex-adapter-acp    --test wire_replay -- --test-threads=1 --skip wire_fixtures
-Remove-Item Env:BLOBLEX_WIRE_RECORD
+$env:RETINUE_WIRE_RECORD="1"
+cargo test -p retinue-adapter-claude --test wire_replay -- --test-threads=1 --skip wire_fixtures
+cargo test -p retinue-adapter-codex  --test wire_replay -- --test-threads=1 --skip wire_fixtures
+cargo test -p retinue-adapter-acp    --test wire_replay -- --test-threads=1 --skip wire_fixtures
+Remove-Item Env:RETINUE_WIRE_RECORD
 ```
 
 Each test sleeps briefly before tearing the provider down so a recording

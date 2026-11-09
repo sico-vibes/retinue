@@ -1,13 +1,13 @@
-# FIX11: Bitbots installed identity (installer, executables, data directory)
+# FIX11: Retinue installed identity (installer, executables, data directory)
 
-> **What this is:** Spec for FIX11: the installed Bitbots identity (installer, executables and data directory).
+> **What this is:** Spec for FIX11: the installed Retinue identity (installer, executables and data directory).
 > **Status:** historical
 > **Last updated:** 2026-10-15
 
 Written 15 October 2026. Owner directive: change the installer name "and so on" now
-that the product is Bitbots (FIX9 renamed the visible text and `productName`). The
+that the product is Retinue (FIX9 renamed the visible text and `productName`). The
 risk is the user's data: today everything lives under
-`%LOCALAPPDATA%\com.bloblex.desktop` (Tauri `app_local_data_dir`, which also holds
+`%LOCALAPPDATA%\com.retinue.desktop` (Tauri `app_local_data_dir`, which also holds
 the WebView2 profile, the SQLite database and downloaded speech models). **No
 existing user may lose conversations, settings or downloaded models.**
 
@@ -18,19 +18,19 @@ copy; another lane (FIX12) owns those.
 
 | Item | Now | After |
 |---|---|---|
-| Bundle identifier | `com.bloblex.desktop` | `com.bitbots.desktop` (dev: `com.bitbots.desktop.dev` in `scripts/dev-windows.ps1`) |
-| Main executable | cargo package name | `Bitbots.exe` (`mainBinaryName` in `tauri.conf.json`) |
-| Daemon sidecar | `bloblexd` | `bitbotsd` (`[[bin]]` name in `crates/bloblex-daemon/Cargo.toml`, `externalBin`, every script, `.gitignore` pattern) |
-| Hook sidecar | `bloblex-hook` | `bitbots-hook` (same places) |
-| Installer file | `Bloblex_<v>_x64-setup.exe` pattern in scripts | `Bitbots_<v>_x64-setup.exe` (scripts, `make-update-manifest.mjs`, `release-windows.ps1`, `docs/operations/release-checklist.md` template text) |
-| Shortcut / uninstall / install dir | follow `productName` | confirm they read "Bitbots" in the generated NSIS script |
-| Private temp folder | `%LOCALAPPDATA%\Bloblex\private-tmp` | `%LOCALAPPDATA%\Bitbots\private-tmp` (`bloblex-adapter-claude`, daemon) |
-| Speech models folder | `...\Bloblex` under local data (`speech.rs` ~line 99) | `...\Bitbots`, migrated (see 2) |
+| Bundle identifier | `com.retinue.desktop` | `com.retinue.desktop` (dev: `com.retinue.desktop.dev` in `scripts/dev-windows.ps1`) |
+| Main executable | cargo package name | `Retinue.exe` (`mainBinaryName` in `tauri.conf.json`) |
+| Daemon sidecar | `retinued` | `retinued` (`[[bin]]` name in `crates/retinue-daemon/Cargo.toml`, `externalBin`, every script, `.gitignore` pattern) |
+| Hook sidecar | `retinue-hook` | `retinue-hook` (same places) |
+| Installer file | `Retinue_<v>_x64-setup.exe` pattern in scripts | `Retinue_<v>_x64-setup.exe` (scripts, `make-update-manifest.mjs`, `release-windows.ps1`, `docs/operations/release-checklist.md` template text) |
+| Shortcut / uninstall / install dir | follow `productName` | confirm they read "Retinue" in the generated NSIS script |
+| Private temp folder | `%LOCALAPPDATA%\Retinue\private-tmp` | `%LOCALAPPDATA%\Retinue\private-tmp` (`retinue-adapter-claude`, daemon) |
+| Speech models folder | `...\Retinue` under local data (`speech.rs` ~line 99) | `...\Retinue`, migrated (see 2) |
 
-Keep, deliberately (state them in the report): crate and package names `bloblex-*`,
-npm names, the `bloblexd.ready` protocol message type, JSON-RPC method names,
-setting keys, `BLOBLEX_*` environment variables, `bloblex.*` localStorage keys and
-`bloblex-*` Tauri event names, and the GitHub repository slug. Accept `BITBOTS_*`
+Keep, deliberately (state them in the report): crate and package names `retinue-*`,
+npm names, the `retinued.ready` protocol message type, JSON-RPC method names,
+setting keys, `RETINUE_*` environment variables, `retinue.*` localStorage keys and
+`retinue-*` Tauri event names, and the GitHub repository slug. Accept `RETINUE_*`
 only where it is trivial; otherwise do nothing.
 
 ## 2. Data migration (the important part)
@@ -40,8 +40,8 @@ unit-testable with temp dirs) and call it first in `run()`/`main()` **before** t
 Tauri builder creates the WebView2 profile.
 
 ```
-legacy = %LOCALAPPDATA%\com.bloblex.desktop     (and ...\com.bloblex.desktop.dev for dev builds)
-target = %LOCALAPPDATA%\com.bitbots.desktop     (and ...dev)
+legacy = %LOCALAPPDATA%\com.retinue.desktop     (and ...\com.retinue.desktop.dev for dev builds)
+target = %LOCALAPPDATA%\com.retinue.desktop     (and ...dev)
 ```
 
 Rules:
@@ -50,19 +50,19 @@ Rules:
    database file (the migration already ran or the user started fresh).
 2. If `target` does not exist: `fs::rename(legacy, target)` (atomic on one volume).
 3. If `target` exists but is only an empty/fresh shell (no database, no
-   `migrated-from-bloblex.json`): remove the shell, then rename as in 2.
+   `migrated-from-retinue.json`): remove the shell, then rename as in 2.
 4. If the rename fails (the old app still running, a locked file), retry for up to
    ~5 s, then fall back to a recursive copy that skips files it cannot open. The
    legacy directory is **never deleted** in the fallback.
-5. After success write `migrated-from-bloblex.json` in `target` with
+5. After success write `migrated-from-retinue.json` in `target` with
    `{ "from": "<legacy path>", "at": "<RFC 3339>", "method": "rename"|"copy", "skipped": [..] }`.
 6. Never read, parse or log file contents; only paths and counts.
 7. Return `MigrationOutcome::{NotNeeded, Moved, Copied { skipped }, Failed(String)}`;
    on `Failed` the app still starts (with an empty profile) and logs one line.
-8. Also move `%LOCALAPPDATA%\Bloblex` (speech models, private tmp) to
-   `%LOCALAPPDATA%\Bitbots` by the same rules.
+8. Also move `%LOCALAPPDATA%\Retinue` (speech models, private tmp) to
+   `%LOCALAPPDATA%\Retinue` by the same rules.
 9. Autostart: if `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` has a value
-   named `Bloblex`, remove it and, if the app's autostart setting is enabled, make
+   named `Retinue`, remove it and, if the app's autostart setting is enabled, make
    sure the new entry exists (use the same mechanism the app already uses; do not
    add a registry crate if one is not already a dependency, `reg.exe` is fine).
 
@@ -75,7 +75,7 @@ locked file, marker content, idempotence on a second call.
   `tauri-bundler` `installer.nsi`) and record in the report what uninstall key and
   install directory it derives from `productName`.
 - Add an NSIS pre-install hook (`bundle.windows.nsis.installerHooks`) that, when an
-  old per-user "Bloblex" install is registered, stops a running `Bloblex.exe`/`bloblexd.exe`
+  old per-user "Retinue" install is registered, stops a running `Retinue.exe`/`retinued.exe`
   and runs its uninstaller silently **without removing app data**, so the old app
   does not sit next to the new one. Best-effort and logged; a failure must not
   abort the install.
@@ -84,8 +84,8 @@ locked file, marker content, idempotence on a second call.
 
 ## 4. Gates
 
-`cargo test --workspace --exclude bloblex-desktop`, `cargo test -p bloblex-desktop`
+`cargo test --workspace --exclude retinue-desktop`, `cargo test -p retinue-desktop`
 for the migration tests if the crate builds in this environment (otherwise run the
-module's tests by path), `cargo clippy --workspace --exclude bloblex-desktop
+module's tests by path), `cargo clippy --workspace --exclude retinue-desktop
 --all-targets -- -D warnings`, `npm run typecheck`, `npm run test`. Never commit;
 leave the diff and write `docs/history/fix-11/report.md`.

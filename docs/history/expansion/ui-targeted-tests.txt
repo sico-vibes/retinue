@@ -1,5 +1,5 @@
 
- RUN  v3.2.7 C:/Users/SicoZ/.codex/worktrees/bitbots-ui/Blolblex
+ RUN  v3.2.7 C:/Users/SicoZ/.codex/worktrees/retinue-ui/Retinue
 
  ✓ apps/desktop/src/preview/fixtureBridge.parity.test.ts (2 tests) 5ms
  ✓ apps/desktop/src/remote/remoteTauri.parity.test.ts (5 tests) 167ms
