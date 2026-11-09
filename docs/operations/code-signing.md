@@ -4,6 +4,8 @@
 > **Status:** current. The workflow and policy are in place; the SignPath application and setup are the owner's to do.
 > **Last updated:** 2026-11-09
 
+The other free channels, winget and the Microsoft Store, are in [distribution.md](distribution.md).
+
 ## Why
 
 Without a signature, Windows SmartScreen shows "Unknown publisher" and stops the installer. SignPath Foundation signs open-source projects for free.

@@ -10,7 +10,7 @@ Retinue goes online only for the following, each to the service named.
 
 | What | Where it connects | When |
 | --- | --- | --- |
-| Checking for a Retinue update | GitHub (`github.com`), the release feed | On start-up, and when you choose **Check for updates**. You can turn the automatic check off in Settings, Updates. |
+| Checking for a Retinue update | GitHub (`github.com`), the release feed | On start-up, and when you choose **Check for updates**. You can turn the automatic check off in Settings, Updates. A copy installed from the Microsoft Store never does this; the Store updates it. |
 | Checking for a coding-agent update | The npm registry (`registry.npmjs.org`): the version number of each agent you use | When Retinue shows the update notice for your agents. It installs an update only when you choose to. |
 | Downloading the on-device speech model | The model's download address shown in Settings | Only when you choose to download it. Dictation then runs on your computer. |
 | Usage bars | Each provider's own usage endpoint (Anthropic for Claude, OpenCode) | Off by default. Only if you turn on reading the agents' sign-ins for usage. The sign-in is used for that single request and is never stored or logged. |

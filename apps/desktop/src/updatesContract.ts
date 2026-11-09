@@ -18,6 +18,8 @@ export interface UpdatesState {
   lastCheckedAt: string | null
   available: UpdateInfo | null
   devBuild: boolean
+  /** Installed from the Microsoft Store, which delivers updates itself. */
+  storeBuild: boolean
 }
 
 export interface UpdateCheckResult {
@@ -62,6 +64,17 @@ export const UPDATE_ERROR_MESSAGES: Record<UpdateErrorCode, string> = {
 }
 
 export const DEV_BUILD_UPDATES_MESSAGE = 'Updates are unavailable in development builds'
+export const STORE_BUILD_UPDATES_MESSAGE = 'This copy of Retinue updates through the Microsoft Store'
+
+/** The built-in updater is off in development builds and in a Microsoft Store copy. */
+export function updaterOff(state: Pick<UpdatesState, 'devBuild' | 'storeBuild'> | null | undefined): boolean {
+  return state?.devBuild === true || state?.storeBuild === true
+}
+
+/** Why the built-in updater is off, for the Updates panel. */
+export function updaterOffMessage(state: Pick<UpdatesState, 'devBuild' | 'storeBuild'>): string {
+  return state.storeBuild ? STORE_BUILD_UPDATES_MESSAGE : DEV_BUILD_UPDATES_MESSAGE
+}
 export const NO_STABLE_RELEASE_MESSAGE = 'No stable release yet.'
 export const UP_TO_DATE_MESSAGE = 'Retinue is up to date.'
 export const INSTALLING_RESTART_MESSAGE = 'Installing. Retinue will restart.'
@@ -141,6 +154,7 @@ export function parseUpdatesState(value: unknown): UpdatesState | null {
     lastCheckedAt: typeof value.lastCheckedAt === 'string' && value.lastCheckedAt.trim() ? value.lastCheckedAt : null,
     available: value.available == null ? null : available,
     devBuild: value.devBuild === true,
+    storeBuild: value.storeBuild === true,
   }
 }
 

@@ -163,6 +163,8 @@ pub struct UpdateStateDto {
     last_checked_at: Option<String>,
     available: Option<UpdateInfo>,
     dev_build: bool,
+    /// Installed from the Microsoft Store, which delivers updates itself.
+    store_build: bool,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -651,6 +653,7 @@ pub async fn updates_get_state(app: AppHandle) -> Result<UpdateStateDto, String>
         last_checked_at: preferences.last_checked_at,
         available,
         dev_build: cfg!(debug_assertions),
+        store_build: crate::distribution::is_packaged(),
     })
 }
 
@@ -689,7 +692,7 @@ pub async fn updates_set_preferences(
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn updates_check(app: AppHandle) -> CheckResult {
-    if cfg!(debug_assertions) {
+    if updater_off() {
         return CheckResult {
             status: "error",
             update: None,
@@ -776,6 +779,12 @@ pub async fn updates_install(app: AppHandle) -> Result<(), InstallError> {
             message: "Updates unavailable in development builds.",
         });
     }
+    if crate::distribution::is_packaged() {
+        return Err(InstallError {
+            code: "unavailable",
+            message: "This copy of Retinue updates through the Microsoft Store.",
+        });
+    }
     let Some(service) = app.try_state::<UpdateService>() else {
         return Err(InstallError {
             code: "unavailable",
@@ -818,6 +827,12 @@ pub async fn updates_install(app: AppHandle) -> Result<(), InstallError> {
     }
 }
 
+/// The built-in updater stays off in development builds and in a Microsoft Store copy,
+/// which the Store updates.
+fn updater_off() -> bool {
+    cfg!(debug_assertions) || crate::distribution::is_packaged()
+}
+
 fn install_message(code: &str) -> &'static str {
     match code {
         "network" => "The update could not be downloaded.",
@@ -830,7 +845,7 @@ fn install_message(code: &str) -> &'static str {
 }
 
 pub fn start_background_checker(app: &AppHandle) {
-    if cfg!(debug_assertions) {
+    if updater_off() {
         return;
     }
     let Some(service) = app.try_state::<UpdateService>() else {

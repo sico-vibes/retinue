@@ -120,7 +120,10 @@ pub fn migrate_before_start() {
         );
     }
     rename_legacy_database(&local.join(TARGET_DATA_DIR));
-    migrate_autostart();
+    // A Store copy starts through its startup task; its Run-key writes would not reach the registry.
+    if !crate::distribution::is_packaged() {
+        migrate_autostart();
+    }
 }
 
 /// The database file was always named after the old product. Once the data

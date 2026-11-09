@@ -77,7 +77,7 @@ describe('updates bridge', () => {
     })
     const state = await updatesGetState()
     expect(invoke).toHaveBeenCalledWith('updates_get_state')
-    expect(state).toEqual({ currentVersion: '0.1.0', channel: 'beta', autoCheck: true, lastCheckedAt: null, available: null, devBuild: false })
+    expect(state).toEqual({ currentVersion: '0.1.0', channel: 'beta', autoCheck: true, lastCheckedAt: null, available: null, devBuild: false, storeBuild: false })
     expect(JSON.stringify(state)).not.toContain('SECRET_STATE')
 
     invoke.mockResolvedValueOnce(null)

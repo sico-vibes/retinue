@@ -125,6 +125,39 @@ jobs:
             if ($status -ne 'Valid') { throw "$($file.Name) is not validly signed ($status)." }
           }
 
+      # The Microsoft Store package, from the same (signed, when SignPath is set up) executables.
+      # The Store signs the package itself. Skipped until the Partner Center identity is set.
+      - name: Pack the Microsoft Store package
+        if: vars.MSIX_IDENTITY_NAME != ''
+        shell: pwsh
+        env:
+          MSIX_IDENTITY_NAME: ${{ vars.MSIX_IDENTITY_NAME }}
+          MSIX_PUBLISHER: ${{ vars.MSIX_PUBLISHER }}
+          MSIX_PUBLISHER_DISPLAY_NAME: ${{ vars.MSIX_PUBLISHER_DISPLAY_NAME }}
+          RETINUE_VERSION: ${{ steps.version.outputs.version }}
+          TRIPLE: ${{ steps.binaries.outputs.triple }}
+        run: |
+          ./packaging/msix/build-msix.ps1 `
+            -AppExe target/release/Retinue.exe `
+            -DaemonExe "apps/desktop/src-tauri/binaries/retinued-$env:TRIPLE.exe" `
+            -HookExe "apps/desktop/src-tauri/binaries/retinue-hook-$env:TRIPLE.exe" `
+            -RemoteWebDir apps/desktop/dist-remote `
+            -Version $env:RETINUE_VERSION `
+            -IdentityName $env:MSIX_IDENTITY_NAME `
+            -Publisher $env:MSIX_PUBLISHER `
+            -PublisherDisplayName $env:MSIX_PUBLISHER_DISPLAY_NAME `
+            -OutDir (Join-Path $env:RUNNER_TEMP 'msix')
+          Remove-Item -Recurse -Force (Join-Path $env:RUNNER_TEMP 'msix/layout')
+
+      - name: Upload the Microsoft Store package
+        if: vars.MSIX_IDENTITY_NAME != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: retinue-${{ steps.version.outputs.version }}-msix
+          path: ${{ runner.temp }}/msix
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Bundle the installer
         shell: pwsh
         working-directory: apps/desktop

@@ -33,6 +33,7 @@ mod power;
 mod backdrop;
 mod pty;
 mod migrate;
+mod distribution;
 
 #[cfg(test)]
 mod file_inspection_tests;
@@ -227,6 +228,25 @@ fn shared_client() -> Result<reqwest::Client, String> {
 /// making a fresh copy at every launch (as this did until 2026-11-01) charged
 /// that to every start. Copies left by older builds are removed here: one
 /// install had 18 of them, 557 MB, after a few weeks of restarts.
+/// The hook bridge at a path that survives updates (`<runtime>/retinue-hook.exe`), refreshed
+/// when the installed one differs in size or is newer. Used by a Microsoft Store copy, whose
+/// install folder changes with every version. A copy that is in use stays as it is.
+fn stable_hook_bridge(runtime_dir: &Path, installed: &Path) -> Option<PathBuf> {
+    let target = runtime_dir.join(installed.file_name()?);
+    let source = fs::metadata(installed).ok()?;
+    let fresh = fs::metadata(&target).ok().is_some_and(|existing| {
+        existing.len() == source.len()
+            && match (existing.modified(), source.modified()) {
+                (Ok(copied), Ok(original)) => copied >= original,
+                _ => true,
+            }
+    });
+    if !fresh && fs::copy(installed, &target).is_err() && !target.is_file() {
+        return None;
+    }
+    Some(target)
+}
+
 fn reusable_daemon_copy(runtime_dir: &Path, executable: &Path) -> Result<PathBuf, String> {
     let source = fs::metadata(executable)
         .map_err(|error| format!("Could not read retinued.exe: {error}"))?;
@@ -376,6 +396,14 @@ fn start_daemon(app: &AppHandle, state: &AppState) -> Result<(), String> {
     // The hook bridge is installed beside the daemon, not beside its private run
     // copy, so the daemon is told where it is (Health check, outside sessions).
     if let Some(bridge) = executable.parent().map(|folder| folder.join(if cfg!(windows) { "retinue-hook.exe" } else { "retinue-hook" })).filter(|path| path.is_file()) {
+        // A Store copy's install folder is named after its version and changes with every
+        // update, which would break the hook command written into Claude Code's settings.
+        // It gets a copy at a stable path instead.
+        let bridge = if distribution::is_packaged() {
+            stable_hook_bridge(&runtime_dir, &bridge).unwrap_or(bridge)
+        } else {
+            bridge
+        };
         command.env("RETINUE_HOOK_BRIDGE", bridge);
     }
     // When the packaged remote web app is installed beside the shell, hand its
@@ -607,6 +635,31 @@ fn retry_startup_read(method: &str, error: &str) -> bool {
 #[cfg(test)]
 mod reusable_daemon_copy_tests {
     use super::*;
+
+    #[test]
+    fn the_stable_hook_bridge_is_copied_once_and_refreshed_when_the_build_changes() {
+        let root = std::env::temp_dir().join(format!("retinue-bridge-{}", Uuid::new_v4()));
+        let runtime_dir = root.join("runtime");
+        let install = root.join("WindowsApps-1");
+        fs::create_dir_all(&runtime_dir).unwrap();
+        fs::create_dir_all(&install).unwrap();
+        let installed = install.join("retinue-hook.exe");
+        fs::write(&installed, b"bridge v1").unwrap();
+
+        let stable = stable_hook_bridge(&runtime_dir, &installed).unwrap();
+        assert_eq!(stable, runtime_dir.join("retinue-hook.exe"));
+        assert_eq!(fs::read(&stable).unwrap(), b"bridge v1");
+        // The reused copy keeps its contents while the build is the same size and not newer.
+        assert_eq!(stable_hook_bridge(&runtime_dir, &installed).unwrap(), stable);
+
+        // A new version from another install folder replaces it.
+        let next = root.join("WindowsApps-2");
+        fs::create_dir_all(&next).unwrap();
+        let updated = next.join("retinue-hook.exe");
+        fs::write(&updated, b"bridge version 2").unwrap();
+        assert_eq!(fs::read(stable_hook_bridge(&runtime_dir, &updated).unwrap()).unwrap(), b"bridge version 2");
+        let _ = fs::remove_dir_all(root);
+    }
 
     #[test]
     fn a_copy_is_reused_for_one_build_and_older_ones_are_removed() {
@@ -3532,6 +3585,9 @@ pub fn run() {
             updates::updates_phase,
             updates::updates_set_preferences,
             updates::updates_check,
+            distribution::app_distribution,
+            distribution::startup_task_enabled,
+            distribution::set_startup_task_enabled,
             updates::updates_install,
             power::set_keep_awake,
             power::keep_awake_state,

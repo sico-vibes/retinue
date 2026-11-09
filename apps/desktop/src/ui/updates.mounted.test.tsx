@@ -4,7 +4,7 @@ import { act, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  DEV_BUILD_UPDATES_MESSAGE, NO_STABLE_RELEASE_MESSAGE, UP_TO_DATE_MESSAGE, UPDATE_ERROR_MESSAGES, UPDATE_FAILED_MESSAGE,
+  DEV_BUILD_UPDATES_MESSAGE, STORE_BUILD_UPDATES_MESSAGE, NO_STABLE_RELEASE_MESSAGE, UP_TO_DATE_MESSAGE, UPDATE_ERROR_MESSAGES, UPDATE_FAILED_MESSAGE,
   type UpdateCheckResult, type UpdateInfo, type UpdateProgress, type UpdatesState,
 } from '../updatesContract'
 import { DISMISSED_UPDATE_VERSION_KEY, UpdateAvailableBanner, useMainUpdateOffer } from './UpdateBanner'
@@ -44,7 +44,7 @@ vi.mock('../tauri', () => ({
 vi.mock('@tauri-apps/api/event', () => ({ emit: vi.fn(), listen: vi.fn(async () => () => undefined) }))
 
 function state(partial: Partial<UpdatesState> = {}): UpdatesState {
-  return { currentVersion: '0.1.0', channel: 'beta', autoCheck: true, lastCheckedAt: null, available: null, devBuild: false, ...partial }
+  return { currentVersion: '0.1.0', channel: 'beta', autoCheck: true, lastCheckedAt: null, available: null, devBuild: false, storeBuild: false, ...partial }
 }
 
 const offer: UpdateInfo = { version: '0.2.0', notes: 'Parser totals use integers.', pubDate: '2026-10-01T15:04:00.000Z', channel: 'beta' }
@@ -190,6 +190,15 @@ describe('updates settings', () => {
     expect(buttonNamed(view.host, 'Install and restart')).toBeUndefined()
     await act(async () => { view.host.querySelector<HTMLButtonElement>('[data-update-check]')!.click() })
     expect(h.updatesCheck).not.toHaveBeenCalled()
+  })
+
+  it('leaves updates to the Microsoft Store in a Store copy', async () => {
+    h.updatesGetState.mockResolvedValue(state({ storeBuild: true, available: { ...offer, version: '9.9.9' } }))
+    const view = await openUpdates()
+    expect(view.host.textContent).toContain(STORE_BUILD_UPDATES_MESSAGE)
+    expect(view.host.textContent).not.toContain('9.9.9')
+    expect(view.host.querySelector<HTMLButtonElement>('[data-update-check]')!.disabled).toBe(true)
+    expect(buttonNamed(view.host, 'Install and restart')).toBeUndefined()
   })
 
   it('saves channel and automatic checks with exact arguments and keeps the previous value after a failure', async () => {

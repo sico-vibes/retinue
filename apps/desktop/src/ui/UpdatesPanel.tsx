@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { RowCopy } from './SettingsParts'
 import {
   AUTO_DOWNLOAD_HINT, AUTO_DOWNLOAD_LABEL,
-  BETA_CHANNEL_EXPLANATION, CHECKING_UPDATES_MESSAGE, DEV_BUILD_UPDATES_MESSAGE, IDLE_UPDATE_PHASE, NO_STABLE_RELEASE_MESSAGE,
+  BETA_CHANNEL_EXPLANATION, CHECKING_UPDATES_MESSAGE, updaterOff, updaterOffMessage, IDLE_UPDATE_PHASE, NO_STABLE_RELEASE_MESSAGE,
   STABLE_CHANNEL_EXPLANATION, UP_TO_DATE_MESSAGE, UPDATE_FAILED_MESSAGE,
   countInstallAffectedSessions, describeUpdatePhase, describeUpdateProgress, displayUpdateFailure, formatUpdateTimestamp, installImpactCopy,
   parseUpdateChannel, updateErrorMessage,
@@ -34,10 +34,10 @@ export function UpdatesPanel({ sessions = [], permissions = [] }: {
 
   const applyState = useCallback((next: UpdatesState) => {
     setState(next)
-    setOffer(next.devBuild ? null : next.available)
-    if (next.devBuild) {
+    setOffer(updaterOff(next) ? null : next.available)
+    if (updaterOff(next)) {
       setCheckKind('idle')
-      setStatusText(DEV_BUILD_UPDATES_MESSAGE)
+      setStatusText(updaterOffMessage(next))
       return
     }
     if (next.available) {
@@ -108,7 +108,7 @@ export function UpdatesPanel({ sessions = [], permissions = [] }: {
     setStatusText(describeUpdatePhase(phase).label)
   }, [phase, installing])
 
-  const devBuild = state?.devBuild === true
+  const devBuild = updaterOff(state)
   const controlsDisabled = devBuild || installing || saving || !loaded
   const channel = state?.channel ?? 'beta'
   const shownProgress = progress && installing ? describeUpdateProgress(progress) : null
@@ -156,7 +156,7 @@ export function UpdatesPanel({ sessions = [], permissions = [] }: {
     try {
       const next = await updatesSetPreferences(patch)
       applyState(next)
-      if (!next.devBuild && !next.available) {
+      if (!updaterOff(next) && !next.available) {
         setCheckKind('idle')
         setStatusText('')
       }
@@ -195,7 +195,7 @@ export function UpdatesPanel({ sessions = [], permissions = [] }: {
   return <section className="settings-group" data-settings-section="updates" aria-labelledby="settings-updates-title">
     <div className="settings-group-head"><h3 id="settings-updates-title">Updates</h3></div>
     <div className="settings-card">
-      {devBuild && <p className="update-dev-note">{DEV_BUILD_UPDATES_MESSAGE}</p>}
+      {devBuild && state && <p className="update-dev-note">{updaterOffMessage(state)}</p>}
       <div className="settings-row update-summary">
         <span className="settings-row-copy">
           <strong>Current version <span data-update-version>{loaded ? version : '…'}</span></strong>

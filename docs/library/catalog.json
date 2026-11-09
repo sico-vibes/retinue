@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "b72307f",
-  "documentCount": 389,
+  "revision": "abaec67",
+  "documentCount": 390,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -1994,7 +1994,7 @@
       "title": "Privacy",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "679f59d7bff5a7377f526f45ce817b8ef62c0310cb057db7ccb5b06c3fe88741",
+      "sha256": "ad1051f0a2f41d296565ead4a84884d04136b496cb655d809282ea29cd616ae2",
       "headings": [
         {
           "id": "when-retinue-itself-goes-online",
@@ -3428,7 +3428,7 @@
       "title": "Code signing (SignPath Foundation)",
       "section": "Operations",
       "status": "Operations",
-      "sha256": "f09c0508553e4e37fada181a852ab0f523e779dde296b32e789b3fc989586532",
+      "sha256": "bbaf2eb0965fa56ad6f743875f7c1f04171cb4e750065afe7bb77a5b0df4ad37",
       "headings": [
         {
           "id": "why",
@@ -3453,6 +3453,26 @@
         {
           "id": "open-items",
           "text": "Open items",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/operations/distribution",
+      "source": "docs/operations/distribution.md",
+      "title": "Distribution: winget and the Microsoft Store",
+      "section": "Operations",
+      "status": "Operations",
+      "sha256": "9a16ba6f7c5ad59b3f016531f23e8fbd83382aba892834ca812ff7f1a1086f4a",
+      "headings": [
+        {
+          "id": "winget",
+          "text": "winget",
+          "level": 2
+        },
+        {
+          "id": "microsoft-store-msix",
+          "text": "Microsoft Store (MSIX)",
           "level": 2
         }
       ]

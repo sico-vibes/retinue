@@ -96,6 +96,11 @@ Read the full diff, not only the report. Check claims against the code; a lane's
 
 - Never put the updater key in CI.
 - Never let `tauri bundle` patch an already-signed `Retinue.exe`. The workflow marks it with `scripts/patch-bundle-type.mjs` before signing and bundles with `--no-binary-patching`. Tauri's bundle-type marker otherwise rewrites the exe and breaks the signature.
+- **winget and the Microsoft Store** (`docs/operations/distribution.md`).
+  - For winget, `packaging/winget/make-manifests.mjs --tag v<version>` writes `SicoVibes.Retinue` manifests from the published release; check them with `winget validate`.
+  - The Release build workflow packs the Store MSIX (`packaging/msix/`) once the `MSIX_*` variables exist.
+  - The app checks `distribution::is_packaged()`. A Store copy keeps the built-in updater off (`storeBuild` in `updates_get_state`), uses the `RetinueStartup` startup task instead of the Run key, and runs the hook bridge from a stable copy in `runtime-processes`.
+  - Anything new that writes the Run key, self-updates or hands out an install-folder path must handle the Store copy the same way.
 - The repository is MIT-licensed. The README's "Code signing policy" section and the website footer carry SignPath's required sentence. Keep both, and keep `PRIVACY.md` accurate whenever the app gains a network call.
 
 ## Lane on a dirty tree (FIX47, 26 October 2026)

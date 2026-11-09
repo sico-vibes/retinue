@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { UpdateInfo } from '../updatesContract'
+import { updaterOff, type UpdateInfo } from '../updatesContract'
 import { listenForUpdateAvailable, updatesGetState } from '../tauri'
 
 export const DISMISSED_UPDATE_VERSION_KEY = 'retinue.update.dismissedVersion'
@@ -54,7 +54,7 @@ export function useMainUpdateOffer(companion: boolean) {
         const state = await updatesGetState()
         if (cancelled) return
         ready.current = true
-        devBuild.current = state?.devBuild === true
+        devBuild.current = updaterOff(state)
         if (devBuild.current) {
           setVersion(null)
           return

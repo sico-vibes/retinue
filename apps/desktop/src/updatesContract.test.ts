@@ -13,7 +13,7 @@ describe('updates normalisers', () => {
       currentVersion: '0.1.0', token: secret, nested: { password: secret }, extra: true,
     })
     expect(state).toEqual({
-      currentVersion: '0.1.0', channel: 'beta', autoCheck: true, lastCheckedAt: null, available: null, devBuild: false,
+      currentVersion: '0.1.0', channel: 'beta', autoCheck: true, lastCheckedAt: null, available: null, devBuild: false, storeBuild: false,
     })
     expect(JSON.stringify(state)).not.toContain(secret)
     expect(parseUpdatesState(null)).toBeNull()
@@ -32,11 +32,13 @@ describe('updates normalisers', () => {
       autoCheck: true,
       lastCheckedAt: null,
       devBuild: false,
+      storeBuild: false,
       available: { version: '0.2.0', notes: null, pubDate: null, channel: 'stable' },
     })
     expect(JSON.stringify(state)).not.toContain(secret)
     expect(parseUpdatesState({ lastCheckedAt: '   ', available: null, devBuild: false })?.lastCheckedAt).toBeNull()
     expect(parseUpdatesState({ devBuild: true })?.devBuild).toBe(true)
+    expect(parseUpdatesState({ storeBuild: true })?.storeBuild).toBe(true)
   })
 
   it('maps only the fixed error strings and never returns raw text', () => {

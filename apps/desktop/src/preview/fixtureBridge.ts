@@ -1774,6 +1774,7 @@ function fixtureUpdatesState(): UpdatesState {
     lastCheckedAt: mode === 'idle' ? null : '2026-10-02T08:00:00.000Z',
     available: mode === 'available' || mode === 'progress' ? fixtureUpdateInfo(channel) : null,
     devBuild: mode === 'dev',
+    storeBuild: mode === 'store',
   }
 }
 
@@ -1799,7 +1800,7 @@ export async function updatesCheck() {
   const mode = flags().get('updates') ?? 'up_to_date'
   if (mode === 'checking') await new Promise((resolve) => setTimeout(resolve, 1200))
   const checkedAt = new Date().toISOString()
-  if (previewUpdates.devBuild || mode === 'dev') return { status: 'error' as const, checkedAt, error: 'unavailable' as const }
+  if (previewUpdates.devBuild || previewUpdates.storeBuild || mode === 'dev' || mode === 'store') return { status: 'error' as const, checkedAt, error: 'unavailable' as const }
   if (mode === 'error') {
     const error = flags().get('updateError')
     const code = error === 'signature' || error === 'manifest' || error === 'unavailable' || error === 'network' ? error : 'network'

@@ -163,7 +163,7 @@ export const GROUPS: Group[] = [
     settings('Machines', '', 'Machines, none'), settings('Machines', 'machines=1', 'Machines, linked', 'Work laptop'), settings('Machines', 'machines=offline', 'Machines, offline', 'Work laptop'),
     settings('Connections', '', 'Connections, off'), settings('Connections', 'preset=mcp', 'Connections, on'),
     settings('Agents'), settings('Accounts', '', 'Accounts', 'work@example.com'), settings('Secrets', '', 'Secrets', 'GITHUB_TOKEN'), settings('Approvals'), settings('Manager'), settings('Memory'), settings('Skills', '', 'Skills', 'release-notes'), settings('Backup'), settings('Health'),
-    settings('Updates', '', 'Updates, up to date'), settings('Updates', 'updates=available', 'Updates, one available'), settings('Updates', 'updates=progress', 'Updates, downloading'), settings('Updates', 'updates=idle', 'Updates, never checked'), settings('Updates', 'updates=dev', 'Updates, a development build'), settings('Updates', 'channel=stable', 'Updates, stable channel'),
+    settings('Updates', '', 'Updates, up to date'), settings('Updates', 'updates=available', 'Updates, one available'), settings('Updates', 'updates=progress', 'Updates, downloading'), settings('Updates', 'updates=idle', 'Updates, never checked'), settings('Updates', 'updates=dev', 'Updates, a development build'), settings('Updates', 'updates=store', 'Updates, a Microsoft Store copy'), settings('Updates', 'channel=stable', 'Updates, stable channel'),
   ] },
   { id: 'dialogs', title: 'Dialogs and menus', description: 'Everything that opens over the window.', scenarios: [
     dialog('whats-new', "What's new", 'open=whats-new'),
