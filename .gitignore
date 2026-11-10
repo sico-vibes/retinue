@@ -20,3 +20,11 @@ apps/desktop/src-tauri/binaries/retinue-hook-*.exe
 /apps/native/
 /docs/plans/rust-native/
 /.claude/skills/retinue-development/references/native-gpui.md
+
+# Local-only working files (owner, 10 November 2026): source renders, sidecar
+# builds under any name, and screenshots or other output from test runs.
+/assets/profile/
+/assets/website/
+/output/
+/.playwright-cli/
+apps/desktop/src-tauri/binaries/*.exe
