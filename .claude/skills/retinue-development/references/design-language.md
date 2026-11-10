@@ -109,7 +109,7 @@ Haze character portraits keep their source SVG colours. Small marks and picker c
 
 - **Haze's controls follow MonoCode, Stone keeps its own:** 6 to 7 px corners, hairline borders, flat selected fill, pill toggles with a white knob (`themes/haze.css`, last block). Scope any new control style to Haze.
 - **Chat background:** Haze only, off by default, in `ChatBackground.tsx` and `chatBackgroundStore.ts`. It stays in the window's IndexedDB and localStorage, never the daemon or a backup. Effects run on the main thread (30 to 140 ms at full size).
-- **Message actions sit under the message**, in both the main window and the companion.
+- **Message actions sit under the message**, in both the main window and the companion. Under an employee's reply they start at the bubble's left edge, not under the photo (owner, 10 November 2026: `experiments.css` skips the 36px avatar column plus its 10px gap); under your own message they stay right-aligned.
 - **Needs you is a bell** beside the sidebar's buttons (`NeedsYouBell`), never a block in the bot list.
 - **The composer has no Plan button and no Steer or Queue control.** Plan is in the mode menu; the delivery choice is `composer.busySendMode` in Settings › Chat, and Ctrl+Enter still sends the other way.
 - **Dragging a task moves the real card.** The original leaves a dashed gap.
