@@ -323,6 +323,8 @@ export interface Session extends JsonRecord {
   tools?: JsonRecord[]
   createdAt?: string
   updatedAt?: string
+  /** The last user or assistant message's time; the sidebar shows and sorts by it, so opening a conversation never moves it. */
+  lastMessageAt?: string | null
   turnId?: string
   model?: string
   modelLock?: SessionModelLock | null

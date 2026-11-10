@@ -655,3 +655,11 @@
 .theme-on-light { display: none; }
 :root[data-theme="light"] .theme-on-dark { display: none; }
 :root[data-theme="light"] .theme-on-light { display: revert; }
+/* The update arrow at the profile row's right (owner, 9 November 2026). */
+.profile-anchor:has(> .update-arrow) { display: flex; align-items: center; gap: 4px; }
+.profile-anchor:has(> .update-arrow) > .profile-button { flex: 1; min-width: 0; }
+.update-arrow { width: 28px; height: 28px; flex: 0 0 28px; margin-right: 6px; display: grid; place-items: center; padding: 0; color: var(--surface-sidebar, #111); border: 0; border-radius: 50%; background: var(--text-1); cursor: pointer; transition: transform 120ms ease, opacity 120ms ease; }
+.update-arrow:hover { transform: translateY(1px); }
+.update-arrow:disabled { opacity: .6; cursor: default; }
+.update-arrow:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.update-arrow.is-downloading { color: var(--text-2); background: transparent; cursor: default; }

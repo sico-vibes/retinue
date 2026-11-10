@@ -11,7 +11,7 @@ import { defaultProjectFor, isAutomationSession, isEmptyConversation, isSideSess
 export function companionConversations(sessions: readonly Session[], agentId: string, currentId: string | null): Session[] {
   return sessions
     .filter((session) => session.agentId === agentId && !session.archived && !isSideSession(session) && !isAutomationSession(session) && (session.id === currentId || !isEmptyConversation(session)))
-    .sort((a, b) => String(b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.updatedAt ?? a.createdAt ?? '')))
+    .sort((a, b) => String(b.lastMessageAt ?? b.updatedAt ?? b.createdAt ?? '').localeCompare(String(a.lastMessageAt ?? a.updatedAt ?? a.createdAt ?? '')))
     .slice(0, 30)
 }
 

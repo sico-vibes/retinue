@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { RotateCw } from 'lucide-react'
+import { ArrowDown, RotateCw } from 'lucide-react'
 import { version as currentVersion } from '../../package.json'
 import {
   BADGE_FAILED_LABEL, BADGE_RESTART_LABEL, BADGE_RESTART_SHORT_LABEL, IDLE_UPDATE_PHASE,
@@ -103,6 +103,7 @@ export function UpdateBadge({ sidebar = false }: { sidebar?: boolean }) {
   const tooltip = state.version ? `Retinue ${state.version}` : 'Retinue update'
 
   if (state.phase === 'downloading') {
+    if (sidebar) return null
     // FIX39 P5 follow-up: at a narrow window the badge keeps only the ring and a
     // short label, so it can never reach the conversation title.
     const short = percent == null ? 'Updating…' : `${percent}%`
@@ -113,6 +114,7 @@ export function UpdateBadge({ sidebar = false }: { sidebar?: boolean }) {
   }
 
   if (state.phase === 'ready') {
+    if (sidebar) return null
     return <button type="button" className={`update-badge-button primary-button small${sidebar ? ' sidebar-update' : ''}${compact ? ' is-compact' : ''}`} data-update-badge="ready" title={sidebar ? 'Restart Retinue to install the downloaded update' : compact ? `${BADGE_RESTART_LABEL} — ${tooltip}` : tooltip} aria-label={BADGE_RESTART_LABEL} disabled={busy} onClick={() => void restart()}>{(compact || sidebar) && <RotateCw size={13} aria-hidden="true" />}<span>{sidebar && state.version ? `Update to ${state.version}` : compact ? BADGE_RESTART_SHORT_LABEL : BADGE_RESTART_LABEL}</span>{sidebar && <small>v{currentVersion}</small>}</button>
   }
 
@@ -121,6 +123,22 @@ export function UpdateBadge({ sidebar = false }: { sidebar?: boolean }) {
   }
 
   return null
+}
+
+/**
+ * The profile row's update arrow (owner, 9 November 2026): a round down-arrow at
+ * the row's right while an update is downloading or ready. Ready, it restarts
+ * Retinue to install; downloading, it shows the progress ring.
+ */
+export function UpdateArrow() {
+  const state = useUpdatePhase()
+  const [busy, setBusy] = useState(false)
+  if (isCompanionWindow()) return null
+  const { label, percent } = describeUpdatePhase(state)
+  if (state.phase === 'downloading') return <span className="update-arrow is-downloading" data-update-arrow="downloading" role="status" aria-label={label} title={label}><ProgressRing percent={percent} /></span>
+  if (state.phase !== 'ready') return null
+  const title = state.version ? `Update to ${state.version}. Restart Retinue to install it.` : 'Restart Retinue to install the update.'
+  return <button type="button" className="update-arrow" data-update-arrow="ready" aria-label={BADGE_RESTART_LABEL} title={title} disabled={busy} onClick={() => { setBusy(true); void bridge().then((api) => api.updatesInstall?.()).catch(() => undefined).finally(() => setBusy(false)) }}><ArrowDown size={14} strokeWidth={2.4} aria-hidden="true" /></button>
 }
 
 export function ProgressRing({ percent }: { percent: number | null }) {

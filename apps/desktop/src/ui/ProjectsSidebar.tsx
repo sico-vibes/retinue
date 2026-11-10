@@ -23,7 +23,7 @@ import './projectsSidebar.css'
 const FOLDED_KEY = 'retinue.sidebar.foldedProjects'
 const RECENT_PER_BOT = 4
 
-const stampOf = (session: Session) => String(session.updatedAt ?? session.createdAt ?? '')
+const stampOf = (session: Session) => String(session.lastMessageAt ?? session.updatedAt ?? session.createdAt ?? '')
 
 type BotInProject = { agent: Agent; sessions: Session[] }
 type ProjectBlock = { key: string; project: Project | null; bots: BotInProject[]; latest: string }
@@ -156,7 +156,7 @@ export function ProjectsSidebar({ agents, projects, sessions, members = null, se
               return <li key={agent.id} role="none" className="ps-bot-item">
                 <div className={`ps-bot marquee-host${holdsSelection ? ' selected' : ''}`}>
                   <button type="button" role="treeitem" aria-expanded={recent.length ? expanded : undefined} className="ps-bot-main" onClick={() => { if (!latest) { onStartInProject(agent, block.project?.id ?? null); return } if (!expanded) setOpenFor(rowKey, true); onOpenConversation(agent, latest) }} title={latest ? undefined : `Start a conversation with ${agent.name}`}>
-                    <BlobCanvas decorative color={agentColorHex(agent.color)} size={36} mood={working ? 'working' : 'idle'} look={agentLook(agent)} label={agent.name} />
+                    <BlobCanvas decorative color={agentColorHex(agent.color)} size={40} mood={needsYou ? 'permission' : working ? 'working' : 'idle'} look={agentLook(agent)} label={agent.name} presence />
                     <span className="ps-bot-copy">
                       <span className="ps-bot-line">
                         <Marquee className="ps-bot-name" text={agent.name} active={holdsSelection} />

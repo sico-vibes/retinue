@@ -44,6 +44,8 @@ export interface BlobCanvasProps {
   style?: ThemeStyle
   /** Force an art style, overriding the look and the app look (pickers and previews). */
   art?: BotArt
+  /** Show a status dot at the photo's top left (online, working, asking, failed, offline), read from `mood`. */
+  presence?: boolean
   onGreetingComplete?: () => void
   onDizzy?: () => void
   onDizzyRecovery?: () => void
@@ -364,10 +366,24 @@ export function BlobCanvas(props: BlobCanvasProps) {
 
 const RESTING = new Set(['offline', 'sleeping', 'rate_limited'])
 
+export type Presence = 'online' | 'working' | 'asking' | 'failed' | 'limited' | 'offline'
+const PRESENCE_WORDS: Record<Presence, string> = { online: 'Online', working: 'Working', asking: 'Waiting for you', failed: 'Failed', limited: 'Usage limit', offline: 'Offline' }
+/** The status dot's state for a mood (the companion's mood vocabulary, `characterState.ts`). */
+export function presenceFor(mood: BlobMood): Presence {
+  switch (mood) {
+    case 'thinking': case 'working': case 'tool_activity': case 'file_activity': case 'file_preparing': case 'file_sending': return 'working'
+    case 'permission': return 'asking'
+    case 'error': case 'file_error': return 'failed'
+    case 'rate_limited': return 'limited'
+    case 'offline': case 'sleeping': return 'offline'
+    default: return 'online'
+  }
+}
+
 /** A round profile picture in place of the mascot (`blob/photos.ts`). */
 const PHOTO_GREETING_MS = 1200
 
-function ProfilePhotoMark({ url, color, size = 24, mood = 'idle', look, label = 'Employee', decorative = false, className = '', dragRegion = false, greeting = false, onGreetingComplete }: BlobCanvasProps & { url: string | null }) {
+function ProfilePhotoMark({ url, color, size = 24, mood = 'idle', look, label = 'Employee', decorative = false, className = '', dragRegion = false, greeting = false, presence = false, onGreetingComplete }: BlobCanvasProps & { url: string | null }) {
   const provider = useLookProvider(look)
   // A picture has no wave to play: the greeting fades it in and finishes on time,
   // so whoever waits for it (the companion's welcome) is never left waiting.
@@ -381,12 +397,15 @@ function ProfilePhotoMark({ url, color, size = 24, mood = 'idle', look, label = 
   const a11y = decorative ? { 'aria-hidden': true as const } : { role: 'img' as const, 'aria-label': label }
   // The coding agent's logo in a small circle at the bottom right, as Slack and
   // Teams show a status badge; too small to read below 20px, so it is left off.
-  const badge = provider && size >= 20 ? Math.max(12, Math.round(size * .4)) : 0
+  const badge = provider && size >= 20 ? Math.max(11, Math.round(size * .34)) : 0
+  const state = presence ? presenceFor(mood) : null
+  const dot = Math.max(8, Math.round(size * .26))
   return <span className={`profile-photo-mark${RESTING.has(mood) ? ' is-resting' : ''}${greeting ? ' is-greeting' : ''} ${className}`} style={{ width: size, height: size }} data-tauri-drag-region={dragRegion || undefined} {...a11y}>
     <span className={`profile-photo-clip${url ? '' : ' is-blank'}`} style={url ? undefined : { ['--photo-tint' as string]: color }}>
       {url ? <img src={url} alt="" draggable={false} /> : <BlankSilhouette />}
     </span>
-    {badge > 0 && provider && <span className="profile-photo-badge" style={{ width: badge, height: badge }} aria-hidden="true"><ProviderLogo provider={provider} size={Math.round(badge * .68)} /></span>}
+    {badge > 0 && provider && <span className="profile-photo-badge" style={{ width: badge, height: badge }} aria-hidden="true"><ProviderLogo provider={provider} size={Math.round(badge * .66)} /></span>}
+    {state && <span className={`profile-photo-presence is-${state}`} style={{ width: dot, height: dot }} title={PRESENCE_WORDS[state]} aria-hidden="true" />}
   </span>
 }
 

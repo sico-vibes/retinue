@@ -5,7 +5,7 @@ import { setThemeStyle, useThemeStyle } from '../blob/retinue'
 import { applyFonts, FONT_CATALOGUE, FONT_DEFAULTS } from './fonts'
 import { THEME_LOOKS } from './appearance'
 import { AccentPicker } from './AccentPicker'
-import { ChatBackgroundSettings } from './ChatBackground'
+import { ChatBackgroundSettings, HazeTuningSettings } from './ChatBackground'
 import { useAccentColor, setAccentColor } from '../blob/retinue'
 import { SettingsGroup, SettingsRow } from './SettingsParts'
 import { LookPicker } from './LookPicker'
@@ -74,6 +74,7 @@ export function AppearancePage() {
   return <div className="appearance-page">
     <SettingsGroup title="Look"><div className="settings-row stacked"><LookPicker value={style} onChange={(id) => void pickLook(id)} compact /></div></SettingsGroup>
     <SettingsGroup title="Colour"><SettingsRow label="Theme"><SegmentedControl label="Theme" value={themeChoice} options={(['system','dark','light'] as const).map((id) => ({ value: id, label: id[0]!.toUpperCase()+id.slice(1) }))} onChange={async (id) => { await save('appearance.theme', id); setThemeChoice(id); document.documentElement.dataset.themeChoice=id; try { localStorage.setItem('retinue.appearance', JSON.stringify({ ...savedAppearance(), theme: id })) } catch { /* The daemon remains the persisted source. */ } applyAppearance(document.documentElement, id, textSize) }} /></SettingsRow><SettingsRow label="Accent" hint={style === 'haze' ? 'Also colours the Haze background.' : undefined}><AccentPicker value={accent} onChange={(next) => { void save('appearance.accent', next).then(() => setAccentColor(next)) }} /></SettingsRow></SettingsGroup>
+    {style === 'haze' && <HazeTuningSettings />}
     {style === 'haze' && <ChatBackgroundSettings />}
     <div ref={textSection} className="appearance-text-section"><SettingsGroup title="Text and spacing">{fontRow(false)}{fontRow(true)}<SettingsRow label="Text size"><SegmentedControl label="Text size" value={textSize} options={([{ value:'small',label:'Small' },{ value:'default',label:'Default' },{ value:'large',label:'Large' },{ value:'larger',label:'Larger' }] as const)} onChange={async (id) => { await save('appearance.textSize',id); setTextSize(id); try { localStorage.setItem('retinue.appearance', JSON.stringify({ ...savedAppearance(), textSize:id })) } catch { /* The daemon remains the persisted source. */ } applyAppearance(document.documentElement, themeChoice, id) }} /></SettingsRow><SettingsRow label="Density"><SegmentedControl label="Density" value={density} options={([{value:'compact',label:'Compact'},{value:'default',label:'Default'},{value:'roomy',label:'Roomy'}] as const)} onChange={async (id) => { await save('appearance.density',id); updateDensity(id) }} /></SettingsRow></SettingsGroup></div>
   </div>

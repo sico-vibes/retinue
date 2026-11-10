@@ -14,3 +14,9 @@ apps/desktop/src-tauri/binaries/retinue-hook-*.exe
 # Local Claude Code session config (the project skills are shared)
 /.claude/*
 !/.claude/skills/
+
+# The native Rust (GPUI) app is on hold and internal only (owner, 9 November 2026):
+# it stays on this machine, out of the repository, builds and tests.
+/apps/native/
+/docs/plans/rust-native/
+/.claude/skills/retinue-development/references/native-gpui.md

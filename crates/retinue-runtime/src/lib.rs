@@ -218,23 +218,25 @@ async fn read_probe_stream(mut stream: impl tokio::io::AsyncRead + Unpin) -> std
     Ok(retained)
 }
 
-pub async fn discover() -> Vec<DiscoveredRuntime> {
+pub async fn discover() -> Vec<DiscoveredRuntime> { discover_except(&[]).await }
+
+/// Discovery that never probes a provider the owner turned off: no PATH lookup
+/// and no process for an id in `disabled`. Entries that are not provider ids
+/// (a runtime id, say) are ignored here; the daemon marks those rows itself.
+pub async fn discover_except(disabled: &[String]) -> Vec<DiscoveredRuntime> {
+    let skip: Vec<bool> = discovery_ids().iter().map(|id| disabled.iter().any(|off| off == id)).collect();
     // Resolve away from the async executor; PATH may include slow network drives.
     // A table provider's executable is its row's `command` (Cursor's CLI is `agent`, not `cursor`).
-    let specs = tokio::task::spawn_blocking(|| discovery_ids().map(|id| (id, resolve_command(acp_provider(id).map_or(id, |row| row.command))))).await;
-    let Ok([claude, codex, opencode, qwen, cursor, grok]) = specs else { return Vec::new(); };
+    let specs = tokio::task::spawn_blocking({
+        let skip = skip.clone();
+        move || discovery_ids().into_iter().zip(skip).map(|(id, off)| (id, if off { None } else { resolve_command(acp_provider(id).map_or(id, |row| row.command)) }, off)).collect::<Vec<_>>()
+    }).await;
+    let Ok(specs) = specs else { return Vec::new(); };
     // The OpenCode stored-credential check is CLI-free and only ever reads
     // these four variables; tests pass a synthetic set instead.
     let environment = opencode_environment();
-    let (a, b, c, d, e, f) = tokio::join!(
-        discover_one(claude.0, claude.1, &environment),
-        discover_one(codex.0, codex.1, &environment),
-        discover_one(opencode.0, opencode.1, &environment),
-        discover_one(qwen.0, qwen.1, &environment),
-        discover_one(cursor.0, cursor.1, &environment),
-        discover_one(grok.0, grok.1, &environment)
-    );
-    [a, b, c, d, e, f].into_iter().flatten().collect()
+    let probes = specs.into_iter().map(|(id, resolved, off)| { let environment = &environment; async move { if off { None } else { discover_one(id, resolved, environment).await } } });
+    futures_util::future::join_all(probes).await.into_iter().flatten().collect()
 }
 
 #[cfg(test)]
@@ -751,6 +753,13 @@ mod tests {
         assert_eq!(safe_version("opencode v2.0.28"), Some("2.0.28".into()));
         assert_eq!(safe_version("unexpected private diagnostic"), None);
         assert_eq!(safe_version("0.161.0\nprivate diagnostic"), Some("0.161.0".into()));
+    }
+    #[tokio::test]
+    async fn a_turned_off_provider_is_never_probed() {
+        let all = discovery_ids().map(String::from).to_vec();
+        assert!(discover_except(&all).await.is_empty(), "every provider is off, so nothing is probed or listed");
+        // A runtime id is not a provider id: it skips nothing here.
+        assert!(discover_except(&["rt_opencode_80ecc406".to_owned()]).await.len() <= discovery_ids().len());
     }
     #[tokio::test]
     async fn discovery_polls_all_providers_concurrently() {

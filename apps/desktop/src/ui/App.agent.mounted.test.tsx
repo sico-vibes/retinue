@@ -396,7 +396,9 @@ describe('blob roster and editor', () => {
   it('shows every create validation message and the runtime not_found sentence', async () => {
     const view = startApp()
     await view.settle()
-    await click(buttonNamed(view.host, 'Create employee'))
+    // The plus opens Hire / Create your own / New project (owner, 9 November 2026).
+    await click(buttonNamed(view.host, 'New project or employee'))
+    await click([...view.host.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent?.includes('Create your own employee')))
     await click(buttonNamed(view.host, 'Show all settings'))
     expect(view.host.textContent).toContain('Enter a name.')
     const save = [...view.host.querySelectorAll('button')].find((button) => button.classList.contains('primary-button') && button.textContent?.includes('Create employee'))
@@ -432,7 +434,9 @@ describe('blob roster and editor', () => {
   it('surfaces the remaining create daemon codes without clearing the draft', async () => {
     const view = startApp()
     await view.settle()
-    await click(buttonNamed(view.host, 'Create employee'))
+    // The plus opens Hire / Create your own / New project (owner, 9 November 2026).
+    await click(buttonNamed(view.host, 'New project or employee'))
+    await click([...view.host.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent?.includes('Create your own employee')))
     await click(buttonNamed(view.host, 'Show all settings'))
     await typeInto(field(view.host, 'Name') as HTMLInputElement, 'Fresh blob')
     const save = [...view.host.querySelectorAll('button')].find((button) => button.classList.contains('primary-button') && button.textContent?.includes('Create employee'))
@@ -743,7 +747,9 @@ describe('blob roster and editor', () => {
   it('focuses the new roster row after a created blob page is closed', async () => {
     const view = startApp()
     await view.settle()
-    await click(buttonNamed(view.host, 'Create employee'))
+    // The plus opens Hire / Create your own / New project (owner, 9 November 2026).
+    await click(buttonNamed(view.host, 'New project or employee'))
+    await click([...view.host.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent?.includes('Create your own employee')))
     await click(buttonNamed(view.host, 'Show all settings'))
     await typeInto(field(view.host, 'Name') as HTMLInputElement, 'Fresh blob')
     const save = [...view.host.querySelectorAll('button')].find((button) => button.classList.contains('primary-button') && button.textContent?.includes('Create employee'))
@@ -804,12 +810,13 @@ describe('blob roster and editor', () => {
     // An old team leader is an ordinary bot now.
     const formerLeader = view.host.querySelector('.team-row[data-agent-id="agent-claude"]')!
     expect(formerLeader.getAttribute('aria-label')).toBe('Claude, CTO')
-    expect(formerLeader.querySelector('.leader-badge')).toBeNull()
+    expect(formerLeader.querySelector('.leader-star')).toBeNull()
     expect(formerLeader.querySelector('.role-chip')?.textContent).toBe('CTO')
     const managerRow = view.host.querySelector('.manager-group .team-row[data-agent-id="agent-manager"]')!
     expect(managerRow.getAttribute('aria-label')).toBe('Manager, Manager, Manager')
-    expect(managerRow.querySelector('.leader-badge')).not.toBeNull()
-    expect(managerRow.querySelector('.leader-badge svg[fill="currentColor"]')).not.toBeNull()
+    // The CEO's star sits after the name, off the photo (owner, 9 November 2026).
+    expect(managerRow.querySelector('.leader-star')).not.toBeNull()
+    expect(managerRow.querySelector('.leader-star svg[fill="currentColor"]')).not.toBeNull()
     expect([...view.host.querySelectorAll('.team-group[aria-label="Employees"] .team-row strong')].map((node) => node.textContent)).toEqual(['Claude', 'Codex', 'Invoice helper', 'OpenCode'])
   })
 

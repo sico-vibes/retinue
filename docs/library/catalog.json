@@ -1,12 +1,12 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "b93e9e9",
-  "documentCount": 390,
+  "revision": "1ac9636",
+  "documentCount": 384,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
-      "sha256": "0636e165e16bd906ac54d0c8c3e7bfb5e55645d0d1dc0d7fbecc8729d624bf1f"
+      "sha256": "2225d7eb8834896ce53583cf4ce8704e2fd467dd7021f6517df6b93359b8b678"
     },
     {
       "source": "docs/library/assets/diagrams/approval-flow.svg",
@@ -1949,6 +1949,61 @@
       "headings": []
     },
     {
+      "id": "repository/crates/retinue-daemon/src/openui_guide",
+      "source": "crates/retinue-daemon/src/openui_guide.md",
+      "title": "openui_guide",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "3b0e4f9902542ab20f27cbf0b5375114f1da4f9e50d492685a52f1ae1fce3361",
+      "headings": [
+        {
+          "id": "syntax-rules",
+          "text": "Syntax Rules",
+          "level": 2
+        },
+        {
+          "id": "component-signatures",
+          "text": "Component Signatures",
+          "level": 2
+        },
+        {
+          "id": "layout",
+          "text": "Layout",
+          "level": 3
+        },
+        {
+          "id": "content",
+          "text": "Content",
+          "level": 3
+        },
+        {
+          "id": "input",
+          "text": "Input",
+          "level": 3
+        },
+        {
+          "id": "hoisting-streaming-critical",
+          "text": "Hoisting & Streaming (CRITICAL)",
+          "level": 2
+        },
+        {
+          "id": "examples",
+          "text": "Examples",
+          "level": 2
+        },
+        {
+          "id": "important-rules",
+          "text": "Important Rules",
+          "level": 2
+        },
+        {
+          "id": "final-verification",
+          "text": "Final Verification",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/reference/phase-5-analytics-contract",
       "source": "docs/reference/phase-5-analytics-contract.md",
       "title": "Phase 5 contract: cost and usage analytics (daemon RPC + UI)",
@@ -2619,41 +2674,6 @@
         {
           "id": "library-work-records",
           "text": "Library work records",
-          "level": 2
-        }
-      ]
-    },
-    {
-      "id": "repository/apps/native/README",
-      "source": "apps/native/README.md",
-      "title": "Retinue in Rust (GPUI) — native preview",
-      "section": "Project documentation",
-      "status": "Project reference",
-      "sha256": "660dd051b6a1eff5c542c05883544151f8d203b7ee79e1fe7893f3defaf297e4",
-      "headings": [
-        {
-          "id": "pinned-revisions",
-          "text": "Pinned revisions",
-          "level": 2
-        },
-        {
-          "id": "build-and-run",
-          "text": "Build and run",
-          "level": 2
-        },
-        {
-          "id": "what-this-slice-does",
-          "text": "What this slice does",
-          "level": 2
-        },
-        {
-          "id": "packaging-and-installing",
-          "text": "Packaging and installing",
-          "level": 2
-        },
-        {
-          "id": "third-party-art",
-          "text": "Third-party art",
           "level": 2
         }
       ]
@@ -4108,341 +4128,6 @@
       ]
     },
     {
-      "id": "project/plans/rust-native/slice-01-brief",
-      "source": "docs/plans/rust-native/slice-01-brief.md",
-      "title": "Brief: Retinue in Rust (GPUI), slice 1 — an installable core",
-      "section": "Plans & briefs",
-      "status": "Plan",
-      "sha256": "378fef5f8fddc00685d1908172072e2fbbd96777da6bea70351348fd6ecfed79",
-      "headings": [
-        {
-          "id": "where-it-lives",
-          "text": "Where it lives",
-          "level": 2
-        },
-        {
-          "id": "1-the-daemon-start-it-talk-to-it",
-          "text": "1. The daemon: start it, talk to it",
-          "level": 2
-        },
-        {
-          "id": "2-the-window-and-the-look-haze-dark-first",
-          "text": "2. The window and the look (Haze, dark first)",
-          "level": 2
-        },
-        {
-          "id": "3-screens-in-this-slice-port-behaviour-from-the-react-source",
-          "text": "3. Screens in this slice (port behaviour from the React source)",
-          "level": 2
-        },
-        {
-          "id": "sidebar",
-          "text": "Sidebar",
-          "level": 3
-        },
-        {
-          "id": "conversations-column",
-          "text": "Conversations column",
-          "level": 3
-        },
-        {
-          "id": "conversation-pane",
-          "text": "Conversation pane",
-          "level": 3
-        },
-        {
-          "id": "4-packaging-so-the-owner-can-install-it",
-          "text": "4. Packaging so the owner can install it",
-          "level": 2
-        },
-        {
-          "id": "5-tests-and-gates",
-          "text": "5. Tests and gates",
-          "level": 2
-        },
-        {
-          "id": "report",
-          "text": "Report",
-          "level": 2
-        }
-      ]
-    },
-    {
-      "id": "project/plans/rust-native/slice-02-brief",
-      "source": "docs/plans/rust-native/slice-02-brief.md",
-      "title": "Brief: Retinue in Rust (GPUI), slice 2 — the look, the team and new projects",
-      "section": "Plans & briefs",
-      "status": "Plan",
-      "sha256": "59fb037d47683cc708a3e17b986c8d84d2156b66ae97c877771fb1714a08b82d",
-      "headings": [
-        {
-          "id": "1-portraits-and-logos",
-          "text": "1. Portraits and logos",
-          "level": 2
-        },
-        {
-          "id": "2-motion-and-states",
-          "text": "2. Motion and states",
-          "level": 2
-        },
-        {
-          "id": "3-light-theme-and-density",
-          "text": "3. Light theme and density",
-          "level": 2
-        },
-        {
-          "id": "4-the-team-page-and-hiring",
-          "text": "4. The Team page and hiring",
-          "level": 2
-        },
-        {
-          "id": "5-new-projects-and-staffing",
-          "text": "5. New projects and staffing",
-          "level": 2
-        },
-        {
-          "id": "6-proposals-in-the-conversation",
-          "text": "6. Proposals in the conversation",
-          "level": 2
-        },
-        {
-          "id": "7-settings-first-pass",
-          "text": "7. Settings, first pass",
-          "level": 2
-        },
-        {
-          "id": "8-daemon-resilience",
-          "text": "8. Daemon resilience",
-          "level": 2
-        },
-        {
-          "id": "9-install",
-          "text": "9. Install",
-          "level": 2
-        },
-        {
-          "id": "10-tests-and-gates",
-          "text": "10. Tests and gates",
-          "level": 2
-        },
-        {
-          "id": "report",
-          "text": "Report",
-          "level": 2
-        }
-      ]
-    },
-    {
-      "id": "project/plans/rust-native/slice-03-brief",
-      "source": "docs/plans/rust-native/slice-03-brief.md",
-      "title": "Brief: Retinue in Rust (GPUI), slice 3 — everyday conversations and bots",
-      "section": "Plans & briefs",
-      "status": "Plan",
-      "sha256": "bf7adfea2923c2fc964705757fd24a8c8a33242e780ed0e040b79fa8dffb2209",
-      "headings": [
-        {
-          "id": "0-shared-primitives-first",
-          "text": "0. Shared primitives first",
-          "level": 2
-        },
-        {
-          "id": "1-the-composer-complete",
-          "text": "1. The composer, complete",
-          "level": 2
-        },
-        {
-          "id": "2-answering-everything-in-the-conversation",
-          "text": "2. Answering everything in the conversation",
-          "level": 2
-        },
-        {
-          "id": "3-messages",
-          "text": "3. Messages",
-          "level": 2
-        },
-        {
-          "id": "4-conversations",
-          "text": "4. Conversations",
-          "level": 2
-        },
-        {
-          "id": "5-search-and-switching",
-          "text": "5. Search and switching",
-          "level": 2
-        },
-        {
-          "id": "6-bots-create-and-edit",
-          "text": "6. Bots: create and edit",
-          "level": 2
-        },
-        {
-          "id": "7-usage-and-attention",
-          "text": "7. Usage and attention",
-          "level": 2
-        },
-        {
-          "id": "8-tests-and-gates",
-          "text": "8. Tests and gates",
-          "level": 2
-        },
-        {
-          "id": "report",
-          "text": "Report",
-          "level": 2
-        },
-        {
-          "id": "after-this-slice-for-planning-not-now",
-          "text": "After this slice (for planning, not now)",
-          "level": 2
-        }
-      ]
-    },
-    {
-      "id": "project/plans/rust-native/slice-04-brief",
-      "source": "docs/plans/rust-native/slice-04-brief.md",
-      "title": "Brief: Retinue in Rust (GPUI), slice 4 — tasks, schedules, changes, terminal and pull requests",
-      "section": "Plans & briefs",
-      "status": "Plan",
-      "sha256": "7dad64393fdb782a9b84a79fd04691cc1f91378cecdadf03de2ac64eb0340ee5",
-      "headings": [
-        {
-          "id": "rules",
-          "text": "Rules",
-          "level": 2
-        },
-        {
-          "id": "file-ownership",
-          "text": "File ownership",
-          "level": 2
-        },
-        {
-          "id": "1-tasks-board",
-          "text": "1. Tasks board",
-          "level": 2
-        },
-        {
-          "id": "2-schedules",
-          "text": "2. Schedules",
-          "level": 2
-        },
-        {
-          "id": "3-changes-and-the-session-rail",
-          "text": "3. Changes and the session rail",
-          "level": 2
-        },
-        {
-          "id": "4-terminal-dock",
-          "text": "4. Terminal dock",
-          "level": 2
-        },
-        {
-          "id": "5-pull-requests-and-delegation-views",
-          "text": "5. Pull requests and delegation views",
-          "level": 2
-        },
-        {
-          "id": "6-tests-and-gates",
-          "text": "6. Tests and gates",
-          "level": 2
-        },
-        {
-          "id": "report",
-          "text": "Report",
-          "level": 2
-        }
-      ]
-    },
-    {
-      "id": "project/plans/rust-native/slice-05-brief",
-      "source": "docs/plans/rust-native/slice-05-brief.md",
-      "title": "Brief: Retinue in Rust (GPUI), slice 5 — the companion and dictation",
-      "section": "Plans & briefs",
-      "status": "Plan",
-      "sha256": "26b1c2bcd06ee9035b04acf35810a901e6382a2d796db4c0883c2b49df9b9211",
-      "headings": [
-        {
-          "id": "file-ownership-so-the-two-slices-merge-cleanly",
-          "text": "File ownership (so the two slices merge cleanly)",
-          "level": 2
-        },
-        {
-          "id": "1-the-companion-window",
-          "text": "1. The companion window",
-          "level": 2
-        },
-        {
-          "id": "2-sounds",
-          "text": "2. Sounds",
-          "level": 2
-        },
-        {
-          "id": "3-dictation-on-device",
-          "text": "3. Dictation (on-device)",
-          "level": 2
-        },
-        {
-          "id": "4-tests-and-gates",
-          "text": "4. Tests and gates",
-          "level": 2
-        },
-        {
-          "id": "report",
-          "text": "Report",
-          "level": 2
-        }
-      ]
-    },
-    {
-      "id": "project/plans/rust-native/slice-06-brief",
-      "source": "docs/plans/rust-native/slice-06-brief.md",
-      "title": "Brief: Retinue in Rust (GPUI), slice 6 — the full Settings sheet, the CEO, onboarding, analytics and updates",
-      "section": "Plans & briefs",
-      "status": "Plan",
-      "sha256": "f04040cfbcd2528b8249c0a71a75bfe5db66ba22e7f06ecb14618064675be9ad",
-      "headings": [
-        {
-          "id": "rules",
-          "text": "Rules",
-          "level": 2
-        },
-        {
-          "id": "file-ownership",
-          "text": "File ownership",
-          "level": 2
-        },
-        {
-          "id": "1-the-settings-sheet",
-          "text": "1. The Settings sheet",
-          "level": 2
-        },
-        {
-          "id": "2-the-ceo-page-and-project-settings",
-          "text": "2. The CEO page and project settings",
-          "level": 2
-        },
-        {
-          "id": "3-onboarding",
-          "text": "3. Onboarding",
-          "level": 2
-        },
-        {
-          "id": "4-analytics-and-updates",
-          "text": "4. Analytics and updates",
-          "level": 2
-        },
-        {
-          "id": "5-tests-and-gates",
-          "text": "5. Tests and gates",
-          "level": 2
-        },
-        {
-          "id": "report",
-          "text": "Report",
-          "level": 2
-        }
-      ]
-    },
-    {
       "id": "project/plans/expansion-plan-v3",
       "source": "docs/plans/expansion-plan-v3.md",
       "title": "Expansion plan v3: the connector",
@@ -4803,36 +4488,6 @@
         {
           "id": "deliverable-on-approval",
           "text": "Deliverable on approval",
-          "level": 2
-        }
-      ]
-    },
-    {
-      "id": "project/plans/rust-native/STATUS",
-      "source": "docs/plans/rust-native/STATUS.md",
-      "title": "The native (Rust, GPUI) port: where it stands",
-      "section": "Plans & briefs",
-      "status": "Plan",
-      "sha256": "1f5c7f4f0fabed64d797cf5497224ad86baa8cab18f88f980674f5732998a389",
-      "headings": [
-        {
-          "id": "what-is-on-main",
-          "text": "What is on main",
-          "level": 2
-        },
-        {
-          "id": "not-on-main",
-          "text": "Not on main",
-          "level": 2
-        },
-        {
-          "id": "known-gaps-in-what-is-merged",
-          "text": "Known gaps in what is merged",
-          "level": 2
-        },
-        {
-          "id": "how-to-resume",
-          "text": "How to resume",
           "level": 2
         }
       ]
@@ -18896,6 +18551,41 @@
       "status": "Release note",
       "sha256": "c8edab001f3c1f3c94ce108065a7bd64f7032e95993dc7dcc29503e3ff1e1433",
       "headings": [
+        {
+          "id": "added",
+          "text": "Added",
+          "level": 2
+        },
+        {
+          "id": "changed",
+          "text": "Changed",
+          "level": 2
+        },
+        {
+          "id": "fixed",
+          "text": "Fixed",
+          "level": 2
+        },
+        {
+          "id": "installation",
+          "text": "Installation",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/releases/0.1.0-beta.51",
+      "source": "docs/releases/0.1.0-beta.51.md",
+      "title": "Retinue 0.1.0-beta.51",
+      "section": "Release notes",
+      "status": "Release note",
+      "sha256": "f161c70c29c756ea37be6672a0a91ea05298b0023c47f7fd994747a0d8579305",
+      "headings": [
+        {
+          "id": "before-you-update",
+          "text": "Before you update",
+          "level": 2
+        },
         {
           "id": "added",
           "text": "Added",

@@ -1,6 +1,6 @@
 import { rpc } from '../tauri'
 import { usePlatform } from '../transport/platform'
-import { useEffect, useRef, useState, type FormEvent, type RefObject } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ArchiveRestore, CalendarClock, ChevronsUpDown, Compass, Gauge, LogOut, Pencil, Settings2, Keyboard, Smartphone, Newspaper } from 'lucide-react'
 import { startTour } from './tour/startTour'
 import { useRemoteStatus } from '../remote/useRemote'
@@ -39,8 +39,10 @@ export function profileInitials(name: string) {
  * (usage, settings, quit) lives in its menu, like a chat app's
  * profile menu. The name is local to this device.
  */
-export function ProfileMenu({ connection, usageActive, schedulesActive = false, triggerRef, onUsage, onSchedules, onRemote, onBackup, onArchivedBots, onWhatsNew, onSettings, onQuit, onShortcuts }: {
+export function ProfileMenu({ connection, usageActive, schedulesActive = false, triggerRef, onUsage, onSchedules, onRemote, onBackup, onArchivedBots, onWhatsNew, onSettings, onQuit, onShortcuts, trailing }: {
   connection: ConnectionState
+  /** Shown at the row's right, outside the menu button (the update arrow). */
+  trailing?: ReactNode
   usageActive: boolean
   schedulesActive?: boolean
   onSchedules?: () => void
@@ -131,8 +133,9 @@ export function ProfileMenu({ connection, usageActive, schedulesActive = false, 
     >
       <span className={`profile-avatar ${initials ? '' : 'empty'}`} aria-hidden="true">{initials || '?'}<i className={`presence ${connection}`} /></span>
       <span className="profile-copy"><strong>{name || 'Your profile'}</strong><small>{statusText}</small></span>
-      <ChevronsUpDown size={14} aria-hidden="true" />
+      {!trailing && <ChevronsUpDown size={14} aria-hidden="true" />}
     </button>
+    {trailing}
     {open && <div ref={menuRef} className="menu-surface profile-menu" role="menu" aria-label="Account" onKeyDown={onMenuKeyDown}>
       <button type="button" role="menuitem" className="menu-item" onClick={() => run(onSettings)}><Settings2 size={15} />Settings</button>
       {onShortcuts && <button type="button" role="menuitem" className="menu-item" onClick={() => run(onShortcuts)}><Keyboard size={15} />Keyboard shortcuts</button>}

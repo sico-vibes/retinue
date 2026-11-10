@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import { BlobCanvas } from '../blob/BlobCanvas'
 import type { BlobLook } from '../blob/look'
-import { BookOpen, Bot, FolderPlus, GitMerge, ListChecks, Pencil, ShieldCheck, UserCog, UserPlus } from 'lucide-react'
+import { BookOpen, Bot, Bug, FolderPlus, GitMerge, ListChecks, Pencil, ShieldCheck, UserCog, UserPlus } from 'lucide-react'
 import { agentColorHex } from './agentColor'
 import { announceMembersChanged } from './projectMembers'
 import { PRESETS } from '../team/presets'
@@ -97,6 +97,8 @@ export function ProposalCard({ request, managerName = 'The CEO', projects, runti
   const kind = String(proposal.kind)
   const updating = draft.action === 'update' && (kind === 'bot' || kind === 'project')
   const opening = kind === 'task' && draft.action === 'open'
+  // The CEO asks to open a GitHub issue (9 November 2026): read-only, shown exactly as it will be posted.
+  const issue = kind === 'task' && draft.action === 'issue'
   // FIX39 P10: a merge card has no fields to edit; it offers merge, keep or discard.
   const merging = kind === 'merge'
   const hiring = kind === 'hire'
@@ -104,6 +106,7 @@ export function ProposalCard({ request, managerName = 'The CEO', projects, runti
   const { title, Icon } = updating
     ? { title: kind === 'bot' ? 'Update an employee' : 'Update a project', Icon: Pencil }
     : opening ? { title: 'Open a conversation', Icon: ListChecks }
+    : issue ? { title: 'Open a GitHub issue', Icon: Bug }
       : KIND_LABEL[kind] ?? { title: 'Do something', Icon: Pencil }
   const set = (key: string, value: unknown) => setDraft((current) => ({ ...current, [key]: value }))
   const folder = (draft.folder ?? {}) as JsonRecord
@@ -224,7 +227,12 @@ export function ProposalCard({ request, managerName = 'The CEO', projects, runti
           {draft.look != null && lookPreview(draft.look)}
         </>}
       </>}
-      {kind === 'task' && !opening && <>
+      {issue && <>
+        <div className="proposal-field"><span>Title</span><p className="proposal-value">{text(draft.title)}</p></div>
+        <div className="proposal-field"><span>Issue text</span><pre className="proposal-value proposal-issue-body">{text(draft.body)}</pre></div>
+        <p className="proposal-note">Posted to sico-vibes/retinue with your GitHub CLI sign-in, exactly as shown. Nothing is sent unless you approve.</p>
+      </>}
+      {kind === 'task' && !opening && !issue && <>
         <div className="proposal-row">
           <div className="proposal-field"><span>For</span><p className="proposal-value">{text(draft.botName) || text(draft.bot)}</p></div>
           {text(draft.project) && <div className="proposal-field"><span>Project</span><p className="proposal-value">{text(draft.projectName) || taskProject?.name || text(draft.project)}</p></div>}

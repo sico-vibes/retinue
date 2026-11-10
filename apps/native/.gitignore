@@ -1,3 +1,0 @@
-# Build output goes to C: (`CARGO_TARGET_DIR`); these are only local leftovers.
-/target
-/dist

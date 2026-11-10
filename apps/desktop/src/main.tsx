@@ -1,9 +1,12 @@
+// OpenUI mounts its own Inspect widget (a floating dog button) in development builds; Retinue never shows it.
+;(globalThis as Record<symbol, unknown>)[Symbol.for('openui.devtools.autoMount')] = true
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { App } from './ui/App'
 import { DictationBubble } from './ui/DictationBubble'
 import { startWindowBackdrop } from './ui/windowBackdrop'
 import { mainWindowReady } from './tauri'
+import './ui/hazeTuning'
 import './ui/theme.css'
 import './ui/styles.css'
 import './ui/approval.css'

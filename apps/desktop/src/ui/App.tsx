@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useMemo, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import { Activity, Cable, Clock, Split, SquareTerminal, ListChecks, ListPlus, ArrowUp, ArrowUpRight, ChevronDown, ChevronLeft, ChevronUp, CircleAlert, ClipboardCopy, Code2, FileDown, FileText, FolderOpen, FolderInput, FolderPlus, Hash, Import, Gauge, GitCompare, GitPullRequest, LoaderCircle, MessageCircle, Maximize2, Minimize2, MoreHorizontal, PanelLeft, PanelLeftClose, PanelRight, Paperclip, Plus, RefreshCw, RotateCw, Settings2, ShieldAlert, Sparkles, Square, SquarePen, Terminal, Volume2, VolumeX, X, BriefcaseBusiness } from 'lucide-react'
+import { Activity, UserPlus, Stethoscope, Cable, Clock, Split, SquareTerminal, ListChecks, ListPlus, ArrowUp, ArrowUpRight, ChevronDown, ChevronLeft, ChevronUp, CircleAlert, ClipboardCopy, Code2, FileDown, FileText, FolderOpen, FolderInput, FolderPlus, Hash, Import, Gauge, GitCompare, GitPullRequest, LoaderCircle, MessageCircle, Maximize2, Minimize2, MoreHorizontal, PanelLeft, PanelLeftClose, PanelRight, Paperclip, Plus, RefreshCw, RotateCw, Settings2, ShieldAlert, Sparkles, Square, SquarePen, Terminal, Volume2, VolumeX, X, BriefcaseBusiness } from 'lucide-react'
 import { outsideSender } from './messageOrigin'
 import { agentLook, SHAPE_LABELS, type BlobLook } from '../blob/look'
 import { MAX_COMPANION_PEERS } from '../blob/companionLayout'
@@ -37,6 +37,7 @@ import { SignInHelp } from './SignInHelp'
 import { ProposalCard } from './ProposalCard'
 import { ManagerSetupCard } from './ManagerSetupCard'
 import { DRAFT_SESSION_PREFIX, draftSessionFor, isDraftSession, managerOf } from './teamSelectors'
+import { PhotoOwnersContext, photoOwners } from './photoOwners'
 import { CompanionChatItem, CompanionTeamActivity, CompanionTeammatesSetting, blobState } from './CompanionTeam'
 import { shortTime } from './rosterSelectors'
 import { NeedsYouBadge, PermissionQueueBar, nextWaitingAgent, waitingAgentsOf } from './CompanionAttention'
@@ -85,7 +86,7 @@ import { DictationButton } from './DictationButton'
 import { DictationIsland, type IslandPhase } from './DictationIsland'
 import { configureDictation, DEFAULT_SPEECH_MODEL_ID, normalizeEngineChoice, setDictationEnginePrefs } from './dictation'
 import { ArchivedBots } from './ArchivedBots'
-import { UpdateBadge } from './UpdateBadge'
+import { UpdateArrow, UpdateBadge } from './UpdateBadge'
 import { SettingsSheet, type SettingsPageId } from './SettingsSheet'
 import { ProfileMenu, readProfileName, saveProfileName, syncProfileName } from './ProfileMenu'
 import { emptyPins, readPins, toggleFavorite, writePins, type SidebarPins } from './sidebarPins'
@@ -376,6 +377,7 @@ export function App() {
   const [projectSearchOpen, setProjectSearchOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [createMenuOpen, setCreateMenuOpen] = useState(false)
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false)
   const [pendingBlobImport, setPendingBlobImport] = useState<SharedBlob | null>(null)
   const [quotaRefreshing, setQuotaRefreshing] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -574,6 +576,7 @@ export function App() {
   useLayoutEffect(() => { setRuntimeProviders(snapshot?.runtimes ?? []) }, [snapshot?.runtimes])
   const sessions = snapshot?.sessions ?? []
   const agents = snapshot?.agents ?? []
+  const photoOwnerMap = useMemo(() => photoOwners(agents), [agents])
   // Every screen that offers bots as a choice uses this; a sub-bot belongs to its parent.
   const bots = agents.filter((agent) => !agent.parentAgentId)
   const projects = snapshot?.projects ?? []
@@ -640,6 +643,17 @@ export function App() {
   composerKeyRef.current = composerKey
   const [composer, setComposer] = useDraft(composerKey)
   useAutosizeTextarea(composerRef, composer, composerMaxHeight)
+  // A button or form in an OpenUI reply puts its answer in the composer; the owner sends it (ui/openui/OpenUiBlock.tsx).
+  useEffect(() => {
+    const onReply = (event: Event) => {
+      const text = (event as CustomEvent<{ text?: string }>).detail?.text?.trim()
+      if (!text) return
+      setComposer(text)
+      requestAnimationFrame(() => { const box = composerRef.current; if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length) } })
+    }
+    window.addEventListener('retinue:openui-reply', onReply)
+    return () => window.removeEventListener('retinue:openui-reply', onReply)
+  }, [setComposer])
   detailsSessionIdRef.current = selectedSession?.id ?? null
   // Remember every conversation's blob, so a removed id can still be traced to its owner.
   for (const session of sessions) sessionOwnersRef.current.set(session.id, session.agentId ?? null)
@@ -1816,6 +1830,17 @@ export function App() {
   const renameConversation = async (session: Session, title: string) => {
     try { await rpc('session.rename', { sessionId: session.id, title }); await refresh() } catch (reason) { setError(messageOf(reason)) }
   }
+  /** "Ask the CEO to troubleshoot" on a failed turn: the daemon opens a CEO conversation with the facts of the failure (owner, 9 November 2026). */
+  const askCeoToTroubleshoot = async (sessionId: string, turnId: string | null) => {
+    try {
+      const result = await rpc<{ sessionId?: string }>('manager.troubleshoot', { sessionId, ...(turnId ? { turnId } : {}) })
+      const ceo = managerOf(agents)
+      const opened = result.sessionId ? sessions.find((item) => item.id === result.sessionId) ?? ({ id: result.sessionId, runtimeId: ceo?.runtimeId ?? '', agentId: ceo?.id ?? null } as Session) : null
+      if (ceo && opened) { leavePages(); selectAgent(ceo); selectConversation(opened) }
+    } catch (reason) { setError(messageOf(reason)) }
+  }
+  /** Clicking an employee or conversation in the sidebar leaves any page (settings, tasks, usage, an employee's page) for that chat (owner, 9 November 2026). */
+  const leavePages = () => { setTeamPage(null); setAnalyticsOpen(false); setSchedulesOpen(false); setTasksOpen(false); setCompareOpen(false); setBlobPage(null); setSettingsSheet(false); setMachineView(null) }
   const selectConversation = (session: Session) => {
     setTeamPage(null)
     setSideSessionId(null)
@@ -2881,6 +2906,7 @@ ${fileReferenceText(sentFile)}` : typed
   return (
     <>
     {!companion && <AppWallpaper />}
+    <PhotoOwnersContext.Provider value={photoOwnerMap}>
     <main className={`app-shell ${detailsVisible ? 'inspector-open' : ''} ${convosOpen && activeSelectedAgent && !schedulesOpen && !tasksOpen && !compareOpen ? 'convos-open' : ''} ${reducedLaunchFade ? 'reduced-launch-fade' : ''}`} style={{ ...(accent ? { '--agent-accent': accent } : {}), ...(reducedLaunchFade ? { '--launch-fade-duration': '180ms' } : {}) } as React.CSSProperties}>
       <aside className="sidebar" aria-label="Agents">
         <div className="sidebar-top">
@@ -2888,9 +2914,17 @@ ${fileReferenceText(sentFile)}` : typed
           <div className="sidebar-create-actions">
             <NeedsYouBell permissions={snapshot?.permissions ?? []} sessions={sessions} agents={agents} now={permissionClock} onOpen={(sessionId) => { const target = sessions.find((item) => item.id === sessionId); if (!target) return; if (isSideSession(target)) openSideConversation(sessionId); else { setSideSessionId(null); selectSession(target) } }} />
             <button type="button" className={`icon-button${tasksOpen ? ' active' : ''}`} title="Tasks" aria-label="Tasks" aria-pressed={tasksOpen} disabled={connection !== 'connected'} onClick={() => { setTasksOpen((open) => !open); setSchedulesOpen(false); setAnalyticsOpen(false); setBlobPage(null) }}><ListChecks size={16} /></button>
-            <button data-testid="create-blob" className="icon-button" title={`Create ${noun}`} aria-label={`Create ${noun}`} disabled={connection !== 'connected' || busy || runtimes.length === 0} onClick={() => openCreate()}><Plus size={17} /></button>
+            <div className="more-menu-wrap" onKeyDown={(event) => { if (event.key === 'Escape') setPlusMenuOpen(false) }}>
+              <button data-testid="create-blob" className="icon-button" title="New" aria-label="New project or employee" aria-haspopup="menu" aria-expanded={plusMenuOpen} disabled={connection !== 'connected' || busy} onClick={() => { setCreateMenuOpen(false); setPlusMenuOpen((open) => !open) }}><Plus size={17} /></button>
+              {plusMenuOpen && <div className="menu-surface more-menu" role="menu" aria-label="New">
+                <button className="menu-item" role="menuitem" onClick={() => { setPlusMenuOpen(false); openTeam('hire') }}><BriefcaseBusiness size={15} />Hire an employee…</button>
+                <button className="menu-item" role="menuitem" disabled={runtimes.length === 0} onClick={() => { setPlusMenuOpen(false); openCreate() }}><UserPlus size={15} />Create your own employee…</button>
+                <span className="menu-separator" role="separator" />
+                <button className="menu-item" role="menuitem" onClick={() => { setPlusMenuOpen(false); void openNewProject().then((project) => { if (project) setStaffProject(project) }) }}><FolderPlus size={15} />New project…</button>
+              </div>}
+            </div>
             <div className="more-menu-wrap" onKeyDown={(event) => { if (event.key === 'Escape') { setCreateMenuOpen(false); restoreCreateFocus() } }}>
-              <button type="button" className="icon-button small" title="More ways to create" aria-label={`${Noun} actions`} aria-haspopup="menu" aria-expanded={createMenuOpen} disabled={connection !== 'connected' || busy} onClick={() => setCreateMenuOpen((open) => !open)}><ChevronDown size={14} /></button>
+              <button type="button" className="icon-button small" title="More ways to create" aria-label={`${Noun} actions`} aria-haspopup="menu" aria-expanded={createMenuOpen} disabled={connection !== 'connected' || busy} onClick={() => { setPlusMenuOpen(false); setCreateMenuOpen((open) => !open) }}><ChevronDown size={14} /></button>
               {createMenuOpen && <div className="menu-surface more-menu" role="menu">
                 {managerOf(agents)
                   ? <><button className="menu-item" role="menuitem" onClick={startProjectWithManager}><BriefcaseBusiness size={15} />New project with {managerOf(agents)?.name ?? 'the CEO'}</button>
@@ -2906,8 +2940,8 @@ ${fileReferenceText(sentFile)}` : typed
           </div>
         </div>
         <div className="sr-only" aria-live="polite">{rosterAnnouncement}</div>
-        <TeamSidebar canCreate={runtimeReady} onOpenTeam={(tab) => openTeam(tab)} teamOpen={!!teamPage} onHire={(projectId) => openTeam('hire', projectId)} onAskCeo={(projectId) => void askCeoToStaff(projectId)} onOpenConversation={(agent, session) => { selectAgent(agent); selectConversation(session) }} onStartInProject={(agent, projectId) => newSession(agent.id, null, projectId)} selectedSessionId={sideSessionId ?? selectedSession?.id ?? null} onOpenSubbot={openSideConversation} machines={machines.length ? <MachineGroups machines={machines} selected={machineView} onOpen={(machine, bot) => setMachineView({ machineId: machine.id, botId: bot.id })} /> : null} banner={!managerOf(agents) && connection === 'connected' ? <ManagerSetupCard runtimes={runtimes.filter((runtime) => runtimeUsable(runtime))} disabled={connection !== 'connected'} onCreate={createOnboardedBlob} /> : null} agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} runtimeLogos={runtimeLogos} sidebarModel={experiments.sidebarModel} botLock={experiments.botLock} connected={connection === 'connected'} now={now} pinnedIds={pins.favorites ?? []} unreadSessionIds={unreadSessionIds} approvalSessionIds={approvalSessionIds} selectedAgentId={activeSelectedAgent?.id ?? null} onOpenSearch={openQuickSwitcher} actions={{
-          onSelect: selectAgent,
+        <TeamSidebar canCreate={runtimeReady} onOpenTeam={(tab) => openTeam(tab)} teamOpen={!!teamPage} onHire={(projectId) => openTeam('hire', projectId)} onAskCeo={(projectId) => void askCeoToStaff(projectId)} onOpenConversation={(agent, session) => { leavePages(); selectAgent(agent); selectConversation(session) }} onStartInProject={(agent, projectId) => { leavePages(); newSession(agent.id, null, projectId) }} selectedSessionId={sideSessionId ?? selectedSession?.id ?? null} onOpenSubbot={openSideConversation} machines={machines.length ? <MachineGroups machines={machines} selected={machineView} onOpen={(machine, bot) => setMachineView({ machineId: machine.id, botId: bot.id })} /> : null} banner={!managerOf(agents) && connection === 'connected' ? <ManagerSetupCard runtimes={runtimes.filter((runtime) => runtimeUsable(runtime))} disabled={connection !== 'connected'} onCreate={createOnboardedBlob} /> : null} agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} runtimeLogos={runtimeLogos} sidebarModel={experiments.sidebarModel} botLock={experiments.botLock} connected={connection === 'connected'} now={now} pinnedIds={pins.favorites ?? []} unreadSessionIds={unreadSessionIds} approvalSessionIds={approvalSessionIds} selectedAgentId={activeSelectedAgent?.id ?? null} onOpenSearch={openQuickSwitcher} actions={{
+          onSelect: (agent) => { leavePages(); selectAgent(agent) },
           onCreate: (projectId) => openCreate(projectId),
           onCreateProject: () => void openNewProject().then((project) => { if (project) setStaffProject(project) }),
           onEdit: openEdit,
@@ -2948,6 +2982,7 @@ ${fileReferenceText(sentFile)}` : typed
           schedulesActive={schedulesOpen}
           onSettings={() => { setSettingsInitialPage('General'); setSettingsFocus(null); setSettingsSheet(true) }}
           onQuit={() => void quitRetinue()}
+          trailing={platform.updater ? <UpdateArrow /> : undefined}
         />
       </aside>
 
@@ -3004,7 +3039,7 @@ ${fileReferenceText(sentFile)}` : typed
                 const content = item.kind === 'activity-group'
                   ? <ActivitySummaryLine group={item} onDiff={(path, content) => setDiffViewer({ path, content })} />
                   : item.kind === 'message'
-                    ? (team && experiments.search && !team.props.id ? <div id={`conversation-message-${encodeURIComponent(item.id)}`}>{team}</div> : team) ?? <MessageItem id={`conversation-message-${encodeURIComponent(item.id)}`} message={item.value!} accent={accent} agentName={agentName} avatar={activeSelectedAgent ? <BlobCanvas decorative color={accent} size={36} look={agentLook(activeSelectedAgent)} label={agentName} /> : undefined} showAvatar={!isUserMessage(item.value) && (index === 0 || isPreviousItemNonMessageOrUser(groupedConversationItems, index))} mood={index === lastAgentIndex ? selectedMood : 'idle'} agents={agents} onOpenReference={openSideConversation} sourceSessionId={selectedSession?.id ?? ''} sourceMessages={sessionMessages} onJumpToMessage={jumpToMessage} onContextMenu={item.value?.role === 'user' && !sideSession ? (event) => openUserMessageMenu(event, item.value!) : undefined} onToggleReaction={experiments.messageActions && !sideSession && item.value?.id ? (emoji) => { void toggleMessageReaction(selectedSession.id, String(item.value!.id), emoji).catch(() => setError('Could not save your reaction. Try again.')) } : undefined} />
+                    ? (team && experiments.search && !team.props.id ? <div id={`conversation-message-${encodeURIComponent(item.id)}`}>{team}</div> : team) ?? <MessageItem id={`conversation-message-${encodeURIComponent(item.id)}`} message={item.value!} accent={accent} agentName={agentName} avatar={activeSelectedAgent ? <BlobCanvas decorative color={accent} size={36} look={agentLook(activeSelectedAgent)} label={agentName} /> : undefined} showAvatar={!isUserMessage(item.value) && (index === 0 || isPreviousItemNonMessageOrUser(groupedConversationItems, index))} mood={index === lastAgentIndex ? selectedMood : 'idle'} agents={agents} onOpenReference={openSideConversation} sourceSessionId={selectedSession?.id ?? ''} sourceMessages={sessionMessages} onJumpToMessage={jumpToMessage} onContextMenu={item.value?.role === 'user' && !sideSession ? (event) => openUserMessageMenu(event, item.value!) : undefined} onToggleReaction={experiments.messageActions && !sideSession && item.value?.id ? (emoji) => { void toggleMessageReaction(selectedSession.id, String(item.value!.id), emoji).catch(() => setError('Could not save your reaction. Try again.')) } : undefined} onTroubleshoot={managerOf(agents) && activeSelectedAgent && activeSelectedAgent.systemRole !== 'manager' ? (turnId) => void askCeoToTroubleshoot(selectedSession.id, turnId) : undefined} />
                     : <ActivityItem item={item} onDiff={(path, content) => setDiffViewer({ path, content })} runtime={selectedRuntime} onSignedIn={() => void refresh()} />
                 const message = item.kind === 'message' ? item.value : undefined
                 const text = originalMessageText(message?.content ?? message?.text)
@@ -3205,6 +3240,7 @@ ${fileReferenceText(sentFile)}` : typed
       {projectDelete && <ConfirmDialog title={`Delete ${projectDelete.name}?`} body="The project is removed from Retinue, with any approvals saved only for it. Its conversations stay, under No project. The folder on disk is not touched." confirmLabel="Delete project" cancelLabel="Keep it" tone="danger" onConfirm={() => { const project = projectDelete; setProjectDelete(null); const memberIds = agents.filter((agent) => agent.projectId === project.id).map((agent) => agent.id); if (experiments.undo) void removeProject(project, memberIds); else void projectAction('project.delete', { projectId: project.id }) }} onCancel={() => setProjectDelete(null)} />}
       {pendingBlobImport && <ImportBlobDialog blob={pendingBlobImport} runtimes={runtimes} onCancel={() => { setPendingBlobImport(null); restoreCreateFocus() }} onCreate={(runtimeId) => createImportedBlob(pendingBlobImport, runtimeId)} />}
     </main>
+    </PhotoOwnersContext.Provider>
     </>
   )
 }
@@ -3291,7 +3327,7 @@ function UserMessageText({ text, agents, references, onOpenReference }: { text: 
     : <span key={index}><SafeMarkdownInline text={segment.text} onOpenLink={(url) => void openSafeLink(url)} /></span>)}</p>
 }
 
-function MessageItem({ id, message, accent, agentName, avatar, showAvatar, mood, agents = [], onOpenReference, sourceSessionId, sourceMessages = [], onJumpToMessage, onContextMenu, onToggleReaction }: { id: string; message: Record<string, unknown>; accent: string; agentName: string; avatar?: ReactNode; showAvatar: boolean; mood: BlobMood; agents?: readonly Agent[]; onOpenReference?: (sessionId: string) => void; sourceSessionId: string; sourceMessages?: Array<Record<string, unknown>>; onJumpToMessage: (sessionId: string, messageId: string) => void; onContextMenu?: (event: ReactMouseEvent<HTMLElement>) => void; onToggleReaction?: (emoji: string) => void }) {
+function MessageItem({ id, message, accent, agentName, avatar, showAvatar, mood, agents = [], onOpenReference, sourceSessionId, sourceMessages = [], onJumpToMessage, onContextMenu, onToggleReaction, onTroubleshoot }: { id: string; message: Record<string, unknown>; accent: string; agentName: string; avatar?: ReactNode; showAvatar: boolean; mood: BlobMood; agents?: readonly Agent[]; onOpenReference?: (sessionId: string) => void; sourceSessionId: string; sourceMessages?: Array<Record<string, unknown>>; onJumpToMessage: (sessionId: string, messageId: string) => void; onContextMenu?: (event: ReactMouseEvent<HTMLElement>) => void; onToggleReaction?: (emoji: string) => void; onTroubleshoot?: (turnId: string | null) => void }) {
   const isUser = isUserMessage(message)
   const via = isUser ? outsideSender(message) : null
   const role = String(message.role ?? message.kind ?? 'assistant').toLowerCase()
@@ -3316,7 +3352,7 @@ function MessageItem({ id, message, accent, agentName, avatar, showAvatar, mood,
       {isUser && via && <div className="message-via"><Cable size={11} aria-hidden="true" />via {via}</div>}
       {isUser && <MessageAnnotations meta={message.meta} />}
       {isUser && <MessageAttachments attachments={message.attachments} sessionId={sourceSessionId} messageId={typeof message.id === 'string' ? message.id : undefined} />}
-      <div className="message-bubble-wrap">{isTool ? <div className={`activity-card ${isError ? 'error' : ''}`}><div className="activity-heading"><Terminal size={14} /><strong>{labelize(toolName ?? eventType.replace('.', ' '))}</strong><span>{isError ? 'Failed' : formatUnknownSafe(String(message.status ?? ''), 'Activity')}</span></div><p>{text || (typeof message.command === 'string' ? message.command : typeof message.summary === 'string' ? message.summary : 'Details are unavailable for this event.')}</p>{typeof message.path === 'string' && <code>{message.path}</code>}</div> : text || !(isUser && Array.isArray(message.attachments) && message.attachments.length) ? <div className={`message-bubble ${isError ? 'message-error' : ''}`}>{isUser && text ? <UserMessageText text={text} agents={agents} references={Array.isArray(message.references) ? message.references as Array<{ id: string; title: string }> : null} onOpenReference={onOpenReference} /> : <SafeMessageText text={text || 'Message content unavailable.'} />}</div> : null}
+      <div className="message-bubble-wrap">{isTool ? <div className={`activity-card ${isError ? 'error' : ''}`}><div className="activity-heading"><Terminal size={14} /><strong>{labelize(toolName ?? eventType.replace('.', ' '))}</strong><span>{isError ? 'Failed' : formatUnknownSafe(String(message.status ?? ''), 'Activity')}</span></div><p>{text || (typeof message.command === 'string' ? message.command : typeof message.summary === 'string' ? message.summary : 'Details are unavailable for this event.')}</p>{typeof message.path === 'string' && <code>{message.path}</code>}</div> : text || !(isUser && Array.isArray(message.attachments) && message.attachments.length) ? <div className={`message-bubble ${isError ? 'message-error' : ''}`}>{isError && onTroubleshoot && <button type="button" className="troubleshoot-button" title="Open a conversation with the CEO about this error" onClick={() => onTroubleshoot(typeof message.turnId === 'string' ? message.turnId : null)}><Stethoscope size={13} aria-hidden="true" />Ask the CEO to troubleshoot</button>}{isUser && text ? <UserMessageText text={text} agents={agents} references={Array.isArray(message.references) ? message.references as Array<{ id: string; title: string }> : null} onOpenReference={onOpenReference} /> : <SafeMessageText text={text || 'Message content unavailable.'} />}</div> : null}
       <MessageReactionBadges reactions={message.reactions} onRemove={onToggleReaction} /></div>
       {stamp && <div className="message-time">{stamp}</div>}
     </div>

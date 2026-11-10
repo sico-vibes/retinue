@@ -485,6 +485,13 @@
       "params": null
     },
     {
+      "method": "manager.troubleshoot",
+      "class": "never",
+      "minTier": null,
+      "why": "Starting a CEO investigation of a failed turn is a desktop action; the report is built on the host.",
+      "params": null
+    },
+    {
       "method": "manager.ensure",
       "class": "never",
       "minTier": null,

@@ -1,0 +1,60 @@
+/* OpenUI replies (ui/openui): Retinue's own surfaces, flat, rounded rectangles, status colour only on tone. */
+.oui-block { display: grid; gap: 6px; margin: 6px 0; }
+.oui-surface { padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-lg, 12px); background: var(--surface-raised); }
+.oui-stack, .oui-card-body, .oui-tab-panel, .oui-form { display: grid; gap: 10px; min-width: 0; }
+.oui-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.oui-grid { display: grid; grid-template-columns: repeat(var(--oui-columns, 3), minmax(0, 1fr)); gap: 10px; }
+@container (max-width: 520px) { .oui-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.oui-heading { margin: 2px 0 0; color: var(--text-1); font-weight: 600; line-height: 1.3; }
+h2.oui-heading { font-size: 17px; } h3.oui-heading { font-size: 15px; } h4.oui-heading { font-size: 13.5px; }
+.oui-text { margin: 0; color: var(--text-1); line-height: 1.55; }
+.oui-text.muted { color: var(--text-2); }
+.oui-card { min-width: 0; border: 1px solid var(--line); border-radius: var(--radius-md, 10px); background: var(--surface-subtle, transparent); overflow: hidden; }
+.oui-card > header { display: grid; gap: 2px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.oui-card > header strong { font-size: 13.5px; font-weight: 600; }
+.oui-card > header span { color: var(--text-3); font-size: var(--fs-xs); }
+.oui-card-body { padding: 12px; }
+.oui-stat { display: grid; gap: 2px; min-width: 120px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md, 10px); }
+.oui-stat-label { color: var(--text-2); font-size: var(--fs-xs); }
+.oui-stat-value { font-size: 22px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+.oui-stat-change { font-size: var(--fs-xs); }
+.oui-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: var(--fs-xs); background: var(--surface-selected); }
+.oui-tone-neutral { color: var(--text-2); }
+.oui-tone-info { color: var(--status-info); }
+.oui-tone-good { color: var(--status-success); }
+.oui-tone-warning { color: var(--status-working); }
+.oui-tone-bad { color: var(--status-danger); }
+.oui-progress { display: grid; gap: 4px; }
+.oui-progress-head { display: flex; justify-content: space-between; font-size: var(--fs-xs); color: var(--text-2); }
+.oui-progress-track { height: 6px; border-radius: 3px; background: var(--surface-selected); overflow: hidden; }
+.oui-progress-fill { display: block; height: 100%; border-radius: 3px; background: currentColor; }
+.oui-progress-fill.oui-tone-neutral { color: var(--text-1); }
+.oui-callout { display: grid; gap: 2px; padding: 10px 12px; border-left: 3px solid currentColor; border-radius: 8px; background: var(--surface-selected); }
+.oui-callout span { color: var(--text-1); }
+.oui-divider { width: 100%; margin: 2px 0; border: 0; border-top: 1px solid var(--line); }
+.oui-list { margin: 0; padding-left: 20px; display: grid; gap: 4px; }
+.oui-code { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--surface-input); font: 12px/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.oui-button { height: 30px; padding: 0 12px; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: var(--radius-sm, 8px); background: transparent; font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.oui-button:hover { background: var(--surface-hover); }
+.oui-button.primary { color: var(--text-inverse, #111); border-color: transparent; background: var(--text-1); }
+.oui-button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.oui-field { display: grid; gap: 4px; font-size: var(--fs-sm); color: var(--text-2); }
+.oui-check { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); }
+.oui-form-actions { display: flex; justify-content: flex-end; }
+.oui-tabs { display: grid; gap: 10px; }
+.oui-tab-list { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.oui-tab-list button { padding: 6px 10px; color: var(--text-2); border: 0; border-bottom: 2px solid transparent; background: transparent; font: inherit; font-size: var(--fs-sm); cursor: pointer; }
+.oui-tab-list button[aria-selected="true"] { color: var(--text-1); border-bottom-color: var(--text-1); }
+.oui-invalid { margin: 0; color: var(--text-3); font-size: var(--fs-xs); }
+/* An OpenUI view uses the whole conversation column, not a chat bubble's width (owner, 9 November 2026). */
+.message-content:has(.oui-block) { width: 100%; max-width: min(56rem, 100%); }
+.message-bubble:has(.oui-block) { width: 100%; padding: 10px 0 2px; background: transparent; }
+.message-bubble:has(.oui-block) > .safe-markdown > p:first-child { margin-top: 0; }
+.oui-surface { padding: 16px; container-type: inline-size; }
+.oui-stat { flex: 1 1 140px; }
+.oui-row > .oui-badge { align-self: flex-start; }
+.oui-field { color: var(--text-2); }
+.oui-field .select-trigger { width: 100%; }
+.oui-form .text-input { width: 100%; }
+.message-action-shell:has(.oui-block), .message-row:has(.oui-block) { width: 100%; flex: 1 1 auto; }
+.message-content:has(.oui-block) > .message-bubble-wrap { width: 100%; justify-self: stretch; }

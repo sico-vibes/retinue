@@ -239,3 +239,5 @@
 .mention { color: color-mix(in srgb, var(--mention) 25%, var(--text-1)); }
 .side-header-pair b { color: color-mix(in srgb, var(--chip-accent, var(--text-1)) 25%, var(--text-1)); }
 .team-row .role-chip { display: none; }
+/* The CEO's star sits after the name, so it never covers the coding agent's badge (owner, 9 November 2026). */
+.leader-star { flex: 0 0 auto; display: inline-grid; place-items: center; margin-left: 4px; color: #f2a13a; }

@@ -345,3 +345,4 @@ fieldset.blob-settings-body + .settings-group { border-top: 1px solid var(--line
 .look-section-label { font-size: var(--fs-xs); font-weight: 500; letter-spacing: 0; text-transform: none; }
 .haze-look-editor .look-moods { display: none; }
 .catalog-refresh-action small { display: none; }
+

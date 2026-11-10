@@ -1,5 +1,6 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
 import { VisualReply, visualFence } from './VisualReply'
+const OpenUiBlock = lazy(() => import('./openui/OpenUiBlock').then((module) => ({ default: module.OpenUiBlock })))
 import { Copy, Github, Paperclip } from 'lucide-react'
 import { RichChart } from './RichChart'
 import { RichTable } from './RichTable'
@@ -147,6 +148,7 @@ function FencedBlock({ language, code }: { language: string; code: string }) {
     if (tag === 'json') return /^\s*\[/.test(code) ? { kind: 'dual', result: tableFromJson(code), initial: 'code' } : null
     return null
   }, [tag, code])
+  if (tag === 'openui') return <Suspense fallback={<CodeBlock language={language} code={code} />}><OpenUiBlock code={code} renderCode={() => <CodeBlock language={language} code={code} />} /></Suspense>
   if (!parsed) {
     const visual = visualFence(language, code)
     return visual ? <VisualReply code={code} start={visual.start} renderCode={() => <CodeBlock language={language} code={code} />} /> : <CodeBlock language={language} code={code} />

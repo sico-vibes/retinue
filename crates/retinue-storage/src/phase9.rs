@@ -40,7 +40,46 @@ pub(super) fn ensure_phase9_schema(c: &Connection) -> Result<(), StorageError> {
         c.execute_batch("ALTER TABLE agents ADD COLUMN preset_id TEXT")?;
     }
     c.execute_batch("CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_preset ON agents(preset_id) WHERE preset_id IS NOT NULL;")?;
+    // The employee's personality: `{id, prompt}` as JSON text, or NULL for none.
+    let has_personality: bool = c.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('agents') WHERE name='personality')",
+        [],
+        |r| r.get(0),
+    )?;
+    if !has_personality {
+        c.execute_batch("ALTER TABLE agents ADD COLUMN personality TEXT")?;
+    }
     Ok(())
+}
+
+/// Longest personality prompt, in characters.
+pub(super) const MAX_PERSONALITY_CHARS: usize = 2000;
+
+/// A personality is `{id, prompt}`: an id of lowercase letters, digits and
+/// hyphens (a preset id or `custom`) and a prompt of at most 2,000 characters
+/// with no NUL. Whether the id is one of the shipped presets is the daemon's
+/// check; storage only keeps the shape sane.
+pub(super) fn valid_personality(value: &Value) -> bool {
+    let Some(object) = value.as_object() else { return false };
+    if object.keys().any(|key| key != "id" && key != "prompt") {
+        return false;
+    }
+    let id_ok = object.get("id").and_then(Value::as_str).is_some_and(|id| {
+        !id.is_empty() && id.len() <= 40 && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+    });
+    let prompt_ok = object
+        .get("prompt")
+        .and_then(Value::as_str)
+        .is_some_and(|prompt| !prompt.trim().is_empty() && prompt.trim().chars().count() <= MAX_PERSONALITY_CHARS && !prompt.contains('\0'));
+    id_ok && prompt_ok
+}
+
+/// The stored form: trimmed prompt, or NULL.
+pub(super) fn personality_column(value: &Value) -> Option<String> {
+    if value.is_null() {
+        return None;
+    }
+    Some(json!({"id": value["id"], "prompt": value["prompt"].as_str().unwrap_or("").trim()}).to_string())
 }
 
 /// The one-time data steps: seed the memberships an existing install already
@@ -274,6 +313,30 @@ impl Storage {
             Some(id) => self.agent_get(&id).map(Some),
             None => Ok(None),
         }
+    }
+
+    /// Sets (an `{id, prompt}` object) or clears (null) an employee's
+    /// personality, and returns the updated bot with the events to broadcast.
+    pub fn agent_set_personality(&self, id: &str, personality: &Value) -> Result<(Value, Vec<Value>), StorageError> {
+        super::validate_agent_id(id)?;
+        if !personality.is_null() && !valid_personality(personality) {
+            return Err(StorageError::InvalidAgent);
+        }
+        let mut c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let old = super::agent_read(&tx, id)?;
+        if old["archived"] == true {
+            return Err(StorageError::AgentConflict);
+        }
+        let column = personality_column(personality);
+        tx.execute(
+            "UPDATE agents SET personality=?2,updated_at=?3 WHERE id=?1",
+            params![id, column, Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)],
+        )?;
+        let agent = super::agent_read(&tx, id)?;
+        let event = super::push_agent_event(&tx, "updated", &agent)?;
+        tx.commit()?;
+        Ok((agent, vec![event]))
     }
 
     /// Records which catalogue employee a bot was made from. `None` clears it.

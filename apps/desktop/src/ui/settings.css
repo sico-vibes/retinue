@@ -207,9 +207,9 @@
 .outside-consent-file pre { max-height: 220px; margin: 8px 0 0; padding: 10px; overflow: auto; color: var(--text-2); border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle); font: 400 var(--fs-2xs) var(--font-mono, ui-monospace, monospace); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* Wave 14: Settings › Connections, the Retinue MCP. */
-.connect-command { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
-.connect-command code { flex: 1 1 auto; min-width: 0; padding: 8px 10px; color: var(--text-1); border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle); font: 11.5px/1.5 var(--font-mono); overflow-wrap: anywhere; user-select: text; }
-.connect-command .ghost-button { flex: none; }
+.connect-command { position: relative; display: flex; min-width: 0; }
+.connect-command code { flex: 1 1 auto; min-width: 0; padding: 8px 38px 8px 10px; color: var(--text-1); border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle); font: 11.5px/1.5 var(--font-mono); overflow-wrap: anywhere; user-select: text; }
+.connect-command-copy { position: absolute; top: 5px; right: 5px; }
 .connect-consent .approval-choices { margin: 4px 0 2px; }
 
 /* Phase 1A: an Always rule shows where it applies. */
@@ -231,3 +231,4 @@
 .settings-sheet:has(.settings-subtabs) .settings-content > :is(.settings-group, .remote-page, .appearance-page):first-child,
 .settings-sheet:has(.settings-subtabs) .settings-content > div:first-child > .settings-group:first-child { margin-top: 0; }
 .settings-content > .settings-intro:first-child { margin-top: 0; }
+.runtime-entry.is-off .runtime-entry-head { opacity: .55; }

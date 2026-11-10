@@ -393,6 +393,13 @@ fn short_reason(raw: &str) -> String {
     text.chars().take(200).collect()
 }
 
+/// The generated-view paragraph. The language guide itself is `openui_guide.md`,
+/// served by the `ui_guide` tool, so this stays short.
+const OPENUI_INSTRUCTIONS: &str = "Interactive views. You may answer with an interactive view in a ```openui block (cards, stats, tables, charts, lists, tabs and buttons that reply), only when it genuinely helps. Call the `ui_guide` tool first for the exact components and syntax. Keep a one-line text summary outside the block, and never invent data.";
+
+/// The OpenUI Lang guide for bots, read by the `ui_guide` tool and the external MCP.
+pub(crate) const OPENUI_GUIDE: &str = include_str!("openui_guide.md");
+
 /// The chart and table block schemas, appended to every bot's instructions.
 ///
 /// This text is the contract with the renderer in
@@ -494,6 +501,7 @@ pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, works
     // for charts and tables sits after the delegation lines and before the
     // side-conversation block.
     lines.push(CHART_TABLE_INSTRUCTIONS.into());
+    lines.push(OPENUI_INSTRUCTIONS.into());
     if link["kind"] == "side" {
         let peer = link["peerName"].as_str().unwrap_or(noun.as_str());
         lines.push(String::new());
@@ -509,6 +517,14 @@ pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, works
     if link["kind"] == "automation" {
         lines.push(String::new());
         lines.push("This conversation is a scheduled run that nobody is watching live. If the check found nothing worth the user's attention, reply exactly `(pass)`.".into());
+    }
+    // The employee's personality is the last block, under its own heading, so
+    // the lines above never read as part of it. The CEO has none unless the
+    // owner gave it one.
+    if let Some(prompt) = agent["personality"]["prompt"].as_str().map(|prompt| prompt.replace("</retinue_team>", "")).map(|prompt| prompt.trim().to_owned()).filter(|prompt| !prompt.is_empty()) {
+        lines.push(String::new());
+        lines.push("## How you communicate".into());
+        lines.push(prompt);
     }
     format!("<retinue_team>\n{}\n</retinue_team>", lines.join("\n"))
 }
@@ -548,6 +564,7 @@ fn tools(is_automation: bool, memory_enabled: bool, ask_user: bool, is_manager: 
     // The shared skills pool is read-only, so every bot gets it, including
     // automation runs (the index is what tells a bot the pool exists).
     let skill_tools = crate::skills::tool_schemas();
+    let ui_guide = json!({"name":"ui_guide","description":"The guide to answering with an interactive view in an ```openui block: the components, their syntax and examples. Read it before you write one.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}});
     if is_automation {
         let mut list = memory;
         list.extend(skill_tools);
@@ -560,6 +577,7 @@ fn tools(is_automation: bool, memory_enabled: bool, ask_user: bool, is_manager: 
         json!({"name":"schedule_task","description":format!("Propose a scheduled task for your {noun}. It is created disabled and will never run until the user approves it in Retinue. Use this only when the user asks for something recurring or at a set time."),"inputSchema":{"type":"object","properties":{"name":{"type":"string","description":"A short title, 1 to 80 characters."},"prompt":{"type":"string","description":"The instruction to run unattended when the task fires."},"when":{"type":"object","description":"A schedule object: {\"kind\":\"once\",\"at\":\"<RFC3339>\"} or {\"kind\":\"cron\",\"cron\":\"m h dom mon dow\",\"timezone\":\"Area/City\"}."}},"required":["name","prompt","when"],"additionalProperties":false}}),
         json!({"name":"list_my_schedules","description":format!("List this {noun}'s scheduled tasks, whether each is enabled, and when it next runs."),"inputSchema":{"type":"object","properties":{},"additionalProperties":false}}),
     ];
+    list.push(ui_guide);
     // Phase 8: a sub-bot is never offered the fleet tools.
     if subbots { list.extend(crate::subbots::tool_schemas(noun)); }
     if is_manager {
@@ -568,6 +586,7 @@ fn tools(is_automation: bool, memory_enabled: bool, ask_user: bool, is_manager: 
         list.extend(manager_tool_schemas());
         list.extend(crate::proposals::tool_schemas());
         list.extend(crate::knowledge::tool_schemas());
+        list.push(crate::troubleshoot::tool_schema());
         // The board draft tool: creates only, never assigns or dispatches.
         list.push(json!({"name":"create_task","description":format!("Create an unassigned task on the user's task board. It is a draft: it has no bot, does not run and cannot be scheduled. The user decides which {noun} gets it by dragging it in Retinue. Use it when the user asks for work to be tracked on the board; use message_blob for ordinary delegation."),"inputSchema":{"type":"object","properties":{"title":{"type":"string","description":"A short title, 1 to 120 characters."},"brief":{"type":"string","description":"The full brief: goal, context, paths and constraints."},"doneGoal":{"type":"string","description":"What must be true for the task to count as done."},"reportBack":{"type":"string","description":"What the bot should report when it stops."},"projectId":{"type":"string","description":"The project this task belongs to (optional)."},"parentTaskId":{"type":"string","description":"The parent task, when this is a follow-up (optional)."},"images":{"description":"Images the user attached in this conversation that the task needs: a list of their numbers (1 is the first image the user sent here, 2 the next, and so on) or the word all. Optional.","anyOf":[{"type":"array","items":{"type":"integer","minimum":1},"maxItems":8},{"type":"string","enum":["all"]}]}},"required":["title","brief","doneGoal","reportBack"],"additionalProperties":false}}));
         for tool in &mut list {
@@ -677,6 +696,9 @@ pub async fn mcp_rpc(st: &AppState, session_id: &str, method: &str, params: &Val
                 "memory_write" if memory_enabled => crate::memory::tool_write(st, session_id, args).await,
                 "memory_update" if memory_enabled => crate::memory::tool_update(st, session_id, args).await,
                 "memory_forget" if memory_enabled => crate::memory::tool_forget(st, session_id, args).await,
+                "ui_guide" => Ok(OPENUI_GUIDE.to_owned()),
+                "open_issue" if is_manager => crate::troubleshoot::open_issue_tool(st, session_id, args).await,
+                "open_issue" => Err(non_manager_error(st)),
                 "list_skills" => crate::skills::tool_list(st, session_id).await,
                 "load_skill" => crate::skills::tool_load(st, session_id, args).await,
                 "read_skill_file" => crate::skills::tool_read_file(st, session_id, args).await,
@@ -1687,15 +1709,38 @@ pub(crate) async fn auto_hire(st: &AppState, agent_id: &str, project_id: &str) {
     }
 }
 
-/// `project.hire {projectId, agentId?, presetId?, runtimeId?, model?}`.
+/// `project.hire {projectId?, agentId?, presetId?, runtimeId?, model?, name?,
+/// photo?, personality?, skills?}`.
 ///
 /// Exactly one of `agentId` and `presetId`. A preset that already made a bot
 /// reuses it, so hiring Ada into two projects gives two memberships and one
 /// bot. Hiring is idempotent: hiring someone already in the project changes
 /// nothing and returns the row it already had.
+///
+/// `projectId` is optional (9 November 2026): without it the employee is
+/// hired into no project (made, or reused, and given no membership; `member`
+/// is null). The options below apply only when a preset makes a new employee;
+/// a preset that already made one is reused as it is.
+///
+/// - `name`: 1 to 40 characters, trimmed; a taken name gets " 2", " 3".
+/// - `photo`: `photo-NN` or an image data URL (the `look.photo` rules); a photo
+///   another employee wears is a `conflict`. `""` hires without a photo. When
+///   omitted the preset's photo is used, or none if another employee wears it.
+/// - `personality`: `{id, prompt?}` (an id from `personalities.json` or
+///   `custom`; the prompt defaults to the shipped one, at most 2,000
+///   characters), or null for none. Default: the preset's personality.
+/// - `skills`: library skill ids (at most 15), installed and switched on for
+///   this employee only. Default: the preset's default list.
 pub(crate) async fn project_hire(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
-    let project_id = required_project_id(p)?.to_owned();
-    st.db.project_get(&project_id).map_err(|_| derr("not_found", "That project no longer exists.", StatusCode::NOT_FOUND))?;
+    let project_id = match p.get("projectId") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(id)) if id.is_empty() => None,
+        Some(Value::String(id)) => Some(id.clone()),
+        Some(_) => return Err(derr("invalid_argument", "projectId must be a project id.", StatusCode::BAD_REQUEST)),
+    };
+    if let Some(project_id) = project_id.as_deref() {
+        st.db.project_get(project_id).map_err(|_| derr("not_found", "That project no longer exists.", StatusCode::NOT_FOUND))?;
+    }
     let agent_id = p["agentId"].as_str().filter(|id| !id.is_empty());
     let preset_id = p["presetId"].as_str().filter(|id| !id.is_empty());
     match (agent_id, preset_id) {
@@ -1713,9 +1758,85 @@ pub(crate) async fn project_hire(st: &AppState, p: &Value) -> Result<Value, Disp
         (None, Some(preset_id)) => hire_from_preset(st, preset_id, p).await?,
         _ => unreachable!("exactly one of agentId and presetId is present"),
     };
-    let (member, added) = st.db.project_add_member(&project_id, &agent_id).map_err(agent_error)?;
-    if added { emit_members_changed(st, &project_id).await; }
-    Ok(json!({"agentId": agent_id, "created": created, "member": member}))
+    let member = match project_id.as_deref() {
+        Some(project_id) => {
+            let (member, added) = st.db.project_add_member(project_id, &agent_id).map_err(agent_error)?;
+            if added { emit_members_changed(st, project_id).await; }
+            member
+        }
+        None => Value::Null,
+    };
+    let agent = st.db.agent_get(&agent_id).map_err(agent_error)?;
+    Ok(json!({"agentId": agent_id, "created": created, "member": member, "agent": agent}))
+}
+
+/// The hire options of one preset hire, checked before anything is made.
+struct HireOptions {
+    name: String,
+    look: Value,
+    personality: Value,
+    skills: Vec<String>,
+}
+
+fn invalid(message: &str) -> DispatchError {
+    derr("invalid_argument", message, StatusCode::BAD_REQUEST)
+}
+
+/// Whether a live employee already wears `photo`.
+fn photo_worn(st: &AppState, photo: &str) -> Result<bool, DispatchError> {
+    let agents = st.db.agent_list(false, None).map_err(agent_error)?;
+    Ok(agents.iter().any(|agent| agent["look"]["photo"].as_str() == Some(photo)))
+}
+
+fn hire_options(st: &AppState, preset: &crate::presets::Preset, p: &Value) -> Result<HireOptions, DispatchError> {
+    let name = match p.get("name") {
+        None | Some(Value::Null) => preset.nickname.clone(),
+        Some(Value::String(text)) => {
+            let text = text.trim();
+            if text.is_empty() || text.chars().count() > 40 { return Err(invalid("name must be 1 to 40 characters.")); }
+            text.to_owned()
+        }
+        Some(_) => return Err(invalid("name must be text.")),
+    };
+    let mut look = preset.look();
+    match p.get("photo") {
+        None | Some(Value::Null) => {
+            if photo_worn(st, &preset.photo)? { look.as_object_mut().map(|object| object.remove("photo")); }
+        }
+        Some(Value::String(text)) if text.trim().is_empty() => { look.as_object_mut().map(|object| object.remove("photo")); }
+        Some(Value::String(text)) => {
+            let photo = text.trim().to_owned();
+            look["photo"] = json!(photo);
+            if !retinue_storage::agent_accepts_preset(&json!({"look": look})) { return Err(invalid("photo must be a shipped photo (photo-NN) or a small PNG, JPEG or WebP picture.")); }
+            if photo_worn(st, &photo)? { return Err(derr("conflict", "Another employee already wears that photo.", StatusCode::CONFLICT)); }
+        }
+        Some(_) => return Err(invalid("photo must be text.")),
+    }
+    let personality = match p.get("personality") {
+        Some(value) => crate::presets::personality_value(value).map_err(|message| invalid(&message))?,
+        None if preset.personality.is_empty() => Value::Null,
+        None => crate::presets::personality_value(&json!({"id": preset.personality})).map_err(|message| invalid(&message))?,
+    };
+    let skills = match p.get("skills") {
+        None | Some(Value::Null) => preset.skills.default.iter().filter(|id| crate::skill_library::get(id).is_some()).cloned().collect::<Vec<_>>(),
+        Some(Value::Array(items)) => {
+            let mut ids: Vec<String> = Vec::new();
+            for item in items {
+                let id = item.as_str().map(str::trim).filter(|id| !id.is_empty()).ok_or_else(|| invalid("skills must be a list of skill ids."))?;
+                if crate::skill_library::get(id).is_none() { return Err(invalid(&format!("There is no library skill called {id}."))); }
+                if !ids.iter().any(|known| known == id) { ids.push(id.to_owned()); }
+            }
+            if ids.len() > crate::skill_library::MAX_HIRE_SKILLS { return Err(invalid(&format!("An employee can start with at most {} skills.", crate::skill_library::MAX_HIRE_SKILLS))); }
+            ids
+        }
+        Some(_) => return Err(invalid("skills must be a list of skill ids.")),
+    };
+    Ok(HireOptions { name, look, personality, skills })
+}
+
+/// "Ada", then "Ada 2", "Ada 3".
+fn label_for(base: &str, attempt: usize) -> String {
+    if attempt == 1 { base.to_owned() } else { format!("{base} {attempt}") }
 }
 
 /// The bot made from a preset: the one that already exists, or a new employee.
@@ -1739,30 +1860,42 @@ async fn hire_from_preset(st: &AppState, preset_id: &str, p: &Value) -> Result<(
         let runtime_id = first.and_then(|runtime| runtime["id"].as_str()).ok_or_else(|| derr("conflict", "No coding agent is installed, so a new employee cannot start yet.", StatusCode::CONFLICT))?;
         (runtime_id.to_owned(), Value::Null)
     };
-    let base = json!({
+    // `hire_options` drops a preset photo another employee already wears.
+    let options = hire_options(st, preset, p)?;
+    // The chosen skills go into the pool first: a failure here leaves no
+    // half-made employee behind.
+    let installed = crate::skill_library::install(st, &options.skills).await.map_err(|message| derr("internal", &message, StatusCode::INTERNAL_SERVER_ERROR))?;
+    let mut base = json!({
         "runtimeId": runtime_id,
         "model": model,
         "role": preset.role,
         "description": preset.description,
         "instructions": preset.instructions(),
         "color": preset.color,
-        "look": preset.look(),
+        "look": options.look,
         "approvalMode": "ask",
     });
+    if !options.personality.is_null() { base["personality"] = options.personality.clone(); }
+    // The effort the owner chose in the hire dialog (9 November 2026); the usual agent checks apply.
+    if let Some(thinking) = p["thinking"].as_str().filter(|value| !value.is_empty()) { base["thinking"] = json!(thinking); }
     // A taken name gets " 2", " 3" and so on, so two presets of the same
     // employee can be hired side by side.
+    let taken = st.db.agent_list(false, None).map_err(agent_error)?.iter().filter_map(|agent| agent["name"].as_str().map(|name| name.trim().to_lowercase())).collect::<std::collections::HashSet<_>>();
     let mut attempt = 1;
+    while taken.contains(&label_for(&options.name, attempt).to_lowercase()) { attempt += 1; }
+    let first = attempt;
     let agent = loop {
-        let name = if attempt == 1 { preset.nickname.clone() } else { format!("{} {attempt}", preset.nickname) };
         let mut fields = base.clone();
-        fields["name"] = json!(name);
+        fields["name"] = json!(label_for(&options.name, attempt));
         match crate::agent_create_from_rpc(st, fields).await {
             Ok(agent) => break agent,
-            Err(error) if error.1.code == "conflict" && attempt < 50 => { attempt += 1; }
+            // Only a name taken since the check above is worth another try.
+            Err(error) if error.1.code == "conflict" && attempt < first + 3 => { attempt += 1; }
             Err(error) => return Err(error),
         }
     };
     let id = agent["id"].as_str().unwrap_or("").to_owned();
+    crate::skill_library::attach(st, &id, &installed).await.map_err(|message| derr("internal", &message, StatusCode::INTERNAL_SERVER_ERROR))?;
     st.db.agent_set_preset(&id, Some(preset_id)).map_err(agent_error)?;
     if !preset.tags.is_empty() {
         let (_agent, events) = st.db.agent_set_team(&id, &json!({"tags": preset.tags})).map_err(agent_error)?;

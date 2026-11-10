@@ -52,7 +52,7 @@
 .team-card-create:focus-visible { box-shadow: var(--focus-ring); }
 
 /* Hire dialog */
-.team-dialog-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: var(--scrim, rgba(0, 0, 0, .32)); animation: team-fade 140ms ease both; }
+.team-dialog-backdrop { position: fixed; inset: 0; z-index: 400; display: grid; place-items: center; background: var(--scrim, rgba(0, 0, 0, .32)); animation: team-fade 140ms ease both; }
 .team-dialog { width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 64px); overflow: auto; display: grid; gap: 14px; padding: 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-md, 14px); background: var(--surface-overlay, var(--surface-1)); box-shadow: var(--shadow-pop); animation: team-rise 180ms cubic-bezier(.2, .7, .2, 1) both; }
 :root[data-style="haze"] .team-dialog { backdrop-filter: blur(28px); }
 .team-dialog-head { display: flex; align-items: center; gap: 12px; }
@@ -91,3 +91,65 @@
 .staff-option > svg { flex: 0 0 auto; margin-top: 1px; color: var(--text-2); }
 .staff-option span { display: grid; gap: 2px; }
 .staff-option small { color: var(--text-3); font-size: var(--fs-xs); line-height: 1.4; }
+
+/* Hire catalogue cards (owner, 9 November 2026): a larger photo and the role's icon drawn big and
+   faded across the card's right half, tinted with the employee's colour. */
+.team-card.hire-card { position: relative; isolation: isolate; overflow: hidden; padding: 16px; gap: 10px; background: color-mix(in srgb, var(--card-tint, #8794a3) 7%, var(--surface-card, transparent)); }
+.team-card.hire-card:hover { background: color-mix(in srgb, var(--card-tint, #8794a3) 12%, var(--surface-hover)); }
+.hire-card-art { position: absolute; z-index: -1; top: -2%; right: -10%; width: 58%; aspect-ratio: 1; color: var(--card-tint, var(--text-2)); opacity: .2; transform: rotate(-10deg); pointer-events: none; -webkit-mask-image: linear-gradient(to left, #000 30%, transparent 95%); mask-image: linear-gradient(to left, #000 30%, transparent 95%); transition: opacity 200ms ease, transform 260ms cubic-bezier(.2, .7, .2, 1); }
+.hire-card-art svg { width: 100%; height: 100%; }
+.team-card.hire-card:hover .hire-card-art { opacity: .3; transform: rotate(-6deg) scale(1.04); }
+.hire-card .team-card-art .profile-photo-clip { box-shadow: 0 0 0 2px color-mix(in srgb, var(--card-tint, #8794a3) 45%, transparent); }
+.hire-card .team-card-copy strong { font-size: 16px; }
+@media (prefers-reduced-motion: reduce) { .hire-card-art { transition: none; } }
+
+/* The hire dialog (owner, 9 November 2026): a tall sheet with a fixed header and footer, sections
+   for who they are, how they talk, what they run on and what they know. Toggles, never checkboxes. */
+.team-dialog.hire-dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 48px); padding: 0; gap: 0; overflow: hidden; grid-template-rows: auto minmax(0, 1fr) auto; }
+.hire-head { position: relative; isolation: isolate; display: flex; align-items: center; gap: 16px; padding: 20px 22px; overflow: hidden; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--hire-tint, #8794a3) 9%, transparent); }
+.hire-head-copy { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.hire-head-copy strong { font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+.hire-head-copy span { color: var(--text-2); font-size: var(--fs-sm); }
+.hire-head-copy .hire-eyebrow { color: var(--text-3); font-size: var(--fs-2xs); text-transform: uppercase; letter-spacing: .06em; }
+.hire-head > .icon-button { align-self: flex-start; }
+.hire-body { overflow: auto; padding: 6px 22px 18px; display: grid; gap: 4px; }
+.hire-section { display: grid; gap: 10px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.hire-section:last-of-type { border-bottom: 0; }
+.hire-section h4 { margin: 0; display: flex; align-items: baseline; gap: 8px; color: var(--text-1); font-size: var(--fs-sm); font-weight: 600; }
+.hire-section h4 small { color: var(--text-3); font-size: var(--fs-xs); font-weight: 400; }
+.hire-name { width: 100%; height: 38px; padding: 0 12px; font-size: var(--fs-md, 14px); }
+.hire-photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 8px; }
+.hire-photo { aspect-ratio: 1; min-width: 0; padding: 4px; display: grid; place-items: center; color: var(--text-2); border: 2px solid transparent; border-radius: 16px; background: transparent; cursor: pointer; transition: background 120ms ease, border-color 120ms ease, transform 140ms ease; }
+.hire-photo:hover { background: var(--surface-hover); transform: translateY(-1px); }
+.hire-photo.on { border-color: color-mix(in srgb, var(--hire-tint, #fff) 60%, var(--line-strong)); background: var(--surface-selected); }
+.hire-photo.upload { border: 1.5px dashed var(--line-strong); }
+.hire-photo img { width: 100%; max-width: 56px; aspect-ratio: 1; border-radius: 50%; object-fit: cover; }
+.hire-photo:focus-visible, .hire-personality:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hire-personalities { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.hire-personality { min-width: 0; min-height: 76px; padding: 12px 6px 10px; display: grid; place-items: center; gap: 6px; color: var(--text-2); border: 1px solid var(--line); border-radius: var(--radius-md, 12px); background: transparent; font: inherit; font-size: var(--fs-xs); cursor: pointer; transition: background 120ms ease, border-color 120ms ease, color 120ms ease; }
+.hire-personality:hover { color: var(--text-1); background: var(--surface-hover); }
+.hire-personality.on { color: var(--text-1); border-color: color-mix(in srgb, var(--hire-tint, #fff) 55%, var(--line-strong)); background: color-mix(in srgb, var(--hire-tint, #fff) 12%, var(--surface-selected)); }
+.hire-personality span { overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.hire-example { display: grid; gap: 8px; padding: 14px; border-radius: var(--radius-md, 12px); background: var(--surface-input, rgb(0 0 0 / .2)); }
+.hire-example-question { justify-self: end; max-width: 85%; margin: 0; padding: 8px 12px; border-radius: 14px; background: var(--bubble-user, var(--surface-selected)); font-size: var(--fs-sm); line-height: 1.5; }
+.hire-example-reply { display: flex; align-items: flex-start; gap: 10px; }
+.hire-example-reply p { max-width: 88%; margin: 0; padding: 8px 12px; border-radius: 14px; background: var(--surface-raised); font-size: var(--fs-sm); line-height: 1.5; white-space: pre-line; }
+.hire-prompt-label { display: grid; gap: 6px; color: var(--text-2); font-size: var(--fs-xs); }
+.hire-prompt-label em { color: var(--text-3); font-style: normal; }
+.hire-prompt { width: 100%; min-height: 96px; padding: 12px 14px; color: var(--text-1); border: 1px solid var(--line); border-radius: var(--radius-md, 10px); background: var(--surface-input, transparent); font: inherit; font-size: var(--fs-sm); line-height: 1.55; resize: vertical; }
+.hire-prompt:focus { outline: none; border-color: var(--line-strong); box-shadow: var(--focus-ring); }
+.hire-brain { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.hire-brain label { min-width: 0; display: grid; gap: 6px; color: var(--text-2); font-size: var(--fs-xs); }
+.hire-brain .select-trigger { width: 100%; }
+.hire-loading { height: 34px; display: flex; align-items: center; padding: 0 10px; color: var(--text-3); border: 1px solid var(--line); border-radius: var(--radius-sm, 8px); font-size: var(--fs-sm); }
+.hire-rows { display: grid; gap: 2px; }
+.hire-row { min-height: 44px; display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--radius-sm, 8px); }
+.hire-row:hover { background: var(--surface-hover); }
+.hire-row.inside { color: var(--text-3); }
+.hire-row-copy { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.hire-row-copy strong { display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); font-weight: 500; }
+.hire-row-copy em, .hire-row-copy small { overflow: hidden; color: var(--text-3); font-size: var(--fs-xs); font-style: normal; text-overflow: ellipsis; white-space: nowrap; }
+.hire-optional { padding: 1px 6px; border-radius: 5px; background: var(--surface-selected); color: var(--text-3); font-size: var(--fs-2xs); font-weight: 400; }
+.hire-hint { margin: 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.45; }
+.hire-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--line); }
+@media (max-width: 640px) { .hire-personalities { grid-template-columns: repeat(3, minmax(0, 1fr)); } .hire-brain { grid-template-columns: 1fr; } }

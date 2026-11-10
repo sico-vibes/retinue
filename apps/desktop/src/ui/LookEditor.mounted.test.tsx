@@ -28,10 +28,18 @@ afterEach(() => { for (const { root, host } of mounted.splice(0)) { act(() => ro
 describe('look editor (profile photos)', () => {
   it('offers no photo, every portrait and an upload, and nothing else', () => {
     const { host } = mount({ shape: 'circle' })
+    // Upload comes first, then No photo, then the portraits, a page at a time (owner, 9 November 2026).
     const options = [...host.querySelectorAll<HTMLButtonElement>('.profile-photo-option')]
-    expect(options[0]?.getAttribute('aria-label')).toBe('No photo')
-    expect(options.filter((option) => option.getAttribute('aria-label')?.startsWith('Profile photo '))).toHaveLength(PROFILE_PHOTOS.length)
-    expect(host.querySelector('[aria-label="Upload a photo"]')).not.toBeNull()
+    expect(options[0]?.getAttribute('aria-label')).toBe('Upload your own photo')
+    expect(options[1]?.getAttribute('aria-label')).toBe('No photo')
+    const seen = new Set<string>()
+    for (let page = 0; page < 20; page += 1) {
+      for (const option of host.querySelectorAll<HTMLButtonElement>('.profile-photo-option')) { const label = option.getAttribute('aria-label') ?? ''; if (label.startsWith('Profile photo ')) seen.add(label) }
+      const next = host.querySelector<HTMLButtonElement>('[aria-label="More photos"]')
+      if (!next || next.disabled) break
+      act(() => next.click())
+    }
+    expect(seen.size).toBe(PROFILE_PHOTOS.length)
     expect(host.querySelector('input[type="file"]')?.getAttribute('accept')).toContain('image/png')
     // The mascot and art controls are gone.
     expect(host.querySelector('.look-style-option, .haze-character-grid, .look-moods')).toBeNull()

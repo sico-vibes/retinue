@@ -4,7 +4,7 @@ import { providerBrand } from './providerBrand'
 import { ArrowLeft, Plus } from 'lucide-react'
 import type { Agent, BoardTask, BoardTaskRun, Project, Runtime } from '../types'
 import { TaskTimeline } from './TaskTimeline'
-import { TaskTree } from './TaskTree'
+import { Columns3 } from 'lucide-react'
 import { rpcFailure } from '../executionContract'
 import { DelegateBoard } from './DelegateBoard'
 import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
@@ -33,7 +33,7 @@ export function TasksView({ agents, projects, runtimes, connected, onBack, onOpe
   const [notice, setNotice] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null)
   const [creating, setCreating] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
-  const [view, setView] = useState<'board' | 'tree' | 'timeline'>('board')
+  const [view, setView] = useState<'board' | 'kanban' | 'timeline'>('board')
   const [runsByTask, setRunsByTask] = useState<Record<string, BoardTaskRun[]>>({})
   const runsKey = board.tasks.filter((task) => task.assigneeAgentId).map((task) => `${task.id}:${task.version}`).join(',')
   useEffect(() => {
@@ -70,14 +70,14 @@ export function TasksView({ agents, projects, runtimes, connected, onBack, onOpe
     <header className="blob-page-header">
       <button ref={backRef} type="button" className="analytics-icon-button" aria-label="Back" title="Back" onClick={onBack}><ArrowLeft size={16} /></button>
       <strong className="blob-page-heading">Tasks</strong>
-      <div className="segmented" role="radiogroup" aria-label="View">{(['board', 'tree', 'timeline'] as const).map((item) => <button key={item} type="button" role="radio" aria-checked={view === item} className={view === item ? 'on' : undefined} onClick={() => setView(item)}>{item === 'board' ? 'Board' : item === 'tree' ? 'Tree' : 'Timeline'}</button>)}</div>
+      <div className="segmented" role="radiogroup" aria-label="View">{(['board', 'kanban', 'timeline'] as const).map((item) => <button key={item} type="button" role="radio" aria-checked={view === item} className={view === item ? 'on' : undefined} onClick={() => setView(item)}>{item === 'board' ? 'Board' : item === 'kanban' ? 'Kanban' : 'Timeline'}</button>)}</div>
       <button type="button" className="primary-button small tasks-new" disabled={!connected} onClick={() => setCreating(true)}><Plus size={14} aria-hidden="true" />New task</button>
     </header>
     <div className="tasks-scroll">
       <div className="tasks-column">
         {board.error && <p className="tasks-problem" role="alert">{board.error}</p>}
         <div className="tasks-notice" role="status" aria-live="polite">{notice && <span className={`tasks-notice-text ${notice.tone}`}>{notice.text}</span>}</div>
-        {!board.loaded && !board.error ? <p className="tasks-loading">Loading tasks…</p> : view === 'tree' ? <TaskTree tasks={board.tasks} agents={agents} nowMs={nowMs} onOpen={(task) => setOpenId(task.id)} /> : view === 'timeline' ? <TaskTimeline tasks={board.tasks} runsByTask={runsByTask} agents={agents} nowMs={nowMs} onOpen={(task) => setOpenId(task.id)} /> : <DelegateBoard tasks={board.tasks} agents={agents} projects={projects} nowMs={nowMs} connected={connected} busy={busy} runtimeName={runtimeName} onAssign={(task, agent) => void assign(task, agent)} onOpen={(task) => setOpenId(task.id)} />}
+        {!board.loaded && !board.error ? <p className="tasks-loading">Loading tasks…</p> : view === 'kanban' ? <div className="tasks-coming-soon" role="status"><Columns3 size={30} strokeWidth={1.6} aria-hidden="true" /><strong>Kanban board</strong><span>Coming soon</span></div> : view === 'timeline' ? <TaskTimeline tasks={board.tasks} runsByTask={runsByTask} agents={agents} nowMs={nowMs} onOpen={(task) => setOpenId(task.id)} /> : <DelegateBoard tasks={board.tasks} agents={agents} projects={projects} nowMs={nowMs} connected={connected} busy={busy} runtimeName={runtimeName} onAssign={(task, agent) => void assign(task, agent)} onOpen={(task) => setOpenId(task.id)} />}
       </div>
     </div>
     {creating && <TaskFormDialog task={null} agents={agents} projects={projects} connected={connected} loadImage={board.image} onClose={() => setCreating(false)} onSave={async (input, start) => { const created = await board.create(input); setCreating(false); if (start) await assign(created, start) }} />}

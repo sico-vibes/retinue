@@ -153,6 +153,8 @@ fn exportable_setting(key: &str, value: &Value) -> bool {
         // Consent to read the coding agents' sign-ins never travels: the owner
         // gives it again on the new machine.
         || lower.starts_with("usage.")
+        // Which coding agents are switched off belongs to this machine's installs.
+        || lower.starts_with("runtimes.")
         || lower.starts_with("speech.cloud.consent")
         || lower == "companion.positions"
         // A machine's folder path is the owner's own machine, so it is set again on another one.
@@ -214,6 +216,7 @@ pub(crate) fn export_bot(agent: &Value, runtimes: &[Value]) -> Value {
         "name": agent["name"],
         "description": agent["description"],
         "instructions": agent["instructions"],
+        "personality": agent["personality"],
         "color": agent["color"],
         "outfit": agent["outfit"],
         "look": agent["look"],
@@ -710,6 +713,8 @@ async fn import(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
             "runtimeId": runtime_id,
             "description": bot["description"].as_str().unwrap_or(""),
             "instructions": bot["instructions"].as_str().unwrap_or(""),
+            // An older backup has none, and a malformed one is dropped rather than skipping the bot.
+            "personality": crate::presets::personality_value(&bot["personality"]).unwrap_or(Value::Null),
             "color": bot["color"].as_str().unwrap_or("mint"),
             "outfit": bot["outfit"].as_str().unwrap_or("auto"),
             "look": bot["look"],

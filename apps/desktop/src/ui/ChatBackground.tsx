@@ -6,6 +6,8 @@ import { CHAT_BACKGROUND_OPACITY_MAX, CHAT_BACKGROUND_OPACITY_MIN, chooseChatBac
 import { CHAT_BACKGROUND_EFFECTS, type ChatBackgroundEffect } from './chatBackgroundEffects'
 import { SegmentedControl } from './SegmentedControl'
 import { SettingsGroup, SettingsRow } from './SettingsParts'
+import { AccentPicker } from './AccentPicker'
+import { DEFAULT_HAZE, HAZE_LIMITS, resetHazeTuning, updateHazeTuning, useHazeTuning } from './hazeTuning'
 import './chatBackground.css'
 
 function Layer({ url, effect, opacity, empty, preview = false }: { url: string; effect: ChatBackgroundEffect; opacity: number; empty: boolean; preview?: boolean }) {
@@ -67,5 +69,26 @@ export function ChatBackgroundSettings() {
       <SettingsRow label="Empty chat visibility"><Strength label="Empty chat background visibility" value={prefs.emptyOpacity} onChange={(emptyOpacity) => updateChatBackgroundPrefs({ emptyOpacity })} /></SettingsRow>
       <SettingsRow label="Conversation visibility"><Strength label="Conversation background visibility" value={prefs.sessionOpacity} onChange={(sessionOpacity) => updateChatBackgroundPrefs({ sessionOpacity })} /></SettingsRow>
     </>}
+  </SettingsGroup>
+}
+
+function Slider({ label, value, min, max, onChange, format }: { label: string; value: number; min: number; max: number; onChange: (value: number) => void; format: (value: number) => string }) {
+  return <span className="chat-bg-strength">
+    <input type="range" aria-label={label} min={Math.round(min * 100)} max={Math.round(max * 100)} value={Math.round(value * 100)} onChange={(event) => onChange(Number(event.target.value) / 100)} />
+    <output>{format(value)}</output>
+  </span>
+}
+
+/** Settings › Appearance › Haze: the backdrop's opacity, mist strength, panel shade and colour (owner, 9 November 2026). */
+export function HazeTuningSettings() {
+  const tuning = useHazeTuning()
+  const changed = tuning.opacity !== DEFAULT_HAZE.opacity || tuning.strength !== DEFAULT_HAZE.strength || tuning.shade !== DEFAULT_HAZE.shade || tuning.tint !== DEFAULT_HAZE.tint
+  const percent = (value: number) => `${Math.round(value * 100)}%`
+  return <SettingsGroup title="Haze">
+    <SettingsRow label="Background opacity" hint="Lower lets more of your desktop show through."><Slider label="Haze background opacity" value={tuning.opacity} min={HAZE_LIMITS.opacity[0]} max={HAZE_LIMITS.opacity[1]} format={percent} onChange={(opacity) => updateHazeTuning({ opacity })} /></SettingsRow>
+    <SettingsRow label="Haze strength" hint="How strong the coloured mist is. 0% is a plain background."><Slider label="Haze strength" value={tuning.strength} min={HAZE_LIMITS.strength[0]} max={HAZE_LIMITS.strength[1]} format={percent} onChange={(strength) => updateHazeTuning({ strength })} /></SettingsRow>
+    <SettingsRow label="Shade" hint="Calms the haze with the base colour."><Slider label="Haze shade" value={tuning.shade} min={HAZE_LIMITS.shade[0]} max={HAZE_LIMITS.shade[1]} format={percent} onChange={(shade) => updateHazeTuning({ shade })} /></SettingsRow>
+    <SettingsRow label="Haze colour" hint="Neutral follows your accent colour."><AccentPicker value={tuning.tint} onChange={(tint) => updateHazeTuning({ tint })} /></SettingsRow>
+    <SettingsRow label="Reset the haze"><button type="button" className="secondary-button small" disabled={!changed} onClick={resetHazeTuning}>Reset</button></SettingsRow>
   </SettingsGroup>
 }

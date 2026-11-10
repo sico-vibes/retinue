@@ -501,6 +501,7 @@ pub(crate) fn describe(kind: &str, payload: &Value) -> String {
     match kind {
         "project" if payload["action"] == "update" => format!("update project {}", named(payload, "targetName", "project", "a project")),
         "bot" if payload["action"] == "update" => format!("update bot {}", named(payload, "targetName", "blob", "a bot")),
+        "task" if payload["action"] == "issue" => format!("open a GitHub issue \"{}\"", payload["title"].as_str().unwrap_or("a report")),
         "task" if payload["action"] == "open" => format!("open the conversation \"{}\"", payload["title"].as_str().unwrap_or("a conversation")),
         "project" => format!("create project {}", payload["name"].as_str().unwrap_or("a project")),
         "bot" => format!("create bot {}", payload["name"].as_str().unwrap_or("a bot")),
@@ -552,6 +553,10 @@ async fn apply(st: &AppState, session_id: &str, agent_id: Option<&str>, kind: &s
             // Edited approval payloads face the same role and lock checks.
             manager_of_session(st, session_id).map_err(invalid)?;
             apply_update(st, kind, payload).await
+        }
+        "task" if payload["action"] == "issue" => {
+            manager_of_session(st, session_id).map_err(invalid)?;
+            crate::troubleshoot::apply_issue(st, payload).await
         }
         "task" if payload["action"] == "open" => {
             manager_of_session(st, session_id).map_err(invalid)?;

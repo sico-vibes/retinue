@@ -3,8 +3,7 @@ import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { IDLE_UPDATE_PHASE, type UpdatePhaseState } from '../updatesContract'
-import { UpdateBadge } from './UpdateBadge'
-import { version as installedVersion } from '../../package.json'
+import { UpdateArrow, UpdateBadge } from './UpdateBadge'
 
 const h = vi.hoisted(() => ({
   updatesPhase: vi.fn(),
@@ -189,18 +188,17 @@ describe('update badge', () => {
     await view.settle()
     expect(badge(view.host)?.textContent).toBe('Restart to update')
   })
-  it('shows the target and installed versions in the sidebar even at narrow widths', async () => {
-    vi.stubGlobal('matchMedia', narrowWindow())
+  // The sidebar's ready badge became the profile row's round arrow (owner, 9 November 2026).
+  it('shows a round update arrow in the profile row that installs on click', async () => {
     h.updatesPhase.mockResolvedValue(phase({ phase: 'ready', version: '0.1.0-beta.99' }))
-    const view = mount(<UpdateBadge sidebar />); views.push(view)
+    const sidebar = mount(<UpdateBadge sidebar />); views.push(sidebar)
+    await sidebar.settle()
+    expect(badge(sidebar.host)).toBeNull()
+    const view = mount(<UpdateArrow />); views.push(view)
     await view.settle()
-    const update = badge(view.host) as HTMLButtonElement
-    expect(update.classList.contains('sidebar-update')).toBe(true)
-    expect(update.textContent).toContain('Update to 0.1.0-beta.99')
-    // The installed version is the app's own (package.json), never a literal that every release bump breaks.
-    expect(update.textContent).toContain(`v${installedVersion}`)
-    expect(update.classList.contains('is-compact')).toBe(false)
-    await act(async () => update.click())
+    const arrow = view.host.querySelector<HTMLButtonElement>('[data-update-arrow="ready"]')!
+    expect(arrow.title).toContain('0.1.0-beta.99')
+    await act(async () => arrow.click())
     expect(h.updatesInstall).toHaveBeenCalledOnce()
   })
 

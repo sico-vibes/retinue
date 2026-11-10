@@ -29,6 +29,28 @@ fn run_data_step(db: &Storage) {
     crate::phase9::ensure_phase9_data(&c).unwrap();
 }
 
+#[test]
+fn an_employee_keeps_a_validated_personality() {
+    let db = Storage::open_in_memory().unwrap();
+    runtime(&db);
+    let (created, _) = db.agent_create(&json!({"name":"Pat","runtimeId":"rt-9","personality":{"id":"warm","prompt":"  Be kind.  "}})).unwrap();
+    assert_eq!(created["personality"], json!({"id":"warm","prompt":"Be kind."}));
+    let id = created["id"].as_str().unwrap();
+    assert!(db.agent_create(&json!({"name":"Bad","runtimeId":"rt-9","personality":{"id":"Warm","prompt":"x"}})).is_err(), "ids are lowercase");
+    assert!(db.agent_create(&json!({"name":"Bad2","runtimeId":"rt-9","personality":{"id":"warm","prompt":"x".repeat(2001)}})).is_err());
+    assert!(db.agent_create(&json!({"name":"Bad3","runtimeId":"rt-9","personality":{"id":"warm"}})).is_err(), "a prompt is required in storage");
+    // A plain update leaves it alone; `agent_set_personality` changes and clears it.
+    db.agent_update(id, &json!({"description":"Still Pat."})).unwrap();
+    assert_eq!(db.agent_get(id).unwrap()["personality"]["prompt"], "Be kind.");
+    let (changed, events) = db.agent_set_personality(id, &json!({"id":"custom","prompt":"Be brief."})).unwrap();
+    assert_eq!(changed["personality"], json!({"id":"custom","prompt":"Be brief."}));
+    assert_eq!(events.len(), 1);
+    assert!(db.agent_set_personality(id, &json!({"id":"custom"})).is_err());
+    let (cleared, _) = db.agent_set_personality(id, &Value::Null).unwrap();
+    assert!(cleared["personality"].is_null());
+    assert!(db.agent_list(false, None).unwrap().iter().all(|agent| agent.get("personality").is_some()), "the key is always present");
+}
+
 fn members(db: &Storage, project_id: &str) -> Vec<String> {
     db.project_members(project_id).unwrap().iter().filter_map(|row| row["agentId"].as_str().map(str::to_owned)).collect()
 }

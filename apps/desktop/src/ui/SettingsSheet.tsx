@@ -223,6 +223,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
       setSendShortcut(normalizeSendShortcut(settings['composer.sendShortcut']))
       setBindings(normalizeBindings(settings['shortcuts.bindings']))
       setReadSignIns(settings['usage.readCliSignIns'] === true)
+      setDisabledRuntimes(Array.isArray(settings['runtimes.disabled']) ? (settings['runtimes.disabled'] as unknown[]).filter((item): item is string => typeof item === 'string') : [])
       if (typeof settings['companion.openAtStartup'] === 'boolean') setCompanionOpenAtStartup(settings['companion.openAtStartup'])
       if (typeof settings.closeToTray === 'boolean') setCloseToTrayValue(settings.closeToTray)
       const soundPrefs = soundPrefsFromSettings(settings)
@@ -371,6 +372,16 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
 
   const setCompanion = (visible: boolean) => guarded(async () => { await setCompanionVisibility(visible) })
   const saveSetting = (key: string, value: unknown) => guarded(async () => { await rpc('settings.set', { key, value }) })
+  /** Settings › Coding agents: turn a coding agent off (owner, 9 November 2026). The provider id when it is the only copy, so the daemon skips probing it at startup; else this copy's id. */
+  const [disabledRuntimes, setDisabledRuntimes] = useState<string[]>([])
+  const runtimeOff = (runtime: Runtime) => disabledRuntimes.includes(runtime.id) || (!!runtime.provider && disabledRuntimes.includes(runtime.provider)) || runtime.status === 'disabled'
+  const setRuntimeOff = (runtime: Runtime, off: boolean) => {
+    const only = runtimes.filter((item) => item.provider === runtime.provider).length <= 1
+    const key = only && runtime.provider ? runtime.provider : runtime.id
+    const next = off ? [...new Set([...disabledRuntimes, key])] : disabledRuntimes.filter((item) => item !== runtime.id && item !== runtime.provider)
+    setDisabledRuntimes(next)
+    void saveSetting('runtimes.disabled', next)
+  }
   const applySpeechEngine = async (engine: DictationEngineChoice, consent: boolean) => {
     const failure = await guarded(async () => {
       if (consent !== cloudConsent) {
@@ -696,15 +707,17 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
                 const open = openRuntimes[runtime.id] === true
                 const probe = runtimeProbeDetail(runtime)
                 const owned = agents.filter((agent) => !agent.parentAgentId && agent.runtimeId === runtime.id)
-                return <div className={`runtime-entry ${open ? 'open' : ''}`} key={runtime.id}>
+                const off = runtimeOff(runtime)
+                return <div className={`runtime-entry ${open ? 'open' : ''}${off ? ' is-off' : ''}`} key={runtime.id}>
                   <button type="button" className="settings-row runtime-entry-head" aria-expanded={open} onClick={() => setOpenRuntimes((current) => ({ ...current, [runtime.id]: !open }))}>
                     <ProviderLogo provider={runtime.provider} />
                     <span className="settings-row-copy"><strong>{providerDisplayName(runtime.provider)}</strong><small>{[runtime.version, runtimeAuthSummary(runtime).label].filter(Boolean).join(' · ') || 'Details unavailable'}</small>{probe && <small className="runtime-probe-error">{probe.step}: {probe.message}</small>}</span>
-                    <span className="settings-value">{owned.length === 1 ? `1 ${noun}` : `${owned.length} ${nouns}`}</span>
+                    <span className="settings-value">{off ? 'Turned off' : owned.length === 1 ? `1 ${noun}` : `${owned.length} ${nouns}`}</span>
                     {open ? <ChevronDown size={15} className="row-chevron" aria-hidden="true" /> : <ChevronRight size={15} className="row-chevron" aria-hidden="true" />}
                   </button>
                   {needsSignIn(runtime) && <div className="runtime-sign-in"><SignInHelp provider={runtime.provider} runtimeId={runtime.id} onChecked={() => void onRefresh()} /></div>}
                   {open && <div className="runtime-entry-body">
+                    <SettingsRow label="Use this coding agent" hint={off ? 'Off: Retinue doesn’t check it at startup, count its usage or offer it to employees.' : 'Turn it off to hide it, skip it at startup and leave it out of usage.'}><button type="button" className={`toggle ${off ? '' : 'on'}`} role="switch" aria-checked={!off} aria-label={`Use ${providerDisplayName(runtime.provider)}`} disabled={saving} onClick={() => setRuntimeOff(runtime, !off)}><i /></button></SettingsRow>
                     <dl className="settings-facts">
                       <div><dt>Status</dt><dd>{labelize(runtime.status, 'Unknown')}</dd></div>
                       <div><dt>Sign-in</dt><dd>{runtimeAuthSummary(runtime).label}</dd></div>

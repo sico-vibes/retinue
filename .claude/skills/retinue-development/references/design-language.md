@@ -168,3 +168,15 @@ Hide the Colour control when a premade `char-*` portrait is selected. Show it ag
 - **Assignment controls** (`DelegationGroup.tsx`): Stop (queued: Withdraw), "Stop all" through one `delegation.cancelGroup` call, and "Ask for an update", which only puts a follow-up question in the Manager's message box for the owner to send. A teammate waiting for approval appears in the Manager's chat as an "Approval" or "Question" chip (`UpdateChip`) that only opens the teammate's request.
 - **Stop for assignments** (`DelegationGroup.tsx`): each active assignment row has Stop (queued: Withdraw), confirmed in place; two or more get "Stop all". **Stop and send instead** in the composer status row interrupts the running turn, waits until it has really ended, then sends the box as a fresh message.
 - **Schedules** (`ui/ScheduleOverview.tsx`): read-only rows of automations and scheduled board tasks with next run, last outcome, state, time limit and a link to the last run, on the Manager settings page (everything) and as a "Schedules" card in the conversation rail (the Manager sees all; another bot sees its own and its project's).
+
+## Sidebar and employee polish (owner, 9 November 2026)
+
+- Sidebar avatars are 40px with a status dot at the top left (online green, working blue pulsing, asking amber, failed red, usage limit amber ring, offline grey), ringed in the panel colour; the coding-agent badge at the bottom right is about a third of the photo.
+- The CEO's star sits after the name, never on the photo.
+- The plus button opens Hire an employee / Create your own employee / New project. The Team list ends with "Hire an employee"; the Projects list ends with "New project". No Hire button in the list header.
+- Clicking an employee or conversation in the sidebar leaves any open page (settings, tasks, usage, an employee's page).
+- An available update is a round down-arrow at the right of the profile row; the Remote row has 8px below it before the profile divider.
+- Tasks: Board, Kanban (coming soon placeholder) and Timeline; the tree view is gone.
+- A failed turn offers "Ask the CEO to troubleshoot" on hover.
+- Hire catalogue cards (not the employee page) carry a 76px photo and the role's icon (`roleIcon.ts`) drawn large, faded and tinted with the employee's colour across the card's right half. The employee page header stays plain.
+- The hire dialog is a 720px sheet with a fixed header and footer: name and a paged photo grid (Upload first, taken photos hidden), personalities as a 5-column grid of icon tiles with an example reply under them and the prompt in a padded text box, the coding agent / model / effort as three styled `Select`s with provider logos, then skills and projects as rows with toggles. Never checkboxes; never a native `<select>`. It renders through a portal so the sidebars can't draw over it.

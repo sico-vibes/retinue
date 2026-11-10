@@ -66,17 +66,19 @@
 
 /* The backdrop's colour is the accent (owner, 31 October 2026): with no accent chosen the mist is neutral grey, and with one
    every blob leans towards it, strongest in the blob at the right. The rest of the window stays monochrome. */
-:root[data-style="haze"][data-accent="custom"]:not(.companion-surface):not(.dictation-surface) {
-  --haze-d1: color-mix(in oklab, var(--user-accent) 40%, #8794a3);
-  --haze-d2: color-mix(in oklab, var(--user-accent) 75%, #8d939b);
-  --haze-d3: color-mix(in oklab, var(--user-accent) 55%, #6b7884);
-  --haze-d4: color-mix(in oklab, var(--user-accent) 35%, #b4b8bd);
+:root[data-style="haze"][data-accent="custom"]:not(.companion-surface):not(.dictation-surface),
+:root[data-style="haze"][data-haze-tint="custom"]:not(.companion-surface):not(.dictation-surface) {
+  --haze-d1: color-mix(in oklab, var(--haze-tint, var(--user-accent)) 40%, #8794a3);
+  --haze-d2: color-mix(in oklab, var(--haze-tint, var(--user-accent)) 75%, #8d939b);
+  --haze-d3: color-mix(in oklab, var(--haze-tint, var(--user-accent)) 55%, #6b7884);
+  --haze-d4: color-mix(in oklab, var(--haze-tint, var(--user-accent)) 35%, #b4b8bd);
 }
-:root[data-style="haze"][data-accent="custom"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) {
-  --haze-d1: color-mix(in oklab, var(--user-accent) 30%, #a9b4c0);
-  --haze-d2: color-mix(in oklab, var(--user-accent) 55%, #c3c8ce);
-  --haze-d3: color-mix(in oklab, var(--user-accent) 40%, #aab6c0);
-  --haze-d4: color-mix(in oklab, var(--user-accent) 25%, #dcdee1);
+:root[data-style="haze"][data-accent="custom"][data-theme="light"]:not(.companion-surface):not(.dictation-surface),
+:root[data-style="haze"][data-haze-tint="custom"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) {
+  --haze-d1: color-mix(in oklab, var(--haze-tint, var(--user-accent)) 30%, #a9b4c0);
+  --haze-d2: color-mix(in oklab, var(--haze-tint, var(--user-accent)) 55%, #c3c8ce);
+  --haze-d3: color-mix(in oklab, var(--haze-tint, var(--user-accent)) 40%, #aab6c0);
+  --haze-d4: color-mix(in oklab, var(--haze-tint, var(--user-accent)) 25%, #dcdee1);
 }
 
 /* The misty backdrop (owner, 26 October 2026, corrected: the background is about 80% OPAQUE, 20% transparent; blobs large and blended).
@@ -86,12 +88,13 @@
    controls, menus and dialogs are separate elements with their own surfaces and are not affected. No backdrop
    CSS blur (backdrop-filter): it cannot reach the desktop; see the frosted-glass rule below for the native blur. */
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .haze-backdrop {
-  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .8;
+  position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: var(--haze-opacity, .8);
   background:
-    radial-gradient(110vw 105vh at 10% 6%, color-mix(in srgb, var(--haze-d1) 46%, transparent), color-mix(in srgb, var(--haze-d1) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d1) 12%, transparent) 66%, transparent 100%),
-    radial-gradient(100vw 110vh at 100% 62%, color-mix(in srgb, var(--haze-d2) 46%, transparent), color-mix(in srgb, var(--haze-d2) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d2) 12%, transparent) 66%, transparent 100%),
-    radial-gradient(125vw 90vh at 38% 114%, color-mix(in srgb, var(--haze-d3) 46%, transparent), color-mix(in srgb, var(--haze-d3) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d3) 12%, transparent) 66%, transparent 100%),
-    radial-gradient(80vw 75vh at 54% 32%, color-mix(in srgb, var(--haze-d4) 36%, transparent), color-mix(in srgb, var(--haze-d4) 18%, transparent) 45%, transparent 100%),
+    linear-gradient(color-mix(in srgb, var(--haze-base) calc(var(--haze-shade, 0) * 100%), transparent), color-mix(in srgb, var(--haze-base) calc(var(--haze-shade, 0) * 100%), transparent)),
+    radial-gradient(110vw 105vh at 10% 6%, color-mix(in srgb, var(--haze-d1) calc(46% * var(--haze-strength, 1)), transparent), color-mix(in srgb, var(--haze-d1) calc(30% * var(--haze-strength, 1)), transparent) 38%, color-mix(in srgb, var(--haze-d1) calc(12% * var(--haze-strength, 1)), transparent) 66%, transparent 100%),
+    radial-gradient(100vw 110vh at 100% 62%, color-mix(in srgb, var(--haze-d2) calc(46% * var(--haze-strength, 1)), transparent), color-mix(in srgb, var(--haze-d2) calc(30% * var(--haze-strength, 1)), transparent) 38%, color-mix(in srgb, var(--haze-d2) calc(12% * var(--haze-strength, 1)), transparent) 66%, transparent 100%),
+    radial-gradient(125vw 90vh at 38% 114%, color-mix(in srgb, var(--haze-d3) calc(46% * var(--haze-strength, 1)), transparent), color-mix(in srgb, var(--haze-d3) calc(30% * var(--haze-strength, 1)), transparent) 38%, color-mix(in srgb, var(--haze-d3) calc(12% * var(--haze-strength, 1)), transparent) 66%, transparent 100%),
+    radial-gradient(80vw 75vh at 54% 32%, color-mix(in srgb, var(--haze-d4) calc(36% * var(--haze-strength, 1)), transparent), color-mix(in srgb, var(--haze-d4) calc(18% * var(--haze-strength, 1)), transparent) 45%, transparent 100%),
     linear-gradient(var(--haze-base), var(--haze-base));
 }
 /* Frosted glass (owner, 27 October 2026): transparency alone is not frost. CSS backdrop-filter cannot blur the desktop,
@@ -103,12 +106,13 @@
    below are a starting point toward the old 80% visual density (system acrylic plus this tint); they were not measured. */
 :root[data-style="haze"][data-backdrop]:not(.companion-surface):not(.dictation-surface) .haze-backdrop {
   --haze-veil: color-mix(in srgb, var(--haze-base) 34%, transparent);
-  opacity: .85;
+  opacity: var(--haze-opacity, .85);
   background:
-    radial-gradient(110vw 105vh at 10% 6%, color-mix(in srgb, var(--haze-d1) 46%, transparent), color-mix(in srgb, var(--haze-d1) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d1) 12%, transparent) 66%, transparent 100%),
-    radial-gradient(100vw 110vh at 100% 62%, color-mix(in srgb, var(--haze-d2) 46%, transparent), color-mix(in srgb, var(--haze-d2) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d2) 12%, transparent) 66%, transparent 100%),
-    radial-gradient(125vw 90vh at 38% 114%, color-mix(in srgb, var(--haze-d3) 46%, transparent), color-mix(in srgb, var(--haze-d3) 30%, transparent) 38%, color-mix(in srgb, var(--haze-d3) 12%, transparent) 66%, transparent 100%),
-    radial-gradient(80vw 75vh at 54% 32%, color-mix(in srgb, var(--haze-d4) 36%, transparent), color-mix(in srgb, var(--haze-d4) 18%, transparent) 45%, transparent 100%),
+    linear-gradient(color-mix(in srgb, var(--haze-base) calc(var(--haze-shade, 0) * 100%), transparent), color-mix(in srgb, var(--haze-base) calc(var(--haze-shade, 0) * 100%), transparent)),
+    radial-gradient(110vw 105vh at 10% 6%, color-mix(in srgb, var(--haze-d1) calc(46% * var(--haze-strength, 1)), transparent), color-mix(in srgb, var(--haze-d1) calc(30% * var(--haze-strength, 1)), transparent) 38%, color-mix(in srgb, var(--haze-d1) calc(12% * var(--haze-strength, 1)), transparent) 66%, transparent 100%),
+    radial-gradient(100vw 110vh at 100% 62%, color-mix(in srgb, var(--haze-d2) calc(46% * var(--haze-strength, 1)), transparent), color-mix(in srgb, var(--haze-d2) calc(30% * var(--haze-strength, 1)), transparent) 38%, color-mix(in srgb, var(--haze-d2) calc(12% * var(--haze-strength, 1)), transparent) 66%, transparent 100%),
+    radial-gradient(125vw 90vh at 38% 114%, color-mix(in srgb, var(--haze-d3) calc(46% * var(--haze-strength, 1)), transparent), color-mix(in srgb, var(--haze-d3) calc(30% * var(--haze-strength, 1)), transparent) 38%, color-mix(in srgb, var(--haze-d3) calc(12% * var(--haze-strength, 1)), transparent) 66%, transparent 100%),
+    radial-gradient(80vw 75vh at 54% 32%, color-mix(in srgb, var(--haze-d4) calc(36% * var(--haze-strength, 1)), transparent), color-mix(in srgb, var(--haze-d4) calc(18% * var(--haze-strength, 1)), transparent) 45%, transparent 100%),
     linear-gradient(var(--haze-veil), var(--haze-veil));
 }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) body { background: transparent; }

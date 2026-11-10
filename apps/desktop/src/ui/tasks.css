@@ -207,3 +207,7 @@
 .delegate-drag-card .delegate-draft-main { display: flex; }
 .delegate-drag-assign { height: 26px; padding: 0 6px 0 9px; display: inline-flex; align-items: center; gap: 6px; justify-self: start; color: var(--text-2); font-size: var(--fs-xs); }
 @media (prefers-reduced-motion: reduce) { .delegate-drag-card { transition: none !important; } .delegate-lane { transition: none; } }
+/* Kanban, in place of the tree view, until it is designed (owner, 9 November 2026). */
+.tasks-coming-soon { min-height: 320px; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--text-3); text-align: center; }
+.tasks-coming-soon strong { color: var(--text-1); font-size: var(--fs-md, 15px); font-weight: 600; }
+.tasks-coming-soon span { font-size: var(--fs-sm); }

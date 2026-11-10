@@ -100,3 +100,9 @@
 .settings-skeleton-heading { max-width: 100px; }
 .settings-skeleton-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px; border-bottom: 1px solid var(--line); }
 .settings-skeleton-row > .skeleton-text { max-width: 230px; }
+/* "Ask the CEO to troubleshoot" on a failed turn: shown on hover or focus (owner, 9 November 2026). */
+.message-bubble.message-error { position: relative; }
+.troubleshoot-button { float: right; margin: -2px -4px 4px 10px; display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: var(--radius-sm, 7px); background: var(--surface-overlay, var(--surface-raised)); font: inherit; font-size: var(--fs-xs); cursor: pointer; opacity: 0; transition: opacity 120ms ease; }
+.message-row:hover .troubleshoot-button, .troubleshoot-button:focus-visible { opacity: 1; }
+.troubleshoot-button:hover { background: var(--surface-hover); }
+@media (hover: none) { .troubleshoot-button { opacity: 1; } }

@@ -79,3 +79,29 @@
   pointer-events: none;
 }
 @media (prefers-reduced-motion: reduce) { .profile-photo-mark { transition: none; } .profile-photo-mark.is-greeting { animation: none; } }
+
+/* The status dot at the photo's top left (owner, 9 November 2026, after the
+   companion blobs' corner indicator): online, working, asking, failed,
+   usage limit, offline. Ringed in the panel colour like the badge. */
+.profile-photo-presence {
+  position: absolute;
+  left: -1px;
+  top: -1px;
+  border-radius: 50%;
+  background: var(--presence, #3fbf74);
+  box-shadow: 0 0 0 2px var(--haze-base, var(--surface-sidebar, #1a1b1d));
+}
+.profile-photo-presence.is-online { --presence: #3fbf74; }
+.profile-photo-presence.is-working { --presence: #5aa2ff; animation: presence-pulse 1.4s ease-in-out infinite; }
+.profile-photo-presence.is-asking { --presence: #f2a93b; }
+.profile-photo-presence.is-failed { --presence: #ef5b5b; }
+.profile-photo-presence.is-limited { --presence: transparent; box-shadow: inset 0 0 0 2px #f2a93b, 0 0 0 2px var(--haze-base, var(--surface-sidebar, #1a1b1d)); }
+.profile-photo-presence.is-offline { --presence: #7c8088; }
+@keyframes presence-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .profile-photo-presence.is-working { animation: none; } }
+/* Taken photos and the pager (owner, 9 November 2026). */
+.profile-photo-grid .profile-photo-option.taken { opacity: .3; filter: grayscale(.7); }
+.profile-photo-pager { margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.profile-photo-dots { display: flex; gap: 6px; }
+.profile-photo-dots button { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--line-strong); cursor: pointer; }
+.profile-photo-dots button.on { background: var(--text-1); }

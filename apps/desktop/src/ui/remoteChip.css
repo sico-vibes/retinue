@@ -1,5 +1,5 @@
 /* Remote in the sidebar foot: a flat row with its state on the right. The detail lives in the tooltip. */
-.remote-chip { width: calc(100% - 16px); height: 36px; margin: 0 8px; padding: 0 10px; display: flex; align-items: center; gap: 10px; color: var(--text-2); border: 0; border-radius: var(--radius-sm); background: transparent; font: inherit; text-align: left; cursor: pointer; transition: color 120ms ease, background 120ms ease; }
+.remote-chip { width: calc(100% - 16px); height: 36px; margin: 0 8px 8px; padding: 0 10px; display: flex; align-items: center; gap: 10px; color: var(--text-2); border: 0; border-radius: var(--radius-sm); background: transparent; font: inherit; text-align: left; cursor: pointer; transition: color 120ms ease, background 120ms ease; }
 .remote-chip:hover { color: var(--text-1); background: var(--surface-hover); }
 .remote-chip-icon { position: relative; width: 20px; height: 20px; flex: 0 0 20px; display: grid; place-items: center; }
 .remote-chip-light { display: none; }

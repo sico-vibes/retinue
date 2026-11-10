@@ -242,6 +242,8 @@ async function discover() {
         !source.startsWith('.dev/') &&
         !source.startsWith('.delegate/') &&
         !source.startsWith('.claude/') &&
+        // Bundled third-party skills (their own licences), not project documentation.
+        !source.startsWith('crates/retinue-daemon/skill_library/') &&
         existsSync(path.join(root, source)),
     )
     .sort();

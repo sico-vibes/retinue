@@ -42,6 +42,7 @@ mod custom_models;
 mod diagnostics;
 mod fanout;
 mod issue_report;
+mod troubleshoot;
 mod stash;
 mod scaffold;
 mod mcp_bridge;
@@ -73,6 +74,7 @@ mod memory;
 mod questions;
 mod proposals;
 mod knowledge;
+mod skill_library;
 mod skills;
 mod commands;
 // Wave 12, part F: the Doctor's read-only checks and their safe fixes.
@@ -538,6 +540,43 @@ fn locked_bot_error() -> DispatchError {
     derr("conflict", "This bot is locked. Unlock it to change its settings.", StatusCode::CONFLICT)
 }
 
+/// `runtimes.disabled`: up to 32 provider ids or runtime ids (plain id text).
+fn valid_disabled_runtimes(value: &Value) -> bool {
+    value.as_array().is_some_and(|ids| ids.len() <= 32 && ids.iter().all(|id| id.as_str().is_some_and(|id| !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)))))
+}
+
+/// The owner's switched-off coding agents (`runtimes.disabled`), empty by default.
+fn disabled_runtimes(db: &Storage) -> Vec<String> {
+    db.settings().ok().and_then(|settings| settings["runtimes.disabled"].as_array().map(|ids| ids.iter().filter_map(|id| id.as_str().map(str::to_owned)).collect())).unwrap_or_default()
+}
+
+fn runtime_is_disabled(runtime: &Value, disabled: &[String]) -> bool {
+    disabled.iter().any(|off| runtime["id"].as_str() == Some(off.as_str()) || runtime["provider"].as_str() == Some(off.as_str()))
+}
+
+/// Marks a row the owner turned off, or clears the mark on one turned back on
+/// (a stale `disabled` status waits for the next scan to read the CLI again).
+fn mark_runtime_disabled(runtime: &mut Value, disabled: &[String]) {
+    let off = runtime_is_disabled(runtime, disabled);
+    let Some(fields) = runtime.as_object_mut() else { return; };
+    if off {
+        fields.insert("disabled".into(), json!(true));
+        fields.insert("status".into(), json!("disabled"));
+    } else {
+        fields.remove("disabled");
+    }
+}
+
+/// The refusal for a conversation or send that needs a switched-off coding agent.
+fn runtime_off_error() -> DispatchError {
+    derr("provider_unavailable", "This coding agent is turned off in Settings › Coding agents.", StatusCode::CONFLICT)
+}
+
+/// `retinue_runtime::discover()` without the providers the owner turned off.
+async fn discover_enabled(st: &AppState) -> Vec<retinue_runtime::DiscoveredRuntime> {
+    retinue_runtime::discover_except(&disabled_runtimes(&st.db)).await
+}
+
 fn persist_runtime_discovery(
     db: &Storage,
     discovered: Vec<retinue_runtime::DiscoveredRuntime>,
@@ -547,6 +586,7 @@ fn persist_runtime_discovery(
     // therefore survives discovery until a successful turn or
     // `runtime.auth.clear` clears it.
     let saved = db.runtimes().unwrap_or_default();
+    let disabled = disabled_runtimes(db);
     let mut values = Vec::with_capacity(discovered.len());
     for runtime in discovered {
         let mut value = serde_json::to_value(runtime).unwrap_or(Value::Null);
@@ -564,8 +604,18 @@ fn persist_runtime_discovery(
                 inherit_sign_in_failure(&mut value, previous);
             }
         }
+        mark_runtime_disabled(&mut value, &disabled);
         db.upsert_runtime(&value)?;
         values.push(value);
+    }
+    // A provider that was skipped keeps its saved row, marked off, so the UI can
+    // show it and turn it back on. Nothing is deleted.
+    for previous in saved {
+        if values.iter().any(|value| value["id"] == previous["id"]) || !runtime_is_disabled(&previous, &disabled) { continue; }
+        let mut kept = previous;
+        mark_runtime_disabled(&mut kept, &disabled);
+        db.upsert_runtime(&kept)?;
+        values.push(kept);
     }
     Ok(values)
 }
@@ -709,7 +759,9 @@ async fn publish_runtime_discovery(
 /// Seed `st.runtimes` from the saved rows before discovery finishes, so a send
 /// immediately after boot can still resolve its runtime.
 async fn load_saved_runtimes(st: &AppState) {
-    if let Ok(saved) = st.db.runtimes() {
+    if let Ok(mut saved) = st.db.runtimes() {
+        let disabled = disabled_runtimes(&st.db);
+        for runtime in &mut saved { mark_runtime_disabled(runtime, &disabled); }
         *st.runtimes.write().await = saved;
     }
 }
@@ -724,6 +776,13 @@ async fn refresh_runtime_discovery(st: &AppState, work: impl std::future::Future
     let values = publish_runtime_discovery(st, work.await).await?;
     *discovery = Some((Instant::now(), values.clone()));
     Ok(values)
+}
+
+/// A scan that cannot join an earlier one: the setting just changed, so the
+/// cached answer is stale.
+async fn refresh_runtime_discovery_now(st: &AppState) {
+    *st.discovery.lock().await = None;
+    if refresh_runtime_discovery(st, discover_enabled(st)).await.is_err() { tracing::warn!("runtime discovery could not be persisted"); }
 }
 
 fn quota_failure_code(failure: PollFailure) -> &'static str {
@@ -805,7 +864,8 @@ async fn poll_provider_quotas(st: &AppState) {
 /// Claude's and OpenCode's bars: the two providers whose usage comes from the
 /// coding agent's own stored sign-in. Codex is not one of them.
 async fn poll_local_provider_quotas(st: &AppState) {
-    let runtimes = st.runtimes.read().await.clone();
+    let disabled = disabled_runtimes(&st.db);
+    let runtimes = st.runtimes.read().await.iter().filter(|runtime| !runtime_is_disabled(runtime, &disabled)).cloned().collect::<Vec<_>>();
     if let Some(runtime) = runtimes.iter().find(|runtime| runtime["provider"] == "claude") {
         if let Some(runtime_id) = runtime["id"].as_str() {
             poll_local_quota(st, "claude", runtime_id, quota_sources::fetch_claude_quota, QUOTA_REQUEST_TIMEOUT).await;
@@ -838,7 +898,8 @@ async fn persist_read_off(st: &AppState, provider: &str, runtime_id: &str) {
 
 /// A runtime id for a local-sign-in provider, when one is installed.
 async fn local_runtime_id(st: &AppState, provider: &str) -> Option<String> {
-    st.runtimes.read().await.iter().find(|runtime| runtime["provider"] == provider).and_then(|runtime| runtime["id"].as_str().map(str::to_owned))
+    let disabled = disabled_runtimes(&st.db);
+    st.runtimes.read().await.iter().find(|runtime| runtime["provider"] == provider && !runtime_is_disabled(runtime, &disabled)).and_then(|runtime| runtime["id"].as_str().map(str::to_owned))
 }
 
 /// The switch moved: turning it on polls soon after (no restart), turning it off
@@ -859,7 +920,8 @@ async fn apply_usage_read_switch(st: &AppState, on: bool) {
 /// One bounded refresh of a provider's quota snapshot, used by the retry
 /// policy when its cached reset time is missing or stale.
 pub(crate) async fn refresh_provider_quota(st: &AppState, provider: &str, timeout: std::time::Duration) {
-    let runtimes = st.runtimes.read().await.clone();
+    let disabled = disabled_runtimes(&st.db);
+    let runtimes = st.runtimes.read().await.iter().filter(|runtime| !runtime_is_disabled(runtime, &disabled)).cloned().collect::<Vec<_>>();
     match provider {
         "codex" => {
             if let Some(runtime) = runtimes.into_iter().find(|runtime| runtime["provider"] == "codex" && runtime["status"] == "online") {
@@ -1024,6 +1086,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "permissions.policy.get" => { let default=st.db.default_approval_mode().map_err(agent_error)?;let agents=st.db.agent_list(false,None).map_err(agent_error)?;let per_agent=agents.iter().map(|a|json!({"agentId":a["id"],"mode":a["approvalMode"],"effectiveMode":a["effectiveApprovalMode"]})).collect::<Vec<_>>();Ok(json!({"defaultMode":default,"perAgent":per_agent})) }
         "manager.get" => st.db.manager_agent().map(|manager| json!({"manager": manager})).map_err(agent_error),
         "manager.profile.list" | "manager.profile.set" | "manager.profile.delete" | "manager.playbook.get" | "manager.playbook.history" | "manager.playbook.set" | "manager.playbook.revert" => knowledge::rpc(st, method, &p).await,
+        "manager.troubleshoot" => troubleshoot::rpc(st, &p).await,
         "manager.ensure" => {
             if let Some(manager) = st.db.manager_agent().map_err(agent_error)? { return Ok(json!({"manager": manager, "created": false})); }
             let mut fields = if p.is_object() { p.clone() } else { json!({}) };
@@ -1041,6 +1104,11 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             let refs = secrets::parse_refs(&p["envRefs"])?;
             let mut fields = p.clone();
             if let Some(object) = fields.as_object_mut() { object.remove("envRefs"); }
+            // A personality is `{id, prompt}`; an id alone takes the shipped prompt.
+            if fields.get("personality").is_some() {
+                let personality = presets::personality_value(&fields["personality"]).map_err(|message| derr("invalid_argument", &message, StatusCode::BAD_REQUEST))?;
+                fields["personality"] = personality;
+            }
             // Phase 9: a new bot's project is a team placement, not a column of
             // the create body (storage ignores it there), so it is written
             // through the one path that validates it.
@@ -1063,6 +1131,15 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             if bot_is_locked(&existing) { return Err(locked_bot_error()); }
             let mut fields = p.clone();
             fields.as_object_mut().unwrap().remove("agentId");
+            // The personality is kept apart from the catalog-checked fields and
+            // written after them (`agent_set_personality`).
+            let personality = match fields.as_object_mut().and_then(|object| object.remove("personality")) {
+                Some(value) => Some(presets::personality_value(&value).map_err(|message| derr("invalid_argument", &message, StatusCode::BAD_REQUEST))?),
+                None => None,
+            };
+            if let Some(photo) = stock_photo(&fields["look"]) {
+                if stock_photo_taken(st, photo, Some(id)) { return Err(photo_taken_error()); }
+            }
             let refs = match fields.get("envRefs") { None => None, Some(value) => Some(secrets::parse_refs(value)?) };
             fields.as_object_mut().unwrap().remove("envRefs");
             let runtime_id = fields["runtimeId"].as_str().unwrap_or(existing["runtimeId"].as_str().unwrap_or("")).to_owned();
@@ -1102,9 +1179,14 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             let (agent, events) = st.db.agent_update(id, &fields).map_err(agent_error)?;
             if let Some(refs) = &refs { st.db.env_refs_set(id, refs).map_err(agent_error)?; }
             st.broadcast_persisted(events);
+            let mut agent = agent;
+            if let Some(personality) = &personality {
+                let (updated, personality_events) = st.db.agent_set_personality(id, personality).map_err(agent_error)?;
+                st.broadcast_persisted(personality_events);
+                agent = updated;
+            }
             // Phase 9: a default project named here is a team placement, so it
             // goes through the path that validates it and hires the bot.
-            let mut agent = agent;
             if let Some(project) = p["projectId"].as_str().filter(|id| !id.is_empty()) {
                 let (_placed, placement_events) = st.db.agent_set_team(id, &json!({"projectId": project})).map_err(agent_error)?;
                 st.broadcast_persisted(placement_events);
@@ -1200,14 +1282,14 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "runtime.list" => Ok(json!({"runtimes":*st.runtimes.read().await})),
         "runtime.refresh" => {
             st.catalog.invalidate_all();
-            let values = refresh_runtime_discovery(st, retinue_runtime::discover()).await.map_err(|_| derr("internal", "Could not save the coding agent scan.", StatusCode::INTERNAL_SERVER_ERROR))?;
+            let values = refresh_runtime_discovery(st, discover_enabled(st)).await.map_err(|_| derr("internal", "Could not save the coding agent scan.", StatusCode::INTERNAL_SERVER_ERROR))?;
             let prewarm = st.clone();
             tokio::spawn(async move { catalog::prewarm_all(&prewarm).await; });
             Ok(json!({"runtimes":values}))
         }
         "runtime.auth.clear" => {
             let runtime_id = p["runtimeId"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "runtimeId is required", StatusCode::BAD_REQUEST))?;
-            let values = runtime_auth_clear(st, runtime_id, retinue_runtime::discover()).await?;
+            let values = runtime_auth_clear(st, runtime_id, discover_enabled(st)).await?;
             Ok(json!({"runtimes":values}))
         }
         "quota.list" => st.db.quota_snapshots().map(|quotas| json!({"quotas":quotas})).map_err(|e| derr("internal", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR)),
@@ -1672,6 +1754,14 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             if k == "usage.readCliSignIns" {
                 apply_usage_read_switch(st, value.as_bool().unwrap_or(false)).await;
             }
+            // Turning a coding agent off (or back on) scans again and publishes
+            // `runtime.changed`; an off agent is never probed.
+            if k == "runtimes.disabled" {
+                st.catalog.invalidate_all();
+                refresh_runtime_discovery_now(st).await;
+                let prewarm = st.clone();
+                tokio::spawn(async move { catalog::prewarm_all(&prewarm).await; });
+            }
             Ok(json!({"saved":true}))
         }
         "pricing.list" | "pricing.override" | "subscription.list" | "subscription.save" => Err(derr("unsupported", "monetary valuation and subscription controls have been retired; historical records are preserved", StatusCode::NOT_FOUND)),
@@ -1767,6 +1857,7 @@ fn validate_setting(k: &str, value: &Value) -> Result<Value, DispatchError> {
     if k == "companion.focusMode" && !value.is_boolean() { return Err(derr("invalid_argument", "companion.focusMode requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "companion.positions" && !valid_companion_positions(value) { return Err(derr("invalid_argument", "companion.positions must map at most 8 display names to {x,y} numbers", StatusCode::BAD_REQUEST)); }
     if k == "questions.expirySecs" && !value.as_i64().is_some_and(|secs| (1_800..=604_800).contains(&secs)) { return Err(derr("invalid_argument", "questions.expirySecs requires an integer between 1800 and 604800", StatusCode::BAD_REQUEST)); }
+    if k == "runtimes.disabled" && !valid_disabled_runtimes(value) { return Err(derr("invalid_argument", "runtimes.disabled must be an array of up to 32 provider or runtime ids", StatusCode::BAD_REQUEST)); }
     if k == "usage.readCliSignIns" && !value.is_boolean() { return Err(derr("invalid_argument", "usage.readCliSignIns requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "composer.sendShortcut" && !valid_send_shortcut(value) { return Err(derr("invalid_argument", "composer.sendShortcut must be enter, ctrl+enter or shift+enter", StatusCode::BAD_REQUEST)); }
     if k == "shortcuts.bindings" && !valid_shortcut_bindings(value) { return Err(derr("invalid_argument", "shortcuts.bindings must map at most 40 action ids to a printable ASCII shortcut of up to 40 characters, or null", StatusCode::BAD_REQUEST)); }
@@ -2237,7 +2328,25 @@ async fn validate_agent_catalog_against(st: &AppState, runtime_id: &str, value: 
 /// normal creation events. `manager.ensure` (and the FIX36 D2 `propose_bot`
 /// approval) reuse this so a bot created outside `agent.create` goes through
 /// exactly the same path as the RPC.
+/// A stock portrait (`photo-NN`) a look wears, or `None` for no photo or an own upload.
+fn stock_photo(look: &Value) -> Option<&str> {
+    look["photo"].as_str().filter(|photo| photo.starts_with("photo-"))
+}
+
+/// True when another existing employee (archived ones included) wears this stock
+/// portrait. `except` is the employee being saved, which may keep its own.
+pub(crate) fn stock_photo_taken(st: &AppState, photo: &str, except: Option<&str>) -> bool {
+    st.db.agent_list(true, None).unwrap_or_default().iter().any(|agent| agent["id"].as_str() != except && stock_photo(&agent["look"]) == Some(photo))
+}
+
+fn photo_taken_error() -> DispatchError {
+    derr("conflict", "Another employee already wears this photo. Change theirs first.", StatusCode::CONFLICT)
+}
+
 async fn agent_create_from_rpc(st: &AppState, mut fields: Value) -> Result<Value, DispatchError> {
+    if let Some(photo) = stock_photo(&fields["look"]) {
+        if stock_photo_taken(st, photo, None) { return Err(photo_taken_error()); }
+    }
     // Owner-created bots start with Full access. This is an explicit value on
     // the new row only; existing bots and unattended automation policy keep
     // their current modes. Manager proposals supply their own restricted mode.
@@ -2592,6 +2701,7 @@ pub(crate) async fn new_session_with(st: &AppState, p: Value, pin: Option<&ModeP
         .find(|r| r["id"] == runtime_id)
         .cloned()
         .ok_or_else(|| derr("not_found", "runtime not found", StatusCode::NOT_FOUND))?;
+    if runtime_is_disabled(&runtime, &disabled_runtimes(&st.db)) { return Err(runtime_off_error()); }
     let spec = runtime_from(&runtime);
     validate_spawn_target(&spec)?;
     let provider = runtime["provider"].as_str().unwrap_or("").to_owned();
@@ -2872,6 +2982,7 @@ async fn resume_inner(st: &AppState, sid: &str, allow_states: &[&str]) -> Result
                 StatusCode::BAD_GATEWAY,
             )
         })?;
+    if runtime_is_disabled(&rt, &disabled_runtimes(&st.db)) { return Err(runtime_off_error()); }
     let spec = runtime_from(&rt);
     validate_spawn_target(&spec)?;
     let provider = row["provider"].as_str().unwrap_or("").to_owned();
@@ -3046,12 +3157,9 @@ async fn activate_session(st: &AppState, sid: &str, owner: Owner) -> Result<Valu
     machines::refuse_if_moved_id(st, sid)?;
     let already_active = || derr("conflict", "session is already active", StatusCode::CONFLICT);
     let is_rpc = matches!(owner, Owner::Rpc);
+    // Opening a conversation warms it; that never continues interrupted work
+    // on its own (owner, 9 November 2026). Only an explicit resume does.
     if st.sessions.lock().await.contains_key(sid) {
-        if !is_rpc && !matches!(owner, Owner::Turn(_)) && !team::session_busy(st,sid).await {
-            let gate = gate_for_session(st,sid).await;
-            let _guard = gate.lock().await;
-            retry::continue_on_activation(st,sid).await;
-        }
         return if is_rpc { Err(already_active()) } else { Ok(Value::Null) };
     }
     // A turn may activate a session that is already `starting`; the reservation
@@ -3072,7 +3180,7 @@ async fn activate_session(st: &AppState, sid: &str, owner: Owner) -> Result<Valu
         return if is_rpc { Err(already_active()) } else { Ok(Value::Null) };
     }
     let result = resume_inner(st, sid, allow_states).await;
-    if result.is_ok() && !matches!(owner, Owner::Turn(_)) {
+    if result.is_ok() && is_rpc {
         retry::continue_on_activation(st, sid).await;
     }
     result
@@ -5665,7 +5773,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     });
     let discovery_state = st.clone();
     tokio::spawn(async move {
-        if refresh_runtime_discovery(&discovery_state, retinue_runtime::discover()).await.is_err() {
+        if refresh_runtime_discovery(&discovery_state, discover_enabled(&discovery_state)).await.is_err() {
             tracing::warn!("runtime discovery could not be persisted");
         } else {
             // Warm the catalog for every usable runtime, two at a time, so model
@@ -11057,7 +11165,11 @@ mod phase2a_tests {
         st.db.recover_after_restart().unwrap();
         let adapter = Arc::new(PromptResumeAdapter {reject_resume:true,fail_resume:false,fail_new:false,resume_calls:Default::default(),new_calls:Default::default(),prompts:Default::default(),events:Default::default()});
         st.adapters=Arc::new(Adapters {acp:Arc::new(AcpAdapter::default()),codex:adapter.clone(),claude:Arc::new(ClaudeAdapter::default())});
+        // Warming (opening the conversation) never continues it on its own.
         activate_session(&st,"p8-killed",Owner::Warm).await.unwrap();
+        assert!(st.db.queue_list("p8-killed").unwrap().is_empty());
+        close_session(&st,"p8-killed").await.unwrap();
+        activate_session(&st,"p8-killed",Owner::Rpc).await.unwrap();
         assert_eq!(st.db.queue_list("p8-killed").unwrap().len(),1);
         crate::queue::due_tick(&st).await;
         assert!(wait_for(|| !adapter.prompts.lock().unwrap().is_empty()).await);
@@ -13162,6 +13274,12 @@ mod phase2a_tests {
 
     // Phase 9 (Gogo's lane): employees, hiring and the CEO.
     include!("phase9_tests.rs");
+
+    // Hire options: name, photo, personality and skills (9 November 2026).
+    include!("hire_options_tests.rs");
+
+    // The OpenUI guide tool, the CEO troubleshoot RPC and the CEO issue card.
+    include!("troubleshoot_tests.rs");
 
     // Phase 5 (Sona S1): secrets in the credential store, and one-use secret requests.
     include!("secrets_tests.rs");

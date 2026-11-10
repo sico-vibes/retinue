@@ -400,15 +400,14 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
         }
       }}>
       <span className="team-row-avatar">
-        <BlobCanvas color={agentColorHex(agent.color)} size={haze ? 32 : 50} mood={status.mood} look={agentLook(agent)} label={agent.name} track={selected} />
-        {isManager(agent) && <span className="leader-badge" title="CEO" aria-hidden="true"><Star size={10} fill="currentColor" strokeWidth={0} /></span>}
+        <BlobCanvas color={agentColorHex(agent.color)} size={haze ? 40 : 50} mood={waiting ? 'permission' : status.mood} look={agentLook(agent)} label={agent.name} track={selected} presence />
         {agent.locked === true && <span className="lock-badge" title="Locked" aria-hidden="true"><Lock size={9} /></span>}
       </span>
       <span className="bot-row-copy">
         <span className="bot-row-line">
-          <span className="team-row-name">{runtimeLogos && !haze && <RuntimeMark provider={runtime?.provider} />}<strong>{agent.name}</strong><RuntimeProblemMarker runtime={runtime} inline idSuffix={agent.id} showTooltip={runtimeTooltipAgentId === agent.id} />{agent.role?.trim() && <span className="role-chip">{agent.role.trim()}</span>}</span>
+          <span className="team-row-name">{runtimeLogos && !haze && <RuntimeMark provider={runtime?.provider} />}<strong>{agent.name}</strong>{isManager(agent) && <span className="leader-star" title="CEO" aria-label="CEO"><Star size={11} fill="currentColor" strokeWidth={0} /></span>}<RuntimeProblemMarker runtime={runtime} inline idSuffix={agent.id} showTooltip={runtimeTooltipAgentId === agent.id} />{agent.role?.trim() && <span className="role-chip">{agent.role.trim()}</span>}</span>
           {(unread || approval) && <i className={`unread-dot ${approval ? 'approval' : ''}`} aria-hidden="true" />}
-          {haze && (waiting || failed || working) ? <span className={`haze-row-state ${waiting ? 'needs' : failed ? 'failed' : 'working'}`}>{waiting ? 'Needs you' : failed ? 'Failed' : 'Working'}</span> : session?.updatedAt && <time>{shortTime(session.updatedAt)}</time>}
+          {haze && (waiting || failed || working) ? <span className={`haze-row-state ${waiting ? 'needs' : failed ? 'failed' : 'working'}`}>{waiting ? 'Needs you' : failed ? 'Failed' : 'Working'}</span> : (session?.lastMessageAt ?? session?.updatedAt) && <time>{shortTime((session.lastMessageAt ?? session.updatedAt)!)}</time>}
         </span>
         <span className="bot-row-line"><span className={`bot-row-preview ${waiting ? 'waiting' : working ? 'active' : ''}`}>{preview}</span></span>
       </span>
@@ -437,13 +436,14 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
       {!projectsView && <section className="team-group" aria-label={Nouns}>
         <div className="team-group-head static">
           <span className="team-group-title"><span>{Nouns}</span></span>
-          <span className="team-group-actions"><button type="button" className="icon-button tiny" aria-label={`Sort ${nouns}`} title={`Sort ${nouns}`} aria-haspopup="menu" onClick={(event) => { menuTrigger.current = event.currentTarget; const rect = event.currentTarget.getBoundingClientRect(); setSortMenu({ x: rect.left, y: rect.bottom + 4 }) }}><ArrowDownUp size={13} /></button>{onOpenTeam && <button type="button" className="ghost-button small team-hire-button" aria-pressed={teamOpen} onClick={() => onOpenTeam('hire')}>Hire</button>}<button type="button" className="icon-button tiny" aria-label={`New ${noun}`} title={`New ${noun}`} onClick={() => actions.onCreate(null)}><Plus size={14} /></button></span>
+          <span className="team-group-actions"><button type="button" className="icon-button tiny" aria-label={`Sort ${nouns}`} title={`Sort ${nouns}`} aria-haspopup="menu" onClick={(event) => { menuTrigger.current = event.currentTarget; const rect = event.currentTarget.getBoundingClientRect(); setSortMenu({ x: rect.left, y: rect.bottom + 4 }) }}><ArrowDownUp size={13} /></button></span>
         </div>
         {groups
           ? groups.map((group) => <div key={group.id} role="group" aria-label={group.name}><div className="team-subgroup-head">{group.name}</div><div className="team-group-rows">{group.agents.map(withSubbots)}</div></div>)
           : <div className="team-group-rows" role="group">{rows.map(withSubbots)}</div>}
       </section>}
       {agents.filter((agent) => !agent.archived).length === 0 && <p className="team-group-empty">No {nouns} yet. Create one to start chatting.</p>}
+      {!projectsView && <button type="button" className="team-hidden-toggle" aria-pressed={teamOpen} onClick={() => onOpenTeam ? onOpenTeam('hire') : actions.onCreate(null)}><Plus size={13} aria-hidden="true" />Hire an employee</button>}
       </div>
       {machines}
       {hiddenCount > 0 && <button type="button" className="team-hidden-toggle" onClick={() => setShowHidden((value) => !value)}>{showHidden ? <EyeOff size={13} /> : <Eye size={13} />}{showHidden ? `Hide hidden ${nouns}` : `Show ${hiddenCount} hidden ${noun}${hiddenCount === 1 ? '' : 's'}`}</button>}

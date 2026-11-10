@@ -217,3 +217,64 @@ async fn list_presets_filters_and_is_read_only() {
     assert!(none["content"][0]["text"].as_str().unwrap().contains("No preset employee matches"));
     assert!(st.db.proposals_pending().unwrap().is_empty(), "the read tools create nothing");
 }
+
+// A stock profile photo belongs to one employee (9 November 2026).
+#[tokio::test]
+async fn a_stock_photo_is_worn_by_one_employee_and_a_preset_falls_back_to_the_silhouette() {
+    let (st, _events) = state();
+    let look = |photo: &str| json!({"shape":"circle","photo":photo});
+    let first = dispatch(&st, "agent.create", json!({"name":"One","runtimeId":"rt-test","look":look("photo-05")})).await.unwrap()["agent"].clone();
+    let first_id = first["id"].as_str().unwrap().to_owned();
+    let taken = dispatch(&st, "agent.create", json!({"name":"Two","runtimeId":"rt-test","look":look("photo-05")})).await.unwrap_err();
+    assert_eq!(taken.1.code, "conflict");
+    assert_eq!(taken.1.message, "Another employee already wears this photo. Change theirs first.");
+    // Another photo and an own upload are free; uploads are not checked.
+    let second = dispatch(&st, "agent.create", json!({"name":"Two","runtimeId":"rt-test","look":look("photo-06")})).await.unwrap()["agent"].clone();
+    let second_id = second["id"].as_str().unwrap().to_owned();
+    let upload = "data:image/webp;base64,UklGRg==";
+    for name in ["Three", "Four"] { dispatch(&st, "agent.create", json!({"name":name,"runtimeId":"rt-test","look":look(upload)})).await.unwrap(); }
+    // An employee may save its own photo again, but not take another's.
+    dispatch(&st, "agent.update", json!({"agentId":first_id,"look":look("photo-05")})).await.unwrap();
+    let steal = dispatch(&st, "agent.update", json!({"agentId":second_id,"look":look("photo-05")})).await.unwrap_err();
+    assert_eq!(steal.1.code, "conflict");
+    // An archived employee still wears its photo.
+    dispatch(&st, "agent.delete", json!({"agentId":first_id})).await.unwrap();
+    assert_eq!(dispatch(&st, "agent.update", json!({"agentId":second_id,"look":look("photo-05")})).await.unwrap_err().1.code, "conflict");
+    // Hiring a preset whose photo is taken succeeds with no photo.
+    dispatch(&st, "agent.create", json!({"name":"Holder","runtimeId":"rt-test","look":look("photo-17")})).await.unwrap();
+    let project = a_project(&st, "P");
+    let hired = dispatch(&st, "project.hire", json!({"projectId":project,"presetId":"ada"})).await.unwrap();
+    let ada = st.db.agent_get(hired["agentId"].as_str().unwrap()).unwrap();
+    assert_eq!(ada["name"], "Ada");
+    assert!(ada["look"]["photo"].is_null(), "{}", ada["look"]);
+}
+
+// Coding agents the owner turned off (9 November 2026).
+#[tokio::test]
+async fn a_turned_off_coding_agent_is_marked_kept_and_refused() {
+    let (st, _events) = state();
+    for bad in [json!("codex"), json!([1]), json!([""]), json!(vec!["x"; 33]), json!(["bad id"])] {
+        assert_eq!(dispatch(&st, "settings.set", json!({"key":"runtimes.disabled","value":bad})).await.unwrap_err().1.code, "invalid_argument", "{bad}");
+    }
+    assert!(disabled_runtimes(&st.db).is_empty());
+    dispatch(&st, "settings.set", json!({"key":"runtimes.disabled","value":["codex"]})).await.unwrap();
+    assert_eq!(disabled_runtimes(&st.db), vec!["codex".to_owned()]);
+    // The saved row is kept, published, and marked off; nothing was probed for it.
+    let roster = st.runtimes.read().await.clone();
+    let row = roster.iter().find(|row| row["id"] == "rt-test").expect("the saved row is still published");
+    assert_eq!(row["disabled"], true);
+    assert_eq!(row["status"], "disabled");
+    assert!(!catalog::runtime_usable(row));
+    assert!(st.db.runtimes().unwrap().iter().any(|row| row["id"] == "rt-test" && row["disabled"] == true));
+    // A conversation on it is refused with the plain sentence.
+    let refused = dispatch(&st, "session.new", json!({"projectPath":".","runtimeId":"rt-test"})).await.unwrap_err();
+    assert_eq!(refused.1.message, "This coding agent is turned off in Settings \u{203a} Coding agents.");
+    // Turned back on: the mark clears.
+    dispatch(&st, "settings.set", json!({"key":"runtimes.disabled","value":[]})).await.unwrap();
+    let mut row = st.db.runtimes().unwrap().into_iter().find(|row| row["id"] == "rt-test").unwrap();
+    mark_runtime_disabled(&mut row, &[]);
+    assert!(row.get("disabled").is_none());
+    // A single installed copy can be turned off by its runtime id.
+    assert!(runtime_is_disabled(&json!({"id":"rt-test","provider":"codex"}), &["rt-test".to_owned()]));
+    assert!(!runtime_is_disabled(&json!({"id":"rt-other","provider":"codex"}), &["rt-test".to_owned()]));
+}

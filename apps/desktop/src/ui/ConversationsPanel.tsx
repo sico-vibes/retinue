@@ -163,9 +163,9 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
               <Marquee className="convo-title" text={title} active={active} />
               {node.kind === 'side'
                 ? <span className="convo-sub">{node.role === 'sender' ? `Asked ${peerName}` : `From ${peerName}`}</span>
-                : <span className="convo-sub convo-meta"><time>{relativeTime(session.updatedAt ?? session.createdAt, now)}</time><span aria-hidden="true">·</span><StatusLabel {...(needsYou ? { tone: 'needs', label: 'Needs you' } : failed ? { tone: 'bad', label: 'Stopped with an error' } : busy ? { tone: 'working', label: 'Working' } : { tone: 'idle', label: 'Idle' }) as ConversationStatus} /></span>}
+                : <span className="convo-sub convo-meta"><time>{relativeTime(session.lastMessageAt ?? session.updatedAt ?? session.createdAt, now)}</time><span aria-hidden="true">·</span><StatusLabel {...(needsYou ? { tone: 'needs', label: 'Needs you' } : failed ? { tone: 'bad', label: 'Stopped with an error' } : busy ? { tone: 'working', label: 'Working' } : { tone: 'idle', label: 'Idle' }) as ConversationStatus} /></span>}
             </span>
-            {session.link?.movedTo ? <MachineBadge name={session.link.movedTo.name} /> : needsYou ? <span className="convo-flag needs">Needs you</span> : failed ? <span className="convo-flag failed">Failed</span> : busy ? <i className="convo-dot" aria-label="Working" /> : node.kind === 'side' ? <time className="convo-time">{relativeTime(session.updatedAt ?? session.createdAt, now)}</time> : null}
+            {session.link?.movedTo ? <MachineBadge name={session.link.movedTo.name} /> : needsYou ? <span className="convo-flag needs">Needs you</span> : failed ? <span className="convo-flag failed">Failed</span> : busy ? <i className="convo-dot" aria-label="Working" /> : node.kind === 'side' ? <time className="convo-time">{relativeTime(session.lastMessageAt ?? session.updatedAt ?? session.createdAt, now)}</time> : null}
           </button>}
         {node.kind === 'main' && renaming !== session.id && <span className="convo-actions">
           <button type="button" className="convo-action" aria-label={`Rename ${title}`} title="Rename" onClick={() => setRenaming(session.id)}><Pencil size={12} aria-hidden="true" /></button>

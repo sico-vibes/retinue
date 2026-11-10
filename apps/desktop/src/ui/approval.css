@@ -16,3 +16,5 @@
 .companion-approval-card .permission-head > .permission-deadline { margin-left: auto; }
 .companion-approval-card .permission-command pre { max-height: 96px; }
 @media (prefers-reduced-motion: reduce) { .permission-card { animation: none; } }
+.proposal-issue-body { max-height: 240px; overflow: auto; margin: 0; white-space: pre-wrap; font: 12px/1.5 var(--font-mono); }
+.proposal-note { margin: 4px 0 0; color: var(--text-3); font-size: var(--fs-xs); }

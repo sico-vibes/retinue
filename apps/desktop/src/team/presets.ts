@@ -16,9 +16,21 @@ export type Preset = {
   tags: string[]
   description: string
   instructions: string[]
+  /** The personality the employee starts with (an id in `personalities.json`). */
+  personality: string
+  /** Library skill ids: on by default, and offered but off by default. */
+  skills: { default: string[]; optional: string[] }
   /** From `preset.list`: the employee made from this preset, when hired. */
   hiredAgentId?: string | null
 }
+
+/** One skill in the daemon's vendored library, as `preset.list` returns it. */
+export type SkillCard = { id: string; name: string; description: string }
+export type LibrarySkill = SkillCard & { licence: string; author: string }
+/** A personality the owner can pick (`preset.list` `personalities`). */
+export type Personality = { id: string; name: string; summary: string; prompt: string; icon?: string; example?: string }
+/** An employee's own personality: a shipped id or `custom`, with the prompt it uses. */
+export type EmployeePersonality = { id: string; prompt: string }
 
 export const DEPARTMENTS: readonly Department[] = catalogue.departments
 export const PRESETS: readonly Preset[] = catalogue.presets

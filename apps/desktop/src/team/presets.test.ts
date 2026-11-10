@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import characters from '../blob/haze/characters.json'
 import { AGENT_SWATCHES } from '../ui/agentColor'
+import personalityCatalogue from './personalities.json'
 import { DEPARTMENTS, PRESETS, presetMatches, presetsByDepartment } from './presets'
 
 describe('preset employees', () => {
@@ -20,6 +21,19 @@ describe('preset employees', () => {
       for (const tag of preset.tags) expect(tag, preset.id).toMatch(/^[a-z0-9][a-z0-9-]{0,23}$/)
       expect(preset.instructions.length, preset.id).toBeGreaterThan(2)
     }
+  })
+
+  it('give each employee a personality and a bounded skill set', () => {
+    const personalities = new Set(personalityCatalogue.personalities.map((personality) => personality.id))
+    expect(personalities.size).toBe(10)
+    for (const preset of PRESETS) {
+      expect(personalities.has(preset.personality), preset.id).toBe(true)
+      expect(preset.skills.default.length, preset.id).toBeGreaterThan(0)
+      expect(preset.skills.default.length, preset.id).toBeLessThanOrEqual(10)
+      expect(preset.skills.optional.length, preset.id).toBeLessThanOrEqual(5)
+      expect(new Set([...preset.skills.default, ...preset.skills.optional]).size, preset.id).toBe(preset.skills.default.length + preset.skills.optional.length)
+    }
+    for (const personality of personalityCatalogue.personalities) expect(personality.prompt.length, personality.id).toBeLessThanOrEqual(2000)
   })
 
   it('uses each portrait at most once, leaving Kratos for the CEO', () => {

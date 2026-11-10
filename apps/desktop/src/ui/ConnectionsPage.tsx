@@ -135,7 +135,7 @@ export function ConnectionsPage({ connected }: { connected: boolean }) {
         <SettingsRow stacked label="Connect Claude Code" detail={status.command ? 'Run this once in a terminal. Claude Code then lists Retinue under /mcp.' : 'The connection program is still being prepared. Check again in a moment.'}>
           {status.command && <div className="connect-command">
             <code>{status.command}</code>
-            <button type="button" className="ghost-button small" onClick={() => void copy()} aria-label="Copy the connect command">{copied ? <Check size={13} /> : <Copy size={13} />}{copied ? 'Copied' : 'Copy'}</button>
+            <button type="button" className="icon-button tiny connect-command-copy" onClick={() => void copy()} aria-label={copied ? 'Copied' : 'Copy the connect command'} title={copied ? 'Copied' : 'Copy'}>{copied ? <Check size={13} /> : <Copy size={13} />}</button>
           </div>}
         </SettingsRow>
         <SettingsRow label="Last used" detail={ago ? `${ago}, by ${clientLabel(status.lastClient)}` : 'Not used yet'} />
