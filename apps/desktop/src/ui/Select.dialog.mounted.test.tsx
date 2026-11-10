@@ -26,6 +26,8 @@ describe('select inside a dialog', () => {
     expect(host!.querySelector('.select-menu')).toBeNull()
     expect(menu.parentElement).toBe(document.body)
     expect(menu.style.position).toBe('fixed')
+    // 2026-11-10: the hire dialog (.team-dialog-backdrop, z-index 400) covered a list at 200.
+    expect(Number(menu.style.zIndex)).toBeGreaterThan(400)
   })
 
   it('picks an option, then closes on Escape and on an outside click', () => {

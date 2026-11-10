@@ -108,7 +108,7 @@ export function Select({ value, options, onChange, ariaLabel, disabled = false, 
     window.addEventListener('scroll', place, true)
     return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
   }, [open, floating, place, query, options.length])
-  const floatStyle: CSSProperties | undefined = floating ? { position: 'fixed', right: 'auto', bottom: 'auto', left: pos?.left ?? 0, top: pos?.top ?? 0, maxHeight: pos?.maxHeight, minWidth: triggerRef.current?.offsetWidth, zIndex: 200 } : undefined
+  const floatStyle: CSSProperties | undefined = floating ? { position: 'fixed', right: 'auto', bottom: 'auto', left: pos?.left ?? 0, top: pos?.top ?? 0, maxHeight: pos?.maxHeight, minWidth: triggerRef.current?.offsetWidth, zIndex: FLOATING_MENU_Z } : undefined
   const placement = `${align === 'left' ? 'align-left' : ''} ${menuPlacement === 'top' ? 'open-up' : ''}`.trim()
   const enabledIndexes = visible.filter((index) => !options[index].disabled)
   const openMenu = () => {
@@ -245,6 +245,10 @@ export function Select({ value, options, onChange, ariaLabel, disabled = false, 
     </SearchShell>)}
   </div>
 }
+
+/** A floating (portalled) menu must sit above every dialog: the team dialogs (hire, staff a project) use
+ *  z-index 400 (teamPage.css `.team-dialog-backdrop`), the rest less. Tooltips (10000) stay above it. */
+const FLOATING_MENU_Z = 1000
 
 /** A floating menu is portalled to the page body; the menu bubbles React events to the Select as before. */
 function wrapFloat(floating: boolean, menu: ReactNode) {
