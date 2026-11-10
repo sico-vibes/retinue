@@ -48,7 +48,7 @@
     "targets": ["nsis"],
     "windows": {
       "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
-      "nsis": { "installMode": "currentUser", "installerHooks": "installer-hooks.nsh" }
+      "nsis": { "installMode": "currentUser" }
     }
   },
   "plugins": {

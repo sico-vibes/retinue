@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "742aec3",
+  "revision": "3f0bb5b",
   "documentCount": 384,
   "assets": [
     {
@@ -3378,7 +3378,7 @@
       "title": "UI/UX polish wave (15 October 2026, unreleased)",
       "section": "Design & product",
       "status": "Design rule",
-      "sha256": "d5f45d8ce935ec868a5b060b66e866f0d1728b3a2cc4e0e23135a9e4f2ba1cb9",
+      "sha256": "c12cccf4f8b69b08791973e5efab7d658d32a547d94da73fd67e09f631d2dcea",
       "headings": [
         {
           "id": "what-changed",
@@ -3658,7 +3658,7 @@
       "title": "Release checklist",
       "section": "Operations",
       "status": "Operations",
-      "sha256": "17fdd183c6ebf048815988909ae876e27dbc3262349b3831ee74de7514e79495",
+      "sha256": "4f7fe89362bbb774b416bfdb55fbf3ce0e31b6964ebb3b3cfabbde6027bebc57",
       "headings": [
         {
           "id": "release-command",

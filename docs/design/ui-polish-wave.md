@@ -14,7 +14,7 @@ the browser preview first. Specs: FIX11 to FIX15.
 
 | Area | Change | Where |
 |---|---|---|
-| Identity | Installer, executables, bundle id, data migration | FIX11, `src-tauri/src/migrate.rs`, `installer-hooks.nsh` |
+| Identity | Installer, executables, bundle id, data migration | FIX11, `src-tauri/src/migrate.rs` (installer hook removed 2026-11-10) |
 | Wording | bot in Retinue, blob in Stone, live | FIX12, `ui/vocabulary.ts` |
 | Preferences | `appearance.density`, `hints.seen`, `onboarding.tour` | FIX13, `ui/uiPrefs.ts` |
 | Tour | 5-step spotlight tour, invite for existing users, replay | `ui/tour/*`, profile menu, palette |
