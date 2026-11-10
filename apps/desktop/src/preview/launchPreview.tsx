@@ -6,6 +6,8 @@ import '../ui/shell.css'
 import '../ui/skeleton.css'
 import '../ui/blobPage.css'
 import '../ui/settings.css'
+import '../ui/themes/haze.css'
+import { AppWallpaper } from '../ui/AppWallpaper'
 import { FirstRunOnboarding } from '../ui/FirstRunOnboarding'
 import { LaunchIntro } from '../ui/LaunchIntro'
 import type { LaunchCheck } from '../ui/launchChecks'
@@ -38,7 +40,9 @@ function Preview() {
   const fixture = launchFixtureData(mode)
   const onboarding = mode.startsWith('onboarding-')
   const initialStep = mode.startsWith('onboarding-step-') ? Number(mode.slice(-1)) - 1 as 0 | 1 | 2 : undefined
+  // As in App: Haze's own surfaces are transparent, so the backdrop is drawn behind both screens.
   return <>
+    <AppWallpaper />
     <nav className="launch-preview-switcher" aria-label="Preview fixtures">
       {launchFixtureModes.map((item) => <button key={item} className="secondary-button small" aria-pressed={item === mode} onClick={() => { setMode(item); history.replaceState(null, '', `?fixture=${item}`) }}>{item}</button>)}
     </nav>

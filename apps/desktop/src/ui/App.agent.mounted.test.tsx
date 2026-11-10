@@ -341,6 +341,19 @@ describe('blob roster and editor', () => {
     expect(create?.[1]).toMatchObject({ name: 'Codex', runtimeId: 'runtime-codex', color: 'violet', approvalMode: 'bypass' })
   })
 
+  it('draws the Haze backdrop behind onboarding, whose own background is transparent in Haze', async () => {
+    configure(snapshot({ runtimes: [codexRuntime], agents: [], sessions: [] }))
+    const view = startApp()
+    await view.settle()
+    expect(view.host.querySelector('.onboarding-screen')).not.toBeNull()
+    expect(view.host.querySelector('.haze-backdrop')).toBeNull()
+    await click(view.host.querySelector('.look-orb-choice[data-look="haze"]'))
+    expect(view.host.querySelector('.onboarding-screen')).not.toBeNull()
+    expect(view.host.querySelector('.haze-backdrop')).not.toBeNull()
+    await click(view.host.querySelector('.look-orb-choice[data-look="stone"]'))
+    expect(view.host.querySelector('.haze-backdrop')).toBeNull()
+  })
+
   it('keeps an existing session-only workspace in the shell instead of auto-opening onboarding', async () => {
     const oldSession = session({ id: 'legacy-session', runtimeId: codexRuntime.id, title: 'Earlier conversation' })
     configure(snapshot({ runtimes: [codexRuntime], agents: [], sessions: [oldSession] }))
