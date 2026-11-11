@@ -129,8 +129,10 @@ export const GROUPS: Group[] = [
     { id: 'composer-typed', title: 'A long draft', url: '/?idle', steps: [{ type: [COMPOSER, Array.from({ length: 16 }, (_, index) => `Line ${index + 1} of a long draft`).join('\n')] }], note: 'How far the box grows before it scrolls.' },
     { id: 'composer-model', title: 'Model picker open', url: '/?idle&session=session-codex&agent=agent-codex', steps: [{ clickText: 'Pick a model' }], note: 'Shows every model and its efforts.' },
     { id: 'composer-model-locked', title: 'Effort meter', url: '/?session=session-codex-composer-preview&agent=agent-codex&composer-low', expect: 'composer controls' },
-    scene('queue', 'Messages waiting, closed', 'queued messages'),
-    { id: 'composer-queue-open', title: 'Messages waiting, opened', url: '/?scene=queue', expect: 'After that, run the whole suite', note: 'Plain, scheduled, retrying, waiting for a limit, and failed.', steps: [{ click: '.composer-status-chip' }, { clickText: 'Show' }] },
+    scene('queue', 'Messages waiting', 'After that, run the whole suite', 'Three rows above the box, the rest folded. Send now goes into the running turn.'),
+    { id: 'composer-queue-open', title: 'Messages waiting, all shown', url: '/?scene=queue', expect: 'This one could not be sent', note: 'Plain, scheduled, retrying, waiting for a limit, and failed.', steps: [{ clickText: 'Show' }] },
+    scene('queue-no-steer', 'Messages waiting, no steering', 'Stop and send', 'A coding agent that cannot take a message mid-turn.'),
+    scene('limited-controls', 'Usage limit with resume and snooze', 'Usage limit', 'Only where the daemon keeps resume per conversation.'),
     scene('queue-paused', 'A paused queue', 'Paused until you resume'),
   ] },
   { id: 'screens', title: 'Full screens', description: 'The other places you can go.', scenarios: [

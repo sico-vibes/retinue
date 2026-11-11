@@ -1017,13 +1017,134 @@ describe('blob roster and editor', () => {
     expect(h.rpc).toHaveBeenCalledWith('session.queue.add', { clientMessageId: expect.stringMatching(/^m-/), sessionId: 'session-claude', text: 'Then add a footer' })
     expect(h.rpc).not.toHaveBeenCalledWith('session.prompt', expect.anything())
     expect(textarea.value).toBe('')
-    // The queue is one compact row with a count; its rows unfold on demand.
-    const chip = view.host.querySelector<HTMLButtonElement>('.composer-status-chip')!
-    expect(chip.textContent).toContain('1 queued message')
-    expect(view.host.querySelector('.queue-banner')).toBeNull()
-    await act(async () => { chip.click() })
+    // The waiting message is a row above the box at once: no chip to open.
+    expect(view.host.querySelector('.composer-status-chip')).toBeNull()
     expect(view.host.querySelector('.queue-banner')?.getAttribute('aria-label')).toBe('Queued messages: 1')
     expect(view.host.querySelector('.queue-text')?.textContent).toBe('Then add a footer')
+  })
+
+  const queuedConversation = (state: string, runtimeId = 'runtime-claude', id = 'session-claude') => {
+    const live = session({ id, runtimeId, agentId: id === 'session-claude' ? 'agent-claude' : 'agent-codex', title: 'Queued', state, updatedAt: '2026-10-02T03:00:00.000Z', messages: [{ id: 'u1', role: 'user', content: 'Build the page.' }] })
+    configure(snapshot({ sessions: [live, ...sessions.filter((item) => item.id !== id)] }))
+    const queued: Array<Record<string, unknown>> = [
+      { id: 'q1', sessionId: id, text: 'Use the staging database', kind: 'user', dueAt: null, status: 'queued', error: null, position: 0 },
+      { id: 'q2', sessionId: id, text: 'Then run the suite', kind: 'user', dueAt: null, status: 'queued', error: null, position: 1 },
+    ]
+    return queued
+  }
+
+  it('sends a queued message into the running turn, and only then takes it off the queue', async () => {
+    const queued = queuedConversation('working')
+    const base = h.rpc.getMockImplementation()!
+    const order: string[] = []
+    h.rpc.mockImplementation(async (method: string, params: Record<string, unknown> = {}) => {
+      if (method === 'runtime.capabilities') return { settings: { steer: { supported: true, enabled: true } } }
+      if (method === 'session.queue.list') return { items: queued, paused: false }
+      if (method === 'session.steer') { order.push(method); return { steered: true } }
+      if (method === 'session.queue.delete') { order.push(method); queued.splice(queued.findIndex((entry) => entry.id === params.id), 1); return { ok: true } }
+      return base(method, params)
+    })
+    const view = startApp()
+    await view.settle()
+    const buttons = [...view.host.querySelectorAll<HTMLButtonElement>('.queue-send')]
+    expect(buttons.map((node) => node.textContent)).toEqual(['Send now', 'Send now'])
+    await click(buttons[0])
+    await view.settle()
+    expect(h.rpc).toHaveBeenCalledWith('session.steer', { sessionId: 'session-claude', text: 'Use the staging database', clientMessageId: expect.stringMatching(/^m-/) })
+    expect(h.rpc).toHaveBeenCalledWith('session.queue.delete', { sessionId: 'session-claude', id: 'q1' })
+    expect(order).toEqual(['session.steer', 'session.queue.delete'])
+    expect([...view.host.querySelectorAll('.queue-text')].map((node) => node.textContent)).toEqual(['Then run the suite'])
+  })
+
+  it('keeps a queued message, moved to the front, when the turn refuses it', async () => {
+    const queued = queuedConversation('working')
+    const base = h.rpc.getMockImplementation()!
+    h.rpc.mockImplementation(async (method: string, params: Record<string, unknown> = {}) => {
+      if (method === 'runtime.capabilities') return { settings: { steer: { supported: true, enabled: true } } }
+      if (method === 'session.queue.list') return { items: queued, paused: false }
+      if (method === 'session.steer') throw new Error('conflict: Nothing is running to steer.')
+      if (method === 'session.queue.send_now') return { queued: true }
+      return base(method, params)
+    })
+    const view = startApp()
+    await view.settle()
+    await click([...view.host.querySelectorAll<HTMLButtonElement>('.queue-send')][1])
+    await view.settle()
+    expect(h.rpc).not.toHaveBeenCalledWith('session.queue.delete', expect.anything())
+    expect(h.rpc).toHaveBeenCalledWith('session.queue.send_now', { sessionId: 'session-claude', id: 'q2' })
+    expect(view.host.querySelector('.composer-status-note')?.textContent).toBe('This turn could not take the message. It is next in the queue.')
+    expect(view.host.querySelectorAll('.queue-item')).toHaveLength(2)
+  })
+
+  it('says "Stop and send" for a coding agent that cannot take a message mid-turn, and says why', async () => {
+    const queued = queuedConversation('working')
+    const base = h.rpc.getMockImplementation()!
+    h.rpc.mockImplementation(async (method: string, params: Record<string, unknown> = {}) => {
+      if (method === 'runtime.capabilities') return { settings: { steer: { supported: false, enabled: false } } }
+      if (method === 'session.queue.list') return { items: queued, paused: false }
+      return base(method, params)
+    })
+    const view = startApp()
+    await view.settle()
+    expect([...view.host.querySelectorAll('.queue-send')].map((node) => node.textContent)).toEqual(['Stop and send', 'Stop and send'])
+    expect(view.host.querySelector('.queue-note')?.textContent).toBe('Steering is unavailable for this coding agent. Your message waits for the turn to end.')
+    expect(h.rpc).not.toHaveBeenCalledWith('session.steer', expect.anything())
+  })
+
+  it('opens a queued message in the message box, saves it back on send and restores the draft', async () => {
+    const queued = queuedConversation('working')
+    const base = h.rpc.getMockImplementation()!
+    h.rpc.mockImplementation(async (method: string, params: Record<string, unknown> = {}) => {
+      if (method === 'session.queue.list') return { items: queued, paused: false }
+      if (method === 'session.queue.update') { queued[0] = { ...queued[0], text: String(params.text) }; return { item: queued[0] } }
+      return base(method, params)
+    })
+    const view = startApp()
+    await view.settle()
+    const textarea = view.host.querySelector<HTMLTextAreaElement>('.composer-wrap textarea')!
+    await typeInto(textarea, 'half a thought')
+    await click(view.host.querySelector('[aria-label="Edit queued message"]'))
+    expect(textarea.value).toBe('Use the staging database')
+    expect(view.host.querySelector('.composer-status-editing')?.textContent).toContain('Editing a queued message')
+    expect(view.host.querySelector('.queue-item.editing')).not.toBeNull()
+    await typeInto(textarea, 'Use the staging database, read-only')
+    await click(view.host.querySelector('[aria-label="Save queued message"]'))
+    await view.settle()
+    expect(h.rpc).toHaveBeenCalledWith('session.queue.update', { sessionId: 'session-claude', id: 'q1', text: 'Use the staging database, read-only' })
+    expect(h.rpc).not.toHaveBeenCalledWith('session.queue.add', expect.anything())
+    expect(h.rpc).not.toHaveBeenCalledWith('session.steer', expect.anything())
+    expect(textarea.value).toBe('half a thought')
+    expect(view.host.querySelector('.composer-status-editing')).toBeNull()
+    expect(view.host.querySelector('.queue-text')?.textContent).toBe('Use the staging database, read-only')
+    // Cancel puts the earlier draft back without saving.
+    await click(view.host.querySelector('[aria-label="Edit queued message"]'))
+    await typeInto(textarea, 'changed my mind')
+    await click(view.host.querySelector('.composer-status-editing button'))
+    expect(textarea.value).toBe('half a thought')
+    expect(h.rpc.mock.calls.filter(([method]) => method === 'session.queue.update')).toHaveLength(1)
+  })
+
+  it('names a usage limit in the composer, with actions only where the daemon keeps them per conversation', async () => {
+    const until = new Date(Date.now() + 2 * 3_600_000).toISOString()
+    const limited = session({ id: 'session-claude', runtimeId: 'runtime-claude', agentId: 'agent-claude', title: 'Limited', state: 'limited', limitedUntil: until, updatedAt: '2026-10-02T03:00:00.000Z', messages: [{ id: 'u1', role: 'user', content: 'Keep going.' }] })
+    configure(snapshot({ sessions: [limited, ...sessions.filter((item) => item.id !== 'session-claude')] }))
+    const base = h.rpc.getMockImplementation()!
+    h.rpc.mockImplementation(async (method: string, params: Record<string, unknown> = {}) => {
+      if (method === 'session.limit.resume') return { ok: true }
+      return base(method, params)
+    })
+    const view = startApp()
+    await view.settle()
+    expect(view.host.querySelector('.composer-status-limit')?.textContent).toMatch(/^Usage limit · resumes /)
+    expect(view.host.querySelector('.composer-status-end button')).toBeNull()
+    expect(view.host.querySelector<HTMLTextAreaElement>('.composer-wrap textarea')?.placeholder).toMatch(/^A message you send now goes out at /)
+    await act(async () => { emit({ type: 'session.changed', sequence: 91, payload: { session: { ...limited, limitAutoResume: false } } } as DaemonEvent) })
+    await view.settle()
+    expect(view.host.querySelector('.composer-status-limit')?.textContent).toMatch(/^Usage limit · resets /)
+    const resume = view.host.querySelector<HTMLButtonElement>('.composer-status-end button')!
+    expect(resume.textContent).toBe('Resume at reset')
+    await click(resume)
+    expect(h.rpc).toHaveBeenCalledWith('session.limit.resume', { sessionId: 'session-claude', autoResume: true })
   })
 
   it('applies queue.changed events and lets the user delete a queued message', async () => {
@@ -1042,9 +1163,7 @@ describe('blob roster and editor', () => {
       emit({ type: 'queue.changed', sequence: 90, payload: { sessionId: 'session-claude', paused: true, items: [{ id: 'q9', sessionId: 'session-claude', text: 'Run the tests', kind: 'user', dueAt: null, status: 'queued', error: null, position: 0 }] } } as DaemonEvent)
     })
     await view.settle()
-    expect(view.host.querySelector('.composer-status-chip')?.textContent).toContain('1 queued message')
     expect(view.host.querySelector('.composer-status-paused')?.textContent).toContain('Paused until you resume')
-    await act(async () => { view.host.querySelector<HTMLButtonElement>('.composer-status-chip')!.click() })
     expect(view.host.querySelector('.queue-text')?.textContent).toBe('Run the tests')
     await click(view.host.querySelector('[aria-label="Remove from queue"]'))
     expect(h.rpc).toHaveBeenCalledWith('session.queue.delete', { sessionId: 'session-claude', id: 'q9' })

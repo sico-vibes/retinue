@@ -12,6 +12,8 @@ export type Scene = {
   delegations?: Array<Record<string, unknown>>
   queue?: Array<Record<string, unknown>>
   queuePaused?: boolean
+  /** false: the coding agent cannot take a message into a running turn. */
+  steer?: boolean
   session?: Partial<Session> & Record<string, unknown>
   extraSessions?: Array<Record<string, unknown>>
 }
@@ -282,6 +284,11 @@ const SCENES: Record<string, () => Scene> = {
     { id: 'q5', kind: 'send_later', text: 'Carry on when the limit resets.', whenLimitResets: true },
     { id: 'q6', kind: 'user', text: 'This one could not be sent.', status: 'failed', error: 'The coding agent stopped unexpectedly.' },
   ] }),
+  'queue-no-steer': () => ({ title: 'Messages waiting, no steering', state: 'working', steer: false, messages: [user('Fix the parser.'), bot('Working on it.')], queue: [
+    { id: 'q1', kind: 'user', text: 'Use the staging database, not production.' },
+    { id: 'q2', kind: 'user', text: 'After that, run the whole suite.' },
+  ] }),
+  'limited-controls': () => ({ title: 'At the usage limit', state: 'limited', messages: [user('Keep going.'), notice("Limited until 14:00. I'll pick up when the window opens.", { kind: 'usage_limit' })], session: { provider: 'claude', limitedUntil: new Date(Date.now() + 2 * 3_600_000).toISOString(), limitAutoResume: true } }),
   'queue-paused': () => ({ title: 'Queue paused', state: 'idle', messages: [user('Fix the parser.'), bot('Done.')], queue: [{ id: 'q1', kind: 'user', text: 'After that, run the whole suite.' }], queuePaused: true }),
 }
 

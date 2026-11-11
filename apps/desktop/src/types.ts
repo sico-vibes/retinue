@@ -331,6 +331,10 @@ export interface Session extends JsonRecord {
   link?: SessionLink | null
   /** When its usage limit resets, while it is waiting for one. */
   limitedUntil?: string | null
+  /** Whether this conversation continues on its own when its usage limit resets. Present only when the daemon keeps it per conversation. */
+  limitAutoResume?: boolean
+  /** The owner asked this limited conversation to stay quiet until woken. */
+  limitSnoozed?: boolean
   /** Phase 1B: the comparison this conversation belongs to. */
   fanoutId?: string | null
   /** Phase 1: the project's approval override, when it has one. It applies unless the conversation has its own. */

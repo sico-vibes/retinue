@@ -257,48 +257,51 @@
 .composer-control-strip .tip:hover .tip-bubble, .composer-control-strip .tip:focus-within .tip-bubble { transform: translate(0, 0); }
 @media (prefers-reduced-motion: reduce) { .tip-bubble { transition: none !important; } }
 
-/* Prompt queue: messages waiting for the current turn, and scheduled ("send later") ones. */
-/* Prompt queue: one compact status line inside the composer card. It exists only
-   while there is something to say (the component renders nothing when idle, so
-   no blank strip sits above the input); once shown, the line is 22 px and the
-   rows unfold only when asked. */
-.composer-status { display: grid; gap: 4px; }
-.composer-status-line { min-height: 22px; display: flex; align-items: center; gap: 8px; overflow: hidden; color: var(--text-3); font-size: var(--fs-2xs); white-space: nowrap; }
-.composer-status-chip { min-height: 22px; max-width: 100%; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; color: var(--text-2); border: 1px solid var(--line); border-radius: 7px; background: var(--surface-selected); font: inherit; cursor: pointer; }
-.composer-status-chip:hover:not(:disabled) { color: var(--text-1); background: var(--surface-hover); }
-.composer-status-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.composer-status-chip.failed { color: var(--danger-ink); border-color: color-mix(in srgb, var(--danger-ink) 55%, transparent); }
-.composer-status-chevron { transition: transform 120ms ease; }
-.composer-status-chevron.open { transform: rotate(180deg); }
+/* Prompt queue: inside the composer card. One status line, present only while
+   there is something to say (the component renders nothing when idle, so no
+   blank strip sits above the input), then the waiting messages as rows above
+   the box. No chip to open and no box around the rows: hairlines only, and
+   colour on a word, never on a border. */
+.composer-status { display: grid; gap: 2px; }
+.composer-status-line { min-height: 22px; display: flex; align-items: center; gap: 10px; overflow: hidden; color: var(--text-3); font-size: var(--fs-2xs); white-space: nowrap; }
+.composer-status-limit { flex: 0 0 auto; color: var(--text-2); }
+.composer-status-limit b { color: var(--warning); font-weight: 500; }
+.composer-status-editing { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
 .composer-status-paused, .composer-status-retry { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; color: var(--warning); }
 .composer-status-note { min-width: 0; flex: 1 1 auto; overflow: hidden; color: var(--text-3); text-overflow: ellipsis; }
+.composer-status-end { margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 12px; }
+.composer-status-end:empty { display: none; }
 .composer-status .queue-link { font-size: inherit; }
-.composer-queue { margin: 2px 0 4px; padding: 6px 8px; display: grid; gap: 4px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-selected); }
-.composer-queue .queue-banner { margin: 0; padding: 0; border: 0; background: none; }
-@media (prefers-reduced-motion: reduce) { .composer-status-chevron { transition: none; } }
-.queue-banner { margin: 0 12px -6px; padding: 8px 10px 14px; display: grid; gap: 6px; color: var(--text-2); border: 1px solid var(--line); border-bottom: 0; border-radius: 14px 14px 0 0; background: var(--surface-raised); font-size: var(--fs-xs); }
-.queue-head { min-height: 20px; display: flex; align-items: center; gap: 10px; color: var(--text-3); }
-.queue-title b { color: var(--text-2); font-weight: 500; }
-.queue-paused { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--warning); }
+.composer-queue { margin: 0 0 2px; }
+.queue-banner { display: grid; gap: 2px; color: var(--text-2); font-size: var(--fs-xs); }
 .queue-link { padding: 0; color: var(--text-2); border: 0; background: transparent; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .queue-link:hover:not(:disabled) { color: var(--text-1); }
 .queue-link:disabled { color: var(--text-3); cursor: default; }
-.queue-more { justify-self: start; color: var(--text-3); }
-.queue-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
-.queue-item { min-height: 28px; padding: 0 2px 0 4px; display: flex; align-items: center; gap: 8px; border-radius: 8px; }
-.queue-item:hover, .queue-item:focus-within { background: var(--surface-hover); }
+.queue-more { justify-self: start; min-height: 22px; color: var(--text-3); font-size: var(--fs-2xs); }
+.queue-note { margin: 0; color: var(--text-3); font-size: var(--fs-2xs); line-height: 22px; }
+.queue-list { margin: 0; padding: 0; list-style: none; display: grid; }
+.queue-item { min-height: 32px; padding: 4px 0; display: flex; align-items: flex-start; gap: 8px; border-bottom: 1px solid var(--line); }
 .queue-item.sending { opacity: .6; }
-.queue-kind { width: 14px; flex: 0 0 auto; display: grid; place-items: center; color: var(--text-3); }
+.queue-item.editing .queue-text { color: var(--text-3); }
+.queue-item.drop-target { border-bottom-color: var(--text-2); }
+.queue-kind, .queue-grip { width: 16px; height: 24px; flex: 0 0 auto; display: grid; place-items: center; color: var(--text-3); }
+.queue-grip { padding: 0; border: 0; border-radius: 6px; background: transparent; cursor: grab; }
+.queue-grip:hover:not(:disabled) { color: var(--text-1); }
+.queue-grip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.queue-grip:disabled { cursor: default; }
 .queue-item.failed .queue-kind { color: var(--danger-ink); }
 .queue-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--text-3); }
-.queue-text { min-width: 0; flex: 1; overflow: hidden; color: var(--text-1); text-overflow: ellipsis; white-space: nowrap; }
-.queue-edit { min-width: 0; flex: 1; height: 24px; padding: 0 8px; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface-app, transparent); font: inherit; }
-.queue-edit:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.queue-meta { flex: 0 1 auto; max-width: 45%; overflow: hidden; color: var(--text-3); text-overflow: ellipsis; white-space: nowrap; }
+.queue-body { min-width: 0; flex: 1; padding: 2px 0; display: grid; line-height: 20px; }
+.queue-text { display: -webkit-box; overflow: hidden; color: var(--text-1); overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.queue-meta { color: var(--text-3); overflow-wrap: anywhere; }
 .queue-meta.danger { color: var(--danger-ink); }
-.queue-confirm { display: inline-flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px 10px; color: var(--text-2); }
-.queue-actions { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 0; opacity: 0; transition: opacity 120ms ease; }
-.queue-item:hover .queue-actions, .queue-item:focus-within .queue-actions, .queue-item.failed .queue-actions { opacity: 1; }
+.queue-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; color: var(--text-2); }
+.queue-actions { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 2px; }
+.queue-send { height: 24px; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; color: var(--text-2); border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: var(--fs-2xs); white-space: nowrap; cursor: pointer; }
+.queue-send.primary { color: var(--text-1); background: var(--surface-selected); }
+.queue-send:hover:not(:disabled) { color: var(--text-1); background: var(--surface-hover); }
+.queue-send:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.queue-send:disabled { opacity: .45; cursor: default; }
 .queue-icon { width: 24px; height: 24px; display: grid; place-items: center; color: var(--text-3); border: 0; border-radius: 6px; background: transparent; cursor: pointer; }
 .queue-icon:hover:not(:disabled) { color: var(--text-1); background: var(--surface-hover); }
 .queue-icon:focus-visible { outline: none; box-shadow: var(--focus-ring); }
@@ -309,7 +312,6 @@
 .send-later-custom input { height: 30px; padding: 0 8px; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: 8px; background: transparent; color-scheme: dark light; font: inherit; }
 .send-later-custom input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .send-later-problem { margin: 0; color: var(--danger-ink); font-size: var(--fs-xs); }
-@media (prefers-reduced-motion: reduce) { .queue-actions { transition: none; } }
 
 /* Slash commands (FIX37 G4): a menu above the composer, never over its text. */
 .slash-menu { position: absolute; z-index: 40; left: 12px; bottom: calc(100% + 8px); width: min(360px, calc(100% - 24px)); max-height: min(360px, 52vh); overflow-y: auto; padding: 5px; display: grid; gap: 1px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; animation: composer-menu-in 120ms ease-out both; }
@@ -331,7 +333,6 @@
 .slash-chip-remove:hover { color: var(--text-1); background: var(--surface-hover); }
 @media (prefers-reduced-motion: reduce) { .slash-menu { animation: none; } }
 
-.composer-status-interrupt { margin-left: auto; white-space: nowrap; }
 
 /* A file attached by path (documents, audio, video): a chip above the box, never a thumbnail. */
 .composer-file-ref { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 2px 4px; }

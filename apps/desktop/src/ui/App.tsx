@@ -23,7 +23,7 @@ import { ApprovalCard, type PermissionReplyOptions } from './ApprovalCard'
 import retinueTileDark from '../assets/brand/retinue-tile-dark.png'
 import retinueTileLight from '../assets/brand/retinue-tile-light.png'
 import { sessionsForPauseRequest } from './trayActions'
-import { applyEvent, formatUnknownSafe, isPermissionReplyAllowed, labelize, isAutomation, normalizeQueueState, type Agent, type AutomationRun, type ChatMessage, type ConnectionState, type DaemonEvent, type PermissionRequest, type Project, type Runtime, type Session, type Snapshot } from '../types'
+import { applyEvent, formatUnknownSafe, isPermissionReplyAllowed, labelize, isAutomation, normalizeQueueState, type Agent, type AutomationRun, type QueuedPrompt, type ChatMessage, type ConnectionState, type DaemonEvent, type PermissionRequest, type Project, type Runtime, type Session, type Snapshot } from '../types'
 import { agentColorHex } from './agentColor'
 import { TeamPage, type TeamTab } from './TeamPage'
 import { announceMembersChanged } from './projectMembers'
@@ -142,7 +142,7 @@ import { RemoteChip } from './RemoteChip'
 import { TourHost } from './tour/TourHost'
 import { ContextualHints } from './tour/ContextualHints'
 import { startTour } from './tour/startTour'
-import { ComposerStatus } from './PromptQueue'
+import { ComposerStatus, type LimitLine } from './PromptQueue'
 import { AttachMenu, AttachmentTray, MAX_COMPOSER_ATTACHMENTS, MessageAttachments, PermissionModeControl, prepareImageBytes, sessionApprovalMode, type ComposerAttachment } from './ComposerControls'
 import { GeneratedImage, generatedImageMeta, imagePromptFrom } from './GeneratedImage'
 import { ConversationOutline, outlineItemsFromMessages } from './ConversationOutline'
@@ -362,7 +362,8 @@ export function App() {
   /** Messages sent but not yet confirmed by the daemon: shown at once as "Sending…" so the composer never waits. */
   const [pendingSends, setPendingSends] = useState<PendingSend[]>([])
   /** The composer's queue rows stay folded until the owner asks for them. */
-  const [queueExpanded, setQueueExpanded] = useState(false)
+  /** A queued message open in the message box: sending the box saves it back, Cancel puts the earlier draft back. */
+  const [queueEdit, setQueueEdit] = useState<{ id: string; key: string | null; previous: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [settingsSheet, setSettingsSheet] = useState(false)
   const [settingsInitialPage, setSettingsInitialPage] = useState<SettingsPageId>('General')
@@ -828,7 +829,15 @@ export function App() {
   const steerAvailable = useSteerAvailable(steerRuntimeId(selectedSession?.state, selectedSession?.runtimeId), connection === 'connected', `${selectedSession?.state}:${steerRevision}`)
   useEffect(() => { setDeliveryNotice(null) }, [selectedSession?.id, selectedSession?.state])
   // The queue rows fold again for another conversation, so the card stays compact.
-  useEffect(() => { setQueueExpanded(false) }, [selectedSession?.id])
+  // Closing the window mid-edit must not leave the queued text behind as the draft: the store writes drafts on pagehide, after this.
+  useEffect(() => {
+    if (!queueEdit) return
+    const restore = () => saveDraft(queueEdit.key, queueEdit.previous)
+    window.addEventListener('beforeunload', restore)
+    return () => window.removeEventListener('beforeunload', restore)
+  }, [queueEdit])
+  // Leaving the conversation ends the edit and gives that box its earlier draft back.
+  useEffect(() => { setQueueEdit((edit) => { if (edit && edit.key !== composerKey) { saveDraft(edit.key, edit.previous); return null } return edit }) }, [composerKey])
   const agentName = sideSession ? sideAgent?.name ?? 'Teammate' : activeSelectedAgent?.name ?? (selectedRuntime ? labelize(selectedRuntime.provider) : 'No runtime selected')
   const outlineItems = outlineItemsFromMessages(
     groupedConversationItems.filter((item): item is ConversationItem & { kind: 'message' } => item.kind === 'message'),
@@ -1257,7 +1266,8 @@ export function App() {
         const storedRuntime = await getActiveRuntime()
         setActiveSessionId(storedActive)
         setSelectedRuntimeId(storedRuntime)
-        setSnapshot(initial)
+        // The open conversation's queue can load before this lands (a remount does it); keep it.
+        setSnapshot((current) => carryQueues(initial, current))
         setConnection(new URLSearchParams(location.search).has('disconnected') ? 'disconnected' : 'connected')
         await startDaemonEventStream()
         const missedWhileSubscribing = [...(replay.replayAvailable === false ? [] : replay.events ?? []), ...queuedEvents.current]
@@ -2073,6 +2083,16 @@ export function App() {
    * message sent during a turn.
    */
   const sendPrompt = async (dueAt?: string, opposite = false) => {
+    // A queued message open in the box is saved back to its row, never sent as a new one.
+    if (queueEdit) {
+      const edit = queueEdit
+      const edited = composer.trim()
+      if (!edited || edit.key !== composerKey) return
+      setQueueEdit(null)
+      setComposer(edit.previous)
+      await queueRpc('session.queue.update', { id: edit.id, text: edited, ...(dueAt ? { dueAt } : {}) })
+      return
+    }
     // The `#` an `@` pick added, still empty, was never part of the message.
     const text = (hashRef?.auto && !hashRef.query && composer[hashRef.start] === '#' ? `${composer.slice(0, hashRef.start)}${composer.slice(hashRef.start + 1)}` : composer).trim()
     const ready = attachments.filter((item) => item.status === 'ready' && item.path)
@@ -2350,9 +2370,48 @@ ${fileReferenceText(sentFile)}` : typed
   }
   const sendQueuedNow = (id: string, confirmResend = false) => void queueRpc('session.queue.send_now', { id, ...(confirmResend ? { confirmResend: true } : {}) })
   const deleteQueued = (id: string) => void queueRpc('session.queue.delete', { id })
-  const updateQueued = (id: string, text: string) => void queueRpc('session.queue.update', { id, text })
   const reorderQueued = (ids: string[]) => void queueRpc('session.queue.reorder', { ids })
   const resumeQueue = () => void queueRpc('session.queue.resume', {})
+  const editQueued = (item: QueuedPrompt) => {
+    if (queueEdit) setComposer(queueEdit.previous)
+    setQueueEdit({ id: item.id, key: composerKey, previous: queueEdit ? queueEdit.previous : composer })
+    setComposer(item.text)
+    requestAnimationFrame(() => composerRef.current?.focus())
+  }
+  const cancelQueueEdit = () => { if (!queueEdit) return; setComposer(queueEdit.previous); setQueueEdit(null) }
+  /** "Send now" while a turn runs: the message goes into the turn, and only then leaves the queue, so it is never lost in between. */
+  const steerQueued = async (id: string) => {
+    const session = selectedSession
+    const item = snapshotRef.current?.queues?.[session?.id ?? '']?.items.find((entry) => entry.id === id)
+    if (!session || !item) return
+    try {
+      await rpc('session.steer', { sessionId: session.id, text: item.text, clientMessageId: newClientMessageId() })
+    } catch (reason) {
+      // A plain refusal means nothing was sent: the message goes to the front of the queue and says why.
+      if (['unsupported', 'conflict'].includes(daemonCodeOf(reason) ?? '')) {
+        setDeliveryNotice('This turn could not take the message. It is next in the queue.')
+        await queueRpc('session.queue.send_now', { id })
+      } else setError(`Retinue could not confirm the message was received. It is still in the queue; remove it if it already arrived. ${messageOf(reason)}`)
+      return
+    }
+    setDeliveryNotice(null)
+    await queueRpc('session.queue.delete', { id })
+  }
+  /** "Stop and send": stop the running turn, wait until it has really ended, then send this queued message. */
+  const stopAndSendQueued = async (id: string) => {
+    const target = selectedSession
+    if (!target || isDraftSession(target)) return
+    try { await doRpc('session.cancel', { sessionId: target.id }) } catch { return }
+    const stateOf = () => snapshotRef.current?.sessions?.find((item) => item.id === target.id)?.state ?? ''
+    const live = () => ['working', 'starting', 'waiting_permission', 'cancelling'].includes(stateOf())
+    for (let waited = 0; waited < 12000 && live(); waited += 250) await new Promise((resolve) => window.setTimeout(resolve, 250))
+    await refresh().catch(() => undefined)
+    if (live()) { setError('The turn is still stopping, so the message was not sent. It is still in the queue; send it once the turn has stopped.'); return }
+    await queueRpc('session.queue.send_now', { id })
+  }
+  /** Per-conversation resume and snooze exist only where the daemon reports them on the conversation. */
+  const setLimitResume = (on: boolean) => void queueRpc('session.limit.resume', { autoResume: on })
+  const setLimitSnooze = (on: boolean) => void queueRpc('session.limit.snooze', { snoozed: on })
   const cancelAutoRetry = () => void queueRpc('turn.retry.cancel', {})
 
   /** Schedules (automations): the daemon owns the timer; these calls only edit definitions and read runs. */
@@ -2722,6 +2781,15 @@ ${fileReferenceText(sentFile)}` : typed
   const selectedMood = deriveCompanionStatus({ connected: connection === 'connected', runtime: selectedRuntime, session: selectedSession, composing: !!composer.trim(), now }).mood
   const sessionBusy = ['working', 'starting', 'waiting_permission'].includes(selectedSession?.state ?? '')
   const limitUntil = sessionBusy ? null : limitWaitingUntil(selectedSession, now)
+  // The composer's usage-limit line. "Resumes" only when the daemon will continue on its own; the two actions only when it reports the per-conversation state.
+  const limitPerConversation = typeof selectedSession?.limitAutoResume === 'boolean'
+  const limitLine: LimitLine | null = !sessionBusy && (limitUntil || selectedSession?.state === 'limited') ? {
+    at: limitUntil ? limitResetTime(limitUntil) : null,
+    resumes: limitPerConversation ? selectedSession?.limitAutoResume === true : experiments.resumeAfterUsageLimits === true,
+    snoozed: selectedSession?.limitSnoozed === true,
+    ...(limitPerConversation ? { onResumeAtReset: setLimitResume, onSnooze: setLimitSnooze } : {}),
+  } : null
+  const queueWaitNote = sessionBusy ? busyDelivery('steer', false, selectedSession?.state, steerAvailable).reason : null
   sendPromptRef.current = sendPrompt
   shortcutHandlers.current = {
     'app.searchProject': () => { if (inDesktop) setProjectSearchOpen(true) },
@@ -3087,7 +3155,7 @@ ${fileReferenceText(sentFile)}` : typed
           {sideSession?.link?.subbot === true ? <SubbotComposer sessionId={sideSession.id} name={agents.find((agent) => agent.id === sideSession.agentId)?.name ?? 'this helper'} onClose={closeSideConversation} /> : sideSession ? <div className="side-close"><button type="button" className="secondary-button" onClick={closeSideConversation}>Close chat</button></div> : selectedSession?.link?.movedTo ? <MovedBar sessionId={selectedSession.id} movedTo={selectedSession.link.movedTo} machines={machines} onMoved={() => { void refresh(); void reloadMachines() }} /> : <div className="composer-wrap">
             {usageTip && <UsageTip tip={usageTip} onDismiss={() => dismissUsageTip(usageTip)} onViewUsage={() => showUsage()} />}
             <div data-tour="composer" className={`composer-box ${composerDropActive ? 'drop-active' : ''}`} onDragOver={(event) => { if (!imagesSupported || !Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) return; event.preventDefault(); setComposerDropActive(true) }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setComposerDropActive(false) }} onDrop={(event) => { setComposerDropActive(false); if (!imagesSupported) return; const files = Array.from(event.dataTransfer.files); if (!files.length) return; event.preventDefault(); addAttachments(files) }}>
-              <ComposerStatus onInterrupt={turnLive && composer.trim() && !busy ? () => void interruptAndSend() : undefined} items={promptQueue?.items ?? []} paused={promptQueue?.paused ?? false} sessionBusy={sessionBusy} notice={deliveryNotice} nowMs={queueNowMs} disabled={connection !== 'connected'} expanded={queueExpanded && (promptQueue?.items.length ?? 0) > 0} onToggle={() => setQueueExpanded((value) => !value)} onResume={resumeQueue} onSendNow={sendQueuedNow} onDelete={deleteQueued} onUpdate={updateQueued} onReorder={reorderQueued} onCancelRetry={cancelAutoRetry} />
+              <ComposerStatus onInterrupt={turnLive && composer.trim() && !busy ? () => void interruptAndSend() : undefined} items={promptQueue?.items ?? []} paused={promptQueue?.paused ?? false} sessionBusy={sessionBusy} notice={deliveryNotice} nowMs={queueNowMs} disabled={connection !== 'connected'} limit={limitLine} editing={queueEdit && queueEdit.key === composerKey ? { id: queueEdit.id, onCancel: cancelQueueEdit } : null} botName={agentName} steer={steerAvailable && selectedSession?.state === 'working'} waitNote={queueWaitNote} onResume={resumeQueue} onSendNow={sendQueuedNow} onSteer={(id) => void steerQueued(id)} onStopAndSend={turnLive ? (id) => void stopAndSendQueued(id) : undefined} onEdit={editQueued} onDelete={(id) => { if (queueEdit?.id === id) cancelQueueEdit(); deleteQueued(id) }} onReorder={reorderQueued} onCancelRetry={cancelAutoRetry} />
               {replyTarget && <ReplyContextStrip target={replyTarget} onCancel={() => { replyTargetRef.current = null; setReplyTarget(null) }} />}
               <AnnotationTray annotations={annotations} onRemove={(index) => setAnnotations((current) => current.filter((_, position) => position !== index))} />
               <AttachmentTray attachments={attachments} onRemove={removeAttachment} />
@@ -3130,7 +3198,7 @@ ${fileReferenceText(sentFile)}` : typed
                 }
                 const enter = composerEnterAction(event.nativeEvent, sendShortcut)
                 if (enter) { event.preventDefault(); void sendPrompt(undefined, enter === 'opposite') }
-              }} placeholder={!runtimeReady ? `${agentName}'s coding agent is not ready` : limitUntil ? `${agentName} is at its usage limit. A message goes out at ${limitResetTime(limitUntil)}` : selectedSession.state === 'waiting_permission' ? `Answer the request above, or queue a message for ${agentName}` : sessionBusy ? composerDelivery.mode === 'steer' ? `Steer ${agentName} now` : `Queue a message for ${agentName}` : activeSelectedAgent?.systemRole === 'manager' && !(selectedSession.messages ?? []).some((message) => message.role === 'user') ? `Tell ${agentName} what needs doing. Type @ to name an employee` : `Message ${agentName}`} aria-label={`Message ${agentName}`} disabled={busy || !runtimeReady} rows={1} />
+              }} placeholder={!runtimeReady ? `${agentName}'s coding agent is not ready` : queueEdit && queueEdit.key === composerKey ? 'Edit the queued message, then send to save it' : limitUntil ? `A message you send now goes out at ${limitResetTime(limitUntil)}` : selectedSession.state === 'waiting_permission' ? `Answer the request above, or queue a message for ${agentName}` : sessionBusy ? composerDelivery.mode === 'steer' ? `Steer ${agentName} now` : `Queue a message for ${agentName}` : activeSelectedAgent?.systemRole === 'manager' && !(selectedSession.messages ?? []).some((message) => message.role === 'user') ? `Tell ${agentName} what needs doing. Type @ to name an employee` : `Message ${agentName}`} aria-label={`Message ${agentName}`} disabled={busy || !runtimeReady} rows={1} />
               <div className="composer-control-strip" data-tour="controls">
                 <div className="composer-controls-start">
                   <AttachMenu imagesSupported={imagesSupported} imagesDisabled={connection !== 'connected' || busy || !runtimeReady} imageCount={attachments.length} fileDisabled={connection !== 'connected' || busy || !runtimeReady || !selectedSession} onImages={addAttachments} onGenerateImage={generatesImages && connection === 'connected' && !busy && runtimeReady ? askForImage : undefined} onPickFile={() => { void (async () => { try { const path = await selectLocalFile(); if (!path) return; const info = await inspectLocalFile(path); setLocalFile({ fileName: info.fileName, path: info.path, sizeBytes: info.sizeBytes }); setLocalFileError(null) } catch (reason) { setLocalFileError(messageOf(reason)) } })() }} />
@@ -3142,7 +3210,7 @@ ${fileReferenceText(sentFile)}` : typed
                   <ContextWindowIndicator used={selectedSession.contextUsed} size={selectedSession.contextSize} contextModel={selectedSession.contextModel} contextEstimated={selectedSession.contextEstimated} model={contextModel} isNewConversation={(selectedSession.messages ?? []).length === 0} quota={sessionQuota} onOpenUsage={() => showUsage()} />
                   {platform.nativeSpeech && speechEnabled && <DictationButton owner="desktop" modelId={speechModel} onFinal={(text) => setComposer((current) => (current ? `${current} ${text}` : text))} disabled={connection !== 'connected' || busy || selectedSession.state === 'waiting_permission' || !runtimeReady} />}
                   {turnLive && <button className="send-button cancel" onClick={() => void cancelTurn()} disabled={busy} aria-label="Cancel turn" title="Stop"><Square size={12} fill="currentColor" /></button>}
-                  <button className="send-button" onClick={(event) => void sendPrompt(undefined, event.ctrlKey || event.metaKey)} disabled={connection !== 'connected' || busy || clipboardReadPending || (!composer.trim() && !annotations.length && !attachments.some((item) => item.status === 'ready')) || attachments.some((item) => item.status === 'staging') || !runtimeReady} aria-label={limitUntil ? 'Send when the limit resets' : sessionBusy ? composerDelivery.mode === 'steer' ? 'Steer now' : 'Queue message' : 'Send message'} title={clipboardReadPending ? 'Preparing the pasted image' : connection !== 'connected' ? 'Waiting for the connection' : limitUntil ? `Goes out when the limit resets, at ${limitResetTime(limitUntil)}` : sessionBusy ? composerDelivery.mode === 'steer' ? `Steer this turn now. ${oppositeKeys(sendShortcut)} queues instead.` : `Add to the queue. ${oppositeKeys(sendShortcut)} sends the other way where supported.` : 'Send'}>{busy ? <LoaderCircle size={16} className="spinning" /> : limitUntil ? <Clock size={16} /> : sessionBusy && composerDelivery.mode === 'queue' ? <ListPlus size={17} /> : <ArrowUp size={17} />}</button>
+                  <button className="send-button" onClick={(event) => void sendPrompt(undefined, event.ctrlKey || event.metaKey)} disabled={connection !== 'connected' || busy || clipboardReadPending || (!composer.trim() && !annotations.length && !attachments.some((item) => item.status === 'ready')) || attachments.some((item) => item.status === 'staging') || !runtimeReady} aria-label={queueEdit && queueEdit.key === composerKey ? 'Save queued message' : limitUntil ? 'Send when the limit resets' : sessionBusy ? composerDelivery.mode === 'steer' ? 'Steer now' : 'Queue message' : 'Send message'} title={clipboardReadPending ? 'Preparing the pasted image' : connection !== 'connected' ? 'Waiting for the connection' : queueEdit && queueEdit.key === composerKey ? 'Save the queued message' : limitUntil ? `Goes out when the limit resets, at ${limitResetTime(limitUntil)}` : sessionBusy ? composerDelivery.mode === 'steer' ? `Steer this turn now. ${oppositeKeys(sendShortcut)} queues instead.` : `Add to the queue. ${oppositeKeys(sendShortcut)} sends the other way where supported.` : 'Send'}>{busy ? <LoaderCircle size={16} className="spinning" /> : limitUntil ? <Clock size={16} /> : sessionBusy && composerDelivery.mode === 'queue' ? <ListPlus size={17} /> : <ArrowUp size={17} />}</button>
                 </div>
               </div>
             </div>

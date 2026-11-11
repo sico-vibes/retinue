@@ -1097,6 +1097,15 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     notifyFixtureDaemon('message.completed', { sessionId: session.id, turnId, id, messageId: id, role: 'user', content: text, meta: { kind: 'steer' } })
     return { steered: true, turnId } as T
   }
+  if (method === 'session.limit.resume' || method === 'session.limit.snooze') {
+    // Stands in for the per-conversation resume state the daemon does not keep yet.
+    const session = sessions.find((item) => item.id === params.sessionId)
+    if (!session) throw rpcError('not_found', 'Conversation not found.')
+    if (method === 'session.limit.resume') { session.limitAutoResume = params.autoResume === true; if (!session.limitAutoResume) session.limitSnoozed = false }
+    else session.limitSnoozed = params.snoozed === true
+    notifyFixtureDaemon('session.changed', { session: { ...session } })
+    return { ok: true } as T
+  }
   if (method === 'turn.retry.cancel') {
     const session = sessions.find((item) => item.id === params.sessionId)
     if (!session) throw rpcError('not_found', 'Conversation not found.')
@@ -1216,7 +1225,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     const thinking = params.runtimeId === 'runtime-opencode' ? { ...supported, enabled: false, reason: 'execution entry gate is disabled' } : supported
     // Steering exists for Codex only, is open by default (FIX39 P13: the gate
     // follows the adapter's capability) and is never proven.
-    const steer = params.runtimeId === 'runtime-codex'
+    const steer = params.runtimeId === 'runtime-codex' && fixtureScene?.steer !== false
       ? { supported: true, enabled: fixtureSettings['exec_gate.codex.steer'] !== false, scope: 'turn', evidence: 'none', ...(fixtureSettings['exec_gate.codex.steer'] === false ? { reason: 'execution entry gate is disabled' } : {}) }
       : { supported: false, enabled: false, scope: 'turn', evidence: 'none', reason: 'setting is unsupported by this runtime' }
     return { runtimeId: params.runtimeId, generatesImages: params.runtimeId === 'runtime-codex', settings: { model: supported, thinking, serviceTier: supported, instructions: supported, customEnv: supported, steer } } as T
