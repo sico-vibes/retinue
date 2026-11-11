@@ -635,8 +635,19 @@ async fn settle_exhausted(st: &AppState, session_id: &str) -> bool {
 }
 
 pub async fn sweep(st: &AppState) {
-    if st.db.settings().unwrap_or(Value::Null)["experimental.resumeAfterUsageLimits"] == false { return; }
+    // The conversation's own `limit_auto_resume` decides, not the global
+    // experiment: the experiment only seeds a conversation when it first becomes
+    // limited. This sweep only resumes limited conversations; the non-limit
+    // continuation path (`continue_on_activation`, driven by
+    // `continuation_pending`) is separate and already ignores the experiment.
     for id in st.db.watchdog_due_sessions(&now_millis()).unwrap_or_default() {
+        // The storage query already leaves out opted-out and snoozed
+        // conversations. Check again here: resuming one by accident is worse than
+        // one redundant read, and a change to the query must not change this.
+        match st.db.session_limit_flags(&id) {
+            Ok((true, false)) => {}
+            _ => continue,
+        }
         if crate::team::session_busy(st,&id).await { continue; }
         let gate = crate::gate_for_session(st,&id).await;
         let _guard = gate.lock().await;

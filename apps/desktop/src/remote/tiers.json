@@ -380,6 +380,20 @@
       "params": null
     },
     {
+      "method": "session.limit.resume",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Arms or cancels the automatic resume when a conversation's usage limit resets.",
+      "params": null
+    },
+    {
+      "method": "session.limit.snooze",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Holds a limited conversation, and the messages waiting for its reset, until the owner wakes it.",
+      "params": null
+    },
+    {
       "method": "session.cancel",
       "class": "chat",
       "minTier": "chat",

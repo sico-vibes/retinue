@@ -199,3 +199,24 @@ fn the_untouched_default_playbook_becomes_the_ceo_one() {
     run_data_step(&db);
     assert_eq!(db.manager_playbook_current().unwrap()["text"], "# Ours\n\nOur own rules.");
 }
+
+#[test]
+fn the_delegating_section_reaches_an_untouched_default_and_not_an_edited_one() {
+    assert!(DEFAULT_PLAYBOOK.contains("## Delegating"));
+    assert!(!DEFAULT_PLAYBOOK_V2.contains("## Delegating"));
+    let db = Storage::open_in_memory().unwrap();
+    // An install still on the previous default is moved to the new text.
+    db.conn.lock().unwrap().execute("UPDATE manager_playbook SET text=?1 WHERE version=1", [DEFAULT_PLAYBOOK_V2.trim()]).unwrap();
+    forget_marker(&db, "migration.delegatingPlaybook");
+    run_data_step(&db);
+    let playbook = db.manager_playbook_current().unwrap();
+    assert_eq!(playbook["text"], DEFAULT_PLAYBOOK.trim());
+    assert_eq!(playbook["author"], "default");
+    assert!(playbook["version"].as_i64().unwrap() > 1, "a new version, so the history is kept");
+    // A playbook the owner edited is left exactly as it is.
+    let db = Storage::open_in_memory().unwrap();
+    db.manager_playbook_append("# Ours\n\nOur own rules.", "user").unwrap();
+    forget_marker(&db, "migration.delegatingPlaybook");
+    run_data_step(&db);
+    assert_eq!(db.manager_playbook_current().unwrap()["text"], "# Ours\n\nOur own rules.");
+}

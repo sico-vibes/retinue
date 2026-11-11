@@ -89,12 +89,14 @@ pub(super) fn ensure_phase9_data(c: &Connection) -> Result<(), StorageError> {
     seed_project_members(c)?;
     rename_manager_to_ceo(c)?;
     replace_default_playbook(c)?;
+    replace_delegating_playbook(c)?;
     Ok(())
 }
 
 const MEMBERS_MARKER: &str = "migration.projectMembersSeeded";
 const CEO_MARKER: &str = "migration.ceoRename";
 const PLAYBOOK_MARKER: &str = "migration.ceoPlaybook";
+const DELEGATING_MARKER: &str = "migration.delegatingPlaybook";
 
 /// The playbook says CEO now. A stored playbook still exactly as it shipped is
 /// the untouched default, so the new text is added as a new version; one the
@@ -115,6 +117,28 @@ fn replace_default_playbook(c: &Connection) -> Result<(), StorageError> {
         )?;
     }
     c.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?1,'true')", [PLAYBOOK_MARKER])?;
+    Ok(())
+}
+
+/// The default playbook gained a "Delegating" section. A stored copy that still
+/// reads exactly as the previous default is untouched and becomes a new version;
+/// one the owner edited is theirs and is left alone.
+fn replace_delegating_playbook(c: &Connection) -> Result<(), StorageError> {
+    let done: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM settings WHERE key=?1)", [DELEGATING_MARKER], |r| r.get(0))?;
+    if done {
+        return Ok(());
+    }
+    let current: Option<String> = c
+        .query_row("SELECT text FROM manager_playbook ORDER BY version DESC LIMIT 1", [], |r| r.get(0))
+        .optional()?;
+    if current.as_deref().map(str::trim) == Some(super::DEFAULT_PLAYBOOK_V2.trim()) {
+        let version: i64 = c.query_row("SELECT COALESCE(MAX(version),0)+1 FROM manager_playbook", [], |r| r.get(0))?;
+        c.execute(
+            "INSERT INTO manager_playbook(version,text,author,created_at) VALUES(?1,?2,'default',?3)",
+            params![version, super::DEFAULT_PLAYBOOK.trim(), Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)],
+        )?;
+    }
+    c.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?1,'true')", [DELEGATING_MARKER])?;
     Ok(())
 }
 

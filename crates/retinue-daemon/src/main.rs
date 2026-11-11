@@ -1502,6 +1502,8 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             session_prompt(st, p).await
         }
         "session.steer" => session_steer(st, p).await,
+        "session.limit.resume" => session_limit_resume(st, p).await,
+        "session.limit.snooze" => session_limit_snooze(st, p).await,
         "session.handoff.draft" => handoff_draft(st, &p),
         "turn.retry.cancel" => retry::cancel_rpc(st, &p).await,
         "session.queue.add" | "session.queue.list" | "session.queue.update" | "session.queue.reorder" | "session.queue.delete" | "session.queue.send_now" | "session.queue.resume" => queue::queue_rpc(st, method, &p).await,
@@ -4537,6 +4539,29 @@ async fn session_steer(st: &AppState, p: Value) -> Result<Value, DispatchError> 
 pub(crate) async fn session_steer_marked(st: &AppState, p: Value, mcp_client: Option<&str>) -> Result<Value, DispatchError> {
     let sid = p["sessionId"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "sessionId is required", StatusCode::BAD_REQUEST))?;
     let text = p["text"].as_str().unwrap_or("");
+    match steer_live(st, sid, text, None, mcp_client).await? {
+        SteerAttempt::Accepted { turn_id } => Ok(json!({"steered":true,"turnId":turn_id})),
+        SteerAttempt::Stale => {
+            let item = queue::enqueue_steer(st, sid, text).await?;
+            Ok(json!({"steered":false,"queued":true,"item":item}))
+        }
+        SteerAttempt::Failed(error) => Err(steer_dispatch_error(error)),
+    }
+}
+
+/// What the running turn's adapter did with steering text. Returned instead of
+/// an error so the one-step queue send can put its own item back after a stale
+/// turn, rather than starting a second copy through `enqueue_steer`.
+pub(crate) enum SteerAttempt {
+    Accepted { turn_id: String },
+    Stale,
+    Failed(retinue_agent_core::AdapterError),
+}
+
+/// Deliver text into the live turn. `client_message_id` is the send id a queued
+/// item was stored under: its message row carries it, so replaying the same send
+/// finds that row and never writes a second one.
+pub(crate) async fn steer_live(st: &AppState, sid: &str, text: &str, client_message_id: Option<&str>, mcp_client: Option<&str>) -> Result<SteerAttempt, DispatchError> {
     let trimmed = text.trim();
     if trimmed.is_empty() || trimmed.len() > 100_000 {
         return Err(derr("invalid_argument", "text must contain 1 to 100000 UTF-8 bytes", StatusCode::BAD_REQUEST));
@@ -4553,6 +4578,18 @@ pub(crate) async fn session_steer_marked(st: &AppState, p: Value, mcp_client: Op
     if !settings[format!("exec_gate.{provider}.steer")].as_bool().unwrap_or(gate_default(provider, "steer")) {
         return Err(derr("unsupported", "Steering is turned off for this runtime.", StatusCode::BAD_REQUEST));
     }
+    // The replay lookup comes before the live-turn check: a send that already
+    // reached the turn is answered with that turn even if the turn has since
+    // ended, and it never steers a second time.
+    if let Some(client_id) = client_message_id {
+        if let Some(existing) = st.db.message_by_client_id(sid, client_id).map_err(agent_error)? {
+            if existing["content"].as_str() != Some(text) {
+                return Err(derr("conflict", "This message id was already used for a different message.", StatusCode::CONFLICT));
+            }
+            if message_delivery_unknown(&existing) { return Err(delivery_unknown()); }
+            return Ok(SteerAttempt::Accepted { turn_id: existing["turnId"].as_str().unwrap_or("").to_owned() });
+        }
+    }
     // Serialise with turn completion and cancellation through the per-session gate.
     let gate = gate_for_session(st, sid).await;
     let _guard = gate.lock().await;
@@ -4567,19 +4604,17 @@ pub(crate) async fn session_steer_marked(st: &AppState, p: Value, mcp_client: Op
         Ok(SteerOutcome::Accepted) => {
             let mut meta = json!({"kind":"steer"});
             if let Some(client) = mcp_client { meta["origin"] = external::origin(Some(client)); }
+            if let Some(client_id) = client_message_id { meta["clientMessageId"] = json!(client_id); }
             let user_message = st.db
                 .append_message_with_data(sid, &turn_id, "user", text, &json!({"meta":meta}))
                 .map_err(|e| derr("internal", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
             if !user_message.is_null() {
                 st.emit("message.completed", json!({"sessionId":sid,"turnId":turn_id,"messageId":user_message["id"],"role":"user","message":user_message})).await;
             }
-            Ok(json!({"steered":true,"turnId":turn_id}))
+            Ok(SteerAttempt::Accepted { turn_id })
         }
-        Ok(SteerOutcome::Stale) => {
-            let item = queue::enqueue_steer(st, sid, text).await?;
-            Ok(json!({"steered":false,"queued":true,"item":item}))
-        }
-        Err(error) => Err(steer_dispatch_error(error)),
+        Ok(SteerOutcome::Stale) => Ok(SteerAttempt::Stale),
+        Err(error) => Ok(SteerAttempt::Failed(error)),
     }
 }
 
@@ -4594,6 +4629,44 @@ fn steer_dispatch_error(error: retinue_agent_core::AdapterError) -> DispatchErro
         retinue_agent_core::AdapterError::Rejected(_) => derr("provider_error", "The provider rejected the steering request.", StatusCode::BAD_GATEWAY),
         _ => derr("provider_error", "The provider could not accept the steering request.", StatusCode::BAD_GATEWAY),
     }
+}
+
+/// The conversation a `session.limit.*` call may change: it exists, is not
+/// archived, is not an unattended run (those keep their own rules), and is
+/// waiting for a usage limit right now.
+fn limit_mutable_session(st: &AppState, p: &Value) -> Result<String, DispatchError> {
+    let sid = p["sessionId"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "sessionId is required", StatusCode::BAD_REQUEST))?.to_owned();
+    let row = st.db.session_brief(&sid).map_err(|_| derr("not_found", "Conversation not found.", StatusCode::NOT_FOUND))?;
+    if row["archived"] == true { return Err(derr("not_found", "Conversation is archived.", StatusCode::NOT_FOUND)); }
+    if is_unattended(&row["link"]) { return Err(derr("conflict", "Unattended runs keep their own usage-limit rules.", StatusCode::CONFLICT)); }
+    if row["state"] != "limited" { return Err(derr("conflict", "This conversation isn't waiting for a usage limit.", StatusCode::CONFLICT)); }
+    Ok(sid)
+}
+
+/// The two per-conversation limit choices, as every session row carries them
+/// while the conversation is limited.
+fn limit_flags_value(flags: (bool, bool)) -> Value {
+    json!({"limitAutoResume":flags.0,"limitSnoozed":flags.1})
+}
+
+/// `session.limit.resume`: arm or cancel the automatic resume at the reset.
+async fn session_limit_resume(st: &AppState, p: Value) -> Result<Value, DispatchError> {
+    let auto_resume = p["autoResume"].as_bool().ok_or_else(|| derr("invalid_argument", "autoResume must be true or false.", StatusCode::BAD_REQUEST))?;
+    let sid = limit_mutable_session(st, &p)?;
+    st.db.session_limit_auto_resume(&sid, auto_resume).map_err(|e| derr("internal", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+    let flags = st.db.session_limit_flags(&sid).map_err(|e| derr("internal", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+    if let Ok(summary) = st.db.session_event_summary(&sid) { st.emit("session.changed", summary).await; }
+    Ok(limit_flags_value(flags))
+}
+
+/// `session.limit.snooze`: hold everything for this conversation, or wake it.
+async fn session_limit_snooze(st: &AppState, p: Value) -> Result<Value, DispatchError> {
+    let snoozed = p["snoozed"].as_bool().ok_or_else(|| derr("invalid_argument", "snoozed must be true or false.", StatusCode::BAD_REQUEST))?;
+    let sid = limit_mutable_session(st, &p)?;
+    st.db.session_limit_snoozed(&sid, snoozed).map_err(|e| derr("internal", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+    let flags = st.db.session_limit_flags(&sid).map_err(|e| derr("internal", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+    if let Ok(summary) = st.db.session_event_summary(&sid) { st.emit("session.changed", summary).await; }
+    Ok(limit_flags_value(flags))
 }
 
 const MAX_PROMPT_ATTACHMENTS: usize = 8;
@@ -10726,6 +10799,95 @@ mod phase2a_tests {
     }
 
     #[tokio::test]
+    async fn send_now_steers_a_plain_item_into_the_live_turn_in_one_step() {
+        let (mut st, _) = state();
+        let adapter = Arc::new(QueueAdapter::default());
+        install_queue_adapter(&mut st, &adapter);
+        let sid = "queue-steer-now";
+        let _tx = queue_session(&st, &adapter, sid).await;
+        mark_busy(&st, sid, "turn-0").await;
+        let item = dispatch(&st, "session.queue.add", json!({"sessionId":sid,"text":"add this"})).await.unwrap()["item"].clone();
+        let send_id = item["sendId"].as_str().unwrap().to_owned();
+        let steered = dispatch(&st, "session.queue.send_now", json!({"sessionId":sid,"id":item["id"],"steer":true})).await.unwrap();
+        assert_eq!(steered, json!({"steered":true}));
+        assert_eq!(adapter.steer_calls(), vec![("turn-0".to_owned(), "add this".to_owned())]);
+        assert!(st.db.queue_list(sid).unwrap().is_empty(), "the steered item leaves the queue");
+        let messages = st.db.session_detail(sid).unwrap()["messages"].as_array().cloned().unwrap_or_default();
+        let message = messages.iter().find(|message| message["meta"]["clientMessageId"] == send_id.as_str()).expect("the steer message carries the item's send id");
+        assert_eq!(message["meta"]["kind"], "steer");
+        assert_eq!(message["content"], "add this");
+    }
+
+    #[tokio::test]
+    async fn send_now_steer_refusal_puts_the_item_back_at_the_front() {
+        let (mut st, _) = state();
+        let adapter = Arc::new(QueueAdapter::default());
+        adapter.set_steer_outcome(SteerOutcome::Stale);
+        install_queue_adapter(&mut st, &adapter);
+        let sid = "queue-steer-stale";
+        let _tx = queue_session(&st, &adapter, sid).await;
+        mark_busy(&st, sid, "turn-0").await;
+        dispatch(&st, "session.queue.add", json!({"sessionId":sid,"text":"first"})).await.unwrap();
+        let item = dispatch(&st, "session.queue.add", json!({"sessionId":sid,"text":"add this"})).await.unwrap()["item"].clone();
+        let refused = dispatch(&st, "session.queue.send_now", json!({"sessionId":sid,"id":item["id"],"steer":true})).await.unwrap();
+        assert_eq!(refused["steered"], false);
+        assert_eq!(refused["queued"], true);
+        assert!(refused["reason"].as_str().unwrap().contains("ended"), "{refused}");
+        let items = st.db.queue_list(sid).unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0]["id"], item["id"]);
+        assert_eq!(items[0]["status"], "queued");
+        assert_eq!(items[0]["position"], 0);
+        assert!(items.iter().all(|item| item["status"] != "failed"), "a refusal never loses the item");
+    }
+
+    #[tokio::test]
+    async fn send_now_steer_leaves_anything_but_plain_text_on_the_queue() {
+        let (mut st, _) = state();
+        let adapter = Arc::new(QueueAdapter::default());
+        install_queue_adapter(&mut st, &adapter);
+        let sid = "queue-steer-plain";
+        let _tx = queue_session(&st, &adapter, sid).await;
+        mark_busy(&st, sid, "turn-0").await;
+        dispatch(&st, "session.queue.add", json!({"sessionId":sid,"text":"ordinary"})).await.unwrap();
+        let due = (Utc::now() + chrono::Duration::seconds(600)).to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        let scheduled = dispatch(&st, "session.queue.add", json!({"sessionId":sid,"text":"later","dueAt":due})).await.unwrap()["item"].clone();
+        let fallback = dispatch(&st, "session.queue.send_now", json!({"sessionId":sid,"id":scheduled["id"],"steer":true})).await.unwrap();
+        assert_eq!(fallback["steered"], false);
+        assert_eq!(fallback["queued"], true);
+        assert!(fallback["reason"].as_str().unwrap().contains("plain text"), "{fallback}");
+        assert!(adapter.steer_calls().is_empty(), "a scheduled item is not steered");
+        assert_eq!(st.db.queue_get(sid, scheduled["id"].as_str().unwrap()).unwrap()["status"], "queued");
+
+        // A runtime whose adapter cannot steer takes the same fallback.
+        let other = "queue-steer-unsupported";
+        st.db.create_session(other, "rt-test", "opencode", ".", "Queue").unwrap();
+        mark_busy(&st, other, "turn-1").await;
+        let item = dispatch(&st, "session.queue.add", json!({"sessionId":other,"text":"plain"})).await.unwrap()["item"].clone();
+        let refused = dispatch(&st, "session.queue.send_now", json!({"sessionId":other,"id":item["id"],"steer":true})).await.unwrap();
+        assert_eq!(refused["steered"], false);
+        assert!(refused["reason"].as_str().unwrap().contains("cannot take a message"), "{refused}");
+    }
+
+    #[tokio::test]
+    async fn a_replayed_steer_finds_its_message_and_does_not_duplicate_it() {
+        let (mut st, _) = state();
+        let adapter = Arc::new(QueueAdapter::default());
+        install_queue_adapter(&mut st, &adapter);
+        let sid = "queue-steer-replay";
+        let _tx = queue_session(&st, &adapter, sid).await;
+        mark_busy(&st, sid, "turn-0").await;
+        let item = dispatch(&st, "session.queue.add", json!({"sessionId":sid,"text":"add this"})).await.unwrap()["item"].clone();
+        let send_id = item["sendId"].as_str().unwrap().to_owned();
+        dispatch(&st, "session.queue.send_now", json!({"sessionId":sid,"id":item["id"],"steer":true})).await.unwrap();
+        let replay = crate::steer_live(&st, sid, "add this", Some(&send_id), None).await.unwrap();
+        assert!(matches!(replay, crate::SteerAttempt::Accepted { .. }), "the stored message answers the replay");
+        assert_eq!(adapter.steer_calls().len(), 1, "the adapter is asked once");
+        let steer_messages = st.db.session_detail(sid).unwrap()["messages"].as_array().cloned().unwrap_or_default().into_iter().filter(|message| message["meta"]["kind"] == "steer").count();
+        assert_eq!(steer_messages, 1, "no second message is written");
+    }
+
+    #[tokio::test]
     async fn a_failed_send_marks_failed_pauses_and_keeps_the_row() {
         let (mut st, _) = state();
         let adapter = Arc::new(QueueAdapter::default());
@@ -11025,11 +11187,13 @@ mod phase2a_tests {
         install_queue_adapter(&mut st,&adapter);
         let _tx = queue_session(&st,&adapter,"limited-sweep").await;
         let reset = past_due_at(2);
-        st.db.watchdog_limit("limited-sweep",Some(&reset)).unwrap();
+        // The experiment seeds a conversation when it first becomes limited; it
+        // is not a live switch over conversations that already carry a choice.
         st.db.set_setting("experimental.resumeAfterUsageLimits",&json!(false)).unwrap();
+        st.db.watchdog_limit("limited-sweep",Some(&reset)).unwrap();
         retry::sweep(&st).await;
-        assert!(st.db.queue_list("limited-sweep").unwrap().is_empty());
-        st.db.set_setting("experimental.resumeAfterUsageLimits",&json!(true)).unwrap();
+        assert!(st.db.queue_list("limited-sweep").unwrap().is_empty(), "the experiment off seeds opt-out");
+        st.db.session_limit_auto_resume("limited-sweep",true).unwrap();
         tokio::join!(retry::sweep(&st),retry::sweep(&st));
         assert_eq!(st.db.queue_list("limited-sweep").unwrap().len(),1);
         crate::queue::due_tick(&st).await;
@@ -11043,6 +11207,138 @@ mod phase2a_tests {
         st.db.watchdog_limit("limited-sweep",None).unwrap();
         retry::sweep(&st).await;
         assert!(st.db.queue_list("limited-sweep").unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn limit_auto_resume_off_and_snooze_hold_the_sweep() {
+        let (mut st, _) = state();
+        let adapter = Arc::new(QueueAdapter::default());
+        install_queue_adapter(&mut st, &adapter);
+        for sid in ["limit-opt-out", "limit-snoozed"] {
+            let _tx = queue_session(&st, &adapter, sid).await;
+            st.db.watchdog_limit(sid, Some(&past_due_at(2))).unwrap();
+        }
+        st.db.session_limit_auto_resume("limit-opt-out", false).unwrap();
+        st.db.session_limit_snoozed("limit-snoozed", true).unwrap();
+        retry::sweep(&st).await;
+        assert!(st.db.queue_list("limit-opt-out").unwrap().is_empty(), "an opted-out conversation is not resumed");
+        assert!(st.db.queue_list("limit-snoozed").unwrap().is_empty(), "a snoozed conversation is not resumed");
+        // Re-arming resume includes it again.
+        st.db.session_limit_auto_resume("limit-opt-out", true).unwrap();
+        retry::sweep(&st).await;
+        assert_eq!(st.db.queue_list("limit-opt-out").unwrap().len(), 1);
+        assert!(st.db.queue_list("limit-snoozed").unwrap().is_empty(), "waking is a separate call");
+    }
+
+    #[tokio::test]
+    async fn a_snoozed_limit_waiter_is_held_until_the_owner_wakes_it() {
+        let (mut st, _) = state();
+        let adapter = Arc::new(QueueAdapter::default());
+        install_queue_adapter(&mut st, &adapter);
+        let sid = "limit-snooze-waiter";
+        let tx = queue_session(&st, &adapter, sid).await;
+        st.db.watchdog_limit(sid, Some(&past_due_at(2))).unwrap();
+        // A "when the limit resets" item whose reset has arrived. The
+        // conversation keeps the choice it was seeded with while the experiment
+        // is turned off afterwards.
+        st.db.queue_add(sid, &json!({"text":"when it resets","attachments":[],"whenLimitResets":true}), "send_later", Some(&past_due_at(1))).unwrap();
+        st.db.set_setting("experimental.resumeAfterUsageLimits", &json!(false)).unwrap();
+        dispatch(&st, "session.limit.snooze", json!({"sessionId":sid,"snoozed":true})).await.unwrap();
+        crate::queue::due_tick(&st).await;
+        assert!(adapter.texts().is_empty(), "a snoozed conversation sends nothing at the reset");
+        dispatch(&st, "session.limit.snooze", json!({"sessionId":sid,"snoozed":false})).await.unwrap();
+        // Waking it lets the sweep resume it; its continuation goes first.
+        retry::sweep(&st).await;
+        crate::queue::due_tick(&st).await;
+        assert!(wait_for(|| adapter.texts() == vec!["Continue where you left off."]).await, "{:?}", adapter.texts());
+        tx.send(AgentEvent::TurnCompleted).await.unwrap();
+        assert!(wait_for(|| adapter.texts() == vec!["Continue where you left off.", "when it resets"]).await, "{:?}", adapter.texts());
+        assert!(st.db.queue_list(sid).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_conversations_own_resume_choice_beats_the_global_experiment() {
+        let (mut st, _) = state();
+        let adapter = Arc::new(QueueAdapter::default());
+        install_queue_adapter(&mut st, &adapter);
+        let sid = "limit-per-conversation";
+        let _tx = queue_session(&st, &adapter, sid).await;
+        st.db.set_setting("experimental.resumeAfterUsageLimits", &json!(false)).unwrap();
+        st.db.watchdog_limit(sid, Some(&past_due_at(2))).unwrap();
+        assert_eq!(st.db.session_limit_flags(sid).unwrap().0, false, "a new episode takes the experiment's value");
+        retry::sweep(&st).await;
+        assert!(st.db.queue_list(sid).unwrap().is_empty(), "the experiment being off does not stop a conversation that opted out");
+        let armed = dispatch(&st, "session.limit.resume", json!({"sessionId":sid,"autoResume":true})).await.unwrap();
+        assert_eq!(armed["limitAutoResume"], true);
+        retry::sweep(&st).await;
+        assert_eq!(st.db.queue_list(sid).unwrap().len(), 1, "the conversation's own choice is the authority");
+        assert_eq!(st.db.queue_list(sid).unwrap()[0]["text"], "Continue where you left off.");
+    }
+
+    #[tokio::test]
+    async fn a_limit_waiter_follows_the_conversations_own_resume_choice() {
+        let (mut st, _) = state();
+        let adapter = Arc::new(QueueAdapter::default());
+        install_queue_adapter(&mut st, &adapter);
+        let sid = "limit-waiter-per-conversation";
+        let tx = queue_session(&st, &adapter, sid).await;
+        st.db.set_setting("experimental.resumeAfterUsageLimits", &json!(false)).unwrap();
+        st.db.watchdog_limit(sid, Some(&past_due_at(2))).unwrap();
+        st.db.queue_add(sid, &json!({"text":"when it resets","attachments":[],"whenLimitResets":true}), "send_later", Some(&past_due_at(1))).unwrap();
+        // Arm this one conversation while the experiment stays off. Its waiting
+        // item now holds for the continuation the sweep will queue.
+        dispatch(&st, "session.limit.resume", json!({"sessionId":sid,"autoResume":true})).await.unwrap();
+        crate::queue::due_tick(&st).await;
+        assert!(adapter.texts().is_empty(), "the waiting item holds until the continuation is queued");
+        retry::sweep(&st).await;
+        crate::queue::due_tick(&st).await;
+        assert!(wait_for(|| adapter.texts() == vec!["Continue where you left off."]).await, "{:?}", adapter.texts());
+        tx.send(AgentEvent::TurnCompleted).await.unwrap();
+        assert!(wait_for(|| adapter.texts() == vec!["Continue where you left off.", "when it resets"]).await, "{:?}", adapter.texts());
+        assert!(st.db.queue_list(sid).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn limit_rpcs_arm_and_refuse_a_conversation_that_is_not_limited() {
+        let (st, _) = state();
+        st.db.create_session("limit-rpc", "rt-test", "codex", ".", "Limit").unwrap();
+        for (method, flag) in [("session.limit.resume", "autoResume"), ("session.limit.snooze", "snoozed")] {
+            let refused = dispatch(&st, method, json!({"sessionId":"limit-rpc", flag:true})).await.unwrap_err();
+            assert_eq!((refused.1.code.as_str(), refused.1.message.as_str()), ("conflict", "This conversation isn't waiting for a usage limit."), "{method}");
+            assert_eq!(dispatch(&st, method, json!({"sessionId":"limit-rpc"})).await.unwrap_err().1.code, "invalid_argument", "{method} needs a boolean");
+        }
+        // A limited conversation carries both choices, in the list and in session.get.
+        let reset = (Utc::now() + chrono::Duration::seconds(3600)).to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+        st.db.watchdog_limit("limit-rpc", Some(&reset)).unwrap();
+        let row = dispatch(&st, "session.get", json!({"sessionId":"limit-rpc"})).await.unwrap();
+        assert_eq!(row["limitAutoResume"], true);
+        assert_eq!(row["limitSnoozed"], false);
+        let listed = st.db.sessions().unwrap();
+        let row = listed.iter().find(|row| row["id"] == "limit-rpc").unwrap();
+        assert_eq!(row["limitAutoResume"], true);
+        assert_eq!(row["limitSnoozed"], false);
+        // Snooze and wake; turning auto resume off clears the snooze. A repeated
+        // limit error in the same episode keeps the owner's choice.
+        assert_eq!(dispatch(&st, "session.limit.snooze", json!({"sessionId":"limit-rpc","snoozed":true})).await.unwrap()["limitSnoozed"], true);
+        st.db.watchdog_limit("limit-rpc", Some(&reset)).unwrap();
+        assert_eq!(st.db.session_limit_flags("limit-rpc").unwrap(), (true, true));
+        let off = dispatch(&st, "session.limit.resume", json!({"sessionId":"limit-rpc","autoResume":false})).await.unwrap();
+        assert_eq!(off["limitAutoResume"], false);
+        assert_eq!(off["limitSnoozed"], false);
+        // Both fields disappear when the limit state clears.
+        st.db.watchdog_reset("limit-rpc").unwrap();
+        st.db.update_session_state("limit-rpc", "idle").unwrap();
+        let cleared = dispatch(&st, "session.get", json!({"sessionId":"limit-rpc"})).await.unwrap();
+        assert!(cleared.get("limitAutoResume").is_none(), "{cleared}");
+        let listed = st.db.sessions().unwrap();
+        let row = listed.iter().find(|row| row["id"] == "limit-rpc").unwrap();
+        assert!(row.get("limitAutoResume").is_none(), "{row}");
+        // An unattended run keeps its own rules.
+        st.db.create_session("limit-automation", "rt-test", "codex", ".", "Auto").unwrap();
+        st.db.set_session_link("limit-automation", &json!({"kind":"automation"})).unwrap();
+        st.db.watchdog_limit("limit-automation", Some(&reset)).unwrap();
+        let refused = dispatch(&st, "session.limit.resume", json!({"sessionId":"limit-automation","autoResume":true})).await.unwrap_err();
+        assert_eq!((refused.1.code.as_str(), refused.1.message.as_str()), ("conflict", "Unattended runs keep their own usage-limit rules."));
     }
 
     #[tokio::test]
@@ -14722,6 +15018,34 @@ mod fix39_p6_tests {
     async fn tool_text(st: &AppState, session: &str, name: &str, args: Value) -> String {
         let result = team::mcp_rpc(st, session, "mcp.tools.call", &json!({"name":name,"arguments":args})).await.unwrap();
         result["content"][0]["text"].as_str().unwrap_or("").to_owned()
+    }
+
+    // 2026-11-10: a bot hired into a project (project_members, no projectId) showed under the
+    // project in the sidebar while the CEO called it casual and its project unstaffed.
+    #[tokio::test]
+    async fn the_ceo_counts_a_hired_bot_as_on_its_project() {
+        let (st, _) = state();
+        let boss = manager_session(&st).await;
+        let (project, _) = st.db.project_create("Retinue", None).unwrap();
+        let project_id = project["id"].as_str().unwrap().to_owned();
+        let (fifi, _) = st.db.agent_create(&json!({"name":"Fifi","runtimeId":"rt-test"})).unwrap();
+        let fifi_id = fifi["id"].as_str().unwrap().to_owned();
+        let (loner, _) = st.db.agent_create(&json!({"name":"Loner","runtimeId":"rt-test"})).unwrap();
+        let loner_id = loner["id"].as_str().unwrap().to_owned();
+        dispatch(&st, "project.hire", json!({"projectId": project_id, "agentId": fifi_id})).await.unwrap();
+        assert!(st.db.agent_get(&fifi_id).unwrap()["projectId"].is_null(), "hiring adds a membership, not a projectId");
+        let roster = tool_text(&st, &boss, "list_blobs", json!({})).await;
+        let fifi_line = roster.lines().find(|line| line.contains("Fifi")).unwrap_or_default().to_owned();
+        assert!(fifi_line.contains("project: Retinue"), "{roster}");
+        let loner_line = roster.lines().find(|line| line.contains("Loner")).unwrap_or_default().to_owned();
+        assert!(loner_line.contains("project: none (casual)"), "{roster}");
+        let free = tool_text(&st, &boss, "list_blobs", json!({"freeOnly": true})).await;
+        assert!(!free.contains(&fifi_id) && free.contains(&loner_id), "{free}");
+        let staffed = tool_text(&st, &boss, "list_blobs", json!({"project": "Retinue"})).await;
+        assert!(staffed.contains(&fifi_id) && !staffed.contains(&loner_id), "{staffed}");
+        let summary = knowledge::workspace_summary(&st);
+        assert!(summary.contains("- Project \"Retinue\" — bots: Fifi"), "{summary}");
+        assert!(!summary.lines().any(|line| line.starts_with("- Casual bots") && line.contains("Fifi")), "{summary}");
     }
 
     #[tokio::test]

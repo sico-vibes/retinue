@@ -185,6 +185,29 @@ impl Storage {
         let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         c.query_row("SELECT state,limited_until FROM sessions WHERE id=?1", [session_id], |r| Ok((r.get(0)?, r.get(1)?))).optional()?.ok_or(StorageError::AgentNotFound)
     }
+    /// The per-conversation usage-limit choices: automatic resume, and snoozed.
+    pub fn session_limit_flags(&self, session_id: &str) -> Result<(bool, bool), StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        c.query_row("SELECT limit_auto_resume!=0,limit_snoozed!=0 FROM sessions WHERE id=?1", [session_id], |r| Ok((r.get(0)?, r.get(1)?))).optional()?.ok_or(StorageError::AgentNotFound)
+    }
+    /// Arm or cancel automatic resume for this conversation. Turning it off also
+    /// clears a snooze, so the two cannot disagree about which one is holding it.
+    pub fn session_limit_auto_resume(&self, session_id: &str, auto_resume: bool) -> Result<(), StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        if auto_resume {
+            c.execute("UPDATE sessions SET limit_auto_resume=1 WHERE id=?1", [session_id])?;
+        } else {
+            c.execute("UPDATE sessions SET limit_auto_resume=0,limit_snoozed=0 WHERE id=?1", [session_id])?;
+        }
+        Ok(())
+    }
+    /// Snooze or wake this conversation. A snoozed conversation resumes nothing
+    /// and sends no limit-waiting item until it is woken.
+    pub fn session_limit_snoozed(&self, session_id: &str, snoozed: bool) -> Result<(), StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        c.execute("UPDATE sessions SET limit_snoozed=?2 WHERE id=?1", params![session_id, snoozed])?;
+        Ok(())
+    }
 }
 
 impl Storage {

@@ -308,7 +308,7 @@ fn confirmed_resend(p: &Value) -> bool {
 pub async fn send_now(st: &AppState, p: Value) -> Result<Value, DispatchError> {
     let session_id = p["sessionId"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "sessionId is required", StatusCode::BAD_REQUEST))?;
     let id = p["id"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "id is required", StatusCode::BAD_REQUEST))?;
-    queue_session(st, session_id)?;
+    let session = queue_session(st, session_id)?;
     let existing = st.db.queue_get(session_id, id).map_err(queue_error)?;
     // A send that was being delivered when Retinue stopped may already have
     // reached the agent: it is never sent again without the owner confirming,
@@ -323,12 +323,109 @@ pub async fn send_now(st: &AppState, p: Value) -> Result<Value, DispatchError> {
         if existing["status"] != "queued" {
             return Err(derr("conflict", "Wait for the current turn to finish, then send this again.", StatusCode::CONFLICT));
         }
-        st.db.queue_move_to_front(session_id, id).map_err(queue_error)?;
-        emit_changed(st, session_id).await;
-        return Ok(json!({"queued":true}));
+        // Without `steer` this is the old behaviour: move the item to the front
+        // of the queue and let the running turn finish first.
+        if p["steer"].as_bool() != Some(true) {
+            st.db.queue_move_to_front(session_id, id).map_err(queue_error)?;
+            emit_changed(st, session_id).await;
+            return Ok(json!({"queued":true}));
+        }
+        let provider = session["provider"].as_str().unwrap_or("");
+        if !plain_text_item(&existing) {
+            st.db.queue_move_to_front(session_id, id).map_err(queue_error)?;
+            emit_changed(st, session_id).await;
+            return Ok(json!({"steered":false,"queued":true,"reason":"Only a plain text message can go into the running turn."}));
+        }
+        if !steer_enabled(st, provider) {
+            st.db.queue_move_to_front(session_id, id).map_err(queue_error)?;
+            emit_changed(st, session_id).await;
+            return Ok(json!({"steered":false,"queued":true,"reason":"This coding agent cannot take a message into a running turn."}));
+        }
+        let Some(send_id) = send_id(&existing).map(str::to_owned) else {
+            st.db.queue_move_to_front(session_id, id).map_err(queue_error)?;
+            emit_changed(st, session_id).await;
+            return Ok(json!({"steered":false,"queued":true,"reason":"This message has no send id, so it cannot be steered."}));
+        };
+        // Claim first: the drain must not send this item as a new turn while the
+        // text is also going into the live one.
+        let claimed = match st.db.queue_claim(session_id, id, &now_utc()).map_err(queue_error)? {
+            Some(item) => item,
+            None => return Err(derr("conflict", "That item is no longer queued.", StatusCode::CONFLICT)),
+        };
+        let text = claimed["text"].as_str().unwrap_or("").to_owned();
+        match crate::steer_live(st, session_id, &text, Some(&send_id), None).await {
+            Ok(crate::SteerAttempt::Accepted { .. }) => {
+                if st.db.queue_mark_sent(id).is_err() {
+                    // The text is in the turn; keep the item off the queue and say
+                    // so rather than risk sending it again.
+                    st.queue.mark_paused(session_id);
+                    emit_changed(st, session_id).await;
+                    return Err(derr("internal", "The message was steered, but its queue entry could not be cleared. Check the conversation before retrying.", StatusCode::INTERNAL_SERVER_ERROR));
+                }
+                emit_changed(st, session_id).await;
+                Ok(json!({"steered":true}))
+            }
+            Ok(crate::SteerAttempt::Stale) => {
+                requeue_to_front(st, session_id, id).await?;
+                Ok(json!({"steered":false,"queued":true,"reason":"The turn ended before the message could go into it."}))
+            }
+            Ok(crate::SteerAttempt::Failed(error)) => {
+                // A timeout or a vanished process may already have delivered the
+                // text: follow the existing ambiguous-send rule and never requeue
+                // it silently.
+                if matches!(error, retinue_agent_core::AdapterError::Timeout | retinue_agent_core::AdapterError::Process(_)) {
+                    let _ = st.db.queue_mark_failed_ambiguous(id, retinue_storage::QUEUE_AMBIGUOUS_ERROR);
+                    st.queue.mark_paused(session_id);
+                    emit_changed(st, session_id).await;
+                    Err(crate::delivery_unknown())
+                } else {
+                    let reason = crate::steer_dispatch_error(error).1.message;
+                    requeue_to_front(st, session_id, id).await?;
+                    Ok(json!({"steered":false,"queued":true,"reason":reason}))
+                }
+            }
+            Err(error) => {
+                // A precondition lost a race (nothing running any more, or the
+                // steer gate closed): keep the item instead of failing it.
+                requeue_to_front(st, session_id, id).await?;
+                let reason = if error.1.code == "conflict" { "The turn ended before the message could go into it.".to_owned() } else { error.1.message };
+                Ok(json!({"steered":false,"queued":true,"reason":reason}))
+            }
+        }
+    } else {
+        send_specific(st, session_id, id, confirmed_resend(&p)).await?;
+        Ok(json!({"queued":false,"sent":true}))
     }
-    send_specific(st, session_id, id, confirmed_resend(&p)).await?;
-    Ok(json!({"queued":false,"sent":true}))
+}
+
+/// Whether a stored item can go into a live turn as ordinary text: no
+/// attachments, command, references, reply, annotations or internal meta, and
+/// not a scheduled or limit-waiting item.
+fn plain_text_item(item: &Value) -> bool {
+    item["kind"] == "user"
+        && item["attachments"].as_array().is_none_or(|items| items.is_empty())
+        && item["conversationRefs"].as_array().is_none_or(|items| items.is_empty())
+        && item.get("replyTo").is_none_or(Value::is_null)
+        && item.get("command").is_none_or(Value::is_null)
+        && item.get("annotations").and_then(Value::as_array).is_none_or(|notes| notes.is_empty())
+        && item.get("meta").is_none_or(|meta| !meta.is_object())
+        && item["whenLimitResets"] != true
+}
+
+/// Whether this runtime can take a message into a running turn right now: the
+/// adapter supports steering and the owner has not closed its gate.
+fn steer_enabled(st: &AppState, provider: &str) -> bool {
+    crate::provider_can_steer(provider)
+        && st.db.settings().map(|settings| settings[format!("exec_gate.{provider}.steer")].as_bool().unwrap_or(crate::gate_default(provider, "steer"))).unwrap_or(false)
+}
+
+/// Return a claimed item to the queue at the front, after a steer it could not
+/// deliver.
+async fn requeue_to_front(st: &AppState, session_id: &str, id: &str) -> Result<(), DispatchError> {
+    st.db.queue_requeue(id).map_err(queue_error)?;
+    st.db.queue_move_to_front(session_id, id).map_err(queue_error)?;
+    emit_changed(st, session_id).await;
+    Ok(())
 }
 
 pub async fn resume(st: &AppState, p: Value) -> Result<Value, DispatchError> {
@@ -375,8 +472,15 @@ async fn limit_waiters_may_send(st: &AppState, session_id: &str) -> bool {
         if st.db.queue_move_limit_waiters(session_id, &reset).unwrap_or(false) { emit_changed(st, session_id).await; }
         return false;
     }
-    let resume_on = st.db.settings().unwrap_or(Value::Null)["experimental.resumeAfterUsageLimits"] != false;
-    !(resume_on && st.db.watchdog_due_sessions(&now_utc()).unwrap_or_default().iter().any(|id| id == session_id))
+    // A snoozed conversation sends nothing at the reset either, and it is absent
+    // from the due list, so it must hold its waiting item here.
+    let (auto_resume, snoozed) = st.db.session_limit_flags(session_id).unwrap_or((true, false));
+    if snoozed { return false; }
+    // The conversation's own choice decides, not the global experiment (which
+    // only seeds it when it becomes limited). While the sweep has yet to queue
+    // its continuation the item holds; once that continuation is queued the
+    // session leaves the due list and the item may go after its turn.
+    !(auto_resume && st.db.watchdog_due_sessions(&now_utc()).unwrap_or_default().iter().any(|id| id == session_id))
 }
 
 /// Claim and send the next eligible item. `allow_plain` is the caller's wish to

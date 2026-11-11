@@ -548,10 +548,26 @@ async fn p7_instructions_ask_for_checked_reports_and_a_pass_reply() {
     let (st, _, worker) = fixture().await;
     let manager = st.db.manager_agent().unwrap().unwrap();
     let instructions = runtime_instructions(&st, &manager, &json!({"kind":"main"}), std::path::Path::new("."));
-    assert!(instructions.contains("compare the reply with its 'Done when' line and start your report with 'Checked:' or 'Not done yet:'"), "the Manager compares against the goal");
+    assert!(instructions.contains("Compare the reply with its 'Done when' line and start with 'Checked:' or 'Not done yet:' and why."), "the Manager compares against the goal");
+    assert!(instructions.contains("treat that as a failure until the owner agrees"), "a changed test is a failure until the owner agrees");
+    assert!(instructions.contains("Report the teammate's own command outcomes as their claims"), "the Manager does not pass claims off as evidence");
+    assert!(instructions.contains("Surface decisions the teammate made that the brief did not ask for"), "a quiet decision is surfaced");
     assert!(instructions.contains("When nothing changed and nothing needs the user, say nothing or one short line."), "the Manager stays quiet when nothing happened");
+    // Every bot writes a brief with the same named lines and never commits.
+    assert!(instructions.contains("write a brief with these lines: Task"), "the generic delegation rule names the lines");
+    assert!(instructions.contains("One task per brief; split unrelated work."), "one task per brief");
+    assert!(instructions.contains("A teammate must never commit or push"), "the commit boundary is stated");
+    assert!(instructions.contains("send only the delta"), "rework continues the same conversation");
     let side = runtime_instructions(&st, &st.db.agent_get(&worker).unwrap(), &json!({"kind":"side","peerName":"Manager"}), std::path::Path::new("."));
+    assert!(side.contains("report in this order and keep it short"), "a teammate has a report contract");
+    assert!(side.contains("Leave the work uncommitted; the owner reviews and commits."), "a teammate is told who lands the work");
     assert!(side.contains("If you were asked to check something and there is nothing to report, reply exactly `(pass)`."), "a teammate knows the silent reply");
+    // The message_blob tool carries the same named lines.
+    let tools = tools(false, false, false, false, false, "bot", "bots");
+    let message = tools.as_array().unwrap().iter().find(|tool| tool["name"] == "message_blob").unwrap();
+    let description = message["inputSchema"]["properties"]["message"]["description"].as_str().unwrap();
+    assert!(description.contains("Task —") && description.contains("Do not touch —") && description.contains("Report —"), "{description}");
+    assert!(description.contains("One task per brief"), "{description}");
 }
 
 // Wave 13 loop guard: work is never sent back to a bot that is waiting on it.

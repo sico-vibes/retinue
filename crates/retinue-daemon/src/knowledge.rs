@@ -287,15 +287,17 @@ fn capped(text: &str, limit: usize) -> String {
     value
 }
 
-fn workspace_summary(st: &AppState) -> String {
+pub(crate) fn workspace_summary(st: &AppState) -> String {
     let projects = st.db.project_list().unwrap_or_default();
     let agents = st.db.agent_list(false, None).unwrap_or_default();
     let name_of = |id: &str| agents.iter().find(|agent| agent["id"].as_str() == Some(id)).map(|agent| agent["name"].as_str().unwrap_or("Bot").to_owned());
+    // A bot is on a project through its own projectId or a hiring row (team::projects_of), as the sidebar shows it.
+    let hired = crate::team::hired_project_ids(st, &projects);
     let mut lines = Vec::new();
     let mut total = 0usize;
     for project in &projects {
         let id = project["id"].as_str().unwrap_or("");
-        let bots = agents.iter().filter(|agent| agent["projectId"].as_str() == Some(id)).filter_map(|agent| name_of(agent["id"].as_str().unwrap_or(""))).collect::<Vec<_>>();
+        let bots = agents.iter().filter(|agent| crate::team::projects_of(agent, &hired).iter().any(|pid| pid == id)).filter_map(|agent| name_of(agent["id"].as_str().unwrap_or(""))).collect::<Vec<_>>();
         let line = format!("- Project \"{}\" — bots: {}{}", project["name"].as_str().unwrap_or("Project"), if bots.is_empty() { "none".to_owned() } else { bots.join(", ") }, crate::team::tags_suffix(&project["tags"]));
         if total + line.chars().count() > MAX_WORKSPACE_BLOCK {
             lines.push("- … more projects exist; list them with list_projects.".to_owned());
@@ -304,7 +306,7 @@ fn workspace_summary(st: &AppState) -> String {
         total += line.chars().count() + 1;
         lines.push(line);
     }
-    let casual = agents.iter().filter(|agent| agent["projectId"].is_null()).filter_map(|agent| agent["name"].as_str().map(str::to_owned)).collect::<Vec<_>>();
+    let casual = agents.iter().filter(|agent| crate::team::projects_of(agent, &hired).is_empty()).filter_map(|agent| agent["name"].as_str().map(str::to_owned)).collect::<Vec<_>>();
     if !casual.is_empty() {
         let line = format!("- Casual bots: {}", casual.join(", "));
         if total + line.chars().count() <= MAX_WORKSPACE_BLOCK {

@@ -484,7 +484,7 @@ pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, works
         // Wave 12, part D: the relay carries the assignment's own "Done when" line,
         // so the Manager checks instead of trusting the prose, and says nothing
         // when there is nothing to say.
-        lines.push("Before you report a finished assignment, compare the reply with its 'Done when' line and start your report with 'Checked:' or 'Not done yet:' and why.".to_owned());
+        lines.push("Before you report a finished assignment: if the reply mentions a changed test, a skipped or deleted test, or a weakened assertion, treat that as a failure until the owner agrees. Compare the reply with its 'Done when' line and start with 'Checked:' or 'Not done yet:' and why. Report the teammate's own command outcomes as their claims, not as your evidence: when you cannot run the gates yourself, say which command the owner should re-run. Surface decisions the teammate made that the brief did not ask for; never absorb them silently.".to_owned());
         lines.push("When nothing changed and nothing needs the user, say nothing or one short line.".to_owned());
     } else {
         match st.db.manager_agent().ok().flatten() {
@@ -495,7 +495,7 @@ pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, works
     lines.push(String::new());
     lines.push("Teammates are separate agents with their own tools and memory. Use the retinue tools: `list_blobs` shows the team (name, role, what each is for, whether they are busy); `message_blob` sends one teammate a message in a private side conversation between the two of you; `list_conversations` lists your side conversations, each with a short topic.".into());
     lines.push("A #Name in the user's message names a project, by its name or one of its tags. This conversation stays in its own folder. When a teammate takes the work, pass that name as `project` on `message_blob` so it opens there; when the work is yours and belongs to another project, tell the user to start a new conversation in that project rather than working somewhere else.".into());
-    lines.push(format!("When the user tags a {noun} with @Name, or asks you to hand work to someone, write that teammate a self-contained brief (they cannot see this conversation: include the goal, context, paths, constraints and what to send back) and send it with `message_blob`. Then tell the user in one short sentence who you asked and end your turn: do not wait, poll or sleep. The reply arrives later in this conversation as a message starting with \"[Reply from <name>]\". When it arrives, report to the user: what they did or found, your own verdict, and any open questions."));
+    lines.push(format!("When the user tags a {noun} with @Name, or asks you to hand work to someone, write a brief with these lines: Task (the job, current and desired behaviour, and where it lives), Do not touch (what must stay as it is), Context (facts from this conversation the teammate cannot see), Rules (the project's own rules that matter, and the exact commands to run), Report (what to send back: what changed, files touched, command outcomes, anything left open). One task per brief; split unrelated work. A teammate must never commit or push: the owner reviews and lands the work. For rework, continue the same conversation and send only the delta: what is wrong, what to keep, and the exact commands. Send it with `message_blob`, then tell the user in one short sentence who you asked and end your turn: do not wait, poll or sleep. The reply arrives later in this conversation as a message starting with \"[Reply from <name>]\". When it arrives, report to the user: what they did or found, your own verdict, and any open questions."));
     lines.push("Each side conversation has a topic, like a chat title. Before messaging a teammate, check `list_conversations`: if one you started with them is about the same subject, continue it by passing its id as `conversation` (they keep the context there). Otherwise start a new one and give it a short `topic` of 3 to 6 words. When the user references a conversation with #, continue that one.".into());
     // Every bot, Manager and side conversations included: the renderer contract
     // for charts and tables sits after the delegation lines and before the
@@ -506,6 +506,7 @@ pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, works
         let peer = link["peerName"].as_str().unwrap_or(noun.as_str());
         lines.push(String::new());
         lines.push(format!("This is a side conversation. Messages here come from {peer}, another {noun}, not from the user. Do what {peer} asks and answer them directly; your final message each turn is delivered back to {peer} automatically. Keep it focused: results, evidence and open questions."));
+        lines.push("When you finish, report in this order and keep it short: what you changed or found; the files you touched; each command you ran and its outcome with counts; anything you could not do, any decision you made that was not asked for, and any open question. If the brief has a 'Done when' line, start with `Checked:` when it holds, or `Not done yet:` and why when it does not. Leave the work uncommitted; the owner reviews and commits. If you changed a test to make it pass, say so plainly and say why.".into());
         if let Some(topic) = link["topic"].as_str().filter(|topic| !topic.trim().is_empty()) { lines.push(format!("Topic of this conversation: {topic}.")); }
         lines.push("If you need a decision or information only the user can give, use the ask_user tool, then end your turn. Your CEO is told you are waiting, but only the user can answer; their answer arrives as your next message. Do not ask the CEO to answer for the user.".into());
         lines.push("If you were asked to check something and there is nothing to report, reply exactly `(pass)`.".into());
@@ -573,7 +574,7 @@ fn tools(is_automation: bool, memory_enabled: bool, ask_user: bool, is_manager: 
     let mut list: Vec<Value> = vec![
         json!({"name":"list_blobs","description":"List your teammates in Retinue: name, role, what each is for, project, whether they are busy, and which one is the CEO.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}),
         json!({"name":"list_conversations","description":"List your side conversations with teammates, newest first: id, topic, teammate, who started it, size and the latest reply. Use it to find a conversation to continue.","inputSchema":{"type":"object","properties":{"blob":{"type":"string","description":"Only conversations with this teammate (optional)."}},"additionalProperties":false}}),
-        json!({"name":"message_blob","description":"Send a message to one teammate in a private side conversation. Use it whenever the user asks you to message, ask or hand work to a teammate: it is sent at once, with no approval card. Continue an earlier conversation you started by passing its id as `conversation`, or start a new one with a short `topic`. Returns at once; their reply is delivered to you later as a message starting with \"[Reply from <name>]\". After sending, tell the user who you asked and end your turn.","inputSchema":{"type":"object","properties":{"blob":{"type":"string","description":"The teammate's name, as shown by list_blobs."},"message":{"type":"string","description":"A self-contained brief: goal, context, paths, constraints and what to send back."},"doneGoal":{"type":"string","description":"What must be true for the work to count as done. It is relayed back with the reply as a 'Done when' line (optional)."},"topic":{"type":"string","description":"For a new conversation: a short title of 3 to 6 words, like a chat title."},"conversation":{"type":"string","description":"The id of a conversation you started with this teammate, from list_conversations, to continue it."},"project":{"type":"string","description":"For a new conversation: the project (an id, an exact name, or a tag only one project carries) it opens in. Defaults to the project of this conversation."}},"required":["blob","message"],"additionalProperties":false}}),
+        json!({"name":"message_blob","description":"Send a message to one teammate in a private side conversation. Use it whenever the user asks you to message, ask or hand work to a teammate: it is sent at once, with no approval card. Continue an earlier conversation you started by passing its id as `conversation`, or start a new one with a short `topic`. Returns at once; their reply is delivered to you later as a message starting with \"[Reply from <name>]\". After sending, tell the user who you asked and end your turn.","inputSchema":{"type":"object","properties":{"blob":{"type":"string","description":"The teammate's name, as shown by list_blobs."},"message":{"type":"string","description":"A self-contained brief. Use these lines, and leave out a line only when it truly does not apply: Task — the concrete job, current and desired behaviour, and where it lives. Do not touch — what must stay as it is. Context — facts from this conversation the teammate cannot see. Rules — the project's own rules that matter (from the project's instructions or .retinue.json), and the exact commands to run. Report — what to send back: what changed, files touched, command outcomes, anything left open. One task per brief: split unrelated work into separate messages."},"doneGoal":{"type":"string","description":"What must be true for the work to count as done. It is relayed back with the reply as a 'Done when' line (optional)."},"topic":{"type":"string","description":"For a new conversation: a short title of 3 to 6 words, like a chat title."},"conversation":{"type":"string","description":"The id of a conversation you started with this teammate, from list_conversations, to continue it."},"project":{"type":"string","description":"For a new conversation: the project (an id, an exact name, or a tag only one project carries) it opens in. Defaults to the project of this conversation."}},"required":["blob","message"],"additionalProperties":false}}),
         json!({"name":"schedule_task","description":format!("Propose a scheduled task for your {noun}. It is created disabled and will never run until the user approves it in Retinue. Use this only when the user asks for something recurring or at a set time."),"inputSchema":{"type":"object","properties":{"name":{"type":"string","description":"A short title, 1 to 80 characters."},"prompt":{"type":"string","description":"The instruction to run unattended when the task fires."},"when":{"type":"object","description":"A schedule object: {\"kind\":\"once\",\"at\":\"<RFC3339>\"} or {\"kind\":\"cron\",\"cron\":\"m h dom mon dow\",\"timezone\":\"Area/City\"}."}},"required":["name","prompt","when"],"additionalProperties":false}}),
         json!({"name":"list_my_schedules","description":format!("List this {noun}'s scheduled tasks, whether each is enabled, and when it next runs."),"inputSchema":{"type":"object","properties":{},"additionalProperties":false}}),
     ];
@@ -718,16 +719,44 @@ pub(crate) async fn session_busy(st: &AppState, session_id: &str) -> bool {
     st.db.session_state(session_id).ok().flatten().is_some_and(|state| matches!(state.as_str(), "starting" | "working" | "waiting_permission" | "cancelling"))
 }
 
+/// Phase 9 hiring: which projects each bot is hired into (`project_members`), by agent id, in project order.
+/// A bot belongs to a project through its own `projectId` OR a hiring row; the sidebar counts both,
+/// so everything the CEO reads must too (2026-11-10: the CEO called a hired bot "casual").
+pub(crate) fn hired_project_ids(st: &AppState, projects: &[Value]) -> HashMap<String, Vec<String>> {
+    let mut out: HashMap<String, Vec<String>> = HashMap::new();
+    for project in projects {
+        let Some(project_id) = project["id"].as_str() else { continue };
+        for member in st.db.project_members(project_id).unwrap_or_default() {
+            let Some(agent_id) = member["agentId"].as_str() else { continue };
+            let list = out.entry(agent_id.to_owned()).or_default();
+            if !list.iter().any(|id| id == project_id) { list.push(project_id.to_owned()); }
+        }
+    }
+    out
+}
+
+/// A bot's projects: its own `projectId` first, then the projects it is hired into. Empty means casual.
+pub(crate) fn projects_of(agent: &Value, hired: &HashMap<String, Vec<String>>) -> Vec<String> {
+    let mut ids = Vec::new();
+    if let Some(project_id) = agent["projectId"].as_str() { ids.push(project_id.to_owned()); }
+    if let Some(list) = agent["id"].as_str().and_then(|id| hired.get(id)) {
+        for project_id in list { if !ids.contains(project_id) { ids.push(project_id.clone()); } }
+    }
+    ids
+}
+
 async fn list_blobs(st: &AppState, session_id: &str) -> Result<String, String> {
     let me = st.db.session_detail(session_id).ok().and_then(|row| row["agentId"].as_str().map(str::to_owned));
     let agents = st.db.agent_list(false, None).map_err(|error| error.to_string())?;
     let projects = st.db.project_list().unwrap_or_default();
     let sessions = st.db.session_list(false).unwrap_or_default();
     let runtimes = st.runtimes.read().await.clone();
+    let hired = hired_project_ids(st, &projects);
     let mut rows = Vec::new();
     for agent in agents.iter().filter(|agent| agent["hidden"] != true) {
         let id = agent["id"].as_str().unwrap_or("");
-        let project = agent["projectId"].as_str().and_then(|pid| projects.iter().find(|p| p["id"] == pid)).and_then(|p| p["name"].as_str()).unwrap_or("none (casual)");
+        let names = projects_of(agent, &hired).iter().filter_map(|pid| projects.iter().find(|p| p["id"] == pid.as_str())).filter_map(|p| p["name"].as_str()).collect::<Vec<_>>();
+        let project = if names.is_empty() { "none (casual)".to_owned() } else { names.join(", ") };
         let busy = sessions.iter().any(|s| s["agentId"] == id && matches!(s["state"].as_str(), Some("working" | "starting" | "waiting_permission")));
         let provider = runtimes.iter().find(|r| r["id"] == agent["runtimeId"]).and_then(|r| r["provider"].as_str()).unwrap_or("unknown");
         let mut line = format!("- {}", agent_name(agent));
@@ -2088,15 +2117,17 @@ async fn manager_blobs(st: &AppState, session_id: &str, args: &Value) -> Result<
     if project.is_none() && role.is_none() && tag.is_none() && !free { return list_blobs(st,session_id).await; }
     let agents = st.db.agent_list(false,None).map_err(|error| error.to_string())?;
     let sessions = st.db.session_list(false).map_err(|error| error.to_string())?;
+    let all_projects = st.db.project_list().unwrap_or_default();
+    let hired = hired_project_ids(st, &all_projects);
     let bots = agents.iter().filter(|bot| bot["hidden"] != true)
         // P7 audit F7: the Manager must not be offered as its own delegate
         // (even when it carries a matching tag); validate_task_target refuses it
         // later, but with a confusing message.
         .filter(|bot| bot["systemRole"].as_str() != Some("manager"))
-        .filter(|bot| !free || bot["projectId"].is_null())
-        .filter(|bot| project.as_ref().is_none_or(|project| bot["projectId"] == project["id"]))
+        .filter(|bot| !free || projects_of(bot, &hired).is_empty())
+        .filter(|bot| project.as_ref().is_none_or(|project| project["id"].as_str().is_some_and(|pid| projects_of(bot, &hired).iter().any(|id| id == pid))))
         .filter(|bot| role.as_ref().is_none_or(|role| bot["role"].as_str().is_some_and(|actual| actual.eq_ignore_ascii_case(role))))
         .filter(|bot| tag.as_ref().is_none_or(|tag| bot["tags"].as_array().is_some_and(|tags| tags.iter().any(|actual| actual.as_str().is_some_and(|actual| actual.eq_ignore_ascii_case(tag))))))
-        .map(|bot| { let mut out = selected_fields(bot,&["id","name","role","description","tags","projectId","locked"]); out["busy"] = json!(sessions.iter().any(|session| session["agentId"] == bot["id"] && matches!(session["state"].as_str(),Some("starting"|"working"|"waiting_permission")))); out }).collect::<Vec<_>>();
+        .map(|bot| { let mut out = selected_fields(bot,&["id","name","role","description","tags","projectId","locked"]); out["projectIds"] = json!(projects_of(bot, &hired)); out["busy"] = json!(sessions.iter().any(|session| session["agentId"] == bot["id"] && matches!(session["state"].as_str(),Some("starting"|"working"|"waiting_permission")))); out }).collect::<Vec<_>>();
     Ok(json!({"bots":bots,"ifNone":"Propose a suitable bot for the resolved project, or a free bot when no project was named. Ask the user with options if the project is unclear."}).to_string())
 }
