@@ -87,6 +87,8 @@ export function stateOf(item: ConversationItem) {
   const resultStatus = String(detailOf(item).resultStatus ?? '').toLowerCase()
   if (['error', 'failed', 'rejected', 'declined'].includes(state) || ['failed', 'declined'].includes(resultStatus)) return 'failed'
   if (['running', 'working', 'started', 'in_progress'].includes(state)) return 'running'
+  // The turn ended while this step was still open (see `groupConversationActivity`).
+  if (state === 'stopped') return 'stopped'
   return 'done'
 }
 
@@ -174,6 +176,7 @@ function Step({ item, onDiff }: { item: ConversationItem; onDiff?: (path: string
       <span className="activity-step-icon"><StepIcon item={item} /></span>
       <span className="activity-step-title">{activityTitle(item)}</span>
       {state === 'running' && <span className="activity-step-state">Running</span>}
+      {state === 'stopped' && <span className="activity-step-state">Did not finish</span>}
       {children.length > 0 && <span className="activity-step-state">{children.length} step{children.length === 1 ? '' : 's'}</span>}
       {state === 'running' && liveOutput && <span className="activity-step-live" aria-hidden="true">{lastLine(maskSecrets(liveOutput).text)}</span>}
       {state === 'failed' && <span className="activity-step-state failed">Failed</span>}

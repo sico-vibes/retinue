@@ -130,6 +130,7 @@
 .plan-card-body { padding: 4px 16px 6px; color: var(--text-1); font-size: var(--fs-sm); }
 .plan-card > footer { padding: 10px 14px; display: flex; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--line); }
 .plan-card .primary-button { display: inline-flex; align-items: center; gap: 6px; }
+.approval-count { margin: 10px 0 -4px; color: var(--text-3); font-size: var(--fs-2xs); }
 .plan-ready-bar { margin: 10px 0; padding: 10px 12px 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--text-2); border: 1px solid color-mix(in srgb, var(--meter-blue) 32%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--meter-blue) 6%, var(--surface-raised)); font-size: var(--fs-sm); }
 
 /* Inline questions. */

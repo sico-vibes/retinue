@@ -16,6 +16,7 @@ import { Marquee } from './Marquee'
 import { ProjectIcon } from './ProjectIcon'
 import type { MembersByProject } from './projectMembers'
 import { shortTime } from './rosterSelectors'
+import { attentionOrder, attentionRank } from './sidebarOrder'
 import { isManager, isSideSession, projectOfSession, sessionIsBusy } from './teamSelectors'
 import { TeamMenu, type MenuItem } from './TeamSidebar'
 import './projectsSidebar.css'
@@ -147,7 +148,8 @@ export function ProjectsSidebar({ agents, projects, sessions, members = null, se
             {block.bots.length === 0 && <li className="ps-empty">{block.project && onHire ? <button type="button" className="ps-empty-hire" onClick={() => onHire(block.project!.id)}>No one hired yet. Hire an employee</button> : 'No one here yet.'}</li>}
             {block.bots.map(({ agent, sessions: list }) => {
               const latest = list[0]
-              const recent = list.slice(0, RECENT_PER_BOT)
+              // What needs the owner comes first, so the cut below can never hide it.
+              const recent = attentionOrder(list, (session) => attentionRank(session, approvalSessionIds?.has(session.id) ?? false)).slice(0, RECENT_PER_BOT)
               const rowKey = `${block.key}:${agent.id}`
               const holdsSelection = recent.some((session) => session.id === selectedSessionId)
               const expanded = recent.length > 0 && (folds.get(rowKey) ?? holdsSelection)

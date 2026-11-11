@@ -1167,6 +1167,22 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     if (method === 'session.queue.send_now') {
       if (target < 0) throw rpcError('not_found', 'That queued message is gone.')
       const [entry] = items.items.splice(target, 1)
+      // `steer: true`: the daemon puts a plain message into the running turn and takes it off the queue.
+      if (params.steer === true && ['working', 'waiting_permission'].includes(String(session.state))) {
+        const canSteer = session.runtimeId === 'runtime-codex' && fixtureScene?.steer !== false && fixtureSettings['exec_gate.codex.steer'] !== false
+        const text = String(entry.text ?? '')
+        if (canSteer && entry.kind === 'user' && !(Array.isArray(entry.attachments) && entry.attachments.length)) {
+          const turnId = String((session.turns ?? []).at(-1)?.id ?? 'turn-preview')
+          const id = `steer-${Date.now()}`
+          session.messages = [...(session.messages ?? []), { id, role: 'user', content: text, turnId, meta: { kind: 'steer' } }]
+          publish()
+          notifyFixtureDaemon('message.completed', { sessionId: session.id, turnId, id, messageId: id, role: 'user', content: text, meta: { kind: 'steer' } })
+          return { steered: true } as T
+        }
+        items.items.unshift(entry)
+        publish()
+        return { steered: false, queued: true, reason: canSteer ? 'Only a plain text message can go into the running turn.' : 'This coding agent cannot take a message into a running turn.' } as T
+      }
       items.items.unshift(entry)
       publish()
       return { queued: true } as T

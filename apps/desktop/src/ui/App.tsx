@@ -805,7 +805,10 @@ export function App() {
     ...(snapshot?.permissions ?? []).filter((permission) => typeof permission.sessionId === 'string' && isPendingPermissionLive(permission, permissionClock)).map((permission) => permission.sessionId!),
   ].filter((id) => !(mainAttention && id === selectedSession?.id)))
   // Without the Agent activity setting only failed turns and sub-agents stay visible; the working indicator shows progress.
-  const groupedConversationItems = groupConversationActivity(activityDetails || sideSession ? conversationItems : conversationItems.filter((item) => item.kind === 'message' || item.activityKind === 'turn' || isSubagentItem(item)))
+  // Only a running turn can have a running step: one that ended mid-step must not read "Working" for ever.
+  const shownSession = sideSession ?? selectedSession
+  const liveTurn = ['working', 'starting', 'waiting_permission', 'cancelling'].includes(String(shownSession?.state ?? '')) ? (typeof shownSession?.turns?.at(-1)?.id === 'string' ? shownSession.turns.at(-1)!.id as string : true) : false
+  const groupedConversationItems = groupConversationActivity(activityDetails || sideSession ? conversationItems : conversationItems.filter((item) => item.kind === 'message' || item.activityKind === 'turn' || isSubagentItem(item)), liveTurn)
   // Messages this conversation's bot sent to teammates read as one assignment card per turn, with the daemon's recorded status.
   const delegationLedger = useDelegations(selectedSession && !isDraftSession(selectedSession) ? selectedSession.id : null, connection === 'connected')
   const { runs: delegationRunMap, folded: delegationFolded } = delegationRuns(groupedConversationItems)
@@ -821,6 +824,8 @@ export function App() {
     // Questions wait in their own conversation (the sidebar shows "Waiting for you");
     // only approvals pull focus across blobs.
     : selectPendingPermission((snapshot?.permissions ?? []).filter((permission) => permission.kind !== 'question' || permission.sessionId === selectedSession?.id), selectedSession?.id, activeSessionId, permissionClock)
+  // How many requests wait in the same conversation as the one on screen: they are answered one at a time, so say there are more.
+  const waitingWithActive = activePermission ? (snapshot?.permissions ?? []).filter((permission) => permission.sessionId === activePermission.sessionId && isPendingPermissionLive(permission, permissionClock)).length : 0
   const sideAgent = sideSession ? agents.find((agent) => agent.id === sideSession.agentId) ?? null : null
   const sidePeer = sideSession ? agents.find((agent) => agent.id === sideSession.link?.peerAgentId) ?? null : null
   // FIX39 item 18: a delegated conversation whose delivery is queued behind the
@@ -2379,23 +2384,15 @@ ${fileReferenceText(sentFile)}` : typed
     requestAnimationFrame(() => composerRef.current?.focus())
   }
   const cancelQueueEdit = () => { if (!queueEdit) return; setComposer(queueEdit.previous); setQueueEdit(null) }
-  /** "Send now" while a turn runs: the message goes into the turn, and only then leaves the queue, so it is never lost in between. */
+  /** "Send now" while a turn runs: one call, and the daemon puts the message into the turn and takes it off the queue, or keeps it at the front and says why. */
   const steerQueued = async (id: string) => {
     const session = selectedSession
-    const item = snapshotRef.current?.queues?.[session?.id ?? '']?.items.find((entry) => entry.id === id)
-    if (!session || !item) return
+    if (!session) return
     try {
-      await rpc('session.steer', { sessionId: session.id, text: item.text, clientMessageId: newClientMessageId() })
-    } catch (reason) {
-      // A plain refusal means nothing was sent: the message goes to the front of the queue and says why.
-      if (['unsupported', 'conflict'].includes(daemonCodeOf(reason) ?? '')) {
-        setDeliveryNotice('This turn could not take the message. It is next in the queue.')
-        await queueRpc('session.queue.send_now', { id })
-      } else setError(`Retinue could not confirm the message was received. It is still in the queue; remove it if it already arrived. ${messageOf(reason)}`)
-      return
-    }
-    setDeliveryNotice(null)
-    await queueRpc('session.queue.delete', { id })
+      const result = await doRpc<{ steered?: boolean; reason?: string }>('session.queue.send_now', { sessionId: session.id, id, steer: true })
+      setDeliveryNotice(result?.steered === false ? result.reason?.trim() || 'This turn could not take the message. It is next in the queue.' : null)
+    } catch { /* inline */ }
+    void loadQueue(session.id)
   }
   /** "Stop and send": stop the running turn, wait until it has really ended, then send this queued message. */
   const stopAndSendQueued = async (id: string) => {
@@ -3137,6 +3134,7 @@ ${fileReferenceText(sentFile)}` : typed
                     : <div className="message-pending-note failed" role="alert"><CircleAlert size={12} aria-hidden="true" /><span>{item.error || 'This message could not be sent.'}</span><button type="button" className="queue-link" onClick={() => void deliverPendingSend(item, item.ambiguous === true)}>{item.ambiguous ? 'Send again' : 'Try again'}</button><button type="button" className="queue-link" onClick={() => editFailedSend(item)}>Edit</button></div>}
                 </div>
               </article>)}
+              {activePermission && waitingWithActive > 1 && <p className="approval-count" role="status">{waitingWithActive} requests are waiting here. They come one at a time.</p>}
               {activePermission && (activePermission.kind === 'proposal'
                 ? <ProposalCard key={activePermission.id} request={activePermission} managerName={managerOf(agents)?.name} projects={projects} runtimes={snapshot?.runtimes ?? []} siblings={hireSiblings(snapshot?.permissions ?? [], activePermission)} onDecided={() => void refresh()} />
                 : activePermission.kind === 'question'

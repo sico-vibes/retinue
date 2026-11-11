@@ -146,6 +146,8 @@ export type DelegationRowModel = {
   startedAt: number | null
   endedAt: number | null
   preview: string
+  /** What must be true for the assignment to count as done, when the brief said. */
+  doneGoal?: string | null
   error: string | null
   workspacePath: string | null
   worktree: DelegationWorktree | null
@@ -257,7 +259,7 @@ export function buildDelegationRows(notices: readonly DelegationNotice[], record
       const bucket: DelegationBucket = approval ? 'approval' : record.status === 'running' ? 'working' : record.status === 'completed' ? 'done' : record.status
       // A teammate that asked the owner a question keeps its assignment open; say so instead of "Needs approval".
       const asking = approval && !!sideSessionId && questionSessions.has(sideSessionId)
-      return { ...base, asking, bucket, label: asking ? 'Has a question' : bucket === 'queued' ? queuedLabel(record.queueReason) : bucket === 'done' && record.silent ? 'Done, nothing to report' : bucket === 'working' ? doingNowFor(sideSession) ?? BUCKET_LABEL.working : BUCKET_LABEL[bucket], startedAt: parse(record.startedAt ?? record.createdAt), endedAt: parse(record.finishedAt), preview: record.briefPreview, error: record.error, workspacePath: record.workspacePath, worktree: record.worktree, recorded: true }
+      return { ...base, asking, bucket, label: asking ? 'Has a question' : bucket === 'queued' ? queuedLabel(record.queueReason) : bucket === 'done' && record.silent ? 'Done, nothing to report' : bucket === 'working' ? doingNowFor(sideSession) ?? BUCKET_LABEL.working : BUCKET_LABEL[bucket], startedAt: parse(record.startedAt ?? record.createdAt), endedAt: parse(record.finishedAt), preview: record.briefPreview, doneGoal: record.doneGoal ?? null, error: record.error, workspacePath: record.workspacePath, worktree: record.worktree, recorded: true }
     }
     const startedAt = parse(notice.createdAt)
     const fallback = { ...base, startedAt, endedAt: null, preview: notice.text, error: notice.failed ? notice.text : null, workspacePath: sideSession?.projectPath ?? null, worktree: null, recorded: false }

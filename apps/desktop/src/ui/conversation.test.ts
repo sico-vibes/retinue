@@ -102,4 +102,29 @@ describe('grouped conversation activity', () => {
     ])
     expect(grouped[1]).toMatchObject({ failed: 1, commands: 2, runningTitle: 'npm test' })
   })
+
+  it('never shows a step as working once its turn has ended', () => {
+    const items = [
+      { kind: 'message', id: 'm1' },
+      { kind: 'activity', id: 't1', activityKind: 'tool', activity: { state: 'running', title: 'Read the docs', kind: 'task', turnId: 'turn-1' }, children: [{ kind: 'activity', id: 'c1', activityKind: 'tool', activity: { status: 'in_progress', kind: 'read' } }] },
+      { kind: 'message', id: 'm2' },
+      { kind: 'activity', id: 't2', activityKind: 'tool', activity: { state: 'running', title: 'npm test', kind: 'commandExecution', turnId: 'turn-2' } },
+    ] as Parameters<typeof groupConversationActivity>[0]
+    // Nothing is running: both groups have settled, and the open steps say they stopped.
+    const idle = groupConversationActivity(items, false)
+    expect(idle[1]).toMatchObject({ runningTitle: null })
+    expect(idle[3]).toMatchObject({ runningTitle: null })
+    const settled = (idle[1] as ActivityGroup).items[0]
+    expect(settled.activity?.state).toBe('stopped')
+    expect(settled.children?.[0].activity?.status).toBe('stopped')
+    // A turn is running: only its own steps, the newest, can be working.
+    const busy = groupConversationActivity(items, 'turn-2')
+    expect(busy[1]).toMatchObject({ runningTitle: null })
+    expect(busy[3]).toMatchObject({ runningTitle: 'npm test' })
+    // The running turn is not in the list yet: the newest steps still count as working.
+    expect(groupConversationActivity(items, true)[3]).toMatchObject({ runningTitle: 'npm test' })
+    expect(groupConversationActivity(items, 'turn-unknown')[3]).toMatchObject({ runningTitle: 'npm test' })
+    // The source items are not changed.
+    expect(items[1].activity?.state).toBe('running')
+  })
 })

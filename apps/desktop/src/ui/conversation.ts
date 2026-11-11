@@ -173,9 +173,25 @@ export function activityCategory(item: ConversationItem): 'subagent' | 'command'
   return 'tool'
 }
 
-/** Each run of activity becomes one collapsible line; a failed turn stays on its own. */
-export function groupConversationActivity(items: ConversationItem[]): GroupedConversationItem[] {
+const RUNNING_STATES = ['running', 'working', 'started', 'in_progress']
+/** A step its turn left unfinished: the turn has ended, so it is no longer running, whatever its last report said. */
+function settleStep(item: ConversationItem): ConversationItem {
+  const state = String(item.activity?.state ?? item.activity?.status ?? '').toLowerCase()
+  const children = item.children?.map(settleStep)
+  if (!RUNNING_STATES.includes(state)) return children ? { ...item, children } : item
+  return { ...item, ...(children ? { children } : {}), activity: { ...item.activity, state: 'stopped', status: 'stopped' } } as ConversationItem
+}
+
+/**
+ * Each run of activity becomes one collapsible line; a failed turn stays on its own.
+ * `live` says what is running now: false for nothing, true for a turn, or the running turn's id.
+ * A step that still says "running" in a turn that has ended is shown as not finished, never as working.
+ * Left out, every step is taken at its word.
+ */
+export function groupConversationActivity(items: ConversationItem[], live?: boolean | string): GroupedConversationItem[] {
   const output: GroupedConversationItem[] = []
+  let lastActivity = -1
+  items.forEach((entry, at) => { if (entry.kind === 'activity' && entry.activityKind !== 'turn') lastActivity = at })
   for (let index = 0; index < items.length;) {
     const item = items[index]
     if (item.kind !== 'activity' || item.activityKind === 'turn') {
@@ -184,7 +200,10 @@ export function groupConversationActivity(items: ConversationItem[]): GroupedCon
     }
     let end = index
     while (end < items.length && items[end].kind === 'activity' && items[end].activityKind !== 'turn') end += 1
-    const activityItems = items.slice(index, end)
+    const groupTurn = items.slice(index, end).map((entry) => entry.activity?.turnId).find((value): value is string => typeof value === 'string') ?? null
+    // While a turn runs, its steps are the newest ones; a turn id, when both sides have it, also proves it.
+    const groupLive = live === undefined || (live !== false && (end - 1 === lastActivity || (typeof live === 'string' && groupTurn === live)))
+    const activityItems = groupLive ? items.slice(index, end) : items.slice(index, end).map(settleStep)
     const categories = activityItems.map(activityCategory)
     // Filesystem searches stay in the existing summary's tool count. The
     // "searched the web" count is only for the existing web/search kinds.

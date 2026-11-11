@@ -72,7 +72,8 @@ function Row({ row, now, onOpen, onError, onFollowUp }: { row: DelegationRowMode
       <button type="button" className="delegation-open" disabled={!row.sideSessionId} onClick={() => row.sideSessionId && onOpen(row.sideSessionId)} aria-label={`${row.bucket === 'approval' ? 'Open to approve' : 'Open'} the conversation with ${row.name}: ${row.topic}`}>{row.bucket === 'approval' ? 'Review' : 'Open'}<ArrowUpRight size={12} aria-hidden="true" /></button>
     </div>
     {open && <div id={panel} className="delegation-detail">
-      {row.preview && <p className="delegation-brief" title={row.preview}>{row.preview}</p>}
+      {row.preview && <p className="delegation-brief" title={row.preview}>{row.doneGoal ? <span className="delegation-term">Asked for </span> : null}{row.preview}</p>}
+      {row.doneGoal && <p className="delegation-brief" title={row.doneGoal}><span className="delegation-term">Done when </span>{row.doneGoal}</p>}
       {row.error && <p className="delegation-error" role="status">{row.error}</p>}
       {row.bucket === 'approval' && <p className="delegation-hint">{row.asking ? `${row.name} asked you a question and is waiting in its own conversation. Open it to answer; the answer goes only to ${row.name}.` : `Waiting for you in ${row.name}'s conversation. Open it to approve or decline.`}</p>}
       {row.bucket === 'interrupted' && <p className="delegation-hint">Retinue restarted before this finished. It was not sent again, so open the conversation to see what was done.</p>}

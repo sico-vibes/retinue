@@ -41,6 +41,7 @@
 .delegation-row.approval .delegation-open { color: var(--warning); font-weight: 600; }
 .delegation-detail { display: grid; gap: 8px; margin: 2px 8px 12px 46px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-raised); color: var(--text-2); font-size: var(--fs-xs); line-height: 1.5; }
 .delegation-detail p { margin: 0; }
+.delegation-term { color: var(--text-3); }
 .delegation-brief { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; color: var(--text-2); overflow-wrap: anywhere; white-space: pre-wrap; }
 .delegation-error { color: var(--danger-ink); overflow-wrap: anywhere; }
 .delegation-hint { color: var(--text-3); }

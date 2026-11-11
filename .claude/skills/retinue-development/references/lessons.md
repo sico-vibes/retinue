@@ -2,6 +2,18 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-11 · Gates · Run the Rust tests with a space-free TEMP; `cargo fmt --check` is not a gate
+
+On this machine `TEMP` is the 8.3 path `C:UsersSICOVI~1...`, so five daemon tests that compare paths fail (`repository`, `worktree_cleanup`, `machines_tests::take_over`, `session_repository`), and the long path has a space, which makes clone tests refuse. Run `cargo test -p retinue-daemon -p retinue-storage` with `TEMP` and `TMP` set to a real space-free folder (`C:tmp`): 992 and 163 pass (11 November 2026). `cargo fmt --all -- --check` reports thousands of diffs in untouched files (no `rustfmt.toml`; the code is hand-formatted), so it is not a gate and must not be "fixed" by reformatting. Rust does build here: the Smart App Control block of 10 November did not recur.
+
+## 2026-11-11 · Work log · A turn that ended kept saying "Working"
+
+Symptom: a finished turn's work-log line read "Working · Ran 153 commands" for ever. Cause: `groupConversationActivity` (`ui/conversation.ts`) took any step whose last report was "running" at its word, and a turn that ends while its sub-agents are still open leaves such steps behind. Fix: the function takes what is live (false, true, or the running turn's id); a step in a turn that is not running is shown as "Did not finish". While a turn runs, only the newest group or the one with its turn id can be working.
+
+## 2026-11-11 · Daemon · A start timeout of 45 seconds fails a long resumed conversation
+
+A message sent into a very long OpenCode conversation failed with `failureClass: timeout` and no tool calls: `forward_events` (`main.rs`) stops a turn that has not started answering in 45 seconds. Until that is tuned, start long tasks in a new conversation, and start two OpenCode conversations about a minute apart.
+
 ## 2026-11-11 · Composer · The queue could vanish on first load: the first snapshot overwrote it
 
 Symptom: in the preview, `?scene=queue` sometimes showed no queued messages until one was added. Cause: `loadQueue` (`ui/App.tsx`) had already stored the queue when the first-load path ran `setSnapshot(initial)` again (React StrictMode remounts in dev; any second initial load does it), and a fresh snapshot carries no queues. Nothing reloaded it, because the conversation and connection had not changed. Fix: that write goes through `carryQueues(initial, current)`, like every other snapshot refresh. Rule: never write a whole snapshot without `carryQueues`.
@@ -729,3 +741,7 @@ Symptom/ask: "Haze should be frosted glass", but the 26 October fix only made th
 ## 2026-11-10 · Dropdowns opened behind the hire dialog
 
 - **Symptom:** the Model list in the hire dialog opened behind the dialog. **Cause:** `Select` portals its list to `<body>` when it is inside a `[role="dialog"]` and gave it `zIndex: 200`, but the team dialogs (hire, staff a project) sit on `.team-dialog-backdrop` at z-index 400 (`teamPage.css`). **Fix:** `FLOATING_MENU_Z = 1000` in `Select.tsx` (above every dialog, below tooltips at 10000); `Select.dialog.mounted.test.tsx` asserts it is above 400. **Avoid:** a new overlay above 1000 must also raise `FLOATING_MENU_Z`.
+
+## 2026-11-10 · The CEO said a hired employee was on no project
+
+- **Symptom:** the sidebar listed Fifi under the Retinue project, but the CEO said Retinue had no one staffed and Fifi was casual. **Cause:** since Phase 9 hiring, a bot belongs to a project through its own `projectId` OR a `project_members` row (`project.hire`, or a first conversation there), and `projectBlocks` (`ProjectsSidebar.tsx`) counts both. The CEO's roster (`team.rs` `list_blobs`), its `freeOnly`/`project` filters (`manager_blobs`) and the workspace summary in its instructions (`knowledge.rs` `workspace_summary`) read only `projectId`. **Fix:** `team::hired_project_ids` + `team::projects_of` (projectId first, then memberships) used in all three; `manager_blobs` also returns `projectIds`; test `the_ceo_counts_a_hired_bot_as_on_its_project` in `main.rs`. **Avoid:** never decide project membership from `projectId` alone; go through `projects_of`.

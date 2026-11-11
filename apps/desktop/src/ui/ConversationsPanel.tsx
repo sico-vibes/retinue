@@ -4,10 +4,10 @@
 // under the conversation that started them.
 import { Collapse } from './Collapse'
 import { Marquee } from './Marquee'
-import { StatusLabel, type ConversationStatus } from './ProjectsSidebar'
+import { StatusLabel, conversationStatus } from './ProjectsSidebar'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { MachineBadge } from './MachineBots'
-import { hasSettled, settleOrder } from './sidebarOrder'
+import { attentionOrder, attentionRank, hasSettled, settleOrder } from './sidebarOrder'
 import { Archive, ArrowLeftRight, ChevronDown, ChevronRight, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Smile, Tag, Trash2 } from 'lucide-react'
 import type { Agent, Project, Session } from '../types'
 import { BlobCanvas } from '../blob/BlobCanvas'
@@ -110,7 +110,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
   }, [tree, activeId])
   const toggle = (id: string) => setExpanded((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })
   // Phase 6: a finished conversation settles below the live ones in its project.
-  const groups = useMemo(() => conversationsByProject(shown, projects).map((group) => ({ ...group, nodes: settleOrder(group.nodes, (node) => hasSettled(node.session, now, false)) })), [shown, projects, now])
+  const groups = useMemo(() => conversationsByProject(shown, projects).map((group) => ({ ...group, nodes: settleOrder(attentionOrder(group.nodes, (node) => attentionRank(node.session)), (node) => hasSettled(node.session, now, false)) })), [shown, projects, now])
   const fallback = defaultProjectFor(agent, projects)
   const [collapsedProjects, setCollapsedProjects] = useState<ReadonlySet<string>>(() => { try { return new Set<string>(JSON.parse(window.localStorage.getItem(COLLAPSED_KEY) ?? '[]')) } catch { return new Set<string>() } })
   const toggleProject = (key: string) => setCollapsedProjects((current) => { const next = new Set(current); if (next.has(key)) next.delete(key); else next.add(key); try { window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next])) } catch { /* a remembered fold is a convenience only */ } return next })
@@ -163,9 +163,9 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
               <Marquee className="convo-title" text={title} active={active} />
               {node.kind === 'side'
                 ? <span className="convo-sub">{node.role === 'sender' ? `Asked ${peerName}` : `From ${peerName}`}</span>
-                : <span className="convo-sub convo-meta"><time>{relativeTime(session.lastMessageAt ?? session.updatedAt ?? session.createdAt, now)}</time><span aria-hidden="true">·</span><StatusLabel {...(needsYou ? { tone: 'needs', label: 'Needs you' } : failed ? { tone: 'bad', label: 'Stopped with an error' } : busy ? { tone: 'working', label: 'Working' } : { tone: 'idle', label: 'Idle' }) as ConversationStatus} /></span>}
+                : <span className="convo-sub convo-meta"><time>{relativeTime(session.lastMessageAt ?? session.updatedAt ?? session.createdAt, now)}</time><span aria-hidden="true">·</span><StatusLabel {...conversationStatus({ ...session, state: presentedSessionState(session) }, false)} /></span>}
             </span>
-            {session.link?.movedTo ? <MachineBadge name={session.link.movedTo.name} /> : needsYou ? <span className="convo-flag needs">Needs you</span> : failed ? <span className="convo-flag failed">Failed</span> : busy ? <i className="convo-dot" aria-label="Working" /> : node.kind === 'side' ? <time className="convo-time">{relativeTime(session.lastMessageAt ?? session.updatedAt ?? session.createdAt, now)}</time> : null}
+            {session.link?.movedTo ? <MachineBadge name={session.link.movedTo.name} /> : node.kind !== 'side' ? null : needsYou ? <span className="convo-flag needs">Needs you</span> : failed ? <span className="convo-flag failed">Failed</span> : busy ? <i className="convo-dot" aria-label="Working" /> : node.kind === 'side' ? <time className="convo-time">{relativeTime(session.lastMessageAt ?? session.updatedAt ?? session.createdAt, now)}</time> : null}
           </button>}
         {node.kind === 'main' && renaming !== session.id && <span className="convo-actions">
           <button type="button" className="convo-action" aria-label={`Rename ${title}`} title="Rename" onClick={() => setRenaming(session.id)}><Pencil size={12} aria-hidden="true" /></button>

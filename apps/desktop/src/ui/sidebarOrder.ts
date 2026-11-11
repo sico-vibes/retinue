@@ -50,6 +50,17 @@ export function groupBotsByProject(agents: readonly Agent[], projects: readonly 
   return [...groups, { id: 'no-project', name: 'No project', agents: rest }].filter((group) => group.agents.length > 0)
 }
 
+/** How much a conversation wants the owner: needs an answer (0), working (1), everything else (2). */
+export function attentionRank(session: Session, needsYou = false): number {
+  if (needsYou || String(session.state ?? '').toLowerCase() === 'waiting_permission') return 0
+  return sessionIsBusy(session) ? 1 : 2
+}
+
+/** Orders by attention and keeps the given order inside each rank, so a list sorted by time stays so. */
+export function attentionOrder<T>(items: readonly T[], rank: (item: T) => number): T[] {
+  return items.map((item, index) => ({ item, index, rank: rank(item) })).sort((a, b) => a.rank - b.rank || a.index - b.index).map((entry) => entry.item)
+}
+
 /** A conversation settles once it's finished and an hour old: anything live or recent stays on top. */
 export const SETTLE_AFTER_MS = 60 * 60 * 1000
 

@@ -1033,15 +1033,13 @@ describe('blob roster and editor', () => {
     return queued
   }
 
-  it('sends a queued message into the running turn, and only then takes it off the queue', async () => {
+  it('sends a queued message into the running turn with one call to the daemon', async () => {
     const queued = queuedConversation('working')
     const base = h.rpc.getMockImplementation()!
-    const order: string[] = []
     h.rpc.mockImplementation(async (method: string, params: Record<string, unknown> = {}) => {
       if (method === 'runtime.capabilities') return { settings: { steer: { supported: true, enabled: true } } }
       if (method === 'session.queue.list') return { items: queued, paused: false }
-      if (method === 'session.steer') { order.push(method); return { steered: true } }
-      if (method === 'session.queue.delete') { order.push(method); queued.splice(queued.findIndex((entry) => entry.id === params.id), 1); return { ok: true } }
+      if (method === 'session.queue.send_now') { queued.splice(queued.findIndex((entry) => entry.id === params.id), 1); return { steered: true } }
       return base(method, params)
     })
     const view = startApp()
@@ -1050,20 +1048,20 @@ describe('blob roster and editor', () => {
     expect(buttons.map((node) => node.textContent)).toEqual(['Send now', 'Send now'])
     await click(buttons[0])
     await view.settle()
-    expect(h.rpc).toHaveBeenCalledWith('session.steer', { sessionId: 'session-claude', text: 'Use the staging database', clientMessageId: expect.stringMatching(/^m-/) })
-    expect(h.rpc).toHaveBeenCalledWith('session.queue.delete', { sessionId: 'session-claude', id: 'q1' })
-    expect(order).toEqual(['session.steer', 'session.queue.delete'])
+    expect(h.rpc).toHaveBeenCalledWith('session.queue.send_now', { sessionId: 'session-claude', id: 'q1', steer: true })
+    // The window never steers or deletes on its own: the daemon does both in one step.
+    expect(h.rpc).not.toHaveBeenCalledWith('session.steer', expect.anything())
+    expect(h.rpc).not.toHaveBeenCalledWith('session.queue.delete', expect.anything())
     expect([...view.host.querySelectorAll('.queue-text')].map((node) => node.textContent)).toEqual(['Then run the suite'])
   })
 
-  it('keeps a queued message, moved to the front, when the turn refuses it', async () => {
+  it('keeps a queued message and shows the daemon\'s reason when the turn refuses it', async () => {
     const queued = queuedConversation('working')
     const base = h.rpc.getMockImplementation()!
     h.rpc.mockImplementation(async (method: string, params: Record<string, unknown> = {}) => {
       if (method === 'runtime.capabilities') return { settings: { steer: { supported: true, enabled: true } } }
       if (method === 'session.queue.list') return { items: queued, paused: false }
-      if (method === 'session.steer') throw new Error('conflict: Nothing is running to steer.')
-      if (method === 'session.queue.send_now') return { queued: true }
+      if (method === 'session.queue.send_now') return { steered: false, queued: true, reason: 'The turn ended before the message could go into it.' }
       return base(method, params)
     })
     const view = startApp()
@@ -1071,8 +1069,8 @@ describe('blob roster and editor', () => {
     await click([...view.host.querySelectorAll<HTMLButtonElement>('.queue-send')][1])
     await view.settle()
     expect(h.rpc).not.toHaveBeenCalledWith('session.queue.delete', expect.anything())
-    expect(h.rpc).toHaveBeenCalledWith('session.queue.send_now', { sessionId: 'session-claude', id: 'q2' })
-    expect(view.host.querySelector('.composer-status-note')?.textContent).toBe('This turn could not take the message. It is next in the queue.')
+    expect(h.rpc).toHaveBeenCalledWith('session.queue.send_now', { sessionId: 'session-claude', id: 'q2', steer: true })
+    expect(view.host.querySelector('.composer-status-note')?.textContent).toBe('The turn ended before the message could go into it.')
     expect(view.host.querySelectorAll('.queue-item')).toHaveLength(2)
   })
 
