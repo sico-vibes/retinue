@@ -2,6 +2,20 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-13 · Lanes · Eight backend lanes at once: what merging them took
+
+Eight backend lanes ran in parallel in the in-app backend bot, one git worktree each (12 November 2026). What mattered:
+
+- **Retinue runs four bots at once by default** (`concurrency.botsAtOnce`, 1 to 16, the owner's setting). A message past the limit is refused with "this one will start when one finishes" and is **not** queued: the conversation is created empty. Ask the owner to raise the limit, or send again when a slot frees.
+- **Two of eight lanes ended with "tests are running, I'll report" and no report.** Their work was complete in the worktree. Read the diff; do not wait for the message.
+- **Lanes edit shared files.** Six touched `main.rs` and all touched `docs/ipc-contract.md`. Merge by exporting each lane's diff (`git add -N` its new files first) and applying them in turn with `git apply --3way` in one integration worktree that already has a warm `target`. Almost every conflict was two lanes adding beside each other (keep both); the real one was two lanes each asserting the other's provider could not steer.
+- **A lane's tests can contradict another lane's feature.** After merging, one test still used Claude as "an agent that cannot steer". Run the merged suite, not each lane's.
+- **Lanes drift outside the brief** (skill files, generated docs, bridge files). Export only the paths the brief allowed.
+
+## 2026-11-13 · Gates · Smart App Control blocks some freshly built binaries, not all
+
+It is intermittent, not total: on 12 and 13 November `cargo check -p retinue-daemon` and the daemon and storage unit tests built and ran (1,033 and 164 passed), while several integration test binaries (`acp_lifecycle`, `acp_steering`, `table_providers`, `wire_replay`, `daemon_smoke`, `parent_watchdog`) and every build script of the native shell (`tray-icon`, `tauri-runtime-wry`, `retinue-desktop`) were refused with os error 4551. So on this machine the native shell cannot be compiled at all, and native changes are only proven by CI or a release build. Use `cargo test --no-fail-fast`, or one blocked binary hides every suite after it. The opt-in live Claude test did run: `RETINUE_LIVE_TESTS=1 cargo test -p retinue-adapter-claude --test live_suite claude_live_permission_change_and_steer` passed, which is the proof that steering reaches a real Claude Code turn.
+
 ## 2026-11-11 · Gates · Run the Rust tests with a space-free TEMP; `cargo fmt --check` is not a gate
 
 On this machine `TEMP` is the 8.3 path `C:UsersSICOVI~1...`, so five daemon tests that compare paths fail (`repository`, `worktree_cleanup`, `machines_tests::take_over`, `session_repository`), and the long path has a space, which makes clone tests refuse. Run `cargo test -p retinue-daemon -p retinue-storage` with `TEMP` and `TMP` set to a real space-free folder (`C:tmp`): 992 and 163 pass (11 November 2026). `cargo fmt --all -- --check` reports thousands of diffs in untouched files (no `rustfmt.toml`; the code is hand-formatted), so it is not a gate and must not be "fixed" by reformatting. Rust does build here: the Smart App Control block of 10 November did not recur.

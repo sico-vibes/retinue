@@ -335,6 +335,8 @@ export interface Session extends JsonRecord {
   limitAutoResume?: boolean
   /** The owner asked this limited conversation to stay quiet until woken. */
   limitSnoozed?: boolean
+  /** Snoozed until it needs the owner: no alerts for progress; an approval, a question or a failure wakes it. Present only while set. */
+  snoozed?: boolean
   /** Phase 1B: the comparison this conversation belongs to. */
   fanoutId?: string | null
   /** Phase 1: the project's approval override, when it has one. It applies unless the conversation has its own. */

@@ -5,7 +5,9 @@
 // says differs from HEAD now, whoever made the change, with what the conversation's
 // own coding agent reported kept alongside for anything Git no longer lists.
 import { useEffect, useState, type ReactNode } from 'react'
-import { Bot, ChevronDown, ChevronRight, CircleAlert, Code2, Copy, FileText, FolderOpen, GitBranch, Smartphone } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, CircleAlert, Code2, Copy, FileText, FolderOpen, GitBranch, Globe, Smartphone } from 'lucide-react'
+import { useLocalServers } from './localServers'
+import { openSafeLink } from './openSafeLink'
 import type { Agent, JsonRecord, Session } from '../types'
 import { rpc } from '../tauri'
 import { HelpTip } from './SettingsParts'
@@ -142,6 +144,7 @@ export function SessionRail({ session, usage, appliedModel, onOpenFile, onReveal
   const environment = useEnvironment(session && !isDraftSession(session) ? session.id : null)
   const busy = ['working', 'starting', 'waiting_permission'].includes(session?.state ?? '')
   const repository = useSessionRepository(session, repositoryRefreshKey(session), busy, active)
+  const servers = useLocalServers(session, active)
   const [showAllOutputs, setShowAllOutputs] = useState(false)
   const [showAllChanges, setShowAllChanges] = useState(false)
   if (!session) return <div className="session-rail">{workingBots}<div className="rail-empty">Open a conversation to see where it works and what it changed.</div></div>
@@ -214,6 +217,17 @@ export function SessionRail({ session, usage, appliedModel, onOpenFile, onReveal
     <Card id="workspace" title="Workspace">
       <WorkspaceBody session={session} active={active} />
     </Card>
+
+    {/* Only while there is one: the dev servers this conversation's coding agent started. A link opens in the system browser. */}
+    {servers.length > 0 && <Card id="servers" title="Local servers">
+      {servers.map((server) => <div className="rail-row" key={server.port}>
+        <Globe size={13} aria-hidden="true" />
+        <span className="rail-row-main" title={server.url}>localhost:{server.port}{server.process ? <small className="rail-row-aside"> {server.process}</small> : null}</span>
+        {!server.answeredHtml && <small className="rail-row-aside">No page yet</small>}
+        <button type="button" className="queue-link" aria-label={`Open localhost:${server.port} in your browser`} onClick={() => void openSafeLink(server.url)}>Open</button>
+      </div>)}
+      <p className="rail-note">Started by {botName} in this conversation. Opens in your browser.</p>
+    </Card>}
 
     <Card id="schedules" title="Schedules">
       <ScheduleOverview compact agents={agents} connected={active} scope={isManager ? null : { agentId: session.agentId ?? null, projectId: session.projectId ?? null }} onOpenSession={onOpenSessionById} onOpenSchedules={onOpenSchedules} />

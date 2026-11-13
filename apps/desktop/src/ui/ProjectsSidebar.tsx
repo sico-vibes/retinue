@@ -31,14 +31,17 @@ type ProjectBlock = { key: string; project: Project | null; bots: BotInProject[]
 
 export type ConversationStatus = { label: string; tone: 'working' | 'needs' | 'limited' | 'bad' | 'idle' }
 
+/** A snoozed conversation says so beside what it is doing; one that needs the owner is never snoozed (the daemon wakes it). */
+const withSnooze = (session: Session, status: ConversationStatus): ConversationStatus => session.snoozed === true ? { ...status, label: `${status.label} · snoozed` } : status
+
 /** What a conversation is doing now, in words for the card's second line. */
 export function conversationStatus(session: Session, needsYou: boolean): ConversationStatus {
   const state = String(session.state ?? '').toLowerCase()
   if (needsYou || state === 'waiting_permission') return { label: 'Needs you', tone: 'needs' }
-  if (sessionIsBusy(session)) return { label: 'Working', tone: 'working' }
-  if (state === 'limited' || state === 'rate_limited') return { label: 'Limited', tone: 'limited' }
+  if (sessionIsBusy(session)) return withSnooze(session, { label: 'Working', tone: session.snoozed === true ? 'idle' : 'working' })
+  if (state === 'limited' || state === 'rate_limited') return withSnooze(session, { label: 'Limited', tone: 'limited' })
   if (state === 'error' || state === 'failed') return { label: 'Stopped with an error', tone: 'bad' }
-  return { label: 'Idle', tone: 'idle' }
+  return withSnooze(session, { label: 'Idle', tone: 'idle' })
 }
 
 /**

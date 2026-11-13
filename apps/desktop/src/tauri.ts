@@ -178,11 +178,14 @@ export type RuntimeTerminalResult = { launched: boolean; terminal: 'wt' | 'power
 /**
  * Opens a visible terminal window running the provider's fixed login or install
  * command, so an expired CLI sign-in can be fixed without leaving the app. The
- * command text lives in the native table; only these two values cross.
+ * command text lives in the native table; only these values cross. With an
+ * account id, the shell asks the daemon for that account's environment and runs
+ * the provider's own sign-in for it, so the provider writes its own credential
+ * into its own folder. Only sign-in takes an account.
  */
-export async function runtimeTerminal(provider: RuntimeTerminalProvider, action: RuntimeTerminalAction): Promise<RuntimeTerminalResult> {
+export async function runtimeTerminal(provider: RuntimeTerminalProvider, action: RuntimeTerminalAction, accountId?: string | null): Promise<RuntimeTerminalResult> {
   if (!inDesktop) throw new Error('Sign-in terminals are available only in the desktop app.')
-  return invoke<RuntimeTerminalResult>('runtime_terminal', { provider, action })
+  return invoke<RuntimeTerminalResult>('runtime_terminal', { provider, action, accountId: accountId ?? null })
 }
 
 export type HarnessUpdateResult = { provider: string; version: string }

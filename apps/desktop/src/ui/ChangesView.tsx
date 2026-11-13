@@ -12,6 +12,22 @@ import { pushUndoToast } from './undo'
 import './changesView.css'
 
 type FileDiff = { diff: string | null; truncated: boolean; binary: boolean; change?: string }
+/** What the review screen compares. The daemon says which of these have anything to show. */
+export type ReviewScope = 'uncommitted' | 'turn' | 'branch' | 'commit'
+const SCOPE_LABEL: Record<ReviewScope, string> = { uncommitted: 'Uncommitted', turn: 'Last turn', branch: 'Branch', commit: 'Last commit' }
+const SCOPE_EMPTY: Record<ReviewScope, string> = { uncommitted: 'No changes against the last commit.', turn: 'That turn changed no files.', branch: 'This branch has no changes against its base.', commit: 'The last commit changed no files.' }
+type ScopeInfo = { scope: ReviewScope; available: boolean; reason: string | null; lastTurnId: string | null }
+
+export function parseScopes(reply: unknown): ScopeInfo[] {
+  const list = (reply as { scopes?: unknown } | null)?.scopes
+  if (!Array.isArray(list)) return []
+  return list.flatMap((item): ScopeInfo[] => {
+    const row = item as Record<string, unknown>
+    if (!['uncommitted', 'turn', 'branch', 'commit'].includes(String(row.scope))) return []
+    return [{ scope: row.scope as ReviewScope, available: row.available === true, reason: typeof row.reason === 'string' ? row.reason : null, lastTurnId: typeof row.lastTurnId === 'string' ? row.lastTurnId : null }]
+  })
+}
+
 type Staged = RepositoryFile['staged']
 
 const CHANGE_LETTER: Record<RepositoryFile['change'], string> = { added: 'A', modified: 'M', deleted: 'D', renamed: 'R' }
@@ -44,28 +60,46 @@ export function ChangesView({ sessionId, initialPath, botName, onClose, onSendCo
   const [comments, setComments] = useState<LineComment[]>([])
   const [sending, setSending] = useState(false)
   const [revision, setRevision] = useState(0)
+  const [scope, setScope] = useState<ReviewScope>('uncommitted')
+  const [scopes, setScopes] = useState<ScopeInfo[]>([])
+  /** For the branch scope: the daemon's own sentence for what it compared against. */
+  const [baseHow, setBaseHow] = useState<string | null>(null)
+  const lastTurnId = scopes.find((item) => item.scope === 'turn')?.lastTurnId ?? null
+  // Staging and discarding act on the working tree, so they belong to the uncommitted scope only.
+  const working = scope === 'uncommitted'
+  const scopeParams = working ? {} : { scope, ...(scope === 'turn' && lastTurnId ? { turnId: lastTurnId } : {}) }
+  const scopeKey = JSON.stringify(scopeParams)
+
+  // Which scopes have anything to show. A daemon that doesn't know the call simply offers no switch.
+  useEffect(() => {
+    let live = true
+    void rpc('session.git.scopes', { sessionId }).then((raw) => { if (live) setScopes(parseScopes(raw)) }).catch(() => { if (live) setScopes([]) })
+    return () => { live = false }
+  }, [sessionId, revision])
 
   useEffect(() => {
     let live = true
-    void rpc('session.repository', { sessionId }).then((raw) => {
+    void rpc('session.repository', { sessionId, ...scopeParams }).then((raw) => {
       if (!live) return
+      const how = (raw as { base?: { how?: unknown } | null } | null)?.base?.how
+      setBaseHow(typeof how === 'string' ? how : null)
       const next = normalizeRepository(raw)
       if (!next) { setFailure('The repository could not be read just now.'); return }
       setRepository(next)
       setSelected((current) => next.files.some((file) => file.repositoryPath === current) ? current : next.files[0]?.repositoryPath ?? null)
     }).catch((reason) => { if (live) setFailure(messageOf(reason, 'The repository could not be read just now.')) })
     return () => { live = false }
-  }, [sessionId, revision])
+  }, [sessionId, revision, scopeKey])
 
   useEffect(() => {
     if (!selected) { setDiff(null); return }
     let live = true
     setDiscarding(false)
-    void rpc<FileDiff>('session.git.diff', { sessionId, repositoryPath: selected })
+    void rpc<FileDiff>('session.git.diff', { sessionId, repositoryPath: selected, ...scopeParams })
       .then((value) => { if (live) setDiff({ path: selected, value }) })
       .catch((reason) => { if (live) setDiff({ path: selected, error: messageOf(reason, 'This diff could not be read.') }) })
     return () => { live = false }
-  }, [sessionId, selected, revision])
+  }, [sessionId, selected, revision, scopeKey])
 
   const files = repository?.files ?? []
   const file = useMemo(() => files.find((item) => item.repositoryPath === selected) ?? null, [files, selected])
@@ -129,25 +163,29 @@ export function ChangesView({ sessionId, initialPath, botName, onClose, onSendCo
           <h2 id="changes-title">Changes</h2>
           {repository && <small>{repository.detached ? 'Detached HEAD' : repository.branch ?? 'Unknown branch'} · {files.length}{repository.truncated ? '+' : ''} {files.length === 1 ? 'file' : 'files'} · <span className="rail-add">+{repository.addedLines.toLocaleString()}</span> <span className="rail-del">−{repository.removedLines.toLocaleString()}</span></small>}
         </div>
+        {scopes.filter((item) => item.available).length > 1 && <span className="diff-mode changes-scope" role="group" aria-label="What to compare">
+          {scopes.filter((item) => item.available).map((item) => <button key={item.scope} type="button" aria-pressed={scope === item.scope} onClick={() => { setScope(item.scope); setDiscarding(false) }}>{SCOPE_LABEL[item.scope]}</button>)}
+        </span>}
         <DiffModeSwitch mode={mode} onChange={setMode} />
         {onCreatePr && repository && <button type="button" className="secondary-button small" onClick={() => onCreatePr(repository)}><GitPullRequest size={13} aria-hidden="true" />Create PR</button>}
         <button type="button" className="icon-button" data-dialog-initial-focus="" aria-label="Close changes" onClick={close}><X size={17} aria-hidden="true" /></button>
       </header>
       {failure && <p className="changes-error" role="alert">{failure}</p>}
+      {scope === 'branch' && baseHow && <p className="changes-note" role="status">Compared with: {baseHow}</p>}
       {repository && (!repository.gitRepo || repository.error)
         ? <p className="diff-empty">{repository.error ?? 'This project is not a git repository.'}</p>
         : repository && files.length === 0
-          ? <p className="diff-empty"><Check size={15} aria-hidden="true" /> No changes against the last commit.</p>
+          ? <p className="diff-empty"><Check size={15} aria-hidden="true" /> {SCOPE_EMPTY[scope]}</p>
           : <div className="changes-layout">
             <aside className="changes-files" aria-label="Changed files">
-              <label className="changes-stage-all">
+              {working && <label className="changes-stage-all">
                 <input type="checkbox" className="changes-stage" disabled={busy || !files.length} checked={allStaged} ref={(node) => { if (node) node.indeterminate = stagedCount > 0 && !allStaged }} onChange={(event) => void stage(files.map((item) => item.repositoryPath), event.target.checked)} />
                 <span>{stagedCount ? `${stagedCount} staged` : 'Stage all'}</span>
-              </label>
+              </label>}
               <ul>{files.map((item) => {
                 const count = comments.filter((comment) => comment.path === item.repositoryPath).length
                 return <li key={item.repositoryPath} className={item.repositoryPath === selected ? 'selected' : undefined}>
-                  <StageBox state={item.staged} name={item.repositoryPath} disabled={busy} onChange={(staged) => void stage([item.repositoryPath], staged)} />
+                  {working && <StageBox state={item.staged} name={item.repositoryPath} disabled={busy} onChange={(staged) => void stage([item.repositoryPath], staged)} />}
                   <button type="button" className="changes-file" aria-current={item.repositoryPath === selected ? 'true' : undefined} title={item.repositoryPath} onClick={() => setSelected(item.repositoryPath)}>
                     <span className="changes-letter" data-change={item.change} title={CHANGE_WORD[item.change]}>{CHANGE_LETTER[item.change]}</span>
                     <span className="changes-name"><strong>{nameOf(item.repositoryPath)}</strong>{folderOf(item.repositoryPath) && <small>{folderOf(item.repositoryPath)}</small>}</span>
@@ -162,8 +200,8 @@ export function ChangesView({ sessionId, initialPath, botName, onClose, onSendCo
                 {file.addedLines !== null && <em className="rail-add">+{file.addedLines.toLocaleString()}</em>}
                 {file.removedLines !== null && <i className="rail-del">−{file.removedLines.toLocaleString()}</i>}
                 <span className="changes-spacer" />
-                <button type="button" className="ghost-button small" disabled={busy} onClick={() => void stage([file.repositoryPath], file.staged !== 'all')}>{file.staged === 'all' ? 'Unstage' : 'Stage'}</button>
-                {discarding
+                {working && <button type="button" className="ghost-button small" disabled={busy} onClick={() => void stage([file.repositoryPath], file.staged !== 'all')}>{file.staged === 'all' ? 'Unstage' : 'Stage'}</button>}
+                {!working ? null : discarding
                   ? <span className="changes-confirm" role="group" aria-label={`Discard the changes to ${nameOf(file.repositoryPath)}?`}>
                     <span>Discard?</span>
                     <button type="button" className="ghost-button small" autoFocus onClick={() => setDiscarding(false)}>Keep</button>

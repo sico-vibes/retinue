@@ -14,6 +14,8 @@ export type Scene = {
   queuePaused?: boolean
   /** false: the coding agent cannot take a message into a running turn. */
   steer?: boolean
+  /** Dev servers the conversation's coding agent started, as `preview.servers` answers. */
+  servers?: Array<Record<string, unknown>>
   session?: Partial<Session> & Record<string, unknown>
   extraSessions?: Array<Record<string, unknown>>
 }
@@ -289,6 +291,10 @@ const SCENES: Record<string, () => Scene> = {
     { id: 'q2', kind: 'user', text: 'After that, run the whole suite.' },
   ] }),
   'limited-controls': () => ({ title: 'At the usage limit', state: 'limited', messages: [user('Keep going.'), notice("Limited until 14:00. I'll pick up when the window opens.", { kind: 'usage_limit' })], session: { provider: 'claude', limitedUntil: new Date(Date.now() + 2 * 3_600_000).toISOString(), limitAutoResume: true } }),
+  servers: () => ({ title: 'Started a dev server', state: 'working', messages: [user('Start the site so I can look at it.'), bot('It is running on port 5173.')], servers: [
+    { port: 5173, url: 'http://127.0.0.1:5173/', pid: 4242, process: 'node.exe', answeredHtml: true },
+    { port: 8787, url: 'http://127.0.0.1:8787/', pid: 4250, process: 'node.exe', answeredHtml: false },
+  ] }),
   'queue-paused': () => ({ title: 'Queue paused', state: 'idle', messages: [user('Fix the parser.'), bot('Done.')], queue: [{ id: 'q1', kind: 'user', text: 'After that, run the whole suite.' }], queuePaused: true }),
 }
 

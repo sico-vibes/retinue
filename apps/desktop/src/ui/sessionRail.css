@@ -17,6 +17,7 @@
 .rail-tag { padding: 1px 6px; color: var(--text-3); border: 1px solid var(--line-strong); border-radius: var(--radius-pill); font-size: var(--fs-2xs); }
 .rail-link { padding: 0; color: var(--text-2); border: 0; background: transparent; font-size: var(--fs-2xs); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; justify-self: start; }
 .rail-link:hover { color: var(--text-1); }
+.rail-row-aside { color: var(--text-3); font-size: var(--fs-2xs); }
 .rail-note { margin: 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.5; }
 .rail-context-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: var(--fs-xs); }
 .rail-context-line b { color: var(--text-1); font-weight: 600; }

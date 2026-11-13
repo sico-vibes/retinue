@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { PrivateEmail } from './PrivateEmail'
 import { Check, Copy, Pencil, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import type { Runtime } from '../types'
-import { rpc } from '../tauri'
+import { inDesktop, rpc, runtimeTerminal } from '../tauri'
 import { ConfirmDialog } from './BlobPage'
 import { providerBrand, ProviderLogo } from './providerBrand'
 import { Select } from './Select'
@@ -67,10 +67,21 @@ function AccountRow({ account, onChanged, onProblem }: { account: Account; onCha
     try { await rpc(method, { id: account.id, ...params }); onChanged() } catch (reason) { onProblem(messageOf(reason, fallback)) }
   }
   const save = () => { const name = draft.trim(); setRenaming(false); if (name && name !== account.name) void act('account.rename', { name }, 'That name could not be saved.') }
-  const showSignIn = async () => {
+  /** The provider's own sign-in was opened in a terminal for this account. */
+  const [opened, setOpened] = useState(false)
+  const showCommand = async () => {
     onProblem(null)
     try { setCommand((await rpc<{ command: string }>('account.signIn', { id: account.id })).command) } catch (reason) { onProblem(messageOf(reason, 'The sign-in command could not be made.')) }
   }
+  // The coding agent's own sign-in runs in a terminal pointed at this account's folder; Retinue never sees the credential.
+  // Where no terminal can be opened (or for a coding agent with no fixed sign-in command) the command to copy is shown instead.
+  const signIn = async () => {
+    onProblem(null)
+    if (!inDesktop || !TERMINAL_SIGN_IN.includes(account.provider)) { await showCommand(); return }
+    try { await runtimeTerminal(account.provider as 'claude' | 'codex' | 'opencode', 'login', account.id); setOpened(true); setCommand(null) }
+    catch (reason) { setOpened(false); onProblem(messageOf(reason, 'The sign-in window could not be opened. Run the command below instead.')); await showCommand().catch(() => undefined) }
+  }
+  const checkAfterSignIn = async () => { await act('account.check', {}, 'That account could not be checked.'); setOpened(false) }
   return <div className="account-row">
     <div className="account-row-main">
       <span className="account-row-copy">
@@ -79,11 +90,18 @@ function AccountRow({ account, onChanged, onProblem }: { account: Account; onCha
           : <strong>{account.name}</strong>}
         <small><AccountLine account={account} signedIn={account.signedIn} /> · {account.bots === 1 ? `1 ${noun}` : `${account.bots} ${nouns}`}</small>
       </span>
-      <button type="button" className="secondary-button small" onClick={() => void showSignIn()}>{account.signedIn ? 'Sign in again' : 'Sign in'}</button>
+      <button type="button" className="secondary-button small" onClick={() => void signIn()}>{account.signedIn ? 'Sign in again' : 'Sign in'}</button>
       <button type="button" className="icon-button" aria-label={`Check ${account.name} now`} title="Check now" onClick={() => void act('account.check', {}, 'That account could not be checked.')}><RefreshCw size={14} aria-hidden="true" /></button>
       {!renaming && <button type="button" className="icon-button" aria-label={`Rename ${account.name}`} title="Rename" onClick={() => { setDraft(account.name); setRenaming(true) }}><Pencil size={14} aria-hidden="true" /></button>}
       <button type="button" className="icon-button" aria-label={`Delete ${account.name}`} title="Delete" onClick={() => setDeleting(true)}><Trash2 size={14} aria-hidden="true" /></button>
     </div>
+    {opened && <div className="account-sign-in opened" role="status">
+      <small>Finish signing in in the terminal window that opened, then check.</small>
+      <span className="account-sign-in-actions">
+        <button type="button" className="secondary-button small" onClick={() => void checkAfterSignIn()}>Check now</button>
+        <button type="button" className="queue-link" onClick={() => { setOpened(false); void showCommand() }}>Show the command instead</button>
+      </span>
+    </div>}
     {command && <div className="account-sign-in">
       <small>Run this in a terminal, then check again.</small>
       <CopyCommand command={command} />
@@ -93,6 +111,9 @@ function AccountRow({ account, onChanged, onProblem }: { account: Account; onCha
       onConfirm={() => { setDeleting(false); void act('account.delete', { confirm: true }, 'That account could not be deleted.') }} onCancel={() => setDeleting(false)} />}
   </div>
 }
+
+/** Coding agents whose own sign-in the app can open in a terminal for a named account. */
+const TERMINAL_SIGN_IN = ['claude', 'codex', 'opencode']
 
 function AddAccount({ provider, onAdded, onProblem }: { provider: string; onAdded: () => void; onProblem: (message: string | null) => void }) {
   const [name, setName] = useState('')

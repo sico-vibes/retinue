@@ -1097,6 +1097,42 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     notifyFixtureDaemon('message.completed', { sessionId: session.id, turnId, id, messageId: id, role: 'user', content: text, meta: { kind: 'steer' } })
     return { steered: true, turnId } as T
   }
+  if (method === 'attention.focus') return { reported: true } as T
+  if (method === 'session.snooze') {
+    const session = sessions.find((item) => item.id === params.sessionId)
+    if (!session || session.archived) throw rpcError('not_found', 'Conversation not found.')
+    if (params.snoozed === true) session.snoozed = true
+    else delete session.snoozed
+    notifyFixtureDaemon('session.changed', { session: { ...session } })
+    return { sessionId: session.id, snoozed: params.snoozed === true } as T
+  }
+  if (method === 'provider.list') {
+    const off = Array.isArray(fixtureSettings['runtimes.disabled']) ? fixtureSettings['runtimes.disabled'] as unknown[] : ['qwen', 'cursor', 'grok', 'antigravity']
+    const row = (provider: string, displayName: string, main: boolean, found: boolean, version: string | null, installHint: string | null) => ({ provider, displayName, main, optional: !main, enabled: main || !off.includes(provider), found, runtimeIds: found ? [`runtime-${provider}`] : [], version, installHint })
+    return { providers: [
+      row('claude', 'Claude Code', true, true, '2.1.322', null),
+      row('codex', 'Codex', true, true, '0.159.3', null),
+      row('opencode', 'OpenCode', true, true, '2.2.7', null),
+      row('qwen', 'Qwen Code', false, false, null, 'Install it from its own site, then scan again.'),
+      row('cursor', 'Cursor', false, true, '1.9.0', null),
+      row('grok', 'Grok Build', false, false, null, 'Install it from its own site, then scan again.'),
+      row('antigravity', 'Antigravity', false, false, null, 'Install Google Antigravity, then scan again.'),
+    ] } as T
+  }
+  if (method === 'preview.servers') {
+    const session = sessions.find((item) => item.id === params.sessionId)
+    if (!session) throw rpcError('not_found', 'session not found')
+    const servers = session.id === SCENE_SESSION_ID && fixtureScene?.servers ? fixtureScene.servers : []
+    return { sessionId: session.id, servers } as T
+  }
+  if (method === 'session.git.scopes') {
+    return { sessionId: params.sessionId, scopes: [
+      { scope: 'uncommitted', available: true, reason: null },
+      { scope: 'turn', available: true, reason: null, lastTurnId: 'scene-turn' },
+      { scope: 'branch', available: true, reason: null, base: { ref: 'main', commit: 'abc1234', kind: 'localDefault', how: 'The repository\'s default branch, main.' } },
+      { scope: 'commit', available: true, reason: null },
+    ] } as T
+  }
   if (method === 'session.limit.resume' || method === 'session.limit.snooze') {
     // Stands in for the per-conversation resume state the daemon does not keep yet.
     const session = sessions.find((item) => item.id === params.sessionId)
@@ -1680,7 +1716,7 @@ export async function saveGeneratedImage(_sessionId: string, _mediaId: string) {
 export async function revealInExplorer() {}
 export async function resolveProjectFile(path: string) { return path }
 // The preview opens no window; the shape is what the sign-in sheet expects.
-export async function runtimeTerminal(_provider: string, _action: string) { return { launched: true, terminal: 'wt' as const } }
+export async function runtimeTerminal(_provider: string, _action: string, _accountId?: string | null) { return { launched: true, terminal: 'wt' as const } }
 const harnessPreviewVersions: Record<string, string> = { claude: '2.1.303', codex: '0.159.3', opencode: '1.18.34' }
 export async function harnessLatestVersion(provider: string) {
   if (!fixturePreset()?.startsWith('harness-update')) throw new Error('No preview update is available.')

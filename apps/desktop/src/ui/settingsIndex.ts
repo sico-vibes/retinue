@@ -2,10 +2,10 @@
 // group heading on that page, which the sheet scrolls to and flashes. Keep the
 // `group` strings equal to the `SettingsGroup title` values in SettingsSheet.
 
-export type SettingsPageName = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Secrets' | 'Updates' | 'Backup' | 'Health'
+export type SettingsPageName = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Secrets' | 'Updates' | 'Backup' | 'Health'
 
 /** The page list, for anything that has to validate an incoming page name. */
-export const SETTINGS_PAGE_NAMES: readonly SettingsPageName[] = ['General', 'Appearance', 'Chat', 'Speech', 'Keyboard', 'Companion', 'Agents', 'Accounts', 'Manager', 'Approvals', 'Memory', 'Skills', 'Remote', 'Machines', 'Connections', 'Secrets', 'Updates', 'Backup', 'Health']
+export const SETTINGS_PAGE_NAMES: readonly SettingsPageName[] = ['General', 'Appearance', 'Chat', 'Speech', 'Keyboard', 'Companion', 'Agents', 'Accounts', 'Providers', 'Manager', 'Approvals', 'Memory', 'Skills', 'Remote', 'Machines', 'Connections', 'Secrets', 'Updates', 'Backup', 'Health']
 
 /**
  * The page out of an open-settings event payload (C13): a known page name, or
@@ -50,6 +50,8 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { page: 'Chat', group: 'Sending', label: 'Send a message with', keywords: 'enter ctrl shift send shortcut new line composer' },
   { page: 'Chat', group: 'Sending', label: 'When you send while an employee is working', keywords: 'steer queue message enter keyboard busy send' },
   { page: 'Chat', group: 'Sending', label: 'Steer a running Codex turn', keywords: 'steer codex running' },
+  { page: 'Chat', group: 'Sending', label: 'Steer a running Claude Code turn', keywords: 'steer claude running send now' },
+  { page: 'Chat', group: 'Sending', label: 'Steer a running OpenCode turn', keywords: 'steer opencode running send now' },
   { page: 'Chat', group: 'Conversations', label: 'Agent activity', keywords: 'steps commands files diffs tools' },
   { page: 'Chat', group: 'Conversations', label: 'Message actions', keywords: 'react reply copy message' },
   { page: 'Chat', group: 'Conversations', label: 'Change review', keywords: 'diff keep revert files changed' },
@@ -75,6 +77,8 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { page: 'Agents', group: 'Custom launchers', label: 'Custom launchers', keywords: 'profile command arguments' },
   { page: 'Accounts', group: 'Accounts', label: 'Add an account', keywords: 'sign in login several second work personal claude codex opencode' },
   { page: 'Accounts', group: 'Custom models', label: 'Custom models', keywords: 'model id effort catalog not listed' },
+  { page: 'Providers', group: 'Main', label: 'Main coding agents', keywords: 'claude codex opencode always on provider' },
+  { page: 'Providers', group: 'Optional', label: 'Optional coding agents', keywords: 'provider toggle switch on off qwen cursor grok antigravity agy' },
   { page: 'Manager', group: 'Profile', label: 'CEO', keywords: 'chief of staff model personality name look' },
   { page: 'Manager', group: 'Hand-offs', label: 'Pause new hand-offs', keywords: 'manager delegate assign teammate pause stop new work' },
   { page: 'Manager', group: 'What it knows about you', label: 'What the CEO knows', keywords: 'profile preferences facts lock learned' },

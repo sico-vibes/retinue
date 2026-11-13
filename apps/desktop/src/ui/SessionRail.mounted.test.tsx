@@ -201,6 +201,8 @@ describe('rail refresh', () => {
     const pending: Record<string, (value: unknown) => void> = {}
     h.rpc.mockImplementation(async (method: string, params: Record<string, unknown>) => {
       if (method === 'session.environment') return { projectPath: root, gitRepo: true, branch: 'main', detached: false, host: 'This computer' }
+      // The rail also asks which dev servers the conversation started; that read is not the one under test.
+      if (method === 'preview.servers') return { servers: [] }
       return new Promise((resolve) => { pending[String(params.sessionId)] = resolve })
     })
     await mount(session({ id: 'slow' }))
@@ -221,8 +223,8 @@ describe('rail refresh', () => {
     await act(async () => { await settle() })
     expect(repositoryCalls()).toHaveLength(1)
     expect(calls().some(([, params]) => params?.sessionId === 'draft:agent-1')).toBe(false)
-    // The workspace, checkpoint, schedule and task cards read too; nothing writes.
-    expect(new Set(calls().map(([method]) => method))).toEqual(new Set(['session.environment', 'session.repository', 'session.workspace', 'session.checkpoints', 'automation.list', 'task.list']))
+    // The workspace, checkpoint, schedule, task and local-server cards read too; nothing writes.
+    expect(new Set(calls().map(([method]) => method))).toEqual(new Set(['session.environment', 'session.repository', 'session.workspace', 'session.checkpoints', 'automation.list', 'task.list', 'preview.servers']))
   })
 })
 

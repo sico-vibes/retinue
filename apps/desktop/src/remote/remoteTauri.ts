@@ -271,7 +271,7 @@ export type RuntimeTerminalProvider = 'claude' | 'codex' | 'opencode'
 export type RuntimeTerminalAction = 'login' | 'install'
 export type RuntimeTerminalResult = { launched: boolean; terminal: 'wt' | 'powershell' }
 /** Sign-in terminals run on the host, never on a device. */
-export async function runtimeTerminal(provider: RuntimeTerminalProvider, action: RuntimeTerminalAction): Promise<never> { void provider; void action; throw notAvailable() }
+export async function runtimeTerminal(provider: RuntimeTerminalProvider, action: RuntimeTerminalAction, accountId?: string | null): Promise<never> { void provider; void action; void accountId; throw notAvailable() }
 
 export type HarnessUpdateResult = { provider: string; version: string }
 /** Coding-agent CLI updates install on the host, never on a device. */

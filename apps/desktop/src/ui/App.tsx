@@ -841,6 +841,19 @@ export function App() {
     window.addEventListener('beforeunload', restore)
     return () => window.removeEventListener('beforeunload', restore)
   }, [queueEdit])
+  // One surface speaks (11 November 2026): the daemon holds back the phone push for the conversation the owner is looking at.
+  // The main window says which one that is when it changes, on focus and blur, and every 30 seconds; a report lapses after 90.
+  const attentionSessionId = companion ? null : sideSessionId ?? (selectedSession && !isDraftSession(selectedSession) ? selectedSession.id : null)
+  useEffect(() => {
+    if (companion || !inDesktop || connection !== 'connected') return
+    const report = () => { void rpc('attention.focus', { sessionId: attentionSessionId, visible: document.visibilityState === 'visible' && document.hasFocus() }).catch(() => undefined) }
+    report()
+    const timer = window.setInterval(report, 30_000)
+    window.addEventListener('focus', report)
+    window.addEventListener('blur', report)
+    document.addEventListener('visibilitychange', report)
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', report); window.removeEventListener('blur', report); document.removeEventListener('visibilitychange', report) }
+  }, [attentionSessionId, companion, connection])
   // Leaving the conversation ends the edit and gives that box its earlier draft back.
   useEffect(() => { setQueueEdit((edit) => { if (edit && edit.key !== composerKey) { saveDraft(edit.key, edit.previous); return null } return edit }) }, [composerKey])
   const agentName = sideSession ? sideAgent?.name ?? 'Teammate' : activeSelectedAgent?.name ?? (selectedRuntime ? labelize(selectedRuntime.provider) : 'No runtime selected')
@@ -3053,7 +3066,7 @@ ${fileReferenceText(sentFile)}` : typed
       </aside>
 
       {activeSelectedAgent
-        ? <ConversationsPanel agent={activeSelectedAgent} agents={agents} sessions={sessions} selectedSessionId={selectedSession?.id ?? null} sideSessionId={sideSessionId} canCreate={connection === 'connected' && runtimeReady} onSelect={selectConversation} onOpenSide={openSideConversation} projects={projects} onNew={(projectId) => newSession(undefined, null, projectId)} projectActions={conversationProjectActions} onRename={renameConversation} onArchive={(session) => void archiveConversation(session)} onDelete={(session) => setSessionDeleteTarget(session)} onClose={() => setConvosVisible(false)} />
+        ? <ConversationsPanel onSnooze={inDesktop ? (session, snoozed) => { void doRpc('session.snooze', { sessionId: session.id, snoozed }).catch(() => undefined) } : undefined} agent={activeSelectedAgent} agents={agents} sessions={sessions} selectedSessionId={selectedSession?.id ?? null} sideSessionId={sideSessionId} canCreate={connection === 'connected' && runtimeReady} onSelect={selectConversation} onOpenSide={openSideConversation} projects={projects} onNew={(projectId) => newSession(undefined, null, projectId)} projectActions={conversationProjectActions} onRename={renameConversation} onArchive={(session) => void archiveConversation(session)} onDelete={(session) => setSessionDeleteTarget(session)} onClose={() => setConvosVisible(false)} />
         : <aside className="conversations-panel" aria-hidden="true" />}
 
       <section className="conversation-pane">

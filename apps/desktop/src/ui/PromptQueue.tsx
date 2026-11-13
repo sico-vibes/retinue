@@ -37,6 +37,12 @@ export interface QueueBannerProps {
   onCancelRetry?: () => void
 }
 
+/** Only ordinary text can join a running turn: anything that carries more (attachments, a command, a reply, notes, a time) keeps it by waiting. The daemon applies the same rule. */
+export function plainText(item: QueuedPrompt): boolean {
+  const filled = (value: unknown) => Array.isArray(value) ? value.length > 0 : value !== null && value !== undefined && value !== false
+  return item.kind === 'user' && !!item.text.trim() && !item.attachments?.length && !filled(item.command) && !filled(item.replyTo) && !filled(item.annotations) && !filled(item.conversationRefs) && item.whenLimitResets !== true
+}
+
 type SendKind = 'now' | 'steer' | 'stop' | 'next' | 'again'
 const SEND_LABEL: Record<SendKind, string> = { now: 'Send now', steer: 'Send now', stop: 'Stop and send', next: 'Send next', again: 'Try again' }
 
@@ -66,7 +72,7 @@ export function QueueBanner({ items, sessionBusy, steer = false, waitNote, botNa
     if (item.status === 'failed') return 'again'
     if (!sessionBusy) return 'now'
     if (item.kind === 'retry') return null
-    if (steer && onSteer && !item.attachments?.length && item.text.trim()) return 'steer'
+    if (steer && onSteer && plainText(item)) return 'steer'
     return onStopAndSend ? 'stop' : 'next'
   }
   const send = (item: QueuedPrompt, kind: SendKind) => {

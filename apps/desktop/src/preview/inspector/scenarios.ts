@@ -133,6 +133,7 @@ export const GROUPS: Group[] = [
     { id: 'composer-queue-open', title: 'Messages waiting, all shown', url: '/?scene=queue', expect: 'This one could not be sent', note: 'Plain, scheduled, retrying, waiting for a limit, and failed.', steps: [{ clickText: 'Show' }] },
     scene('queue-no-steer', 'Messages waiting, no steering', 'Stop and send', 'A coding agent that cannot take a message mid-turn.'),
     scene('limited-controls', 'Usage limit with resume and snooze', 'Usage limit', 'Only where the daemon keeps resume per conversation.'),
+    scene('servers', 'A conversation that started dev servers', 'Local servers', 'The rail lists them; a link opens in the system browser.'),
     scene('queue-paused', 'A paused queue', 'Paused until you resume'),
   ] },
   { id: 'screens', title: 'Full screens', description: 'The other places you can go.', scenarios: [

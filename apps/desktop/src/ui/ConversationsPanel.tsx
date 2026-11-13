@@ -8,7 +8,7 @@ import { StatusLabel, conversationStatus } from './ProjectsSidebar'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { MachineBadge } from './MachineBots'
 import { attentionOrder, attentionRank, hasSettled, settleOrder } from './sidebarOrder'
-import { Archive, ArrowLeftRight, ChevronDown, ChevronRight, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Smile, Tag, Trash2 } from 'lucide-react'
+import { Archive, ArrowLeftRight, BellOff, BellRing, ChevronDown, ChevronRight, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Smile, Tag, Trash2 } from 'lucide-react'
 import type { Agent, Project, Session } from '../types'
 import { BlobCanvas } from '../blob/BlobCanvas'
 import { agentLook } from '../blob/look'
@@ -71,7 +71,7 @@ export type ProjectActions = {
   onDeleteProject: (project: Project) => void
 }
 
-export function ConversationsPanel({ agent, agents, projects = [], sessions, selectedSessionId, sideSessionId, canCreate, onSelect, onOpenSide, onNew, projectActions, onRename, onArchive, onDelete }: {
+export function ConversationsPanel({ agent, agents, projects = [], sessions, selectedSessionId, sideSessionId, canCreate, onSelect, onOpenSide, onNew, projectActions, onRename, onArchive, onSnooze, onDelete }: {
   agent: Agent
   agents: readonly Agent[]
   projects?: readonly Project[]
@@ -87,6 +87,8 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
   onRename: (session: Session, title: string) => Promise<unknown> | void
   /** Hides the conversation from this list; it can be restored on the bot's page. */
   onArchive?: (session: Session) => void
+  /** Snoozes a conversation until it needs the owner, or wakes it. */
+  onSnooze?: (session: Session, snoozed: boolean) => void
   onDelete: (session: Session) => void
   /** Kept for callers; hiding the panel now lives in the main header (28 October 2026). */
   onClose?: () => void
@@ -169,6 +171,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
           </button>}
         {node.kind === 'main' && renaming !== session.id && <span className="convo-actions">
           <button type="button" className="convo-action" aria-label={`Rename ${title}`} title="Rename" onClick={() => setRenaming(session.id)}><Pencil size={12} aria-hidden="true" /></button>
+          {onSnooze && !needsYou && <button type="button" className="convo-action" aria-pressed={session.snoozed === true} aria-label={session.snoozed ? `Wake ${title}` : `Snooze ${title} until it needs you`} title={session.snoozed ? 'Wake: alert me about its progress again' : 'Snooze until it needs you: no alerts for progress, but approvals, questions and failures still reach you'} onClick={() => onSnooze(session, session.snoozed !== true)}>{session.snoozed ? <BellRing size={12} aria-hidden="true" /> : <BellOff size={12} aria-hidden="true" />}</button>}
           {onArchive && <button type="button" className="convo-action" aria-label={`Archive ${title}`} title="Archive (restore it from the employee's page)" disabled={busy} onClick={() => onArchive(session)}><Archive size={12} aria-hidden="true" /></button>}
           <button type="button" className="convo-action danger" aria-label={`Delete ${title}`} title="Delete" disabled={busy} onClick={() => onDelete(session)}><Trash2 size={12} aria-hidden="true" /></button>
         </span>}

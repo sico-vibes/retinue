@@ -98,6 +98,21 @@ describe('QueueBanner', () => {
     expect(handlers.onStopAndSend).toHaveBeenCalledWith('a')
   })
 
+  it('never steers a message that carries a command, a reply or a time', () => {
+    banner([
+      item({ id: 'a', text: '/review the diff', command: { kind: 'skill', name: 'review' } }),
+      item({ id: 'b', text: 'about this', replyTo: { messageId: 'm1' } }),
+      item({ id: 'c', text: 'later', kind: 'send_later', dueAt: new Date(NOW + 60 * 60_000).toISOString() }),
+      item({ id: 'd', text: 'plain' }),
+    ], { steer: true })
+    banner([
+      item({ id: 'a', text: '/review the diff', command: { kind: 'skill', name: 'review' } }),
+      item({ id: 'b', text: 'about this', replyTo: { messageId: 'm1' } }),
+      item({ id: 'd', text: 'plain' }),
+    ], { steer: true })
+    expect(sendButtons().map((node) => node.textContent)).toEqual(['Stop and send', 'Stop and send', 'Send now'])
+  })
+
   it('keeps "Send next" where stopping is not offered', () => {
     const handlers = banner([item({ id: 'a', text: 'first' })], { onStopAndSend: undefined })
     expect(sendButtons()[0].textContent).toBe('Send next')

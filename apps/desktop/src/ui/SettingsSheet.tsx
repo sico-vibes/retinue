@@ -35,6 +35,7 @@ import { RowCopy, SettingsGroup, SettingsRow } from './SettingsParts'
 import { OutsideWatchSetting } from './OutsideSessions'
 import { RemoteSettings } from './RemoteSettings'
 import { MachinesPage } from './MachinesPage'
+import { ProvidersPage } from './ProvidersPage'
 import { AccountsPage } from './AccountsPage'
 import { SecretsPage } from './SecretsPage'
 import { ConnectionsPage } from './ConnectionsPage'
@@ -51,7 +52,7 @@ import { useEntityNoun } from './vocabulary'
 import { useThemeStyle } from '../blob/retinue'
 import './retinueUi.css'
 
-export type SettingsPageId = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Secrets' | 'Updates' | 'Backup' | 'Health'
+export type SettingsPageId = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Secrets' | 'Updates' | 'Backup' | 'Health'
 
 type SettingsTab = { label: string; icon: typeof SlidersHorizontal; pages: Array<{ id: SettingsPageId; label: string }> }
 
@@ -64,7 +65,7 @@ const NAV: Array<{ label: string; tabs: SettingsTab[] }> = [
     { label: 'Companion', icon: Sparkles, pages: [{ id: 'Companion', label: 'Companion' }] },
   ] },
   { label: 'Employees', tabs: [
-    { label: 'Coding agents', icon: Bot, pages: [{ id: 'Agents', label: 'Agents' }, { id: 'Accounts', label: 'Accounts' }] },
+    { label: 'Coding agents', icon: Bot, pages: [{ id: 'Agents', label: 'Agents' }, { id: 'Accounts', label: 'Accounts' }, { id: 'Providers', label: 'Providers' }] },
     { label: 'CEO', icon: BriefcaseBusiness, pages: [{ id: 'Manager', label: 'CEO' }] },
     { label: 'Approvals', icon: ShieldCheck, pages: [{ id: 'Approvals', label: 'Approvals' }] },
     { label: 'Memory and skills', icon: Brain, pages: [{ id: 'Memory', label: 'Memory' }, { id: 'Skills', label: 'Skills' }] },
@@ -78,6 +79,8 @@ const NAV: Array<{ label: string; tabs: SettingsTab[] }> = [
   ] },
 ]
 const TABS = NAV.flatMap((group) => group.tabs)
+/** Always on as providers; one installed copy can still be turned off. */
+const MAIN_PROVIDERS = ['claude', 'codex', 'opencode']
 const tabOf = (page: SettingsPageId) => TABS.find((tab) => tab.pages.some((item) => item.id === page)) ?? TABS[0]!
 
 type SpeechModelRow = { id: string; label: string; description: string; language: string; streaming: boolean; recommended: boolean; sizeBytes: number }
@@ -255,6 +258,8 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
       setCloudConsent(settings['speech.cloud.consent'] === true)
       setDictationEnginePrefs({ engine: loadedEngine, consent: settings['speech.cloud.consent'] === true })
       setSteerGate(settings['exec_gate.codex.steer'] === true)
+      // Claude Code and OpenCode have no stored row until the owner changes it: absent means on.
+      setSteerGates({ claude: settings['exec_gate.claude.steer'] !== false, opencode: settings['exec_gate.opencode.steer'] !== false })
       if (typeof settings.editorExecutable === 'string') setEditorExecutable(settings.editorExecutable)
       if (Array.isArray(settings.editorArgs) && settings.editorArgs.every((argument) => typeof argument === 'string')) setEditorArgs(JSON.stringify(settings.editorArgs))
       if (settings['permissions.default_mode'] === 'ask' || settings['permissions.default_mode'] === 'auto') setDefaultMode(settings['permissions.default_mode'])
@@ -374,10 +379,11 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
   const saveSetting = (key: string, value: unknown) => guarded(async () => { await rpc('settings.set', { key, value }) })
   /** Settings › Coding agents: turn a coding agent off (owner, 9 November 2026). The provider id when it is the only copy, so the daemon skips probing it at startup; else this copy's id. */
   const [disabledRuntimes, setDisabledRuntimes] = useState<string[]>([])
+  const [steerGates, setSteerGates] = useState({ claude: true, opencode: true })
   const runtimeOff = (runtime: Runtime) => disabledRuntimes.includes(runtime.id) || (!!runtime.provider && disabledRuntimes.includes(runtime.provider)) || runtime.status === 'disabled'
   const setRuntimeOff = (runtime: Runtime, off: boolean) => {
     const only = runtimes.filter((item) => item.provider === runtime.provider).length <= 1
-    const key = only && runtime.provider ? runtime.provider : runtime.id
+    const key = only && runtime.provider && !MAIN_PROVIDERS.includes(runtime.provider) ? runtime.provider : runtime.id
     const next = off ? [...new Set([...disabledRuntimes, key])] : disabledRuntimes.filter((item) => item !== runtime.id && item !== runtime.provider)
     setDisabledRuntimes(next)
     void saveSetting('runtimes.disabled', next)
@@ -633,6 +639,8 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
                 <Select ariaLabel="When you send while an employee is working" variant="muted" value={busyMode} disabled={saving} onChange={(value) => { const next = value === 'queue' ? 'queue' : 'steer'; void saveSetting('composer.busySendMode', next).then((failure) => { if (!failure) setBusyMode(next) }) }} options={[{ value: 'steer', label: 'Steer' }, { value: 'queue', label: 'Queue' }]} />
               </SettingsRow>
               <SettingsRow label="Steer a running Codex turn" hint="If the turn has ended, your message queues instead.">{pageSwitch('Steer a running Codex turn', steerGate, 'exec_gate.codex.steer', setSteerGate)}</SettingsRow>
+              <SettingsRow label="Steer a running Claude Code turn" hint="Claude reads the message at its next step.">{pageSwitch('Steer a running Claude Code turn', steerGates.claude, 'exec_gate.claude.steer', (next) => setSteerGates((current) => ({ ...current, claude: next })))}</SettingsRow>
+              <SettingsRow label="Steer a running OpenCode turn" hint="Needs OpenCode 2.2.7 or later. Older versions queue the message.">{pageSwitch('Steer a running OpenCode turn', steerGates.opencode, 'exec_gate.opencode.steer', (next) => setSteerGates((current) => ({ ...current, opencode: next })))}</SettingsRow>
             </SettingsGroup>
             <SettingsGroup title="Conversations">
               <SettingsRow label="Agent activity" hint="What the coding agent did during a reply, as one line you can open.">{pageSwitch('Agent activity', activityDetails, 'experimental.activityDetails', (next) => onActivityDetailsChange?.(next))}</SettingsRow>
@@ -693,6 +701,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
           {!loading && page === 'Remote' && <RemoteSettings onOpenPower={() => switchPage('General')} />}
           {!loading && page === 'Machines' && <MachinesPage />}
           {!loading && page === 'Accounts' && <AccountsPage runtimes={snapshot?.runtimes ?? EMPTY_RUNTIMES} />}
+          {!loading && page === 'Providers' && <ProvidersPage disabled={disabledRuntimes} saving={saving} onChange={async (next) => { setDisabledRuntimes(next); return saveSetting('runtimes.disabled', next) }} />}
           {!loading && page === 'Secrets' && <SecretsPage />}
           {!loading && page === 'Connections' && <ConnectionsPage connected={inDesktop && !!snapshot} />}
 
