@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "9e2a525",
-  "documentCount": 385,
+  "revision": "373e2a5",
+  "documentCount": 391,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -1681,6 +1681,346 @@
       ]
     },
     {
+      "id": "project/research/accounts-and-openbot-2026-11",
+      "source": "docs/research/accounts-and-openbot-2026-11.md",
+      "title": "Accounts, sign-in, and how OpenBot runs coding bots",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "e6213a3eda2dd4eece401ce3de3598702d5f8378ada0d67de3b9eb2eb68dae6e",
+      "headings": [
+        {
+          "id": "summary-the-ten-findings-that-matter-most",
+          "text": "Summary: the ten findings that matter most",
+          "level": 2
+        },
+        {
+          "id": "part-0-what-i-read-and-which-openbot-is-which",
+          "text": "Part 0: what I read, and which OpenBot is which",
+          "level": 2
+        },
+        {
+          "id": "part-1-accounts-and-sign-in-in-openbot",
+          "text": "Part 1: accounts and sign-in in OpenBot",
+          "level": 2
+        },
+        {
+          "id": "11-how-a-person-adds-an-account-per-provider",
+          "text": "1.1 How a person adds an account, per provider",
+          "level": 3
+        },
+        {
+          "id": "12-where-credentials-end-up-and-who-can-read-them",
+          "text": "1.2 Where credentials end up, and who can read them",
+          "level": 3
+        },
+        {
+          "id": "13-how-several-accounts-of-one-provider-are-kept-apart",
+          "text": "1.3 How several accounts of one provider are kept apart",
+          "level": 3
+        },
+        {
+          "id": "14-how-sign-in-state-is-detected-and-shown",
+          "text": "1.4 How sign-in state is detected and shown",
+          "level": 3
+        },
+        {
+          "id": "15-switching-account-for-a-running-or-existing-conversation",
+          "text": "1.5 Switching account for a running or existing conversation",
+          "level": 3
+        },
+        {
+          "id": "16-which-providers-which-are-on-by-default-how-others-are-enabled",
+          "text": "1.6 Which providers, which are on by default, how others are enabled",
+          "level": 3
+        },
+        {
+          "id": "part-2-what-retinue-should-do",
+          "text": "Part 2: what Retinue should do",
+          "level": 2
+        },
+        {
+          "id": "20-what-retinue-has-today-accurately",
+          "text": "2.0 What Retinue has today, accurately",
+          "level": 3
+        },
+        {
+          "id": "21-a-design-that-stays-inside-agentsmd",
+          "text": "2.1 A design that stays inside AGENTS.md",
+          "level": 3
+        },
+        {
+          "id": "22-the-three-ways-to-start-that-login-and-which-to-take",
+          "text": "2.2 The three ways to start that login, and which to take",
+          "level": 3
+        },
+        {
+          "id": "23-how-it-attaches-to-what-exists",
+          "text": "2.3 How it attaches to what exists",
+          "level": 3
+        },
+        {
+          "id": "24-providers-behind-toggles",
+          "text": "2.4 Providers behind toggles",
+          "level": 3
+        },
+        {
+          "id": "25-what-could-still-go-wrong-and-the-checks-that-settle-it",
+          "text": "2.5 What could still go wrong, and the checks that settle it",
+          "level": 3
+        },
+        {
+          "id": "part-3-googles-antigravity-cli",
+          "text": "Part 3: Google's Antigravity CLI",
+          "level": 2
+        },
+        {
+          "id": "31-what-it-is-and-how-it-is-installed",
+          "text": "3.1 What it is, and how it is installed",
+          "level": 3
+        },
+        {
+          "id": "32-its-sign-in-and-where-the-sign-in-is-kept",
+          "text": "3.2 Its sign-in, and where the sign-in is kept",
+          "level": 3
+        },
+        {
+          "id": "33-modes-an-app-can-drive",
+          "text": "3.3 Modes an app can drive",
+          "level": 3
+        },
+        {
+          "id": "34-usage-and-limits",
+          "text": "3.4 Usage and limits",
+          "level": 3
+        },
+        {
+          "id": "35-more-than-one-account",
+          "text": "3.5 More than one account",
+          "level": 3
+        },
+        {
+          "id": "36-how-other-integrations-handle-it",
+          "text": "3.6 How other integrations handle it",
+          "level": 3
+        },
+        {
+          "id": "37-what-supporting-it-in-retinue-would-take",
+          "text": "3.7 What supporting it in Retinue would take",
+          "level": 3
+        },
+        {
+          "id": "38-unknowns-in-the-order-they-would-bite",
+          "text": "3.8 Unknowns, in the order they would bite",
+          "level": 3
+        },
+        {
+          "id": "part-4-how-openbot-runs-coding-bots",
+          "text": "Part 4: how OpenBot runs coding bots",
+          "level": 2
+        },
+        {
+          "id": "41-what-a-bot-is-there",
+          "text": "4.1 What a bot is there",
+          "level": 3
+        },
+        {
+          "id": "42-how-a-bot-is-started-and-kept-alive",
+          "text": "4.2 How a bot is started and kept alive",
+          "level": 3
+        },
+        {
+          "id": "43-how-it-talks-to-each-provider",
+          "text": "4.3 How it talks to each provider",
+          "level": 3
+        },
+        {
+          "id": "44-workspaces-memory-and-instructions-per-bot",
+          "text": "4.4 Workspaces, memory and instructions per bot",
+          "level": 3
+        },
+        {
+          "id": "45-how-bots-hand-work-to-each-other",
+          "text": "4.5 How bots hand work to each other",
+          "level": 3
+        },
+        {
+          "id": "46-what-its-interface-does-well-for-coding-work",
+          "text": "4.6 What its interface does well for coding work",
+          "level": 3
+        },
+        {
+          "id": "47-ideas-worth-borrowing-and-where-each-one-lands",
+          "text": "4.7 Ideas worth borrowing, and where each one lands",
+          "level": 3
+        },
+        {
+          "id": "sources",
+          "text": "Sources",
+          "level": 2
+        },
+        {
+          "id": "what-i-could-not-verify",
+          "text": "What I could not verify",
+          "level": 2
+        },
+        {
+          "id": "proposed-skill-update-not-applied-this-run-wrote-one-file-only",
+          "text": "Proposed skill update (not applied: this run wrote one file only)",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/ade-ux-and-delegation-2026-11",
+      "source": "docs/research/ade-ux-and-delegation-2026-11.md",
+      "title": "ADE interface research and delegation: how the best tools behave, and what Retinue should borrow",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "f6ba2aae43a051de63475eb35c99dd353afe407e55070bb68f18add9223060c3",
+      "headings": [
+        {
+          "id": "1-summary-the-dozen-findings-that-matter-most",
+          "text": "1. Summary: the dozen findings that matter most",
+          "level": 2
+        },
+        {
+          "id": "2-part-1-how-the-leading-ades-handle-the-core-interactions",
+          "text": "2. Part 1: how the leading ADEs handle the core interactions",
+          "level": 2
+        },
+        {
+          "id": "21-the-composer-while-an-agent-is-busy",
+          "text": "2.1 The composer while an agent is busy",
+          "level": 3
+        },
+        {
+          "id": "22-usage-limits",
+          "text": "2.2 Usage limits",
+          "level": 3
+        },
+        {
+          "id": "23-the-conversation-list-with-many-agents-running",
+          "text": "2.3 The conversation list with many agents running",
+          "level": 3
+        },
+        {
+          "id": "24-approvals-and-questions-from-an-agent",
+          "text": "2.4 Approvals and questions from an agent",
+          "level": 3
+        },
+        {
+          "id": "25-showing-what-an-agent-is-doing",
+          "text": "2.5 Showing what an agent is doing",
+          "level": 3
+        },
+        {
+          "id": "26-reviewing-what-changed",
+          "text": "2.6 Reviewing what changed",
+          "level": 3
+        },
+        {
+          "id": "27-starting-work",
+          "text": "2.7 Starting work",
+          "level": 3
+        },
+        {
+          "id": "28-delegation-and-orchestration",
+          "text": "2.8 Delegation and orchestration",
+          "level": 3
+        },
+        {
+          "id": "29-command-palette-shortcuts-and-quick-switchers",
+          "text": "2.9 Command palette, shortcuts and quick switchers",
+          "level": 3
+        },
+        {
+          "id": "210-small-things-that-make-these-apps-feel-smooth",
+          "text": "2.10 Small things that make these apps feel smooth",
+          "level": 3
+        },
+        {
+          "id": "3-part-2-delegation",
+          "text": "3. Part 2: delegation",
+          "level": 2
+        },
+        {
+          "id": "31-amelnagdys-delegate-skills-code",
+          "text": "3.1 amElnagdy's delegate-skills [code]",
+          "level": 3
+        },
+        {
+          "id": "32-how-retinue-delegates-today-code",
+          "text": "3.2 How Retinue delegates today [code]",
+          "level": 3
+        },
+        {
+          "id": "33-the-comparison",
+          "text": "3.3 The comparison",
+          "level": 3
+        },
+        {
+          "id": "34-what-retinues-delegation-should-adopt",
+          "text": "3.4 What Retinue's delegation should adopt",
+          "level": 3
+        },
+        {
+          "id": "4-part-3-katana-by-max-blade",
+          "text": "4. Part 3: Katana, by Max Blade",
+          "level": 2
+        },
+        {
+          "id": "41-what-i-saw-myself",
+          "text": "4.1 What I saw myself",
+          "level": 3
+        },
+        {
+          "id": "42-what-is-second-hand-and-from-where",
+          "text": "4.2 What is second-hand, and from where",
+          "level": 3
+        },
+        {
+          "id": "43-what-katanas-ui-does-that-a-coding-tool-could-learn-from",
+          "text": "4.3 What Katana's UI does that a coding tool could learn from",
+          "level": 3
+        },
+        {
+          "id": "44-what-cnvs-itself-does-that-retinue-should-study",
+          "text": "4.4 What CNVS itself does that Retinue should study",
+          "level": 3
+        },
+        {
+          "id": "45-what-is-relevant-to-retinue",
+          "text": "4.5 What is relevant to Retinue",
+          "level": 3
+        },
+        {
+          "id": "5-part-4-the-ideas-most-worth-building-next",
+          "text": "5. Part 4: the ideas most worth building next",
+          "level": 2
+        },
+        {
+          "id": "6-sources",
+          "text": "6. Sources",
+          "level": 2
+        },
+        {
+          "id": "61-repositories-read-shallow-clone-commit-licence",
+          "text": "6.1 Repositories read (shallow clone, commit, licence)",
+          "level": 3
+        },
+        {
+          "id": "62-documentation-articles-posts-and-videos",
+          "text": "6.2 Documentation, articles, posts and videos",
+          "level": 3
+        },
+        {
+          "id": "63-what-i-could-not-verify",
+          "text": "6.3 What I could not verify",
+          "level": 3
+        }
+      ]
+    },
+    {
       "id": "project/reference/approval-modes",
       "source": "docs/reference/approval-modes.md",
       "title": "Approval modes contract: ask, auto-approve and bypass",
@@ -1747,6 +2087,356 @@
           "id": "gotchas",
           "text": "Gotchas",
           "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/browser-computer-use-and-ag-ui-2026-11",
+      "source": "docs/research/browser-computer-use-and-ag-ui-2026-11.md",
+      "title": "Browser use, computer use, server preview, and AG-UI",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "a5a53020374dd46329c244ce2e6506cd39755d77a39a0ff4a39f6804e5f6a2ed",
+      "headings": [
+        {
+          "id": "the-ten-findings-that-matter-most",
+          "text": "The ten findings that matter most",
+          "level": 2
+        },
+        {
+          "id": "part-1-computer-use-in-openbot",
+          "text": "Part 1: computer use in OpenBot",
+          "level": 2
+        },
+        {
+          "id": "10-which-repository-this-is",
+          "text": "1.0 Which repository this is",
+          "level": 3
+        },
+        {
+          "id": "11-what-openbot-uses-for-computer-use",
+          "text": "1.1 What OpenBot uses for computer use",
+          "level": 3
+        },
+        {
+          "id": "12-how-it-is-exposed-to-the-coding-agents",
+          "text": "1.2 How it is exposed to the coding agents",
+          "level": 3
+        },
+        {
+          "id": "13-consent-and-safety",
+          "text": "1.3 Consent and safety",
+          "level": 3
+        },
+        {
+          "id": "14-how-a-bots-browser-differs-from-computer-use",
+          "text": "1.4 How a bot's browser differs from computer use",
+          "level": 3
+        },
+        {
+          "id": "15-licence-and-what-retinue-may-reuse",
+          "text": "1.5 Licence, and what Retinue may reuse",
+          "level": 3
+        },
+        {
+          "id": "part-2-browser-use-and-server-preview-in-t3-code",
+          "text": "Part 2: browser use and server preview in T3 Code",
+          "level": 2
+        },
+        {
+          "id": "21-how-an-agent-uses-a-browser",
+          "text": "2.1 How an agent uses a browser",
+          "level": 3
+        },
+        {
+          "id": "22-how-a-preview-of-a-running-dev-server-works",
+          "text": "2.2 How a preview of a running dev server works",
+          "level": 3
+        },
+        {
+          "id": "23-site-permissions-sign-in-and-what-is-refused",
+          "text": "2.3 Site permissions, sign-in and what is refused",
+          "level": 3
+        },
+        {
+          "id": "24-console-errors-and-network-failures",
+          "text": "2.4 Console errors and network failures",
+          "level": 3
+        },
+        {
+          "id": "25-other-open-projects-with-a-better-preview",
+          "text": "2.5 Other open projects with a better preview",
+          "level": 3
+        },
+        {
+          "id": "part-3-ag-ui",
+          "text": "Part 3: AG-UI",
+          "level": 2
+        },
+        {
+          "id": "31-what-ag-ui-is-in-plain-words",
+          "text": "3.1 What AG-UI is, in plain words",
+          "level": 3
+        },
+        {
+          "id": "32-how-it-relates-to-what-retinue-already-has",
+          "text": "3.2 How it relates to what Retinue already has",
+          "level": 3
+        },
+        {
+          "id": "33-an-honest-verdict",
+          "text": "3.3 An honest verdict",
+          "level": 3
+        },
+        {
+          "id": "part-4-what-retinue-should-build",
+          "text": "Part 4: what Retinue should build",
+          "level": 2
+        },
+        {
+          "id": "40-what-retinue-has-today",
+          "text": "4.0 What Retinue has today",
+          "level": 3
+        },
+        {
+          "id": "41-a-browser-preview-pane-for-servers-a-bot-starts",
+          "text": "4.1 A browser preview pane for servers a bot starts",
+          "level": 3
+        },
+        {
+          "id": "42-browser-use-for-bots",
+          "text": "4.2 Browser use for bots",
+          "level": 3
+        },
+        {
+          "id": "43-computer-use",
+          "text": "4.3 Computer use",
+          "level": 3
+        },
+        {
+          "id": "44-parts-effort-risks",
+          "text": "4.4 Parts, effort, risks",
+          "level": 3
+        },
+        {
+          "id": "sources",
+          "text": "Sources",
+          "level": 2
+        },
+        {
+          "id": "what-i-could-not-verify",
+          "text": "What I could not verify",
+          "level": 2
+        },
+        {
+          "id": "proposed-skill-update-not-applied-because-this-run-was-research-only",
+          "text": "Proposed skill update (not applied, because this run was research-only)",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/competitor-adaptation-2026-11",
+      "source": "docs/research/competitor-adaptation-2026-11.md",
+      "title": "Competitor adaptation research: T3 Code, OpenBot, Nuphos, Monocode",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "aff2ec5c8c60c5d6ced0d295b286a8cb07ad74559bd40236f0e87fdd4a37dcaa",
+      "headings": [
+        {
+          "id": "0-method-confidence-and-licences",
+          "text": "0. Method, confidence, and licences",
+          "level": 2
+        },
+        {
+          "id": "1-summary-the-ideas-most-worth-adapting",
+          "text": "1. Summary: the ideas most worth adapting",
+          "level": 2
+        },
+        {
+          "id": "2-deep-dive-sending-a-message-while-the-bot-is-working-and-send-now",
+          "text": "2. Deep dive: sending a message while the bot is working, and \"Send now\"",
+          "level": 2
+        },
+        {
+          "id": "21-how-t3-code-does-it-code",
+          "text": "2.1 How T3 Code does it [code]",
+          "level": 3
+        },
+        {
+          "id": "22-how-monocode-does-it-code",
+          "text": "2.2 How Monocode does it [code]",
+          "level": 3
+        },
+        {
+          "id": "23-how-retinue-works-today-code",
+          "text": "2.3 How Retinue works today [code]",
+          "level": 3
+        },
+        {
+          "id": "24-the-gap-precisely",
+          "text": "2.4 The gap, precisely",
+          "level": 3
+        },
+        {
+          "id": "3-deep-dive-scheduling-a-resume-after-the-usage-limit-resets",
+          "text": "3. Deep dive: scheduling a resume after the usage limit resets",
+          "level": 2
+        },
+        {
+          "id": "31-how-t3-code-detects-the-limit-and-the-reset-time-code",
+          "text": "3.1 How T3 Code detects the limit and the reset time [code]",
+          "level": 3
+        },
+        {
+          "id": "32-how-t3-schedules-the-resume-code",
+          "text": "3.2 How T3 schedules the resume [code]",
+          "level": 3
+        },
+        {
+          "id": "33-how-monocode-does-it-code",
+          "text": "3.3 How Monocode does it [code]",
+          "level": 3
+        },
+        {
+          "id": "34-how-retinue-works-today-code",
+          "text": "3.4 How Retinue works today [code]",
+          "level": 3
+        },
+        {
+          "id": "35-the-gap-precisely",
+          "text": "3.5 The gap, precisely",
+          "level": 3
+        },
+        {
+          "id": "4-t3-code-pingdotggt3code-mit",
+          "text": "4. T3 Code (pingdotgg/t3code, MIT)",
+          "level": 2
+        },
+        {
+          "id": "41-what-it-is",
+          "text": "4.1 What it is",
+          "level": 3
+        },
+        {
+          "id": "42-architecture-in-brief",
+          "text": "4.2 Architecture in brief",
+          "level": 3
+        },
+        {
+          "id": "43-notable-features",
+          "text": "4.3 Notable features",
+          "level": 3
+        },
+        {
+          "id": "44-what-we-could-adapt",
+          "text": "4.4 What we could adapt",
+          "level": 3
+        },
+        {
+          "id": "5-openbot-nightly-labsopenbot-polyform-noncommercial-100",
+          "text": "5. OpenBot (nightly-labs/openbot, PolyForm Noncommercial 1.0.0)",
+          "level": 2
+        },
+        {
+          "id": "51-what-it-is",
+          "text": "5.1 What it is",
+          "level": 3
+        },
+        {
+          "id": "52-architecture-in-brief",
+          "text": "5.2 Architecture in brief",
+          "level": 3
+        },
+        {
+          "id": "53-notable-features",
+          "text": "5.3 Notable features",
+          "level": 3
+        },
+        {
+          "id": "54-what-we-could-adapt",
+          "text": "5.4 What we could adapt",
+          "level": 3
+        },
+        {
+          "id": "6-nuphos-nuphosnuphos-apache-20",
+          "text": "6. Nuphos (nuphos/nuphos, Apache-2.0)",
+          "level": 2
+        },
+        {
+          "id": "61-what-it-is",
+          "text": "6.1 What it is",
+          "level": 3
+        },
+        {
+          "id": "62-architecture-in-brief",
+          "text": "6.2 Architecture in brief",
+          "level": 3
+        },
+        {
+          "id": "63-notable-features",
+          "text": "6.3 Notable features",
+          "level": 3
+        },
+        {
+          "id": "64-what-we-could-adapt",
+          "text": "6.4 What we could adapt",
+          "level": 3
+        },
+        {
+          "id": "7-monocode-hardbeat920monocode-mit",
+          "text": "7. Monocode (hardbeat920/monocode, MIT)",
+          "level": 2
+        },
+        {
+          "id": "71-what-it-is",
+          "text": "7.1 What it is",
+          "level": 3
+        },
+        {
+          "id": "72-architecture-in-brief",
+          "text": "7.2 Architecture in brief",
+          "level": 3
+        },
+        {
+          "id": "73-notable-features",
+          "text": "7.3 Notable features",
+          "level": 3
+        },
+        {
+          "id": "74-what-we-could-adapt",
+          "text": "7.4 What we could adapt",
+          "level": 3
+        },
+        {
+          "id": "8-every-candidate-idea",
+          "text": "8. Every candidate idea",
+          "level": 2
+        },
+        {
+          "id": "9-sources",
+          "text": "9. Sources",
+          "level": 2
+        },
+        {
+          "id": "91-repositories-read-full-commit-hashes",
+          "text": "9.1 Repositories read (full commit hashes)",
+          "level": 3
+        },
+        {
+          "id": "92-how-i-identified-monocode",
+          "text": "9.2 How I identified Monocode",
+          "level": 3
+        },
+        {
+          "id": "93-public-material-not-code",
+          "text": "9.3 Public material (not code)",
+          "level": 3
+        },
+        {
+          "id": "94-what-i-could-not-verify",
+          "text": "9.4 What I could not verify",
+          "level": 3
         }
       ]
     },
@@ -2144,7 +2834,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "acb75e7280c2a66fa975d367bfe1f618a7f61980326a75db17e8e9cddc734623",
+      "sha256": "1a1e1546ef919fa5fc446087d78db59058bcb585916db731e95f48b10e2b5d0a",
       "headings": [
         {
           "id": "update-commands",
@@ -2239,6 +2929,11 @@
         {
           "id": "phase-3-review-31-october-2026-diff-stage-revert-pull-requests",
           "text": "Phase 3: review (31 October 2026): diff, stage, revert, pull requests",
+          "level": 3
+        },
+        {
+          "id": "phase-3-review-scopes-11-november-2026",
+          "text": "Phase 3: review scopes (11 November 2026)",
           "level": 3
         },
         {
@@ -2355,6 +3050,21 @@
           "id": "sub-bots-31-october-2026-phase-8",
           "text": "Sub-bots (31 October 2026, Phase 8)",
           "level": 3
+        },
+        {
+          "id": "providers-main-providers-always-on-the-rest-behind-switches-11-november-2026",
+          "text": "Providers: main providers always on, the rest behind switches (11 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "server-preview-11-november-2026",
+          "text": "Server preview (11 November 2026)",
+          "level": 3
+        },
+        {
+          "id": "the-linked-vps-computer-harbor-13-november-2026",
+          "text": "The linked VPS computer: Harbor (13 November 2026)",
+          "level": 2
         }
       ]
     },
@@ -18724,6 +19434,41 @@
       ]
     },
     {
+      "id": "project/releases/0.2.0-beta.1",
+      "source": "docs/releases/0.2.0-beta.1.md",
+      "title": "Retinue 0.2.0-beta.1",
+      "section": "Release notes",
+      "status": "Release note",
+      "sha256": "c667462ffcf78566c25cc7bc4f52b7302965d58f2b0122d04f234ceb4f5261e5",
+      "headings": [
+        {
+          "id": "new",
+          "text": "New",
+          "level": 2
+        },
+        {
+          "id": "changed",
+          "text": "Changed",
+          "level": 2
+        },
+        {
+          "id": "fixed",
+          "text": "Fixed",
+          "level": 2
+        },
+        {
+          "id": "not-in-this-release-yet",
+          "text": "Not in this release yet",
+          "level": 2
+        },
+        {
+          "id": "installation",
+          "text": "Installation",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/remote/AGENTS_AMENDMENT_DRAFT",
       "source": "docs/remote/AGENTS_AMENDMENT_DRAFT.md",
       "title": "Draft amendment for AGENTS.md: Remote mode (for owner approval)",
@@ -19319,6 +20064,36 @@
         {
           "id": "13-native-method-17-october-2026",
           "text": "13. Native method (17 October 2026)",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/evidence/claude-turn-steer-2026-11-11",
+      "source": "docs/evidence/claude-turn-steer-2026-11-11.md",
+      "title": "Claude turn steering evidence inventory (11 November 2026)",
+      "section": "Evidence",
+      "status": "Evidence",
+      "sha256": "f537abe1c320b46b45503e8144fbb51709decd37c194fac3c759f37a5e8fb980",
+      "headings": [
+        {
+          "id": "source-of-the-request-shape",
+          "text": "Source of the request shape",
+          "level": 2
+        },
+        {
+          "id": "implementation",
+          "text": "Implementation",
+          "level": 2
+        },
+        {
+          "id": "what-the-fixture-proves-request-shape-only",
+          "text": "What the fixture proves (request shape only)",
+          "level": 2
+        },
+        {
+          "id": "not-verified-live",
+          "text": "Not verified live",
           "level": 2
         }
       ]
