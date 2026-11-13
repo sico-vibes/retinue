@@ -75,7 +75,8 @@ pub(crate) fn tags_suffix(tags: &Value) -> String {
 }
 
 impl Team {
-    fn token_for(&self, session_id: &str) -> String {
+    /// The conversation's own MCP capability, shared with the computer bridge.
+    pub(crate) fn token_for(&self, session_id: &str) -> String {
         let mut tokens = self.tokens.lock().unwrap();
         if let Some(token) = tokens.get(session_id) { return token.clone(); }
         let token = retinue_security::new_capability();
@@ -556,6 +557,13 @@ pub fn attach(st: &AppState, session_id: &str, agent_id: Option<&str>, link: &Va
             args: vec!["mcp-bridge".into()],
             env: BTreeMap::from([("RETINUE_DAEMON_ADDR".to_owned(), address), ("RETINUE_MCP_TOKEN".to_owned(), token)]),
         }];
+        // The linked computer's tools, when the owner has one switched on. It is
+        // a second server so its tools sit outside the team bridge's reach; the
+        // spec carries no token (the bridge reads a user-only endpoint file, and
+        // the daemon holds the Harbor credential).
+        if let Some(computer) = crate::computer::mcp_server_for(st, session_id) {
+            options.mcp_servers.push(computer);
+        }
     }
 }
 

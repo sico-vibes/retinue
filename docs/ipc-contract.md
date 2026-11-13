@@ -737,3 +737,47 @@ The dock's preview needs to know which local dev servers a conversation started.
 - **Cost.** The list is recomputed at most every two seconds, and only while a client asked for that conversation within the last minute: an idle app runs no `netstat`. **A pane watching a conversation must therefore call `preview.servers` again at least once a minute** (on opening the tab, and on each `preview.changed`); a first call waits for one scan, `netstat` plus one probe per address, about a second. One `netstat -ano -p tcp`/`tcpv6` and one `CreateToolhelp32Snapshot` per scan.
 - **`tiers.json` class `never`.** A device must not learn which ports this computer is running; the event is `drop`.
 - **Not covered yet: the terminal dock.** A dock shell is a child of the native shell (`apps/desktop/src-tauri/src/pty.rs`), not of the daemon, so a server started by hand there is not attributed. Covering it needs the native side to report each dock shell's `{sessionId, pid}` to the daemon (one new daemon method over the existing loopback API, `never` in `tiers.json`), which is not built.
+
+## The linked VPS computer: Harbor (13 November 2026)
+
+The owner links one Harbor server, which manages one persistent Linux desktop in a container, and may give employees its tools. Code is `crates/retinue-daemon/src/computer.rs`, the row is `computer_link` in `crates/retinue-storage/src/computer_link.rs`.
+
+**Where the token lives.** Harbor's bearer token is a Windows Credential Manager entry, generic, target `Retinue/computer/<id>`, persisted for the local machine. The database keeps the address, the switch and that credential's name only. The token is never in a reply, an event, a log line, a backup, a diagnostics bundle, a coding agent's config file, its argv or its environment. The credential's name contains `/`, so it never appears in `secret.list` (which accepts `[A-Za-z0-9_.-]`) and `secret.set`/`secret.delete` cannot name it.
+
+**Status object** (every field always present, camelCase):
+
+```
+{ linked, enabled, address, name, reachable,
+  state: "awake" | "asleep" | "missing" | "unknown",
+  since, restarts, cpuPercent, memoryPercent, memoryText, pids, diskBytes,
+  limits: { cpu, memory } | null, desktopUrl, checkedAt, problem }
+```
+
+- `state` comes from Docker's own `status` for the container: `running` is `awake`; `exited`, `created` and `paused` are `asleep`; `missing` is `missing`; anything else, and an unreachable server, is `unknown`.
+- `desktopUrl` is passed through only when it is on the linked address's origin (same scheme, host and effective port); anything else is `null`. `limits` carries only `cpu` and `memory` as Harbor's own text (`"2"`, `"4GiB"`).
+- Every method here is `tiers.json` class `never`; the event `computer.changed` is `drop`.
+
+**Methods.**
+
+- `computer.status {}` gives the status object. It **never fails**: an unreachable server is `reachable: false`, `state: "unknown"` and a plain `problem` sentence, read within 8 s. Unlinked gives `linked: false` with `checkedAt` and `problem` `null`.
+- `computer.link {address, token, confirm}` gives the status object. `confirm: true` is required. `address` must be `https://`; plain `http://` only for `localhost`, `127.0.0.0/8`, `::1`, a `*.ts.net` host or a `100.64.0.0/10` address, with no path, query, fragment, user name or password, and a trailing `/` is dropped. Harbor is called once **before anything is stored**: `401` is `invalid_argument` with `Harbor refused that token.`, an unreachable address is `unavailable`, and a `200` that is not Harbor's shape is refused. A successful link replaces any earlier one, deletes the earlier credential, and starts switched off.
+- `computer.unlink {}` gives `{linked: false, ...}`: the row, the credential and every bridge endpoint file go.
+- `computer.setEnabled {enabled, confirm}` gives the status object. `enabled: true` needs `confirm: true`. Off after linking.
+- `computer.action {action}` gives the status object, from a fresh read after the action. `action` is `wake`, `sleep` or `restart`; `sleep` posts Harbor's `/action/stop` (the container stops, its `/config` volume stays). A wake may still be starting when the status is read.
+- `computer.routines {}` gives `{routines: [{id, name, cron, command, enabled, lastRunAt, lastOk, lastOutput}]}`. Harbor's `{routines: [...]}` and a bare array are both accepted; `lastOk` and `lastOutput` come from `lastResult` (an object's `ok`/`output`/`log`/`text`/`message`, or a bare string) and are `null` when it says nothing; `lastOutput` is cut to 2,000 characters.
+- `computer.routine.run {id}` gives `{ok, output}`. `id` is 1 to 200 characters.
+- `computer.logs {tail}` gives `{logs}`. `tail` is a number, clamped to 20 to 1,000, 200 by default; a non-number is `invalid_argument`.
+- **Event `computer.changed`** carries the status object, after every write and after a status read that differs from the last one announced. `checkedAt` alone is not a difference: an unchanged read announces nothing.
+
+**The employee tools (`vps-computer`).** While a computer is linked and switched on, every new conversation's coding agent gets a second app-owned MCP server beside `retinue`: name `vps-computer`, command this daemon executable with `computer-server --endpoint <file>`, and **no environment**. The endpoint file is `<data>/computer/mcp-<sessionId>.json`, created empty, restricted to the current user, then written with `{address, token}` naming **this daemon** and the conversation's own capability; the folder is emptied at startup, on unlink and on import. The bridge reads it, speaks stdio MCP to the provider, and forwards `mcp.computer.list` and `mcp.computer.call` to the daemon over the existing loopback API, authorised by that same conversation capability (the `mcp.*` route in `main_rpc`). **The Harbor token never reaches the bridge.** Every Harbor call is made by the daemon, which re-reads the credential for that one request.
+
+The ten tools are the proposal's Node bridge's (`tools/vps-computer-mcp/`, commit `2182a94`), with the same names, descriptions and schemas: `computer_status`, `computer_wake`, `computer_sleep`, `computer_restart`, `computer_logs`, `computer_exec`, `computer_list_routines`, `computer_create_routine`, `computer_run_routine`, `computer_desktop_url`.
+
+- Every call checks, at call time, that a computer is linked and switched on: a conversation that started before the switch was turned off keeps running, and its computer tools answer a plain sentence instead. A conversation in a deleted state is refused the same way.
+- `computer_exec`, `computer_create_routine` and `computer_run_routine` are **refused in an unattended conversation** (an automation, an unattended task, or a delegated child whose origin chain holds one), with a sentence saying so.
+- `computer_desktop_url` returns `{desktop_url, note}` as text, with the URL only when it is on the linked origin; nothing opens it.
+- One tool result is capped at 64 KB. Each call writes one content-free line: the tool's own name in the bridge's stderr, and a `debug` line in the daemon.
+- **Approvals.** A `vps-computer` tool is not on any auto-allow list. Claude Code is launched with `--allowedTools mcp__retinue` only (never `mcp__vps-computer`), so `can_use_tool` reaches the conversation's approval card; Codex auto-accepts only `server: "retinue"` elicitations and approvals, so this server's `mcpServer/elicitation/request` and `requestApproval` become permission cards; OpenCode (ACP) has no Retinue-side allow list, so the approval is its own `session/request_permission` card. In a mode that never asks (Full access), nothing asks — the unattended refusal above is the only bar.
+- **Backups.** The link never travels: nothing about it is exported, and `backup.import` unlinks the computer and deletes its credential.
+- **Not covered.** Nothing here checks TLS certificates against a fingerprint the owner compared (Harbor's own certificate is trusted by the usual roots), there is no wake-before-dispatch for a task that asks for the computer, and the remote gateway has no computer view.
+

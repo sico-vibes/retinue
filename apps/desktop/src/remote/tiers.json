@@ -345,6 +345,62 @@
       "params": null
     },
     {
+      "method": "computer.status",
+      "class": "never",
+      "minTier": null,
+      "why": "The linked VPS computer is the owner's own machine, and its address stays at the desktop.",
+      "params": null
+    },
+    {
+      "method": "computer.link",
+      "class": "never",
+      "minTier": null,
+      "why": "Linking a computer stores a token in the credential store; only the owner at the desktop may link one.",
+      "params": null
+    },
+    {
+      "method": "computer.unlink",
+      "class": "never",
+      "minTier": null,
+      "why": "Unlinking deletes the computer's token; a device may not do that.",
+      "params": null
+    },
+    {
+      "method": "computer.setEnabled",
+      "class": "never",
+      "minTier": null,
+      "why": "Whether employees get a remote machine's tools is the owner's decision at the desktop.",
+      "params": null
+    },
+    {
+      "method": "computer.action",
+      "class": "never",
+      "minTier": null,
+      "why": "Waking, sleeping or restarting a remote machine is a desktop action.",
+      "params": null
+    },
+    {
+      "method": "computer.routines",
+      "class": "never",
+      "minTier": null,
+      "why": "Routines carry the commands the computer runs, which stay on the host.",
+      "params": null
+    },
+    {
+      "method": "computer.routine.run",
+      "class": "never",
+      "minTier": null,
+      "why": "Starting a routine runs a command on a remote machine; only the desktop may.",
+      "params": null
+    },
+    {
+      "method": "computer.logs",
+      "class": "never",
+      "minTier": null,
+      "why": "A container log can hold anything the remote machine printed, so it never leaves the host.",
+      "params": null
+    },
+    {
       "method": "runtime.profile.list",
       "class": "read",
       "minTier": "viewer",
@@ -1647,6 +1703,7 @@
     "replay.gap": "allow",
     "runtime.models.changed": "allow",
     "machine.changed": "drop",
+    "computer.changed": "drop",
     "secret.request.changed": "drop",
     "machine.pair.changed": "drop",
     "machine.takeOver.changed": "drop",

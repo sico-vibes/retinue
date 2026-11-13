@@ -15,7 +15,7 @@
 //! the user's rename/replace/skip choices, resolves memory scopes, stages any
 //! skills on disk and restores everything else in one database transaction.
 
-use crate::{agent_error, derr, AppState, DispatchError};
+use crate::{agent_error, computer, derr, AppState, DispatchError};
 use axum::http::StatusCode;
 use base64::Engine as _;
 use serde_json::{json, Map, Value};
@@ -931,6 +931,10 @@ async fn import(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
         "automations": skipped_automations + outcome["skipped"]["automations"].as_u64().unwrap_or(0),
         "settings": skipped_settings + outcome["skipped"]["settings"].as_u64().unwrap_or(0),
     });
+    // A linked computer never travels: the address and its token are this
+    // machine's own, so an import leaves the computer unlinked (and deletes the
+    // credential the old link named).
+    computer::forget_link(st).await;
     st.emit("backup.imported", json!({"imported": imported, "skipped": skipped})).await;
 
     Ok(json!({

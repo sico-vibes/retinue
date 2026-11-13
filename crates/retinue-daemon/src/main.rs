@@ -114,6 +114,8 @@ mod handoff;
 mod machines_tests;
 // Phase 5: secrets in the credential store and one-use secret requests.
 mod secrets;
+// The owner's linked VPS computer (Harbor) and its employee tools.
+mod computer;
 /// Phase 5, section 8: webhook triggers and their signature.
 mod webhooks;
 
@@ -169,6 +171,9 @@ struct AppState {
     /// Lane 7: who is watching a conversation's local servers, and what they were
     /// told last. It holds no conversation content.
     preview: Arc<preview::Preview>,
+    /// The linked VPS computer (Harbor): the last status announced, so an
+    /// unchanged read is not announced twice.
+    computer: Arc<computer::Computer>,
 }
 #[derive(Clone)]
 struct Adapters {
@@ -482,7 +487,14 @@ async fn main_rpc(
             return (StatusCode::UNAUTHORIZED, Json(error(req.id, "unauthorized", "missing or invalid team capability")));
         };
         let id = req.id.clone();
-        return match team::mcp_rpc(&st, &session, &req.method, &req.params).await {
+        // The `vps-computer` bridge shares the conversation's capability; its
+        // tools are the linked computer's, and the Harbor token stays here.
+        let result = if req.method.starts_with("mcp.computer.") {
+            computer::mcp_rpc(&st, &session, &req.method, &req.params).await
+        } else {
+            team::mcp_rpc(&st, &session, &req.method, &req.params).await
+        };
+        return match result {
             Ok(v) => (StatusCode::OK, Json(RpcResponse { v: PROTOCOL_VERSION, id, ok: true, result: Some(v), error: None })),
             Err((status, e)) => (status, Json(RpcResponse { v: PROTOCOL_VERSION, id, ok: false, result: None, error: Some(e) })),
         };
@@ -1115,6 +1127,9 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "subbot.list" => subbots::rpc(st, method, &p).await,
         "automation.webhook.enable" | "automation.webhook.rotate" | "automation.webhook.update" | "automation.webhook.disable" => webhooks::rpc(st, method, &p).await,
         "secret.list" | "secret.set" | "secret.delete" | "secret.request.list" | "secret.request.answer" | "secret.request.decline" => secrets::rpc(st, method, &p).await,
+        // The linked VPS computer (Harbor): desktop only, never remote, and no
+        // employee tool reaches these (they go through `mcp.computer.*`).
+        "computer.status" | "computer.link" | "computer.unlink" | "computer.setEnabled" | "computer.action" | "computer.routines" | "computer.routine.run" | "computer.logs" => computer::rpc(st, method, &p).await,
         "project.findByIdentity" => repo_identity::find_by_identity(st, &p),
         "project.sharedSettings.get" | "project.sharedSettings.trust" | "project.sharedSettings.untrust" | "project.sharedSettings.write" => shared_settings::rpc(st, method, &p),
         "worktree.abandoned" | "worktree.removeAbandoned" => worktree_cleanup::rpc(st, method, &p).await,
@@ -5966,6 +5981,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         warm_lru: Arc::new(Mutex::new(Vec::new())),
         attention: Arc::new(attention::Attention::default()),
         preview: Arc::new(preview::Preview::default()),
+        computer: Arc::new(computer::Computer::default()),
     };
     // A send right after boot must not fail with "runtime is not installed":
     // show the saved roster until discovery replaces it. `validate_spawn_target`
@@ -6019,7 +6035,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
     *st.team.address.lock().unwrap() = Some(addr.to_string());
-    if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); }
+    if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); computer::sweep_endpoints(dir); }
     *st.team.data_dir.lock().unwrap() = data_dir;
     stash::prune_restored(&st);
     git_ops::prune_reverted(&st);
@@ -6120,6 +6136,18 @@ async fn daemon_main() {
             std::process::exit(2);
         };
         mcp_bridge::run_external(std::path::PathBuf::from(endpoint)).await;
+        return;
+    }
+    // The linked computer's bridge: `retinued computer-server --endpoint <file>`.
+    // The provider starts it with the conversation's own run; it reads the daemon
+    // address and a per-conversation capability from that user-only file.
+    if std::env::args().nth(1).as_deref() == Some("computer-server") {
+        let args = std::env::args().skip(2).collect::<Vec<_>>();
+        let Some(endpoint) = args.iter().position(|arg| arg == "--endpoint").and_then(|at| args.get(at + 1)) else {
+            eprintln!("usage: computer-server --endpoint <file>");
+            std::process::exit(2);
+        };
+        mcp_bridge::run_computer(std::path::PathBuf::from(endpoint)).await;
         return;
     }
     if let Err(error) = retinue_usage::shipped_official_price_rules() {
@@ -7380,7 +7408,7 @@ mod phase2a_tests {
     /// a second state on the same file.
     pub(crate) fn state_with(db:Storage)->(AppState,broadcast::Receiver<EventEnvelope>){
         let db=Arc::new(db);db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"})).unwrap();let(events,rx)=broadcast::channel(64);
-        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default())};(st,rx)
+        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default())};(st,rx)
     }
     #[tokio::test]
     async fn bot_purge_is_confirmed_atomic_and_removes_both_sides_only() {
@@ -13986,6 +14014,9 @@ mod phase2a_tests {
 
     // Phase 5 (Sona S1): secrets in the credential store, and one-use secret requests.
     include!("secrets_tests.rs");
+
+    // The linked VPS computer (Harbor): linking, state, routines and the tools.
+    include!("computer_tests.rs");
 
     #[tokio::test]
     async fn team_update_project_move_does_not_archive() {

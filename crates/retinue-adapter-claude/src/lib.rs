@@ -316,10 +316,18 @@ fn mcp_config_json(servers: &[McpServerSpec]) -> String {
     json!({"mcpServers":map}).to_string()
 }
 
-/// Pre-approves every tool of the app-owned servers (rule `mcp__<server>`).
+/// Servers whose every tool is pre-approved (rule `mcp__<server>`). Only
+/// Retinue's own team bridge is here: it lists teammates and messages them.
+/// An app-owned server that can run commands on another machine — the linked
+/// computer's `vps-computer` tools — is deliberately absent, so in a mode that
+/// asks, the provider asks about every one of its calls.
+const PRE_APPROVED_SERVERS: [&str; 1] = ["retinue"];
+
+/// Pre-approves the tools of the app-owned servers that may run without asking.
 fn mcp_allowed_tools(servers: &[McpServerSpec]) -> Vec<String> {
-    if servers.is_empty() { return Vec::new(); }
-    vec!["--allowedTools".into(), servers.iter().map(|server| format!("mcp__{}", server.name)).collect::<Vec<_>>().join(",")]
+    let pre_approved = servers.iter().map(|server| server.name.as_str()).filter(|name| PRE_APPROVED_SERVERS.contains(name)).map(|name| format!("mcp__{name}")).collect::<Vec<_>>();
+    if pre_approved.is_empty() { return Vec::new(); }
+    vec!["--allowedTools".into(), pre_approved.join(",")]
 }
 
 /// Normalizes `AskUserQuestion` input. Claude keys answers by question text.
@@ -1397,6 +1405,16 @@ mod tests {
             parse_line(&tx, &json!({"type":"assistant","message":{"content":[{"type":"tool_use","name":name,"id":"tool","input":input}]}}), &id, &permissions, "session", &active, &context).await;
             assert!(matches!(rx.recv().await, Some(AgentEvent::ToolStarted { title, raw, .. }) if title == expected && raw["input"] == input), "{name}");
         }
+    }
+    #[test]
+    fn only_the_team_server_is_pre_approved_so_a_computer_tool_asks() {
+        let spec = |name: &str| retinue_agent_core::McpServerSpec { name: name.into(), command: std::path::PathBuf::from("retinued.exe"), args: Vec::new(), env: Default::default() };
+        assert_eq!(mcp_allowed_tools(&[]), Vec::<String>::new(), "no server, no flag");
+        assert_eq!(mcp_allowed_tools(&[spec("retinue")]), vec!["--allowedTools".to_owned(), "mcp__retinue".to_owned()]);
+        // The linked computer can run commands: it is never on the allow list, so
+        // Claude's own permission request reaches the conversation's approval card.
+        assert_eq!(mcp_allowed_tools(&[spec("vps-computer")]), Vec::<String>::new());
+        assert_eq!(mcp_allowed_tools(&[spec("vps-computer"), spec("retinue")]), vec!["--allowedTools".to_owned(), "mcp__retinue".to_owned()]);
     }
     #[test] fn accept_edits_launches_like_ask(){let ask=permission_args(retinue_agent_core::ApprovalMode::Ask);let accept=permission_args(retinue_agent_core::ApprovalMode::AcceptEdits);assert_eq!(accept,ask);assert!(!accept.contains(&"bypassPermissions"));assert!(!accept.contains(&"--allow-dangerously-skip-permissions"));assert_eq!(retinue_agent_core::ApprovalMode::AcceptEdits.as_str(),"accept_edits");}
     #[test] fn permission_modes_have_typed_launch_flags_only_for_bypass(){let bypass=permission_args(retinue_agent_core::ApprovalMode::Bypass);assert!(bypass.contains(&"bypassPermissions"));assert!(bypass.contains(&"--allow-dangerously-skip-permissions"));assert!(!bypass.contains(&"--permission-prompt-tool"));for mode in [retinue_agent_core::ApprovalMode::Ask,retinue_agent_core::ApprovalMode::Auto]{let args=permission_args(mode);assert!(args.contains(&"--permission-mode"));assert!(args.contains(&"default"));assert!(!args.contains(&"bypassPermissions"));assert!(!args.contains(&"--permission-prompt-tool"));}}

@@ -10,6 +10,11 @@
 //!   `ext.tools.*`, and reads the file again when the daemon answers 401 or
 //!   cannot be reached, so a rotated token or a restarted Retinue is picked up
 //!   without restarting the client.
+//! - `retinued computer-server --endpoint <file>`: the linked VPS computer's
+//!   tools, launched by a provider CLI for one conversation. It reads the same
+//!   `{address, token}` shape from a per-conversation user-only file and forwards
+//!   to `mcp.computer.*`. The Harbor token is never in that file, in argv or in
+//!   the provider's environment: the daemon holds it and makes every call.
 //!
 //! Each request is handled on its own task, so a long `wait_for_turn` never
 //! blocks a `steer` or `stop_turn` that arrives meanwhile.
@@ -31,6 +36,8 @@ const PROTOCOL_VERSION: &str = "2025-06-18";
 const TEAM_TIMEOUT: Duration = Duration::from_secs(60);
 /// The Retinue MCP's request timeout: `wait_for_turn` may wait up to 600 s, plus a margin.
 const EXTERNAL_TIMEOUT: Duration = Duration::from_secs(660);
+/// The computer bridge's request timeout: one `exec` may run for 300 s, plus a margin.
+const COMPUTER_TIMEOUT: Duration = Duration::from_secs(330);
 /// How long the hello after `initialize` may take; it never holds up the client for long.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -45,8 +52,21 @@ enum Failure {
     Other(String),
 }
 
+/// Which daemon route this server forwards to.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+    /// The team tools, for a provider CLI Retinue starts (`mcp.tools.*`).
+    Team,
+    /// The Retinue MCP for an outside client (`ext.tools.*`).
+    External,
+    /// The linked computer's tools (`mcp.computer.*`).
+    Computer,
+}
+
 struct Backend {
-    /// The endpoint file of the Retinue MCP; `None` for the team bridge.
+    kind: Kind,
+    /// The endpoint file the token is read from; `None` for the team bridge,
+    /// whose token arrives in its environment.
     endpoint: Option<PathBuf>,
     creds: StdMutex<(String, String)>,
     timeout: Duration,
@@ -54,24 +74,41 @@ struct Backend {
 
 impl Backend {
     fn team_with(address: &str, token: &str) -> Self {
-        Self { endpoint: None, creds: StdMutex::new((address.to_owned(), token.to_owned())), timeout: TEAM_TIMEOUT }
+        Self { kind: Kind::Team, endpoint: None, creds: StdMutex::new((address.to_owned(), token.to_owned())), timeout: TEAM_TIMEOUT }
     }
 
     fn external(endpoint: PathBuf) -> Self {
         let creds = read_endpoint(&endpoint).unwrap_or_default();
-        Self { endpoint: Some(endpoint), creds: StdMutex::new(creds), timeout: EXTERNAL_TIMEOUT }
+        Self { kind: Kind::External, endpoint: Some(endpoint), creds: StdMutex::new(creds), timeout: EXTERNAL_TIMEOUT }
+    }
+
+    fn computer(endpoint: PathBuf) -> Self {
+        let creds = read_endpoint(&endpoint).unwrap_or_default();
+        Self { kind: Kind::Computer, endpoint: Some(endpoint), creds: StdMutex::new(creds), timeout: COMPUTER_TIMEOUT }
     }
 
     fn is_external(&self) -> bool {
-        self.endpoint.is_some()
+        self.kind == Kind::External
+    }
+
+    fn is_computer(&self) -> bool {
+        self.kind == Kind::Computer
     }
 
     fn list_method(&self) -> &'static str {
-        if self.is_external() { "ext.tools.list" } else { "mcp.tools.list" }
+        match self.kind {
+            Kind::Team => "mcp.tools.list",
+            Kind::External => "ext.tools.list",
+            Kind::Computer => "mcp.computer.list",
+        }
     }
 
     fn call_method(&self) -> &'static str {
-        if self.is_external() { "ext.tools.call" } else { "mcp.tools.call" }
+        match self.kind {
+            Kind::Team => "mcp.tools.call",
+            Kind::External => "ext.tools.call",
+            Kind::Computer => "mcp.computer.call",
+        }
     }
 
     /// Reads the endpoint file again; true when it names a different address or token.
@@ -95,18 +132,19 @@ impl Backend {
             Ok(value) => Ok(value),
             Err(failure @ (Failure::Unauthorized | Failure::Unreachable(_))) if self.is_external() => {
                 if self.reload() {
-                    self.attempt(method, &params).await.map_err(failure_message)
+                    self.attempt(method, &params).await.map_err(|failure| failure_message(self.kind, failure))
                 } else {
-                    Err(failure_message(failure))
+                    Err(failure_message(self.kind, failure))
                 }
             }
-            Err(failure) => Err(failure_message(failure)),
+            Err(failure) => Err(failure_message(self.kind, failure)),
         }
     }
 }
 
-fn failure_message(failure: Failure) -> String {
+fn failure_message(kind: Kind, failure: Failure) -> String {
     match failure {
+        Failure::Unauthorized if kind == Kind::Computer => "Retinue no longer recognises this conversation's computer bridge. Start a new conversation to use the computer.".to_owned(),
         Failure::Unauthorized => "Retinue refused the request. Turn the Retinue MCP on in Retinue > Settings > Connections.".to_owned(),
         Failure::Unreachable(message) | Failure::Other(message) => message,
     }
@@ -129,6 +167,11 @@ pub async fn run() {
 /// `retinued mcp-server --endpoint <file>`.
 pub async fn run_external(endpoint: PathBuf) {
     serve(Arc::new(Backend::external(endpoint)), BufReader::new(tokio::io::stdin()), tokio::io::stdout()).await;
+}
+
+/// `retinued computer-server --endpoint <file>`.
+pub async fn run_computer(endpoint: PathBuf) {
+    serve(Arc::new(Backend::computer(endpoint)), BufReader::new(tokio::io::stdin()), tokio::io::stdout()).await;
 }
 
 async fn serve<R, W>(backend: Arc<Backend>, reader: R, mut writer: W)
@@ -170,27 +213,49 @@ async fn handle(backend: &Backend, message: &Value) -> Option<Value> {
                 let hello = backend.call("ext.hello", json!({"clientName": client}));
                 let _ = timeout(HELLO_TIMEOUT, hello).await;
             }
+            let (name, instructions) = if backend.is_computer() {
+                (
+                    "retinue-vps-computer",
+                    "The owner's linked computer (Harbor): read its state, wake it, sleep it, restart it, run commands and manage its routines. Commands run inside its container, never on the host.",
+                )
+            } else if backend.is_external() {
+                (
+                    "retinue",
+                    "Retinue tools: see the owner's bots, projects and conversations, send or steer a message, wait for the reply and read turn metrics. What you may do depends on the level the owner chose in Retinue.",
+                )
+            } else {
+                ("retinue", "Retinue team tools: list your teammates and message them.")
+            };
             Ok(json!({
                 "protocolVersion": message["params"]["protocolVersion"].as_str().unwrap_or(PROTOCOL_VERSION),
                 "capabilities": {"tools": {"listChanged": false}},
-                "serverInfo": {"name": "retinue", "version": env!("CARGO_PKG_VERSION")},
-                "instructions": if backend.is_external() {
-                    "Retinue tools: see the owner's bots, projects and conversations, send or steer a message, wait for the reply and read turn metrics. What you may do depends on the level the owner chose in Retinue."
-                } else {
-                    "Retinue team tools: list your teammates and message them."
-                }
+                "serverInfo": {"name": name, "version": env!("CARGO_PKG_VERSION")},
+                "instructions": instructions,
             }))
         }
         "ping" => Ok(json!({})),
         "tools/list" => backend.call(backend.list_method(), json!({})).await,
-        "tools/call" => backend.call(backend.call_method(), message["params"].clone()).await
-            .or_else(|error| Ok(json!({"content":[{"type":"text","text":error}],"isError":true}))),
+        "tools/call" => {
+            if backend.is_computer() {
+                // One content-free line per call: the tool's own name, never its
+                // arguments, its output or the address.
+                eprintln!("vps-computer: {}", tool_name(message));
+            }
+            backend.call(backend.call_method(), message["params"].clone()).await
+                .or_else(|error| Ok(json!({"content":[{"type":"text","text":error}],"isError":true})))
+        }
         _ => Err(format!("Method {method} is not supported")),
     };
     Some(match result {
         Ok(result) => json!({"jsonrpc":"2.0","id":id,"result":result}),
         Err(error) => json!({"jsonrpc":"2.0","id":id,"error":{"code":-32601,"message":error}}),
     })
+}
+
+/// The tool name of a `tools/call`, reduced to the characters a tool name may
+/// hold, so the log line can carry nothing else.
+fn tool_name(message: &Value) -> String {
+    message["params"]["name"].as_str().unwrap_or("").chars().filter(|ch| ch.is_ascii_alphanumeric() || *ch == '_').take(40).collect()
 }
 
 async fn post(address: &str, token: &str, method: &str, params: Value, limit: Duration) -> Result<Value, Failure> {
