@@ -1,0 +1,88 @@
+/* Settings › Integrations › Computer, and the rail's Computer card. Flat, no glow; colour only on the state word. */
+.computer-card { padding: 14px; display: grid; gap: 14px; }
+.computer-head { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.computer-icon { width: 36px; height: 36px; flex: 0 0 auto; display: grid; place-items: center; color: var(--text-2); border-radius: 10px; background: var(--surface-subtle); }
+.computer-copy { min-width: 0; flex: 1 1 160px; display: grid; gap: 2px; }
+.computer-copy strong { overflow: hidden; color: var(--text-1); font-size: var(--fs-sm); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.computer-copy small { color: var(--text-3); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.computer-state { color: var(--text-2); font-weight: 600; }
+[data-state="awake"] .computer-state { color: var(--status-ok, #5fd38d); }
+[data-state="unreachable"] .computer-state, [data-state="missing"] .computer-state { color: var(--status-working-text, var(--status-working)); }
+.computer-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.computer-actions button { display: inline-flex; align-items: center; gap: 5px; }
+.computer-meters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.computer-meter { min-width: 0; display: grid; align-content: start; gap: 6px; }
+.computer-meter-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: var(--text-3); font-size: var(--fs-xs); }
+.computer-meter-line b { min-width: 0; overflow: hidden; color: var(--text-1); font-weight: 600; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.computer-meter small { color: var(--text-3); font-size: var(--fs-2xs); }
+.computer-note { margin: 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.5; }
+.computer-plain { padding-top: 10px; color: var(--text-3); }
+@media (max-width: 640px) { .computer-meters { grid-template-columns: minmax(0, 1fr); gap: 10px; } }
+
+.computer-link { padding: 14px; display: grid; gap: 12px; }
+.computer-link .text-input { width: 100%; }
+.computer-link-actions { display: flex; justify-content: flex-end; }
+.computer-field-problem { color: var(--danger-ink); font-size: var(--fs-xs); }
+.computer-steps { margin: 0; padding: 0 0 0 20px; display: grid; gap: 8px; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.5; }
+.computer-steps b { color: var(--text-1); font-weight: 600; }
+
+.computer-routines { margin: 0; padding: 0; list-style: none; }
+.computer-routine { padding: 10px 14px; display: grid; gap: 6px; }
+.computer-routine + .computer-routine { border-top: 1px solid var(--line); }
+.computer-routine-line { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.computer-routine-line .secondary-button { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; }
+.computer-routine-line .queue-link { flex: 0 0 auto; font-size: var(--fs-xs); }
+.computer-routine-copy { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.computer-routine-copy strong { display: flex; align-items: center; gap: 6px; color: var(--text-1); font-size: var(--fs-sm); font-weight: 560; }
+.computer-routine-copy small { color: var(--text-3); font-size: var(--fs-xs); }
+.computer-failed { color: var(--danger-ink); }
+.computer-routine-command { min-width: 0; overflow: hidden; color: var(--text-3); font: var(--fs-2xs)/1.5 var(--font-mono, ui-monospace, monospace); text-overflow: ellipsis; white-space: nowrap; }
+.computer-output { max-height: 180px; margin: 0; padding: 8px 10px; overflow: auto; color: var(--text-2); border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle); font: var(--fs-2xs)/1.5 var(--font-mono, ui-monospace, monospace); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+
+/* The rail: one row, the state word carries the colour. */
+.rail-computer-state { font-weight: 600; }
+.rail-computer-state[data-state="awake"] { color: var(--status-ok, #5fd38d); }
+.rail-computer-state[data-state="unreachable"] { color: var(--status-working-text, var(--status-working)); }
+
+/* The screen, inside the app. A dark stage whatever the theme, like a monitor. */
+.sheet-backdrop.computer-view-backdrop { z-index: 90; padding: 20px; }
+.computer-view { width: min(1280px, 100%); height: min(860px, 100%); min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface-overlay); }
+.computer-view:focus { outline: none; }
+.computer-view-head { min-height: 44px; padding: 0 10px 0 14px; display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); border-bottom: 1px solid var(--line); }
+.computer-view-head > svg { color: var(--text-3); }
+.computer-view-head strong { font-weight: 600; }
+.computer-view-head .computer-state { font-size: var(--fs-xs); }
+.computer-view-head button { display: inline-flex; align-items: center; gap: 5px; }
+.computer-view-spacer { flex: 1; }
+.computer-view-stage { position: relative; min-height: 0; display: grid; place-items: center; background: #0d0d0f; }
+.computer-view-frame { width: 100%; height: 100%; display: block; border: 0; background: #0d0d0f; }
+.computer-view-shield { position: absolute; inset: 0; cursor: default; }
+.computer-view-plain { max-width: 420px; margin: 0; padding: 24px; display: grid; justify-items: center; gap: 12px; color: #c9c9cf; font-size: var(--fs-sm); line-height: 1.5; text-align: center; }
+.computer-view-plain p { margin: 0; }
+.computer-view-plain button { display: inline-flex; align-items: center; gap: 5px; }
+.computer-view-foot { padding: 10px 14px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 14px; border-top: 1px solid var(--line); }
+.computer-view-foot small { color: var(--text-3); font-size: var(--fs-xs); }
+.computer-view-modes { padding: 3px; display: inline-flex; gap: 2px; border-radius: var(--radius-pill); background: var(--surface-subtle); }
+.computer-view-modes button { height: 28px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); border: 0; border-radius: var(--radius-pill); background: transparent; font-size: var(--fs-xs); font-weight: 560; cursor: pointer; }
+.computer-view-modes button.on { color: var(--text-1); background: color-mix(in srgb, var(--text-1) 14%, transparent); }
+.computer-view-modes button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* The rail's card: one button, the state under the name, a small screen at the side. */
+.rail-computer { width: 100%; min-width: 0; padding: 9px 10px; display: flex; align-items: center; gap: 10px; color: inherit; border: 1px solid var(--line); border-radius: 10px; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.rail-computer:hover { border-color: var(--line-strong); background: var(--surface-subtle); }
+.rail-computer:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.rail-computer-copy { min-width: 0; flex: 1; display: grid; gap: 1px; }
+.rail-computer-copy strong { overflow: hidden; color: var(--text-1); font-size: var(--fs-xs); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.rail-computer-copy .rail-computer-state { font-size: var(--fs-2xs); }
+.rail-computer-copy .rail-computer-state:not([data-state="awake"]):not([data-state="unreachable"]) { color: var(--text-3); }
+.rail-computer-screen { width: 46px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; color: var(--text-3); border-radius: 6px; background: var(--surface-subtle); }
+.rail-computer[data-state="awake"] .rail-computer-screen { color: #e9e9ee; background: #17171a; }
+
+/* The setup prompt the owner hands to an agent on their server. */
+.computer-setup { padding: 14px; display: grid; gap: 12px; }
+.computer-setup p { margin: 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.5; }
+.computer-setup-prompt { position: relative; }
+.computer-setup-prompt pre { max-height: 190px; margin: 0; padding: 10px 40px 10px 12px; overflow: auto; color: var(--text-2); border: 1px solid var(--line); border-radius: 8px; background: var(--surface-subtle); font: var(--fs-2xs)/1.55 var(--font-mono, ui-monospace, monospace); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.computer-setup-prompt .icon-button { position: absolute; top: 6px; right: 6px; }
+.computer-setup-actions { display: flex; align-items: center; gap: 10px; }
+.computer-setup-actions button { display: inline-flex; align-items: center; gap: 5px; }

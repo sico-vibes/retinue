@@ -412,7 +412,7 @@ function ProfilePhotoMark({ url, color, size = 24, mood = 'idle', look, label = 
 /** The blank profile picture: a head and shoulders, as Slack and Teams show it. */
 function BlankSilhouette() {
   return <svg className="profile-photo-blank" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-    <circle cx="32" cy="25" r="11" />
-    <path d="M10 60c1.8-11.6 10.8-19 22-19s20.2 7.4 22 19z" />
+    <circle cx="32" cy="26" r="11.5" />
+    <path d="M6 70c1.4-16.4 11.6-27 26-27s24.6 10.6 26 27z" />
   </svg>
 }

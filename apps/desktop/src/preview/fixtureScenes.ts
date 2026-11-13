@@ -295,7 +295,7 @@ const SCENES: Record<string, () => Scene> = {
     { port: 5173, url: 'http://127.0.0.1:5173/', pid: 4242, process: 'node.exe', answeredHtml: true },
     { port: 8787, url: 'http://127.0.0.1:8787/', pid: 4250, process: 'node.exe', answeredHtml: false },
   ] }),
-  'queue-paused': () => ({ title: 'Queue paused', state: 'idle', messages: [user('Fix the parser.'), bot('Done.')], queue: [{ id: 'q1', kind: 'user', text: 'After that, run the whole suite.' }], queuePaused: true }),
+  'queue-paused': () => ({ title: 'Queue paused', state: 'idle', messages: [user('Fix the parser.'), bot('Done.')], queue: [{ id: 'q1', kind: 'user', text: 'After that, run the whole suite.' }, { id: 'q2', kind: 'user', text: 'Addition to this lane from the owner (same rules, same report; add it to what you are doing, do not restart). ## Task D: the screen inside the app. The owner wants to open the live screen inside the window, watch, and take control when needed. ' + 'averyveryverylongunbrokenwordthatcannotwrap'.repeat(8) }], queuePaused: true }),
 }
 
 export const sceneIds = () => Object.keys(SCENES)

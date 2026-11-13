@@ -2,10 +2,10 @@
 // group heading on that page, which the sheet scrolls to and flashes. Keep the
 // `group` strings equal to the `SettingsGroup title` values in SettingsSheet.
 
-export type SettingsPageName = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Secrets' | 'Updates' | 'Backup' | 'Health'
+export type SettingsPageName = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Computer' | 'Secrets' | 'Updates' | 'Backup' | 'Health'
 
 /** The page list, for anything that has to validate an incoming page name. */
-export const SETTINGS_PAGE_NAMES: readonly SettingsPageName[] = ['General', 'Appearance', 'Chat', 'Speech', 'Keyboard', 'Companion', 'Agents', 'Accounts', 'Providers', 'Manager', 'Approvals', 'Memory', 'Skills', 'Remote', 'Machines', 'Connections', 'Secrets', 'Updates', 'Backup', 'Health']
+export const SETTINGS_PAGE_NAMES: readonly SettingsPageName[] = ['General', 'Appearance', 'Chat', 'Speech', 'Keyboard', 'Companion', 'Agents', 'Accounts', 'Providers', 'Manager', 'Approvals', 'Memory', 'Skills', 'Remote', 'Machines', 'Connections', 'Computer', 'Secrets', 'Updates', 'Backup', 'Health']
 
 /**
  * The page out of an open-settings event payload (C13): a known page name, or
@@ -99,6 +99,9 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { page: 'Connections', group: 'Access', label: 'Let outside sessions use Retinue', keywords: 'mcp claude code connect terminal outside session external tools delegate' },
   { page: 'Connections', group: 'Access', label: 'Connect Claude Code', keywords: 'mcp command claude mcp add copy' },
   { page: 'Connections', group: 'Access', label: 'Reset access', keywords: 'mcp key token rotate revoke' },
+  { page: 'Computer', group: 'Link a computer', label: 'Link a computer on your server', keywords: 'vps server harbor remote desktop cloud machine token address browser computer use' },
+  { page: 'Computer', group: 'Employees', label: 'Let employees use this computer', keywords: 'vps server tools mcp exec commands browser automation' },
+  { page: 'Computer', group: 'Routines', label: 'Routines', keywords: 'cron schedule vps server run now' },
   { page: 'Secrets', group: 'Saved', label: 'Secrets', keywords: 'environment token key credential manager password' },
   { page: 'Updates', group: 'Updates', label: 'Updates and version', keywords: 'release check upgrade about' },
   { page: 'Backup', group: 'Export', label: 'Export a backup', keywords: 'save file employees memory skills automations settings' },

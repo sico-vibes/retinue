@@ -83,6 +83,15 @@ const fixtureRuns: Record<string, Array<Record<string, unknown>>> = {}
 const fixtureFanouts: Array<{ id: string; title: string; text: string; projectId: string | null; projectName: string | null; createdAt: string; chosenSessionId: string | null; rows: Array<{ agentId: string; sessionId: string }> }> = []
 const fixtureStash: Array<{ id: string; text: string; attachments: Array<{ file: string; name: string }>; agentId: string | null; agentName: string | null; projectId: string | null; projectName: string | null; createdAt: string; updatedAt: string }> = []
 const fixtureExternal: { enabled: boolean; tier: string; lastCallAt: string | null; lastClient: string | null; allowFullAccess: boolean } = fixturePreset() === 'mcp' ? { enabled: true, tier: 'operator', lastCallAt: new Date(Date.now() - 4 * 60_000).toISOString(), lastClient: 'claude-code', allowFullAccess: false } : { enabled: false, tier: 'chat', lastCallAt: null, lastClient: null, allowFullAccess: false }
+// The computer on the owner's server. `?preset=computer` is linked, awake and shared with employees;
+// `computer-asleep`, `computer-away` (the server does not answer) and `computer-linked` (linked, not shared yet).
+const computerPreset = (fixturePreset() ?? '').startsWith('computer') ? fixturePreset()! : null
+const fixtureComputer: { linked: boolean; enabled: boolean; awake: boolean; away: boolean; since: string } = { linked: !!computerPreset, enabled: !!computerPreset && computerPreset !== 'computer-linked', awake: computerPreset !== 'computer-asleep', away: computerPreset === 'computer-away', since: new Date(Date.now() - 5 * 3_600_000).toISOString() }
+const fixtureRoutines: Array<Record<string, unknown>> = [
+  { id: 'rt_1', name: 'Morning price check', cron: '0 8 * * *', command: 'node ~/jobs/prices.mjs --notify', enabled: true, lastRunAt: new Date(Date.now() - 3 * 3_600_000).toISOString(), lastOk: true, lastOutput: 'Checked 42 listings.\n3 changed since yesterday.' },
+  { id: 'rt_2', name: 'Nightly site backup', cron: '30 2 * * *', command: 'bash ~/jobs/backup.sh', enabled: true, lastRunAt: new Date(Date.now() - 9 * 3_600_000).toISOString(), lastOk: false, lastOutput: 'rsync: connection timed out (110)' },
+  { id: 'rt_3', name: 'Refresh sign-in', cron: '*/30 * * * *', command: 'npx playwright test refresh.spec.ts', enabled: false, lastRunAt: null, lastOk: null, lastOutput: null },
+]
 const fixtureOutside = {
   enabled: fixturePreset() === 'outside',
   sessions: [
@@ -1118,6 +1127,40 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       row('grok', 'Grok Build', false, false, null, 'Install it from its own site, then scan again.'),
       row('antigravity', 'Antigravity', false, false, null, 'Install Google Antigravity, then scan again.'),
     ] } as T
+  }
+  if (method.startsWith('computer.')) {
+    const address = 'https://dashboard.example.com'
+    const status = () => !fixtureComputer.linked
+      ? { linked: false, enabled: false, address: null, name: null, reachable: false, state: 'unknown', since: null, restarts: 0, cpuPercent: null, memoryPercent: null, memoryText: null, pids: null, diskBytes: null, limits: null, desktopUrl: null, checkedAt: null, problem: null }
+      : { linked: true, enabled: fixtureComputer.enabled, address, name: 'retinue-01', reachable: !fixtureComputer.away, state: fixtureComputer.away ? 'unknown' : fixtureComputer.awake ? 'awake' : 'asleep', since: fixtureComputer.awake ? fixtureComputer.since : null, restarts: 0, cpuPercent: fixtureComputer.awake ? 7 : null, memoryPercent: fixtureComputer.awake ? 31 : null, memoryText: fixtureComputer.awake ? '1.24 GiB / 4 GiB' : null, pids: fixtureComputer.awake ? 188 : null, diskBytes: 2_340_000_000, limits: { cpu: '2', memory: '4g' }, desktopUrl: `${address}/harbor/computer/view/`, checkedAt: new Date().toISOString(), problem: fixtureComputer.away ? 'Your server did not answer in time.' : null }
+    const changed = () => { notifyFixtureDaemon('computer.changed', status()); return status() as T }
+    if (method === 'computer.status') return status() as T
+    if (method === 'computer.link') {
+      if (params.confirm !== true) throw rpcError('invalid_argument', 'Confirm linking the computer first.')
+      if (typeof params.token !== 'string' || !params.token.startsWith('hrb_')) throw rpcError('invalid_argument', 'Harbor refused that token.')
+      Object.assign(fixtureComputer, { linked: true, enabled: false, awake: true, away: false })
+      return changed()
+    }
+    if (method === 'computer.unlink') { Object.assign(fixtureComputer, { linked: false, enabled: false }); return changed() }
+    if (method === 'computer.setEnabled') {
+      if (params.enabled === true && params.confirm !== true) throw rpcError('invalid_argument', 'Confirm sharing the computer first.')
+      fixtureComputer.enabled = params.enabled === true
+      return changed()
+    }
+    if (method === 'computer.action') {
+      if (fixtureComputer.away) throw rpcError('unavailable', 'Your server did not answer in time.')
+      fixtureComputer.awake = params.action !== 'sleep'
+      if (params.action !== 'sleep') fixtureComputer.since = new Date().toISOString()
+      return changed()
+    }
+    if (method === 'computer.routines') return { routines: fixtureRoutines } as T
+    if (method === 'computer.routine.run') {
+      const routine = fixtureRoutines.find((item) => item.id === params.id)
+      if (!routine) throw rpcError('not_found', 'That routine is gone.')
+      return { ok: routine.id !== 'rt_2', output: routine.id === 'rt_2' ? 'rsync: connection timed out (110)' : 'Done in 4.2 s.' } as T
+    }
+    if (method === 'computer.view') return (flags().has('computer-no-view') ? { url: null, reason: 'Your server does not offer its screen to Retinue yet. Update Harbor, or open it in your browser.' } : { url: `${window.location.origin}/src/preview/computerDesktop.html`, reason: null }) as T
+    if (method === 'computer.logs') return { logs: '[svc] desktop ready on :3000' } as T
   }
   if (method === 'preview.servers') {
     const session = sessions.find((item) => item.id === params.sessionId)

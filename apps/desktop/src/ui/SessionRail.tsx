@@ -5,8 +5,11 @@
 // says differs from HEAD now, whoever made the change, with what the conversation's
 // own coding agent reported kept alongside for anything Git no longer lists.
 import { useEffect, useState, type ReactNode } from 'react'
-import { Bot, ChevronDown, ChevronRight, CircleAlert, Code2, Copy, FileText, FolderOpen, GitBranch, Globe, Smartphone } from 'lucide-react'
+import { Bot, ChevronDown, ChevronRight, CircleAlert, Code2, Copy, FileText, FolderOpen, GitBranch, Globe, Monitor, Moon, Smartphone } from 'lucide-react'
 import { useLocalServers } from './localServers'
+import { stateWord, useComputer } from './computer'
+import { ComputerView } from './ComputerView'
+import './computer.css'
 import { openSafeLink } from './openSafeLink'
 import type { Agent, JsonRecord, Session } from '../types'
 import { rpc } from '../tauri'
@@ -145,6 +148,9 @@ export function SessionRail({ session, usage, appliedModel, onOpenFile, onReveal
   const busy = ['working', 'starting', 'waiting_permission'].includes(session?.state ?? '')
   const repository = useSessionRepository(session, repositoryRefreshKey(session), busy, active)
   const servers = useLocalServers(session, active)
+  const computer = useComputer(active)
+  const [waking, setWaking] = useState(false)
+  const [screen, setScreen] = useState(false)
   const [showAllOutputs, setShowAllOutputs] = useState(false)
   const [showAllChanges, setShowAllChanges] = useState(false)
   if (!session) return <div className="session-rail">{workingBots}<div className="rail-empty">Open a conversation to see where it works and what it changed.</div></div>
@@ -227,6 +233,15 @@ export function SessionRail({ session, usage, appliedModel, onOpenFile, onReveal
         <button type="button" className="queue-link" aria-label={`Open localhost:${server.port} in your browser`} onClick={() => void openSafeLink(server.url)}>Open</button>
       </div>)}
       <p className="rail-note">Started by {botName} in this conversation. Opens in your browser.</p>
+    </Card>}
+
+    {/* Only when one is linked and employees may use it: the computer on the owner's server. Sleeping it stays in Settings. */}
+    {computer.status?.linked && computer.status.enabled && <Card id="computer" title="Computer">
+      <button type="button" className="rail-computer" data-state={computer.status.reachable ? computer.status.state : 'unreachable'} aria-label={`${computer.status.name ?? 'Computer'}, ${stateWord(computer.status).toLowerCase()}. Open its screen`} onClick={() => setScreen(true)}>
+        <span className="rail-computer-copy"><strong>{computer.status.name ?? 'Computer'}</strong><span className="rail-computer-state" data-state={computer.status.reachable ? computer.status.state : 'unreachable'}>{stateWord(computer.status)}</span></span>
+        <span className="rail-computer-screen" aria-hidden="true">{computer.status.reachable && computer.status.state === 'asleep' ? <Moon size={14} /> : <Monitor size={14} />}</span>
+      </button>
+      {screen && <ComputerView status={computer.status} waking={waking} onClose={() => setScreen(false)} onWake={() => { setWaking(true); void rpc<unknown>('computer.action', { action: 'wake' }).then(computer.apply).catch(() => computer.refresh()).finally(() => setWaking(false)) }} />}
     </Card>}
 
     <Card id="schedules" title="Schedules">

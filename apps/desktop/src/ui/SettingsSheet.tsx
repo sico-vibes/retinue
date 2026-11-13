@@ -39,6 +39,7 @@ import { ProvidersPage } from './ProvidersPage'
 import { AccountsPage } from './AccountsPage'
 import { SecretsPage } from './SecretsPage'
 import { ConnectionsPage } from './ConnectionsPage'
+import { ComputerPage } from './ComputerPage'
 import { DiagnosticsDialog } from './DiagnosticsDialog'
 import { HarnessUpdatesNotice } from './HarnessUpdatesNotice'
 import { AppearancePage } from './AppearancePage'
@@ -52,7 +53,7 @@ import { useEntityNoun } from './vocabulary'
 import { useThemeStyle } from '../blob/retinue'
 import './retinueUi.css'
 
-export type SettingsPageId = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Secrets' | 'Updates' | 'Backup' | 'Health'
+export type SettingsPageId = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Computer' | 'Secrets' | 'Updates' | 'Backup' | 'Health'
 
 type SettingsTab = { label: string; icon: typeof SlidersHorizontal; pages: Array<{ id: SettingsPageId; label: string }> }
 
@@ -72,7 +73,7 @@ const NAV: Array<{ label: string; tabs: SettingsTab[] }> = [
   ] },
   { label: 'Connections', tabs: [
     { label: 'Remote access', icon: Smartphone, pages: [{ id: 'Remote', label: 'Remote' }, { id: 'Machines', label: 'Machines' }] },
-    { label: 'Integrations', icon: Cable, pages: [{ id: 'Connections', label: 'Retinue MCP' }, { id: 'Secrets', label: 'Secrets' }] },
+    { label: 'Integrations', icon: Cable, pages: [{ id: 'Connections', label: 'Retinue MCP' }, { id: 'Computer', label: 'Computer' }, { id: 'Secrets', label: 'Secrets' }] },
   ] },
   { label: 'System', tabs: [
     { label: 'System', icon: Wrench, pages: [{ id: 'Updates', label: 'Updates' }, { id: 'Backup', label: 'Backup' }, { id: 'Health', label: 'Health check' }] },
@@ -704,6 +705,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
           {!loading && page === 'Providers' && <ProvidersPage disabled={disabledRuntimes} saving={saving} onChange={async (next) => { setDisabledRuntimes(next); return saveSetting('runtimes.disabled', next) }} />}
           {!loading && page === 'Secrets' && <SecretsPage />}
           {!loading && page === 'Connections' && <ConnectionsPage connected={inDesktop && !!snapshot} />}
+          {!loading && page === 'Computer' && <ComputerPage connected={inDesktop && !!snapshot} />}
 
           {!loading && page === 'Agents' && <>
             <SettingsGroup title="Installed" action={<button type="button" className="ghost-button small" onClick={() => void onRefresh()} disabled={saving || scanStatus.scanning} aria-busy={scanStatus.scanning}><RefreshCw size={13} className={scanStatus.scanning ? 'spinning' : ''} />{scanStatus.scanning ? 'Scanning…' : 'Scan again'}</button>}>

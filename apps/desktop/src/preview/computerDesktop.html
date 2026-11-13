@@ -1,0 +1,17 @@
+<!doctype html>
+<!-- Preview only: stands in for the computer's screen in the browser preview. Not part of the app. -->
+<html><head><meta charset="utf-8"><title>Stand-in desktop</title>
+<style>
+  html, body { height: 100%; margin: 0; font: 13px system-ui, sans-serif; }
+  body { display: grid; grid-template-rows: 1fr 34px; background: linear-gradient(135deg, #d9d9d9, #a9a9ab 55%, #e4e4e4); }
+  main { display: grid; place-items: center; color: #3a3a3d; text-align: center; }
+  footer { display: flex; align-items: center; justify-content: space-between; padding: 0 12px; color: #ddd; background: #1b1b1e; }
+  button { padding: 6px 12px; border: 0; border-radius: 6px; background: #1b1b1e; color: #fff; cursor: pointer; }
+</style></head>
+<body><main><div><p>Stand-in desktop for the preview.</p><button id="b">Click me</button></div></main>
+<footer><span>Files · Browser · Terminal</span><span id="t"></span></footer>
+<script>
+  let n = 0
+  document.getElementById('b').addEventListener('click', (event) => { n += 1; event.target.textContent = `Clicked ${n}` })
+  document.getElementById('t').textContent = new Date().toLocaleTimeString()
+</script></body></html>

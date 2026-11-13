@@ -12,9 +12,10 @@ const brands = {
   'opencode-go': { name: 'OpenCode', mark: 'O', file: 'opencode' },
   'opencode-zen': { name: 'OpenCode', mark: 'O', file: 'opencode' },
   anthropic: { name: 'Claude Code', mark: 'C', file: 'claude' },
-  cursor: { name: 'Cursor CLI', mark: 'C', file: '' },
-  grok: { name: 'Grok CLI', mark: 'G', file: '' },
-  qwen: { name: 'Qwen Code', mark: 'Q', file: '' },
+  cursor: { name: 'Cursor CLI', mark: 'C', file: 'cursor' },
+  grok: { name: 'Grok CLI', mark: 'G', file: 'grok' },
+  qwen: { name: 'Qwen Code', mark: 'Q', file: 'qwen' },
+  antigravity: { name: 'Antigravity', mark: 'A', file: 'antigravity' },
 } as const
 
 export function providerBrand(provider: string) {
@@ -27,7 +28,7 @@ export function ProviderLogo({ provider, size = 18 }: { provider: string; size?:
   const light = document.documentElement.dataset.theme === 'light'
   const entries = Object.entries(providerAssets)
   const themed = entries.find(([path]) => path.toLowerCase().endsWith(`/providers/${brand.file}-${light ? 'light' : 'dark'}.svg`))?.[1]
-  const entry = themed ?? entries.find(([path]) => path.toLowerCase().endsWith(`/providers/${brand.file}.svg`))?.[1]
+  const entry = themed ?? (brand.file ? entries.find(([path]) => /\.(svg|png|webp)$/.test(path) && path.toLowerCase().replace(/\.(svg|png|webp)$/, '').endsWith(`/providers/${brand.file}`))?.[1] : undefined)
   const style = { width: size, height: size, '--provider-logo-size': `${size}px` } as CSSProperties
   return <span className={`provider-logo${entry ? ' has-image' : ''}`} style={style} aria-hidden="true">{entry ? <img className="provider-logo-image" src={entry} width={size} height={size} alt="" /> : <span>{brand.mark}</span>}</span>
 }

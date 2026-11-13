@@ -7,7 +7,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const h = vi.hoisted(() => ({ rpc: vi.fn() }))
-vi.mock('../tauri', () => ({ rpc: h.rpc, previewMode: false, inDesktop: true }))
+vi.mock('../tauri', () => ({ rpc: h.rpc, previewMode: false, inDesktop: true, listenForDaemonEvents: async () => () => undefined }))
 vi.mock('../remote/useRemote', () => ({ useRemoteStatus: () => ({ available: false, status: null }) }))
 vi.mock('../transport/platform', () => ({ usePlatform: () => ({ editor: true }) }))
 
@@ -203,6 +203,7 @@ describe('rail refresh', () => {
       if (method === 'session.environment') return { projectPath: root, gitRepo: true, branch: 'main', detached: false, host: 'This computer' }
       // The rail also asks which dev servers the conversation started; that read is not the one under test.
       if (method === 'preview.servers') return { servers: [] }
+      if (method === 'computer.status') return { linked: false }
       return new Promise((resolve) => { pending[String(params.sessionId)] = resolve })
     })
     await mount(session({ id: 'slow' }))
@@ -224,7 +225,7 @@ describe('rail refresh', () => {
     expect(repositoryCalls()).toHaveLength(1)
     expect(calls().some(([, params]) => params?.sessionId === 'draft:agent-1')).toBe(false)
     // The workspace, checkpoint, schedule, task and local-server cards read too; nothing writes.
-    expect(new Set(calls().map(([method]) => method))).toEqual(new Set(['session.environment', 'session.repository', 'session.workspace', 'session.checkpoints', 'automation.list', 'task.list', 'preview.servers']))
+    expect(new Set(calls().map(([method]) => method))).toEqual(new Set(['session.environment', 'session.repository', 'session.workspace', 'session.checkpoints', 'automation.list', 'task.list', 'preview.servers', 'computer.status']))
   })
 })
 
