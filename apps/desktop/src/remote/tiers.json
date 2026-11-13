@@ -1598,6 +1598,48 @@
       "params": null
     },
     {
+      "method": "machine.start",
+      "class": "never",
+      "minTier": null,
+      "why": "Starting a conversation on a linked machine is the desktop's own link, made over its gateway; a paired phone must not drive it.",
+      "params": null
+    },
+    {
+      "method": "machine.prompt",
+      "class": "never",
+      "minTier": null,
+      "why": "Sending a message through a linked machine's gateway is the desktop's own link; a paired phone must not drive it.",
+      "params": null
+    },
+    {
+      "method": "machine.steer",
+      "class": "never",
+      "minTier": null,
+      "why": "Steering a turn through a linked machine's gateway is the desktop's own link; a paired phone must not drive it.",
+      "params": null
+    },
+    {
+      "method": "machine.cancel",
+      "class": "never",
+      "minTier": null,
+      "why": "Stopping a turn through a linked machine's gateway is the desktop's own link; a paired phone must not drive it.",
+      "params": null
+    },
+    {
+      "method": "machine.permission.reply",
+      "class": "never",
+      "minTier": null,
+      "why": "Answering an approval through a linked machine's gateway would let a phone approve on a third machine; only the desktop may.",
+      "params": null
+    },
+    {
+      "method": "machine.projects",
+      "class": "never",
+      "minTier": null,
+      "why": "Listing a linked machine's projects is the desktop's own link; a paired phone must not read another machine through this one.",
+      "params": null
+    },
+    {
       "method": "handoff.*",
       "class": "handoff",
       "minTier": "operator",

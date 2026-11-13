@@ -712,3 +712,188 @@ async fn computer_view_forwards_a_websocket_to_the_view_path_with_the_token() {
     assert_eq!(echo.to_text().unwrap(), "drive", "the frame's message reaches the server");
     assert_eq!(seen.lock().unwrap().first().map(String::as_str), Some(format!("Bearer {HARBOR_TOKEN}").as_str()), "the handshake carried the token");
 }
+
+// ---------------------------------------------------------------------------
+// The computer as an employee's workplace (13 November 2026)
+
+/// A fake Harbor whose container starts asleep and stays awake once woken. It
+/// records every request it answers, so a test can count the wakes.
+async fn workplace_harbor(awake: Arc<std::sync::atomic::AtomicBool>, seen: Arc<TestMutex<Vec<String>>>) -> String {
+    fake_harbor(move |method, path, _| {
+        seen.lock().unwrap().push(format!("{method} {path}"));
+        if path.ends_with("/action/wake") {
+            awake.store(true, std::sync::atomic::Ordering::SeqCst);
+            return (200, json!({"ok": true}));
+        }
+        (200, harbor_body(if awake.load(std::sync::atomic::Ordering::SeqCst) { "running" } else { "exited" }, None))
+    })
+    .await
+}
+
+fn wakes_in(seen: &Arc<TestMutex<Vec<String>>>) -> usize {
+    seen.lock().unwrap().iter().filter(|line| line.ends_with("/action/wake")).count()
+}
+
+async fn workplace_agent(st: &AppState, name: &str) -> String {
+    dispatch(st, "agent.create", json!({"name":name,"runtimeId":"rt-test","computerWorkplace":true})).await.unwrap()["agent"]["id"].as_str().unwrap().to_owned()
+}
+
+#[tokio::test]
+async fn computer_workplace_round_trips_and_travels_in_a_backup() {
+    let (st, _) = state();
+    let created = dispatch(&st, "agent.create", json!({"name":"Worker","runtimeId":"rt-test","computerWorkplace":true})).await.unwrap()["agent"].clone();
+    let id = created["id"].as_str().unwrap().to_owned();
+    assert_eq!(created["computerWorkplace"], true, "on create");
+    assert_eq!(dispatch(&st, "agent.get", json!({"agentId":id})).await.unwrap()["agent"]["computerWorkplace"], true, "on get");
+    let listed = dispatch(&st, "agent.list", json!({})).await.unwrap()["agents"].as_array().unwrap().clone();
+    assert_eq!(listed.iter().find(|agent| agent["id"] == json!(id)).map(|agent| agent["computerWorkplace"].clone()), Some(json!(true)), "on list");
+    let snapshot = dispatch(&st, "app.snapshot", json!({})).await.unwrap();
+    assert_eq!(snapshot["agents"][0]["computerWorkplace"], true, "in the snapshot");
+    assert_eq!(dispatch(&st, "agent.update", json!({"agentId":id,"computerWorkplace":false})).await.unwrap()["agent"]["computerWorkplace"], false, "on update");
+    assert_eq!(dispatch(&st, "agent.update", json!({"agentId":id,"computerWorkplace":true})).await.unwrap()["agent"]["computerWorkplace"], true);
+    assert_eq!(dispatch(&st, "agent.create", json!({"name":"Odd","runtimeId":"rt-test","computerWorkplace":"yes"})).await.unwrap_err().1.code, "invalid_argument");
+    for method in ["agent.create", "agent.update"] {
+        let body = if method == "agent.create" { json!({"name":"Bad","runtimeId":"rt-test","computerWorkplace":7}) } else { json!({"agentId":id,"computerWorkplace":7}) };
+        assert_eq!(dispatch(&st, method, body).await.unwrap_err().1.code, "invalid_argument", "{method}");
+    }
+
+    // A backup carries it, and a restore puts it back.
+    let document = dispatch(&st, "backup.export", json!({})).await.unwrap()["document"].clone();
+    let bot = document["contents"]["bots"].as_array().unwrap().iter().find(|bot| bot["name"] == "Worker").unwrap().clone();
+    assert_eq!(bot["computerWorkplace"], true, "the export carries the switch");
+    let (target, _) = state();
+    let preview = dispatch(&target, "backup.preview", json!({"document": document})).await.unwrap();
+    dispatch(&target, "backup.import", json!({"previewId": preview["previewId"], "resolutions": {"default":"rename"}})).await.unwrap();
+    let restored = dispatch(&target, "agent.list", json!({})).await.unwrap()["agents"].as_array().unwrap().clone();
+    assert_eq!(restored.iter().find(|agent| agent["name"] == "Worker").map(|agent| agent["computerWorkplace"].clone()), Some(json!(true)), "the import keeps it");
+
+    // An older backup has no key, and the bot it restores is off.
+    let document = bots_document(vec![bot_entry("e-old", "Older", "codex", false, "ask")]);
+    let preview = dispatch(&target, "backup.preview", json!({"document": document})).await.unwrap();
+    dispatch(&target, "backup.import", json!({"previewId": preview["previewId"], "resolutions": {"default":"rename"}})).await.unwrap();
+    let restored = dispatch(&target, "agent.list", json!({})).await.unwrap()["agents"].as_array().unwrap().clone();
+    assert_eq!(restored.iter().find(|agent| agent["name"] == "Older").map(|agent| agent["computerWorkplace"].clone()), Some(json!(false)), "an older backup leaves it off");
+}
+
+#[tokio::test]
+async fn computer_workplace_instructions_appear_only_when_the_switch_and_the_computer_are_on() {
+    let (st, _) = state();
+    let id = workplace_agent(&st, "Worker").await;
+    let plain = dispatch(&st, "agent.create", json!({"name":"Plain","runtimeId":"rt-test"})).await.unwrap()["agent"]["id"].as_str().unwrap().to_owned();
+    let instructions = |agent: &str| team::runtime_instructions(&st, &st.db.agent_get(agent).unwrap(), &json!({"kind":"main"}), std::path::Path::new("."));
+
+    // Nothing linked: the switch alone does nothing.
+    assert!(!instructions(&id).contains("## Your workplace"));
+    // Linked but switched off: still nothing.
+    link_directly(&st, "https://harbor.example.com", HARBOR_TOKEN, false);
+    assert!(!instructions(&id).contains("## Your workplace"));
+    // Linked and on: the section, and only for the employee with the switch.
+    st.db.computer_link_set_enabled(true).unwrap();
+    let text = instructions(&id);
+    assert!(text.contains("## Your workplace"), "{text}");
+    assert!(text.contains("/config/work/<project>"), "the work folder is named");
+    assert!(text.contains("/config/work/logs"), "the log folder is named");
+    assert!(text.contains("computer_exec"), "the tool is named");
+    assert!(text.contains("computer_create_routine"), "routines are named");
+    assert!(text.contains("report what you did and where the files are"));
+    assert!(!text.contains(HARBOR_TOKEN), "never the token");
+    assert!(!text.contains("harbor.example.com"), "never the address");
+    assert!(text.len() < 9_000, "a short section, not a page: {}", text.len());
+    assert!(!instructions(&plain).contains("## Your workplace"), "a bot without the switch gets what it got before");
+
+    // The computer's own name is used once a status read has told us it.
+    let awake = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let seen = Arc::new(TestMutex::new(Vec::new()));
+    let address = workplace_harbor(awake, seen).await;
+    link_directly(&st, &format!("http://{address}"), HARBOR_TOKEN, true);
+    dispatch(&st, "computer.status", json!({})).await.unwrap();
+    assert!(instructions(&id).contains("harbor-bot-retinue-01"), "named from its status");
+}
+
+#[tokio::test]
+async fn computer_workplace_wakes_a_sleeping_computer_once_before_the_first_turn() {
+    let awake = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let seen = Arc::new(TestMutex::new(Vec::new()));
+    let address = workplace_harbor(awake.clone(), seen.clone()).await;
+    let (st, _) = state();
+    let id = workplace_agent(&st, "Worker").await;
+    st.db.create_session_for_agent("work-session", "rt-test", "codex", ".", "Work", Some(&id)).unwrap();
+    st.db.update_session_state("work-session", "idle").unwrap();
+    link_directly(&st, &format!("http://{address}"), HARBOR_TOKEN, true);
+
+    computer::before_first_turn(&st, "work-session").await;
+    assert_eq!(wakes_in(&seen), 1, "the first turn wakes a sleeping computer");
+    assert!(awake.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(seen.lock().unwrap().iter().all(|line| !line.contains(HARBOR_TOKEN)), "no request line carries the token");
+
+    // Later turns never wake it again, and never even read the computer.
+    computer::before_first_turn(&st, "work-session").await;
+    computer::before_first_turn(&st, "work-session").await;
+    assert_eq!(wakes_in(&seen), 1);
+}
+
+#[tokio::test]
+async fn computer_workplace_leaves_an_awake_a_refused_a_slow_and_an_unlinked_computer_alone() {
+    // Awake: no wake at all.
+    let awake = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let seen = Arc::new(TestMutex::new(Vec::new()));
+    let address = workplace_harbor(awake, seen.clone()).await;
+    let (st, _) = state();
+    let id = workplace_agent(&st, "Worker").await;
+    st.db.create_session_for_agent("awake-session", "rt-test", "codex", ".", "Awake", Some(&id)).unwrap();
+    st.db.update_session_state("awake-session", "idle").unwrap();
+    link_directly(&st, &format!("http://{address}"), HARBOR_TOKEN, true);
+    computer::before_first_turn(&st, "awake-session").await;
+    assert_eq!(wakes_in(&seen), 0, "an awake computer is not woken");
+    assert!(seen.lock().unwrap().iter().any(|line| line.ends_with("/harbor/api/computer")), "it was read once");
+
+    // Switched off, and unlinked: nothing is asked of the server.
+    let seen = Arc::new(TestMutex::new(Vec::new()));
+    let address = workplace_harbor(Arc::new(std::sync::atomic::AtomicBool::new(false)), seen.clone()).await;
+    link_directly(&st, &format!("http://{address}"), HARBOR_TOKEN, false);
+    st.db.create_session_for_agent("off-session", "rt-test", "codex", ".", "Off", Some(&id)).unwrap();
+    computer::before_first_turn(&st, "off-session").await;
+    assert!(seen.lock().unwrap().is_empty(), "a switched-off computer is not contacted");
+    dispatch(&st, "computer.unlink", json!({})).await.unwrap();
+    st.db.create_session_for_agent("gone-session", "rt-test", "codex", ".", "Gone", Some(&id)).unwrap();
+    computer::before_first_turn(&st, "gone-session").await;
+    assert!(seen.lock().unwrap().is_empty());
+
+    // A bot without the switch never asks at all.
+    let seen = Arc::new(TestMutex::new(Vec::new()));
+    let address = workplace_harbor(Arc::new(std::sync::atomic::AtomicBool::new(false)), seen.clone()).await;
+    link_directly(&st, &format!("http://{address}"), HARBOR_TOKEN, true);
+    let plain = dispatch(&st, "agent.create", json!({"name":"Plain","runtimeId":"rt-test"})).await.unwrap()["agent"]["id"].as_str().unwrap().to_owned();
+    st.db.create_session_for_agent("plain-session", "rt-test", "codex", ".", "Plain", Some(&plain)).unwrap();
+    computer::before_first_turn(&st, "plain-session").await;
+    assert!(seen.lock().unwrap().is_empty(), "the switch is what asks for it");
+
+    // A refused wake: one attempt, and the turn carries on.
+    let seen = Arc::new(TestMutex::new(Vec::new()));
+    let refusing = fake_harbor({
+        let seen = seen.clone();
+        move |method, path, _| {
+            seen.lock().unwrap().push(format!("{method} {path}"));
+            if path.ends_with("/action/wake") { return (401, json!({"error": {"message": "no"}})); }
+            (200, harbor_body("exited", None))
+        }
+    })
+    .await;
+    link_directly(&st, &format!("http://{refusing}"), HARBOR_TOKEN, true);
+    st.db.create_session_for_agent("refused-session", "rt-test", "codex", ".", "Refused", Some(&id)).unwrap();
+    computer::before_first_turn(&st, "refused-session").await;
+    assert_eq!(wakes_in(&seen), 1, "one attempt, then the turn goes on");
+
+    // A server that never answers cannot hold the turn for longer than the budget.
+    let silent = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let silent_address = format!("127.0.0.1:{}", silent.local_addr().unwrap().port());
+    tokio::spawn(async move {
+        let mut held = Vec::new();
+        while let Ok((stream, _)) = silent.accept().await { held.push(stream); }
+    });
+    link_directly(&st, &format!("http://{silent_address}"), HARBOR_TOKEN, true);
+    st.db.create_session_for_agent("slow-session", "rt-test", "codex", ".", "Slow", Some(&id)).unwrap();
+    let started = std::time::Instant::now();
+    computer::before_first_turn_within(&st, "slow-session", std::time::Duration::from_millis(200)).await;
+    assert!(started.elapsed() < std::time::Duration::from_secs(5), "the budget ends the wait: {:?}", started.elapsed());
+}

@@ -994,6 +994,87 @@ pub async fn forget_link(st: &AppState) {
 }
 
 // ---------------------------------------------------------------------------
+// The computer as an employee's workplace
+//
+// An employee with `computerWorkplace` on works on the owner's computer rather
+// than only reaching for it now and then: its conversations carry a short
+// section saying so, and a sleeping computer is woken before the conversation's
+// first turn. The switch alone does nothing; the computer must be linked and
+// switched on, and the tools keep the same gates as every other conversation
+// (`call_tool`): the conversation's approval, and the unattended refusal.
+
+/// How long a conversation's first turn may spend waking the computer. The
+/// prompt goes out either way when it runs out.
+const WAKE_BUDGET: Duration = Duration::from_secs(20);
+
+/// Whether this employee treats the computer as its workplace: its own switch.
+pub(crate) fn workplace_on(agent: &Value) -> bool {
+    agent["computerWorkplace"].as_bool() == Some(true)
+}
+
+/// The instructions section for a workplace employee, or `None` when the switch
+/// is off or no computer is linked and switched on. Names the computer when a
+/// status read has already told us its name; never its address or its token.
+pub(crate) fn workplace_instructions(st: &AppState, agent: &Value) -> Option<String> {
+    if !workplace_on(agent) { return None; }
+    enabled_link(st)?;
+    let opening = match last_name(st) {
+        Some(name) => format!("The owner's computer, {name}, is your workplace, not a tool you may get around to using."),
+        None => "The owner's computer is your workplace, not a tool you may get around to using.".to_owned(),
+    };
+    Some([
+        "## Your workplace",
+        &opening,
+        "Clone repositories, build, run and test projects there under /config/work/<project>, using computer_exec from your vps-computer tools.",
+        "Start anything that runs longer than a few minutes (a server, a long build, a watcher) in the background, with its output in a log file under /config/work/logs, then read that log to check it.",
+        "Use computer_create_routine for anything on a schedule.",
+        "When you finish, report what you did and where the files are.",
+        "Use this machine's own folder only for what the owner asked to be here.",
+    ].join("\n"))
+}
+
+/// Wakes a sleeping computer before `sid`'s first turn. One attempt per
+/// conversation, inside its budget, and never a reason to stop the turn. One
+/// content-free line says what happened; nothing here names the conversation,
+/// the address or the token.
+pub(crate) async fn before_first_turn(st: &AppState, sid: &str) {
+    before_first_turn_within(st, sid, WAKE_BUDGET).await
+}
+
+/// The same, with the budget named: the tests use a short one to prove an
+/// unanswered server cannot hold a turn.
+pub(crate) async fn before_first_turn_within(st: &AppState, sid: &str, budget: Duration) {
+    let Ok(brief) = st.db.session_brief(sid) else { return };
+    let Some(agent) = brief["agentId"].as_str().and_then(|id| st.db.agent_get(id).ok()) else { return };
+    if !workplace_on(&agent) { return; }
+    // The claim is taken even when there is nothing to wake, so a conversation
+    // wakes its computer once and never on a later turn.
+    if !st.db.session_take_computer_wake(sid).unwrap_or(false) { return; }
+    let Some(link) = enabled_link(st) else { return };
+    match tokio::time::timeout(budget, wake_if_asleep(st, &link)).await {
+        // Statements, not expressions: the daemon's log scan reads a call site up
+        // to its `);`, and prose about the token must never fall inside it.
+        Ok(Ok(true)) => { tracing::info!("computer workplace: woke the computer before its first turn"); }
+        Ok(Ok(false)) => { tracing::debug!("computer workplace: nothing to wake"); }
+        _ => { tracing::debug!("computer workplace: the wake did not finish, so the turn carried on"); }
+    }
+}
+
+/// `true` when it asked Harbor to wake the computer. An unreachable server, a
+/// refused token or a sleeping state that cannot be read are all `Err`, which
+/// the caller ignores: the turn carries on.
+async fn wake_if_asleep(st: &AppState, link: &ComputerLink) -> Result<bool, ()> {
+    if read_status(st).await["state"] != "asleep" { return Ok(false); }
+    let harbor = Harbor { address: link.address.clone(), token: token_of(link).map_err(|_| ())? };
+    harbor.call(reqwest::Method::POST, "/action/wake", Some(json!({})), ACTION_TIMEOUT).await.map_err(|_| ())?;
+    // The same forced announcement `computer.action wake` makes; a wake may still
+    // be starting when the status is read.
+    let status = read_status(st).await;
+    publish(st, status, true).await;
+    Ok(true)
+}
+
+// ---------------------------------------------------------------------------
 // The screen: HTTP and WebSocket proxying under a ticket
 
 /// The two routes the framed screen uses. A frame cannot send the daemon's

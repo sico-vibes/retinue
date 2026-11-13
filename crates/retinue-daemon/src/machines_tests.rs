@@ -1238,4 +1238,264 @@ async fn a_lowered_tier_reaches_the_link() {
     tier_follows("operator", "viewer").await;
 }
 
+// ---------------------------------------------------------------------------
+// Working on the other machine
+
+const FAR_ID: &str = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+const FAR_TOKEN: &str = "far-machine-token-0123456789";
+
+fn ok_body(result: Value) -> String {
+    json!({"ok": true, "id": "reply", "result": result}).to_string()
+}
+
+/// A gateway that answers the reads this machine makes after a write as the far side would, and
+/// hands every other call to `rpc`.
+fn far_gateway<R>(rpc: R) -> impl Fn(&str) -> Option<String> + Send + Sync
+where
+    R: Fn(&str, &Value) -> String + Send + Sync + 'static,
+{
+    move |request: &str| {
+        if is_ping(request) {
+            return Some(http("200 OK", &[], PING));
+        }
+        if request.starts_with("GET /api/me ") {
+            return Some(http("200 OK", &[], r#"{"device":{"tier":"chat"}}"#));
+        }
+        if !request.starts_with("POST /api/rpc ") {
+            return Some(http("404 Not Found", &[], "{}"));
+        }
+        let envelope: Value = request.split("\r\n\r\n").nth(1).map(str::trim).and_then(|body| serde_json::from_str(body).ok()).unwrap_or(Value::Null);
+        let method = envelope["method"].as_str().unwrap_or("");
+        let body = match method {
+            "machine.info" => ok_body(json!({"machineId": FAR_ID, "name": "Far", "version": "9.9.9", "handoffVersion": 1})),
+            "agent.list" => ok_body(json!({"agents": [{"id": "far-bot", "name": "Far bot"}]})),
+            "session.list" => ok_body(json!({"sessions": []})),
+            other => rpc(other, &envelope),
+        };
+        Some(http("200 OK", &[], &body))
+    }
+}
+
+/// A link straight into the table: pairing is covered elsewhere, and these tests are about what is
+/// sent and refused.
+async fn linked_to(st: &AppState, server: &RawServer, tier: &str) {
+    st.db
+        .machine_link_upsert(&json!({
+            "id": FAR_ID, "name": "Far", "url": server.url(), "auth": "password", "fingerprint": server.fingerprint(),
+            "tier": tier, "pairedAt": "2026-11-13T00:00:00.000Z", "lastSeenAt": "2026-11-13T00:00:00.000Z", "state": "online"
+        }))
+        .unwrap();
+    client::write_token(st, FAR_ID, FAR_TOKEN).await.unwrap();
+}
+
+/// The `(method, params)` pairs a gateway was sent, in order, after the first `skip`.
+fn rpc_calls(server: &RawServer, skip: usize) -> Vec<(String, Value)> {
+    server
+        .seen()
+        .iter()
+        .filter(|request| request.starts_with("POST /api/rpc "))
+        .filter_map(|request| serde_json::from_str::<Value>(request.split("\r\n\r\n").nth(1)?.trim()).ok())
+        .skip(skip)
+        .map(|envelope| (envelope["method"].as_str().unwrap_or("").to_string(), envelope["params"].clone()))
+        .collect()
+}
+
+/// The far side a call went to, as `calls[skip]`.
+fn sent(server: &RawServer, skip: usize) -> (String, Value) {
+    rpc_calls(server, skip).into_iter().next().unwrap_or_else(|| panic!("nothing was sent after call {skip}"))
+}
+
+#[tokio::test]
+async fn the_new_calls_go_to_the_far_side_with_this_links_own_token() {
+    let server = raw_server(far_gateway(|method, _| match method {
+        "agent.conversation.create" => ok_body(json!({"session": {"id": "far-new", "agentId": "far-bot"}})),
+        "project.list" => ok_body(json!({"projects": [{"id": "p1", "name": "Far project"}]})),
+        "session.steer" => ok_body(json!({"steered": true, "turnId": "t1"})),
+        "session.cancel" => ok_body(json!({"cancelled": true})),
+        "permission.reply" => ok_body(json!({"answered": true})),
+        _ => ok_body(json!({"accepted": true, "state": "starting"})),
+    }))
+    .await;
+    let (me, dir) = local("send-me");
+    linked_to(&me, &server, "chat").await;
+
+    // `machine.start` names the conversation the far side made, and the machine it runs on.
+    let started = dispatch(&me, "machine.start", json!({"machineId": FAR_ID, "agentId": "far-bot", "title": "From the laptop"})).await.unwrap();
+    assert_eq!(started, json!({"sessionId": "far-new", "machineId": FAR_ID}));
+    assert_eq!(sent(&server, 0), ("agent.conversation.create".to_string(), json!({"agentId": "far-bot", "title": "From the laptop"})));
+
+    // Each write forwards the far side's own call with the caller's parameters, no `machineId`.
+    for (method, params, far, far_params) in [
+        (
+            "machine.prompt",
+            json!({"machineId": FAR_ID, "sessionId": "far-s1", "text": "Go on", "delivery": "queue"}),
+            "session.prompt",
+            json!({"sessionId": "far-s1", "text": "Go on", "delivery": "queue"}),
+        ),
+        ("machine.steer", json!({"machineId": FAR_ID, "sessionId": "far-s1", "text": "Faster"}), "session.steer", json!({"sessionId": "far-s1", "text": "Faster"})),
+        ("machine.cancel", json!({"machineId": FAR_ID, "sessionId": "far-s1"}), "session.cancel", json!({"sessionId": "far-s1"})),
+        ("machine.projects", json!({"machineId": FAR_ID}), "project.list", json!({})),
+    ] {
+        let before = rpc_calls(&server, 0).len();
+        let answer = dispatch(&me, method, params).await.unwrap_or_else(|error| panic!("{method}: {:?}", error.1));
+        assert_eq!(sent(&server, before), (far.to_string(), far_params), "{method}");
+        if method == "machine.prompt" {
+            assert_eq!(answer, json!({"accepted": true, "state": "starting"}));
+        }
+        if method == "machine.projects" {
+            assert_eq!(answer["projects"][0]["id"], "p1");
+        }
+    }
+    // A permission answer is the far side's `approve` class, so it needs operator here.
+    me.db.machine_link_set_tier(FAR_ID, "operator").unwrap();
+    let before = rpc_calls(&server, 0).len();
+    dispatch(&me, "machine.permission.reply", json!({"machineId": FAR_ID, "permissionId": "p1", "choice": "allow"})).await.unwrap();
+    let (far, params) = sent(&server, before);
+    assert_eq!(far, "permission.reply");
+    assert_eq!(params, json!({"permissionId": "p1", "choice": "allow"}));
+
+    // Every request carried this link's own token as its cookie, and nothing named a machine id.
+    for request in server.seen() {
+        assert!(request.contains(&format!("{DEVICE_COOKIE}={FAR_TOKEN}")), "a request went without the token: {request}");
+        assert!(!request.contains("machineId"), "a machine id reached the far side");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn a_link_below_the_methods_tier_is_refused_before_anything_is_sent() {
+    let server = raw_server(far_gateway(|method, _| match method {
+        "project.list" => ok_body(json!({"projects": [{"id": "p1", "name": "Far project"}]})),
+        _ => ok_body(json!({"ok": true})),
+    }))
+    .await;
+    let (me, dir) = local("tier-me");
+    linked_to(&me, &server, "viewer").await;
+    for (method, params, needed) in [
+        ("machine.start", json!({"machineId": FAR_ID, "agentId": "far-bot"}), "Chat"),
+        ("machine.prompt", json!({"machineId": FAR_ID, "sessionId": "s", "text": "hi"}), "Chat"),
+        ("machine.steer", json!({"machineId": FAR_ID, "sessionId": "s", "text": "hi"}), "Chat"),
+        ("machine.cancel", json!({"machineId": FAR_ID, "sessionId": "s"}), "Chat"),
+        ("machine.permission.reply", json!({"machineId": FAR_ID, "permissionId": "p", "choice": "allow"}), "Operator"),
+    ] {
+        let refused = dispatch(&me, method, params).await.unwrap_err();
+        assert_eq!(refused.1.code, "tier_required", "{method}");
+        let message = &refused.1.message;
+        assert!(
+            message.contains(&format!("needs {needed} there")) && message.contains("linked as Viewer") && message.contains("Far's Remote settings"),
+            "{method}: {message}"
+        );
+    }
+    assert!(rpc_calls(&server, 0).is_empty(), "nothing was sent, so nothing ran there");
+    // A viewer may list the far side's projects: that is the far side's own class for it.
+    let projects = dispatch(&me, "machine.projects", json!({"machineId": FAR_ID})).await.unwrap();
+    assert_eq!(projects["projects"][0]["id"], "p1");
+    // At chat a permission answer still needs operator.
+    me.db.machine_link_set_tier(FAR_ID, "chat").unwrap();
+    let refused = dispatch(&me, "machine.permission.reply", json!({"machineId": FAR_ID, "permissionId": "p", "choice": "allow"})).await.unwrap_err();
+    assert_eq!(refused.1.code, "tier_required");
+    assert!(refused.1.message.contains("Operator") && refused.1.message.contains("linked as Chat"), "{}", refused.1.message);
+    // A raised tier unlocks it, and the far side then has the last word.
+    me.db.machine_link_set_tier(FAR_ID, "operator").unwrap();
+    dispatch(&me, "machine.permission.reply", json!({"machineId": FAR_ID, "permissionId": "p", "choice": "allow"})).await.unwrap();
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn an_away_or_revoked_link_is_refused_with_the_sentence_a_read_gives() {
+    let server = raw_server(far_gateway(|_, _| ok_body(json!({"ok": true})))).await;
+    let (me, dir) = local("away-link-me");
+    linked_to(&me, &server, "chat").await;
+    for state in ["offline", "revoked"] {
+        me.db.machine_link_set_state(FAR_ID, state, false).unwrap();
+        let expected = if state == "revoked" { "Far removed this computer's pairing. Pair it again." } else { "Far can't be reached right now." };
+        for method in ["machine.start", "machine.prompt", "machine.steer", "machine.cancel", "machine.permission.reply", "machine.projects"] {
+            let params = json!({"machineId": FAR_ID, "agentId": "far-bot", "sessionId": "s", "text": "hi", "permissionId": "p", "choice": "allow"});
+            let refused = dispatch(&me, method, params).await.unwrap_err();
+            assert_eq!(refused.1.code, "provider_unavailable", "{method} while {state}");
+            assert_eq!(refused.1.message, expected, "{method} while {state}");
+        }
+    }
+    assert!(rpc_calls(&server, 0).is_empty(), "an away machine is not asked");
+    // An unknown machine is still its own error.
+    assert_eq!(dispatch(&me, "machine.prompt", json!({"machineId": "nobody", "sessionId": "s", "text": "hi"})).await.unwrap_err().1.code, "not_found");
+    assert_eq!(dispatch(&me, "machine.prompt", json!({"sessionId": "s", "text": "hi"})).await.unwrap_err().1.code, "invalid_argument");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn a_conversation_that_moved_elsewhere_is_refused_here() {
+    let server = raw_server(far_gateway(|_, _| ok_body(json!({"accepted": true})))).await;
+    let (me, dir) = local("moved-call-me");
+    linked_to(&me, &server, "chat").await;
+    let bot = add_bot(&me, "Local");
+    me.db.create_session_for_agent("moved-away", "rt-test", "codex", ".", "Moved", Some(&bot)).unwrap();
+    me.db.set_session_link("moved-away", &json!({"movedTo": {"machineId": "someone-else", "name": "Desk", "at": "2026-11-13T00:00:00.000Z"}})).unwrap();
+    for method in ["machine.prompt", "machine.steer", "machine.cancel"] {
+        let refused = dispatch(&me, method, json!({"machineId": FAR_ID, "sessionId": "moved-away", "text": "hi"})).await.unwrap_err();
+        assert_eq!(refused.1.code, "conflict", "{method}");
+        assert_eq!(refused.1.message, "This conversation moved to Desk. Take it over to continue.", "{method}");
+    }
+    assert!(rpc_calls(&server, 0).is_empty(), "nothing ran anywhere");
+    // Moved to the machine being asked: that machine is where it runs, so the call goes.
+    me.db.set_session_link("moved-away", &json!({"movedTo": {"machineId": FAR_ID, "name": "Far"}})).unwrap();
+    dispatch(&me, "machine.prompt", json!({"machineId": FAR_ID, "sessionId": "moved-away", "text": "hi"})).await.unwrap();
+    assert_eq!(sent(&server, 0).0, "session.prompt");
+    // A live lease means it is moving right now: nobody runs it.
+    me.machines.handoff.begin("moved-away", FAR_ID, "Far");
+    let refused = dispatch(&me, "machine.prompt", json!({"machineId": FAR_ID, "sessionId": "moved-away", "text": "again"})).await.unwrap_err();
+    assert_eq!(refused.1.code, "conflict");
+    assert_eq!(refused.1.message, "This conversation is moving to Far.");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn the_far_sides_own_refusal_reaches_the_caller_as_a_plain_message() {
+    let server = raw_server(far_gateway(|method, _| match method {
+        "session.prompt" => json!({"ok": false, "id": "reply", "error": {"code": "tier_required", "message": "a chat device cannot call session.prompt"}}).to_string(),
+        "permission.reply" => json!({"ok": false, "id": "reply", "error": {"code": "approvals_disabled", "message": "approvals from remote are turned off on this host"}}).to_string(),
+        "project.list" => json!({"ok": false, "id": "reply", "error": {"code": "not_found", "message": "unknown method"}}).to_string(),
+        _ => ok_body(json!({"ok": true})),
+    }))
+    .await;
+    let (me, dir) = local("far-refusal-me");
+    linked_to(&me, &server, "operator").await;
+    let refused = dispatch(&me, "machine.prompt", json!({"machineId": FAR_ID, "sessionId": "s", "text": "hi"})).await.unwrap_err();
+    assert_eq!(refused.1.code, "tier_required");
+    assert_eq!(refused.1.message, "a chat device cannot call session.prompt");
+    let refused = dispatch(&me, "machine.permission.reply", json!({"machineId": FAR_ID, "permissionId": "p", "choice": "allow"})).await.unwrap_err();
+    assert_eq!(refused.1.code, "approvals_disabled");
+    assert_eq!(refused.1.message, "approvals from remote are turned off on this host");
+    let refused = dispatch(&me, "machine.projects", json!({"machineId": FAR_ID})).await.unwrap_err();
+    assert_eq!(refused.1.code, "not_found");
+    assert_eq!(refused.1.message, "unknown method");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn starting_on_the_other_machine_names_it_and_the_next_read_shows_it() {
+    let other = host("start-host").await;
+    let runtime = json!({"id": "rt-test", "provider": "codex", "status": "online", "executablePath": "unused-test-runtime", "launchArgs": []});
+    other.st.db.upsert_runtime(&runtime).unwrap();
+    *other.st.runtimes.write().await = vec![runtime];
+    let bot = add_bot(&other.st, "Rae");
+    let (me, dir) = local("start-me");
+    link_native(&me, &other, "chat").await;
+    let other_id = host_id(&other);
+    machines::refresh_one(&me, &other_id).await.unwrap();
+    assert_eq!(dispatch(&me, "machine.list", json!({})).await.unwrap()["machines"][0]["bots"][0]["conversations"], 0);
+
+    let started = dispatch(&me, "machine.start", json!({"machineId": other_id, "agentId": bot})).await.unwrap();
+    assert_eq!(started["machineId"], json!(other_id));
+    let session_id = started["sessionId"].as_str().expect("a conversation id").to_string();
+    // It is that machine's conversation; this one holds none of it.
+    assert_eq!(other.st.db.session_brief(&session_id).unwrap()["agentId"], json!(bot));
+    assert!(me.db.session_list(true).unwrap().is_empty());
+    // The write refreshed this machine's snapshot, so the next read shows it without waiting 20 s.
+    let after = dispatch(&me, "machine.list", json!({})).await.unwrap();
+    assert_eq!(after["machines"][0]["bots"][0]["conversations"], 1, "{after}");
+    assert_eq!(after["machines"][0]["state"], "online");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 include!("handoff_tests.rs");

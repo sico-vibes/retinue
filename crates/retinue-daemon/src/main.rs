@@ -1904,7 +1904,13 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         | "machine.remove"
         | "machine.refresh"
         | "machine.conversations"
-        | "machine.conversation" => machines::rpc(st, method, &p).await,
+        | "machine.conversation"
+        | "machine.start"
+        | "machine.prompt"
+        | "machine.steer"
+        | "machine.cancel"
+        | "machine.permission.reply"
+        | "machine.projects" => machines::rpc(st, method, &p).await,
         "machine.takeOver.preview"
         | "machine.takeOver"
         | "machine.takeOver.list"
@@ -4495,6 +4501,9 @@ async fn run_turn(state: AppState, driver: TurnDriver) {
         project_setup::Setup::Cancelled => { finish_turn_cancelled(st, &sid, &turn).await; return; }
         project_setup::Setup::Proceed(sentence) => sentence.map(|sentence| format!("{sentence}\n\n")).unwrap_or_default(),
     };
+    // A workplace employee's computer is woken before its first turn; it never
+    // stops the turn, and nothing happens for a bot without the switch.
+    computer::before_first_turn(st, &sid).await;
     // 1. Activate the provider (resume a saved session, or start fresh).
     if let Err(error) = activate_session(st, &sid, Owner::Turn(turn.clone())).await {
         finish_activation_failure(st, &sid, &turn, &error).await;

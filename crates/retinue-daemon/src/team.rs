@@ -524,6 +524,12 @@ pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, works
         lines.push(String::new());
         lines.push("This conversation is a scheduled run that nobody is watching live. If the check found nothing worth the user's attention, reply exactly `(pass)`.".into());
     }
+    // 13 November 2026: an employee who works on the owner's computer is told so
+    // here, beside the rest of its context, not left to find the tools itself.
+    if let Some(workplace) = crate::computer::workplace_instructions(st, agent) {
+        lines.push(String::new());
+        lines.push(workplace);
+    }
     // The employee's personality is the last block, under its own heading, so
     // the lines above never read as part of it. The CEO has none unless the
     // owner gave it one.

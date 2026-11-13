@@ -226,6 +226,7 @@ pub(crate) fn export_bot(agent: &Value, runtimes: &[Value]) -> Value {
         "serviceTier": agent["serviceTier"],
         "approvalMode": agent["approvalMode"],
         "notificationLevel": agent["notificationLevel"],
+        "computerWorkplace": agent["computerWorkplace"],
         "leader": agent["leader"],
         "hidden": agent["hidden"],
         "maxConcurrency": agent["maxConcurrency"],
@@ -724,6 +725,8 @@ async fn import(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
             "serviceTier": bot["serviceTier"],
             "approvalMode": approval,
             "notificationLevel": bot["notificationLevel"],
+            // An older backup has none, and anything but true is off.
+            "computerWorkplace": bot["computerWorkplace"].as_bool() == Some(true),
             "leader": leader,
             "hidden": bot["hidden"].as_bool().unwrap_or(false),
             "maxConcurrency": bot["maxConcurrency"].as_i64().filter(|count| (1..=50).contains(count)).unwrap_or(1),

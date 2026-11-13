@@ -453,7 +453,7 @@ pub(crate) fn failure(st: &AppState, machine_id: &str, error: ClientError) -> Di
             let status = match code.as_str() {
                 "not_found" => StatusCode::NOT_FOUND,
                 "invalid_argument" | "invalid_params" => StatusCode::BAD_REQUEST,
-                "forbidden_remote" | "forbidden" => StatusCode::FORBIDDEN,
+                "forbidden_remote" | "forbidden" | "tier_required" | "approvals_disabled" | "quiet_hours" => StatusCode::FORBIDDEN,
                 _ => StatusCode::BAD_GATEWAY,
             };
             derr(&code, &message, status)
@@ -473,6 +473,107 @@ pub(crate) fn failure(st: &AppState, machine_id: &str, error: ClientError) -> Di
 async fn read_through(st: &AppState, machine_id: &str, method: &str, params: Value) -> Result<Value, DispatchError> {
     link_or_missing(st, machine_id)?;
     client::rpc(st, machine_id, method, params).await.map_err(|error| failure(st, machine_id, error))
+}
+
+// ---------------------------------------------------------------------------
+// Working on the other machine
+
+/// The name the window shows for a link, and the one the refusal sentences use.
+fn link_name(link: &Value) -> String {
+    link["name"].as_str().map(str::to_string).unwrap_or_else(|| "That machine".to_string())
+}
+
+/// A link's tier, as a number. The three names are the gateway's own
+/// (`apps/desktop/src/remote/tiers.json`); anything else ranks below all of them.
+fn tier_rank(tier: &str) -> i8 {
+    match tier {
+        "viewer" => 0,
+        "chat" => 1,
+        "operator" => 2,
+        _ => -1,
+    }
+}
+
+fn tier_label(tier: &str) -> String {
+    match tier {
+        "viewer" => "Viewer".to_string(),
+        "chat" => "Chat".to_string(),
+        "operator" => "Operator".to_string(),
+        other => other.to_string(),
+    }
+}
+
+/// An away machine gives the same sentence a read gives. A revoked one says how
+/// to fix it, and is not asked again.
+fn require_online(link: &Value) -> Result<(), DispatchError> {
+    let name = link_name(link);
+    match link["state"].as_str() {
+        Some("online") => Ok(()),
+        Some("revoked") => Err(derr(
+            "provider_unavailable",
+            &format!("{name} removed this computer's pairing. Pair it again."),
+            StatusCode::SERVICE_UNAVAILABLE,
+        )),
+        _ => Err(derr("provider_unavailable", &unreachable_detail(&name), StatusCode::SERVICE_UNAVAILABLE)),
+    }
+}
+
+/// The one tier check: `needed` is the far side's own class for the method, so a
+/// refusal here is the one its gateway would give, only sooner and without a
+/// request. The gateway stays the authority.
+fn require_tier(link: &Value, needed: &str, action: &str) -> Result<(), DispatchError> {
+    let tier = link["tier"].as_str().unwrap_or("viewer");
+    if tier_rank(tier) >= tier_rank(needed) {
+        return Ok(());
+    }
+    let name = link_name(link);
+    let message = format!(
+        "{action} on {name} needs {} there, and this computer is linked as {}. Change this computer's tier in {name}'s Remote settings.",
+        tier_label(needed),
+        tier_label(tier)
+    );
+    Err(derr("tier_required", &message, StatusCode::FORBIDDEN))
+}
+
+/// The far side's own parameters: everything the caller sent except the machine
+/// it is meant for. The gateway validates them exactly as it does a phone's.
+fn far_params(p: &Value) -> Value {
+    match p.as_object() {
+        Some(fields) => Value::Object(fields.iter().filter(|(key, _)| key.as_str() != "machineId").map(|(key, value)| (key.clone(), value.clone())).collect()),
+        None => Value::Object(Default::default()),
+    }
+}
+
+/// One call to another machine's gateway, after the checks that give a plain
+/// message before a request is made.
+async fn call_through(st: &AppState, p: &Value, method: &str, needed: &str, action: &str) -> Result<Value, DispatchError> {
+    let machine = id_param(p, "machineId")?;
+    let link = link_or_missing(st, machine)?;
+    require_online(&link)?;
+    require_tier(&link, needed, action)?;
+    client::rpc(st, machine, method, far_params(p)).await.map_err(|error| failure(st, machine, error))
+}
+
+/// A call that changes the other machine. The next read here shows it: the 20 s
+/// loop would otherwise hide a just-started or just-busy conversation for that
+/// long.
+async fn write_through(st: &AppState, p: &Value, method: &str, needed: &str, action: &str) -> Result<Value, DispatchError> {
+    let answer = call_through(st, p, method, needed, action).await?;
+    if let Ok(machine) = id_param(p, "machineId") {
+        refresh_one(st, machine).await;
+    }
+    Ok(answer)
+}
+
+/// [`refuse_if_moved`] for a call that goes to `machine_id`: a conversation this
+/// machine recorded as moved to the very machine being asked is that machine's
+/// to run, so only a move elsewhere, or a live lease, refuses.
+fn refuse_if_moved_elsewhere(st: &AppState, session_id: &str, machine_id: &str) -> Result<(), DispatchError> {
+    let Ok(mut row) = st.db.session_brief(session_id) else { return Ok(()) };
+    if row["link"]["movedTo"]["machineId"].as_str() == Some(machine_id) {
+        row["link"]["movedTo"] = Value::Null;
+    }
+    refuse_if_moved(st, &row)
 }
 
 // ---------------------------------------------------------------------------
@@ -818,6 +919,35 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
             let session = id_param(p, "sessionId")?;
             read_through(st, machine, "session.get", json!({"sessionId": session})).await.map(|session| json!({"session": session}))
         }
+        // Starting and steering work on the other machine: thin pass-throughs to its gateway.
+        "machine.start" => {
+            let machine = id_param(p, "machineId")?;
+            let answer = write_through(st, p, "agent.conversation.create", "chat", "Starting a conversation").await?;
+            let session = answer["session"]["id"].as_str().filter(|id| !id.is_empty()).map(str::to_string).ok_or_else(|| {
+                derr("provider_unavailable", "That machine didn't say which conversation it started. Update Retinue there.", StatusCode::BAD_GATEWAY)
+            })?;
+            Ok(json!({"sessionId": session, "machineId": machine}))
+        }
+        "machine.prompt" => {
+            let machine = id_param(p, "machineId")?;
+            let session = id_param(p, "sessionId")?;
+            refuse_if_moved_elsewhere(st, session, machine)?;
+            write_through(st, p, "session.prompt", "chat", "Sending a message").await
+        }
+        "machine.steer" => {
+            let machine = id_param(p, "machineId")?;
+            let session = id_param(p, "sessionId")?;
+            refuse_if_moved_elsewhere(st, session, machine)?;
+            write_through(st, p, "session.steer", "chat", "Steering a turn").await
+        }
+        "machine.cancel" => {
+            let machine = id_param(p, "machineId")?;
+            let session = id_param(p, "sessionId")?;
+            refuse_if_moved_elsewhere(st, session, machine)?;
+            write_through(st, p, "session.cancel", "chat", "Stopping a turn").await
+        }
+        "machine.permission.reply" => write_through(st, p, "permission.reply", "operator", "Answering an approval").await,
+        "machine.projects" => call_through(st, p, "project.list", "viewer", "Listing the projects").await,
         _ => Err(derr("not_found", "unknown machine method", StatusCode::NOT_FOUND)),
     }
 }

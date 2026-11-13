@@ -21,6 +21,11 @@ pub(super) fn ensure_computer_link_schema(c: &Connection) -> Result<(), StorageE
         linked_at TEXT NOT NULL
     );",
     )?;
+    // An employee's own switch (13 November 2026): the computer is this bot's
+    // workplace, not just an occasional tool. Kept here, beside the link's
+    // schema, so the agent columns other lanes touch stay as they are.
+    let has_workplace: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('agents') WHERE name='computer_workplace')", [], |r| r.get(0))?;
+    if !has_workplace { c.execute("ALTER TABLE agents ADD COLUMN computer_workplace INTEGER NOT NULL DEFAULT 0", [])?; }
     Ok(())
 }
 
@@ -68,11 +73,25 @@ impl Storage {
         c.execute("DELETE FROM computer_link", [])?;
         Ok(())
     }
+
+    /// Takes a conversation's one claim to wake the computer before its first
+    /// turn. True once per conversation, and a restart does not hand it out
+    /// again: the marker lives in the session's own `data`, like `setupPending`,
+    /// and is written in the same statement that tests it.
+    pub fn session_take_computer_wake(&self, id: &str) -> Result<bool, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let changed = c.execute(
+            "UPDATE sessions SET data=json_set(COALESCE(NULLIF(data,''),'{}'),'$.computerWoke',1) WHERE id=?1 AND json_extract(data,'$.computerWoke') IS NULL",
+            [id],
+        )?;
+        Ok(changed > 0)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::{json, Value};
 
     #[test]
     fn a_link_starts_switched_off_replaces_whole_and_clears() {
@@ -93,5 +112,29 @@ mod tests {
         assert_eq!(db.computer_link().unwrap().unwrap().token_ref, "computer/two");
         db.computer_link_clear().unwrap();
         assert_eq!(db.computer_link().unwrap(), None);
+    }
+
+    #[test]
+    fn an_employees_workplace_switch_round_trips_and_its_wake_is_claimed_once() {
+        let db = Storage::open_in_memory().unwrap();
+        db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"})).unwrap();
+        let (worker, _) = db.agent_create(&json!({"name":"Worker","runtimeId":"rt-test","computerWorkplace":true})).unwrap();
+        let id = worker["id"].as_str().unwrap();
+        assert_eq!(worker["computerWorkplace"], true, "returned on create");
+        assert_eq!(db.agent_get(id).unwrap()["computerWorkplace"], true, "returned on read");
+        assert_eq!(db.agent_list(false, None).unwrap()[0]["computerWorkplace"], true, "returned on list");
+        assert_eq!(db.agent_update(id, &json!({"computerWorkplace": false})).unwrap().0["computerWorkplace"], false, "a save turns it off");
+        assert_eq!(db.agent_update(id, &json!({"computerWorkplace": Value::Null})).unwrap().0["computerWorkplace"], false, "null is off");
+        // A bot created without the key is off, and the field is boolean only.
+        assert_eq!(db.agent_create(&json!({"name":"Plain","runtimeId":"rt-test"})).unwrap().0["computerWorkplace"], false);
+        assert!(db.agent_create(&json!({"name":"Odd","runtimeId":"rt-test","computerWorkplace":"yes"})).is_err());
+
+        // The wake is claimed once per conversation, and each conversation has its own.
+        db.create_session("s-wake", "rt-test", "codex", ".", "First").unwrap();
+        db.create_session("s-other", "rt-test", "codex", ".", "Other").unwrap();
+        assert!(db.session_take_computer_wake("s-wake").unwrap(), "the first turn takes the claim");
+        assert!(!db.session_take_computer_wake("s-wake").unwrap(), "a later turn does not");
+        assert!(db.session_take_computer_wake("s-other").unwrap(), "another conversation has its own");
+        assert!(!db.session_take_computer_wake("no-such-session").unwrap());
     }
 }
