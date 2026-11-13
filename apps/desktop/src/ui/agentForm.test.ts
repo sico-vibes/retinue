@@ -95,4 +95,18 @@ describe('agent draft validation', () => {
     expect(createParams(changed, { model: true, thinking: true, serviceTier: false })).toMatchObject({ model: 'other-model', thinking: 'max', approvalMode: 'auto' })
     expect(createParams(changed, { model: true, thinking: true, serviceTier: false })).not.toHaveProperty('serviceTier')
   })
+
+  it('carries the computer workplace switch only when it is on or changed', () => {
+    const baseline = draftFromAgent(agent())
+    expect(baseline.computerWorkplace).toBe(false)
+    expect(draftFromAgent(agent({ computerWorkplace: true })).computerWorkplace).toBe(true)
+    expect(isAgentDirty({ ...baseline, computerWorkplace: true }, baseline)).toBe(true)
+    expect(updateParams('agent-claude', { ...baseline, computerWorkplace: true }, baseline)).toEqual({ agentId: 'agent-claude', computerWorkplace: true })
+    const on = draftFromAgent(agent({ computerWorkplace: true }))
+    expect(updateParams('agent-claude', { ...on, computerWorkplace: false }, on)).toEqual({ agentId: 'agent-claude', computerWorkplace: false })
+    expect(createParams(baseline)).not.toHaveProperty('computerWorkplace')
+    expect(createParams({ ...baseline, computerWorkplace: true })).toMatchObject({ computerWorkplace: true })
+    expect(duplicateParams(agent({ computerWorkplace: true }), 'Copy')).toMatchObject({ computerWorkplace: true })
+    expect(duplicateParams(agent(), 'Copy')).not.toHaveProperty('computerWorkplace')
+  })
 })

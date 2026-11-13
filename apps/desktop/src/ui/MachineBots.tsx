@@ -6,7 +6,7 @@ import { showMainWindow } from '../tauri'
 import { BlobCanvas } from '../blob/BlobCanvas'
 import { agentLook } from '../blob/look'
 import { agentColorHex } from './agentColor'
-import { machineStateWord, type Machine, type MachineBot } from './machines'
+import { canChat, machineStateWord, type Machine, type MachineBot } from './machines'
 import { useEntityNoun } from './vocabulary'
 import './machines.css'
 
@@ -19,7 +19,7 @@ export function MachineBadge({ name }: { name: string }) {
 
 export function MachineBotRow({ machine, bot, selected, onOpen }: { machine: Machine; bot: MachineBot; selected: boolean; onOpen: () => void }) {
   const offline = machine.state !== 'online'
-  return <button type="button" className="machine-bot-row" aria-current={selected ? 'true' : undefined} aria-label={`${bot.name} on ${machine.name}${bot.busy ? ', working' : ''}, read only`} onClick={onOpen}>
+  return <button type="button" className="machine-bot-row" aria-current={selected ? 'true' : undefined} aria-label={`${bot.name} on ${machine.name}${bot.busy ? ', working' : ''}${canChat(machine) ? '' : ', read only'}`} onClick={onOpen}>
     <BlobCanvas decorative color={agentColorHex(bot.color ?? 'mint')} size={20} mini mood={offline ? 'offline' : bot.busy ? 'tool_activity' : 'idle'} look={agentLook(asAgent(bot))} label={bot.name} />
     <span className="machine-bot-copy">
       <strong>{bot.name}</strong>

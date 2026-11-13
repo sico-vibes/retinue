@@ -39,7 +39,7 @@ async function render(element: React.ReactElement) {
 const flush = () => act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 const button = (label: string) => [...document.querySelectorAll('button')].find((item) => item.textContent?.trim() === label || item.getAttribute('aria-label') === label) as HTMLButtonElement
 const click = async (element: Element | null | undefined) => { await act(async () => { (element as HTMLElement).click() }); await flush() }
-const type = async (element: HTMLInputElement, value: string) => {
+const type = async (element: HTMLInputElement | HTMLTextAreaElement, value: string) => {
   const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(element), 'value')!.set!
   await act(async () => { setter.call(element, value); element.dispatchEvent(new Event('input', { bubbles: true })) })
 }
@@ -180,7 +180,7 @@ describe('another machine\'s employees', () => {
     const laptop = machine({ bots: [bot({ busy: true })] })
     await render(<MachineGroups machines={[laptop]} selected={null} onOpen={onOpen} />)
     expect(document.querySelector('section')?.getAttribute('aria-label')).toBe('Work laptop, another machine')
-    const row = button('Rae on Work laptop, working, read only')
+    const row = button('Rae on Work laptop, working')
     expect(row.textContent).toContain('Working')
     await click(row)
     expect(onOpen).toHaveBeenCalledWith(laptop, laptop.bots[0])
@@ -193,29 +193,74 @@ describe('another machine\'s employees', () => {
     expect(button('Rae on Old, read only')).toBeUndefined()
   })
 
-  it('shows a conversation read only, with no composer', async () => {
+  it('shows a conversation read only, with no composer, at the View level', async () => {
     replies({
       'machine.conversations': { conversations: [{ id: 's1', title: 'Fix it' }] },
       'machine.conversation': { session: { id: 's1', state: 'idle', messages: [{ id: 'a', role: 'user', content: 'Why?' }, { id: 'b', role: 'assistant', content: 'Because.' }, { id: 'c', role: 'thinking', content: 'HIDDEN' }] } },
     })
-    await render(<MachineConversation machine={machine()} bot={machine().bots[0]} selfId="me" onClose={vi.fn()} onMoved={vi.fn()} />)
+    const viewer = machine({ tier: 'viewer' })
+    await render(<MachineConversation machine={viewer} bot={viewer.bots[0]} selfId="me" onClose={vi.fn()} onMoved={vi.fn()} />)
     await flush()
     await flush()
     expect(document.body.textContent).toContain('Why?')
     expect(document.body.textContent).toContain('Because.')
     expect(document.body.textContent).not.toContain('HIDDEN')
     expect(document.querySelector('textarea')).toBeNull()
-    expect(button('Take over').disabled).toBe(false)
-  })
-
-  it('takes nothing over at a lower tier', async () => {
-    replies({ 'machine.conversations': { conversations: [{ id: 's1' }] }, 'machine.conversation': { session: { id: 's1', messages: [] } } })
-    const reader = machine({ tier: 'chat' })
-    await render(<MachineConversation machine={reader} bot={reader.bots[0]} selfId="me" onClose={vi.fn()} onMoved={vi.fn()} />)
-    await flush()
-    await flush()
+    expect(button('New conversation')).toBeUndefined()
     expect(button('Take over').disabled).toBe(true)
     expect(document.body.textContent).toContain('the Operator level')
+  })
+
+  it('talks to an employee on another machine at the Chat level, without offering Take over', async () => {
+    replies({ 'machine.conversations': { conversations: [{ id: 's1' }] }, 'machine.conversation': { session: { id: 's1', state: 'idle', messages: [] } }, 'machine.prompt': { ok: true } })
+    const chatter = machine({ tier: 'chat' })
+    await render(<MachineConversation machine={chatter} bot={chatter.bots[0]} selfId="me" onClose={vi.fn()} onMoved={vi.fn()} />)
+    await flush()
+    await flush()
+    expect(button('Take over')).toBeUndefined()
+    const box = document.querySelector('textarea') as HTMLTextAreaElement
+    expect(box.getAttribute('aria-label')).toBe('Message Rae on Work laptop')
+    expect(button('Send').disabled).toBe(true)
+    await type(box, 'Run the tests there.')
+    await click(button('Send'))
+    expect(called('machine.prompt')).toEqual([{ machineId: 'laptop', sessionId: 's1', text: 'Run the tests there.' }])
+    expect(box.value).toBe('')
+  })
+
+  it('steers a running turn and stops it', async () => {
+    replies({ 'machine.conversations': { conversations: [{ id: 's1' }] }, 'machine.conversation': { session: { id: 's1', state: 'working', messages: [] } }, 'machine.steer': { ok: true }, 'machine.cancel': { ok: true } })
+    await render(<MachineConversation machine={machine()} bot={machine().bots[0]} selfId="me" onClose={vi.fn()} onMoved={vi.fn()} />)
+    await flush()
+    await flush()
+    await type(document.querySelector('textarea') as HTMLTextAreaElement, 'Also check the linter.')
+    await click(button('Send now'))
+    expect(called('machine.steer')).toEqual([{ machineId: 'laptop', sessionId: 's1', text: 'Also check the linter.' }])
+    expect(called('machine.prompt')).toEqual([])
+    await click(button('Stop'))
+    expect(called('machine.cancel')).toEqual([{ machineId: 'laptop', sessionId: 's1' }])
+  })
+
+  it('starts a conversation there and opens it', async () => {
+    replies({ 'machine.conversations': { conversations: [] }, 'machine.start': { sessionId: 'new-1', machineId: 'laptop' }, 'machine.conversation': { session: { id: 'new-1', state: 'idle', messages: [] } } })
+    await render(<MachineConversation machine={machine()} bot={machine().bots[0]} selfId="me" onClose={vi.fn()} onMoved={vi.fn()} />)
+    await flush()
+    await click(button('New conversation'))
+    await flush()
+    expect(called('machine.start')).toEqual([{ machineId: 'laptop', agentId: 'rae' }])
+    expect(called('machine.conversation')).toContainEqual({ machineId: 'laptop', sessionId: 'new-1' })
+    expect(document.querySelector('textarea')).toBeTruthy()
+  })
+
+  it('says what the other machine refused, in its own words', async () => {
+    replies({ 'machine.conversations': { conversations: [{ id: 's1' }] }, 'machine.conversation': { session: { id: 's1', state: 'idle', messages: [] } }, 'machine.prompt': new Error('Work laptop is out of Claude usage until 18:00.') })
+    await render(<MachineConversation machine={machine()} bot={machine().bots[0]} selfId="me" onClose={vi.fn()} onMoved={vi.fn()} />)
+    await flush()
+    await flush()
+    const box = document.querySelector('textarea') as HTMLTextAreaElement
+    await type(box, 'Go.')
+    await click(button('Send'))
+    expect(document.querySelector('.machine-composer [role="alert"]')?.textContent).toBe('Work laptop is out of Claude usage until 18:00.')
+    expect(box.value).toBe('Go.')
   })
 })
 

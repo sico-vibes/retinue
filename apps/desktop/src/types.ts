@@ -190,6 +190,8 @@ export interface Agent extends JsonRecord {
   effectiveApprovalMode?: ApprovalMode | null
   /** What this blob may notify about: everything, only what needs the user, or nothing. */
   notificationLevel?: 'all' | 'input' | 'muted' | null
+  /** Works on the linked computer (Harbor) by default: told so in its instructions, and the computer wakes for it. */
+  computerWorkplace?: boolean
   /** Phase 1A: the default project for new conversations (null = none); bots work in every project. */
   projectId?: string | null
   /** Phase 1A: the project of the bot's most recent conversation, the first default for a new one. */

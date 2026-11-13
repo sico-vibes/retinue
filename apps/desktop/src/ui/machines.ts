@@ -117,6 +117,9 @@ export function machineUrlProblem(raw: string): string | null {
 /** Whether this link may press Take over. Reading needs less. */
 export const canTakeOver = (machine: Machine) => machine.state === 'online' && machine.tier === 'operator'
 
+/** Whether this link may start conversations there and send them messages (the other machine's Chat level). */
+export const canChat = (machine: Machine) => machine.state === 'online' && machine.tier !== 'viewer'
+
 export const machineStateWord = (machine: Machine) => machine.state === 'online' ? 'Online' : machine.state === 'revoked' ? 'Needs pairing again' : 'Can\'t be reached'
 
 /** The bot of another machine that's working, with the machine's name, for a badge. */

@@ -437,6 +437,7 @@ let fixturePushOn = false
 let fixtureSelfName = 'Home desktop'
 let fixtureMachineList: Array<Record<string, unknown>> | null = null
 let fixturePairJob: { id: string; url: string; state: string; detail: string | null; machine: { id: string; name: string } | null } | null = null
+const fixtureMachineSent: Record<string, Array<Record<string, unknown>>> = {}
 let fixtureTakeOver: { id: string; state: string; steps: Array<{ id: string; status: string; detail: string | null }>; sessionId: string | null; detail: string | null } | null = null
 let fixtureShared: Record<string, unknown> = { found: true, valid: true, problems: [], settings: { setupScript: 'npm install', defaultBot: 'Rae', approvalMode: 'ask' }, hash: 'preview', trusted: false, state: 'untrusted' }
 function fixtureMachines(): Array<Record<string, unknown>> {
@@ -605,11 +606,26 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     { id: 'preview-remote-1', title: 'Fix the invoice export', updatedAt: new Date(Date.now() - 120_000).toISOString(), projectName: 'korus', state: 'working' },
     { id: 'preview-remote-2', title: 'Tidy the settings page', updatedAt: new Date(Date.now() - 86_400_000).toISOString(), projectName: 'korus', state: 'idle' },
   ] } as T
+  if (method === 'machine.start') {
+    const id = `preview-remote-new-${Date.now().toString(36)}`
+    fixtureMachineSent[id] = []
+    return { sessionId: id, machineId: params.machineId } as T
+  }
+  if (method === 'machine.prompt' || method === 'machine.steer') {
+    const id = String(params.sessionId)
+    ;(fixtureMachineSent[id] ??= []).push({ id: `sent-${Date.now()}`, role: 'user', content: String(params.text ?? ''), createdAt: new Date().toISOString() })
+    return { ok: true } as T
+  }
+  if (method === 'machine.cancel') return { cancelled: true } as T
+  if (method === 'machine.conversation' && String(params.sessionId).startsWith('preview-remote-new-')) {
+    return { session: { id: params.sessionId, title: 'New conversation', state: 'idle', messages: fixtureMachineSent[String(params.sessionId)] ?? [] } } as T
+  }
   if (method === 'machine.conversation') {
     const working = params.sessionId === 'preview-remote-1'
     return { session: { id: params.sessionId, title: working ? 'Fix the invoice export' : 'Tidy the settings page', state: working ? 'working' : 'idle', messages: [
       { id: 'r1', role: 'user', content: working ? 'The invoice export drops the last row. Can you find out why?' : 'Group the settings by what they change.', createdAt: new Date(Date.now() - 600_000).toISOString() },
       { id: 'r2', role: 'assistant', content: working ? 'Found it. The loop stops one row early because `end` is exclusive.\n\nI\'m adding a test for it now.' : 'Done. They\'re grouped under **Account**, **Appearance** and **Behaviour**.', createdAt: new Date(Date.now() - 300_000).toISOString() },
+      ...(fixtureMachineSent[String(params.sessionId)] ?? []),
     ] } } as T
   }
   if (method === 'machine.takeOver.preview') return {
@@ -1497,6 +1513,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       description: typeof params.description === 'string' ? params.description : existing.description,
       instructions: typeof params.instructions === 'string' ? params.instructions : existing.instructions,
       color: typeof params.color === 'string' ? params.color : existing.color,
+      computerWorkplace: typeof params.computerWorkplace === 'boolean' ? params.computerWorkplace : existing.computerWorkplace,
       // The look the editor saved (icon, art, profile photo); the real daemon keeps it too.
       ...(params.look && typeof params.look === 'object' && !Array.isArray(params.look) ? { look: params.look as Agent['look'] } : {}),
       runtimeId: nextRuntime,

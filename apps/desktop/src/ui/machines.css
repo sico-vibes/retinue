@@ -59,6 +59,19 @@
 .machine-owner-bar > span { flex: 1; min-width: 0; }
 .machine-owner-bar strong { color: var(--text-1); font-weight: 500; }
 
+/* Talking to an employee on another machine. */
+.machine-view-side { min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 6px; }
+.machine-view-new { justify-self: start; display: inline-flex; align-items: center; gap: 5px; }
+.machine-composer { display: grid; gap: 6px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-raised); }
+.machine-composer:focus-within { border-color: var(--text-3); }
+.machine-composer textarea { width: 100%; min-height: 40px; max-height: 180px; padding: 2px; resize: none; color: var(--text-1); border: 0; background: transparent; font: inherit; font-size: var(--fs-sm); line-height: 1.5; }
+.machine-composer textarea:focus-visible { outline: none; box-shadow: none; }
+.machine-composer textarea::placeholder { color: var(--text-3); }
+.machine-composer-foot { display: flex; align-items: center; gap: 8px; color: var(--text-3); font-size: var(--fs-2xs); }
+.machine-composer-foot > span { flex: 1; min-width: 0; display: inline-flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.machine-composer-foot button { display: inline-flex; align-items: center; gap: 5px; }
+.machine-composer-problem { margin: 0; color: var(--danger-ink); font-size: var(--fs-xs); }
+
 /* Take over. */
 .blob-dialog.take-over { width: min(520px, calc(100% - 32px)); background: color-mix(in srgb, var(--surface-overlay) 30%, Canvas); }
 .take-over-facts { display: grid; gap: 6px; margin: 0; padding: 0; color: var(--text-2); font-size: var(--fs-sm); list-style: none; }

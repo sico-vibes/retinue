@@ -337,6 +337,7 @@ export function BlobSettings({ draft, runtimes, projects = [], errors, execution
           <button type="button" className="secondary-button small" onClick={() => void browseFolder()}>Browse…</button>
         </div>
       </div>
+      <ComputerWorkplaceRow on={!!draft.computerWorkplace} noun={noun} onChange={(on) => onDraftChange({ ...draft, computerWorkplace: on })} />
     </EditGroup>}
 
     {show('permissions') && <EditGroup id="permissions" title="Permissions">
@@ -558,4 +559,26 @@ function envNote(setting: CapabilitySetting) {
   const keys = setting.allowedKeys ?? []
   if (!keys.length) return 'Custom environment keys were not reported.'
   return `Allowed environment keys: ${keys.join(', ')}. Evidence: ${evidencePlain(setting.evidence)}.`
+}
+
+
+/** Whether this employee works on the computer on the owner's server by default. Shown only when a computer is
+ * linked and shared with employees, or when the switch is already on (so it can be turned off). */
+function ComputerWorkplaceRow({ on, noun, onChange }: { on: boolean; noun: string; onChange: (on: boolean) => void }) {
+  const [computer, setComputer] = useState<{ ready: boolean; name: string | null } | null>(null)
+  useEffect(() => {
+    let live = true
+    try {
+      void Promise.resolve(rpc<{ linked?: boolean; enabled?: boolean; name?: string | null }>('computer.status', {}))
+        .then((status) => { if (live) setComputer({ ready: status?.linked === true && status.enabled === true, name: typeof status?.name === 'string' && status.name ? status.name : null }) })
+        .catch(() => { if (live) setComputer({ ready: false, name: null }) })
+    } catch { setComputer({ ready: false, name: null }) }
+    return () => { live = false }
+  }, [])
+  if (!computer || (!computer.ready && !on)) return null
+  const where = computer.name ?? 'the computer on your server'
+  return <div className="settings-row computer-workplace-row">
+    <RowCopy label="Works on the computer" hint={`This ${noun} clones repositories, builds, runs projects and sets up routines on ${where}, and wakes it when a conversation starts. Commands still wait for your approval when it is set to ask.`} detail={computer.ready ? `New conversations work on ${where}.` : 'No computer is shared with employees right now, so this does nothing until you share one in Settings, Integrations, Computer.'} />
+    <span className="settings-row-control"><button type="button" className={`toggle ${on ? 'on' : ''}`} role="switch" aria-label="Works on the computer" aria-checked={on} onClick={() => onChange(!on)}><i /></button></span>
+  </div>
 }

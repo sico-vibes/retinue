@@ -23,6 +23,8 @@ export interface AgentDraft {
   approvalMode: ApprovalMode | null
   /** Absent means "all". */
   notificationLevel?: 'all' | 'input' | 'muted'
+  /** Works on the linked computer by default. Absent means off. */
+  computerWorkplace?: boolean
   /** Team placement, saved separately through agent.team.update. */
   role: string
   projectId: string | null
@@ -91,6 +93,7 @@ export function draftFromAgent(agent: Agent): AgentDraft {
     role: typeof agent.role === 'string' ? agent.role : '',
     projectId: typeof agent.projectId === 'string' ? agent.projectId : null,
     leader: agent.leader === true,
+    computerWorkplace: agent.computerWorkplace === true,
   }
 }
 
@@ -130,6 +133,7 @@ export function isAgentDirty(draft: AgentDraft, baseline: AgentDraft) {
     || nullableText(draft.serviceTier) !== nullableText(baseline.serviceTier)
     || (draft.approvalMode ?? null) !== (baseline.approvalMode ?? null)
     || (draft.notificationLevel ?? 'all') !== (baseline.notificationLevel ?? 'all')
+    || !!draft.computerWorkplace !== !!baseline.computerWorkplace
 }
 
 export function validateAgentDraft(draft: AgentDraft, otherActiveNames: readonly string[]): FieldErrors {
@@ -164,6 +168,7 @@ export function createParams(draft: AgentDraft, gate: ExecutionSendGate = CLOSED
   if (gate.serviceTier && nullableText(draft.serviceTier)) params.serviceTier = nullableText(draft.serviceTier)
   params.approvalMode = draft.approvalMode
   if (draft.notificationLevel === 'input' || draft.notificationLevel === 'muted') params.notificationLevel = draft.notificationLevel
+  if (draft.computerWorkplace) params.computerWorkplace = true
   return params
 }
 
@@ -183,6 +188,7 @@ export function duplicateParams(source: Agent, name: string): Record<string, unk
     maxConcurrency: source.maxConcurrency,
     defaultProject: source.defaultProject,
     approvalMode: source.approvalMode ?? null,
+    ...(source.computerWorkplace ? { computerWorkplace: true } : {}),
   }
 }
 
@@ -200,6 +206,7 @@ export function updateParams(agentId: string, draft: AgentDraft, baseline: Agent
   if (gate.serviceTier && nullableText(draft.serviceTier) !== nullableText(baseline.serviceTier)) params.serviceTier = nullableText(draft.serviceTier)
   if ((draft.approvalMode ?? null) !== (baseline.approvalMode ?? null)) params.approvalMode = draft.approvalMode
   if ((draft.notificationLevel ?? 'all') !== (baseline.notificationLevel ?? 'all')) params.notificationLevel = draft.notificationLevel === 'input' || draft.notificationLevel === 'muted' ? draft.notificationLevel : null
+  if (!!draft.computerWorkplace !== !!baseline.computerWorkplace) params.computerWorkplace = !!draft.computerWorkplace
   return params
 }
 
@@ -278,6 +285,7 @@ export function changedFields(draft: AgentDraft, baseline: AgentDraft): ChangedF
   if (nullableText(draft.serviceTier) !== nullableText(baseline.serviceTier)) add('serviceTier', 'Speed', 'model')
   if (draft.instructions !== baseline.instructions) add('instructions', 'Instructions', 'model')
   if (normalizeProject(draft.defaultProject) !== normalizeProject(baseline.defaultProject)) add('defaultProject', 'Working folder', 'model')
+  if (!!draft.computerWorkplace !== !!baseline.computerWorkplace) add('computerWorkplace', 'Works on the computer', 'model')
   if ((draft.approvalMode ?? null) !== (baseline.approvalMode ?? null)) add('approvalMode', 'Approvals', 'permissions')
   if ((draft.notificationLevel ?? 'all') !== (baseline.notificationLevel ?? 'all')) add('notificationLevel', 'Notifications', 'notifications')
   return out

@@ -2,11 +2,11 @@
 // machine runs a conversation. The one action is Take over, which moves it to this machine.
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CircleAlert, CircleCheck, FolderGit2, GitBranch, Info, Laptop, LoaderCircle, RefreshCw, X } from 'lucide-react'
+import { CircleAlert, CircleCheck, FolderGit2, GitBranch, Info, Laptop, LoaderCircle, Plus, RefreshCw, SendHorizontal, Square, X } from 'lucide-react'
 import type { Session } from '../types'
 import { rpc } from '../tauri'
 import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
-import { canTakeOver, machineBusyBots, useMachines, type Machine, type MachineBot, type TakeOverJob, type TakeOverPreview } from './machines'
+import { canChat, canTakeOver, machineBusyBots, useMachines, type Machine, type MachineBot, type TakeOverJob, type TakeOverPreview } from './machines'
 import { MachineBadge, openMachineBotInMainWindow } from './MachineBots'
 import { openSafeLink } from './openSafeLink'
 import { SafeMarkdown } from './SafeMarkdown'
@@ -32,7 +32,7 @@ export function takeOverState(machine: Machine, session: Pick<Session, 'link'> |
   if (machine.state === 'revoked') return { allowed: false, note: `${machine.name} removed this link. Pair again in Settings, Machines.` }
   if (machine.state !== 'online') return { allowed: false, note: `${machine.name} can't be reached, so this may be out of date.` }
   if (!canTakeOver(machine)) return { allowed: false, note: `Read only. To take conversations over, give this machine the Operator level in Settings, Remote, on ${machine.name}.` }
-  return { allowed: true, note: `Running on ${machine.name}. Read only here.` }
+  return { allowed: true, note: `Running on ${machine.name}. Take it over to run it on this machine instead.` }
 }
 
 export function TakeOverDialog({ machine, sessionId, onClose, onMoved }: { machine: Machine; sessionId: string; onClose: () => void; onMoved: (sessionId: string) => void }) {
@@ -145,6 +145,37 @@ export function CompanionMachineBots() {
   </div>
 }
 
+/** The message box for a conversation that runs on another machine. Sends through this machine's link; the
+ * other machine runs the turn and its own coding agent. While a turn runs, a message goes in as a steer. */
+export function MachineComposer({ machine, bot, sessionId, busy, onSent }: { machine: Machine; bot: MachineBot; sessionId: string; busy: boolean; onSent: () => void }) {
+  const [text, setText] = useState('')
+  const [sending, setSending] = useState<'send' | 'stop' | null>(null)
+  const [problem, setProblem] = useState<string | null>(null)
+  const ready = text.trim().length > 0 && !sending
+  const send = async () => {
+    if (!ready) return
+    setSending('send'); setProblem(null)
+    try {
+      await rpc(busy ? 'machine.steer' : 'machine.prompt', { machineId: machine.id, sessionId, text: text.trim() })
+      setText('')
+      onSent()
+    } catch (reason) { setProblem(messageOf(reason, `${machine.name} didn't take that message.`)) } finally { setSending(null) }
+  }
+  const stop = async () => {
+    setSending('stop'); setProblem(null)
+    try { await rpc('machine.cancel', { machineId: machine.id, sessionId }); onSent() } catch (reason) { setProblem(messageOf(reason, `${machine.name} didn't stop it.`)) } finally { setSending(null) }
+  }
+  return <form className="machine-composer" onSubmit={(event) => { event.preventDefault(); void send() }}>
+    <textarea value={text} rows={2} aria-label={`Message ${bot.name} on ${machine.name}`} placeholder={busy ? `Add to what ${bot.name} is doing` : `Message ${bot.name}`} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() } }} />
+    {problem && <p className="machine-composer-problem" role="alert">{problem}</p>}
+    <div className="machine-composer-foot">
+      <span><Laptop size={12} aria-hidden="true" />Runs on {machine.name}, with its own coding agent and files.</span>
+      {busy && <button type="button" className="secondary-button small" disabled={!!sending} onClick={() => void stop()}><Square size={11} aria-hidden="true" />{sending === 'stop' ? 'Stopping…' : 'Stop'}</button>}
+      <button type="submit" className="primary-button small" disabled={!ready}><SendHorizontal size={12} aria-hidden="true" />{sending === 'send' ? 'Sending…' : busy ? 'Send now' : 'Send'}</button>
+    </div>
+  </form>
+}
+
 export function MachineConversation({ machine, bot, initialSessionId, selfId, onClose, onMoved }: { machine: Machine; bot: MachineBot; initialSessionId?: string | null; selfId: string | null; onClose: () => void; onMoved: (sessionId: string) => void }) {
   const entered = useDialogEntered()
   const [takingOver, setTakingOver] = useState(false)
@@ -155,19 +186,35 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
   const [failure, setFailure] = useState<string | null>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
+  const [reread, setReread] = useState(0)
+  const [starting, setStarting] = useState(false)
+  const chat = canChat(machine)
+  const startConversation = async () => {
+    setStarting(true); setFailure(null)
+    try {
+      const reply = await rpc<{ sessionId?: string; session?: { id?: string } }>('machine.start', { machineId: machine.id, agentId: bot.id })
+      const id = reply?.sessionId ?? reply?.session?.id ?? null
+      if (id) {
+        setConversations((rows) => rows?.some((row) => row.id === id) ? rows : [{ id, title: 'New conversation', updatedAt: new Date().toISOString() }, ...(rows ?? [])])
+        setSelected(id)
+      }
+      setReread((value) => value + 1)
+    } catch (reason) { setFailure(messageOf(reason, `${machine.name} didn't start a conversation.`)) } finally { setStarting(false) }
+  }
 
   useEffect(() => {
     let live = true
     const load = () => rpc('machine.conversations', { machineId: machine.id, agentId: bot.id }).then((reply) => {
       if (!live) return
       const rows = conversationsFrom(reply)
-      setConversations(rows)
+      // Keep a conversation just started here while the other machine's list catches up.
+      setConversations((current) => [...(current ?? []).filter((row) => !rows.some((item) => item.id === row.id) && row.title === 'New conversation'), ...rows])
       setSelected((current) => current ?? rows[0]?.id ?? null)
     }).catch((reason) => { if (live) { setConversations((current) => current ?? []); setFailure(messageOf(reason, `${machine.name} can't be reached right now.`)) } })
     void load()
     const timer = window.setInterval(() => void load(), 15000)
     return () => { live = false; window.clearInterval(timer) }
-  }, [machine.id, bot.id, machine.name])
+  }, [machine.id, bot.id, machine.name, reread])
 
   useEffect(() => {
     if (!selected) { setSession(null); return }
@@ -180,7 +227,7 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
     void load()
     const timer = window.setInterval(() => { if (!document.hidden) void load() }, POLL_MS)
     return () => { live = false; window.clearInterval(timer) }
-  }, [machine.id, selected, machine.name])
+  }, [machine.id, selected, machine.name, reread])
 
   useEffect(() => {
     const element = scroller.current
@@ -190,6 +237,8 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
   const state = takeOverState(machine, session, selfId)
   const messages = (session?.messages ?? []).filter((message) => ['user', 'assistant', 'notice'].includes(String(message.role)) && String(message.content ?? '').trim())
   const busy = sessionIsBusy(session)
+  const movedAway = !!session?.link?.movedTo
+  const waitingForYou = session?.state === 'waiting_permission'
 
   return <div className={`sheet-backdrop blob-dialog-backdrop ${entered ? 'is-entered' : ''}`}>
     <section ref={ref} className="blob-dialog machine-view" role="dialog" aria-modal="true" aria-labelledby="machine-view-title" tabIndex={-1}>
@@ -201,16 +250,21 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
         <button type="button" className="icon-button" aria-label="Close" onClick={close}><X size={16} aria-hidden="true" /></button>
       </header>
       <div className="machine-view-layout">
-        <ul className="machine-view-list" aria-label={`${bot.name}'s conversations`}>
-          {conversations === null && <li><small>Loading…</small></li>}
-          {conversations?.length === 0 && <li><small>No conversations yet.</small></li>}
-          {conversations?.map((item) => <li key={item.id}><button type="button" aria-current={item.id === selected ? 'true' : undefined} onClick={() => setSelected(item.id)}>
-            <strong>{item.title || 'Conversation'}</strong>
-            <small>{[item.projectName, item.updatedAt ? shortTime(item.updatedAt) : null].filter(Boolean).join(' · ')}</small>
-          </button></li>)}
-        </ul>
+        <div className="machine-view-side">
+          {chat
+            ? <button type="button" className="secondary-button small machine-view-new" disabled={starting} onClick={() => void startConversation()}><Plus size={13} aria-hidden="true" />{starting ? 'Starting…' : 'New conversation'}</button>
+            : <span />}
+          <ul className="machine-view-list" aria-label={`${bot.name}'s conversations`}>
+            {conversations === null && <li><small>Loading…</small></li>}
+            {conversations?.length === 0 && <li><small>No conversations yet.</small></li>}
+            {conversations?.map((item) => <li key={item.id}><button type="button" aria-current={item.id === selected ? 'true' : undefined} onClick={() => setSelected(item.id)}>
+              <strong>{item.title || 'Conversation'}</strong>
+              <small>{[item.projectName, item.updatedAt ? shortTime(item.updatedAt) : null].filter(Boolean).join(' · ')}</small>
+            </button></li>)}
+          </ul>
+        </div>
         <div className="machine-view-main">
-          <div ref={scroller} className="machine-transcript" tabIndex={0} aria-label="Conversation, read only" onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48 }}>
+          <div ref={scroller} className="machine-transcript" tabIndex={0} aria-label={chat ? "Conversation" : "Conversation, read only"} onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48 }}>
             {selected && !session && !failure && <p role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading…</p>}
             {!selected && conversations?.length !== 0 && conversations !== null && <p>Choose a conversation.</p>}
             {messages.map((message) => <article key={String(message.id)} className={`machine-message ${String(message.role)}`}>
@@ -219,10 +273,12 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
                 ? <SafeMarkdown text={String(message.content)} onOpenLink={openSafeLink} />
                 : <div>{String(message.content)}</div>}
             </article>)}
-            {busy && <p className="machine-message notice" role="status">{bot.name} is working on {machine.name}…</p>}
+            {busy && !waitingForYou && <p className="machine-message notice" role="status">{bot.name} is working on {machine.name}…</p>}
+            {waitingForYou && <p className="machine-message notice" role="status">{bot.name} is waiting for an approval. Answer it on {machine.name}.</p>}
           </div>
           {failure && <p className="new-project-error" role="alert">{failure}</p>}
-          {selected && <div className="machine-owner-bar">
+          {selected && chat && !movedAway && session && <MachineComposer machine={machine} bot={bot} sessionId={selected} busy={busy} onSent={() => { pinned.current = true; setReread((value) => value + 1) }} />}
+          {selected && (!chat || movedAway || canTakeOver(machine)) && <div className="machine-owner-bar">
             <Laptop size={14} aria-hidden="true" />
             <span>{state.note}</span>
             {machine.state === 'offline' && <RefreshCw size={13} aria-hidden="true" />}
