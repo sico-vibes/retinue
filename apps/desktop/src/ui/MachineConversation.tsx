@@ -31,7 +31,7 @@ export function takeOverState(machine: Machine, session: Pick<Session, 'link'> |
   if (movedTo) return { allowed: false, note: movedTo.machineId === selfId ? 'This conversation moved to this machine.' : `This conversation moved to ${movedTo.name}.` }
   if (machine.state === 'revoked') return { allowed: false, note: `${machine.name} removed this link. Pair again in Settings, Machines.` }
   if (machine.state !== 'online') return { allowed: false, note: `${machine.name} can't be reached, so this may be out of date.` }
-  if (!canTakeOver(machine)) return { allowed: false, note: `Read only. To take conversations over, set this machine to Chat and approve in Settings, Remote, on ${machine.name}.` }
+  if (!canTakeOver(machine)) return { allowed: false, note: `Read only. To take conversations over, give this machine the Operator level in Settings, Remote, on ${machine.name}.` }
   return { allowed: true, note: `Running on ${machine.name}. Read only here.` }
 }
 
@@ -124,7 +124,7 @@ export function MovedBar({ sessionId, movedTo, machines, onMoved }: { sessionId:
   const [takingOver, setTakingOver] = useState(false)
   const machine = machines.find((item) => item.id === movedTo.machineId) ?? null
   const allowed = !!machine && canTakeOver(machine)
-  const note = !machine ? `To take it back, link ${movedTo.name} in Settings, Machines.` : !allowed ? machine.state === 'online' ? `To take it back, set this machine to Chat and approve on ${machine.name}.` : `${machine.name} can't be reached right now.` : 'Read only here.'
+  const note = !machine ? `To take it back, link ${movedTo.name} in Settings, Machines.` : !allowed ? machine.state === 'online' ? `To take it back, give this machine the Operator level on ${machine.name}.` : `${machine.name} can't be reached right now.` : 'Read only here.'
   return <div className="moved-bar" role="status">
     <Laptop size={15} aria-hidden="true" />
     <span><strong>Moved to {movedTo.name}.</strong> {note}</span>

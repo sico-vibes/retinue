@@ -36,7 +36,7 @@ export function ComputerView({ status, onClose, onWake, waking = false }: { stat
     setView(null); setControl(false)
     if (!awake) return
     let live = true
-    rpc<unknown>('computer.view', {}).then((reply) => { if (live) setView(parseComputerViewAddress(reply)) }).catch(() => { if (live) setView({ url: null, reason: null }) })
+    rpc<unknown>('computer.view', {}).then((reply) => { if (live) setView(parseComputerViewAddress(reply)) }).catch((error) => { if (live) setView({ url: null, reason: error instanceof Error && error.message ? error.message : null }) })
     return () => { live = false }
   }, [awake])
   const browser = awake && status.desktopUrl ? <button type="button" className="secondary-button small" onClick={() => void openSafeLink(status.desktopUrl!)}><ExternalLink size={13} aria-hidden="true" />Open in your browser</button> : null

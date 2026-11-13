@@ -96,7 +96,7 @@ describe('what the daemon reports', () => {
 
   it('says why a conversation can or can\'t be taken over', () => {
     expect(takeOverState(machine(), null, 'me')).toMatchObject({ allowed: true })
-    expect(takeOverState(machine({ tier: 'viewer' }), null, 'me')).toMatchObject({ allowed: false, note: expect.stringMatching(/Chat and approve/) })
+    expect(takeOverState(machine({ tier: 'viewer' }), null, 'me')).toMatchObject({ allowed: false, note: expect.stringMatching(/the Operator level/) })
     expect(takeOverState(machine({ state: 'offline' }), null, 'me').allowed).toBe(false)
     expect(takeOverState(machine({ state: 'revoked' }), null, 'me').note).toMatch(/Pair again/)
     expect(takeOverState(machine(), { link: { movedTo: { machineId: 'me', name: 'Home' } } }, 'me')).toEqual({ allowed: false, note: 'This conversation moved to this machine.' })
@@ -215,7 +215,7 @@ describe('another machine\'s employees', () => {
     await flush()
     await flush()
     expect(button('Take over').disabled).toBe(true)
-    expect(document.body.textContent).toContain('Chat and approve')
+    expect(document.body.textContent).toContain('the Operator level')
   })
 })
 

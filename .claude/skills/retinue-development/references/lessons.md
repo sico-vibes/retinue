@@ -777,3 +777,20 @@ Symptom/ask: "Haze should be frosted glass", but the 26 October fix only made th
 ## 2026-11-13 · Gates · The App roster tests time out in a full parallel run on this PC
 
 - **Symptom:** `npx vitest run` failed 44 to 89 tests, nearly all in `src/ui/App.agent.mounted.test.tsx`, with a different count each time. **Cause:** that file mounts the whole app 77 times; with the default worker count (or a cargo build running) each test passes the 5-second limit. It passes alone in about 30 seconds. **Rule:** run the full UI suite with `--maxWorkers=3` and never beside a cargo build; a varying failure count in that one file is load, not a regression.
+
+## 2026-11-13 · Daemon · A proxied frame: axum route shapes and the headers that must go
+
+The computer's screen (`computer.view`, `computer.rs`) is the first route on the daemon's listener outside `/v1/*`. Three facts cost a build each:
+
+- **A trailing slash is a different path.** `/computer/view/{ticket}` does not answer `/computer/view/<ticket>/`, and `{*rest}` does not match an empty remainder. Register both the bare ticket and the ticket-with-slash to the same handler, then the catch-all below them.
+- **Buffer and strip `Content-Length`.** The proxy reads the whole upstream body, so any copied `Content-Length` (or `Transfer-Encoding`) contradicts the body axum writes. Strip both, with `Set-Cookie`, `Content-Security-Policy*`, `X-Frame-Options`, and add `Content-Security-Policy: frame-ancestors <app origins>`.
+- **A frame cannot send the capability**, so the route is proved by a ticket in the path: 64 hex characters, compared in constant time against every live ticket, 10 minutes after last use, cleared on unlink. `desktop/src-tauri/tauri.conf.json` must add `frame-src 'self' http://127.0.0.1:*` or the app's own CSP blocks the frame. A WebSocket to the same path is forwarded with `tokio-tungstenite` (workspace dependency, promoted from dev-dependencies with `rustls-tls-webpki-roots` for `wss://`).
+
+## 2026-11-13 · Remote · Harbor's screen accepts the computer token
+
+- The owner's Harbor (`/root/Dashboard/harbor/server/proxy.js` on the VPS, deployed to `/srv/harbor/app/server/proxy.js`) now lets a computer token open `/harbor/computer/view/` and its WebSocket, besides the owner's session, with one audit line per token every 5 minutes. The desktop is Selkies, and its client connects to `${base}/api/websockets?role=viewer`. A hand-made upgrade needs a correctly padded `Sec-WebSocket-Key`, or the container answers `400 Handshake error`. SSH to the VPS with `-o ClearAllForwardings=yes`: the `synthet-mail` host entry carries mail port forwards that fail when the ports are busy.
+- **Shell trap (Director, same day):** never put Markdown with backticks inside a double-quoted `node -e "..."` in Bash. Bash runs each backticked span as a command; here it tried to execute `tiers.json` and a research note as scripts (harmless only because both failed to parse). Write such text with the Write or Edit tool.
+
+## 2026-11-13 · Machines · A linked machine is read-only plus take over, and the gap is local
+
+- The gateway already lets a `chat` device run `agent.conversation.create`, `session.prompt` and `session.steer` (`apps/desktop/src/remote/tiers.json`), but `crates/retinue-daemon/src/machines.rs` exposes only reads and take over. Starting work on another machine is a pass-through in `machines.rs`, not a gateway change. Pairing needs `remote.pair.confirm`, a window RPC, so a headless host (a Linux VPS) cannot approve a device yet. Research: `docs/research/many-machines-2026-11.md`.
