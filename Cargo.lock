@@ -4560,7 +4560,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-adapter-acp"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -4577,7 +4577,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-adapter-claude"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4590,7 +4590,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-adapter-codex"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4602,7 +4602,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-adapter-opencode"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "retinue-adapter-acp",
  "retinue-agent-core",
@@ -4622,7 +4622,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-budget"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
@@ -4630,7 +4630,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-daemon"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "aes-gcm",
  "argon2",
@@ -4680,7 +4680,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-desktop"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "arboard",
  "base64 0.22.1",
@@ -4715,7 +4715,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-hook"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "serde_json",
  "tokio",
@@ -4723,7 +4723,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-process"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "tokio",
  "windows-sys 0.61.2",
@@ -4739,7 +4739,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-runtime"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "futures-util",
  "retinue-process",
@@ -4752,7 +4752,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-security"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "rand 0.9.5",
  "subtle",
@@ -4761,7 +4761,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-speech"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4782,7 +4782,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-storage"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "chrono",
  "chrono-tz",
@@ -4796,7 +4796,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-usage"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "chrono",
  "serde",
@@ -4805,7 +4805,7 @@ dependencies = [
 
 [[package]]
 name = "retinue-wsl"
-version = "0.2.0-beta.2"
+version = "0.2.0-beta.3"
 dependencies = [
  "tokio",
 ]

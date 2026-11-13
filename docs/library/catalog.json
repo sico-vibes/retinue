@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "ec7acc2",
-  "documentCount": 393,
+  "revision": "375a40a",
+  "documentCount": 394,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -2949,7 +2949,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "6b46faf48e36177bc59837e7484884261b601f02a6e20e780c659767982507c1",
+      "sha256": "95f7f72ecf84fb6b9366f5e1f5e2547b823e9f058c6bd10773fffb2a397f6e56",
       "headings": [
         {
           "id": "update-commands",
@@ -19604,6 +19604,36 @@
         {
           "id": "fixed",
           "text": "Fixed",
+          "level": 2
+        },
+        {
+          "id": "before-you-use-it",
+          "text": "Before you use it",
+          "level": 2
+        },
+        {
+          "id": "installation",
+          "text": "Installation",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/releases/0.2.0-beta.3",
+      "source": "docs/releases/0.2.0-beta.3.md",
+      "title": "Retinue 0.2.0-beta.3",
+      "section": "Release notes",
+      "status": "Release note",
+      "sha256": "e8226312c2a825857e8867117271fe8ed1ebd9cb1c65dc7e5751bac2583c551c",
+      "headings": [
+        {
+          "id": "new",
+          "text": "New",
+          "level": 2
+        },
+        {
+          "id": "changed",
+          "text": "Changed",
           "level": 2
         },
         {
