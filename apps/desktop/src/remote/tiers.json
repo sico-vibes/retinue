@@ -401,6 +401,13 @@
       "params": null
     },
     {
+      "method": "computer.view",
+      "class": "never",
+      "minTier": null,
+      "why": "The owner's live screen is framed at the desktop; the address and its ticket never leave the host.",
+      "params": null
+    },
+    {
       "method": "runtime.profile.list",
       "class": "read",
       "minTier": "viewer",

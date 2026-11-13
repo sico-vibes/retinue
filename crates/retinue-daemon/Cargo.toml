@@ -45,14 +45,13 @@ subtle.workspace = true
 zeroize.workspace = true
 tokio.workspace = true
 tokio-rustls.workspace = true
+# The framed computer screen: its WebSocket half is a client here.
+tokio-tungstenite = { workspace = true, features = ["rustls-tls-webpki-roots"] }
 tracing.workspace = true
 tracing-appender = "0.2"
 tracing-subscriber.workspace = true
 uuid.workspace = true
 zip = { version = "2", default-features = false, features = ["deflate"] }
-
-[dev-dependencies]
-tokio-tungstenite.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_System_Diagnostics_ToolHelp"] }

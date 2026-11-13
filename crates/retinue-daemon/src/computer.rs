@@ -19,8 +19,19 @@
 //! remote gateway or from the Retinue MCP.
 
 use crate::{derr, AppState, DispatchError};
-use axum::http::StatusCode;
+use axum::{
+    body::Body,
+    extract::{
+        ws::{Message as WsMessage, WebSocket, WebSocketUpgrade},
+        FromRequestParts, Path as AxumPath, State,
+    },
+    http::{header, HeaderMap, HeaderName, HeaderValue, Request, StatusCode},
+    response::{IntoResponse, Response},
+    routing::get,
+    Router,
+};
 use chrono::{SecondsFormat, Utc};
+use futures_util::{SinkExt, StreamExt};
 use retinue_agent_core::McpServerSpec;
 use retinue_storage::ComputerLink;
 use serde_json::{json, Value};
@@ -30,6 +41,7 @@ use std::{
     sync::Mutex as StdMutex,
     time::Duration,
 };
+use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message as TgMessage};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -61,6 +73,27 @@ const TOKEN_PREFIX: &str = "computer/";
 const ADDRESS_MAX: usize = 2_048;
 const TOKEN_MAX: usize = 2_048;
 const ROUTINE_ID_MAX: usize = 200;
+/// Harbor's owner-only live view, under the linked address.
+pub const VIEW_PATH: &str = "/harbor/computer/view";
+/// The prefix this daemon serves the framed screen on.
+pub const VIEW_ROUTE: &str = "/computer/view";
+/// A view ticket is 64 hex characters: 256 random bits.
+const VIEW_TICKET_LEN: usize = 64;
+/// How long a view ticket lives after its last use.
+const VIEW_TTL: Duration = Duration::from_secs(600);
+/// The most view tickets kept at once; the oldest goes first.
+const VIEW_TICKETS_MAX: usize = 16;
+/// How long one proxied request or the token probe may take.
+const VIEW_TIMEOUT: Duration = Duration::from_secs(30);
+/// The app's own origins, in the packaged window and in the Vite dev server.
+/// Only these may frame the proxy's answers.
+const APP_ORIGINS: &str = "http://tauri.localhost https://tauri.localhost tauri://localhost http://127.0.0.1:1420";
+/// Headers an answer from Harbor must never carry through the proxy: they would
+/// either break the frame, set a cookie the window must not hold, or contradict
+/// the buffered body's own length.
+const STRIPPED_VIEW_HEADERS: [&str; 8] = ["set-cookie", "set-cookie2", "content-security-policy", "content-security-policy-report-only", "x-frame-options", "transfer-encoding", "connection", "content-length"];
+
+const NO_VIEW: &str = "Your server does not offer its screen to Retinue yet. Update Harbor, or open it in your browser.";
 
 const NOT_LINKED: &str = "No computer is linked in Retinue, so there is no computer to use. Ask the owner to link one in Settings.";
 const SWITCHED_OFF: &str = "The computer is switched off in Retinue, so this conversation has no computer tools. Ask the owner to switch it on.";
@@ -70,10 +103,68 @@ const UNATTENDED: &str = "This conversation runs unattended, so it cannot run co
 const COMMAND_TOOLS: [&str; 3] = ["computer_exec", "computer_create_routine", "computer_run_routine"];
 
 /// What the daemon remembers between reads: the last status it announced, so an
-/// unchanged read does not produce an event.
+/// unchanged read does not produce an event, and the live tickets for the
+/// computer's screen.
 #[derive(Default)]
 pub struct Computer {
     last: StdMutex<Option<Value>>,
+    /// A frame cannot send the daemon's capability, so the screen is served
+    /// under single-purpose tickets instead: random, short-lived, never logged.
+    view: StdMutex<Vec<ViewTicket>>,
+}
+
+/// One live view ticket, and when it was last used.
+struct ViewTicket {
+    value: String,
+    last_used: std::time::Instant,
+}
+
+impl Computer {
+    /// Drops tickets nobody has used within the lifetime.
+    fn prune_view(tickets: &mut Vec<ViewTicket>) {
+        tickets.retain(|ticket| ticket.last_used.elapsed() < VIEW_TTL);
+    }
+
+    /// A new screen ticket: 256 random bits, hex.
+    fn mint_view_ticket(&self) -> String {
+        let mut tickets = self.view.lock().unwrap_or_else(|poison| poison.into_inner());
+        Self::prune_view(&mut tickets);
+        while tickets.len() >= VIEW_TICKETS_MAX {
+            // The least recently used goes first: a frame that is being watched
+            // keeps its ticket for as long as its own requests arrive.
+            let Some(oldest) = tickets.iter().enumerate().min_by_key(|(_, ticket)| ticket.last_used).map(|(index, _)| index) else { break };
+            tickets.remove(oldest);
+        }
+        let value = retinue_security::new_capability();
+        tickets.push(ViewTicket { value: value.clone(), last_used: std::time::Instant::now() });
+        value
+    }
+
+    /// Whether `supplied` is one of the live tickets. Every live ticket is
+    /// compared, in constant time, so the answer does not depend on which one
+    /// matched, and a match keeps its ticket alive for another lifetime.
+    fn accepts_view_ticket(&self, supplied: &str) -> bool {
+        if supplied.len() != VIEW_TICKET_LEN || !supplied.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return false;
+        }
+        let mut tickets = self.view.lock().unwrap_or_else(|poison| poison.into_inner());
+        Self::prune_view(&mut tickets);
+        let mut accepted = false;
+        for ticket in tickets.iter_mut() {
+            let matched: bool = retinue_security::capability_matches(&ticket.value, supplied);
+            accepted |= matched;
+            if matched {
+                ticket.last_used = std::time::Instant::now();
+            }
+        }
+        accepted
+    }
+
+    fn clear_view_tickets(&self) {
+        if let Ok(mut tickets) = self.view.lock() {
+            tickets.clear();
+        }
+    }
 }
 
 fn now_iso() -> String {
@@ -321,7 +412,7 @@ pub(crate) fn map_status(address: &str, enabled: bool, body: &Value) -> Value {
         "cpuPercent": percent(&stats["cpu"]),
         "memoryPercent": percent(&stats["memoryPercent"]),
         "memoryText": stats["memory"].as_str(),
-        "pids": stats["pids"].as_u64(),
+        "pids": stats["pids"].as_u64().or_else(|| stats["pids"].as_str().and_then(|text| text.trim().parse().ok())),
         "diskBytes": computer["disk_bytes"].as_u64(),
         "limits": limits,
         "desktopUrl": body["desktop_url"].as_str().filter(|url| same_origin(address, url)),
@@ -432,6 +523,7 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         "computer.routines" => Ok(json!({"routines": routines(st).await?})),
         "computer.routine.run" => run_routine(st, p).await,
         "computer.logs" => logs(st, p).await,
+        "computer.view" => view(st).await,
         _ => Err(derr("not_found", "unknown computer method", StatusCode::NOT_FOUND)),
     }
 }
@@ -468,6 +560,8 @@ async fn link(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
         let _ = crate::secrets::store::delete(&previous.token_ref);
     }
     let status = map_status(&address, false, &body);
+    // A new link is a new token: the old link's tickets die with it.
+    st.computer.clear_view_tickets();
     publish(st, status.clone(), true).await;
     Ok(status)
 }
@@ -476,6 +570,7 @@ async fn link(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
 async fn unlink(st: &AppState) -> Result<Value, DispatchError> {
     let previous = st.db.computer_link().ok().flatten();
     st.db.computer_link_clear().map_err(|_| internal("The computer's link could not be removed."))?;
+    st.computer.clear_view_tickets();
     if let Some(previous) = previous {
         let _ = crate::secrets::store::delete(&previous.token_ref);
     }
@@ -627,6 +722,61 @@ async fn logs(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
         other => other["logs"].as_str().unwrap_or("").to_owned(),
     };
     Ok(json!({"logs": text}))
+}
+
+/// `computer.view {}`: a loopback address the window may frame, carrying a
+/// ticket the proxy accepts, or `url: null` and a plain reason.
+///
+/// The token is checked once against the server's view path first: today Harbor
+/// only offers its screen to the owner's browser sign-in, so an update can add
+/// this later without the window ever holding the token.
+async fn view(st: &AppState) -> Result<Value, DispatchError> {
+    let no = |reason: String| json!({"url": Value::Null, "reason": reason});
+    let Some(link) = st.db.computer_link().ok().flatten() else {
+        return Ok(no("No computer is linked in Retinue. Link one in Settings.".into()));
+    };
+    let status = read_status(st).await;
+    if status["state"] != "awake" {
+        let reason = match status["state"].as_str().unwrap_or("") {
+            "asleep" => "The computer is asleep. Wake it first.".to_owned(),
+            "missing" => "The computer is missing on its server.".to_owned(),
+            _ => status["problem"].as_str().map(str::to_owned).unwrap_or_else(|| "The computer is not awake.".into()),
+        };
+        return Ok(no(reason));
+    }
+    let token = match token_of(&link) {
+        Ok(token) => token,
+        Err(error) => return Ok(no(error.1.message)),
+    };
+    match probe_view(&link, &token).await {
+        Ok(code) if code.is_success() => {}
+        // A sign-in page or a plain refusal: Harbor does not offer the screen to
+        // Retinue yet, and the window falls back to the owner's browser.
+        Ok(code) if code.is_redirection() || code == StatusCode::UNAUTHORIZED || code == StatusCode::FORBIDDEN => return Ok(no(NO_VIEW.into())),
+        Ok(code) => return Ok(no(format!("Harbor answered HTTP {} on its view path.", code.as_u16()))),
+        Err(error) => return Ok(no(problem_of(error))),
+    }
+    let Some(address) = st.team.address.lock().ok().and_then(|address| address.clone()) else {
+        return Ok(no("Retinue's own address is not ready yet. Try again in a moment.".into()));
+    };
+    let ticket = st.computer.mint_view_ticket();
+    Ok(json!({"url": format!("http://{address}{VIEW_ROUTE}/{ticket}/"), "reason": Value::Null}))
+}
+
+/// One check that the server accepts the token on its view path: the status
+/// code only, never the body. Redirects are not followed.
+async fn probe_view(link: &ComputerLink, token: &str) -> Result<StatusCode, HarborError> {
+    let client = Harbor::client()?;
+    let response = client
+        .get(format!("{}{VIEW_PATH}/", link.address))
+        .header(reqwest::header::AUTHORIZATION, format!("Bearer {token}"))
+        .header("X-Harbor-Client", "mcp")
+        .header(reqwest::header::ACCEPT, "text/html,application/xhtml+xml")
+        .timeout(STATUS_TIMEOUT)
+        .send()
+        .await
+        .map_err(|_| HarborError::Unreachable)?;
+    Ok(StatusCode::from_u16(response.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY))
 }
 
 // ---------------------------------------------------------------------------
@@ -841,4 +991,225 @@ pub fn mcp_server_for(st: &AppState, session_id: &str) -> Option<McpServerSpec> 
 pub async fn forget_link(st: &AppState) {
     let Some(_previous) = st.db.computer_link().ok().flatten() else { return };
     let _ = unlink(st).await;
+}
+
+// ---------------------------------------------------------------------------
+// The screen: HTTP and WebSocket proxying under a ticket
+
+/// The two routes the framed screen uses. A frame cannot send the daemon's
+/// capability, so the ticket in the path is the only proof.
+pub(crate) fn view_routes() -> Router<AppState> {
+    Router::new()
+        .route(&format!("{VIEW_ROUTE}/{{ticket}}"), get(view_root))
+        // The framed URL always ends with `/`, and axum treats that as a
+        // different path from the bare ticket.
+        .route(&format!("{VIEW_ROUTE}/{{ticket}}/"), get(view_root))
+        .route(&format!("{VIEW_ROUTE}/{{ticket}}/{{*rest}}"), get(view_under))
+}
+
+pub(crate) async fn view_root(State(st): State<AppState>, AxumPath(ticket): AxumPath<String>, request: Request<Body>) -> Response {
+    view_request(st, ticket, String::new(), request).await
+}
+
+pub(crate) async fn view_under(State(st): State<AppState>, AxumPath((ticket, rest)): AxumPath<(String, String)>, request: Request<Body>) -> Response {
+    view_request(st, ticket, rest, request).await
+}
+
+async fn view_request(st: AppState, ticket: String, rest: String, request: Request<Body>) -> Response {
+    if !st.computer.accepts_view_ticket(&ticket) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    // Unlinking clears the tickets; reading the link again keeps a stale state
+    // from reaching a server the owner has already unlinked.
+    let Ok(Some(link)) = st.db.computer_link() else { return StatusCode::NOT_FOUND.into_response() };
+    if !view_rest_is_safe(&rest) {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+    if upgrade_requested(request.headers()) {
+        return websocket(st, link, rest, request).await;
+    }
+    forward_http(link, &ticket, &rest, request).await
+}
+
+/// Whether a captured path stays inside the view prefix: no segment climbs out,
+/// no backslash, and no query or fragment smuggled through the path.
+fn view_rest_is_safe(rest: &str) -> bool {
+    if rest.chars().any(|ch| ch.is_control() || ch == '\\' || ch == '?' || ch == '#') {
+        return false;
+    }
+    rest.split('/').all(|segment| segment != "." && segment != "..")
+}
+
+fn upgrade_requested(headers: &HeaderMap) -> bool {
+    let connection = headers.get(header::CONNECTION).and_then(|value| value.to_str().ok()).unwrap_or("");
+    let upgrade = headers.get(header::UPGRADE).and_then(|value| value.to_str().ok()).unwrap_or("");
+    connection.split(',').any(|part| part.trim().eq_ignore_ascii_case("upgrade")) && upgrade.eq_ignore_ascii_case("websocket")
+}
+
+/// The upstream URL for one path and query. Always the linked address and the
+/// fixed view prefix: no part of the request can choose a host.
+fn upstream_view(address: &str, rest: &str, query: Option<&str>) -> String {
+    let query = query.map(|query| format!("?{query}")).unwrap_or_default();
+    if rest.is_empty() {
+        return format!("{address}{VIEW_PATH}/{query}");
+    }
+    format!("{address}{VIEW_PATH}/{rest}{query}")
+}
+
+/// A redirect back to the server's own view path, re-pointed at the framed
+/// copy; anything else is left alone.
+fn rewrite_location(address: &str, ticket: &str, location: &str) -> String {
+    for prefix in [format!("{address}{VIEW_PATH}"), VIEW_PATH.to_owned()] {
+        if let Some(rest) = location.strip_prefix(&prefix) {
+            if rest.is_empty() || rest.starts_with('/') {
+                return format!("{VIEW_ROUTE}/{ticket}{rest}");
+            }
+        }
+    }
+    location.to_owned()
+}
+
+async fn forward_http(link: ComputerLink, ticket: &str, rest: &str, request: Request<Body>) -> Response {
+    let Ok(token) = token_of(&link) else { return StatusCode::NOT_FOUND.into_response() };
+    let query = request.uri().query().map(str::to_owned);
+    let target = upstream_view(&link.address, rest, query.as_deref());
+    let Ok(client) = Harbor::client() else { return StatusCode::BAD_GATEWAY.into_response() };
+    let mut upstream = client
+        .get(&target)
+        .header(reqwest::header::AUTHORIZATION, format!("Bearer {}", token.as_str()))
+        .header("X-Harbor-Client", "mcp")
+        .timeout(VIEW_TIMEOUT);
+    // Only what a page and its assets need: no cookie, no authorization of the
+    // window's, and no accept-encoding, so the answer can be buffered as it is.
+    for name in ["accept", "accept-language", "range", "if-none-match", "if-modified-since"] {
+        if let Some(value) = request.headers().get(name).and_then(|value| value.to_str().ok()) {
+            upstream = upstream.header(name, value);
+        }
+    }
+    let Ok(answer) = upstream.send().await else { return StatusCode::BAD_GATEWAY.into_response() };
+    let status = StatusCode::from_u16(answer.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let mut headers = HeaderMap::new();
+    for (name, value) in answer.headers() {
+        let text = name.as_str();
+        if STRIPPED_VIEW_HEADERS.contains(&text) {
+            continue;
+        }
+        if text.eq_ignore_ascii_case("location") {
+            let location = rewrite_location(&link.address, ticket, value.to_str().unwrap_or(""));
+            if let Ok(value) = HeaderValue::from_str(&location) {
+                headers.insert(header::LOCATION, value);
+            }
+            continue;
+        }
+        if let (Ok(name), Ok(value)) = (HeaderName::from_bytes(text.as_bytes()), HeaderValue::from_bytes(value.as_bytes())) {
+            headers.append(name, value);
+        }
+    }
+    // The screen may be framed by the app and by nothing else.
+    if let Ok(value) = HeaderValue::from_str(&format!("frame-ancestors {APP_ORIGINS}")) {
+        headers.insert(header::CONTENT_SECURITY_POLICY, value);
+    }
+    let Ok(body) = answer.bytes().await else { return StatusCode::BAD_GATEWAY.into_response() };
+    (status, headers, Body::from(body)).into_response()
+}
+
+/// A WebSocket upgrade to the server's view path, carrying the token in the
+/// handshake, then both directions copied between the frame and the server.
+async fn websocket(st: AppState, link: ComputerLink, rest: String, request: Request<Body>) -> Response {
+    let (mut parts, _body) = request.into_parts();
+    let protocols = parts
+        .headers
+        .get(header::SEC_WEBSOCKET_PROTOCOL)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.split(',').map(|protocol| protocol.trim().to_owned()).filter(|protocol| !protocol.is_empty()).collect::<Vec<_>>())
+        .unwrap_or_default();
+    let query = parts.uri.query().map(str::to_owned);
+    let Ok(upgrade) = WebSocketUpgrade::from_request_parts(&mut parts, &st).await else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let Ok(token) = token_of(&link) else { return StatusCode::NOT_FOUND.into_response() };
+    let target = ws_target(&link.address, &rest, query.as_deref());
+    let upgrade = if protocols.is_empty() { upgrade } else { upgrade.protocols(protocols) };
+    upgrade.on_upgrade(move |socket| pump(socket, target, token))
+}
+
+fn ws_target(address: &str, rest: &str, query: Option<&str>) -> String {
+    let (scheme, host) = match address.strip_prefix("https://") {
+        Some(host) => ("wss", host),
+        None => ("ws", address.strip_prefix("http://").unwrap_or(address)),
+    };
+    let query = query.map(|query| format!("?{query}")).unwrap_or_default();
+    if rest.is_empty() {
+        return format!("{scheme}://{host}{VIEW_PATH}/{query}");
+    }
+    format!("{scheme}://{host}{VIEW_PATH}/{rest}{query}")
+}
+
+/// One WebSocket, both directions until either side closes. The token is read
+/// for this connection and dropped with it.
+async fn pump(socket: WebSocket, target: String, token: Zeroizing<String>) {
+    let Ok(mut request) = target.as_str().into_client_request() else { return };
+    let Ok(authorization) = HeaderValue::from_str(&format!("Bearer {}", token.as_str())) else { return };
+    request.headers_mut().insert(header::AUTHORIZATION, authorization);
+    request.headers_mut().insert("x-harbor-client", HeaderValue::from_static("mcp"));
+    let Ok((upstream, _answer)) = tokio_tungstenite::connect_async(request).await else { return };
+    let (mut to_client, mut from_client) = socket.split();
+    let (mut to_server, mut from_server) = upstream.split();
+    let client_to_server = async {
+        while let Some(Ok(message)) = from_client.next().await {
+            if to_server.send(to_tungstenite(message)).await.is_err() {
+                break;
+            }
+        }
+        let _ = to_server.close().await;
+    };
+    let server_to_client = async {
+        while let Some(Ok(message)) = from_server.next().await {
+            if let Some(message) = from_tungstenite(message) {
+                if to_client.send(message).await.is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = to_client.close().await;
+    };
+    tokio::select! {
+        _ = client_to_server => {}
+        _ = server_to_client => {}
+    }
+}
+
+fn to_tungstenite(message: WsMessage) -> TgMessage {
+    match message {
+        WsMessage::Text(text) => TgMessage::Text(text.as_str().to_owned().into()),
+        WsMessage::Binary(bytes) => TgMessage::Binary(bytes),
+        WsMessage::Ping(bytes) => TgMessage::Ping(bytes),
+        WsMessage::Pong(bytes) => TgMessage::Pong(bytes),
+        WsMessage::Close(_) => TgMessage::Close(None),
+    }
+}
+
+fn from_tungstenite(message: TgMessage) -> Option<WsMessage> {
+    match message {
+        TgMessage::Text(text) => Some(WsMessage::Text(text.as_str().into())),
+        TgMessage::Binary(bytes) => Some(WsMessage::Binary(bytes)),
+        TgMessage::Ping(bytes) => Some(WsMessage::Ping(bytes)),
+        TgMessage::Pong(bytes) => Some(WsMessage::Pong(bytes)),
+        TgMessage::Close(_) => Some(WsMessage::Close(None)),
+        TgMessage::Frame(_) => None,
+    }
+}
+
+#[cfg(test)]
+impl Computer {
+    pub(crate) fn mint_view_ticket_for_tests(&self) -> String {
+        self.mint_view_ticket()
+    }
+
+    pub(crate) fn expire_view_tickets_for_tests(&self) {
+        let mut tickets = self.view.lock().unwrap_or_else(|poison| poison.into_inner());
+        for ticket in tickets.iter_mut() {
+            ticket.last_used = std::time::Instant::now() - VIEW_TTL - Duration::from_secs(1);
+        }
+    }
 }

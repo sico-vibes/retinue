@@ -5,7 +5,9 @@
 // run in parallel never meet.
 
 use std::sync::Mutex as TestMutex;
+use futures_util::{SinkExt, StreamExt};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio_tungstenite::tungstenite::Message as TgMessage;
 
 /// A value no status, event or error text may ever contain.
 const HARBOR_TOKEN: &str = "hrb_SECRET_SENTINEL_value";
@@ -134,6 +136,12 @@ fn computer_status_maps_docker_states_and_drops_an_off_origin_desktop() {
     }
     let no_limits = json!({"computer": {"status": "running"}, "desktop_url": Value::Null});
     assert_eq!(computer::map_status("https://harbor.example.com", true, &no_limits)["limits"], Value::Null);
+    // Harbor reports the process count as a string as well as a number.
+    let mut string_pids = harbor_body("running", None);
+    string_pids["computer"]["stats"]["pids"] = json!("42");
+    assert_eq!(computer::map_status("https://harbor.example.com", true, &string_pids)["pids"], 42);
+    string_pids["computer"]["stats"]["pids"] = json!("many");
+    assert_eq!(computer::map_status("https://harbor.example.com", true, &string_pids)["pids"], Value::Null, "an unreadable count is unknown, not a number");
 }
 
 #[test]
@@ -433,4 +441,274 @@ async fn computer_bridge_lists_the_ten_tools_and_answers_unknown_ones() {
     ]);
     let unknown = computer::mcp_rpc(&st, "computer-session", "mcp.computer.call", &json!({"name": "computer_sudo", "arguments": {}})).await.unwrap();
     assert_eq!(unknown["isError"], true, "an unknown tool is not forwarded anywhere");
+}
+
+
+// ---------------------------------------------------------------------------
+// The screen, framed by the app
+
+/// A fake Harbor that answers raw HTTP, so a test can choose every header.
+/// `answer(method, path, request head)` returns the whole response; every
+/// request head is recorded in `seen`.
+async fn fake_raw_harbor(answer: impl Fn(&str, &str, &str) -> String + Send + Sync + 'static, seen: Arc<TestMutex<Vec<String>>>) -> String {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = format!("127.0.0.1:{}", listener.local_addr().unwrap().port());
+    let answer = Arc::new(answer);
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else { return };
+            let answer = answer.clone();
+            let seen = seen.clone();
+            tokio::spawn(async move {
+                let mut data = Vec::new();
+                let mut buffer = [0u8; 8192];
+                loop {
+                    let Ok(count) = stream.read(&mut buffer).await else { return };
+                    if count == 0 { return; }
+                    data.extend_from_slice(&buffer[..count]);
+                    let text = String::from_utf8_lossy(&data).to_string();
+                    let Some((head, body)) = text.split_once("\r\n\r\n") else { continue };
+                    let length = head.lines().find_map(|line| line.to_ascii_lowercase().strip_prefix("content-length:").and_then(|value| value.trim().parse::<usize>().ok())).unwrap_or(0);
+                    if body.len() < length { continue; }
+                    seen.lock().unwrap().push(head.to_owned());
+                    let request_line = head.lines().next().unwrap_or("");
+                    let method = request_line.split_whitespace().next().unwrap_or("").to_owned();
+                    let path = request_line.split_whitespace().nth(1).unwrap_or("").to_owned();
+                    let reply = answer(&method, &path, head);
+                    let _ = stream.write_all(reply.as_bytes()).await;
+                    return;
+                }
+            });
+        }
+    });
+    address
+}
+
+/// One raw HTTP answer. `status` is the code; the reason phrase is a placeholder.
+fn raw_response(status: u16, headers: &[(&str, String)], body: &str) -> String {
+    let mut reply = format!("HTTP/1.1 {status} X\r\n");
+    for (name, value) in headers {
+        reply.push_str(&format!("{name}: {value}\r\n"));
+    }
+    reply.push_str(&format!("Content-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()));
+    reply
+}
+
+/// A fake Harbor that answers the status route like Harbor and every view route
+/// with `view`.
+async fn fake_view_harbor(view: (u16, Vec<(&'static str, &'static str)>, &'static str), seen: Arc<TestMutex<Vec<String>>>) -> String {
+    fake_raw_harbor(move |_, path, _| {
+        if path.starts_with("/harbor/api/computer") {
+            return raw_response(200, &[("Content-Type", "application/json".into())], &harbor_body("running", None).to_string());
+        }
+        let (status, headers, body) = &view;
+        let headers = headers.iter().map(|(name, value)| (*name, (*value).to_owned())).collect::<Vec<_>>();
+        raw_response(*status, &headers, body)
+    }, seen)
+    .await
+}
+
+/// The daemon's own listener, serving the framed-screen routes with this state.
+async fn view_listener(st: &AppState) -> String {
+    let app = computer::view_routes().with_state(st.clone());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap().to_string();
+    tokio::spawn(async move { let _ = axum::serve(listener, app).await; });
+    address
+}
+
+fn view_client() -> reqwest::Client {
+    reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).no_proxy().build().unwrap()
+}
+
+#[tokio::test]
+async fn computer_view_forwards_with_the_bearer_token_and_strips_framing_headers() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let harbor = fake_view_harbor(
+        (
+            200,
+            vec![
+                ("Content-Type", "text/html"),
+                ("Set-Cookie", "session=abc"),
+                ("X-Frame-Options", "DENY"),
+                ("Content-Security-Policy", "frame-ancestors 'none'"),
+                ("Location", "/harbor/computer/view/app/next"),
+            ],
+            "<p>screen</p>",
+        ),
+        seen.clone(),
+    )
+    .await;
+    let (st, _) = state();
+    let server = view_listener(&st).await;
+    *st.team.address.lock().unwrap() = Some(server.clone());
+    link_directly(&st, &format!("http://{harbor}"), HARBOR_TOKEN, true);
+
+    let view = dispatch(&st, "computer.view", json!({})).await.unwrap();
+    assert_eq!(view["reason"], Value::Null, "{view}");
+    let url = view["url"].as_str().unwrap().to_owned();
+    assert!(url.starts_with(&format!("http://{server}/computer/view/")), "{url}");
+    assert!(url.ends_with('/'), "a frame asks for the folder: {url}");
+    assert!(!url.contains(HARBOR_TOKEN), "the URL never carries the token");
+
+    let response = view_client().get(format!("{url}app/")).send().await.unwrap();
+    assert_eq!(response.status(), 200);
+    let headers = response.headers();
+    assert!(headers.get("set-cookie").is_none(), "no cookie reaches the window");
+    assert!(headers.get("x-frame-options").is_none());
+    let csp = headers.get("content-security-policy").unwrap().to_str().unwrap();
+    assert!(csp.starts_with("frame-ancestors "), "{csp}");
+    assert!(csp.contains("http://tauri.localhost"), "the app may frame it: {csp}");
+    assert!(!csp.contains("'none'"), "{csp}");
+    let location = headers.get("location").unwrap().to_str().unwrap();
+    assert!(location.starts_with("/computer/view/") && location.ends_with("/app/next"), "a view redirect stays inside the ticket: {location}");
+    assert_eq!(response.text().await.unwrap(), "<p>screen</p>");
+
+    let seen = seen.lock().unwrap();
+    let forwarded = seen.iter().find(|head| head.starts_with("GET /harbor/computer/view/app/ ")).expect("the page reached Harbor");
+    assert!(forwarded.to_ascii_lowercase().contains(&format!("authorization: bearer {}", HARBOR_TOKEN.to_ascii_lowercase())), "{forwarded}");
+    let probe = seen.iter().find(|head| head.starts_with("GET /harbor/computer/view/ ")).expect("the probe ran before the URL was handed out");
+    assert!(probe.to_ascii_lowercase().contains("authorization: bearer "), "{probe}");
+}
+
+#[tokio::test]
+async fn computer_view_refuses_a_wrong_expired_or_unlinked_ticket_without_forwarding() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let harbor = fake_view_harbor((200, vec![("Content-Type", "text/html")], "screen"), seen.clone()).await;
+    let (st, _) = state();
+    let server = view_listener(&st).await;
+    *st.team.address.lock().unwrap() = Some(server.clone());
+    link_directly(&st, &format!("http://{harbor}"), HARBOR_TOKEN, true);
+
+    let view = dispatch(&st, "computer.view", json!({})).await.unwrap();
+    let url = view["url"].as_str().unwrap().to_owned();
+    let before = seen.lock().unwrap().len();
+
+    let wrong = format!("http://{server}/computer/view/{}/", "0".repeat(64));
+    assert_eq!(view_client().get(wrong).send().await.unwrap().status(), 404, "a wrong ticket");
+    assert_eq!(seen.lock().unwrap().len(), before, "a wrong ticket forwards nothing");
+
+    // The URL keeps its ticket alive; once the lifetime passes, it is gone.
+    assert_eq!(view_client().get(&url).send().await.unwrap().status(), 200);
+    st.computer.expire_view_tickets_for_tests();
+    assert_eq!(view_client().get(&url).send().await.unwrap().status(), 404, "an expired ticket");
+    assert_eq!(seen.lock().unwrap().len(), before + 1, "only the live ticket's request was forwarded");
+
+    // Unlinking kills the tickets that are still live.
+    let view = dispatch(&st, "computer.view", json!({})).await.unwrap();
+    let url = view["url"].as_str().unwrap().to_owned();
+    dispatch(&st, "computer.unlink", json!({})).await.unwrap();
+    let before = seen.lock().unwrap().len();
+    assert_eq!(view_client().get(&url).send().await.unwrap().status(), 404, "unlink kills the ticket");
+    assert_eq!(seen.lock().unwrap().len(), before, "and forwards nothing");
+}
+
+#[tokio::test]
+async fn computer_view_refuses_a_path_that_climbs_out_of_the_prefix() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let harbor = fake_view_harbor((200, vec![("Content-Type", "text/html")], "screen"), seen.clone()).await;
+    let (st, _) = state();
+    let server = view_listener(&st).await;
+    *st.team.address.lock().unwrap() = Some(server.clone());
+    link_directly(&st, &format!("http://{harbor}"), HARBOR_TOKEN, true);
+    let view = dispatch(&st, "computer.view", json!({})).await.unwrap();
+    let base = view["url"].as_str().unwrap().trim_end_matches('/').to_owned();
+    let before = seen.lock().unwrap().len();
+
+    for path in ["/%2e%2e/%2e%2e/harbor/api/computer", "/..%2f..%2fv1%2frpc", "/a%5cb", "/x%3fy=1"] {
+        let response = view_client().get(format!("{base}{path}")).send().await.unwrap();
+        assert_eq!(response.status(), 404, "{path} must be refused");
+    }
+    assert_eq!(seen.lock().unwrap().len(), before, "no escaping path was forwarded");
+}
+
+#[tokio::test]
+async fn computer_view_explains_when_the_server_does_not_offer_its_screen() {
+    let reason = "Your server does not offer its screen to Retinue yet. Update Harbor, or open it in your browser.";
+    for status in [401u16, 403, 302] {
+        let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+        let harbor = fake_raw_harbor(
+            move |_, path, _| {
+                if path.starts_with("/harbor/api/computer") {
+                    return raw_response(200, &[("Content-Type", "application/json".into())], &harbor_body("running", None).to_string());
+                }
+                raw_response(status, &[("Location", "/harbor/computer/login".into())], "")
+            },
+            seen,
+        )
+        .await;
+        let (st, _) = state();
+        *st.team.address.lock().unwrap() = Some("127.0.0.1:9".into());
+        link_directly(&st, &format!("http://{harbor}"), HARBOR_TOKEN, true);
+        let view = dispatch(&st, "computer.view", json!({})).await.unwrap();
+        assert_eq!(view["url"], Value::Null, "{status}");
+        assert_eq!(view["reason"], reason, "{status}");
+    }
+}
+
+#[tokio::test]
+async fn computer_view_explains_an_asleep_or_unlinked_computer_and_probes_nothing() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let harbor = fake_raw_harbor(
+        move |_, path, _| {
+            if path.starts_with("/harbor/api/computer") {
+                return raw_response(200, &[("Content-Type", "application/json".into())], &harbor_body("exited", None).to_string());
+            }
+            raw_response(200, &[], "screen")
+        },
+        seen.clone(),
+    )
+    .await;
+    let (st, _) = state();
+    let unlinked = dispatch(&st, "computer.view", json!({})).await.unwrap();
+    assert_eq!(unlinked["url"], Value::Null);
+    assert!(unlinked["reason"].as_str().unwrap().contains("No computer is linked"), "{unlinked}");
+
+    link_directly(&st, &format!("http://{harbor}"), HARBOR_TOKEN, true);
+    let asleep = dispatch(&st, "computer.view", json!({})).await.unwrap();
+    assert_eq!(asleep["url"], Value::Null);
+    assert_eq!(asleep["reason"], "The computer is asleep. Wake it first.");
+    assert!(seen.lock().unwrap().iter().all(|head| !head.contains("/harbor/computer/view")), "an asleep computer is not probed");
+}
+
+#[tokio::test]
+#[allow(clippy::result_large_err)] // the handshake callback's error type is tungstenite's
+async fn computer_view_forwards_a_websocket_to_the_view_path_with_the_token() {
+    use tokio_tungstenite::tungstenite::handshake::server::{Request as WsRequest, Response as WsResponse};
+
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let harbor = format!("127.0.0.1:{}", listener.local_addr().unwrap().port());
+    let seen_ws = seen.clone();
+    tokio::spawn(async move {
+        while let Ok((stream, _)) = listener.accept().await {
+            let seen = seen_ws.clone();
+            tokio::spawn(async move {
+                let callback = move |request: &WsRequest, response: WsResponse| {
+                    let authorization = request.headers().get("authorization").and_then(|value| value.to_str().ok()).unwrap_or("").to_owned();
+                    seen.lock().unwrap().push(authorization);
+                    Ok(response)
+                };
+                let Ok(mut socket) = tokio_tungstenite::accept_hdr_async(stream, callback).await else { return };
+                if socket.send(TgMessage::Text("screen ready".into())).await.is_err() { return; }
+                while let Some(Ok(message)) = socket.next().await {
+                    if let TgMessage::Text(text) = message { let _ = socket.send(TgMessage::Text(text)).await; }
+                }
+            });
+        }
+    });
+
+    let (st, _) = state();
+    let server = view_listener(&st).await;
+    *st.team.address.lock().unwrap() = Some(server.clone());
+    link_directly(&st, &format!("http://{harbor}"), HARBOR_TOKEN, true);
+    let ticket = st.computer.mint_view_ticket_for_tests();
+
+    let (mut socket, _) = tokio_tungstenite::connect_async(format!("ws://{server}/computer/view/{ticket}/socket")).await.unwrap();
+    let greeting = tokio::time::timeout(std::time::Duration::from_secs(5), socket.next()).await.unwrap().unwrap().unwrap();
+    assert_eq!(greeting.to_text().unwrap(), "screen ready", "the server's message reaches the frame");
+    socket.send(TgMessage::Text("drive".into())).await.unwrap();
+    let echo = tokio::time::timeout(std::time::Duration::from_secs(5), socket.next()).await.unwrap().unwrap().unwrap();
+    assert_eq!(echo.to_text().unwrap(), "drive", "the frame's message reaches the server");
+    assert_eq!(seen.lock().unwrap().first().map(String::as_str), Some(format!("Bearer {HARBOR_TOKEN}").as_str()), "the handshake carried the token");
 }

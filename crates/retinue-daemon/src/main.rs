@@ -1129,7 +1129,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "secret.list" | "secret.set" | "secret.delete" | "secret.request.list" | "secret.request.answer" | "secret.request.decline" => secrets::rpc(st, method, &p).await,
         // The linked VPS computer (Harbor): desktop only, never remote, and no
         // employee tool reaches these (they go through `mcp.computer.*`).
-        "computer.status" | "computer.link" | "computer.unlink" | "computer.setEnabled" | "computer.action" | "computer.routines" | "computer.routine.run" | "computer.logs" => computer::rpc(st, method, &p).await,
+        "computer.status" | "computer.link" | "computer.unlink" | "computer.setEnabled" | "computer.action" | "computer.routines" | "computer.routine.run" | "computer.logs" | "computer.view" => computer::rpc(st, method, &p).await,
         "project.findByIdentity" => repo_identity::find_by_identity(st, &p),
         "project.sharedSettings.get" | "project.sharedSettings.trust" | "project.sharedSettings.untrust" | "project.sharedSettings.write" => shared_settings::rpc(st, method, &p),
         "worktree.abandoned" | "worktree.removeAbandoned" => worktree_cleanup::rpc(st, method, &p).await,
@@ -6031,6 +6031,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         .route("/v1/rpc", post(main_rpc))
         .route("/v1/events", get(start_ws))
+        // The computer's screen, framed by the app: its own route, proved by a
+        // per-window ticket rather than the daemon capability.
+        .merge(computer::view_routes())
         .with_state(st.clone());
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
