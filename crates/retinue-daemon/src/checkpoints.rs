@@ -141,7 +141,7 @@ fn file_dto(project: &Path, file: &Value, undo: bool, undo_reason: Option<&str>)
 /// Whether a complete saved diff exists, read from the check's own result so the
 /// rule stays in `experiments::prepare_reverse`: only its diff refusals mean the
 /// diff itself is missing or unusable.
-fn diff_complete(outcome: &Result<(), String>) -> bool {
+pub(crate) fn diff_complete(outcome: &Result<(), String>) -> bool {
     match outcome {
         Ok(()) => true,
         Err(message) => !INCOMPLETE_DIFF_REASONS.contains(&message.as_str()),
@@ -149,7 +149,7 @@ fn diff_complete(outcome: &Result<(), String>) -> bool {
 }
 
 /// Added and removed lines in a saved unified diff, headers excluded.
-fn line_counts(diff: Option<&str>) -> (Option<u32>, Option<u32>) {
+pub(crate) fn line_counts(diff: Option<&str>) -> (Option<u32>, Option<u32>) {
     let Some(diff) = diff.filter(|text| !text.is_empty()) else { return (None, None) };
     let mut additions = 0u32;
     let mut deletions = 0u32;

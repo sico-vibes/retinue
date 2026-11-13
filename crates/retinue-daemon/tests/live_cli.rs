@@ -590,12 +590,23 @@ fn daemon_live_summaries_are_present_and_sanitised() {
                 path.display()
             );
             // FIX39 P13: the steer gate is open wherever the adapter can steer,
-            // and every other provider is an honest Queue fallback.
+            // and every other provider is an honest Queue fallback. OpenCode
+            // steers through the `_session/steering` extension its ACP server
+            // advertises from 2.2.7: a recording made since says what the steer
+            // did, and one made before it says `unsupported`, which is honest
+            // for that CLI. Neither is a transport failure.
             if value["provider"] == "codex" {
                 assert_ne!(
                     value["steer"],
                     "unsupported",
                     "{} recorded Codex steering as unsupported",
+                    path.display()
+                );
+            } else if value["provider"] == "opencode" {
+                let steer = value["steer"].as_str().unwrap_or("");
+                assert!(
+                    ["unsupported", "accepted", "conflict"].contains(&steer),
+                    "{} recorded an unclear OpenCode steer: {steer}",
                     path.display()
                 );
             } else {

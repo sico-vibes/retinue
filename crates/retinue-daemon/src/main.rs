@@ -38,6 +38,8 @@ use uuid::Uuid;
 
 mod catalog;
 mod accounts;
+// 11 November 2026: the main providers are always on, the rest behind switches.
+mod provider_gate;
 mod custom_models;
 mod diagnostics;
 mod fanout;
@@ -56,6 +58,9 @@ mod subbots_tests;
 mod queue;
 mod retry;
 mod experiments;
+// Lane 6 (11 November 2026): what the owner is looking at, and the snooze that
+// keeps a conversation quiet until it needs them.
+mod attention;
 // Authorised media preview and the per-turn checkpoint report.
 mod media;
 mod checkpoints;
@@ -92,9 +97,13 @@ mod shared_settings;
 #[allow(dead_code)]
 mod worktree_attach;
 mod workspace;
+// Lane 7: the local dev servers one conversation started (`preview.servers`).
+mod preview;
 // FIX45: the actual repository changes of a conversation's project folder.
 mod repository;
 mod git_ops;
+// Review scopes: this turn, uncommitted, the branch and the last commit, for the review screen.
+mod review_scopes;
 mod pull_request;
 // Remote mode (P1): the gateway, its policy and its `remote.*` API.
 mod remote;
@@ -154,6 +163,12 @@ struct AppState {
     starting_cancels: Arc<Mutex<HashSet<String>>>,
     /// Warmed sessions that have had no turn since warming, oldest first (LRU).
     warm_lru: Arc<Mutex<Vec<String>>>,
+    /// Lane 6: the focus the desktop last reported and when the owner last typed
+    /// in each conversation. Memory only.
+    attention: Arc<attention::Attention>,
+    /// Lane 7: who is watching a conversation's local servers, and what they were
+    /// told last. It holds no conversation content.
+    preview: Arc<preview::Preview>,
 }
 #[derive(Clone)]
 struct Adapters {
@@ -186,17 +201,27 @@ impl AppState {
                 if self.deleted_sessions.lock().await.contains(id) { return; }
             }
         }
+        // Lane 6, task B: the first approval, question or failure in a snoozed
+        // conversation wakes it. The wake is announced after the event itself;
+        // it must not come back through `emit`, which would recurse.
+        let woken = crate::attention::wake_if_snoozed(self, kind, &payload);
         // Phase 5, section 7: a permission card or a failed turn may reach the
-        // owner's phone. Content-free, and only when the owner turned it on.
+        // owner's phone. Content-free, and only when the owner turned it on and
+        // is not already looking at that conversation (`crate::attention`).
         crate::remote::push::on_event(self, kind, &payload).await;
-        if let Ok((sequence, event_id, timestamp)) = self.db.push_event(kind, &payload) {
+        self.persist_event(kind, &payload);
+        if let Some(summary) = woken { self.persist_event("session.changed", &summary); }
+    }
+    /// The one way an event reaches the log and the live sockets.
+    fn persist_event(&self, kind: &str, payload: &Value) {
+        if let Ok((sequence, event_id, timestamp)) = self.db.push_event(kind, payload) {
             let _ = self.events.send(EventEnvelope {
                 v: 1,
                 event_id,
                 sequence,
                 timestamp,
                 event_type: kind.into(),
-                payload,
+                payload: payload.clone(),
             });
         }
     }
@@ -545,25 +570,38 @@ fn valid_disabled_runtimes(value: &Value) -> bool {
     value.as_array().is_some_and(|ids| ids.len() <= 32 && ids.iter().all(|id| id.as_str().is_some_and(|id| !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)))))
 }
 
-/// The owner's switched-off coding agents (`runtimes.disabled`), empty by default.
+/// The owner's switched-off coding agents and providers (`runtimes.disabled`),
+/// empty by default. A main provider is never in it: `provider_gate` drops one
+/// an older install or a restored backup saved.
 fn disabled_runtimes(db: &Storage) -> Vec<String> {
-    db.settings().ok().and_then(|settings| settings["runtimes.disabled"].as_array().map(|ids| ids.iter().filter_map(|id| id.as_str().map(str::to_owned)).collect())).unwrap_or_default()
+    provider_gate::disabled_ids(db)
 }
 
 fn runtime_is_disabled(runtime: &Value, disabled: &[String]) -> bool {
     disabled.iter().any(|off| runtime["id"].as_str() == Some(off.as_str()) || runtime["provider"].as_str() == Some(off.as_str()))
 }
 
-/// Marks a row the owner turned off, or clears the mark on one turned back on
-/// (a stale `disabled` status waits for the next scan to read the CLI again).
-fn mark_runtime_disabled(runtime: &mut Value, disabled: &[String]) {
-    let off = runtime_is_disabled(runtime, disabled);
+/// Stamps a runtime row with its provider's state: `main` (always on), `enabled`
+/// (this copy is offered), and the mark Settings reads for one that is off.
+fn stamp_runtime_state(runtime: &mut Value, disabled: &[String]) {
+    // A main provider cannot be switched off by its provider id; one installed
+    // copy can still be switched off by its own runtime id.
+    let main = runtime["provider"].as_str().is_some_and(provider_gate::is_main_provider);
+    let provider_off = !main && runtime["provider"].as_str().is_some_and(|provider| disabled.iter().any(|off| off == provider));
+    let copy_off = runtime["id"].as_str().is_some_and(|id| disabled.iter().any(|off| off == id));
+    let off = provider_off || copy_off;
     let Some(fields) = runtime.as_object_mut() else { return; };
+    fields.insert("main".into(), json!(main));
+    fields.insert("enabled".into(), json!(!off));
     if off {
         fields.insert("disabled".into(), json!(true));
         fields.insert("status".into(), json!("disabled"));
     } else {
         fields.remove("disabled");
+        // A row an older switch left at `disabled` is not claimed to be offered;
+        // the next scan reads the CLI again. A main provider reaches here without
+        // the owner turning anything back on.
+        if fields.get("status").and_then(Value::as_str) == Some("disabled") { fields.insert("status".into(), json!("offline")); }
     }
 }
 
@@ -572,9 +610,30 @@ fn runtime_off_error() -> DispatchError {
     derr("provider_unavailable", "This coding agent is turned off in Settings › Coding agents.", StatusCode::CONFLICT)
 }
 
+/// The refusal for a coding agent whose provider is switched off (Settings ›
+/// Providers, 11 November 2026).
+fn provider_off_error() -> DispatchError {
+    derr("provider_unavailable", "This coding agent is turned off in Settings › Providers.", StatusCode::CONFLICT)
+}
+
+/// The refusal for one runtime row: the provider-level switch and the
+/// per-install switch live on two pages, so the sentence names the right one.
+fn runtime_off_for(db: &Storage, runtime: &Value) -> DispatchError {
+    if provider_gate::provider_is_off(db, runtime["provider"].as_str().unwrap_or("")) { provider_off_error() } else { runtime_off_error() }
+}
+
 /// `retinue_runtime::discover()` without the providers the owner turned off.
+///
+/// One exception (11 November 2026): a provider that is off and has never been
+/// recorded is probed once, so Settings can tell "installed, switched off" from
+/// "not installed" on the Providers page. Once it has a saved row it is not
+/// probed again while it is off, so turning a coding agent off still saves the
+/// startup scan.
 async fn discover_enabled(st: &AppState) -> Vec<retinue_runtime::DiscoveredRuntime> {
-    retinue_runtime::discover_except(&disabled_runtimes(&st.db)).await
+    let disabled = disabled_runtimes(&st.db);
+    let recorded = st.db.runtimes().unwrap_or_default().iter().filter_map(|runtime| runtime["provider"].as_str().map(str::to_owned)).collect::<Vec<_>>();
+    let probe = disabled.iter().filter(|provider| !recorded.iter().any(|recorded| recorded == *provider)).cloned().collect::<Vec<_>>();
+    retinue_runtime::discover_except(&probe).await
 }
 
 fn persist_runtime_discovery(
@@ -604,7 +663,7 @@ fn persist_runtime_discovery(
                 inherit_sign_in_failure(&mut value, previous);
             }
         }
-        mark_runtime_disabled(&mut value, &disabled);
+        stamp_runtime_state(&mut value, &disabled);
         db.upsert_runtime(&value)?;
         values.push(value);
     }
@@ -613,7 +672,7 @@ fn persist_runtime_discovery(
     for previous in saved {
         if values.iter().any(|value| value["id"] == previous["id"]) || !runtime_is_disabled(&previous, &disabled) { continue; }
         let mut kept = previous;
-        mark_runtime_disabled(&mut kept, &disabled);
+        stamp_runtime_state(&mut kept, &disabled);
         db.upsert_runtime(&kept)?;
         values.push(kept);
     }
@@ -757,11 +816,17 @@ async fn publish_runtime_discovery(
 }
 
 /// Seed `st.runtimes` from the saved rows before discovery finishes, so a send
-/// immediately after boot can still resolve its runtime.
+/// immediately after boot can still resolve its runtime. A row whose `main` and
+/// `enabled` stamp changed is written back, so `app.snapshot` (which reads the
+/// table) agrees with the roster from the first paint.
 async fn load_saved_runtimes(st: &AppState) {
     if let Ok(mut saved) = st.db.runtimes() {
         let disabled = disabled_runtimes(&st.db);
-        for runtime in &mut saved { mark_runtime_disabled(runtime, &disabled); }
+        for runtime in &mut saved {
+            let before = runtime.clone();
+            stamp_runtime_state(runtime, &disabled);
+            if *runtime != before { let _ = st.db.upsert_runtime(runtime); }
+        }
         *st.runtimes.write().await = saved;
     }
 }
@@ -1143,6 +1208,11 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             let refs = match fields.get("envRefs") { None => None, Some(value) => Some(secrets::parse_refs(value)?) };
             fields.as_object_mut().unwrap().remove("envRefs");
             let runtime_id = fields["runtimeId"].as_str().unwrap_or(existing["runtimeId"].as_str().unwrap_or("")).to_owned();
+            // A bot may keep the agent it already runs on, but a save cannot move
+            // it onto one that is switched off (11 November 2026).
+            if fields["runtimeId"].as_str().is_some_and(|id| Some(id) != existing["runtimeId"].as_str()) {
+                provider_gate::refuse_off_runtime(st, &runtime_id).await?;
+            }
             // Phase 5: the account must exist and belong to this bot's provider.
             if let Some(account) = fields["accountId"].as_str() {
                 accounts::check_bot_account(st, Some(account), Some(&runtime_id)).await?;
@@ -1280,6 +1350,9 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             Ok(json!({"stopping":true}))
         }
         "runtime.list" => Ok(json!({"runtimes":*st.runtimes.read().await})),
+        // 11 November 2026: every provider Retinue knows, installed or not, with
+        // whether it is main, whether it is on, and whether it was found here.
+        "provider.list" => Ok(provider_gate::list(st).await),
         "runtime.refresh" => {
             st.catalog.invalidate_all();
             let values = refresh_runtime_discovery(st, discover_enabled(st)).await.map_err(|_| derr("internal", "Could not save the coding agent scan.", StatusCode::INTERNAL_SERVER_ERROR))?;
@@ -1480,6 +1553,8 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "session.repository" => repository::session_repository(st,&p).await,
         // Phase 3: review and act on the conversation's changes, and open a pull request.
         "session.git.diff" => git_ops::diff(st,&p).await,
+        // Which review scopes have something to show for this conversation, read-only.
+        "session.git.scopes" => review_scopes::availability_rpc(st,&p).await,
         "session.git.stage" => git_ops::stage(st,&p).await,
         "session.git.revert" => git_ops::revert(st,&p).await,
         "session.git.revertUndo" => git_ops::revert_undo(st,&p).await,
@@ -1487,6 +1562,8 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "session.pr.create" => pull_request::create(st,&p).await,
         // DELEGATION item 4: where this conversation is working, read-only.
         "session.workspace" => workspace::rpc(st, &p).await,
+        // Lane 7: the loopback dev servers this conversation started, read-only.
+        "preview.servers" => preview::servers(st, &p).await,
         "session.new" => new_session(st, p).await,
         "session.resume" => resume_session(st, p).await,
         "session.model.update" => update_session_model(st, p).await,
@@ -1504,6 +1581,10 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "session.steer" => session_steer(st, p).await,
         "session.limit.resume" => session_limit_resume(st, p).await,
         "session.limit.snooze" => session_limit_snooze(st, p).await,
+        // Lane 6: the owner's "snooze until it needs me", and what the desktop
+        // is looking at. Both desktop-only; `attention.focus` is `never` remote.
+        "session.snooze" => session_snooze(st, p).await,
+        "attention.focus" => attention_focus(st, &p),
         "session.handoff.draft" => handoff_draft(st, &p),
         "turn.retry.cancel" => retry::cancel_rpc(st, &p).await,
         "session.queue.add" | "session.queue.list" | "session.queue.update" | "session.queue.reorder" | "session.queue.delete" | "session.queue.send_now" | "session.queue.resume" => queue::queue_rpc(st, method, &p).await,
@@ -1740,6 +1821,11 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             if k.starts_with("mcp.external.") {
                 return Err(derr("invalid_argument", "use external.enable", StatusCode::BAD_REQUEST));
             }
+            // A one-time migration marker is written by the daemon, not by a
+            // client; it records that a rule has already been applied once.
+            if k.starts_with("migration.") {
+                return Err(derr("invalid_argument", "Migration markers are written by Retinue itself.", StatusCode::BAD_REQUEST));
+            }
             let value = validate_setting(k, &p["value"])?;
             if k == "permissions.default_mode" && value == "bypass" && p["confirm"] != true { return Err(derr("invalid_argument", "Confirm making Full access the default first.", StatusCode::BAD_REQUEST)); }
             let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k=="composer.sendShortcut"||k=="shortcuts.bindings";
@@ -1860,6 +1946,15 @@ fn validate_setting(k: &str, value: &Value) -> Result<Value, DispatchError> {
     if k == "companion.positions" && !valid_companion_positions(value) { return Err(derr("invalid_argument", "companion.positions must map at most 8 display names to {x,y} numbers", StatusCode::BAD_REQUEST)); }
     if k == "questions.expirySecs" && !value.as_i64().is_some_and(|secs| (1_800..=604_800).contains(&secs)) { return Err(derr("invalid_argument", "questions.expirySecs requires an integer between 1800 and 604800", StatusCode::BAD_REQUEST)); }
     if k == "runtimes.disabled" && !valid_disabled_runtimes(value) { return Err(derr("invalid_argument", "runtimes.disabled must be an array of up to 32 provider or runtime ids", StatusCode::BAD_REQUEST)); }
+    // Claude Code, Codex and OpenCode are always on (11 November 2026): the
+    // provider-level switch cannot turn them off, so a write that names one is
+    // refused rather than silently ignored. One installed copy is still its own
+    // runtime id, which the per-install switch uses.
+    if k == "runtimes.disabled" {
+        if let Some(main) = provider_gate::main_provider_named(value) {
+            return Err(derr("invalid_argument", &format!("{} is always on and cannot be turned off. Turn off one installed copy instead.", retinue_runtime::provider_display_name(main)), StatusCode::BAD_REQUEST));
+        }
+    }
     if k == "usage.readCliSignIns" && !value.is_boolean() { return Err(derr("invalid_argument", "usage.readCliSignIns requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "composer.sendShortcut" && !valid_send_shortcut(value) { return Err(derr("invalid_argument", "composer.sendShortcut must be enter, ctrl+enter or shift+enter", StatusCode::BAD_REQUEST)); }
     if k == "shortcuts.bindings" && !valid_shortcut_bindings(value) { return Err(derr("invalid_argument", "shortcuts.bindings must map at most 40 action ids to a printable ASCII shortcut of up to 40 characters, or null", StatusCode::BAD_REQUEST)); }
@@ -2356,6 +2451,9 @@ async fn agent_create_from_rpc(st: &AppState, mut fields: Value) -> Result<Value
         object.entry("approvalMode").or_insert_with(|| json!("bypass"));
     }
     let runtime_id = fields["runtimeId"].as_str().ok_or_else(|| derr("invalid_argument", "runtimeId is required", StatusCode::BAD_REQUEST))?.to_owned();
+    // An optional provider that is switched off cannot be chosen for a new bot
+    // (11 November 2026); a bot that already exists on one keeps it.
+    provider_gate::refuse_off_runtime(st, &runtime_id).await?;
     // Phase 5: the account must exist and belong to this bot's provider.
     if let Some(account) = fields["accountId"].as_str() {
         accounts::check_bot_account(st, Some(account), Some(&runtime_id)).await?;
@@ -2449,8 +2547,14 @@ fn gate_default(provider: &str, setting: &str) -> bool {
 /// capability behind `runtime_capabilities().settings.steer`; the
 /// `exec_gate.<provider>.steer` default and `session.steer` both read it, so a
 /// provider whose adapter supports steering is never gated off by accident.
+/// Codex has `turn/steer`. Claude takes one more `--input-format stream-json`
+/// user message with `priority: "next"` into the running turn (see
+/// `ClaudeAdapter::steer`). OpenCode's ACP adapter has the `_session/steering`
+/// extension it advertises as `_meta.steering.supported` (2.2.7 and later).
+/// Every other ACP provider omits that advertisement and is refused by the
+/// adapter itself.
 fn provider_can_steer(provider: &str) -> bool {
-    matches!(provider, "codex")
+    matches!(provider, "codex" | "claude" | "opencode")
 }
 const EXEC_UNAVAILABLE: &str = "The requested setting is unavailable for this runtime until its execution check passes.";
 fn safe_requested_options(options: &ExecOptions) -> Value {
@@ -2510,6 +2614,22 @@ async fn opencode_thinking_support(st:&AppState,runtime:&Value,model:&str)->Opti
     Some(!levels.is_empty())
 }
 
+/// Whether the installed OpenCode can steer a running turn: its
+/// `_session/steering` extension shipped in 2.2.7, and an older CLI refuses it,
+/// so the capability is not claimed there. An unknown or unparseable version
+/// keeps the provider-level answer; the adapter's own `_meta` check then
+/// refuses a steer cleanly instead of pretending.
+fn opencode_steering_supported(provider: &str, version: Option<&str>) -> bool {
+    if provider != "opencode" { return true; }
+    let Some(version) = version else { return true; };
+    let mut parts = [0u64; 3];
+    for (slot, part) in parts.iter_mut().zip(version.split('.')) {
+        let Ok(value) = part.parse::<u64>() else { return true; };
+        *slot = value;
+    }
+    parts >= [2, 2, 7]
+}
+
 async fn runtime_capabilities(st:&AppState,p:&Value)->Result<Value,DispatchError>{
     let runtime_id=p["runtimeId"].as_str().filter(|s|!s.is_empty()).ok_or_else(||derr("invalid_argument","runtimeId is required",StatusCode::BAD_REQUEST))?;
     let runtime=st.runtimes.read().await.iter().find(|r|r["id"]==runtime_id).cloned().ok_or_else(||derr("not_found","runtime not found",StatusCode::NOT_FOUND))?;
@@ -2537,10 +2657,12 @@ async fn runtime_capabilities(st:&AppState,p:&Value)->Result<Value,DispatchError
     for (setting,provider_supported,scope,evidence) in table {
         let key=match setting{"model"=>format!("exec_gate.{provider}.model"),"thinking"=>format!("exec_gate.{provider}.thinking"),"serviceTier"=>format!("exec_gate.{provider}.serviceTier"),"instructions"=>format!("exec_gate.{provider}.instructions"),"steer"=>format!("exec_gate.{provider}.steer"),_=>String::new()};
         let gate=if key.is_empty(){true}else{settings[&key].as_bool().unwrap_or(gate_default(provider,setting))};
-        let supported=if setting=="thinking"{provider_supported && opencode_thinking.unwrap_or(true)}else{provider_supported};
+        // Steering is claimed only where the installed OpenCode is new enough to
+        // advertise its extension; the adapter refuses a steer on an older one.
+        let supported=if setting=="thinking"{provider_supported && opencode_thinking.unwrap_or(true)}else if setting=="steer"{provider_supported && opencode_steering_supported(provider, runtime["version"].as_str())}else{provider_supported};
         let mut value=json!({"supported":supported,"enabled":supported&&gate,"scope":scope,"evidence":evidence});
         if setting=="customEnv"{value["allowedKeys"]=json!(["LANG","LC_ALL","TZ","NO_COLOR","TERM"]);}
-        if !supported{value["reason"]=json!(if setting=="customEnv"{"environment options are unsupported for this runtime"}else if setting=="thinking"&&provider=="opencode"{"model_has_no_effort_levels"}else if setting=="thinking"{"provider_unsupported"}else{"setting is unsupported by this runtime"});}
+        if !supported{value["reason"]=json!(if setting=="customEnv"{"environment options are unsupported for this runtime"}else if setting=="thinking"&&provider=="opencode"{"model_has_no_effort_levels"}else if setting=="thinking"{"provider_unsupported"}else if setting=="steer"&&provider=="opencode"{"OpenCode steering needs version 2.2.7 or later"}else{"setting is unsupported by this runtime"});}
         else if !gate{value["reason"]=json!("execution entry gate is disabled");}
         reported.insert(setting.into(),value);
     }
@@ -2571,6 +2693,10 @@ async fn runtime_capabilities(st:&AppState,p:&Value)->Result<Value,DispatchError
     // the tool anyway still gets its image card.
     let generates_images = matches!(provider, "codex");
     let mut result=json!({"runtimeId":runtime_id,"versionRecognized":version_recognized,"generatesImages":generates_images,"settings":reported,"globalConcurrency":{"limit":global_limit,"active":active},"agentConcurrency":agent_concurrency,"agentConcurrencies":agents,"hostDependent":true});
+    // 11 November 2026: whether this is one of the always-on providers, and
+    // whether this copy is offered at all.
+    result["main"] = json!(provider_gate::is_main_provider(provider));
+    result["enabled"] = json!(!runtime_is_disabled(&runtime, &disabled_runtimes(&st.db)));
     if agent_runtime_mismatch{result["agentRuntimeMismatch"]=json!(true);}
     Ok(result)
 }
@@ -2703,7 +2829,7 @@ pub(crate) async fn new_session_with(st: &AppState, p: Value, pin: Option<&ModeP
         .find(|r| r["id"] == runtime_id)
         .cloned()
         .ok_or_else(|| derr("not_found", "runtime not found", StatusCode::NOT_FOUND))?;
-    if runtime_is_disabled(&runtime, &disabled_runtimes(&st.db)) { return Err(runtime_off_error()); }
+    if runtime_is_disabled(&runtime, &disabled_runtimes(&st.db)) { return Err(runtime_off_for(&st.db, &runtime)); }
     let spec = runtime_from(&runtime);
     validate_spawn_target(&spec)?;
     let provider = runtime["provider"].as_str().unwrap_or("").to_owned();
@@ -2984,7 +3110,7 @@ async fn resume_inner(st: &AppState, sid: &str, allow_states: &[&str]) -> Result
                 StatusCode::BAD_GATEWAY,
             )
         })?;
-    if runtime_is_disabled(&rt, &disabled_runtimes(&st.db)) { return Err(runtime_off_error()); }
+    if runtime_is_disabled(&rt, &disabled_runtimes(&st.db)) { return Err(runtime_off_for(&st.db, &rt)); }
     let spec = runtime_from(&rt);
     validate_spawn_target(&spec)?;
     let provider = row["provider"].as_str().unwrap_or("").to_owned();
@@ -4301,6 +4427,12 @@ async fn session_prompt_impl(st: &AppState, p: Value, origin: PromptOrigin) -> R
         }
         next_state.to_owned()
     };
+    // Lane 6: the owner typing in a conversation keeps its routine alerts quiet
+    // for a minute, and ends a snooze. Daemon-internal sends (a queue item, a
+    // retry, an automation, a task, a teammate, the MCP) are not the owner.
+    if origin == PromptOrigin::User {
+        crate::attention::owner_sent(st, &sid).await;
+    }
     // A question's answer starts a turn of its own: the assignment the question
     // belongs to adopts it, so this turn's ending finishes that assignment and
     // relays the child's final text, even though the answer waited in the queue.
@@ -4526,7 +4658,8 @@ async fn run_turn(state: AppState, driver: TurnDriver) {
 }
 
 /// Adds text to the turn that is running right now on a runtime that can
-/// truly steer (Codex only). The text is recorded as an ordinary user message
+/// truly steer (Codex, Claude through one more stream-json user message, and
+/// OpenCode 2.2.7 and later). The text is recorded as an ordinary user message
 /// with `meta.kind == "steer"`; if the provider reports the turn is gone the
 /// text is queued instead of being dropped. Steering never changes the
 /// permission mode or cancels the turn.
@@ -4611,6 +4744,9 @@ pub(crate) async fn steer_live(st: &AppState, sid: &str, text: &str, client_mess
             if !user_message.is_null() {
                 st.emit("message.completed", json!({"sessionId":sid,"turnId":turn_id,"messageId":user_message["id"],"role":"user","message":user_message})).await;
             }
+            // Lane 6: a steer from the window (or the queue's Send now) is the
+            // owner typing here; one from the MCP is a bot's own message.
+            if mcp_client.is_none() { crate::attention::owner_sent(st, sid).await; }
             Ok(SteerAttempt::Accepted { turn_id })
         }
         Ok(SteerOutcome::Stale) => Ok(SteerAttempt::Stale),
@@ -4667,6 +4803,47 @@ async fn session_limit_snooze(st: &AppState, p: Value) -> Result<Value, Dispatch
     let flags = st.db.session_limit_flags(&sid).map_err(|e| derr("internal", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
     if let Ok(summary) = st.db.session_event_summary(&sid) { st.emit("session.changed", summary).await; }
     Ok(limit_flags_value(flags))
+}
+
+/// The conversation a `session.snooze` call may change. Not the usage-limit
+/// snooze above (`limit_mutable_session`): this one is for a working
+/// conversation, so it only has to exist and not be archived.
+fn snooze_mutable_session(st: &AppState, p: &Value) -> Result<String, DispatchError> {
+    let sid = p["sessionId"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "sessionId is required", StatusCode::BAD_REQUEST))?.to_owned();
+    let row = st.db.session_brief(&sid).map_err(|_| derr("not_found", "Conversation not found.", StatusCode::NOT_FOUND))?;
+    if row["archived"] == true { return Err(derr("not_found", "Conversation is archived.", StatusCode::NOT_FOUND)); }
+    Ok(sid)
+}
+
+/// `session.snooze`: keep this conversation quiet (no phone push and no other
+/// daemon-side alert for its progress) until it needs the owner. The first
+/// approval, question or failure clears it, and so does the owner's own message
+/// (`attention::wake_if_snoozed`, `attention::owner_sent`). Separate from the
+/// usage-limit snooze (`session.limit.snooze`).
+async fn session_snooze(st: &AppState, p: Value) -> Result<Value, DispatchError> {
+    let snoozed = p["snoozed"].as_bool().ok_or_else(|| derr("invalid_argument", "snoozed must be true or false.", StatusCode::BAD_REQUEST))?;
+    let sid = snooze_mutable_session(st, &p)?;
+    let changed = st.db.session_set_snoozed(&sid, snoozed).map_err(|e| derr("internal", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+    if changed {
+        if let Ok(summary) = st.db.session_event_summary(&sid) { st.emit("session.changed", summary).await; }
+    }
+    Ok(json!({"sessionId":sid,"snoozed":snoozed}))
+}
+
+/// `attention.focus`: what the desktop is looking at, and whether it has focus.
+/// The window sends it when the open conversation changes, when it gains or
+/// loses focus, and as a heartbeat; a report stands for 90 seconds
+/// (`attention::FOCUS_TTL`). Memory only, never stored, never logged, and never
+/// reachable from the remote gateway.
+fn attention_focus(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+    let session_id = match p.get("sessionId") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(id)) if !id.trim().is_empty() && id.chars().count() <= 128 => Some(id.clone()),
+        Some(_) => return Err(derr("invalid_argument", "sessionId must be a conversation id or null.", StatusCode::BAD_REQUEST)),
+    };
+    let visible = p["visible"].as_bool().ok_or_else(|| derr("invalid_argument", "visible must be true or false.", StatusCode::BAD_REQUEST))?;
+    st.attention.report_focus(session_id, visible, Instant::now());
+    Ok(json!({"reported":true}))
 }
 
 const MAX_PROMPT_ATTACHMENTS: usize = 8;
@@ -4874,6 +5051,32 @@ async fn finish_turn_delivery(st: &AppState, turn_id: &str, infer_unknown: bool)
     }
 }
 
+/// How long a conversation's first turn may take to produce its first output.
+const TURN_START_LIMIT: std::time::Duration = std::time::Duration::from_secs(45);
+/// The same window for a turn that resumes an existing provider session: a long
+/// conversation takes longer to answer its first prompt after a resume
+/// (11 November 2026: a message into a long OpenCode conversation was stopped
+/// with no tool calls started, because the resume produced nothing for 45 s).
+const RESUMED_TURN_START_LIMIT: std::time::Duration = std::time::Duration::from_secs(180);
+/// The window once output has started. It is the same for every turn.
+const TURN_SILENCE_LIMIT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// The start window for one forwarder. `first_turn` and `resumed_turn` are
+/// parameters so a test can stand in short durations for the real limits.
+fn start_limit(resumes_provider_session: bool, first_turn: std::time::Duration, resumed_turn: std::time::Duration) -> std::time::Duration {
+    if resumes_provider_session { resumed_turn } else { first_turn }
+}
+
+/// Whether the forwarder serves a turn that continues an existing provider
+/// session: the conversation has a provider session id and at least one prompt
+/// has already been delivered to that context. A fresh context (a new
+/// conversation, or a resume that fell back to a new session) reads as a first
+/// turn, because starting a provider session is not the slow part.
+fn resumes_provider_session(st: &AppState, sid: &str) -> bool {
+    st.db.session_had_provider_turns(sid).unwrap_or(false)
+        && st.db.session_brief(sid).ok().is_some_and(|row| row["providerSessionId"].as_str().is_some_and(|id| !id.is_empty()))
+}
+
 async fn forward_events(
     st: AppState,
     sid: String,
@@ -4881,16 +5084,8 @@ async fn forward_events(
     runtime_id: String,
     rx: tokio::sync::mpsc::Receiver<AgentEvent>,
 ) {
-    forward_events_with_timeouts(
-        st,
-        sid,
-        provider,
-        runtime_id,
-        rx,
-        std::time::Duration::from_secs(45),
-        std::time::Duration::from_secs(300),
-    )
-    .await;
+    let start = start_limit(resumes_provider_session(&st, &sid), TURN_START_LIMIT, RESUMED_TURN_START_LIMIT);
+    forward_events_with_timeouts(st, sid, provider, runtime_id, rx, start, TURN_SILENCE_LIMIT).await;
 }
 
 fn completed_tool_state(raw: &Value) -> &'static str {
@@ -5769,10 +5964,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         activation_locks: Arc::new(Mutex::new(HashMap::new())),
         starting_cancels: Arc::new(Mutex::new(HashSet::new())),
         warm_lru: Arc::new(Mutex::new(Vec::new())),
+        attention: Arc::new(attention::Attention::default()),
+        preview: Arc::new(preview::Preview::default()),
     };
     // A send right after boot must not fail with "runtime is not installed":
     // show the saved roster until discovery replaces it. `validate_spawn_target`
     // still guards a missing executable.
+    //
+    // 11 November 2026: Claude Code, Codex and OpenCode are always on and every
+    // other provider starts off, applied once and never over what the owner
+    // already uses (see `provider_gate`).
+    if provider_gate::apply_defaults(&st.db).is_err() { tracing::warn!("provider defaults could not be saved"); }
     load_saved_runtimes(&st).await;
     if let Ok(paused) = st.db.queue_paused_sessions() { st.queue.mark_startup_paused(paused); }
     // A run interrupted by an unclean exit is not a failure; leave its session.
@@ -5839,6 +6041,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // file that lands after its turn ended still reaches the transcript.
     let media_state = st.clone();
     tokio::spawn(async move { media::sweep_loop(media_state).await; });
+    // Lane 7: the local dev servers a conversation started are re-read every two
+    // seconds for as long as a client is watching that conversation.
+    let preview_state = st.clone();
+    tokio::spawn(async move { preview::sweep_loop(preview_state).await; });
     let deletion_state = st.clone();
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(250));
@@ -7174,7 +7380,7 @@ mod phase2a_tests {
     /// a second state on the same file.
     pub(crate) fn state_with(db:Storage)->(AppState,broadcast::Receiver<EventEnvelope>){
         let db=Arc::new(db);db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"})).unwrap();let(events,rx)=broadcast::channel(64);
-        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new()))};(st,rx)
+        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default())};(st,rx)
     }
     #[tokio::test]
     async fn bot_purge_is_confirmed_atomic_and_removes_both_sides_only() {
@@ -8480,6 +8686,66 @@ mod phase2a_tests {
         assert_eq!(silence_message("claude",true,std::time::Duration::from_secs(300)),"Claude Code sent nothing for 5 minutes, so Retinue stopped this turn. Send a message to try again.");
         assert_eq!(silence_message("codex",false,std::time::Duration::from_secs(45)),"Codex did not start answering within 45 seconds, so Retinue stopped this turn. Send a message to try again.");
     }
+    // 11 November 2026: a long conversation gets a longer start window, and only
+    // a turn that resumes a provider session gets it.
+    #[tokio::test]
+    async fn a_resumed_conversation_gets_the_longer_start_limit(){
+        let short=std::time::Duration::from_millis(60);
+        let long=std::time::Duration::from_millis(600);
+        assert_eq!(TURN_START_LIMIT,std::time::Duration::from_secs(45));
+        assert_eq!(RESUMED_TURN_START_LIMIT,std::time::Duration::from_secs(180));
+        assert_eq!(TURN_SILENCE_LIMIT,std::time::Duration::from_secs(300),"the window after output has started is unchanged");
+        assert_eq!(start_limit(false,short,long),short,"a first turn keeps the short limit");
+        assert_eq!(start_limit(true,short,long),long,"a resumed turn gets the long one");
+        assert!(silence_message("codex",false,RESUMED_TURN_START_LIMIT).contains("within 3 minutes"),"the stop names the limit that applied");
+        // Both facts are needed: a provider session id alone is a session that
+        // has not answered anything yet.
+        let (st,_events)=state();
+        let sid="start-limit-resumed";
+        st.db.create_session(sid,"rt-test","codex",".","Limit").unwrap();
+        assert!(!resumes_provider_session(&st,sid),"a fresh conversation is a first turn");
+        st.db.set_session_provider_id(sid,"native",true).unwrap();
+        assert!(!resumes_provider_session(&st,sid),"no prompt has reached the provider yet");
+        st.db.merge_session_data(sid,&json!({"providerTurns":1})).unwrap();
+        assert!(resumes_provider_session(&st,sid),"a provider session with an earlier turn is a resumed turn");
+        // A context that fell back to a fresh session reads as a first turn again.
+        st.db.clear_session_provider_id(sid).unwrap();
+        assert!(!resumes_provider_session(&st,sid));
+    }
+    #[tokio::test]
+    async fn a_first_turn_stops_at_the_short_limit_and_a_resumed_turn_at_the_long_one(){
+        let short=std::time::Duration::from_millis(60);
+        let long=std::time::Duration::from_millis(600);
+        for resumes in [false,true]{
+            let(st,mut events)=state();
+            let sid=if resumes{"start-limit-long"}else{"start-limit-short"};
+            let turn=if resumes{"start-limit-long-turn"}else{"start-limit-short-turn"};
+            st.db.create_session(sid,"rt-test","codex",".","Limit").unwrap();
+            st.db.create_turn(turn,sid).unwrap();
+            st.db.update_session_state(sid,"working").unwrap();
+            st.active_turns.lock().await.insert(sid.into(),turn.into());
+            let adapter=Arc::new(LifecycleAdapter{reject_resume:false,allow_resume:true,resume_calls:Default::default(),new_calls:Default::default(),close_calls:Default::default()});
+            let handle=SessionHandle{session_id:sid.into(),provider_session_id:"native".into(),capabilities:retinue_agent_core::AgentCapabilities::default()};
+            let runtime=RuntimeSpec{runtime_id:"rt-test".into(),provider:"codex".into(),executable:PathBuf::from("fake"),args:vec![],cwd:None};
+            st.sessions.lock().await.insert(sid.into(),ActiveSession{handle,runtime,adapter,launch_approval_mode:ApprovalMode::Ask});
+            let(tx,rx)=tokio::sync::mpsc::channel(8);
+            let started=Instant::now();
+            let task=tokio::spawn(forward_events_with_timeouts(st.clone(),sid.into(),"codex".into(),"rt-test".into(),rx,start_limit(resumes,short,long),long));
+            if resumes {
+                // Nothing for twice the short window: a resumed turn is not stopped early.
+                assert!(tokio::time::timeout(short*2,events.recv()).await.is_err(),"a resumed turn is not stopped at the short limit");
+            }
+            let error=loop{
+                let event=tokio::time::timeout(std::time::Duration::from_secs(3),events.recv()).await.unwrap().unwrap();
+                if event.event_type=="turn.error" { break event; }
+            };
+            assert_eq!(error.payload["failureClass"],"timeout");
+            if resumes { assert!(started.elapsed()>=long,"a resumed turn waits for the long limit"); }
+            else { assert!(started.elapsed()<long,"a first turn stops at the short limit"); }
+            drop(tx);
+            task.await.unwrap();
+        }
+    }
     #[tokio::test]
     async fn agent_rpc_crud_reorder_archive_errors_and_persisted_event_sequence(){
         let(st,mut events)=state();
@@ -8741,6 +9007,17 @@ mod phase2a_tests {
         for key in ["model", "thinking", "serviceTier", "instructions"] {
             assert_eq!(unknown["settings"][key]["supported"], false, "{key} is not supported for an unknown provider");
         }
+    }
+
+    #[test]
+    fn opencode_steering_needs_the_extension_version() {
+        assert!(opencode_steering_supported("opencode", Some("2.2.7")));
+        assert!(opencode_steering_supported("opencode", Some("2.3.0")));
+        assert!(!opencode_steering_supported("opencode", Some("2.2.6")));
+        assert!(!opencode_steering_supported("opencode", Some("1.18.34")));
+        assert!(opencode_steering_supported("opencode", None), "an unknown version keeps the provider answer");
+        assert!(opencode_steering_supported("opencode", Some("preview")), "an unparseable version is unknown, not old");
+        assert!(opencode_steering_supported("codex", Some("0.1.0")), "only OpenCode has the extension");
     }
 
     /// End-to-end: a turn fails on an expired CLI sign-in, then a later turn on
@@ -10677,6 +10954,33 @@ mod phase2a_tests {
         (Utc::now() - chrono::Duration::seconds(secs)).to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
     }
 
+    /// An OpenCode conversation steers through the same adapter call as Codex:
+    /// the provider is admitted by `provider_can_steer`, and its own gate is the
+    /// off-switch.
+    #[tokio::test]
+    async fn an_opencode_conversation_can_steer_and_its_gate_is_the_off_switch() {
+        let (mut st, _) = state();
+        let adapter = Arc::new(QueueAdapter::default());
+        st.adapters = Arc::new(Adapters { acp: adapter.clone(), codex: Arc::new(CodexAdapter::default()), claude: Arc::new(ClaudeAdapter::default()) });
+        let sid = "steer-opencode";
+        st.db.create_session(sid, "rt-opencode", "opencode", ".", "Steer").unwrap();
+        st.db.update_session_state(sid, "idle").unwrap();
+        let (_tx, rx) = tokio::sync::mpsc::channel(16);
+        let runtime = RuntimeSpec { runtime_id: "rt-opencode".into(), provider: "opencode".into(), executable: PathBuf::from("fake"), args: vec![], cwd: None };
+        let handle = SessionHandle { session_id: sid.into(), provider_session_id: "steer-native".into(), capabilities: retinue_agent_core::AgentCapabilities::default() };
+        st.sessions.lock().await.insert(sid.into(), ActiveSession { handle, runtime, adapter: adapter.clone(), launch_approval_mode: ApprovalMode::Ask });
+        tokio::spawn(forward_events(st.clone(), sid.into(), "opencode".into(), "rt-opencode".into(), rx));
+        mark_busy(&st, sid, "turn-0").await;
+        assert_eq!(dispatch(&st, "session.steer", json!({"sessionId":sid,"text":"add this"})).await.unwrap(), json!({"steered":true,"turnId":"turn-0"}));
+        assert_eq!(adapter.steer_calls(), vec![("turn-0".to_owned(), "add this".to_owned())]);
+        st.db.set_setting("exec_gate.opencode.steer", &json!(false)).unwrap();
+        assert_eq!(
+            dispatch(&st, "session.steer", json!({"sessionId":sid,"text":"again"})).await.unwrap_err().1.message,
+            "Steering is turned off for this runtime."
+        );
+        assert_eq!(adapter.steer_calls().len(), 1, "a closed gate never reaches the adapter");
+    }
+
     #[tokio::test]
     async fn queue_add_while_busy_drains_one_item_per_completed_turn_exactly_once() {
         let (mut st, _) = state();
@@ -10859,9 +11163,10 @@ mod phase2a_tests {
         assert!(adapter.steer_calls().is_empty(), "a scheduled item is not steered");
         assert_eq!(st.db.queue_get(sid, scheduled["id"].as_str().unwrap()).unwrap()["status"], "queued");
 
-        // A runtime whose adapter cannot steer takes the same fallback.
+        // A runtime whose adapter cannot steer takes the same fallback: a table ACP
+        // provider advertises no steering (see `provider_can_steer`).
         let other = "queue-steer-unsupported";
-        st.db.create_session(other, "rt-test", "opencode", ".", "Queue").unwrap();
+        st.db.create_session(other, "rt-test", "qwen", ".", "Queue").unwrap();
         mark_busy(&st, other, "turn-1").await;
         let item = dispatch(&st, "session.queue.add", json!({"sessionId":other,"text":"plain"})).await.unwrap()["item"].clone();
         let refused = dispatch(&st, "session.queue.send_now", json!({"sessionId":other,"id":item["id"],"steer":true})).await.unwrap();
@@ -11030,25 +11335,48 @@ mod phase2a_tests {
     }
 
     #[tokio::test]
-    async fn steer_is_unsupported_for_other_runtimes_and_side_conversations() {
+    async fn steer_is_unsupported_for_acp_runtimes_and_side_conversations() {
         let (st, _) = state();
-        for provider in ["claude", "opencode"] {
-            let sid = format!("steer-{provider}");
-            st.db.create_session(&sid, "rt-test", provider, ".", "Chat").unwrap();
-            let error = dispatch(&st, "session.steer", json!({"sessionId":sid,"text":"hi"})).await.unwrap_err();
-            assert_eq!(error.1.code, "unsupported", "{provider} cannot steer");
-        }
+        // A table ACP provider advertises no steering extension.
+        st.db.create_session("steer-qwen", "rt-test", "qwen", ".", "Chat").unwrap();
+        let error = dispatch(&st, "session.steer", json!({"sessionId":"steer-qwen","text":"hi"})).await.unwrap_err();
+        assert_eq!(error.1.code, "unsupported", "qwen cannot steer");
         st.db.create_session("steer-side", "rt-test", "codex", ".", "Side").unwrap();
         st.db.set_session_link("steer-side", &json!({"kind":"side","peerAgentId":"p","originSessionId":"q"})).unwrap();
         assert_eq!(dispatch(&st, "session.steer", json!({"sessionId":"steer-side","text":"hi"})).await.unwrap_err().1.code, "read_only");
         st.db.create_session("steer-archived", "rt-test", "codex", ".", "Old").unwrap();
         st.db.session_archive("steer-archived", true).unwrap();
         assert_eq!(dispatch(&st, "session.steer", json!({"sessionId":"steer-archived","text":"hi"})).await.unwrap_err().1.code, "not_found");
-        // Adapters that cannot steer report Unsupported through the default trait method.
+        // Claude and the ACP adapter both implement steering now, so a session
+        // neither holds is a missing session rather than a claimed inability.
         let handle = SessionHandle { session_id: "x".into(), provider_session_id: "x".into(), capabilities: retinue_agent_core::AgentCapabilities::default() };
         let request = || SteerRequest { turn_id: "t".into(), text: "hi".into() };
-        assert!(matches!(ClaudeAdapter::default().steer(&handle, request()).await, Err(retinue_agent_core::AdapterError::Unsupported(_))));
-        assert!(matches!(AcpAdapter::default().steer(&handle, request()).await, Err(retinue_agent_core::AdapterError::Unsupported(_))));
+        assert!(matches!(ClaudeAdapter::default().steer(&handle, request()).await, Err(retinue_agent_core::AdapterError::Process(_))));
+        assert!(matches!(AcpAdapter::default().steer(&handle, request()).await, Err(retinue_agent_core::AdapterError::Process(_))));
+    }
+
+    #[tokio::test]
+    async fn claude_steers_and_its_gate_follows_the_same_rule_as_codex() {
+        let (st, _) = state();
+        st.db.upsert_runtime(&json!({"id":"rt-claude","provider":"claude","status":"offline"})).unwrap();
+        *st.runtimes.write().await = vec![json!({"id":"rt-claude","provider":"claude","status":"offline"})];
+        let caps = dispatch(&st, "runtime.capabilities", json!({"runtimeId":"rt-claude"})).await.unwrap();
+        assert_eq!(caps["settings"]["steer"]["supported"], true, "Claude takes a message into its running turn");
+        assert_eq!(caps["settings"]["steer"]["enabled"], true, "the default follows the adapter capability");
+        assert_eq!(caps["settings"]["steer"]["scope"], "turn");
+        assert_eq!(caps["settings"]["steer"]["evidence"], "none");
+        // The stored value stays the off-switch, as for Codex.
+        dispatch(&st, "settings.set", json!({"key":"exec_gate.claude.steer","value":false})).await.unwrap();
+        let closed = dispatch(&st, "runtime.capabilities", json!({"runtimeId":"rt-claude"})).await.unwrap();
+        assert_eq!(closed["settings"]["steer"]["enabled"], false);
+        assert_eq!(closed["settings"]["steer"]["reason"], "execution entry gate is disabled");
+        st.db.create_session("steer-claude", "rt-claude", "claude", ".", "Claude").unwrap();
+        st.db.update_session_state("steer-claude", "idle").unwrap();
+        let off = dispatch(&st, "session.steer", json!({"sessionId":"steer-claude","text":"add this"})).await.unwrap_err();
+        assert_eq!((off.1.code.as_str(), off.1.message.as_str()), ("unsupported", "Steering is turned off for this runtime."));
+        dispatch(&st, "settings.set", json!({"key":"exec_gate.claude.steer","value":true})).await.unwrap();
+        let idle = dispatch(&st, "session.steer", json!({"sessionId":"steer-claude","text":"add this"})).await.unwrap_err();
+        assert_eq!((idle.1.code.as_str(), idle.1.message.as_str()), ("conflict", "Nothing is running to steer."));
     }
 
     #[tokio::test]
@@ -11066,13 +11394,24 @@ mod phase2a_tests {
         st.db.set_setting("exec_gate.codex.steer", &json!(true)).unwrap();
         let enabled = dispatch(&st, "runtime.capabilities", json!({"runtimeId":"rt-test"})).await.unwrap();
         assert_eq!(enabled["settings"]["steer"]["enabled"], true);
-        *st.runtimes.write().await = vec![json!({"id":"rt-open","provider":"opencode"})];
+        // OpenCode's ACP adapter has the `_session/steering` extension, so its
+        // row is the same as Codex's: supported, and its own gate is the switch.
+        *st.runtimes.write().await = vec![json!({"id":"rt-open","provider":"opencode","version":"2.2.7"}),json!({"id":"rt-open-old","provider":"opencode","version":"2.0.28"})];
         st.db.upsert_runtime(&json!({"id":"rt-open","provider":"opencode"})).unwrap();
         let open = dispatch(&st, "runtime.capabilities", json!({"runtimeId":"rt-open"})).await.unwrap();
-        assert_eq!(open["settings"]["steer"]["supported"], false);
+        assert_eq!(open["settings"]["steer"]["supported"], true);
         assert_eq!(open["settings"]["steer"]["evidence"], "none");
-        assert_eq!(open["settings"]["steer"]["enabled"], false);
-        assert_eq!(open["settings"]["steer"]["reason"], "setting is unsupported by this runtime");
+        assert_eq!(open["settings"]["steer"]["enabled"], true);
+        st.db.set_setting("exec_gate.opencode.steer", &json!(false)).unwrap();
+        let closed = dispatch(&st, "runtime.capabilities", json!({"runtimeId":"rt-open"})).await.unwrap();
+        assert_eq!(closed["settings"]["steer"]["supported"], true);
+        assert_eq!(closed["settings"]["steer"]["enabled"], false);
+        assert_eq!(closed["settings"]["steer"]["reason"], "execution entry gate is disabled");
+        // The extension shipped in 2.2.7, so an older installed CLI is not claimed.
+        let old = dispatch(&st, "runtime.capabilities", json!({"runtimeId":"rt-open-old"})).await.unwrap();
+        assert_eq!(old["settings"]["steer"]["supported"], false);
+        assert_eq!(old["settings"]["steer"]["enabled"], false);
+        assert_eq!(old["settings"]["steer"]["reason"], "OpenCode steering needs version 2.2.7 or later");
     }
 
     #[tokio::test]
@@ -11265,7 +11604,7 @@ mod phase2a_tests {
         let _tx = queue_session(&st, &adapter, sid).await;
         st.db.set_setting("experimental.resumeAfterUsageLimits", &json!(false)).unwrap();
         st.db.watchdog_limit(sid, Some(&past_due_at(2))).unwrap();
-        assert_eq!(st.db.session_limit_flags(sid).unwrap().0, false, "a new episode takes the experiment's value");
+        assert!(!st.db.session_limit_flags(sid).unwrap().0, "a new episode takes the experiment's value");
         retry::sweep(&st).await;
         assert!(st.db.queue_list(sid).unwrap().is_empty(), "the experiment being off does not stop a conversation that opted out");
         let armed = dispatch(&st, "session.limit.resume", json!({"sessionId":sid,"autoResume":true})).await.unwrap();
@@ -11339,6 +11678,71 @@ mod phase2a_tests {
         st.db.watchdog_limit("limit-automation", Some(&reset)).unwrap();
         let refused = dispatch(&st, "session.limit.resume", json!({"sessionId":"limit-automation","autoResume":true})).await.unwrap_err();
         assert_eq!((refused.1.code.as_str(), refused.1.message.as_str()), ("conflict", "Unattended runs keep their own usage-limit rules."));
+    }
+
+    /// Lane 6: the owner's snooze is its own conversation flag, carried on every
+    /// session row only while it is set, and announced with `session.changed`.
+    #[tokio::test]
+    async fn session_snooze_sets_a_separate_flag_that_appears_and_disappears() {
+        let (st, mut events) = state();
+        st.db.create_session("snooze-rpc", "rt-test", "codex", ".", "Snooze").unwrap();
+        st.db.update_session_state("snooze-rpc", "idle").unwrap();
+        assert_eq!(dispatch(&st, "session.snooze", json!({"sessionId":"snooze-rpc"})).await.unwrap_err().1.code, "invalid_argument");
+        assert_eq!(dispatch(&st, "session.snooze", json!({"sessionId":"missing","snoozed":true})).await.unwrap_err().1.code, "not_found");
+        let on = dispatch(&st, "session.snooze", json!({"sessionId":"snooze-rpc","snoozed":true})).await.unwrap();
+        assert_eq!(on["snoozed"], true);
+        let changed = events.recv().await.unwrap();
+        assert_eq!(changed.event_type, "session.changed");
+        assert_eq!(changed.payload["snoozed"], true);
+        assert_eq!(st.db.session_snoozed("snooze-rpc").unwrap(), true);
+        // The row carries it in session.get and in the list, and the unrelated
+        // usage-limit snooze is untouched.
+        assert_eq!(dispatch(&st, "session.get", json!({"sessionId":"snooze-rpc"})).await.unwrap()["snoozed"], true);
+        let listed = st.db.sessions().unwrap();
+        let row = listed.iter().find(|row| row["id"] == "snooze-rpc").unwrap();
+        assert_eq!(row["snoozed"], true);
+        assert_eq!(st.db.session_limit_flags("snooze-rpc").unwrap().1, false, "limit_snoozed is a different column");
+        // Setting it again changes nothing, so nothing is announced.
+        dispatch(&st, "session.snooze", json!({"sessionId":"snooze-rpc","snoozed":true})).await.unwrap();
+        assert!(events.try_recv().is_err(), "no event for an unchanged flag");
+        // Off again: the field is gone from both shapes.
+        assert_eq!(dispatch(&st, "session.snooze", json!({"sessionId":"snooze-rpc","snoozed":false})).await.unwrap()["snoozed"], false);
+        let cleared = events.recv().await.unwrap();
+        assert_eq!(cleared.event_type, "session.changed");
+        assert!(cleared.payload.get("snoozed").is_none(), "{:?}", cleared.payload);
+        assert!(dispatch(&st, "session.get", json!({"sessionId":"snooze-rpc"})).await.unwrap().get("snoozed").is_none());
+        let listed = st.db.sessions().unwrap();
+        let row = listed.iter().find(|row| row["id"] == "snooze-rpc").unwrap();
+        assert!(row.get("snoozed").is_none());
+        // An archived conversation cannot be snoozed.
+        dispatch(&st, "session.archive", json!({"sessionId":"snooze-rpc","archived":true})).await.unwrap();
+        assert_eq!(dispatch(&st, "session.snooze", json!({"sessionId":"snooze-rpc","snoozed":true})).await.unwrap_err().1.code, "not_found");
+    }
+
+    /// Lane 6: the window's report of what it is looking at. Memory only, and
+    /// the input is checked at the edge.
+    #[tokio::test]
+    async fn attention_focus_records_the_windows_report_and_validates_it() {
+        let (st, _events) = state();
+        assert_eq!(dispatch(&st, "attention.focus", json!({"sessionId":"s","visible":true})).await.unwrap()["reported"], true);
+        assert!(st.attention.focused("s", Instant::now()));
+        // Losing focus, another conversation, and no conversation at all.
+        dispatch(&st, "attention.focus", json!({"sessionId":"s","visible":false})).await.unwrap();
+        assert!(!st.attention.focused("s", Instant::now()));
+        dispatch(&st, "attention.focus", json!({"sessionId":"other","visible":true})).await.unwrap();
+        assert!(!st.attention.focused("s", Instant::now()));
+        dispatch(&st, "attention.focus", json!({"sessionId":null,"visible":true})).await.unwrap();
+        assert!(!st.attention.focused("other", Instant::now()));
+        for bad in [
+            json!({"sessionId":"s"}),
+            json!({"sessionId":"s","visible":"yes"}),
+            json!({"sessionId":"  ","visible":true}),
+            json!({"sessionId":7,"visible":true}),
+        ] {
+            assert_eq!(dispatch(&st, "attention.focus", bad.clone()).await.unwrap_err().1.code, "invalid_argument", "{bad}");
+        }
+        // Nothing is stored: the flag lives in memory only.
+        assert!(st.db.sessions().unwrap().is_empty());
     }
 
     #[tokio::test]
@@ -13570,6 +13974,9 @@ mod phase2a_tests {
 
     // Phase 9 (Gogo's lane): employees, hiring and the CEO.
     include!("phase9_tests.rs");
+
+    // Providers behind switches: main providers always on, the rest off by default.
+    include!("provider_gate_tests.rs");
 
     // Hire options: name, photo, personality and skills (9 November 2026).
     include!("hire_options_tests.rs");

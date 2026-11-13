@@ -1295,6 +1295,11 @@ pub trait AgentAdapter: Send + Sync {
     /// Returns a transient process snapshot for timeout diagnostics. Provider
     /// stderr must be sanitized before it is emitted, logged, or persisted.
     async fn diagnostic(&self, _session_id: &str) -> Option<AgentDiagnostic> { None }
+    /// The operating-system process serving this conversation, when the adapter
+    /// can name a live one. Observation only: the daemon reads it to attribute a
+    /// local dev-server listener to the conversation that started it, and nothing
+    /// decides anything from it. `None` is always a safe answer.
+    async fn process_id(&self, _session_id: &str) -> Option<u32> { None }
     async fn probe(&self, runtime: &RuntimeSpec) -> Result<ProbeResult, AdapterError>;
     async fn new_session(
         &self,

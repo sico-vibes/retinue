@@ -77,6 +77,10 @@ struct SharedProcess {
     initialized: AtomicBool,
     load_session: AtomicBool,
     image_prompts: AtomicBool,
+    /// OpenCode's interim `_session/steering` extension, advertised as
+    /// `_meta.steering.supported` in `initialize`. A property of the CLI
+    /// version, so it lives on the shared process, not the session.
+    steering: AtomicBool,
     setup: Mutex<()>,
     alive: AtomicBool,
     shutdown_started: AtomicBool,
@@ -375,6 +379,7 @@ impl AcpAdapter {
             initialized: AtomicBool::new(false),
             load_session: AtomicBool::new(false),
             image_prompts: AtomicBool::new(false),
+            steering: AtomicBool::new(false),
             setup: Mutex::new(()),
             alive: AtomicBool::new(true),
             shutdown_started: AtomicBool::new(false),
@@ -497,6 +502,9 @@ impl AcpAdapter {
             json!({"protocolVersion":1,"clientCapabilities":{},"clientInfo":{"name":"Retinue","version":"0.1.0"}}),
         ).await?;
         c.process.image_prompts.store(init["agentCapabilities"]["promptCapabilities"]["image"].as_bool().unwrap_or(false), Ordering::Release);
+        // OpenCode advertises mid-turn steering in the response's own `_meta`,
+        // outside `agentCapabilities`; any other ACP agent simply omits it.
+        c.process.steering.store(init["_meta"]["steering"]["supported"].as_bool().unwrap_or(false), Ordering::Release);
         let can_load = init["agentCapabilities"]["loadSession"].as_bool().unwrap_or(false);
         Self::notify(c, "initialized", json!({})).await?;
         c.process.load_session.store(can_load, Ordering::Release);
@@ -1617,6 +1625,59 @@ impl AgentAdapter for AcpAdapter {
         Ok(())
     }
 
+    /// Mid-turn steering through OpenCode's interim `_session/steering`
+    /// extension: its `initialize` response advertises
+    /// `_meta.steering.supported`, and the text joins the running turn at its
+    /// next step. Every other ACP agent omits the advertisement and keeps the
+    /// trait's `Unsupported`.
+    async fn steer(&self, handle: &SessionHandle, req: SteerRequest) -> Result<SteerOutcome, AdapterError> {
+        let c = self
+            .sessions
+            .lock()
+            .await
+            .get(&handle.session_id)
+            .cloned()
+            .ok_or_else(|| AdapterError::Process("ACP session missing".into()))?;
+        // A process that went away took the turn with it. That is the same
+        // answer as a finished turn: the caller queues the text instead of
+        // losing it.
+        if c.detached.load(Ordering::Acquire) || !c.process.alive.load(Ordering::Acquire) {
+            return Ok(SteerOutcome::Stale);
+        }
+        if !c.process.steering.load(Ordering::Acquire) {
+            return Err(AdapterError::Unsupported("This coding agent cannot add a message to a running turn.".into()));
+        }
+        if req.text.trim().is_empty() {
+            return Err(AdapterError::Unsupported("A steering message needs text.".into()));
+        }
+        // The agent itself answers `promptRequired` when its turn has ended. A
+        // turn this adapter no longer holds is stale for the same reason and
+        // the request is not sent at all.
+        if c.active_turn_id.lock().await.as_deref() != Some(req.turn_id.as_str()) {
+            return Ok(SteerOutcome::Stale);
+        }
+        let provider_id = c.session_id.lock().await.clone().ok_or_else(|| AdapterError::Process("ACP session has no provider session id".into()))?;
+        let result = Self::request(
+            &c,
+            "_session/steering",
+            json!({"sessionId": provider_id, "prompt": [{"type": "text", "text": req.text}]}),
+        )
+        .await?;
+        steer_outcome(result["outcome"].as_str())
+    }
+
+    async fn process_id(&self, session_id: &str) -> Option<u32> {
+        // Lane 7 (preview): the shared ACP process serving this conversation. It
+        // can serve several conversations at once, so the daemon attributes an
+        // ambiguous pid to none of them.
+        let conn = self.sessions.lock().await.get(session_id).cloned()?;
+        let mut child = conn.process.child.lock().await;
+        match child.try_wait() {
+            Ok(Some(_)) => None,
+            _ => child.id(),
+        }
+    }
+
     async fn cancel(&self, handle: &SessionHandle) -> Result<(), AdapterError> {
         let c = self
             .sessions
@@ -1722,6 +1783,21 @@ impl AgentAdapter for AcpAdapter {
     }
 }
 
+/// What `_session/steering` answered. `injected` means the text joined the
+/// running turn; `promptRequired` means the agent's turn had already ended, so
+/// the caller queues the text rather than dropping it. Anything else is a
+/// protocol error, never a silent success.
+fn steer_outcome(outcome: Option<&str>) -> Result<SteerOutcome, AdapterError> {
+    match outcome {
+        Some("injected") => Ok(SteerOutcome::Accepted),
+        Some("promptRequired") => Ok(SteerOutcome::Stale),
+        other => Err(AdapterError::Protocol(format!(
+            "the agent answered steering with {}",
+            other.map(|value| format!("\"{value}\"")).unwrap_or_else(|| "no outcome".into())
+        ))),
+    }
+}
+
 fn resume_rejected_evidence(message: &str) -> bool {
     let message = message.to_ascii_lowercase();
     // OpenCode 2 ties a session to its folder, and answers a load from any other
@@ -1741,6 +1817,17 @@ mod tests {
     fn a_session_from_another_folder_counts_as_a_rejected_resume() {
         assert!(resume_rejected_evidence(r#"{"code":-32602,"message":"Invalid params: session ses_e6 does not belong to cwd: C:\\b"}"#));
         assert!(!resume_rejected_evidence(r#"{"code":-32602,"message":"Invalid params: cwd must be absolute"}"#));
+    }
+
+    /// OpenCode's `_session/steering` answer decides the caller's next step: an
+    /// injected text joined the turn, a `promptRequired` turn had already ended
+    /// (the daemon queues the text), and an unknown shape is never success.
+    #[test]
+    fn a_steering_answer_maps_to_accepted_stale_or_a_protocol_error() {
+        assert_eq!(steer_outcome(Some("injected")).unwrap(), SteerOutcome::Accepted);
+        assert_eq!(steer_outcome(Some("promptRequired")).unwrap(), SteerOutcome::Stale);
+        assert!(matches!(steer_outcome(None), Err(AdapterError::Protocol(_))));
+        assert!(matches!(steer_outcome(Some("queued")), Err(AdapterError::Protocol(_))));
     }
 
     #[test]

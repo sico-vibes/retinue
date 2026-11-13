@@ -75,6 +75,19 @@ pub fn sign_in_command(provider: &str, folder: &Path) -> String {
     format!("{prefix}; {command}")
 }
 
+/// The reply `account.signIn` gives: the copyable PowerShell line, and the same
+/// variable names and values as pairs, so the native shell can open the
+/// provider's own sign-in with this account's environment set. The shell builds
+/// the command line itself; nothing here is a secret, and nothing here is a
+/// credential file.
+pub fn sign_in_reply(provider: &str, folder: &Path) -> Value {
+    let environment = account_environment(provider, folder)
+        .into_iter()
+        .map(|(name, value)| json!({"name": name, "value": value}))
+        .collect::<Vec<_>>();
+    json!({"command": sign_in_command(provider, folder), "provider": provider, "environment": environment})
+}
+
 /// `<data>/accounts/<id>`: the only place an account folder may live, which is
 /// what makes a delete safe.
 pub fn account_folder(data_dir: &Path, id: &str) -> Option<PathBuf> {
@@ -238,8 +251,10 @@ pub async fn dispatch(st: &AppState, method: &str, params: &Value) -> Result<Val
             let row = st.db.account_get(id).map_err(|_| derr("internal", "Could not read the account.", StatusCode::INTERNAL_SERVER_ERROR))?.ok_or_else(|| derr("not_found", "Account not found.", StatusCode::NOT_FOUND))?;
             let provider = row["provider"].as_str().unwrap_or("");
             let dir = data_dir(st)?;
+            // The folder is resolved here, from the id: the window never
+            // supplies a path, and this reply never leaves the host.
             let folder = account_folder(&dir, id).ok_or_else(|| derr("internal", "Could not read the account folder.", StatusCode::INTERNAL_SERVER_ERROR))?;
-            Ok(json!({"command": sign_in_command(provider, &folder)}))
+            Ok(sign_in_reply(provider, &folder))
         }
         "account.check" => check_account(st, params["id"].as_str().unwrap_or("")).await,
         _ => Err(derr("unsupported", "unknown account method", StatusCode::NOT_FOUND)),
@@ -346,6 +361,61 @@ mod tests {
         assert!(!command.contains('"'), "the folder is quoted with PowerShell single quotes: {command}");
         let opencode = sign_in_command("opencode", folder);
         assert!(opencode.contains("$env:XDG_CONFIG_HOME=") && opencode.contains("$env:XDG_DATA_HOME="), "{opencode}");
+    }
+
+    #[tokio::test]
+    async fn sign_in_reply_carries_the_environment_the_shell_sets() {
+        let (st, _rx) = state();
+        let dir = temp_dir("signin-reply");
+        with_data_dir(&st, &dir);
+        // Claude: one variable, and the command agrees with it exactly.
+        let claude = new_account(&st, "claude", "Personal").await;
+        let reply = dispatch(&st, "account.signIn", &json!({"id": claude})).await.unwrap();
+        let folder = dir.join("accounts").join(&claude);
+        assert_eq!(reply["provider"], json!("claude"));
+        assert_eq!(reply["environment"], json!([{"name": "CLAUDE_CONFIG_DIR", "value": folder.display().to_string()}]));
+        assert_eq!(
+            reply["command"],
+            json!(format!("$env:CLAUDE_CONFIG_DIR='{}'; claude auth login", folder.display())),
+            "the copyable line and the pairs must name the same folder and command"
+        );
+        // Codex: one variable. OpenCode: the two it reads, both the folder.
+        let codex = new_account(&st, "codex", "Work").await;
+        let reply = dispatch(&st, "account.signIn", &json!({"id": codex})).await.unwrap();
+        assert_eq!(reply["environment"], json!([{"name": "CODEX_HOME", "value": dir.join("accounts").join(&codex).display().to_string()}]));
+        let opencode = new_account(&st, "opencode", "Shared").await;
+        let reply = dispatch(&st, "account.signIn", &json!({"id": opencode})).await.unwrap();
+        let shared = dir.join("accounts").join(&opencode).display().to_string();
+        assert_eq!(reply["environment"], json!([
+            {"name": "XDG_CONFIG_HOME", "value": shared},
+            {"name": "XDG_DATA_HOME", "value": shared},
+        ]));
+        assert!(reply["command"].as_str().unwrap().ends_with("; opencode auth login"));
+    }
+
+    #[tokio::test]
+    async fn sign_in_reply_names_no_credential_file() {
+        let (st, _rx) = state();
+        let dir = temp_dir("signin-plain");
+        with_data_dir(&st, &dir);
+        let id = new_account(&st, "claude", "Personal").await;
+        let reply = dispatch(&st, "account.signIn", &json!({"id": id})).await.unwrap();
+        let text = reply.to_string();
+        for name in [".credentials.json", "auth.json", "token", "secret"] {
+            assert!(!text.to_lowercase().contains(&name.to_lowercase()), "{name} must not come back: {text}");
+        }
+        assert_eq!(reply.as_object().unwrap().keys().count(), 3, "the reply is the command, the provider and the pairs: {text}");
+    }
+
+    #[tokio::test]
+    async fn sign_in_refuses_an_unknown_account() {
+        let (st, _rx) = state();
+        let dir = temp_dir("signin-unknown");
+        with_data_dir(&st, &dir);
+        for id in ["", "no-such-account", "../../Windows"] {
+            let refused = dispatch(&st, "account.signIn", &json!({"id": id})).await.unwrap_err();
+            assert_eq!(refused.1.code, "not_found", "{id}");
+        }
     }
 
     #[tokio::test]

@@ -1792,6 +1792,17 @@ impl AgentAdapter for CodexAdapter {
             Err(error) => Err(error),
         }
     }
+    async fn process_id(&self, session_id: &str) -> Option<u32> {
+        // Lane 7 (preview): the app-server process serving this conversation. It
+        // can serve several conversations at once, so an ambiguous pid is
+        // attributed to none of them.
+        let conn = self.sessions.lock().await.get(session_id).cloned()?;
+        let mut child = conn.process.child.lock().await;
+        match child.try_wait() {
+            Ok(Some(_)) => None,
+            _ => child.id(),
+        }
+    }
     async fn cancel(&self, h: &SessionHandle) -> Result<(), AdapterError> {
         let c = self
             .sessions

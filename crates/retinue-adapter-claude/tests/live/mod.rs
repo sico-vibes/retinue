@@ -199,6 +199,7 @@ fn is_reported_limit(message: &str) -> bool {
     [
         "rate limit",
         "usage limit",
+        "weekly limit",
         "quota",
         "429",
         "too many requests",
@@ -466,8 +467,9 @@ async fn claude_live_permission_change_and_steer_are_reported() {
             },
         )
         .await;
-    // Steer while that turn is active. Claude does not support steer, so a
-    // typed `Unsupported` is the clean report; a transport error is not.
+    // Steer while that turn is active. Claude reads a `priority: "next"` user
+    // message into the running turn, so `Accepted` (or `Stale` when the turn has
+    // already gone) is the honest report; a transport error is not.
     match adapter
         .steer(
             &handle,

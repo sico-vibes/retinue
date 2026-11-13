@@ -1235,6 +1235,47 @@ impl AgentAdapter for ClaudeAdapter {
         c.prompt_awaiting_ack.store(true, Ordering::SeqCst);
         Ok(())
     }
+    /// Steering is one more documented stream-json user message on the live
+    /// process. `priority: "next"` (the default when the field is omitted) means
+    /// Claude reads the message in the same turn as soon as the tool calls it is
+    /// running finish, and the turn is never stopped; `"now"` would interrupt
+    /// the turn and `"later"` would wait for a new one. If the turn ends first
+    /// the message would start a turn nobody asked for, so a turn that is over,
+    /// or a turn id that is not the running one, is answered `Stale` and nothing
+    /// is written (Agent SDK reference, `SDKUserMessage.priority`,
+    /// https://docs.claude.com/en/api/agent-sdk/typescript).
+    async fn steer(&self, h: &SessionHandle, q: SteerRequest) -> Result<SteerOutcome, AdapterError> {
+        if q.text.trim().is_empty() {
+            return Err(AdapterError::Unsupported("Steering text is empty".into()));
+        }
+        let c = self
+            .sessions
+            .lock()
+            .await
+            .get(&h.session_id)
+            .cloned()
+            .ok_or_else(|| AdapterError::Process("Claude session is not active".into()))?;
+        let running = c.active_turn.load(Ordering::SeqCst);
+        let current_turn = c.active_turn_id.lock().await.clone();
+        if !running || current_turn.as_deref() != Some(q.turn_id.as_str()) {
+            return Ok(SteerOutcome::Stale);
+        }
+        let mut bytes = serde_json::to_vec(&json!({
+            "type": "user",
+            "message": {"role": "user", "content": q.text},
+            "parent_tool_use_id": null,
+            "priority": "next",
+        }))
+        .map_err(|e| AdapterError::Protocol(e.to_string()))?;
+        bytes.push(b'\n');
+        c.stdin
+            .lock()
+            .await
+            .write(&bytes)
+            .await
+            .map_err(|e| AdapterError::Process(format!("writing Claude steering message: {e}")))?;
+        Ok(SteerOutcome::Accepted)
+    }
     async fn set_instruction_hash_context(&self,session_id:&str,desired:Option<String>,baseline:Option<String>){self.instruction_hash_context.lock().await.insert(session_id.into(),(desired,baseline));}
     async fn preflight_exec_options(&self,options:&ExecOptions)->Result<(),AdapterError>{
         if let Some(text)=options.instructions.as_deref().filter(|s|!s.is_empty()) { let pair=self.create_instruction_file(text).map_err(|_|AdapterError::Unsupported("The requested instructions are unavailable because secure private storage could not be established.".into()))?;remove_private_pair(&pair); }
@@ -1261,6 +1302,15 @@ impl AgentAdapter for ClaudeAdapter {
             api_retry_http_status_seen: conn.api_retry_http_status_seen.load(Ordering::Relaxed),
             api_retry_connection_failure: conn.api_retry_connection_failure.load(Ordering::Relaxed),
         })
+    }
+    async fn process_id(&self, session_id: &str) -> Option<u32> {
+        // Lane 7 (preview): the child this conversation's Claude Code runs in.
+        let conn = self.sessions.lock().await.get(session_id).cloned()?;
+        let mut child = conn.child.lock().await;
+        match child.try_wait() {
+            Ok(Some(_)) => None,
+            _ => child.id(),
+        }
     }
     async fn cancel(&self, h: &SessionHandle) -> Result<(), AdapterError> {
         let c = self

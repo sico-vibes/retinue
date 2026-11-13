@@ -18,6 +18,11 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let audit = args.iter().find_map(|arg| arg.strip_prefix("--fake-audit=")).map(PathBuf::from);
     let model = args.windows(2).find(|pair| pair[0] == "--model").map(|pair| pair[1].clone());
+    // Test seams for steering: `--fake-hold-turn` keeps a turn open after its
+    // first user message so a later one can join it, and `--fake-steer-audit`
+    // records every inbound user message so a test can check its wire shape.
+    let hold_turn = args.iter().any(|arg| arg == "--fake-hold-turn");
+    let steer_audit = args.iter().find_map(|arg| arg.strip_prefix("--fake-steer-audit=")).map(PathBuf::from);
     let instruction = args.windows(2).find(|pair| pair[0] == "--append-system-prompt-file").map(|pair| PathBuf::from(&pair[1]));
     let instruction_exists = instruction.as_ref().is_some_and(|path| path.is_file());
     let acl_restricted = instruction.as_ref().is_some_and(|path| {
@@ -76,6 +81,7 @@ fn main() {
         emit(json!({"type":"result","subtype":"error_during_execution","is_error":true,"num_turns":0,"usage":{"input_tokens":0,"output_tokens":0},"errors":["prefix: No conversation found with session ID: elsewhere"]}));
     }
     let stdin = io::stdin();
+    let mut holding = false;
     // Fake provider reads UTF-8 JSON lines from the adapter; the read-error path is unreachable.
     #[allow(clippy::lines_filter_map_ok)]
     for line in stdin.lock().lines().flatten() {
@@ -89,6 +95,24 @@ fn main() {
         } else if input["type"] == "control_request" && input["request"]["subtype"] == "get_settings" {
             emit(json!({"type":"control_response","response":{"subtype":"success","request_id":input["request_id"],"response":{"effective":{},"sources":[],"applied":{"model":"claude-sonnet-test","effort":"low","ultracodeAvailable":false}}}}));
         } else if input["type"] == "user" {
+            if let Some(path) = steer_audit.as_ref() {
+                if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+                    let _ = writeln!(file, "{}", input);
+                    let _ = file.flush();
+                }
+            }
+            if hold_turn && !holding {
+                // The first message starts a turn that stays open.
+                holding = true;
+                emit(json!({"type":"assistant","message":{"model":"claude-sonnet-test","content":[{"type":"text","text":"fake turn in progress"}]}}));
+                continue;
+            }
+            if hold_turn {
+                // A later message joins the held turn, as a mid-turn steer does.
+                holding = false;
+                let text = input["message"]["content"].as_str().unwrap_or("");
+                emit(json!({"type":"assistant","message":{"model":"claude-sonnet-test","content":[{"type":"text","text":format!("steered {text}")}]}}));
+            }
             if args.iter().any(|arg| arg == "--fake-compact-boundary") {
                 emit(json!({"type":"system","subtype":"compact_boundary","compact_metadata":{"trigger":"auto","pre_tokens":120000}}));
             }

@@ -9,6 +9,10 @@
 //! `--experimental-acp`, but prints "deprecated ... use --acp instead", so the
 //! table names the flag it tells you to use. Gemini CLI was removed on
 //! 3 November 2026 (owner decision); Retinue no longer looks for it.
+//!
+//! The three main providers (claude, codex, opencode) are always on; every
+//! provider in this table is optional and off until the owner turns it on
+//! (11 November 2026).
 
 /// One provider the ACP adapter runs.
 #[derive(Debug, Clone, Copy)]
@@ -57,7 +61,42 @@ pub const ACP_PROVIDERS: &[AcpProvider] = &[
         install_hint: "Install the Grok CLI from x.ai/cli",
         probe_token: "agent",
     },
+    // Google's Antigravity CLI documents `agy acp` as an Agent Client Protocol
+    // server over stdin/stdout (antigravity.google/docs/ide/extensions/acp), and
+    // `agy acp --login` as the in-terminal sign-in.
+    //
+    // UNVERIFIED ON WINDOWS (11 November 2026): `agy` is not installed on this
+    // machine, so the command line above and the `acp` probe below are the
+    // documentation's, not a run. One third-party integration reports that
+    // Antigravity ships no Windows ACP server and resolves a wrapper instead
+    // (docs/research/accounts-and-openbot-2026-11.md, Part 3.6 and 3.8). Its
+    // sign-in is the CLI's own keyring flow: Retinue never reads it, and the
+    // provider is single-account (default account only).
+    AcpProvider {
+        provider: "antigravity",
+        display_name: "Antigravity",
+        command: "agy",
+        args: &["acp"],
+        sign_in_command: "agy acp --login",
+        install_hint: "Install the Antigravity CLI from antigravity.google/docs/getting-started",
+        probe_token: "acp",
+    },
 ];
+
+/// The providers that are always on (owner decision, 11 November 2026): Claude
+/// Code, Codex and OpenCode. Every other provider is optional and off until the
+/// owner turns it on; `runtimes.disabled` cannot switch these three off.
+pub const MAIN_PROVIDERS: [&'static str; 3] = ["claude", "codex", "opencode"];
+
+/// Whether a provider is one of the three that are always on.
+pub fn is_main_provider(provider: &str) -> bool {
+    MAIN_PROVIDERS.contains(&provider)
+}
+
+/// Every provider behind the owner's switch: all of them but the three main ones.
+pub fn optional_providers() -> Vec<&'static str> {
+    discovery_ids().into_iter().filter(|id| !is_main_provider(id)).collect()
+}
 
 /// The row for a table provider.
 pub fn acp_provider(provider: &str) -> Option<&'static AcpProvider> {
@@ -82,8 +121,8 @@ pub fn acp_launch_args(provider: &str) -> &'static [&'static str] {
 }
 
 /// Every provider Retinue looks for on `PATH`, in display order.
-pub fn discovery_ids() -> [&'static str; 6] {
-    ["claude", "codex", "opencode", ACP_PROVIDERS[0].provider, ACP_PROVIDERS[1].provider, ACP_PROVIDERS[2].provider]
+pub fn discovery_ids() -> [&'static str; 7] {
+    ["claude", "codex", "opencode", ACP_PROVIDERS[0].provider, ACP_PROVIDERS[1].provider, ACP_PROVIDERS[2].provider, ACP_PROVIDERS[3].provider]
 }
 
 #[cfg(test)]
@@ -104,6 +143,29 @@ mod tests {
         }
     }
 
+    // Antigravity (11 November 2026): the command line is Google's, not a run.
+    #[test]
+    fn antigravity_is_an_optional_acp_provider_launched_as_its_documentation_says() {
+        let row = acp_provider("antigravity").expect("Antigravity is a table row");
+        assert_eq!(row.command, "agy");
+        assert_eq!(row.args, &["acp"]);
+        assert_eq!(acp_launch_args("antigravity"), &["acp"]);
+        assert_eq!(row.sign_in_command, "agy acp --login");
+        assert!(is_acp_provider("antigravity"));
+        assert!(discovery_ids().contains(&"antigravity"));
+        assert!(!is_main_provider("antigravity"), "it is behind the owner's switch");
+    }
+
+    #[test]
+    fn the_first_three_providers_are_the_only_ones_that_are_always_on() {
+        assert_eq!(MAIN_PROVIDERS, ["claude", "codex", "opencode"]);
+        for main in MAIN_PROVIDERS { assert!(is_main_provider(main), "{main}"); }
+        for optional in ["qwen", "cursor", "grok", "antigravity", "gemini", ""] {
+            assert!(!is_main_provider(optional), "{optional}");
+        }
+        assert_eq!(optional_providers(), ["qwen", "cursor", "grok", "antigravity"]);
+    }
+
     #[test]
     fn only_opencode_and_the_table_rows_speak_acp() {
         assert!(is_acp_provider("opencode"));
@@ -112,6 +174,6 @@ mod tests {
             assert!(!is_acp_provider(provider), "{provider}");
             assert!(acp_provider(provider).is_none(), "{provider}");
         }
-        assert_eq!(discovery_ids(), ["claude", "codex", "opencode", "qwen", "cursor", "grok"]);
+        assert_eq!(discovery_ids(), ["claude", "codex", "opencode", "qwen", "cursor", "grok", "antigravity"]);
     }
 }

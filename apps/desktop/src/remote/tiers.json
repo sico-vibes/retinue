@@ -254,6 +254,13 @@
       "params": null
     },
     {
+      "method": "provider.*",
+      "class": "never",
+      "minTier": null,
+      "why": "Which coding agents are installed and switched on is the owner's, at the desktop; a device is offered only what the host already offers it.",
+      "params": null
+    },
+    {
       "method": "model.custom.*",
       "class": "never",
       "minTier": null,
@@ -391,6 +398,20 @@
       "class": "chat",
       "minTier": "chat",
       "why": "Holds a limited conversation, and the messages waiting for its reset, until the owner wakes it.",
+      "params": null
+    },
+    {
+      "method": "session.snooze",
+      "class": "chat",
+      "minTier": "chat",
+      "why": "Snoozes a conversation until it needs the owner: its progress alerts stop, and the first approval, question or failure wakes it.",
+      "params": null
+    },
+    {
+      "method": "attention.focus",
+      "class": "never",
+      "minTier": null,
+      "why": "What the desktop window is looking at is about this machine's screen only, and it is memory-only state the phone must neither read nor set.",
       "params": null
     },
     {
@@ -1528,6 +1549,13 @@
       "params": null
     },
     {
+      "method": "session.git.scopes",
+      "class": "never",
+      "minTier": null,
+      "why": "It names the host repository's base branch, commits and which turns changed files, which the remote redaction does not reduce, so it stays on the host.",
+      "params": null
+    },
+    {
       "method": "session.git.stage",
       "class": "never",
       "minTier": null,
@@ -1588,6 +1616,13 @@
       "class": "never",
       "minTier": null,
       "why": "The Doctor reports the host's executable paths, database file and installed models, which are the owner's at the computer.",
+      "params": null
+    },
+    {
+      "method": "preview.servers",
+      "class": "never",
+      "minTier": null,
+      "why": "It names the host's local dev servers, their ports and the process ids behind them: a map of what is running on this computer, which only the owner at the desktop may see.",
       "params": null
     }
   ],
@@ -1658,7 +1693,8 @@
     "external.changed": "drop",
     "media.generated": "drop",
     "fanout.changed": "drop",
-    "stash.changed": "drop"
+    "stash.changed": "drop",
+    "preview.changed": "drop"
   },
   "settingsAllowlist": [
     "appearance.style",

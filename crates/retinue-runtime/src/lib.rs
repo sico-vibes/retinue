@@ -3,7 +3,7 @@ use retinue_process::{prepare_command, ProcessTree};
 use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 pub mod providers;
-pub use providers::{acp_launch_args, acp_provider, discovery_ids, is_acp_provider, AcpProvider, ACP_PROVIDERS};
+pub use providers::{acp_launch_args, acp_provider, discovery_ids, is_acp_provider, is_main_provider, optional_providers, AcpProvider, ACP_PROVIDERS, MAIN_PROVIDERS};
 use std::{
     collections::BTreeMap,
     env,

@@ -71,6 +71,8 @@ struct Flags {
     v2_stop_after: Option<u32>,
     pid_log: Option<PathBuf>,
     image_stem: Option<String>,
+    steering: bool,
+    steering_prompt_required: bool,
 }
 
 impl Flags {
@@ -91,6 +93,8 @@ impl Flags {
         let mut v2_stop_after = None;
         let mut pid_log = None;
         let mut image_stem = None;
+        let mut steering = false;
+        let mut steering_prompt_required = false;
         let mut index = 0;
         while index < args.len() {
             let arg = &args[index];
@@ -112,6 +116,8 @@ impl Flags {
                 "--v2-stop-after" => v2_stop_after = next.and_then(|value| value.parse().ok()),
                 "--pid-log" => pid_log = next.map(PathBuf::from),
                 "--image-stem" => image_stem = next.map(str::to_owned),
+                "--steering" => steering = true,
+                "--steering-prompt-required" => steering_prompt_required = true,
                 _ => {}
             }
             index += if matches!(arg.as_str(), "--record" | "--models" | "--variant-models" | "--efforts" | "--effort-id" | "--reject-effort" | "--stale-effort" | "--fail-load" | "--usage" | "--v2-stop-after" | "--pid-log" | "--image-stem") {
@@ -137,6 +143,8 @@ impl Flags {
             v2_stop_after,
             pid_log,
             image_stem,
+            steering,
+            steering_prompt_required,
         }
     }
 }
@@ -332,11 +340,11 @@ fn acp_main(_args: &[String], flags: &Flags) {
         let Some(id) = message.get("id").cloned() else { continue };
         match method {
             "initialize" => {
-                respond(
-                    &mut stdout,
-                    &id,
-                    json!({"protocolVersion": 1, "agentCapabilities": {"loadSession": true}, "agentInfo": {"name": "fake-opencode", "version": "test"}}),
-                );
+                let mut result = json!({"protocolVersion": 1, "agentCapabilities": {"loadSession": true}, "agentInfo": {"name": "fake-opencode", "version": "test"}});
+                // OpenCode 2.2.7's interim mid-turn steering extension, outside
+                // `agentCapabilities`, exactly as the CLI advertises it.
+                if flags.steering { result["_meta"] = json!({"steering": {"supported": true}}); }
+                respond(&mut stdout, &id, result);
             }
             "session/new" | "session/load" => {
                 // `--fail-load` returns a non-resume provider error (the
@@ -385,6 +393,27 @@ fn acp_main(_args: &[String], flags: &Flags) {
                 write_record(flags, &rpc, Some(&session));
             }
             "session/prompt" => handle_prompt(&mut stdout, flags, &mut session, &id),
+            // A CLI without the extension answers "method not found", which is
+            // the refusal the adapter reports as `Unsupported`.
+            "_session/steering" if flags.steering => {
+                // Only one text block is accepted, exactly the shape OpenCode
+                // takes for a steer; anything else is a malformed request.
+                let prompt = message["params"]["prompt"].as_array().cloned().unwrap_or_default();
+                let text_only = prompt.len() == 1
+                    && prompt[0]["type"] == "text"
+                    && prompt[0]["text"].as_str().is_some_and(|text| !text.trim().is_empty());
+                if !text_only {
+                    error(&mut stdout, &id, -32602, "a steer carries one text block");
+                    continue;
+                }
+                let outcome = if session.prompt_id.is_some() && !flags.steering_prompt_required {
+                    json!({"outcome": "injected"})
+                } else {
+                    json!({"outcome": "promptRequired", "reason": "noRunningTurn"})
+                };
+                respond(&mut stdout, &id, outcome);
+                write_record(flags, &rpc, Some(&session));
+            }
             "session/close" => respond(&mut stdout, &id, json!({})),
             _ => error(&mut stdout, &id, -32601, "method not found"),
         }

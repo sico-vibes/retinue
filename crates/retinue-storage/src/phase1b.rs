@@ -208,6 +208,20 @@ impl Storage {
         c.execute("UPDATE sessions SET limit_snoozed=?2 WHERE id=?1", params![session_id, snoozed])?;
         Ok(())
     }
+    /// The owner's "snooze until it needs me" flag (11 November 2026). Unrelated
+    /// to `limit_snoozed` above: that one holds a conversation waiting for its
+    /// usage limit, this one keeps a working conversation quiet.
+    pub fn session_snoozed(&self, session_id: &str) -> Result<bool, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        Ok(c.query_row("SELECT snoozed_until_needed!=0 FROM sessions WHERE id=?1", [session_id], |r| r.get(0)).optional()?.unwrap_or(false))
+    }
+    /// Set or clear that flag. Answers whether the stored value changed, so a
+    /// caller only announces a real change.
+    pub fn session_set_snoozed(&self, session_id: &str, snoozed: bool) -> Result<bool, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let changed = c.execute("UPDATE sessions SET snoozed_until_needed=?2 WHERE id=?1 AND snoozed_until_needed!=?2", params![session_id, snoozed])?;
+        Ok(changed > 0)
+    }
 }
 
 impl Storage {

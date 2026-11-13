@@ -51,7 +51,7 @@ pub fn tool_schemas() -> Vec<Value> {
         json!({"name":"assign_task","description":"Propose a task for one of your bots. It is delivered like message_blob when the user approves: a private side conversation, and the reply comes back here. Nothing is assigned until they approve it.","inputSchema":{"type":"object","properties":{
             "bot":{"type":"string","description":"The bot's name or id."},
             "project":{"type":"string","description":"A project id, exact project name or unique tag the task belongs to (optional)."},
-            "brief":{"type":"string","description":"A self-contained brief: goal, context, paths, constraints and what to send back."}
+            "brief":{"type":"string","description":crate::team::BRIEF_LINES}
         },"required":["bot","brief"],"additionalProperties":false}}),
         json!({"name":"project_status","description":"Show a project's bots with their latest conversation title, state and last activity.","inputSchema":{"type":"object","properties":{
             "project":{"type":"string","description":"A project id or exact project name."}

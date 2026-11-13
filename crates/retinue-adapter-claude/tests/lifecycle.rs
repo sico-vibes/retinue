@@ -1,5 +1,5 @@
 use retinue_adapter_claude::ClaudeAdapter;
-use retinue_agent_core::{AgentAdapter, AgentEvent, ContextChangeReason, ExecOptions, ModelCatalog, NewSessionRequest, PromptRequest, RuntimeSpec};
+use retinue_agent_core::{AgentAdapter, AgentCapabilities, AgentEvent, ContextChangeReason, ExecOptions, ModelCatalog, NewSessionRequest, PromptRequest, RuntimeSpec, SessionHandle, SteerOutcome, SteerRequest};
 use serde_json::Value;
 use std::{path::PathBuf, time::Duration};
 use tokio::sync::mpsc;
@@ -669,4 +669,154 @@ async fn changed_mode_resumes_a_silent_session_without_waiting_for_init() {
     adapter.close_session(&handle).await.unwrap();
     tokio::time::sleep(Duration::from_millis(100)).await;
     std::fs::remove_dir_all(root).unwrap();
+}
+
+/// Claude Code reads one more stream-json user message with `priority: "next"`
+/// into the running turn (Agent SDK reference, `SDKUserMessage.priority`), so a
+/// steer reaches the turn at its next step without ending it.
+#[tokio::test]
+async fn steering_joins_the_running_turn_without_ending_it() {
+    let (root, private, audit_path) = paths();
+    let steer_audit = root.join("steer.jsonl");
+    let system_root = setup_test_acl(&root);
+    let adapter = ClaudeAdapter::with_test_acl_executable(private, system_root);
+    let rt = runtime(&audit_path, &["--fake-hold-turn", &format!("--fake-steer-audit={}", steer_audit.display())]);
+    let (tx, mut rx) = mpsc::channel(32);
+    let handle = adapter
+        .new_session(&rt, NewSessionRequest { session_id: "s-steer".into(), project_path: root.clone(), exec_options: ExecOptions::default() }, tx)
+        .await
+        .unwrap();
+    wait_session_start(&mut rx).await;
+    adapter
+        .prompt(&handle, PromptRequest { attachments: Vec::new(), turn_id: "turn-steer".into(), text: "start".into(), exec_options: ExecOptions::default() })
+        .await
+        .unwrap();
+    let held = loop {
+        let event = tokio::time::timeout(Duration::from_secs(5), rx.recv()).await.unwrap().unwrap();
+        if let AgentEvent::AssistantMessage { text } = event { break text; }
+    };
+    assert_eq!(held, "fake turn in progress");
+    let outcome = adapter
+        .steer(&handle, SteerRequest { turn_id: "turn-steer".into(), text: "add this".into() })
+        .await
+        .unwrap();
+    assert_eq!(outcome, SteerOutcome::Accepted);
+    let seen = events_through_turn(&mut rx).await;
+    assert!(seen.iter().any(|event| matches!(event, AgentEvent::AssistantMessage { text } if text == "steered add this")), "the steer joins the held turn: {seen:?}");
+    let rows = std::fs::read_to_string(&steer_audit).unwrap_or_default().lines().map(|line| serde_json::from_str::<Value>(line).unwrap()).collect::<Vec<_>>();
+    assert_eq!(rows.len(), 2, "one prompt and one steer reached the provider");
+    let steer = rows.last().unwrap();
+    assert_eq!(steer["type"], "user");
+    assert_eq!(steer["priority"], "next", "the message joins the running turn instead of starting the next one");
+    assert_eq!(steer["parent_tool_use_id"], Value::Null);
+    assert_eq!(steer["message"]["role"], "user");
+    assert_eq!(steer["message"]["content"], "add this");
+    adapter.close_session(&handle).await.unwrap();
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// A message written after the turn ended would start a new turn Claude never
+/// asked for, so it is reported stale and never written.
+#[tokio::test]
+async fn steering_a_turn_that_has_ended_is_stale_and_writes_nothing() {
+    let (root, private, audit_path) = paths();
+    let steer_audit = root.join("steer.jsonl");
+    let system_root = setup_test_acl(&root);
+    let adapter = ClaudeAdapter::with_test_acl_executable(private, system_root);
+    let rt = runtime(&audit_path, &[&format!("--fake-steer-audit={}", steer_audit.display())]);
+    let (tx, mut rx) = mpsc::channel(32);
+    let handle = adapter
+        .new_session(&rt, NewSessionRequest { session_id: "s-steer-stale".into(), project_path: root.clone(), exec_options: ExecOptions::default() }, tx)
+        .await
+        .unwrap();
+    wait_session_start(&mut rx).await;
+    assert_eq!(
+        adapter.steer(&handle, SteerRequest { turn_id: "turn-never".into(), text: "before a turn".into() }).await.unwrap(),
+        SteerOutcome::Stale,
+        "nothing is running to steer"
+    );
+    adapter
+        .prompt(&handle, PromptRequest { attachments: Vec::new(), turn_id: "turn-done".into(), text: "hello".into(), exec_options: ExecOptions::default() })
+        .await
+        .unwrap();
+    let seen = events_through_turn(&mut rx).await;
+    assert!(seen.iter().any(|event| matches!(event, AgentEvent::TurnCompleted)));
+    assert_eq!(
+        adapter.steer(&handle, SteerRequest { turn_id: "turn-done".into(), text: "too late".into() }).await.unwrap(),
+        SteerOutcome::Stale,
+        "the turn ended before this arrived"
+    );
+    let rows = std::fs::read_to_string(&steer_audit).unwrap_or_default().lines().map(|line| serde_json::from_str::<Value>(line).unwrap()).collect::<Vec<_>>();
+    assert_eq!(rows.len(), 1, "only the prompt reached the provider");
+    assert_eq!(rows[0]["message"]["content"], "hello");
+    adapter.close_session(&handle).await.unwrap();
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// The daemon's turn id is checked against the running one, so a steer for a
+/// turn that is no longer the live turn never reaches a newer one.
+#[tokio::test]
+async fn steering_a_turn_id_that_is_not_running_is_stale() {
+    let (root, private, audit_path) = paths();
+    let steer_audit = root.join("steer.jsonl");
+    let system_root = setup_test_acl(&root);
+    let adapter = ClaudeAdapter::with_test_acl_executable(private, system_root);
+    let rt = runtime(&audit_path, &["--fake-hold-turn", &format!("--fake-steer-audit={}", steer_audit.display())]);
+    let (tx, mut rx) = mpsc::channel(32);
+    let handle = adapter
+        .new_session(&rt, NewSessionRequest { session_id: "s-steer-wrong-turn".into(), project_path: root.clone(), exec_options: ExecOptions::default() }, tx)
+        .await
+        .unwrap();
+    wait_session_start(&mut rx).await;
+    adapter
+        .prompt(&handle, PromptRequest { attachments: Vec::new(), turn_id: "turn-right".into(), text: "start".into(), exec_options: ExecOptions::default() })
+        .await
+        .unwrap();
+    loop {
+        let event = tokio::time::timeout(Duration::from_secs(5), rx.recv()).await.unwrap().unwrap();
+        if matches!(event, AgentEvent::AssistantMessage { .. }) { break; }
+    }
+    assert_eq!(
+        adapter.steer(&handle, SteerRequest { turn_id: "turn-other".into(), text: "wrong turn".into() }).await.unwrap(),
+        SteerOutcome::Stale
+    );
+    assert_eq!(
+        adapter.steer(&handle, SteerRequest { turn_id: "turn-right".into(), text: "add this".into() }).await.unwrap(),
+        SteerOutcome::Accepted,
+        "the right turn is still steerable"
+    );
+    let seen = events_through_turn(&mut rx).await;
+    assert!(seen.iter().any(|event| matches!(event, AgentEvent::AssistantMessage { text } if text == "steered add this")));
+    let rows = std::fs::read_to_string(&steer_audit).unwrap_or_default().lines().map(|line| serde_json::from_str::<Value>(line).unwrap()).collect::<Vec<_>>();
+    assert_eq!(rows.len(), 2, "the stale steer wrote nothing");
+    assert_eq!(rows[1]["message"]["content"], "add this");
+    adapter.close_session(&handle).await.unwrap();
+    let _ = std::fs::remove_dir_all(root);
+}
+
+/// A refusal is an error, never `Accepted`: no session to write to, or empty
+/// text the provider would treat as a new (empty) turn.
+#[tokio::test]
+async fn steering_refuses_a_missing_session_and_empty_text() {
+    let missing = SessionHandle { session_id: "not-open".into(), provider_session_id: "p".into(), capabilities: AgentCapabilities::default() };
+    assert!(matches!(
+        ClaudeAdapter::default().steer(&missing, SteerRequest { turn_id: "t".into(), text: "hi".into() }).await,
+        Err(retinue_agent_core::AdapterError::Process(_))
+    ));
+    let (root, private, audit_path) = paths();
+    let system_root = setup_test_acl(&root);
+    let adapter = ClaudeAdapter::with_test_acl_executable(private, system_root);
+    let rt = runtime(&audit_path, &[]);
+    let (tx, mut rx) = mpsc::channel(16);
+    let handle = adapter
+        .new_session(&rt, NewSessionRequest { session_id: "s-steer-empty".into(), project_path: root.clone(), exec_options: ExecOptions::default() }, tx)
+        .await
+        .unwrap();
+    wait_session_start(&mut rx).await;
+    assert!(matches!(
+        adapter.steer(&handle, SteerRequest { turn_id: "t".into(), text: "   ".into() }).await,
+        Err(retinue_agent_core::AdapterError::Unsupported(_))
+    ));
+    adapter.close_session(&handle).await.unwrap();
+    let _ = std::fs::remove_dir_all(root);
 }

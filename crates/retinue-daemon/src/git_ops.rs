@@ -21,8 +21,8 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 /// One file's whole diff stops here.
-const DIFF_MAX_BYTES: usize = 2 * 1024 * 1024;
-const NUMSTAT_MAX_BYTES: usize = 64 * 1024;
+pub(crate) const DIFF_MAX_BYTES: usize = 2 * 1024 * 1024;
+pub(crate) const NUMSTAT_MAX_BYTES: usize = 64 * 1024;
 /// A file larger than this is never discarded, because it would not be kept.
 const COPY_MAX_BYTES: u64 = 20 * 1024 * 1024;
 /// How many paths one staging call takes.
@@ -75,7 +75,23 @@ fn pathspec(path: &str) -> String {
 
 // ── session.git.diff ─────────────────────────────────────────────────────
 
+/// `session.git.diff`: one file's whole change in the reviewed scope.
 pub(crate) async fn diff(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+    // A scope other than `uncommitted` compares other two ends; `uncommitted` (and an
+    // absent scope) is the answer below, exactly as it was before scopes existed.
+    let scope = crate::review_scopes::parse(p)?;
+    if !matches!(scope, crate::review_scopes::Scope::Uncommitted) {
+        let (_, detail, folder) = session_folder(st, p)?;
+        let path = repository_path(p, "repositoryPath")?;
+        let located = repository::locate(&folder).await.map_err(invalid)?;
+        return crate::review_scopes::file_diff(&folder, &detail, &located, &scope, &path).await;
+    }
+    Ok(crate::review_scopes::stamp(uncommitted(st, p).await?, &scope, None))
+}
+
+/// One file's whole change against `HEAD`, with untracked files and an unborn repository
+/// handled as they always were.
+async fn uncommitted(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
     let (_, _, folder) = session_folder(st, p)?;
     let path = repository_path(p, "repositoryPath")?;
     let located = repository::locate(&folder).await.map_err(invalid)?;
@@ -107,7 +123,7 @@ pub(crate) async fn diff(st: &AppState, p: &Value) -> Result<Value, DispatchErro
     }))
 }
 
-type Whole = (Option<String>, bool, bool, Option<u64>, Option<u64>);
+pub(crate) type Whole = (Option<String>, bool, bool, Option<u64>, Option<u64>);
 
 /// The whole patch of a tracked path against `HEAD` and its line counts.
 async fn tracked(root: &Path, change: &Change) -> Whole {
@@ -137,7 +153,7 @@ async fn tracked(root: &Path, change: &Change) -> Whole {
 
 /// A display patch for a file that exists only in the working tree, with the larger cap. A link,
 /// a folder or a path leaving the repository is not read.
-fn synthesise(root: &Path, path: &str) -> Whole {
+pub(crate) fn synthesise(root: &Path, path: &str) -> Whole {
     let none: Whole = (None, false, false, None, None);
     let Some(file_path) = repository::safe_file(root, path) else { return none };
     let Ok(file) = std::fs::File::open(&file_path) else { return none };

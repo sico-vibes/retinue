@@ -570,6 +570,34 @@ async fn p7_instructions_ask_for_checked_reports_and_a_pass_reply() {
     assert!(description.contains("One task per brief"), "{description}");
 }
 
+// 11 November 2026: every brief tool names the same lines, so a brief written
+// for a task or a sub-bot reads like one written for message_blob.
+#[tokio::test]
+async fn p7_every_brief_tool_names_the_same_lines() {
+    let (st, _, worker) = fixture().await;
+    let schemas = tools(false, false, false, true, true, "bot", "bots");
+    let brief = |tool: &str| {
+        let schema = schemas.as_array().unwrap().iter().find(|schema| schema["name"] == tool).cloned().unwrap_or(Value::Null);
+        let props = &schema["inputSchema"]["properties"];
+        let field = if props["brief"]["description"].is_string() { props["brief"].clone() } else { props["bots"]["items"]["properties"]["brief"].clone() };
+        field["description"].as_str().unwrap_or("").to_owned()
+    };
+    for tool in ["assign_task", "create_task", "spawn_subbots"] {
+        let text = brief(tool);
+        assert!(text.contains("Task —") && text.contains("Do not touch —") && text.contains("Context —") && text.contains("Rules —") && text.contains("Report —"), "{tool}: {text}");
+        assert!(text.contains("One task per brief"), "{tool}: {text}");
+        assert_eq!(text, crate::team::BRIEF_LINES, "{tool} uses the message_blob wording");
+    }
+    // message_blob's own field is that one wording.
+    let message = schemas.as_array().unwrap().iter().find(|schema| schema["name"] == "message_blob").unwrap();
+    assert_eq!(message["inputSchema"]["properties"]["message"]["description"], crate::team::BRIEF_LINES);
+    // A sub-bot is a side conversation: its instructions carry the same report
+    // shape, and it knows it is a helper its parent started.
+    let instructions = runtime_instructions(&st, &st.db.agent_get(&worker).unwrap(), &json!({"kind":"side","peerName":"Manager","subbot":true}), std::path::Path::new("."));
+    assert!(instructions.contains("report in this order and keep it short"), "{instructions}");
+    assert!(instructions.contains("You are a helper Manager started"), "{instructions}");
+}
+
 // Wave 13 loop guard: work is never sent back to a bot that is waiting on it.
 #[tokio::test]
 async fn w13_work_is_not_sent_back_up_the_chain() {

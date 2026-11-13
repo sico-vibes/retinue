@@ -752,7 +752,7 @@ async fn provider_polling_and_attachments_are_refused() {
 async fn a_never_method_is_forbidden_remote() {
     let gateway = gateway().await;
     let (_device_id, token) = seed_device(&gateway.st, "dev-never", "operator", None);
-    for method in ["settings.set", "agent.create", "daemon.shutdown", "remote.enable", "remote.devices.list", "file.revert"] {
+    for method in ["settings.set", "agent.create", "daemon.shutdown", "remote.enable", "remote.devices.list", "file.revert", "attention.focus"] {
         assert_eq!(
             gateway.rpc_error(&token, method, json!({"key": "x", "value": 1})).await,
             "forbidden_remote",

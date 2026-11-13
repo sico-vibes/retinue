@@ -1845,6 +1845,79 @@ fn provider_login_script(provider: &str) -> Result<&'static str, String> {
     }
 }
 
+/// The provider's own sign-in for a *named* account. Each of these signs in and
+/// exits, so the window closes on its own and the person is never left inside a
+/// session that belongs to nobody. Documented per provider: `claude auth login`
+/// (code.claude.com/docs/en/cli-reference), `codex login`
+/// (developers.openai.com/codex/cli/reference) and `opencode auth login`
+/// (opencode.ai/docs/cli/commands).
+fn account_login_script(provider: &str) -> Result<&'static str, String> {
+    match provider {
+        "claude" => Ok("claude auth login"),
+        "codex" => Ok("codex login"),
+        "opencode" => Ok("opencode auth login"),
+        _ => Err(format!("Unknown coding agent: {provider}")),
+    }
+}
+
+/// What one account adds to a launch: its provider and the variables that point
+/// that provider's CLI at the account's folder. Both come from the daemon, which
+/// owns the one table (`accounts::account_environment`); the shell never builds
+/// a path, so a window cannot name a folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct AccountEnvironment {
+    provider: String,
+    environment: Vec<(String, String)>,
+}
+
+/// A plain environment name: ASCII letters, digits and `_`.
+fn environment_name_is_safe(name: &str) -> bool {
+    !name.is_empty() && name.len() <= 64 && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// The daemon's own rule for an account id, so the renderer cannot ask for a
+/// folder, a quote or a path.
+fn account_id_is_safe(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
+
+/// The `$env:` prefix for one account. PowerShell single-quotes the value and
+/// doubles an inner quote, so a space, a `$` or a quote in a folder path stays
+/// literal and is never read as code.
+fn environment_prefix(environment: &[(String, String)]) -> Result<String, String> {
+    if environment.is_empty() {
+        return Err("Retinue does not know how to point that coding agent at an account.".to_string());
+    }
+    let mut parts = Vec::with_capacity(environment.len());
+    for (name, value) in environment {
+        if !environment_name_is_safe(name) {
+            return Err("Retinue cannot set this account's environment.".to_string());
+        }
+        // A control character would end the one line the terminal hands to
+        // PowerShell; a folder path never holds one.
+        if value.is_empty() || value.chars().any(char::is_control) {
+            return Err("This account's folder cannot be used for a sign-in.".to_string());
+        }
+        parts.push(format!("$env:{name}='{}'", value.replace('\'', "''")));
+    }
+    Ok(parts.join("; "))
+}
+
+/// The part of `account.signIn`'s reply a launch needs. It is checked against the
+/// provider the renderer asked for, so an account of another coding agent can
+/// never be opened under the wrong command.
+fn account_environment_from_reply(reply: &Value, provider: &str) -> Result<AccountEnvironment, String> {
+    if reply["provider"].as_str() != Some(provider) {
+        return Err("That account belongs to a different coding agent.".to_string());
+    }
+    let pairs = reply["environment"].as_array().ok_or_else(|| "Retinue could not read this account's environment.".to_string())?;
+    let environment = pairs
+        .iter()
+        .map(|pair| (pair["name"].as_str().unwrap_or("").to_owned(), pair["value"].as_str().unwrap_or("").to_owned()))
+        .collect::<Vec<_>>();
+    Ok(AccountEnvironment { provider: provider.to_owned(), environment })
+}
+
 const OPENCODE_DOCS: &str = "https://opencode.ai/docs/";
 
 /// The install command for one provider, with its login command chained in the
@@ -1886,14 +1959,30 @@ struct TerminalLaunched {
     terminal: &'static str,
 }
 
-/// Build the launch for one provider and action. Nothing is spawned here, which
-/// is what lets the table be tested.
+/// Build the launch for one provider and action with no account, which is the
+/// table the tests pin. Production goes through `terminal_launch_with` so the
+/// default and the named-account paths share one table.
+#[cfg(test)]
 fn terminal_launch(provider: &str, action: &str, npm_available: bool, wt_available: bool) -> Result<TerminalLaunch, String> {
+    terminal_launch_with(provider, action, None, npm_available, wt_available)
+}
+
+/// The same table with an account added: the provider's own sign-in, run with
+/// the variables that point it at that account's folder. Only sign-in uses an
+/// account; an install belongs to the machine, not to an account.
+fn terminal_launch_with(provider: &str, action: &str, account: Option<&AccountEnvironment>, npm_available: bool, wt_available: bool) -> Result<TerminalLaunch, String> {
     let name = runtime_terminal_name(provider)?;
-    let script = match action {
-        "login" => provider_login_script(provider)?.to_owned(),
-        "install" => provider_install_script(provider, npm_available)?,
-        other => return Err(format!("Unknown terminal action: {other}")),
+    let script = match (account, action) {
+        (Some(account), "login") => {
+            if account.provider != provider {
+                return Err("That account belongs to a different coding agent.".to_string());
+            }
+            format!("{}; {}", environment_prefix(&account.environment)?, account_login_script(provider)?)
+        }
+        (Some(_), other) => return Err(format!("An account can only be signed in, not {other}.")),
+        (None, "login") => provider_login_script(provider)?.to_owned(),
+        (None, "install") => provider_install_script(provider, npm_available)?,
+        (None, other) => return Err(format!("Unknown terminal action: {other}")),
     };
     let title = format!("Retinue: {name} sign-in");
     if wt_available {
@@ -1936,11 +2025,16 @@ fn program_on_path(program: &str) -> bool {
 }
 
 /// Opens a visible terminal window with the provider's login or install
-/// command. Only the provider and action come from the renderer; the command
-/// text itself is always ours.
+/// command. Only the provider, the action and an account id come from the
+/// renderer; the command text itself is always ours, and the account's folder is
+/// resolved by the daemon from that id.
 #[tauri::command]
-fn runtime_terminal(provider: String, action: String) -> Result<TerminalLaunched, String> {
-    let launch = terminal_launch(&provider, &action, program_on_path("npm.cmd"), program_on_path("wt.exe"))?;
+async fn runtime_terminal(provider: String, action: String, account_id: Option<String>, state: State<'_, AppState>) -> Result<TerminalLaunched, String> {
+    let account = match account_id.as_deref() {
+        None => None,
+        Some(id) => Some(account_environment(&state, id, &provider).await?),
+    };
+    let launch = terminal_launch_with(&provider, &action, account.as_ref(), program_on_path("npm.cmd"), program_on_path("wt.exe"))?;
     let mut command = Command::new(&launch.program);
     command.args(&launch.args);
     // The direct PowerShell fallback is a console app with no window of its own,
@@ -1954,6 +2048,18 @@ fn runtime_terminal(provider: String, action: String) -> Result<TerminalLaunched
         .spawn()
         .map_err(|error| format!("Could not open a terminal window: {error}"))?;
     Ok(TerminalLaunched { launched: true, terminal: launch.terminal })
+}
+
+/// The variables that point one provider at this account's folder, from the
+/// daemon that owns the table. The id is checked here first, so a caller cannot
+/// even reach the daemon with a path or a quote.
+async fn account_environment(state: &State<'_, AppState>, id: &str, provider: &str) -> Result<AccountEnvironment, String> {
+    if !account_id_is_safe(id) {
+        return Err("That account cannot be signed in from here.".to_string());
+    }
+    let conn = connection(state)?;
+    let reply = rpc_call(&conn, "account.signIn", json!({"id": id})).await?;
+    account_environment_from_reply(&reply, provider)
 }
 
 #[tauri::command]
@@ -3736,12 +3842,135 @@ mod markdown_export_tests {
 
 #[cfg(test)]
 mod runtime_terminal_tests {
-    use super::{provider_install_script, terminal_launch, TerminalLaunch, OPENCODE_DOCS};
+    use super::{
+        account_environment_from_reply, account_id_is_safe, environment_prefix, provider_install_script,
+        terminal_launch, terminal_launch_with, AccountEnvironment, TerminalLaunch, TerminalLaunched,
+        OPENCODE_DOCS,
+    };
+    use serde_json::json;
 
     fn argv(provider: &str, action: &str, npm: bool, wt: bool) -> Vec<String> {
         let launch = terminal_launch(provider, action, npm, wt).unwrap();
         assert_eq!(launch.program, if launch.terminal == "wt" { "wt.exe" } else { "powershell.exe" });
         launch.args
+    }
+
+    /// The account environment exactly as the daemon's `account.signIn` reply
+    /// gives it: the folder is the daemon's, never the window's.
+    fn account(provider: &str, folder: &str) -> AccountEnvironment {
+        let names: &[&str] = match provider {
+            "claude" => &["CLAUDE_CONFIG_DIR"],
+            "codex" => &["CODEX_HOME"],
+            _ => &["XDG_CONFIG_HOME", "XDG_DATA_HOME"],
+        };
+        account_environment_from_reply(
+            &json!({
+                "provider": provider,
+                "environment": names.iter().map(|name| json!({"name": name, "value": folder})).collect::<Vec<_>>(),
+            }),
+            provider,
+        )
+        .unwrap()
+    }
+
+    fn account_argv(provider: &str, folder: &str, wt: bool) -> Vec<String> {
+        terminal_launch_with(provider, "login", Some(&account(provider, folder)), true, wt)
+            .unwrap()
+            .args
+    }
+
+    #[test]
+    fn an_account_sign_in_sets_its_folder_for_each_provider() {
+        let folder = "C:/Retinue data/accounts/0b3c4d5e";
+        // A space in the path stays inside the PowerShell single quotes, and wt's
+        // own `;` separator is escaped for wt, not for PowerShell.
+        assert_eq!(
+            account_argv("claude", folder, true),
+            vec![
+                "new-tab",
+                "--title",
+                "Retinue: Claude Code sign-in",
+                "powershell",
+                "-NoExit",
+                "-Command",
+                "$env:CLAUDE_CONFIG_DIR='C:/Retinue data/accounts/0b3c4d5e'\\; claude auth login",
+            ]
+        );
+        assert_eq!(
+            account_argv("codex", folder, true).last().unwrap(),
+            "$env:CODEX_HOME='C:/Retinue data/accounts/0b3c4d5e'\\; codex login"
+        );
+        assert_eq!(
+            account_argv("opencode", folder, true).last().unwrap(),
+            "$env:XDG_CONFIG_HOME='C:/Retinue data/accounts/0b3c4d5e'\\; $env:XDG_DATA_HOME='C:/Retinue data/accounts/0b3c4d5e'\\; opencode auth login"
+        );
+        // The direct PowerShell fallback: one argv entry, `;` unescaped because
+        // no cmd.exe and no wt is in the path to read it.
+        assert_eq!(
+            account_argv("codex", folder, false),
+            vec!["-NoExit", "-Command", "$env:CODEX_HOME='C:/Retinue data/accounts/0b3c4d5e'; codex login"]
+        );
+    }
+
+    #[test]
+    fn a_quote_in_the_folder_is_doubled_and_never_ends_the_string() {
+        let prefix = environment_prefix(&[("CLAUDE_CONFIG_DIR".to_string(), "C:/Retinue data/it's mine".to_string())]).unwrap();
+        assert_eq!(prefix, "$env:CLAUDE_CONFIG_DIR='C:/Retinue data/it''s mine'");
+        assert!(!prefix.contains('"'), "the folder is quoted with PowerShell single quotes: {prefix}");
+        // Read as PowerShell: the doubled quote is one literal `'`.
+        assert_eq!(prefix.matches('\'').count(), 4);
+    }
+
+    #[test]
+    fn an_unknown_or_unsafe_account_is_refused() {
+        for id in ["", "a b", "a'b", "a/b", "../x", "a;b", "0b3c4d5e\\"] {
+            assert!(!account_id_is_safe(id), "{id:?} must be refused");
+        }
+        assert!(!account_id_is_safe(&"x".repeat(65)), "an id is at most 64 characters");
+        for id in ["0b3c4d5e", "0b3c4d5e-0000-4000-8000-000000000000", "A-1"] {
+            assert!(account_id_is_safe(id), "{id} is a real account id");
+        }
+        // An account the shell cannot name, and one belonging to another agent.
+        assert!(terminal_launch_with("codex", "login", Some(&account("claude", "C:/a")), true, true).is_err());
+        assert!(terminal_launch_with("nope", "login", Some(&account("nope", "C:/a")), true, true).is_err());
+        // The daemon's own reply must name the provider that was asked for.
+        let reply = json!({"provider": "claude", "environment": [{"name": "CLAUDE_CONFIG_DIR", "value": "C:/a"}]});
+        assert!(account_environment_from_reply(&reply, "codex").is_err());
+        assert!(account_environment_from_reply(&json!({"provider": "claude"}), "claude").is_err());
+    }
+
+    #[test]
+    fn an_environment_is_refused_when_it_could_break_out_of_the_script() {
+        let value = "C:/a".to_string();
+        assert!(environment_prefix(&[]).is_err(), "an empty environment points nowhere");
+        assert!(environment_prefix(&[("CLAUDE_CONFIG_DIR;calc".to_string(), value.clone())]).is_err());
+        assert!(environment_prefix(&[("CLAUDE_CONFIG_DIR".to_string(), "C:/a\ncalc".to_string())]).is_err());
+        assert!(environment_prefix(&[("CLAUDE_CONFIG_DIR".to_string(), String::new())]).is_err());
+        assert!(environment_prefix(&[("X".repeat(65), value)]).is_err());
+    }
+
+    #[test]
+    fn an_account_can_only_sign_in() {
+        for provider in ["claude", "codex", "opencode"] {
+            let error = terminal_launch_with(provider, "install", Some(&account(provider, "C:/a")), true, true).unwrap_err();
+            assert!(error.contains("signed in"), "{error}");
+        }
+    }
+
+    #[test]
+    fn an_account_sign_in_uses_the_providers_own_command_not_a_session() {
+        for provider in ["claude", "codex", "opencode"] {
+            let script = account_argv(provider, "C:/a", true).pop().unwrap();
+            assert!(!script.contains("/login"), "a named account signs in without an interactive session: {script}");
+            assert!(script.ends_with(super::account_login_script(provider).unwrap()), "{script}");
+        }
+    }
+
+    #[test]
+    fn the_terminal_result_carries_no_folder_or_secret() {
+        let result = TerminalLaunched { launched: true, terminal: "wt" };
+        let value = serde_json::to_value(&result).unwrap();
+        assert_eq!(value, json!({"launched": true, "terminal": "wt"}));
     }
 
     #[test]

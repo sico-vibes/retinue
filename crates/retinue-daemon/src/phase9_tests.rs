@@ -249,7 +249,9 @@ async fn a_stock_photo_is_worn_by_one_employee_and_a_preset_falls_back_to_the_si
     assert!(ada["look"]["photo"].is_null(), "{}", ada["look"]);
 }
 
-// Coding agents the owner turned off (9 November 2026).
+// Coding agents the owner turned off (9 November 2026). Since 11 November 2026 a
+// main provider cannot be turned off by its provider id; one installed copy is
+// still switched off by its runtime id.
 #[tokio::test]
 async fn a_turned_off_coding_agent_is_marked_kept_and_refused() {
     let (st, _events) = state();
@@ -257,13 +259,21 @@ async fn a_turned_off_coding_agent_is_marked_kept_and_refused() {
         assert_eq!(dispatch(&st, "settings.set", json!({"key":"runtimes.disabled","value":bad})).await.unwrap_err().1.code, "invalid_argument", "{bad}");
     }
     assert!(disabled_runtimes(&st.db).is_empty());
-    dispatch(&st, "settings.set", json!({"key":"runtimes.disabled","value":["codex"]})).await.unwrap();
-    assert_eq!(disabled_runtimes(&st.db), vec!["codex".to_owned()]);
-    // The saved row is kept, published, and marked off; nothing was probed for it.
+    // Codex is a main provider: its own id is refused, with the sentence the UI
+    // shows, and nothing is switched off.
+    let main = dispatch(&st, "settings.set", json!({"key":"runtimes.disabled","value":["codex"]})).await.unwrap_err();
+    assert_eq!(main.1.code, "invalid_argument");
+    assert_eq!(main.1.message, "Codex is always on and cannot be turned off. Turn off one installed copy instead.");
+    assert!(disabled_runtimes(&st.db).is_empty());
+    dispatch(&st, "settings.set", json!({"key":"runtimes.disabled","value":["rt-test"]})).await.unwrap();
+    assert_eq!(disabled_runtimes(&st.db), vec!["rt-test".to_owned()]);
+    // The saved row is kept, published, and marked off.
     let roster = st.runtimes.read().await.clone();
     let row = roster.iter().find(|row| row["id"] == "rt-test").expect("the saved row is still published");
-    assert_eq!(row["disabled"], true);
+    assert_eq!(row["disabled"], true, "{roster:?}");
     assert_eq!(row["status"], "disabled");
+    assert_eq!(row["main"], true, "Codex is a main provider");
+    assert_eq!(row["enabled"], false, "this installed copy is off");
     assert!(!catalog::runtime_usable(row));
     assert!(st.db.runtimes().unwrap().iter().any(|row| row["id"] == "rt-test" && row["disabled"] == true));
     // A conversation on it is refused with the plain sentence.
@@ -272,8 +282,9 @@ async fn a_turned_off_coding_agent_is_marked_kept_and_refused() {
     // Turned back on: the mark clears.
     dispatch(&st, "settings.set", json!({"key":"runtimes.disabled","value":[]})).await.unwrap();
     let mut row = st.db.runtimes().unwrap().into_iter().find(|row| row["id"] == "rt-test").unwrap();
-    mark_runtime_disabled(&mut row, &[]);
+    stamp_runtime_state(&mut row, &[]);
     assert!(row.get("disabled").is_none());
+    assert_eq!(row["enabled"], true);
     // A single installed copy can be turned off by its runtime id.
     assert!(runtime_is_disabled(&json!({"id":"rt-test","provider":"codex"}), &["rt-test".to_owned()]));
     assert!(!runtime_is_disabled(&json!({"id":"rt-other","provider":"codex"}), &["rt-test".to_owned()]));

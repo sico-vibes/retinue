@@ -21,30 +21,36 @@ use tokio::io::AsyncReadExt;
 /// The longest one git call may take.
 const GIT_TIMEOUT: Duration = Duration::from_secs(15);
 /// Caps for the one-call outputs; a truncated status still lists what it read.
-const TOPLEVEL_MAX_BYTES: usize = 8 * 1024;
+/// The same limits apply to every review scope (`review_scopes`).
+pub(crate) const TOPLEVEL_MAX_BYTES: usize = 8 * 1024;
 const STATUS_MAX_BYTES: usize = 2 * 1024 * 1024;
-const NUMSTAT_MAX_BYTES: usize = 1024 * 1024;
+pub(crate) const NUMSTAT_MAX_BYTES: usize = 1024 * 1024;
 /// Per-file and whole-answer diff limits.
 const PATCH_MAX_BYTES: usize = 96 * 1024;
-const PATCH_POOL_BYTES: usize = 512 * 1024;
+pub(crate) const PATCH_POOL_BYTES: usize = 512 * 1024;
 /// How many changed files are listed and how many carry a diff.
-const MAX_FILES: usize = 200;
-const MAX_PATCH_FILES: usize = 24;
+pub(crate) const MAX_FILES: usize = 200;
+pub(crate) const MAX_PATCH_FILES: usize = 24;
 /// An untracked file is read only up to this size and line count.
 const UNTRACKED_MAX_BYTES: u64 = 256 * 1024;
 const UNTRACKED_MAX_LINES: u64 = 20_000;
 /// A NUL byte in the first bytes is git's own binary heuristic.
 const BINARY_SNIFF_BYTES: usize = 8_000;
 
-/// `session.repository`: the conversation's folder against its `HEAD`.
+/// `session.repository`: the conversation's folder against its `HEAD`, or against another
+/// review scope's two ends (see `review_scopes`).
 pub(crate) async fn session_repository(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
     let session_id = p["sessionId"].as_str().filter(|id| !id.is_empty())
         .ok_or_else(|| derr("invalid_argument", "sessionId is required", StatusCode::BAD_REQUEST))?;
     let detail = st.db.session_detail(session_id).map_err(|_| derr("not_found", "session not found", StatusCode::NOT_FOUND))?;
+    let scope = crate::review_scopes::parse(p)?;
     let Some(project_path) = detail["projectPath"].as_str().filter(|path| !path.is_empty()).map(str::to_owned) else {
-        return Ok(empty_answer(None, "This conversation has no project folder."));
+        return Ok(crate::review_scopes::stamp(empty_answer(None, "This conversation has no project folder."), &scope, None));
     };
-    Ok(working_tree(&project_path).await)
+    if matches!(scope, crate::review_scopes::Scope::Uncommitted) {
+        return Ok(crate::review_scopes::stamp(working_tree(&project_path).await, &scope, None));
+    }
+    Ok(crate::review_scopes::tree(&project_path, &detail, &scope).await)
 }
 
 /// The answered contract for a folder: repository changes against `HEAD`.
@@ -58,15 +64,12 @@ pub(crate) async fn working_tree(project_path: &str) -> Value {
     if !top.ok || root_text.trim().is_empty() || !root.is_dir() {
         return empty_answer(Some(project_path.to_owned()), "This project is not a git repository.");
     }
-    let branch_run = run_git(&root, &["symbolic-ref", "--short", "-q", "HEAD"], TOPLEVEL_MAX_BYTES).await;
-    let branch = (branch_run.ok).then(|| text(&branch_run.stdout).trim().to_owned()).filter(|name| !name.is_empty());
-    let detached = branch.is_none();
+    let (branch, detached) = current_branch(&root).await;
     let unborn = !run_git(&root, &["rev-parse", "--verify", "-q", "HEAD"], TOPLEVEL_MAX_BYTES).await.ok;
-    let status = run_git(&root, &["status", "--porcelain=v2", "-z", "--untracked-files=all", "--renames"], STATUS_MAX_BYTES).await;
-    if !status.started || (!status.ok && status.stdout.is_empty()) {
-        return repo_answer(project_path, &root, branch, detached, Vec::new(), (0, 0), false, Some("The repository's changes could not be read."));
-    }
-    let changes = parse_status(&status.stdout);
+    let (changes, status_truncated) = match status_changes(&root).await {
+        Ok(read) => read,
+        Err(message) => return repo_answer(project_path, &root, branch, detached, Vec::new(), (0, 0), false, Some(message)),
+    };
     let mut stats = HashMap::new();
     let mut stats_truncated = false;
     if !unborn {
@@ -76,7 +79,7 @@ pub(crate) async fn working_tree(project_path: &str) -> Value {
     let mut files = Vec::new();
     let mut pool = PATCH_POOL_BYTES;
     let (mut total_added, mut total_removed) = (0u64, 0u64);
-    let mut answer_truncated = status.truncated || stats_truncated || changes.len() > MAX_FILES;
+    let mut answer_truncated = status_truncated || stats_truncated || changes.len() > MAX_FILES;
     let mut patches = 0usize;
     for change in changes.iter().take(MAX_FILES) {
         let added_label = if unborn { change.change != "deleted" } else { change.change == "added" };
@@ -154,13 +157,30 @@ pub(crate) async fn locate(project_path: &str) -> Result<Located, &'static str> 
     let root = PathBuf::from(root_text.trim());
     if !top.ok || root_text.trim().is_empty() || !root.is_dir() { return Err("This project is not a git repository."); }
     let unborn = !run_git(&root, &["rev-parse", "--verify", "-q", "HEAD"], TOPLEVEL_MAX_BYTES).await.ok;
-    let status = run_git(&root, &["status", "--porcelain=v2", "-z", "--untracked-files=all", "--renames"], STATUS_MAX_BYTES).await;
-    if !status.started || status.truncated || (!status.ok && status.stdout.is_empty()) { return Err("The repository's changes could not be read."); }
-    Ok(Located { root, unborn, changes: parse_status(&status.stdout) })
+    let (changes, truncated) = status_changes(&root).await?;
+    if truncated { return Err("The repository's changes could not be read."); }
+    Ok(Located { root, unborn, changes })
+}
+
+/// Every changed path and untracked file in the repository, with whether the list was cut at
+/// the byte cap. An error is a plain sentence.
+pub(crate) async fn status_changes(root: &Path) -> Result<(Vec<Change>, bool), &'static str> {
+    let status = run_git(root, &["status", "--porcelain=v2", "-z", "--untracked-files=all", "--renames"], STATUS_MAX_BYTES).await;
+    if !status.started || (!status.ok && status.stdout.is_empty()) { return Err("The repository's changes could not be read."); }
+    Ok((parse_status(&status.stdout), status.truncated))
+}
+
+/// The branch checked out at `root`, and whether `HEAD` is detached. Reading it never fails:
+/// a detached or unreadable `HEAD` simply has no branch name.
+pub(crate) async fn current_branch(root: &Path) -> (Option<String>, bool) {
+    let run = run_git(root, &["symbolic-ref", "--short", "-q", "HEAD"], TOPLEVEL_MAX_BYTES).await;
+    let branch = (run.ok).then(|| text(&run.stdout).trim().to_owned()).filter(|name| !name.is_empty());
+    let detached = branch.is_none();
+    (branch, detached)
 }
 
 #[allow(clippy::too_many_arguments)]
-fn repo_answer(project_path: &str, root: &Path, branch: Option<String>, detached: bool, files: Vec<Value>, totals: (u64, u64), truncated: bool, error: Option<&str>) -> Value {
+pub(crate) fn repo_answer(project_path: &str, root: &Path, branch: Option<String>, detached: bool, files: Vec<Value>, totals: (u64, u64), truncated: bool, error: Option<&str>) -> Value {
     json!({
         "projectPath": project_path,
         "repoRoot": display_path(root),
@@ -175,7 +195,7 @@ fn repo_answer(project_path: &str, root: &Path, branch: Option<String>, detached
     })
 }
 
-fn empty_answer(project_path: Option<String>, error: &str) -> Value {
+pub(crate) fn empty_answer(project_path: Option<String>, error: &str) -> Value {
     json!({
         "projectPath": project_path,
         "repoRoot": Value::Null,
@@ -244,16 +264,22 @@ pub(crate) async fn run_git(dir: &Path, args: &[&str], max_bytes: usize) -> GitR
     }
 }
 
-struct Patch {
-    diff: Option<String>,
-    truncated: bool,
+pub(crate) struct Patch {
+    pub(crate) diff: Option<String>,
+    pub(crate) truncated: bool,
 }
 
-/// The patch of one tracked path against `HEAD`, cut at the remaining budget.
+/// The patch of one tracked path between a scope's two ends, cut at the remaining budget.
 async fn tracked_patch(root: &Path, repository_path: &str, pool: &mut usize) -> Patch {
     let literal = format!(":(literal){repository_path}");
+    patch_of(root, vec!["diff".to_owned(), "HEAD".to_owned(), "-M".to_owned(), "--no-ext-diff".to_owned(), "--no-textconv".to_owned(), "--".to_owned(), literal], pool).await
+}
+
+/// The patch one git argument list produces, cut at the remaining budget.
+pub(crate) async fn patch_of(root: &Path, args: Vec<String>, pool: &mut usize) -> Patch {
     let limit = PATCH_MAX_BYTES.min(*pool);
-    let run = run_git(root, &["diff", "HEAD", "-M", "--no-ext-diff", "--no-textconv", "--", literal.as_str()], limit).await;
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let run = run_git(root, &refs, limit).await;
     if !run.started || (!run.ok && run.stdout.is_empty() && !run.truncated) {
         return Patch { diff: None, truncated: false };
     }
@@ -263,18 +289,18 @@ async fn tracked_patch(root: &Path, repository_path: &str, pool: &mut usize) -> 
     Patch { diff, truncated: run.truncated }
 }
 
-struct Untracked {
-    diff: Option<String>,
-    added: Option<u64>,
-    removed: Option<u64>,
-    binary: bool,
-    truncated: bool,
+pub(crate) struct Untracked {
+    pub(crate) diff: Option<String>,
+    pub(crate) added: Option<u64>,
+    pub(crate) removed: Option<u64>,
+    pub(crate) binary: bool,
+    pub(crate) truncated: bool,
 }
 
 /// Read one untracked file inside the repository and describe it as an added
 /// file. A symlink, a folder, or a path that would leave the repository is not
 /// read; a file over the cap is reported as truncated instead.
-fn untracked_file(root: &Path, repository_path: &str, pool: &mut usize) -> Untracked {
+pub(crate) fn untracked_file(root: &Path, repository_path: &str, pool: &mut usize) -> Untracked {
     let none = Untracked { diff: None, added: None, removed: None, binary: false, truncated: false };
     let Some(path) = safe_file(root, repository_path) else { return none };
     let Ok(file) = std::fs::File::open(&path) else { return none };

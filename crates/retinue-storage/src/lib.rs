@@ -565,6 +565,10 @@ fn ensure_queue_schema(c: &Connection) -> Result<(), StorageError> {
         // limited) and whether the owner snoozed it. Additive.
         ("limit_auto_resume", "INTEGER NOT NULL DEFAULT 1"),
         ("limit_snoozed", "INTEGER NOT NULL DEFAULT 0"),
+        // The owner's "snooze until it needs me" flag for a conversation (11
+        // November 2026). A different feature from `limit_snoozed` above: this
+        // one keeps a working conversation quiet until it needs the owner.
+        ("snoozed_until_needed", "INTEGER NOT NULL DEFAULT 0"),
     ] {
         if !tx.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('sessions') WHERE name=?1)", [name], |r| r.get::<_, bool>(0))? {
             tx.execute_batch(&format!("ALTER TABLE sessions ADD COLUMN {name} {definition}"))?;
@@ -3940,7 +3944,7 @@ impl Storage {
     pub fn sessions(&self) -> Result<Vec<Value>, StorageError> { self.session_list(false) }
     pub fn session_list(&self, include_archived: bool) -> Result<Vec<Value>, StorageError> {
         let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
-        let mut s=c.prepare("SELECT id,runtime_id,provider,provider_session_id,project_path,COALESCE(title_override,title),state,resumable,created_at,updated_at,agent_id,archived,model_lock_json,json_extract(data,'$.link'),COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path),'Casual'),limited_until,COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path)),(SELECT f.id FROM fanouts f WHERE f.id=json_extract(sessions.data,'$.fanoutId')),(SELECT CASE WHEN json_valid(q.overrides_json) THEN json_extract(q.overrides_json,'$.approvalMode') END FROM projects q WHERE q.id=COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path))),(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1),limit_auto_resume,limit_snoozed FROM sessions WHERE (?1 OR archived=0) ORDER BY updated_at DESC")?;
+        let mut s=c.prepare("SELECT id,runtime_id,provider,provider_session_id,project_path,COALESCE(title_override,title),state,resumable,created_at,updated_at,agent_id,archived,model_lock_json,json_extract(data,'$.link'),COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path),'Casual'),limited_until,COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path)),(SELECT f.id FROM fanouts f WHERE f.id=json_extract(sessions.data,'$.fanoutId')),(SELECT CASE WHEN json_valid(q.overrides_json) THEN json_extract(q.overrides_json,'$.approvalMode') END FROM projects q WHERE q.id=COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path))),(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1),limit_auto_resume,limit_snoozed,snoozed_until_needed FROM sessions WHERE (?1 OR archived=0) ORDER BY updated_at DESC")?;
         let iter=s.query_map([include_archived],|r|{
             let mut row=json!({"id":r.get::<_,String>(0)?,"runtimeId":r.get::<_,String>(1)?,"provider":r.get::<_,String>(2)?,"providerSessionId":r.get::<_,Option<String>>(3)?,"projectPath":r.get::<_,String>(4)?,"title":r.get::<_,String>(5)?,"state":r.get::<_,String>(6)?,"resumable":r.get::<_,bool>(7)?,"createdAt":r.get::<_,String>(8)?,"updatedAt":r.get::<_,String>(9)?,"agentId":r.get::<_,Option<String>>(10)?,"archived":r.get::<_,bool>(11)?,"modelLock":r.get::<_,Option<String>>(12)?.and_then(|value|serde_json::from_str::<Value>(&value).ok()),"link":r.get::<_,Option<String>>(13)?.and_then(|value|serde_json::from_str::<Value>(&value).ok()),"workspaceLabel":r.get::<_,String>(14)?,"limitedUntil":r.get::<_,Option<String>>(15)?,"projectId":r.get::<_,Option<String>>(16)?,"projectName":r.get::<_,Option<String>>(17)?,"fanoutId":r.get::<_,Option<String>>(18)?,"projectApprovalMode":r.get::<_,Option<String>>(19)?,"lastMessageAt":r.get::<_,Option<String>>(20)?});
             // The two per-conversation limit choices travel only while the
@@ -3949,6 +3953,9 @@ impl Storage {
                 row["limitAutoResume"] = json!(r.get::<_, bool>(21)?);
                 row["limitSnoozed"] = json!(r.get::<_, bool>(22)?);
             }
+            // The owner's snooze is independent of the limit state, and present
+            // only while it is set.
+            if r.get::<_, bool>(23)? { row["snoozed"] = json!(true); }
             Ok(row)
         })?;
         iter.collect::<Result<Vec<_>, _>>()
@@ -7874,13 +7881,17 @@ const SESSION_MESSAGES_SQL: &str = "SELECT json_object('id',id,'turnId',turn_id,
 
 fn session_event_summary_locked(c: &Connection, id: &str) -> Result<Value, StorageError> {
     let json: Option<String> = c.query_row(
-        "SELECT json_object('id',id,'runtimeId',runtime_id,'agentId',agent_id,'provider',provider,'title',COALESCE(title_override,title),'modelLock',json(model_lock_json),'archived',json(CASE WHEN archived=1 THEN 'true' ELSE 'false' END),'state',state,'limitedUntil',limited_until,'limitAutoResume',json(CASE WHEN limit_auto_resume!=0 THEN 'true' ELSE 'false' END),'limitSnoozed',json(CASE WHEN limit_snoozed!=0 THEN 'true' ELSE 'false' END),'resumable',json(CASE WHEN resumable!=0 THEN 'true' ELSE 'false' END),'createdAt',created_at,'updatedAt',updated_at,'workspaceLabel',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path),'Casual'),'projectId',COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),'projectName',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path)),'fanoutId',(SELECT f.id FROM fanouts f WHERE f.id=json_extract(sessions.data,'$.fanoutId')),'projectApprovalMode',(SELECT CASE WHEN json_valid(q.overrides_json) THEN json_extract(q.overrides_json,'$.approvalMode') END FROM projects q WHERE q.id=COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path))),'link',json_extract(data,'$.link'),'lastMessageAt',(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1)) FROM sessions WHERE id=?1",
+        "SELECT json_object('id',id,'runtimeId',runtime_id,'agentId',agent_id,'provider',provider,'title',COALESCE(title_override,title),'modelLock',json(model_lock_json),'archived',json(CASE WHEN archived=1 THEN 'true' ELSE 'false' END),'state',state,'limitedUntil',limited_until,'limitAutoResume',json(CASE WHEN limit_auto_resume!=0 THEN 'true' ELSE 'false' END),'limitSnoozed',json(CASE WHEN limit_snoozed!=0 THEN 'true' ELSE 'false' END),'snoozed',json(CASE WHEN snoozed_until_needed!=0 THEN 'true' ELSE 'false' END),'resumable',json(CASE WHEN resumable!=0 THEN 'true' ELSE 'false' END),'createdAt',created_at,'updatedAt',updated_at,'workspaceLabel',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path),'Casual'),'projectId',COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),'projectName',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path)),'fanoutId',(SELECT f.id FROM fanouts f WHERE f.id=json_extract(sessions.data,'$.fanoutId')),'projectApprovalMode',(SELECT CASE WHEN json_valid(q.overrides_json) THEN json_extract(q.overrides_json,'$.approvalMode') END FROM projects q WHERE q.id=COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path))),'link',json_extract(data,'$.link'),'lastMessageAt',(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1)) FROM sessions WHERE id=?1",
         [id],
         |r| r.get(0),
     ).optional()?;
     let mut summary: Value = serde_json::from_str(&json.ok_or(StorageError::AgentNotFound)?)?;
     if summary["state"] != "limited" {
         if let Some(object) = summary.as_object_mut() { object.remove("limitAutoResume"); object.remove("limitSnoozed"); }
+    }
+    // The owner's snooze is present only while it is set.
+    if summary["snoozed"].as_bool() != Some(true) {
+        if let Some(object) = summary.as_object_mut() { object.remove("snoozed"); }
     }
     let (context_used, context_size, context_model, context_estimated) = session_context_locked(c, id)?;
     summary["contextUsed"] = json!(context_used);
@@ -7897,11 +7908,15 @@ fn session_event_summary_locked(c: &Connection, id: &str) -> Result<Value, Stora
 /// `session.permissions.set`) read only this: they never need a single message
 /// or tool payload (2026-11-01).
 fn session_row_locked(c: &Connection, id: &str) -> Result<Value, StorageError> {
-    let base:Option<String>=c.query_row("SELECT json_object('id',id,'runtimeId',runtime_id,'agentId',agent_id,'provider',provider,'providerSessionId',provider_session_id,'projectPath',project_path,'title',COALESCE(title_override,title),'modelLock',json(model_lock_json),'archived',json(CASE WHEN archived=1 THEN 'true' ELSE 'false' END),'state',state,'limitedUntil',limited_until,'limitAutoResume',json(CASE WHEN limit_auto_resume!=0 THEN 'true' ELSE 'false' END),'limitSnoozed',json(CASE WHEN limit_snoozed!=0 THEN 'true' ELSE 'false' END),'resumable',json(CASE WHEN resumable!=0 THEN 'true' ELSE 'false' END),'createdAt',created_at,'updatedAt',updated_at,'workspaceLabel',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path),'Casual'),'projectId',COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),'projectName',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path)),'fanoutId',(SELECT f.id FROM fanouts f WHERE f.id=json_extract(sessions.data,'$.fanoutId')),'projectApprovalMode',(SELECT CASE WHEN json_valid(q.overrides_json) THEN json_extract(q.overrides_json,'$.approvalMode') END FROM projects q WHERE q.id=COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path))),'link',json_extract(data,'$.link'),'lastMessageAt',(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1)) FROM sessions WHERE id=?1",[id],|r|r.get(0)).optional()?;
+    let base:Option<String>=c.query_row("SELECT json_object('id',id,'runtimeId',runtime_id,'agentId',agent_id,'provider',provider,'providerSessionId',provider_session_id,'projectPath',project_path,'title',COALESCE(title_override,title),'modelLock',json(model_lock_json),'archived',json(CASE WHEN archived=1 THEN 'true' ELSE 'false' END),'state',state,'limitedUntil',limited_until,'limitAutoResume',json(CASE WHEN limit_auto_resume!=0 THEN 'true' ELSE 'false' END),'limitSnoozed',json(CASE WHEN limit_snoozed!=0 THEN 'true' ELSE 'false' END),'snoozed',json(CASE WHEN snoozed_until_needed!=0 THEN 'true' ELSE 'false' END),'resumable',json(CASE WHEN resumable!=0 THEN 'true' ELSE 'false' END),'createdAt',created_at,'updatedAt',updated_at,'workspaceLabel',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path),'Casual'),'projectId',COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),'projectName',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path)),'fanoutId',(SELECT f.id FROM fanouts f WHERE f.id=json_extract(sessions.data,'$.fanoutId')),'projectApprovalMode',(SELECT CASE WHEN json_valid(q.overrides_json) THEN json_extract(q.overrides_json,'$.approvalMode') END FROM projects q WHERE q.id=COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path))),'link',json_extract(data,'$.link'),'lastMessageAt',(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1)) FROM sessions WHERE id=?1",[id],|r|r.get(0)).optional()?;
     let mut v: Value =
         serde_json::from_str(&base.ok_or(rusqlite::Error::QueryReturnedNoRows)?)?;
     if v["state"] != "limited" {
         if let Some(object) = v.as_object_mut() { object.remove("limitAutoResume"); object.remove("limitSnoozed"); }
+    }
+    // The owner's snooze is present only while it is set.
+    if v["snoozed"].as_bool() != Some(true) {
+        if let Some(object) = v.as_object_mut() { object.remove("snoozed"); }
     }
     let (context_used, context_size, context_model, context_estimated) = session_context_locked(c, id)?;
     v["contextUsed"] = json!(context_used);
@@ -11421,6 +11436,31 @@ mod p8_watchdog_tests {
         assert_eq!(db.session_limit_flags("s").unwrap(), (true, false), "already limited, experiment on: it resumes");
         drop(db);
         fs::remove_dir_all(dir).unwrap();
+    }
+    /// The owner's snooze (11 November 2026) is its own column: it is present on
+    /// every session row only while set, and it never moves the usage-limit
+    /// snooze, which belongs to the limit state.
+    #[test]
+    fn the_owner_snooze_travels_on_every_session_row_and_is_not_the_limit_snooze() {
+        let db = Storage::open_in_memory().unwrap();
+        db.upsert_runtime(&json!({"id":"r","provider":"codex"})).unwrap();
+        db.create_session("s","r","codex",".","Chat").unwrap();
+        assert_eq!(db.session_snoozed("s").unwrap(), false);
+        assert_eq!(db.session_snoozed("missing").unwrap(), false, "a missing conversation is simply not snoozed");
+        assert!(db.session_set_snoozed("s", true).unwrap(), "a real change is reported");
+        assert!(!db.session_set_snoozed("s", true).unwrap(), "setting it twice changes nothing");
+        assert_eq!(db.session_snoozed("s").unwrap(), true);
+        let row = db.session_list(false).unwrap().into_iter().find(|row| row["id"]=="s").unwrap();
+        assert_eq!(row["snoozed"], json!(true));
+        assert!(row.get("limitSnoozed").is_none(), "the limit snooze stays with the limit state");
+        assert_eq!(db.session_event_summary("s").unwrap()["snoozed"], json!(true));
+        assert_eq!(db.session_detail("s").unwrap()["snoozed"], json!(true));
+        assert_eq!(db.session_execution_row("s").unwrap()["snoozed"], json!(true));
+        assert_eq!(db.session_limit_flags("s").unwrap().1, false, "the two snoozes are separate columns");
+        assert!(db.session_set_snoozed("s", false).unwrap());
+        for cleared in [db.session_list(false).unwrap()[0].clone(), db.session_event_summary("s").unwrap(), db.session_detail("s").unwrap(), db.session_execution_row("s").unwrap()] {
+            assert!(cleared.get("snoozed").is_none(), "{cleared}");
+        }
     }
     /// A failure saved after its turn had already completed is a stale label:
     /// the newest turn is the truth. A turn that really failed, was cancelled

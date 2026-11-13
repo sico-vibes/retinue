@@ -488,6 +488,12 @@ pub async fn on_event(st: &AppState, kind: &str, payload: &Value) {
     let Some(session_id) = payload["sessionId"].as_str().filter(|id| !id.is_empty()) else {
         return;
     };
+    // Lane 6: one surface speaks. The window's own card is the alert while the
+    // owner is looking at the conversation, and a snoozed conversation stays
+    // quiet for its progress. The decision lives in `crate::attention`.
+    if !crate::attention::should_alert(st, kind, payload, session_id) {
+        return;
+    }
     if st.remote.security(st).quiet_hours_active(chrono::Local::now()) {
         return;
     }
@@ -688,6 +694,50 @@ mod tests {
         on_event(&st, "permission.requested", &json!({"sessionId": "session-1"})).await;
         assert!(stub.sent.lock().unwrap().is_empty());
         assert_eq!(st.remote.push.failures_of("phone-1"), 0);
+    }
+
+    #[tokio::test]
+    async fn a_focused_conversation_sends_no_push_until_the_focus_expires_or_the_window_hides() {
+        let (st, stub) = push_state();
+        let event = json!({"sessionId": "session-1"});
+        // The window reports this conversation, focused and visible.
+        crate::dispatch(&st, "attention.focus", json!({"sessionId": "session-1", "visible": true})).await.unwrap();
+        on_event(&st, "permission.requested", &event).await;
+        assert!(stub.sent.lock().unwrap().is_empty(), "the card is the alert while the owner is looking");
+        // A report older than the 90-second deadline is forgotten.
+        st.attention.report_focus(Some("session-1".into()), true, std::time::Instant::now() - crate::attention::FOCUS_TTL - std::time::Duration::from_secs(1));
+        on_event(&st, "permission.requested", &event).await;
+        assert_eq!(stub.sent.lock().unwrap().len(), 1, "an expired focus is no focus");
+        // A visible window on another conversation does not silence this one.
+        let (st2, stub2) = push_state();
+        st2.attention.report_focus(Some("session-elsewhere".into()), true, std::time::Instant::now());
+        on_event(&st2, "turn.error", &event).await;
+        assert_eq!(stub2.sent.lock().unwrap().len(), 1);
+        // The window in the background reports the conversation but not visibility.
+        let (st3, stub3) = push_state();
+        st3.attention.report_focus(Some("session-1".into()), false, std::time::Instant::now());
+        on_event(&st3, "turn.error", &event).await;
+        assert_eq!(stub3.sent.lock().unwrap().len(), 1, "a hidden window is not the card");
+        // With no report at all, behaviour is exactly as before.
+        let (st4, stub4) = push_state();
+        on_event(&st4, "turn.error", &event).await;
+        assert_eq!(stub4.sent.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_snoozed_conversation_stays_quiet_until_it_needs_the_owner() {
+        let (st, stub) = push_state();
+        assert!(st.db.session_set_snoozed("session-1", true).unwrap());
+        // An approval wakes it, and that approval still reaches the phone.
+        crate::dispatch(&st, "attention.focus", json!({"sessionId": null, "visible": true})).await.unwrap();
+        st.emit("permission.requested", json!({"sessionId": "session-1"})).await;
+        assert_eq!(stub.sent.lock().unwrap().len(), 1, "the first approval alerts");
+        assert!(!st.db.session_snoozed("session-1").unwrap(), "and clears the snooze");
+        // A snoozed failure is the other thing that needs the owner.
+        let (st2, stub2) = push_state();
+        st2.db.session_set_snoozed("session-1", true).unwrap();
+        st2.emit("turn.error", json!({"sessionId": "session-1"})).await;
+        assert_eq!(stub2.sent.lock().unwrap().len(), 1);
     }
 
     #[tokio::test]
