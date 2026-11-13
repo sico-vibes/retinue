@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "c90931a",
-  "documentCount": 391,
+  "revision": "5b99065",
+  "documentCount": 393,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -2550,6 +2550,121 @@
       ]
     },
     {
+      "id": "project/research/many-machines-2026-11",
+      "source": "docs/research/many-machines-2026-11.md",
+      "title": "Many machines in one Retinue",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "b2c8de34b0a68aff7c98a10dfbfb00a64e414f596baa7b131f82f8dfdf9d1c7e",
+      "headings": [
+        {
+          "id": "1-how-t3-code-does-it",
+          "text": "1. How T3 Code does it",
+          "level": 2
+        },
+        {
+          "id": "2-how-herdr-does-it",
+          "text": "2. How Herdr does it",
+          "level": 2
+        },
+        {
+          "id": "3-others-worth-comparing",
+          "text": "3. Others worth comparing",
+          "level": 2
+        },
+        {
+          "id": "4-retinue-today-against-the-owners-ask",
+          "text": "4. Retinue today against the owner's ask",
+          "level": 2
+        },
+        {
+          "id": "what-is-built",
+          "text": "What is built",
+          "level": 3
+        },
+        {
+          "id": "what-works-for-employees-work-on-another-machine",
+          "text": "What works for \"employees work on another machine\"",
+          "level": 3
+        },
+        {
+          "id": "the-gap-stated-exactly",
+          "text": "The gap, stated exactly",
+          "level": 3
+        },
+        {
+          "id": "5-linux-can-retinued-run-headless-today",
+          "text": "5. Linux: can retinued run headless today?",
+          "level": 2
+        },
+        {
+          "id": "short-answer",
+          "text": "Short answer",
+          "level": 3
+        },
+        {
+          "id": "what-is-windows-only-with-evidence",
+          "text": "What is Windows-only, with evidence",
+          "level": 3
+        },
+        {
+          "id": "how-much-a-linux-build-of-only-the-daemon-needs",
+          "text": "How much a Linux build of only the daemon needs",
+          "level": 3
+        },
+        {
+          "id": "6-options-for-retinue",
+          "text": "6. Options for Retinue",
+          "level": 2
+        },
+        {
+          "id": "a-a-retinue-daemon-on-every-machine-linked-over-tailscale-extended-so-the-window-can-start-and-steer-work-there",
+          "text": "A. A Retinue daemon on every machine, linked over Tailscale, extended so the window can start and steer work there",
+          "level": 3
+        },
+        {
+          "id": "b-ssh-only-no-daemon-on-the-remote-this-machines-daemon-runs-the-agent-over-ssh",
+          "text": "B. SSH only: no daemon on the remote, this machine's daemon runs the agent over SSH",
+          "level": 3
+        },
+        {
+          "id": "c-options-i-would-not-choose-and-one-worth-knowing",
+          "text": "C. Options I would not choose, and one worth knowing",
+          "level": 3
+        },
+        {
+          "id": "recommendation-between-them",
+          "text": "Recommendation between them",
+          "level": 3
+        },
+        {
+          "id": "7-the-vps-specifically",
+          "text": "7. The VPS specifically",
+          "level": 2
+        },
+        {
+          "id": "recommendation",
+          "text": "Recommendation",
+          "level": 2
+        },
+        {
+          "id": "the-first-piece-of-work-sized-for-one-backend-lane",
+          "text": "The first piece of work, sized for one backend lane",
+          "level": 3
+        },
+        {
+          "id": "what-i-could-not-confirm",
+          "text": "What I could not confirm",
+          "level": 2
+        },
+        {
+          "id": "proposed-skill-update-this-sandbox-is-read-only-for-code-so-the-director-applies-it",
+          "text": "Proposed skill update (this sandbox is read-only for code, so the Director applies it)",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/research/rust-native-ui-port",
       "source": "docs/research/rust-native-ui-port.md",
       "title": "Moving the Retinue UI to native Rust: is it worth it?",
@@ -2834,7 +2949,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "1a1e1546ef919fa5fc446087d78db59058bcb585916db731e95f48b10e2b5d0a",
+      "sha256": "6b46faf48e36177bc59837e7484884261b601f02a6e20e780c659767982507c1",
       "headings": [
         {
           "id": "update-commands",
@@ -19459,6 +19574,41 @@
         {
           "id": "not-in-this-release-yet",
           "text": "Not in this release yet",
+          "level": 2
+        },
+        {
+          "id": "installation",
+          "text": "Installation",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/releases/0.2.0-beta.2",
+      "source": "docs/releases/0.2.0-beta.2.md",
+      "title": "Retinue 0.2.0-beta.2",
+      "section": "Release notes",
+      "status": "Release note",
+      "sha256": "cbbb82d42bd52bde17b874b1312ef6033a9216c4d4177c123b9abd34c9355f9e",
+      "headings": [
+        {
+          "id": "new",
+          "text": "New",
+          "level": 2
+        },
+        {
+          "id": "changed",
+          "text": "Changed",
+          "level": 2
+        },
+        {
+          "id": "fixed",
+          "text": "Fixed",
+          "level": 2
+        },
+        {
+          "id": "before-you-use-it",
+          "text": "Before you use it",
           "level": 2
         },
         {
