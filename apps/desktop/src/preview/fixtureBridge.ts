@@ -276,6 +276,26 @@ sessions.push({
     { id: 'side2-a1', sequence: 2, role: 'assistant', content: 'GPT-5.5 at High effort.', createdAt: minutesAgo(95) },
   ],
 })
+
+// `?demo` (website screenshots): the placeholder employees become real hires with profile photos,
+// and every message, title and delegation uses their names.
+if (flags().has('demo')) {
+  const cast: Record<string, { name: string; role: string; photo: `photo-${string}`; was: string }> = {
+    'agent-codex': { name: 'Ada', role: 'Backend engineer', photo: 'photo-17', was: 'Codex' },
+    'agent-claude': { name: 'Mira', role: 'Data scientist', photo: 'photo-21', was: 'Claude' },
+    'agent-opencode': { name: 'Grey', role: 'Research and planning', photo: 'photo-27', was: 'OpenCode' },
+    'agent-invoice': { name: 'Wu', role: 'Full-stack engineer', photo: 'photo-05', was: 'Invoice helper' },
+    'agent-pololo': { name: 'Fifi', role: 'UI designer', photo: 'photo-24', was: 'Pololo' },
+    'agent-manager': { name: 'CEO', role: 'Runs the team', photo: 'photo-43', was: 'Manager' },
+  }
+  agents = agents.map((agent) => {
+    const role = cast[agent.id]
+    return role ? { ...agent, name: role.name, role: role.role, look: { ...(agent.look ?? { shape: 'circle', seed: agent.id }), photo: role.photo } } : agent
+  })
+  const rename = (text: string) => Object.values(cast).reduce((value, role) => value.split(role.was).join(role.name), text)
+  const swap = (value: unknown): unknown => typeof value === 'string' ? rename(value) : Array.isArray(value) ? value.map(swap) : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([key, inner]) => [key, key === 'id' || key.endsWith('Id') ? inner : swap(inner)])) : value
+  sessions = sessions.map((session) => swap(session) as Session)
+}
 // `?scene=<id>`: the inspector's conversations, one per state the App can show.
 const fixtureScene = sceneFor(flags().get('scene'))
 let sceneQueueSeeded = false
