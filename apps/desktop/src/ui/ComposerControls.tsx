@@ -1,6 +1,7 @@
 // Composer footer controls: permission mode, attachment tray and the shared
 // popover behaviour used by the model, effort and context controls.
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { ImageLightbox } from './ImageLightbox'
 import { ClipboardList, Check, ChevronDown, FilePenLine, FileText, Hand, ImageIcon, ImageOff, LoaderCircle, Paperclip, Plus, ShieldCheck, Sparkles, X, CircleAlert } from 'lucide-react'
 import type { Agent, ApprovalMode, Session } from '../types'
 import { parseApprovalMode } from '../approvalContract'
@@ -303,10 +304,7 @@ export function MessageImage({ sessionId, messageId, index, name }: { sessionId:
   if (state === 'loading' || !src) return <li className="message-image loading" aria-busy="true" aria-label={`Loading ${name}`}><LoaderCircle size={16} className="spinning" aria-hidden="true" /></li>
   return <li className="message-image-wrap">
     <button ref={triggerRef} type="button" className="message-image" aria-label={`Open ${name}`} title={name} onClick={() => setOpen(true)}><img src={src} alt={name} /></button>
-    {open && <div className="message-image-viewer" role="dialog" aria-modal="true" aria-label={`${name}, enlarged`} onClick={() => close(true)}>
-      <button ref={closeRef} type="button" className="message-image-viewer-close" aria-label="Close image" onClick={() => close(true)}><X size={16} aria-hidden="true" /></button>
-      <figure onClick={(event) => event.stopPropagation()}><img src={src} alt={name} /><figcaption>{name}</figcaption></figure>
-    </div>}
+    {open && <ImageLightbox src={src} name={name} onClose={() => close(true)} />}
   </li>
 }
 

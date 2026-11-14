@@ -85,7 +85,7 @@ async fn fanout_starts_one_conversation_per_bot_in_the_same_project() {
     let listed = st.db.session_list(false).unwrap();
     assert_eq!(listed.iter().filter(|row| row["fanoutId"] == started["id"]).count(), 3);
     let settled = p1b_settled(&st, started["id"].as_str().unwrap()).await;
-    assert!(settled["rows"].as_array().unwrap().iter().all(|row| row["reply"] == "handled: Which is best?"), "{settled}");
+    assert!(settled["rows"].as_array().unwrap().iter().all(|row| row["reply"].as_str().map(sent_text).as_deref() == Some("handled: Which is best?")), "{settled}");
     // The record is listed, newest first.
     let all = dispatch(&st, "fanout.list", json!({})).await.unwrap();
     assert_eq!(all["fanouts"][0]["id"], started["id"]);
@@ -208,7 +208,7 @@ async fn fanout_get_reports_replies_and_unknown_usage_as_null() {
     let id = started["id"].as_str().unwrap();
     let got = p1b_settled(&st, id).await;
     for row in got["rows"].as_array().unwrap() {
-        assert_eq!(row["reply"], format!("handled: {long}"), "get carries the whole reply");
+        assert_eq!(row["reply"].as_str().map(sent_text), Some(format!("handled: {long}")), "get carries the whole reply");
         assert!(row["tokens"].is_null(), "the stub reported no usage, so it is unknown, never zero: {row}");
         assert!(row["durationMs"].is_null() || row["durationMs"].as_i64().unwrap() > 0, "{row}");
         assert!(row["agentName"].is_string());

@@ -569,6 +569,83 @@ async fn a_size_that_never_settles_still_fails_after_35_minutes() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// B1 (14 November 2026): the cards read where the images were made, before the
+/// reply that closes the turn, however late the daemon learns the files arrived.
+#[tokio::test]
+async fn two_images_and_the_closing_reply_read_back_in_the_order_they_were_made() {
+    let (st, mut rx, dir) = image_state();
+    st.db.create_turn("turn-made", "image-session").unwrap();
+    // The closing reply streams first, which is what put the cards below it before.
+    let reply = st.db.append_message_delta("image-session", "turn-made", "Made scenes/hero-team.png and scenes/hero-cast.png.").unwrap();
+    let team = dir.join("hero-team.png");
+    let cast = dir.join("hero-cast.png");
+    std::fs::write(&team, png_bytes()).unwrap();
+    std::fs::write(&cast, png_bytes()).unwrap();
+    media::requested(&st, "image-session", Some("turn-made"), "codex", "img-team", None, Some(team.to_string_lossy().into_owned()), None, None).await;
+    media::requested(&st, "image-session", Some("turn-made"), "codex", "img-cast", None, Some(cast.to_string_lossy().into_owned()), None, None).await;
+
+    let messages = st.db.session_detail("image-session").unwrap()["messages"].as_array().cloned().unwrap_or_default();
+    let order: Vec<(String, String)> = messages.iter().map(|message| (
+        message["role"].as_str().unwrap_or("").to_owned(),
+        message["content"].as_str().unwrap_or("").to_owned(),
+    )).collect();
+    assert_eq!(order, vec![
+        ("notice".to_owned(), "Generated an image: hero-team.png".to_owned()),
+        ("notice".to_owned(), "Generated an image: hero-cast.png".to_owned()),
+        ("assistant".to_owned(), "Made scenes/hero-team.png and scenes/hero-cast.png.".to_owned()),
+    ]);
+    // The notice carries the turn and item it came from, and when the item finished;
+    // the message row itself still has no turn, so it can never merge with another notice.
+    let first = &messages[0];
+    assert!(first["turnId"].is_null(), "a notice is stored with no turn");
+    assert_eq!(first["meta"]["turnId"], "turn-made");
+    assert_eq!(first["meta"]["toolCallId"], "img-team");
+    let generated_at = first["meta"]["generatedAt"].as_str().expect("generatedAt");
+    assert!(chrono::DateTime::parse_from_rfc3339(generated_at).is_ok(), "RFC 3339: {generated_at}");
+    assert!(generated_at.contains('.'), "with milliseconds: {generated_at}");
+    // A live window gets the same order: each notice names the reply it reads above.
+    let seen = drain(&mut rx).await;
+    let ready: Vec<&Value> = seen.iter().filter(|(kind, payload)| kind == "message.completed" && payload["message"]["meta"]["status"] == "ready").map(|(_, payload)| payload).collect();
+    assert_eq!(ready.len(), 2, "{seen:?}");
+    for payload in ready {
+        assert_eq!(payload["beforeMessageId"], reply["id"], "{payload}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A notice that arrives after later turns must not jump below them: the closing
+/// reply and every later message move down one, so the image still reads where
+/// its turn was and nothing else changes order (B1 review, 14 November 2026).
+#[tokio::test]
+async fn a_late_notice_keeps_the_order_of_every_later_turn() {
+    let (st, _rx, dir) = image_state();
+    st.db.create_turn("turn-1", "image-session").unwrap();
+    let first_reply = st.db.append_message_delta("image-session", "turn-1", "First reply.").unwrap();
+    st.db.create_turn("turn-2", "image-session").unwrap();
+    st.db.append_message_with_data("image-session", "turn-2", "user", "Next request.", &json!({})).unwrap();
+    let second_reply = st.db.append_message_delta("image-session", "turn-2", "Second reply.").unwrap();
+    // The sweep finishes once more messages exist, minutes later.
+    let late = dir.join("late.png");
+    std::fs::write(&late, png_bytes()).unwrap();
+    media::requested(&st, "image-session", Some("turn-1"), "codex", "img-late", None, Some(late.to_string_lossy().into_owned()), None, None).await;
+    let messages = st.db.session_detail("image-session").unwrap()["messages"].as_array().cloned().unwrap_or_default();
+    let order: Vec<(String, String)> = messages.iter().map(|message| (
+        message["role"].as_str().unwrap_or("").to_owned(),
+        message["content"].as_str().unwrap_or("").to_owned(),
+    )).collect();
+    assert_eq!(order, vec![
+        ("notice".to_owned(), "Generated an image: late.png".to_owned()),
+        ("assistant".to_owned(), "First reply.".to_owned()),
+        ("user".to_owned(), "Next request.".to_owned()),
+        ("assistant".to_owned(), "Second reply.".to_owned()),
+    ]);
+    // The later turns are the same rows, only renumbered.
+    let ids: Vec<&str> = messages.iter().filter_map(|message| message["id"].as_str()).collect();
+    assert!(ids.contains(&first_reply["id"].as_str().unwrap()) && ids.contains(&second_reply["id"].as_str().unwrap()));
+    assert_eq!(messages[0]["meta"]["turnId"], "turn-1", "it still names the turn it came from");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// Deleting a conversation drops its rows and leaves the file on disk.
 #[tokio::test]
 async fn deleting_a_conversation_drops_its_media_rows_and_keeps_the_file() {

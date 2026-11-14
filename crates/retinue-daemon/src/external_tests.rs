@@ -296,6 +296,39 @@ async fn external_a_message_to_a_busy_conversation_is_queued_and_keeps_its_mark(
     let _ = std::fs::remove_dir_all(&c.dir);
 }
 
+/// B2 (14 November 2026): a conversation the MCP starts says so, on every row the
+/// window reads; one the owner starts in the app carries no origin at all.
+#[tokio::test]
+async fn conversations_started_through_the_mcp_say_so() {
+    let c = fixture("chat", false).await;
+    let st = &c.st;
+    route(st, "ext.hello", &json!({"clientName": "claude-code"})).await.unwrap();
+    let (failed, sent) = tool(st, "send_message", json!({"botId": c.agent, "text": "Hello", "newConversation": true})).await;
+    assert!(!failed, "{sent}");
+    let session = sent["sessionId"].as_str().unwrap().to_owned();
+    let expected = json!({"kind": "mcp", "client": "claude-code"});
+    assert_eq!(st.db.session_event_summary(&session).unwrap()["origin"], expected, "the changed row");
+    let listed = st.db.session_list(false).unwrap();
+    assert_eq!(listed.iter().find(|row| row["id"] == json!(session)).unwrap()["origin"], expected, "the snapshot row");
+    assert_eq!(st.db.session_detail(&session).unwrap()["origin"], expected, "the conversation");
+    // The fan-out path marks each conversation it opens, with the same client.
+    let second = st.db.agent_create(&json!({"name": "Second", "runtimeId": "ext-rt", "approvalMode": "ask"})).unwrap().0["id"].as_str().unwrap().to_owned();
+    let (failed, started) = tool(st, "fan_out", json!({"botIds": [c.agent, second], "text": "hello", "worktrees": false})).await;
+    assert!(!failed, "{started}");
+    for row in started["rows"].as_array().unwrap() {
+        let id = row["sessionId"].as_str().unwrap();
+        assert_eq!(st.db.session_event_summary(id).unwrap()["origin"], expected, "{id}");
+    }
+    // A conversation started in the app has no origin key at all, not a null one.
+    let own = crate::dispatch(st, "session.new", json!({"agentId": c.agent, "projectPath": c.dir.to_string_lossy()})).await.unwrap();
+    let own_id = own["id"].as_str().unwrap().to_owned();
+    assert!(st.db.session_event_summary(&own_id).unwrap().get("origin").is_none(), "absent on the changed row");
+    let listed = st.db.session_list(false).unwrap();
+    assert!(listed.iter().find(|row| row["id"] == json!(own_id)).unwrap().get("origin").is_none(), "absent on the snapshot row");
+    assert!(st.db.session_detail(&own_id).unwrap().get("origin").is_none(), "absent on the conversation");
+    let _ = std::fs::remove_dir_all(&c.dir);
+}
+
 #[tokio::test]
 async fn external_wait_for_turn_returns_reply_and_metrics() {
     let c = fixture("chat", false).await;

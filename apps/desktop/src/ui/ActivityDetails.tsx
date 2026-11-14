@@ -3,11 +3,12 @@
 // (command and output, tool input and result, search query, file and diff).
 // Shown only when Settings → Chat → "Agent activity" is on.
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, ChevronRight, FileText, Globe, ShieldAlert, Terminal, Wrench } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Globe, Image as ImageIcon, ShieldAlert, Terminal, Wrench } from 'lucide-react'
 import type { JsonRecord } from '../types'
 import { activityCategory, activityInput, activitySummary, activityToolName, subagentOutput, type ActivityGroup, type ConversationItem } from './conversation'
 import { TAIL_LINES, lastLine, maskSecrets, outputStreaming, tailOf, useActivityProvider } from './liveOutput'
 import './ActivityDetails.css'
+import { WorkingMark } from './WorkingMark'
 
 const TEAM_TOOLS: Record<string, string> = {
   list_blobs: 'Checked the team',
@@ -191,14 +192,17 @@ function Step({ item, onDiff }: { item: ConversationItem; onDiff?: (path: string
 export function ActivitySummaryLine({ group, onDiff }: { group: ActivityGroup; onDiff?: (path: string, content: string) => void }) {
   const [open, setOpen] = useState(false)
   const summary = group.runningTitle ? `Working · ${activitySummary(group)}` : activitySummary(group)
-  return <section className={`activity-summary${group.failed ? ' has-failed' : ''}${open ? ' open' : ''}`}>
+  // Owner, 14 November 2026: while a bot is making an image, the chat shows a placeholder where it will appear.
+  const making = group.items.filter((entry) => isMakingImage(entry))
+  const line = <section className={`activity-summary${group.failed ? ' has-failed' : ''}${open ? ' open' : ''}`}>
     <button type="button" className="activity-summary-toggle" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
-      {group.runningTitle && <span className="typing" aria-hidden="true"><i /><i /><i /></span>}
+      {group.runningTitle && <WorkingMark label="" timer={false} compact />}
       <span>{summary}{group.failed > 0 ? ` · ${group.failed} failed` : ''}</span>
       {open ? <ChevronDown size={13} aria-hidden="true" /> : <ChevronRight size={13} aria-hidden="true" />}
     </button>
     {open && <GroupedSteps items={group.items} onDiff={onDiff} />}
   </section>
+  return making.length ? <>{line}<div className="image-making-strip">{making.map((entry) => <ImageMakingCard key={entry.id} since={String(entry.activity?.startedAt ?? entry.activity?.createdAt ?? '')} />)}</div></> : line
 }
 
 const STEP_GROUPS = [
@@ -218,4 +222,29 @@ function GroupedSteps({ items, onDiff, flat }: { items: ConversationItem[]; onDi
 /** The companion uses the same readable groups as the conversation, laid flat. */
 export function ActivitySteps({ items }: { items: ConversationItem[] }) {
   return <GroupedSteps items={items} flat />
+}
+
+export function isMakingImage(entry: ConversationItem) {
+  const activity = entry.activity ?? {}
+  const kind = String(activity.kind ?? activity.toolKind ?? '')
+  const state = String(activity.state ?? activity.status ?? '').toLowerCase()
+  return (kind === 'imageGeneration' || activity.title === 'Generating an image') && ['running', 'working', 'started', 'pending', 'in_progress'].includes(state)
+}
+
+/** The image a bot is still making: a picture-shaped placeholder that breathes, with how long it has taken. */
+export function ImageMakingCard({ since }: { since: string }) {
+  const started = Date.parse(since)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer) }, [])
+  const seconds = Number.isFinite(started) ? Math.max(0, Math.round((now - started) / 1000)) : null
+  return <div className="image-making" role="status" aria-label="Generating an image">
+    <span className="image-making-sheen" aria-hidden="true" />
+    <span className="image-making-label"><ImageIcon size={15} aria-hidden="true" />Generating an image{seconds !== null ? <small>{seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`}</small> : null}</span>
+  </div>
+}
+
+/** With activity hidden, a turn that is making an image still shows the placeholder, and only that. */
+export function ImageMakingCards({ group }: { group: ActivityGroup }) {
+  const making = group.items.filter((entry) => isMakingImage(entry))
+  return making.length ? <div className="image-making-strip">{making.map((entry) => <ImageMakingCard key={entry.id} since={String(entry.activity?.startedAt ?? entry.activity?.createdAt ?? '')} />)}</div> : null
 }

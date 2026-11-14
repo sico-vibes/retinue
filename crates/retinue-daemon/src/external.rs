@@ -403,7 +403,7 @@ fn catalog() -> Vec<(Tier, Value)> {
         entry(Chat, "fan_out", "Sends one message to several bots at once, each in its own new conversation, so the answers can be compared. Returns at once with a conversation per bot; use wait_for_turn on each for its reply.", schema(json!({"botIds": {"type": "array", "minItems": 2, "maxItems": 6, "items": {"type": "string"}, "description": "2 to 6 different bots."}, "text": id("The message, up to 100,000 characters."), "projectId": id("The project for every conversation, from list_projects. Without it each bot opens in its usual project."), "worktrees": {"type": "boolean", "description": "Give each conversation its own git worktree (the Operator level only; the default below it is false)."}}), &["botIds", "text"])),
         entry(Chat, "steer", "Sends extra guidance to the turn that is running now, without stopping it.", schema(json!({"sessionId": id("The conversation."), "text": id("The guidance.")}), &["sessionId", "text"])),
         entry(Chat, "stop_turn", "Stops the turn that is running in a conversation.", schema(json!({"sessionId": id("The conversation.")}), &["sessionId"])),
-        entry(Operator, "create_bot", "Creates a bot. Use list_runtimes for the runtime and model; the bot works in projectPath. Its permission mode is ask unless you pass auto.", schema(json!({"name": id("The bot's name, up to 60 characters."), "runtimeId": id("From list_runtimes."), "model": id("A model id from list_runtimes."), "effort": id("An effort the model offers."), "projectPath": id("The folder the bot works in."), "role": id("A short role, up to 40 characters."), "approvalMode": {"type": "string", "enum": ["ask", "auto", "accept_edits"], "description": "How the bot asks before acting (default ask). accept_edits allows file edits and reads in the project and asks for everything else."}}), &["name", "runtimeId", "model", "projectPath"])),
+        entry(Operator, "create_bot", "Creates a bot. Use list_runtimes for the runtime and model; the bot works in projectPath. Its permission mode is ask unless you pass auto.", schema(json!({"name": id("The bot's name, up to 60 characters."), "runtimeId": id("From list_runtimes."), "model": id("A model id from list_runtimes."), "effort": id("An effort the model offers."), "projectPath": id("The folder the bot works in."), "role": id("A short role, up to 40 characters."), "approvalMode": {"type": "string", "enum": ["ask", "auto", "accept_edits"], "description": "How the bot asks before acting (default ask). accept_edits allows file edits and reads in the project and asks for everything else."}, "replyIcons": {"type": "boolean", "description": "Let the bot mark table cells, list items and status words with an emoji or a Lucide icon (default false)."}}), &["name", "runtimeId", "model", "projectPath"])),
         entry(Operator, "update_bot", "Changes a bot's settings. Pass only what changes. Use list_runtimes for runtimes, models and efforts. A locked bot can't be changed.", schema(json!({
             "botId": id("The bot, from list_bots."),
             "name": {"type": "string", "maxLength": 60, "description": "The bot's name."},
@@ -420,6 +420,7 @@ fn catalog() -> Vec<(Tier, Value)> {
             "tags": {"type": "array", "maxItems": 8, "items": {"type": "string", "minLength": 1, "maxLength": 24}, "description": "Routing tags; they replace the current set."},
             "hidden": {"type": "boolean", "description": "Hide the bot from the sidebar."},
             "notificationLevel": {"type": ["string", "null"], "description": "The bot's notification level, or null for the default."},
+            "replyIcons": {"type": "boolean", "description": "Let the bot mark table cells, list items and status words with an emoji or a Lucide icon."},
         }), &["botId"])),
         entry(Operator, "answer_approval", "Allows or denies one waiting approval from list_approvals.", schema(json!({"approvalId": id("From list_approvals."), "decision": {"type": "string", "enum": ["allow", "deny"]}}), &["approvalId", "decision"])),
     ]
@@ -956,7 +957,9 @@ async fn send_message(st: &AppState, tier: Tier, args: &Value) -> ToolResult {
                     }
                     let mut params = json!({"agentId": bot, "projectPath": folder.to_string_lossy(), "lazy": true, "link": link});
                     if let Some(project_id) = &project_id { params["projectId"] = json!(project_id); }
-                    let opened = crate::new_session(st, params).await;
+                    // B2: the conversation says it was started through the MCP.
+                    let origin = origin(Some(client_name));
+                    let opened = crate::new_session_from_mcp(st, params, origin).await;
                     match opened {
                         Ok(session) => { created = Some(session.clone()); session["id"].as_str().unwrap_or("").to_owned() }
                         Err(error) => {
@@ -1048,6 +1051,7 @@ async fn create_bot(st: &AppState, args: &Value) -> ToolResult {
     let mut fields = json!({"name": name, "runtimeId": runtime_id, "model": model, "approvalMode": mode});
     if let Some(effort) = text_arg(args, "effort") { fields["thinking"] = json!(effort); }
     if let Some(role) = text_arg(args, "role") { fields["role"] = json!(role); }
+    if let Some(icons) = args.get("replyIcons") { fields["replyIcons"] = json!(icons.as_bool().ok_or("replyIcons must be true or false.")?); }
     let project_id = project_for_folder(st, project).await?;
     let created = crate::agent_create_from_rpc(st, fields).await.map_err(fail)?;
     let agent_id = created["id"].as_str().unwrap_or("").to_owned();
@@ -1060,7 +1064,7 @@ async fn create_bot(st: &AppState, args: &Value) -> ToolResult {
 }
 
 /// The settings `update_bot` may change (`botId` names the bot).
-const UPDATE_KEYS: [&str; 15] = ["botId", "name", "role", "description", "instructions", "color", "runtimeId", "model", "effort", "serviceTier", "approvalMode", "projectPath", "tags", "hidden", "notificationLevel"];
+const UPDATE_KEYS: [&str; 16] = ["botId", "name", "role", "description", "instructions", "color", "runtimeId", "model", "effort", "serviceTier", "approvalMode", "projectPath", "tags", "hidden", "notificationLevel", "replyIcons"];
 
 /// A text setting that is absent, or a string of at most `max` characters.
 fn text_field<'a>(args: &'a Value, key: &str, max: usize, allow_empty: bool) -> Result<Option<&'a str>, String> {
@@ -1108,6 +1112,7 @@ async fn update_bot(st: &AppState, args: &Value) -> ToolResult {
         team["tags"] = tags.clone();
     }
     if let Some(hidden) = args.get("hidden") { team["hidden"] = json!(hidden.as_bool().ok_or("hidden must be true or false.")?); }
+    if let Some(icons) = args.get("replyIcons") { fields["replyIcons"] = json!(icons.as_bool().ok_or("replyIcons must be true or false.")?); }
     let folder = match args.get("projectPath") {
         None => None,
         Some(Value::Null) => Some(None),

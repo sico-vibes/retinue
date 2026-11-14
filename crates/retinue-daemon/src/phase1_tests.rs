@@ -537,3 +537,55 @@ async fn stopping_a_turn_stops_its_setup_script() {
     assert_eq!(setup_notices(&st, &sid).len(), 2);
     let _ = std::fs::remove_dir_all(worktree);
 }
+
+/// B3 (14 November 2026): `replyIcons` is a per-bot setting, off by default, and
+/// it changes the guide every bot is given.
+#[tokio::test]
+async fn reply_icons_round_trip_and_change_the_bot_instructions() {
+    let (st, _) = state();
+    let created = dispatch(&st, "agent.create", json!({"name":"Marked","runtimeId":"rt-test","replyIcons":true})).await.unwrap()["agent"].clone();
+    let id = created["id"].as_str().unwrap().to_owned();
+    assert_eq!(created["replyIcons"], true, "on create");
+    assert_eq!(dispatch(&st, "agent.get", json!({"agentId":id})).await.unwrap()["agent"]["replyIcons"], true, "on get");
+    let listed = dispatch(&st, "agent.list", json!({})).await.unwrap()["agents"].as_array().unwrap().clone();
+    assert_eq!(listed.iter().find(|agent| agent["id"] == json!(id)).map(|agent| agent["replyIcons"].clone()), Some(json!(true)), "on list");
+    let snapshot = dispatch(&st, "app.snapshot", json!({})).await.unwrap();
+    assert_eq!(snapshot["agents"].as_array().unwrap().iter().find(|agent| agent["id"] == json!(id)).unwrap()["replyIcons"], true, "in the snapshot");
+
+    // The guide differs: on, icons are allowed; off, they are not. The rest is the same.
+    let guide = |agent: &Value| team::runtime_instructions_in(&st, agent, &json!({"kind":"main"}), std::path::Path::new("."), None);
+    let on = guide(&st.db.agent_get(&id).unwrap());
+    assert!(on.contains("==text=="), "the formatting guide is on every bot");
+    assert!(on.contains(":lucide-check:") && !on.contains("Do not use emoji or icons"), "{on}");
+    let plain = dispatch(&st, "agent.create", json!({"name":"Plain","runtimeId":"rt-test"})).await.unwrap()["agent"].clone();
+    assert_eq!(plain["replyIcons"], false, "off by default");
+    let off = guide(&plain);
+    assert!(off.contains("==text==") && off.contains("Do not use emoji or icons"), "{off}");
+    assert!(!off.contains(":lucide-check:"));
+    assert_ne!(on, off, "the two guides differ");
+
+    // It goes back off through a save, and null means off.
+    assert_eq!(dispatch(&st, "agent.update", json!({"agentId":id,"replyIcons":false})).await.unwrap()["agent"]["replyIcons"], false);
+    assert_eq!(dispatch(&st, "agent.update", json!({"agentId":id,"replyIcons":true})).await.unwrap()["agent"]["replyIcons"], true);
+    assert_eq!(dispatch(&st, "agent.update", json!({"agentId":id,"replyIcons":null})).await.unwrap()["agent"]["replyIcons"], false, "null is off");
+    // Anything but a boolean is refused, on create and on update.
+    assert_eq!(dispatch(&st, "agent.create", json!({"name":"Odd","runtimeId":"rt-test","replyIcons":"yes"})).await.unwrap_err().1.code, "invalid_argument");
+    assert_eq!(dispatch(&st, "agent.update", json!({"agentId":id,"replyIcons":7})).await.unwrap_err().1.code, "invalid_argument");
+
+    // A backup carries it, and a restore puts it back.
+    dispatch(&st, "agent.update", json!({"agentId":id,"replyIcons":true})).await.unwrap();
+    let document = dispatch(&st, "backup.export", json!({})).await.unwrap()["document"].clone();
+    let bot = document["contents"]["bots"].as_array().unwrap().iter().find(|bot| bot["name"] == "Marked").unwrap().clone();
+    assert_eq!(bot["replyIcons"], true, "the export carries the switch");
+    let (target, _) = state();
+    let preview = dispatch(&target, "backup.preview", json!({"document": document})).await.unwrap();
+    dispatch(&target, "backup.import", json!({"previewId": preview["previewId"], "resolutions": {"default":"rename"}})).await.unwrap();
+    let restored = dispatch(&target, "agent.list", json!({})).await.unwrap()["agents"].as_array().unwrap().clone();
+    assert_eq!(restored.iter().find(|agent| agent["name"] == "Marked").map(|agent| agent["replyIcons"].clone()), Some(json!(true)), "the import keeps it");
+    // An older backup has no key, and the bot it restores is off.
+    let document = bots_document(vec![bot_entry("e-old", "Older", "codex", false, "ask")]);
+    let preview = dispatch(&target, "backup.preview", json!({"document": document})).await.unwrap();
+    dispatch(&target, "backup.import", json!({"previewId": preview["previewId"], "resolutions": {"default":"rename"}})).await.unwrap();
+    let restored = dispatch(&target, "agent.list", json!({})).await.unwrap()["agents"].as_array().unwrap().clone();
+    assert_eq!(restored.iter().find(|agent| agent["name"] == "Older").map(|agent| agent["replyIcons"].clone()), Some(json!(false)), "an older backup leaves it off");
+}

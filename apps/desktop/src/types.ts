@@ -192,6 +192,8 @@ export interface Agent extends JsonRecord {
   notificationLevel?: 'all' | 'input' | 'muted' | null
   /** Works on the linked computer (Harbor) by default: told so in its instructions, and the computer wakes for it. */
   computerWorkplace?: boolean
+  /** May put icons and emoji in tables and lists (owner, 14 November 2026). */
+  replyIcons?: boolean
   /** Phase 1A: the default project for new conversations (null = none); bots work in every project. */
   projectId?: string | null
   /** Phase 1A: the project of the bot's most recent conversation, the first default for a new one. */
@@ -297,6 +299,15 @@ export interface MessageAttachment extends JsonRecord {
   path?: string
 }
 
+/** Where one step of a conversation's task list stands. */
+export type PlanItemStatus = 'pending' | 'in_progress' | 'completed'
+/** One step of the task list a bot keeps for its turn. */
+export interface PlanItem { text: string; status: PlanItemStatus }
+/** The turn's own task list: the whole list on every update, replaced rather than patched. */
+export interface TurnPlan { items: PlanItem[]; updatedAt?: string }
+/** A turn row of a conversation. `plan` is present while the turn has a task list. */
+export interface SessionTurn extends JsonRecord { plan?: TurnPlan }
+
 /** Per-conversation execution pins. Absent speed/mode keys follow the blob. */
 export interface SessionModelLock {
   model?: string | null
@@ -321,12 +332,14 @@ export interface Session extends JsonRecord {
   resumable?: boolean
   messages?: ChatMessage[]
   events?: ChatMessage[]
-  turns?: JsonRecord[]
+  turns?: SessionTurn[]
   tools?: JsonRecord[]
   createdAt?: string
   updatedAt?: string
   /** The last user or assistant message's time; the sidebar shows and sorts by it, so opening a conversation never moves it. */
   lastMessageAt?: string | null
+  /** Set when another program started this conversation through the MCP. */
+  origin?: { kind: 'mcp'; client?: string }
   turnId?: string
   model?: string
   modelLock?: SessionModelLock | null
@@ -376,6 +389,15 @@ export interface PermissionRequest extends JsonRecord {
   /** Wave 12: whether this request may be remembered as an "Always allow" rule, and its sentence ("Run `git status`"). */
   rememberable?: boolean
   rememberLabel?: string | null
+}
+
+/** Phase C: one grant on the owner's own computer, for the conversation bar and the companion pill. `state: 'ended'` says the bar comes down. */
+export interface OwnerComputerGrant extends JsonRecord {
+  sessionId: string
+  agentId?: string
+  state: 'live' | 'ended'
+  /** When the grant runs out, ISO-8601, or null once it has ended. */
+  endsAt?: string | null
 }
 
 /** The Manager's proposal carried by a `kind: "proposal"` permission card. */
@@ -568,7 +590,7 @@ export function applyEvent(snapshot: Snapshot, event: DaemonEvent): Snapshot {
   }
   if (event.type === 'daemon.health') return { ...snapshot, sequence, daemon: { ...(snapshot.daemon ?? {}), ...payload } }
 
-  if (!['message.delta', 'message.completed', 'message.reactions.changed', 'tool.changed', 'command.changed', 'file.changed', 'permission.requested', 'usage.updated', 'turn.completed', 'turn.error'].includes(event.type)) {
+  if (!['message.delta', 'message.completed', 'message.reactions.changed', 'tool.changed', 'command.changed', 'file.changed', 'permission.requested', 'usage.updated', 'turn.completed', 'turn.error', 'session.plan'].includes(event.type)) {
     return { ...snapshot, sequence }
   }
 
@@ -632,6 +654,19 @@ export function applyEvent(snapshot: Snapshot, event: DaemonEvent): Snapshot {
         else files.push(file)
         return { ...session, files }
       }
+      if (event.type === 'session.plan') {
+        // The provider sends the whole list each time; a turn row that has not
+        // arrived yet is created by the event so the list is never lost.
+        const turnId = typeof payload.turnId === 'string' ? payload.turnId : ''
+        if (!turnId) return session
+        const plan: TurnPlan = { items: normalizePlanItems(payload.items) }
+        if (typeof payload.updatedAt === 'string') plan.updatedAt = payload.updatedAt
+        const turns = [...(session.turns ?? [])]
+        const index = turns.findIndex((turn) => turn.id === turnId)
+        if (index >= 0) turns[index] = { ...turns[index], plan }
+        else turns.push({ id: turnId, plan })
+        return { ...session, turns }
+      }
       if (event.type === 'turn.completed') {
         // The turn's own record follows the event, so a turn that errored mid-way and then finished is a completed turn.
         const turnId = typeof payload.turnId === 'string' ? payload.turnId : null
@@ -658,6 +693,21 @@ export function applyEvent(snapshot: Snapshot, event: DaemonEvent): Snapshot {
   }
   if (event.type === 'permission.requested') return { ...snapshot, sequence, permissions: [...(snapshot.permissions ?? []), (payload.permission ?? payload) as PermissionRequest] }
   return { ...snapshot, sequence }
+}
+
+/** The steps of a `session.plan` payload, validated at the edge: an unknown status is pending, and a step with no text is not a step. */
+export function normalizePlanItems(value: unknown): PlanItem[] {
+  if (!Array.isArray(value)) return []
+  const items: PlanItem[] = []
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue
+    const raw = (entry as JsonRecord).text
+    const text = typeof raw === 'string' ? raw.trim() : ''
+    if (!text) continue
+    const status = (entry as JsonRecord).status
+    items.push({ text, status: status === 'completed' ? 'completed' : status === 'in_progress' ? 'in_progress' : 'pending' })
+  }
+  return items
 }
 
 export function stateForEvent(eventType: string): string | undefined {
@@ -735,6 +785,72 @@ export interface BoardTaskRun extends JsonRecord {
   endedAt?: string | null
 }
 export interface TaskDispatchResult { task: BoardTask; run?: BoardTaskRun | null; disposition: 'started' | 'queued'; queuePosition?: number | null; reason?: 'bot_busy' | 'global_limit' | 'global_pause' | null; replayed?: boolean }
+
+/**
+ * Importing conversations from other coding agents (Phase 10, 14 November 2026).
+ * The source id is also the agent id, so `canResumeWith` names an agent.
+ */
+export type ImportSourceId = 'claude' | 'codex' | 'opencode'
+/** What is on this computer, one row per source. An absent source is not listed; an unreadable one carries `error`. */
+export interface ImportSource {
+  source: ImportSourceId
+  label: string
+  folder: string | null
+  conversations: number
+  recent: number
+  newest: string | null
+  oldest: string | null
+  bytes: number
+  error: string | null
+}
+export interface ImportScan { sinceDays: number; scannedAt: string; sources: ImportSource[] }
+/** One conversation offered for import. `conversationId` is the source's own id, not a Retinue session id. */
+export interface ImportRow {
+  conversationId: string
+  source: ImportSourceId
+  agent: ImportSourceId
+  agentLabel: string
+  title: string
+  projectPath: string
+  firstUser: string
+  messageCount: number
+  bytes: number
+  updatedAt: string
+  /** `claude`, `codex` or `opencode` only while the source file is still there, else null: read-only. */
+  canResumeWith: ImportSourceId | null
+  alreadyImported: boolean
+  importedSessionId: string | null
+  error: string | null
+}
+export interface ImportPreview { source: ImportSourceId; total: number; offset: number; limit: number; next: number | null; rows: ImportRow[] }
+export interface ImportItem { source: ImportSourceId; conversationId: string }
+export interface ImportAssign { agentId?: string | null; projectId?: string | null }
+export interface ImportApplyResult { importId: string; imported: number; skipped: number; failed: number; sessions: string[] }
+/** One `import.progress` event. `importedSessionId` is present once a conversation has a Retinue session. */
+export interface ImportProgress {
+  importId: string
+  index: number
+  total: number
+  source: ImportSourceId
+  conversationId: string
+  state: 'started' | 'done' | 'skipped' | 'failed'
+  reason?: 'not_found' | 'older_than_window' | 'already_imported' | 'unreadable' | 'storage'
+  message?: string
+  title?: string
+  importedSessionId?: string
+}
+export interface ImportCompleted { importId: string; imported: number; skipped: number; failed: number; conversationIds: string[] }
+/** The daemon's suggestion for one imported conversation. `conversationId` is the Retinue session id; a null `agentId` means the CEO. */
+export interface ImportSuggestion {
+  conversationId: string
+  sessionId: string
+  title: string
+  source: string
+  agentId: string | null
+  reason: 'project' | 'agent' | 'role' | 'balance'
+  detail: string
+}
+
 
 /** The native frosted-glass backdrop of the main window (Haze), as reported by the shell. */
 export type WindowBackdrop = { effect: 'acrylic' | 'blur' | 'none'; active: boolean; transparencyOff: boolean; reason?: string }

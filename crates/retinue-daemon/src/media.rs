@@ -603,16 +603,22 @@ fn finish_failed(
 /// that carries the media id, then the session summary and the small event.
 /// `meta` holds no path, so a message crossing to a phone has nothing to redact.
 async fn publish(st: &AppState, row: &Value) {
-    let Some(media_id) = row["id"].as_str() else { return };
-    let Some(sid) = row["sessionId"].as_str() else { return };
-    let status = row["status"].as_str().unwrap_or("failed");
     let name = row["name"].as_str().unwrap_or("");
     let detail = row["detail"].as_str().unwrap_or("");
-    let text = match status {
+    let text = match row["status"].as_str().unwrap_or("failed") {
         "pending" => "Generating an image…".to_owned(),
         "ready" => format!("Generated an image: {name}"),
         _ => format!("The image couldn't be generated: {}", if detail.is_empty() { "the request failed." } else { detail }),
     };
+    publish_with_text(st, row, &text).await;
+}
+
+/// The same, with the transcript's own wording: a screenshot is a media record
+/// like a generated image, but it is not "generated".
+async fn publish_with_text(st: &AppState, row: &Value, text: &str) {
+    let Some(media_id) = row["id"].as_str() else { return };
+    let Some(sid) = row["sessionId"].as_str() else { return };
+    let status = row["status"].as_str().unwrap_or("failed");
     let meta = json!({
         "kind": "generated_image",
         "mediaId": media_id,
@@ -622,20 +628,66 @@ async fn publish(st: &AppState, row: &Value) {
         "mediaType": row["mediaType"],
         "provider": row["provider"],
         "detail": row["detail"],
+        // B1 (14 November 2026): which turn and which provider item made it, and
+        // when that item finished, so the card reads where the image was made.
+        // The message row itself still carries no turn (see `media_message_write`).
+        "turnId": row["turnId"],
+        "toolCallId": row["toolCallId"],
+        "generatedAt": if status == "pending" { Value::Null } else { row["updatedAt"].clone() },
     });
     // A record whose conversation is gone writes nothing; the row went with it.
     // `message.completed` carries the whole message, and the client replaces the
     // row with this id rather than appending, so the card moves from "Generating…"
-    // to its result without a reload.
-    if let Ok(message) = st.db.media_message_write(media_id, sid, &text, &meta) {
-        if !message.is_null() {
-            st.emit("message.completed", json!({"sessionId":sid,"messageId":media_id,"role":"notice","message":message})).await;
+    // to its result without a reload. A new notice names the reply it reads above,
+    // so a live window shows what a reload shows.
+    match st.db.media_message_write(media_id, sid, row["turnId"].as_str(), text, &meta) {
+        Ok((message, before)) if !message.is_null() => {
+            let mut payload = json!({"sessionId":sid,"messageId":media_id,"role":"notice","message":message});
+            if let Some(before) = before { payload["beforeMessageId"] = json!(before); }
+            st.emit("message.completed", payload).await;
         }
+        _ => {}
     }
     if let Ok(summary) = st.db.session_event_summary(sid) {
         st.emit("session.changed", summary).await;
     }
     st.emit("media.generated", json!({"sessionId":sid,"mediaId":media_id,"status":status})).await;
+}
+
+/// One screenshot from the linked computer (`AGENTS.md`, 14 November 2026),
+/// kept through the generated-image path: one PNG per call under the data
+/// folder, one `ready` record, one image card in the transcript. The record's
+/// `meta` carries no path, so nothing here can reach a phone, a log, a backup or
+/// a diagnostics bundle. Answers the media id the tool row names.
+pub(crate) async fn store_screenshot(st: &AppState, sid: &str, png: &[u8]) -> Result<String, String> {
+    if !st.db.session_exists(sid).unwrap_or(false) {
+        return Err("This conversation is gone, so the screenshot was not kept.".to_owned());
+    }
+    if png.is_empty() {
+        return Err("The screenshot came back empty.".to_owned());
+    }
+    if png.len() as u64 > MAX_GENERATED_BYTES {
+        return Err("The screenshot was too large to keep.".to_owned());
+    }
+    if !png.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err("The screenshot was not a PNG.".to_owned());
+    }
+    let folder = generated_folder(st, sid).ok_or_else(|| "The image folder is unavailable.".to_owned())?;
+    let media_id = retinue_storage::Storage::new_media_id();
+    let file = format!("{media_id}.png");
+    tokio::fs::create_dir_all(&folder).await.map_err(|_| "The image folder is unavailable.".to_owned())?;
+    let path = folder.join(&file);
+    tokio::fs::write(&path, png).await.map_err(|_| "The screenshot could not be saved.".to_owned())?;
+    let turn = st.active_turns.lock().await.get(sid).cloned().filter(|turn| !turn.is_empty());
+    let call_id = format!("computer-screenshot-{media_id}");
+    let row = st
+        .db
+        .media_insert(&media_id, sid, turn.as_deref(), "computer", &call_id, None, Some(&path.to_string_lossy()), "ready", Some(&file), Some(png.len() as i64), Some("image/png"), None)
+        .ok()
+        .flatten();
+    let Some(row) = row else { return Err("The screenshot could not be recorded.".to_owned()) };
+    publish_with_text(st, &row, "Took a screenshot of the bot computer").await;
+    Ok(media_id)
 }
 
 /// The extension an image's own bytes claim, and its media type.

@@ -21,3 +21,21 @@ export function LookOrb({ look, size }: { look: ThemeStyle; size: number }) {
 
   </svg>
 }
+
+/** The same material as a wide rounded rectangle, for the full-width look cards in Settings (owner, 14 November 2026). */
+export function LookSwatch({ look }: { look: ThemeStyle }) {
+  const id = `look-swatch-${useId().replace(/:/g, '')}`
+  const haze = look === 'haze'
+  const stops = haze ? ['#8a8f96', '#3b3d42', '#1b1c1f'] : ['#777', '#505050', '#292929']
+  const band = haze ? 'var(--user-accent, #c7ccd3)' : '#bdbdbd'
+  return <svg className="look-swatch" data-look={look} aria-hidden="true" focusable="false" viewBox="0 0 240 96" preserveAspectRatio="none">
+    <defs>
+      <radialGradient id={`${id}-fill`} cx="22%" cy="18%" r="95%"><stop stopColor={stops[0]} /><stop offset=".5" stopColor={stops[1]} /><stop offset="1" stopColor={stops[2]} /></radialGradient>
+      <linearGradient id={`${id}-band`} x1="0" x2="1"><stop style={{ stopColor: band }} stopOpacity="0" /><stop offset=".55" style={{ stopColor: band }} stopOpacity={haze ? '.55' : '.38'} /><stop offset="1" style={{ stopColor: band }} stopOpacity={haze ? '.9' : '.75'} /></linearGradient>
+      <clipPath id={`${id}-clip`}><rect x="1" y="1" width="238" height="94" rx="14" /></clipPath>
+    </defs>
+    <rect x="1" y="1" width="238" height="94" rx="14" fill={`url(#${id}-fill)`} />
+    <g clipPath={`url(#${id}-clip)`}><rect x="40" y="40" width="200" height="16" rx="8" fill={`url(#${id}-band)`} /></g>
+    <rect x="1" y="1" width="238" height="94" rx="14" fill="none" stroke={haze ? '#fff' : '#8b8b8b'} strokeOpacity={haze ? '.22' : '.4'} strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+  </svg>
+}

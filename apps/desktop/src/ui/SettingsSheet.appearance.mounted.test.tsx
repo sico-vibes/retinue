@@ -58,10 +58,11 @@ describe('General settings mounted controls', () => {
     host = document.createElement('div'); document.body.append(host); root = createRoot(host)
     await act(async () => root.render(<SettingsSheet snapshot={null} initialPage="Appearance" onClose={vi.fn()} onRefresh={vi.fn()} onError={vi.fn()} onOpenAgent={vi.fn()} />))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    expect([...host.querySelectorAll('.look-orb-choice .look-orb-tooltip')].map((button) => button.textContent)).toEqual(['Haze','Stone'])
-    expect([...host.querySelectorAll<SVGElement>('.appearance-page .look-orb')].map((orb) => orb.dataset.look)).toEqual(['haze', 'stone'])
+    // 14 November 2026 (owner): Settings shows the two looks as full-width rectangles.
+    expect([...host.querySelectorAll('.look-card-choice .look-card-name')].map((button) => button.textContent)).toEqual(['Haze','Stone'])
+    expect([...host.querySelectorAll<SVGElement>('.appearance-page .look-swatch')].map((swatch) => swatch.dataset.look)).toEqual(['haze', 'stone'])
     expect(host.querySelector('.appearance-page .look-window')).toBeNull()
-    await act(async () => { [...host.querySelectorAll<HTMLButtonElement>('.look-orb-choice')].find((button) => button.textContent?.includes('Stone'))?.click(); await Promise.resolve() })
+    await act(async () => { [...host.querySelectorAll<HTMLButtonElement>('.look-card-choice')].find((button) => button.textContent?.includes('Stone'))?.click(); await Promise.resolve() })
     expect(mocks.rpc).toHaveBeenCalledWith('settings.set', { key: 'appearance.style', value: 'stone' })
     // Wallpaper and glass belonged to Frost, retired on 27 October 2026.
     expect(host.textContent).not.toContain('Wallpaper')

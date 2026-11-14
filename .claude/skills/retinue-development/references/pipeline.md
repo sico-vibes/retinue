@@ -1,5 +1,9 @@
 # Pipeline: the Director, lanes, worktrees and releases
 
+## Parallel bot conversations (owner, 14 November 2026)
+
+"You don't need to queue... fire up multiple sessions with Ada... the default should be to fire up at least 3." Split backend work into independent batches and start each as its own Ada conversation (`send_message` with `newConversation: true, worktree: true`, about a minute apart for OpenCode), with research to Grey in parallel. Use one conversation only when the owner says so. Never queue a batch behind a busy conversation: the MCP cannot withdraw a queued message, so if one is queued by mistake, `steer` the running turn to skip it. Each brief names the files the other lanes own.
+
 Last reviewed: 2026-10-22. The governing rules are the top amendments in `AGENTS.md`; this file is the practical how-to. When the owner changes the arrangement, update both.
 
 ## Wave 13 onwards: the Director does everything (owner, 28 October 2026)

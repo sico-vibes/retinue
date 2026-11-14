@@ -153,12 +153,6 @@
 .message-image-placeholder { display: grid; justify-items: center; gap: 4px; padding: 8px; color: var(--text-3); font-size: var(--fs-2xs); text-align: center; }
 .message-image-placeholder span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .message-image:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.message-image-viewer { position: fixed; z-index: 90; inset: 0; display: grid; place-items: center; padding: 24px; background: #000000b8; }
-.message-image-viewer figure { margin: 0; display: grid; gap: 8px; justify-items: center; max-width: min(1100px, 100%); }
-.message-image-viewer img { max-width: 100%; max-height: calc(100vh - 120px); display: block; border-radius: 12px; background: var(--surface-raised); }
-.message-image-viewer figcaption { color: #f4f4f6; font-size: var(--fs-xs); }
-.message-image-viewer-close { position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; padding: 0; display: grid; place-items: center; color: #f4f4f6; border: 1px solid #ffffff44; border-radius: 50%; background: #00000066; cursor: pointer; }
-.message-image-viewer-close:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
 @media (max-width: 940px) {
   .composer-pill { padding-inline: 7px; }
@@ -359,3 +353,34 @@
 .composer-pill-chevron { opacity: .5; }
 .context-window-indicator.tone-unknown { opacity: .5; }
 .permission-pill.mode-plan { color: var(--text-1); }
+
+/* One effort control for every coding agent (owner, 14 November 2026), after React Bits'
+   Prompt Bar. Haze draws the track and thumb as rounded rectangles; Stone keeps pills. */
+:root { --effort-spark: #b39dff; }
+:root[data-theme="light"] { --effort-spark: #6d4fe0; }
+.session-effort-popover.unified { position: absolute; overflow: hidden; isolation: isolate; }
+.session-effort-popover.unified::before { content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: radial-gradient(140% 120% at 0% 100%, color-mix(in srgb, var(--effort-spark) 22%, transparent), transparent 62%); opacity: 0; pointer-events: none; transition: opacity 500ms ease; }
+.session-effort-popover.unified.max::before { opacity: 1; }
+.effort-track { --effort-radius: 6px; position: relative; height: 22px; margin-top: 2px; border-radius: var(--effort-radius); background: var(--surface-hover); cursor: pointer; outline: none; touch-action: none; user-select: none; }
+.effort-track:focus-visible { box-shadow: var(--focus-ring); }
+.effort-track[aria-disabled="true"] { opacity: .5; cursor: default; }
+.effort-track-fill { position: absolute; inset: 0 auto 0 0; width: var(--effort-fill); border-radius: var(--effort-radius); background: color-mix(in srgb, var(--text-1) 18%, transparent); transition: width 220ms cubic-bezier(.23, 1, .32, 1), background-color 300ms ease; }
+.effort-track-dot { position: absolute; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 1px; background: color-mix(in srgb, var(--text-1) 30%, transparent); }
+.effort-track-thumb { position: absolute; top: -3px; left: var(--effort-x); width: 14px; height: 28px; margin-left: -7px; border-radius: 4px; background: var(--text-1); box-shadow: 0 2px 6px rgb(0 0 0 / .25); transition: left 220ms cubic-bezier(.23, 1, .32, 1), background-color 300ms ease; }
+.effort-track.dragging .effort-track-fill, .effort-track.dragging .effort-track-thumb { transition: background-color 300ms ease; }
+.effort-track.max .effort-track-fill { background: color-mix(in srgb, var(--effort-spark) 35%, transparent); }
+.effort-track.max .effort-track-thumb { background: var(--effort-spark); }
+:root[data-style="stone"] .effort-track { --effort-radius: 11px; }
+:root[data-style="stone"] .effort-track-dot { border-radius: 50%; }
+:root[data-style="stone"] .effort-track-thumb { border-radius: 7px; }
+.effort-sparks { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; color: var(--effort-spark); border-radius: inherit; pointer-events: none; opacity: 0; transition: opacity 400ms ease; }
+.effort-sparks.on { opacity: 1; }
+.effort-sparks.popover-sparks { z-index: -1; }
+.composer-box { isolation: isolate; }
+.composer-box > .effort-sparks.composer-sparks { z-index: -1; }
+.composer-box:has(> .effort-sparks.composer-sparks.on) { border-color: color-mix(in srgb, var(--effort-spark) 45%, var(--line)); background-image: radial-gradient(140% 120% at 0% 100%, color-mix(in srgb, var(--effort-spark) 14%, transparent), transparent 62%); }
+.session-effort-trigger { position: relative; overflow: hidden; }
+.session-effort-trigger { isolation: isolate; }
+.session-effort-trigger > .effort-sparks { z-index: -1; }
+.session-effort-control.max .session-effort-trigger { color: var(--effort-spark); }
+@media (prefers-reduced-motion: reduce) { .effort-track-fill, .effort-track-thumb, .effort-sparks { transition: none; } }

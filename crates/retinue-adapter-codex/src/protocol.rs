@@ -109,6 +109,8 @@ pub const METHODS: &[MethodUse] = &[
     MethodUse { method: "item/commandExecution/outputDelta", direction: Direction::Handle, at: "src/lib.rs:1020" },
     MethodUse { method: "item/mcpToolCall/progress", direction: Direction::Handle, at: "src/lib.rs:1024" },
     MethodUse { method: "thread/name/updated", direction: Direction::Handle, at: "src/lib.rs:1014" },
+    // The provider's own task list for the turn, complete each time.
+    MethodUse { method: "turn/plan/updated", direction: Direction::Handle, at: "src/lib.rs:1015" },
 ];
 
 pub const COMPAT: &[CompatUse] = &[

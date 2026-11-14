@@ -15,18 +15,25 @@ export function isAutomationSession(session: Session | null | undefined) {
   return session?.link?.kind === 'automation'
 }
 
+/**
+ * When a conversation last had a message, for ordering lists. Not `updatedAt`:
+ * the daemon touches that for state changes, renames and app restarts, so a
+ * list sorted by it moved a conversation the owner had only opened (2026-11-14).
+ */
+export const activityAt = (session: Session) => String(session.lastMessageAt ?? session.createdAt ?? session.updatedAt ?? '')
+
 /** A blob's main conversation: its newest open session that is neither a side conversation nor a scheduled run. */
 export function mainSessionFor(sessions: readonly Session[], agentId: string): Session | null {
   return sessions
     .filter((session) => session.agentId === agentId && !session.archived && !isSideSession(session) && !isAutomationSession(session))
-    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))[0] ?? null
+    .sort((a, b) => activityAt(b).localeCompare(activityAt(a)))[0] ?? null
 }
 
 /** Side conversations a blob takes part in, as either side, newest first. */
 export function sideSessionsFor(sessions: readonly Session[], agentId: string): Session[] {
   return sessions
     .filter((session) => isSideSession(session) && !session.archived && (session.agentId === agentId || session.link?.peerAgentId === agentId))
-    .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
+    .sort((a, b) => activityAt(b).localeCompare(activityAt(a)))
 }
 
 export function sessionIsBusy(session: Session | null | undefined) {
@@ -342,7 +349,7 @@ export interface ConversationNode {
   children: ConversationNode[]
 }
 
-const updatedAtOf = (session: Session) => String(session.updatedAt ?? session.createdAt ?? '')
+const updatedAtOf = activityAt
 
 /**
  * Every conversation a bot had in its project, as a tree: its own

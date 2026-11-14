@@ -3,9 +3,9 @@ import type { Agent, Runtime } from '../types'
 import { type LaunchCheck } from './launchChecks'
 import { friendlyError } from './errorCopy'
 import { ProviderLogo } from './providerBrand'
-import { PixelClouds } from './PixelClouds'
-import markWhite from '../assets/brand/retinue-mark-white.png'
-import markBlack from '../assets/brand/retinue-mark-black.png'
+import { lazy, Suspense } from 'react'
+import { MetallicMark, canPaintMetal } from './MetallicMark'
+const GradientASCII = lazy(() => import('./reactbits/GradientASCII'))
 import { useLegacyPixel } from '../blob/retinue'
 
 type Phase = 'scanning' | 'greeting' | 'ready'
@@ -74,7 +74,8 @@ export function LaunchIntro({ checks, runtimes, agent: _agent = null, onComplete
   const running = checks.find((check) => check.state === 'running')
   const status = serviceDown ? 'Retinue could not connect to its service.' : finished ? 'Ready for your next conversation.' : running?.label ?? 'Getting Retinue ready…'
   return <main className={`launch-intro${reducedMotion ? ' reduced-motion' : ''}`} data-phase={phase} aria-label="Retinue launch checks" onPointerDown={() => { if (phase === 'greeting' && autoComplete) complete() }}>
-    <PixelClouds className="launch-clouds" />
+    {/* Owner, 14 November 2026: React Bits' Gradient ASCII reveals itself behind the checks. */}
+    {canPaintMetal() && <Suspense fallback={null}><div className="launch-ascii" aria-hidden="true"><GradientASCII intro shape="horizon" lightMode={document.documentElement.dataset.theme === 'light'} colors={launchColours()} mouseInteraction clickEffect="wave" /></div></Suspense>}
     <section className="launch-intro-content">
       <div className="launch-blob-stage">
         <LaunchLogo state={serviceDown ? 'error' : phase === 'greeting' ? 'greeting' : phase === 'ready' ? 'ready' : 'working'} onGreeted={greetingDone} />
@@ -168,7 +169,12 @@ function LaunchLogo({ state, onGreeted }: { state: 'greeting' | 'working' | 'rea
     return () => window.clearTimeout(timer)
   }, [state])
   return <span className={`launch-logo is-${state}`} role="img" aria-label="Retinue">
-    <img className="launch-logo-on-dark" src={markWhite} alt="" draggable={false} />
-    <img className="launch-logo-on-light" src={markBlack} alt="" draggable={false} />
+    <MetallicMark size={96} playing={state !== 'error'} intro light={document.documentElement.dataset.theme === 'light'} />
   </span>
+}
+
+/** The background's colours: the owner's accent over the look's greys. */
+function launchColours() {
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--user-accent').trim()
+  return document.documentElement.dataset.theme === 'light' ? ['#3a3f4a', '#8a93a3', accent || '#5d6b85', '#c9ced8'] : ['#2a2e36', '#8a93a3', accent || '#b7c0d0', '#e6e9ee']
 }

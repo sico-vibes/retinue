@@ -1,5 +1,6 @@
 import { Suspense, lazy, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { ImageLightbox } from './ImageLightbox'
 import { AlertCircle, FileText, ImageOff, LoaderCircle, Music2, Video, X } from 'lucide-react'
 import { revealInExplorer, rpc } from '../tauri'
 import './mediaPreview.css'
@@ -110,18 +111,9 @@ function Card({ icon, name, line, children, tone }: { icon: ReactNode; name: str
   return <div className={`media-card${tone ? ` ${tone}` : ''}`}><span className="media-card-icon" aria-hidden="true">{icon}</span><span className="media-card-text"><strong title={name}>{name}</strong><small>{line}</small></span>{children}</div>
 }
 
+/** Kept as the name other modules import; the viewer itself is `ImageLightbox`. */
 export function Viewer({ src, name, onClose }: { src: string; name: string; onClose: () => void }) {
-  const closeRef = useRef<HTMLButtonElement>(null)
-  useEffect(() => {
-    requestAnimationFrame(() => closeRef.current?.focus())
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); onClose() } }
-    document.addEventListener('keydown', onKeyDown, true)
-    return () => document.removeEventListener('keydown', onKeyDown, true)
-  }, [onClose])
-  return <div className="message-image-viewer" role="dialog" aria-modal="true" aria-label={`${name}, enlarged`} onClick={onClose}>
-    <button ref={closeRef} type="button" className="message-image-viewer-close" aria-label="Close image" onClick={onClose}><X size={16} aria-hidden="true" /></button>
-    <figure onClick={(event) => event.stopPropagation()}><img src={src} alt={name} /><figcaption>{name}</figcaption></figure>
-  </div>
+  return <ImageLightbox src={src} name={name} onClose={onClose} />
 }
 
 function PlayableMedia({ reply, kind }: { reply: MediaReply; kind: 'audio' | 'video' }) {

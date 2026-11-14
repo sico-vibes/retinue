@@ -1,0 +1,20 @@
+/* The enlarged image (owner, 14 November 2026): over the whole window, with
+   everything behind it blurred so nothing competes with the picture. */
+.image-lightbox { position: fixed; z-index: 1000; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: rgb(8 8 10 / .72); backdrop-filter: blur(18px) saturate(.8); -webkit-backdrop-filter: blur(18px) saturate(.8); animation: image-lightbox-in 140ms ease-out; }
+.image-lightbox-stage { min-height: 0; display: grid; place-items: center; padding: 56px 24px 8px; overflow: hidden; cursor: zoom-in; touch-action: none; user-select: none; }
+.image-lightbox-stage.zoomed { cursor: grab; }
+.image-lightbox-stage.zoomed:active { cursor: grabbing; }
+.image-lightbox-stage img { max-width: min(1400px, 100%); max-height: 100%; display: block; border-radius: 12px; transform-origin: center; transition: transform 90ms ease-out; will-change: transform; cursor: inherit; }
+/* Transparent PNGs sit on a checker so their edges read. */
+.image-lightbox-stage img { background: repeating-conic-gradient(#2a2a2e 0 25%, #222226 0 50%) 0 0 / 20px 20px; }
+.image-lightbox-bar { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 10px 16px 18px; color: #f4f4f6; font-size: var(--fs-xs); }
+.image-lightbox-name { max-width: 50vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #d8d8dc; }
+.image-lightbox-zoom { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid #ffffff22; border-radius: 10px; background: #00000066; }
+.image-lightbox-zoom output { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; }
+.image-lightbox-zoom button, .image-lightbox-close { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; color: #f4f4f6; border: 0; border-radius: 7px; background: transparent; cursor: pointer; }
+.image-lightbox-zoom button:hover:not(:disabled), .image-lightbox-close:hover { background: #ffffff1f; }
+.image-lightbox-zoom button:disabled { opacity: .35; cursor: default; }
+.image-lightbox-close { position: absolute; top: 16px; right: 16px; width: 34px; height: 34px; border: 1px solid #ffffff33; border-radius: 10px; background: #00000066; }
+.image-lightbox button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@keyframes image-lightbox-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .image-lightbox, .image-lightbox-stage img { animation: none; transition: none; } }

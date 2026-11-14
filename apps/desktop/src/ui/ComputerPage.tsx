@@ -8,6 +8,7 @@ import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
 import { ComputerView } from './ComputerView'
 import { COMPUTER_SETUP_PROMPT } from './computerSetup'
 import { SettingsGroup, SettingsRow } from './SettingsParts'
+import { OwnerComputerSettings } from './OwnerComputer'
 import { addressProblem, parseRoutines, scheduleText, sizeText, spanSince, stateWord, tidyAddress, useComputer, type ComputerRoutine, type ComputerStatus } from './computer'
 import './blobPage.css'
 import './computer.css'
@@ -47,6 +48,8 @@ function ComputerCard({ status, busy, onAction, onWatch }: { status: ComputerSta
       <Meter label="Memory" value={status.memoryText ?? (status.memoryPercent === null ? 'Not reported' : `${Math.round(status.memoryPercent)}%`)} percent={status.memoryPercent} />
       <div className="computer-meter"><span className="computer-meter-line"><span>Kept files</span><b>{sizeText(status.diskBytes) ?? 'Not reported'}</b></span><small>Stay when it sleeps or restarts.</small></div>
     </div>}
+    {awake && status.input && <p className="computer-note">{status.input.ready ? 'Employees can click, type and take screenshots on it.' : <>Clicks, typing and screenshots need {status.input.missing.join(' and ')}. Install {status.input.missing.length === 1 ? 'it' : 'them'} on the computer with <code>apt-get install -y {status.input.missing.join(' ')}</code>, then check again.</>}</p>}
+    {awake && status.browser && !status.browser.ready && <p className="computer-note">Browsing needs {status.browser.missing.join(' and ')} on the computer, then check again.</p>}
     {asleep && <p className="computer-note">Its files are kept and its routines wait. An employee can wake it when a job needs it.</p>}
     {status.reachable && status.state === 'missing' && <p className="computer-note">Harbor has no computer set up yet. Open Harbor on your server and choose Provision, then check again.</p>}
     {!status.reachable && <p className="computer-note" role="status">{status.problem ?? 'Your server did not answer.'} Nothing was changed.</p>}
@@ -157,7 +160,7 @@ export function ComputerPage({ connected }: { connected: boolean }) {
 
   const intro = <p className="settings-intro">A computer on your own server that employees can use for browser work, long jobs and routines. It keeps running when this PC is off.</p>
   if (!connected) return <>{intro}<p className="settings-row-note computer-plain">Available in the desktop app.</p></>
-  if (!status) return <>{intro}<p className="settings-row-note computer-plain" role="status">{failed ? 'The computer settings could not be read.' : 'Reading…'}</p></>
+  if (!status) return <>{intro}<p className="settings-row-note computer-plain" role="status">{failed ? 'The computer settings could not be read.' : 'Reading…'}</p><OwnerComputerSettings /></>
 
   if (!linked) return <>
     {intro}
@@ -167,6 +170,7 @@ export function ComputerPage({ connected }: { connected: boolean }) {
     <SettingsGroup title="Set one up">
       <SetupPrompt />
     </SettingsGroup>
+    <OwnerComputerSettings />
   </>
 
   return <>
@@ -202,6 +206,7 @@ export function ComputerPage({ connected }: { connected: boolean }) {
     {unlinking && <ConsentDialog title="Unlink this computer?" confirm="Unlink" busyWord="Unlinking…" danger busy={busy === 'unlink'} onCancel={() => setUnlinking(false)} onConfirm={async () => { if (await run('unlink', 'computer.unlink', {}, undefined)) setUnlinking(false) }}>
       <p>Retinue forgets the address and the token, and employees lose the tools. The computer keeps running on your server. To cut the token off for good, revoke it in Harbor.</p>
     </ConsentDialog>}
+    <OwnerComputerSettings />
   </>
 }
 

@@ -524,6 +524,129 @@ pub(crate) fn discard_staged(staging: &Path) {
 }
 
 // ---------------------------------------------------------------------------
+// Built-in skills
+//
+// Two skills ship inside the daemon rather than in the pool on disk: `retinue`,
+// which every bot always has, and `cloud-computer`, which exists only while the
+// owner has a computer linked and switched on. They are served from memory, so
+// nothing in the app can write, delete or switch them off, and their version
+// follows the app's.
+
+/// A skill compiled into the daemon. `files[0]` is `SKILL.md` and carries the
+/// frontmatter; the rest are references `read_skill_file` serves.
+struct Builtin {
+    name: &'static str,
+    files: &'static [(&'static str, &'static str)],
+}
+
+static RETINUE_SKILL: Builtin = Builtin {
+    name: "retinue",
+    files: &[
+        ("SKILL.md", include_str!("skills/retinue/SKILL.md")),
+        ("tools.md", include_str!("skills/retinue/tools.md")),
+        ("working.md", include_str!("skills/retinue/working.md")),
+    ],
+};
+
+static CLOUD_COMPUTER_SKILL: Builtin = Builtin {
+    name: "cloud-computer",
+    files: &[("SKILL.md", include_str!("skills/cloud-computer/SKILL.md"))],
+};
+
+static BUILTINS: [&Builtin; 2] = [&RETINUE_SKILL, &CLOUD_COMPUTER_SKILL];
+
+fn builtin(name: &str) -> Option<&'static Builtin> {
+    BUILTINS.iter().copied().find(|builtin| builtin.name == name)
+}
+
+fn builtin_front(builtin: &'static Builtin) -> Result<Frontmatter, String> {
+    let text = builtin.files.first().map(|(_, text)| *text).unwrap_or_default();
+    parse_frontmatter(text)
+}
+
+/// Whether the feature a built-in explains is on at all: `retinue` always,
+/// `cloud-computer` only with a computer linked and switched on. This is the
+/// pool-wide half; `builtin_visible` adds the per-bot half.
+fn builtin_available(st: &AppState, builtin: &Builtin) -> bool {
+    match builtin.name {
+        "cloud-computer" => crate::computer::enabled_link(st).is_some(),
+        _ => true,
+    }
+}
+
+/// Whether a built-in is listed for this bot: available, and, for
+/// `cloud-computer`, only when this bot works on the computer.
+fn builtin_visible(st: &AppState, builtin: &Builtin, agent: Option<&Value>) -> bool {
+    if !builtin_available(st, builtin) {
+        return false;
+    }
+    match builtin.name {
+        "cloud-computer" => agent.is_some_and(crate::computer::workplace_on),
+        _ => true,
+    }
+}
+
+/// The pool row for a built-in, shaped like a stored skill. `source` is
+/// `builtin`, which no stored row can carry.
+fn builtin_row(builtin: &'static Builtin) -> Value {
+    let description = builtin_front(builtin).map(|front| front.description).unwrap_or_default();
+    let joined = builtin.files.iter().map(|(path, text)| format!("{path}\u{0}{text}\u{0}")).collect::<String>();
+    json!({
+        "name": builtin.name,
+        "description": description,
+        "source": "builtin",
+        "sourcePath": null,
+        "contentSha256": retinue_agent_core::instruction_sha256(&joined).unwrap_or_default(),
+        "enabled": true,
+        "builtin": true,
+        "disabledFor": [],
+        "fileCount": builtin.files.len() as i64,
+        "totalBytes": builtin.files.iter().map(|(_, text)| text.len() as i64).sum::<i64>(),
+    })
+}
+
+fn builtin_rows(st: &AppState, agent: Option<&Value>) -> Vec<Value> {
+    BUILTINS.iter().filter(|builtin| builtin_visible(st, builtin, agent)).map(|builtin| builtin_row(builtin)).collect()
+}
+
+/// `skills.get` for a built-in: the same shape as a stored skill, read from
+/// memory. It names no folder, because there is none.
+fn builtin_get(builtin: &'static Builtin) -> Result<Value, DispatchError> {
+    let front = builtin_front(builtin).map_err(|message| derr("internal", &message, StatusCode::INTERNAL_SERVER_ERROR))?;
+    Ok(json!({
+        "name": builtin.name,
+        "description": front.description,
+        "body": front.body.chars().take(MAX_BODY_CHARS).collect::<String>(),
+        "builtin": true,
+        "files": builtin.files.iter().map(|(path, text)| json!({"path": path, "bytes": text.len()})).collect::<Vec<_>>(),
+    }))
+}
+
+/// The built-in a session may load, or the reason it may not. `cloud-computer`
+/// is only for an employee with the workplace switch on and a computer linked.
+fn builtin_for_session(st: &AppState, name: &str, agent_id: Option<&str>) -> Option<&'static Builtin> {
+    let builtin = builtin(name)?;
+    let agent = agent_row(st, agent_id);
+    builtin_visible(st, builtin, agent.as_ref()).then_some(builtin)
+}
+
+/// Test-only: a built-in's `SKILL.md` body, so another module can check what it
+/// promises without going through a session.
+#[cfg(test)]
+pub(crate) fn builtin_body_for_test(name: &str) -> String {
+    match builtin(name).map(builtin_front) {
+        Some(Ok(front)) => front.body,
+        _ => String::new(),
+    }
+}
+
+/// The agent a session or a per-bot view belongs to, read once so the built-ins
+/// can be gated on it. `None` for a pool-wide view and for an unknown agent.
+fn agent_row(st: &AppState, agent_id: Option<&str>) -> Option<Value> {
+    agent_id.and_then(|id| st.db.agent_get(id).ok())
+}
+
+// ---------------------------------------------------------------------------
 // Visibility
 
 fn session_identity(st: &AppState, session_id: &str) -> Result<(Option<String>, String), String> {
@@ -537,24 +660,29 @@ fn disabled_for(row: &Value, agent_id: Option<&str>) -> bool {
     row["disabledFor"].as_array().is_some_and(|list| list.iter().any(|id| id.as_str() == Some(agent_id)))
 }
 
-/// The pool rows a session may see: the global switch on, the per-bot opt-out
-/// cleared, and (when a provider is named) native copies removed.
+/// The pool rows a session may see: the built-ins first, then stored skills
+/// with the global switch on, the per-bot opt-out cleared, and (when a provider
+/// is named) native copies removed. A built-in is never shadowed by a stored
+/// row of the same name, and it is never treated as native: the coding agent
+/// cannot carry Retinue's own copy, and dropping it would leave the bot without
+/// the skill it is meant to have.
 fn visible_rows(st: &AppState, agent_id: Option<&str>, provider: Option<&str>) -> Result<Vec<Value>, String> {
+    let agent = agent_row(st, agent_id);
+    let mut out = builtin_rows(st, agent.as_ref());
     let rows = st.db.skills_list().map_err(|error| error.to_string())?;
-    let mut out = Vec::new();
     for row in rows {
         if row["enabled"] != true || disabled_for(&row, agent_id) {
             continue;
         }
+        if builtin(row["name"].as_str().unwrap_or("")).is_some() {
+            continue;
+        }
         out.push(row);
-    }
-    if out.is_empty() {
-        return Ok(out);
     }
     if let Some(provider) = provider {
         let native = native_names(st, provider);
         if !native.is_empty() {
-            out.retain(|row| !is_native(&native, row["name"].as_str().unwrap_or(""), row["contentSha256"].as_str().unwrap_or("")));
+            out.retain(|row| row["source"] == "builtin" || !is_native(&native, row["name"].as_str().unwrap_or(""), row["contentSha256"].as_str().unwrap_or("")));
         }
     }
     Ok(out)
@@ -651,6 +779,9 @@ fn import_one(st: &AppState, source: &str, folder: &Path) -> Result<String, Stri
     let skill_md = if canonical.is_dir() { canonical.join("SKILL.md") } else { canonical.clone() };
     let text = std::fs::read_to_string(&skill_md).map_err(|_| "The skill has no readable SKILL.md.".to_string())?;
     let front = parse_frontmatter(&text)?;
+    if builtin(&front.name).is_some() {
+        return Err("That skill has the same name as one built into Retinue, so it is not imported.".into());
+    }
     let total: u64 = files.iter().map(|(_, path)| std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)).sum();
     let hash = content_sha256(&files);
     place_skill(&skills_dir(st), &front.name, &files)?;
@@ -714,7 +845,15 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
             let rows = st.db.skills_list().map_err(skill_error)?;
             let claude = native_names(st, "claude");
             let codex = native_names(st, "codex");
-            let skills = rows.into_iter().map(|mut row| {
+            // Built-ins first: they are the skills that explain Retinue itself.
+            // `builtin: true` is the flag the window uses to offer them read-only:
+            // no delete and no toggle, which the RPCs refuse as well.
+            let mut skills = BUILTINS.iter().filter(|builtin| builtin_available(st, builtin)).map(|builtin| {
+                let mut row = builtin_row(builtin);
+                row["nativeFor"] = json!([]);
+                row
+            }).collect::<Vec<_>>();
+            skills.extend(rows.into_iter().map(|mut row| {
                 let name = row["name"].as_str().unwrap_or("").to_owned();
                 let sha = row["contentSha256"].as_str().unwrap_or("").to_owned();
                 let mut native = Vec::new();
@@ -726,7 +865,7 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
                 }
                 row["nativeFor"] = json!(native);
                 row
-            }).collect::<Vec<_>>();
+            }));
             Ok(json!({"skills": skills}))
         }
         "skills.forAgent" => {
@@ -737,6 +876,9 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         }
         "skills.get" => {
             let name = required_skill_name(p)?.to_owned();
+            if let Some(builtin) = builtin(&name) {
+                return builtin_get(builtin);
+            }
             let row = st.db.skills_get(&name).map_err(skill_error)?;
             let dir = skill_dir(st, &name);
             let text = std::fs::read_to_string(dir.join("SKILL.md")).map_err(|_| derr("not_found", "The skill files are missing on disk.", StatusCode::NOT_FOUND))?;
@@ -770,6 +912,9 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         "skills.import" => import_rpc(st, p).await,
         "skills.delete" => {
             let name = required_skill_name(p)?.to_owned();
+            if builtin(&name).is_some() {
+                return Err(derr("invalid_argument", "A built-in skill cannot be deleted.", StatusCode::BAD_REQUEST));
+            }
             st.db.skills_delete(&name).map_err(skill_error)?;
             let _ = std::fs::remove_dir_all(skill_dir(st, &name));
             st.emit("skills.changed", json!({"action":"deleted","name":name})).await;
@@ -778,6 +923,9 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         "skills.toggle" => {
             let name = required_skill_name(p)?.to_owned();
             let enabled = p["enabled"].as_bool().ok_or_else(|| derr("invalid_argument", "enabled must be a boolean", StatusCode::BAD_REQUEST))?;
+            if builtin(&name).is_some() {
+                return Err(derr("invalid_argument", "A built-in skill is always on and cannot be changed.", StatusCode::BAD_REQUEST));
+            }
             let agent = p["agentId"].as_str().map(str::trim).filter(|agent| !agent.is_empty());
             let row = st.db.skills_toggle(&name, enabled, agent).map_err(skill_error)?;
             st.emit("skills.changed", json!({"action":"toggled","name":name})).await;
@@ -814,6 +962,13 @@ pub async fn tool_load(st: &AppState, session_id: &str, args: &Value) -> Result<
         return Err("name must match [a-z0-9][a-z0-9-]{0,63}".into());
     }
     let (agent_id, _provider) = session_identity(st, session_id)?;
+    if builtin(&name).is_some() {
+        let builtin = builtin_for_session(st, &name, agent_id.as_deref()).ok_or_else(|| format!("The skill {name} is not available in this conversation."))?;
+        let front = builtin_front(builtin)?;
+        let body = front.body.chars().take(MAX_BODY_CHARS).collect::<String>();
+        let files = builtin.files.iter().map(|(path, text)| format!("- {path} ({} bytes)", text.len())).collect::<Vec<_>>().join("\n");
+        return Ok(format!("# Skill: {name}\n{}\n\nBuilt into Retinue and versioned with the app. Read its files with read_skill_file.\n\n{body}\n\nFiles:\n{files}", front.description));
+    }
     let row = one_skill(st, &name)?;
     ensure_on_for(&row, &name, agent_id.as_deref())?;
     let dir = skill_dir(st, &name);
@@ -839,6 +994,11 @@ pub async fn tool_read_file(st: &AppState, session_id: &str, args: &Value) -> Re
         return Err("path must be a relative path inside the skill folder, without .. or a drive or : part.".into());
     }
     let (agent_id, _provider) = session_identity(st, session_id)?;
+    if builtin(&name).is_some() {
+        let builtin = builtin_for_session(st, &name, agent_id.as_deref()).ok_or_else(|| format!("The skill {name} is not available in this conversation."))?;
+        let (_, text) = builtin.files.iter().find(|(path, _)| *path == rel).ok_or_else(|| format!("The skill {name} has no file at {rel}."))?;
+        return Ok(text.chars().take(MAX_FILE_CHARS).collect());
+    }
     let row = one_skill(st, &name)?;
     ensure_on_for(&row, &name, agent_id.as_deref())?;
     let dir = std::fs::canonicalize(skill_dir(st, &name)).map_err(|_| format!("The skill {name} is missing on disk."))?;
@@ -1031,5 +1191,35 @@ mod tests {
                 None => std::env::remove_var(key),
             }
         }
+    }
+
+    #[test]
+    fn built_in_skills_parse_and_name_no_host_path_or_secret() {
+        for builtin in BUILTINS {
+            let front = builtin_front(builtin).unwrap_or_else(|message| panic!("{}: {message}", builtin.name));
+            assert_eq!(front.name, builtin.name, "frontmatter name must match the table");
+            assert!(!front.description.trim().is_empty(), "{} needs a description", builtin.name);
+            assert!(front.description.chars().count() <= MAX_DESCRIPTION_CHARS, "{} has a long description", builtin.name);
+            assert_eq!(builtin.files[0].0, "SKILL.md", "{} must start with SKILL.md", builtin.name);
+            assert!(builtin.files.len() <= MAX_FILES, "{} has too many files", builtin.name);
+        }
+        // The content rule from AGENTS.md: no host paths, no credentials.
+        for (path, text) in BUILTINS.iter().flat_map(|builtin| builtin.files.iter()) {
+            for needle in ["C:\\", "D:\\", "/Users/", "/home/", "sk-ant-", "ghp_", "xoxb-", "BEGIN PRIVATE KEY"] {
+                assert!(!text.contains(needle), "{path} must not carry a host path or a secret: {needle}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_built_in_row_is_shaped_like_a_stored_skill() {
+        let row = builtin_row(&RETINUE_SKILL);
+        assert_eq!(row["name"], "retinue");
+        assert_eq!(row["source"], "builtin");
+        assert_eq!(row["enabled"], true);
+        assert_eq!(row["builtin"], true);
+        assert_eq!(row["fileCount"], 3);
+        assert_eq!(row["contentSha256"].as_str().unwrap().len(), 64);
+        assert!(row["description"].as_str().unwrap().contains("Retinue"));
     }
 }

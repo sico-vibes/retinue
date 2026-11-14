@@ -2,6 +2,80 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-14 - Tools - PowerShell `Get-Content -Raw` + `Set-Content` corrupts a UTF-8 Rust file
+
+A scripted replace on `crates/retinue-daemon/src/browser.rs` (`Get-Content -Raw`, `.Replace(...)`, `Set-Content -Encoding utf8`) turned every em dash into `â€"` and put a BOM at the top: Windows PowerShell 5.1 reads a BOM-less file as ANSI, so the bytes arrive wrong and are then written back as UTF-8. `cargo check` still passes (the damage was in comments), so it is easy to miss in review. Use the `edit` tool (exact text, byte-preserving) for any edit to a source file; when a script is unavoidable, read and write with `[System.IO.File]::ReadAllText($p, [System.Text.Encoding]::UTF8)` and `New-Object System.Text.UTF8Encoding($false)`. Check with `($bytes[0..3] -join ',')` (no 239,187,191) and by grepping for `â€`.
+
+## 2026-11-14 — Daemon/UI — A live task list per turn (`session.plan`)
+
+The owner wanted Claude Code's to-do list under every conversation. How it is built, so the next change fits it:
+
+- **One normalized event, three provider shapes.** `AgentEvent::PlanUpdated { items: Vec<PlanItem> }` in `crates/retinue-agent-core/src/lib.rs`; `PlanItem { text, status }` with `status` `pending`/`in_progress`/`completed`. The whole list on every event (replace, never patch); an empty list clears. Helpers there: `is_plan_tool` (matches `TodoWrite`, `todowrite`, `updateTodos` … after stripping non-alphanumerics), `plan_items_from_todos` (a `{content|text, status}` array, also the ACP `entries` shape), `plan_status` (unknown → pending, never completed), caps `PLAN_ITEMS_LIMIT` 50 and `PLAN_TEXT_LIMIT` 300.
+- **Where each adapter finds it.** Claude (`retinue-adapter-claude`): the `TodoWrite` `tool_use` inside the `assistant` message carries `input.todos`. Codex (`retinue-adapter-codex`): the `turn/plan/updated` notification (`params.plan[].step` / `.status` with `inProgress`), now listed in `METHODS` (`protocol.rs`). OpenCode (ACP, `retinue-adapter-acp`): the `sessionUpdate: "plan"` update (`entries[].content`/`.status`) **and** the `todowrite` `tool_call` (`rawInput.todos`) — the ACP `tool_call` has no `name`, only `title`, so the tool is recognized by `title`, and its row is emitted with `kind: "plan"`.
+- **Storage and wire.** The daemon's forwarded-event match (`main.rs`, `AgentEvent::PlanUpdated`) writes `turns.data.plan` with `merge_turn_data` (replace the whole object, do not patch) and returns the tuple `("session.plan", {sessionId,turnId,items,updatedAt})`. `session_detail_parts` (`retinue-storage/src/lib.rs`) adds `'plan', json(json_extract(t.data,'$.plan'))` to the turn `json_object`, so `session.get` returns it on the turn rows. Watch the parentheses: the `json_object(` call already ends with a `)`, and `json(json_extract(...))` needs its own pair.
+- **Remote.** `tiers.json` needs `"session.plan": "drop"` or the parity test fails; it is dropped like `tool.changed` and `session.context.updated`, while `session.get` still carries the stored list to a viewer.
+- **Window.** `apps/desktop/src/types.ts`: `PlanItemStatus`, `PlanItem`, `TurnPlan`, `SessionTurn` (`turns?: SessionTurn[]`), the `applyEvent` branch (creates the turn row when it has not arrived) and `normalizePlanItems`. Tool rows with `kind: "plan"` are the to-do tool's own row, so the UI can hide them in favour of the list.
+- **Instruction.** One line in `team.rs`'s `runtime_instructions_in` (`TASK_LIST_INSTRUCTIONS`), beside `CHART_TABLE_INSTRUCTIONS`/`OPENUI_INSTRUCTIONS`.
+
+## 2026-11-14 — Gates — `cargo test --lib` skips the `src/bin` helpers (and the docs build rewrites line endings)
+
+- **`cargo test -p retinue-adapter-claude --lib` fails `spawn_failure_removes_secure_instruction_pair`** with `Os { code: 2 }`: it copies `fake-icacls.exe` from beside the test binary, and `--lib` does not build `src/bin` helpers. Run the crate without `--lib` (30 tests pass).
+- **`node scripts/docs-library.mjs build` writes the whole `docs/library` snapshot as LF.** With `core.autocrlf=true` git then reports ~580 modified files; the check itself only needs the rebuilt content. Convert the tree back to CRLF after building (`Text -replace "\r\n","\n" -replace "\n","\r\n"` over text files, **never** over `docs/library/assets/*.png`, which are binary and get corrupted), then `git status -- docs` shows only the real edits (`ipc-contract.md`, its snapshot, `catalog.json`, `DOCUMENTATION.html`).
+- **`docs:check` is red on `main` for `apps/site/content/docs/*`** (missing `/docs/*.webp` images and `/docs/<slug>/` links). The site lane owns that; do not chase it.
+- **`npm run typecheck`, `npm test` and `docs:check` need `npm ci` in the worktree.** Without it they die on `Cannot find package 'vite'` / `'marked'`.
+- **Clippy is red on this baseline in code nobody touched:** `retinue-runtime/src/providers.rs:89` (`redundant_static_lifetimes`, which blocks clippy for every crate that depends on it), four `assert_eq!(…, false)` in the storage snooze tests, `review_scopes.rs:531/797` and `computer_tests.rs:368`. Use `cargo clippy -p <crate> --no-deps` to lint your own crate while that stands.
+- **The full mounted vitest suite flakes under load** (8, then 4, then 1 failing file across three identical runs). Run `npx vitest run --testTimeout=30000` from `apps/desktop`; the one standing failure is `remoteBuild.test.ts > is small enough to precache on a phone` (1,749,900 bytes against a 1,500,000 budget on this branch).
+
+## 2026-11-14 · Site · The new website in apps/site
+
+- **Where:** `apps/site` (Next.js static export, Tailwind, React Bits, GSAP, Lenis). It replaces `apps/website`, which stays until the owner retires it. Its README lists the scripts: art optimisation, roster and badges from the app's presets, screenshots from the desktop preview with `?demo&clean` (real employees with photos), whole-page review captures.
+- **WebGL:** a page holds only a few WebGL contexts, so every React Bits shader sits in `WhenVisible`; React Strict Mode is off because those shaders release their context on unmount and the development double-run then reuses a lost one.
+- **Art by Iris (Codex `gpt-6-luna`, high) in the running app:** her turns end after two or three images, so feed her two or three files per message and check each with `node scripts/check-art.mjs`. Two of her conversations can run at once on different files.
+- **Never write Markdown or regex through a double-quoted `sed` or `node -e` in Bash:** backticks run as commands and backslashes are eaten. Use the Write or Edit tool, or a script file.
+
+- **Site art from Iris often has a coloured halo** (green or yellow fringe left by background removal). Shrink the alpha a few pixels and soften it with sharp (blur the alpha channel about 2 px, threshold near 235, blur 0.8) before `optimize-art.mjs`, and check the result composited on the dark background.
+- **Site props must be anchored.** The owner rejected props dropped on top of screenshots and plants hanging from nothing. A prop sits beside an element on its baseline, is pressed onto an edge, or hangs from a section's top border; big edge pieces (`art/edges/`) come in from the page sides at 2xl only.
+- **Grid cells holding long code overflow phones.** A `truncate` line inside a grid item still sets the item's minimum width; give the grid child `min-w-0`. Check `document.documentElement.scrollWidth` at 375 px.
+- **Headless Edge captures show no WebGL** (the lanyard and shaders are blank in `review.mjs` shots). Check those in the browser pane.
+
+## 2026-11-14: conversations moved in the sidebar when only opened
+
+- **Symptom:** clicking or cycling through conversations moved them up or down the sidebar with no message sent.
+- **Cause:** every list ordering used `session.updatedAt` (`teamSelectors.ts` `mainSessionFor`, `sideSessionsFor`, `updatedAtOf`; `sidebarOrder.ts` `latest` and `hasSettled`). The daemon writes `updated_at` on state changes, renames, model locks, error-to-completed recovery and app restarts (`state='closed'`), so opening a conversation could reorder it. `list_conversations` showed several closed conversations with the same `updatedAt` minute after a restart.
+- **Fix:** one helper, `activityAt(session)` = `lastMessageAt ?? createdAt ?? updatedAt`, used by every ordering. `lastMessageAt` comes from the newest user or assistant message.
+- **Avoid:** never sort a list the owner reads by `updatedAt`.
+
+## 2026-11-14: a dialog inside the message list can't blur the window
+
+- The old image viewer was a `position: fixed` element inside the conversation, so the side panels stacked above its backdrop. A full-window overlay must be a portal on `document.body` (`ImageLightbox`). Tests then query `document`, not the mounted host.
+
+## 2026-11-14: React Bits
+
+- Components come from `DavidHDev/react-bits` `src/ts-default/<Category>/<Name>/` (`gh api repos/DavidHDev/react-bits/contents/... -H "Accept: application/vnd.github.raw"`). Licence: MIT + Commons Clause (use inside the app is allowed; never ship them as a component pack). Several need `motion` and Hugeicons, which Retinue doesn't install: rewrite those in CSS (`EffortTrack`, `TurnPlan`). Copied ones live in `apps/desktop/src/ui/reactbits/` with a header and a line in `docs/legal/third-party-notices.md`.
+- `MetallicPaint`'s `scale` is the pattern scale; a large value (2.2) made the logo invisible. Use the defaults. `GradientASCII` needs light colours to show on a dark page.
+
+## 2026-11-14: too many OpenCode lanes at once
+
+- **Symptom:** three Ada turns ended at the same minute with "The provider reported a turn error" / `OpenCode prompt failed: Internal error: OpenCode server is unavailable`, and no report; another ended "completed" with no closing message.
+- **Cause:** seven OpenCode conversations at once, each running `cargo build`/`cargo test` of the daemon in its own worktree (its own target), on one PC.
+- **Fix:** keep about three to five OpenCode lanes at once. Resume a failed one in a **new** conversation told to work only in the old worktree's path (`git status`/`git diff` there first): continuing the long conversation failed with the 45-second start timeout. Check `turn_metrics` (`outcome`, `failureClass`) before trusting "done".
+
+## 2026-11-14 · Skills · Every conversation's first prompt carries the skills index now
+
+Symptom: 25 daemon tests failed with a `<retinue_skills>…</retinue_skills>` block glued onto the text they expected (`"Do it<retinue_skills>…"`), fan-out replies came back as `"handled: <prompt><retinue_skills>…"`, and the hiring tests listed an extra `retinue` skill. Cause: the built-in `retinue` skill (`skills.rs`, `BUILTINS`, served from memory) is listed for **every** bot, so `index_for_prompt` now returns a block even when the pool holds no imported skill; it is a per-turn prompt suffix placed after the memory catalog and before the reference and reply blocks (`main.rs`, the `prompt_text` format string). It is sent once per session per change, so it lands on each conversation's first prompt. Fix/avoid: assert message text through `sent_text()` in `mod phase2a_tests` (main.rs), which strips the block; keep the raw prompt where delivery itself matters (`the_team_queue_survives_a_restart_and_is_delivered_once_free` asserts the first prompt contains it); filter `row["builtin"] != true` when a test counts the skills an employee chose (`skills_on` in `hire_options_tests.rs`); and never index `skills.list()[0]` for an imported skill, because the built-ins are listed first. `skills.list` rows carry `source: "builtin"` and `builtin: true`.
+
+## 2026-11-14 - Events - When an existing read gains a side channel, its first read must not emit
+
+`computer.status` also carries the browser's readiness now (`browser::add_status`, called from the dispatch arm in `main.rs`). The first version emitted `browser.changed` whenever the value differed from "nothing announced yet", so the very first `computer.status` after boot queued an extra event and broke `phase2a_tests::computer_status_is_announced_only_when_it_changes` (`crates/retinue-daemon/src/computer_tests.rs:289`, "no event for an unchanged read") — a test owned by another lane and nothing to do with the browser. Fix: the first read only records the value (the caller already has it in the reply it asked for) and later reads emit only on a real change (`browser::announce`). Rule: when an existing read method gains an event, leave that method's event behaviour as it was; a status reply is not an announcement. Run the whole crate's tests, not only your module's, or another lane's test is where you find out.
+
+## 2026-11-14 - Media - A tool that stores a picture must answer with the media row's id, not its own call id
+
+`media::requested` (`crates/retinue-daemon/src/media.rs:469`) chooses the row id itself (`Storage::new_media_id`) unless a row already exists for the tool call id, and it returns nothing. `crates/retinue-daemon/src/browser.rs` passed a fresh `browser-<uuid>` as the tool call id and put that same string in its reply as `mediaId`, so the row existed under one id while the transcript and the window looked for another: the image card had nothing to load. Symptom: `browser_screenshot_is_stored_as_media_and_never_in_the_reply` failed at `media_by_id(...).expect("one media row")`. Fix: after `requested`, read the row back with `media_by_call(session_id, &call_id)` and reply with `row["id"]`; a row that is not `ready` is an error, not a broken card. Rule: the call id is how you find the row, the row id is what you tell everyone else.
+
+## 2026-11-14 - Tests - An included `*_tests.rs` shares the module it is included into
+
+`crates/retinue-daemon/src/main.rs` ends `phase2a_tests` with `include!("computer_tests.rs")` and so on, which is textual: every `use` and helper in those files lands in one module. A new test file that writes `use std::time::Duration as TestDuration;` fails with `E0252: the name TestDuration is defined multiple times` because `secrets_tests.rs` (included earlier) already aliases it, and a `use base64::Engine as _;` is reported as *unused* for the same reason. Symptom first seen while adding `browser_tests.rs` (14 November 2026). Fix: reuse what the earlier includes bring in, and fully qualify the rest (`std::time::Duration::from_secs(601)`); helpers defined in an earlier include (`state`, `fake_harbor`, `harbor_body`, `link_directly`, `HARBOR_TOKEN`, `TestMutex`) are already in scope, so a new file needs no `use` of its own for them. Put a new include after the one whose helpers it borrows.
+
 ## 2026-11-13 · Lanes · Eight backend lanes at once: what merging them took
 
 Eight backend lanes ran in parallel in the in-app backend bot, one git worktree each (12 November 2026). What mattered:
@@ -24,7 +98,8 @@ It is intermittent, not total: on 12 and 13 November `cargo check -p retinue-dae
 
 ## 2026-11-11 · Gates · Run the Rust tests with a space-free TEMP; `cargo fmt --check` is not a gate
 
-On this machine `TEMP` is the 8.3 path `C:UsersSICOVI~1...`, so five daemon tests that compare paths fail (`repository`, `worktree_cleanup`, `machines_tests::take_over`, `session_repository`), and the long path has a space, which makes clone tests refuse. Run `cargo test -p retinue-daemon -p retinue-storage` with `TEMP` and `TMP` set to a real space-free folder (`C:tmp`): 992 and 163 pass (11 November 2026). `cargo fmt --all -- --check` reports thousands of diffs in untouched files (no `rustfmt.toml`; the code is hand-formatted), so it is not a gate and must not be "fixed" by reformatting. Rust does build here: the Smart App Control block of 10 November did not recur.
+On this machine `TEMP` is the 8.3 path `C:UsersSICOVI~1...`, so five daemon tests that compare paths fail (`repository`, `worktree_cleanup`, `machines_tests::take_over`, `session_repository`), and the long path has a space, which makes clone tests refuse. Run `cargo test -p retinue-daemon -p retinue-storage` with `TEMP` and `TMP` set to a real space-free folder (`C:
+tmp`): 992 and 163 pass (11 November 2026). `cargo fmt --all -- --check` reports thousands of diffs in untouched files (no `rustfmt.toml`; the code is hand-formatted), so it is not a gate and must not be "fixed" by reformatting. Rust does build here: the Smart App Control block of 10 November did not recur.
 
 ## 2026-11-11 · Work log · A turn that ended kept saying "Working"
 
@@ -43,6 +118,7 @@ Also learned: "Send now" from a queue row is two existing calls in the window, `
 ## 2026-11-09 · Employees · Every preset employee wears its own profile photo
 
 Profile photos are `apps/desktop/src/blob/photos/photo-NN.webp`, 256px crops of the owner's renders in `assets/profile` (the oldest file is `photo-01`; crop a 78% square at 11% from the left and 3.7% from the top, WebP quality 82). The renders are numbered by file modification time, so new ones get the next numbers; on 10 November 2026, photos 55–80 were added this way. `PROFILE_PHOTOS` picks up every file in the folder with no code change, and `valid_photo` accepts any two- or three-digit `photo-NN`. `assets/profile` (the source renders, about 140 MB) is not in git, so only this machine can recrop them; a clone has the crops and needs nothing else. Each preset in `apps/desktop/src/team/presets.json` names its `photo`. The daemon puts it in the hired employee's look (`presets.rs` `look()`) and on CEO hire proposals, and `valid_look` accepts `photo` as `photo-NN` or a base64 PNG, JPEG or WebP data URL of at most 160,000 characters (`valid_photo`). The window shows presets with `BlobCanvas` and `presetLook()`, not `HazeMark`. **To avoid:** adding a look field in the window only; the daemon drops any look key `valid_look` does not list.
+
 ## 2026-11-09 · Rebrand · Retinue starts from a clean history; the old names are gone
 
 The product is Retinue. On 9 November 2026 the owner archived the old history as the branch `archive/pre-retinue`, renamed the GitHub repository to `sico-vibes/retinue` and restarted `main` from one clean commit. Nothing in `main` names the earlier products any more.
@@ -196,6 +272,7 @@ The beta.46 release sat for 41 minutes on `npm run perf` after it printed "every
 - **`taskkill /T` isn't atomic.** It killed `ping` first, and the parent `cmd` ran the script's next step before its own turn, so Stop could let one more setup step through (`stopping_a_turn_stops_its_setup_script` under load, which had looked flaky). Setup scripts and submodule updates now run in `retinue_process::ProcessTree`, a job from the first instruction. Anything a setup script leaves running also stops when the script ends. `project_clone.rs` and `worktree_attach.rs` still use `taskkill`, which is fine for a single git command but not for a chained script.
 - **`target\debug\incremental` reached 100.8 GB** and left D with 5 GB. It's only a compile cache: `rmdir` it when D runs low, and keep `deps`.
 - **Fix a CI failure on the tool's real path.** The runner's temp folder is `RUNNER~1`, git reports the long name, and text comparison called live copies abandoned. `worktree_cleanup::key` now resolves the real name, and CI sets `TEMP` to `RUNNER_TEMP`.
+
 ## 2026-10-31 · Daemon · An open conversation was left working in an emptied task copy
 
 - **Symptom:** a real OpenCode bot in a fan-out replied without changing a file, and the transcript said "Nothing was changed, but the separate copy could not be removed." The copy was not there any more.
@@ -395,6 +472,7 @@ The waves ran no tests; afterwards 141 TypeScript and 6 Rust tests failed. Three
 ## 2026-10-27 · Native preview · Missing sherpa static library (uncommitted)
 
 `D:\pv1` desktop development build could not find `sherpa-onnx-kaldifst-core.lib` because its `target/desktop-dev/sherpa-onnx-prebuilt` extraction was incomplete. A complete extraction from the matching `D:\hz1` target was copied into that preview target without removing the existing cache. A production-only daemon check had passed; this was a native build dependency issue. Do not delete or recurse through `node_modules` junctions while repairing a worktree.
+
 ## 2026-10-27 · Model switching, idempotent sends, assignments and restart truth (T7 wave, uncommitted, in `main`; no tests were run)
 - **A model change always threw away the provider session, though all three adapters switch models in-session.** `update_session_model` cleared the provider id and demanded `confirmModelChange` for every provider, but Codex sends `model` in every `turn/start`, Claude's `prompt()` restarts with `--resume` and the new `--model` (effort changes already travel that way), and ACP/OpenCode selects the model config option before each prompt. Fix: `AgentAdapter::model_switch()` (`ModelSwitch::KeepsSession | NewSession`, default `NewSession`; opencode is `AcpAdapter`, so it inherits ACP) and `session.model.plan` (read-only; `continuity` kept / recap / none plus one provider-specific sentence). The composer asks the plan first and only confirms a `recap`. The lock write and the provider-id clear are one transaction (`session_apply_model_change`), and `expectedModel` refuses a stale choice. Not run against a live provider: the claim rests on reading those code paths. **Avoid:** never add a provider to `KeepsSession` without a `file:line` proof that its next prompt carries the model into the same provider session.
 - **The composer's "model saved" could be an error.** `session.model.update` succeeded, then the bot-default write (`agent.update`) threw, and the catch reported a failure while the conversation had changed. The conversation result is shown first now and the default write is best effort with its own message.
@@ -799,7 +877,6 @@ The computer's screen (`computer.view`, `computer.rs`) is the first route on the
 - **A write must refresh the snapshot.** The 20 s loop would otherwise hide a just-started conversation, or a bot that just became busy, for up to that long. `write_through` calls `refresh_one` after the far side answers (reads such as `machine.projects` do not).
 - **Pairing still needs `remote.pair.confirm`,** a window RPC, so a headless host (a Linux VPS) cannot approve a device yet. Research: `docs/research/many-machines-2026-11.md`.
 
-
 ## 2026-11-13 · Daemon · A `tracing` call written as a match arm breaks the log-site scan
 
 - `fix39_p12_tests::every_log_call_site_is_a_fixed_message` slices each call site to the next `);` and refuses `token`, `message`, `content`, `command` and the like anywhere in that slice. An expression arm (`Ok(x) => tracing::info!("…"),`) has no `);` of its own, so the slice runs into the following code and fails on a word three lines away. Write log calls as statements ending in `);` (`=> { tracing::info!("…"); }`).
@@ -807,15 +884,3 @@ The computer's screen (`computer.view`, `computer.rs`) is the first route on the
 ## 2026-11-13 · Computer · An employee's workplace
 
 - `computerWorkplace` on an employee (`agents.computer_workplace`, added by `ensure_computer_link_schema` in `crates/retinue-storage/src/computer_link.rs`) adds a `## Your workplace` section to new conversations' instructions (`computer::workplace_instructions`, from `team::runtime_instructions_in`) and wakes a sleeping computer once per conversation at the top of `run_turn` (`computer::before_first_turn`, claimed through `Storage::session_take_computer_wake`, 20 s budget, never sleeps it). Only when a computer is linked and shared with employees. The window's switch is `ComputerWorkplaceRow` in `ui/BlobSettings.tsx`, shown only when a computer is shared or the switch is already on.
-
-## 2026-11-14 · Site · The new website in apps/site
-
-- **Where:** `apps/site` (Next.js static export, Tailwind, React Bits, GSAP, Lenis). It replaces `apps/website`, which stays until the owner retires it. Its README lists the scripts: art optimisation, roster and badges from the app's presets, screenshots from the desktop preview with `?demo&clean` (real employees with photos), whole-page review captures.
-- **WebGL:** a page holds only a few WebGL contexts, so every React Bits shader sits in `WhenVisible`; React Strict Mode is off because those shaders release their context on unmount and the development double-run then reuses a lost one.
-- **Art by Iris (Codex `gpt-6-luna`, high) in the running app:** her turns end after two or three images, so feed her two or three files per message and check each with `node scripts/check-art.mjs`. Two of her conversations can run at once on different files.
-- **Never write Markdown or regex through a double-quoted `sed` or `node -e` in Bash:** backticks run as commands and backslashes are eaten. Use the Write or Edit tool, or a script file.
-
-- **Site art from Iris often has a coloured halo** (green or yellow fringe left by background removal). Shrink the alpha a few pixels and soften it with sharp (blur the alpha channel about 2 px, threshold near 235, blur 0.8) before `optimize-art.mjs`, and check the result composited on the dark background.
-- **Site props must be anchored.** The owner rejected props dropped on top of screenshots and plants hanging from nothing. A prop sits beside an element on its baseline, is pressed onto an edge, or hangs from a section's top border; big edge pieces (`art/edges/`) come in from the page sides at 2xl only.
-- **Grid cells holding long code overflow phones.** A `truncate` line inside a grid item still sets the item's minimum width; give the grid child `min-w-0`. Check `document.documentElement.scrollWidth` at 375 px.
-- **Headless Edge captures show no WebGL** (the lanyard and shaders are blank in `review.mjs` shots). Check those in the browser pane.

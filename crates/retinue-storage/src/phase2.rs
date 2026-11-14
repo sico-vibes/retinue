@@ -229,32 +229,60 @@ impl Storage {
 impl Storage {
     /// The transcript's one message for a generated image, under the media id as
     /// its message id. Appends when it is new, rewrites it in place when it is
-    /// not, and returns the stored row both times. It is stored with no turn,
-    /// exactly as a team notice is: the client matches a notice on turn and role,
-    /// so a notice that carried a turn could overwrite another one from that turn.
-    /// `meta` never holds a path. The real turn stays on the `generated_media` row.
-    pub fn media_message_write(&self, message_id: &str, session_id: &str, content: &str, meta: &Value) -> Result<Value, StorageError> {
-        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+    /// not, and returns the stored row both times, plus the id of the message a
+    /// new notice now reads above (see below).
+    ///
+    /// A new notice is placed where the image was made: just above the assistant
+    /// text that closes its turn (14 November 2026, B1). The image is what the
+    /// turn did; the reply is what the bot says about it, so the card reads
+    /// before the closing reply however late the daemon learns the file arrived.
+    /// That closing row and every later message in the conversation move down
+    /// one, so nothing else changes order (a notice written minutes later never
+    /// jumps below a newer turn), and the closing row's id is returned so a live
+    /// window shows the same order as a reload. The move is done negate-then-
+    /// restore in two statements, because `(session_id, sequence)` is unique and
+    /// shifting in place would collide with the next row's number.
+    /// It is stored with no turn, exactly as a team notice is: the client matches
+    /// a notice on turn and role, so a notice that carried a turn could overwrite
+    /// another one from that turn. `meta` never holds a path.
+    pub fn media_message_write(&self, message_id: &str, session_id: &str, turn: Option<&str>, content: &str, meta: &Value) -> Result<(Value, Option<String>), StorageError> {
+        let mut c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         let exists: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM sessions WHERE id=?1)", [session_id], |r| r.get(0))?;
         if !exists {
-            return Ok(Value::Null);
+            return Ok((Value::Null, None));
         }
         let data = json!({"meta": meta}).to_string();
         let existing: Option<(i64, String)> = c
             .query_row("SELECT sequence,created_at FROM messages WHERE session_id=?1 AND id=?2", params![session_id, message_id], |r| Ok((r.get(0)?, r.get(1)?)))
             .optional()?;
-        let sequence: i64 = match existing {
-            Some((sequence, created_at)) => {
-                c.execute("UPDATE messages SET content=?2,data=?3 WHERE session_id=?1 AND id=?4", params![session_id, content, data, message_id])?;
-                return Ok(json!({"id":message_id,"sessionId":session_id,"turnId":"","sequence":sequence,"role":"notice","content":content,"createdAt":created_at,"meta":meta}));
+        if let Some((sequence, created_at)) = existing {
+            c.execute("UPDATE messages SET content=?2,data=?3 WHERE session_id=?1 AND id=?4", params![session_id, content, data, message_id])?;
+            return Ok((json!({"id":message_id,"sessionId":session_id,"turnId":"","sequence":sequence,"role":"notice","content":content,"createdAt":created_at,"meta":meta}), None));
+        }
+        let closing: Option<(String, i64)> = match turn.map(str::trim).filter(|turn| !turn.is_empty()) {
+            Some(turn) => c
+                .query_row("SELECT id,sequence FROM messages WHERE session_id=?1 AND role='assistant' AND turn_id=?2 ORDER BY sequence DESC LIMIT 1", params![session_id, turn], |r| Ok((r.get(0)?, r.get(1)?)))
+                .optional()?,
+            None => None,
+        };
+        let tx = c.transaction()?;
+        let (sequence, before) = match closing {
+            Some((above, sequence)) => {
+                // The closing row and every later message move down one together:
+                // negated first, so `UNIQUE(session_id, sequence)` never sees two
+                // rows with the same number, then restored one higher.
+                tx.execute("UPDATE messages SET sequence=-(sequence+1) WHERE session_id=?1 AND sequence>=?2", params![session_id, sequence])?;
+                tx.execute("UPDATE messages SET sequence=-sequence WHERE session_id=?1 AND sequence<0", params![session_id])?;
+                (sequence, Some(above))
             }
-            None => c.query_row("SELECT COALESCE(MAX(sequence),0)+1 FROM messages WHERE session_id=?1", [session_id], |r| r.get(0))?,
+            None => (tx.query_row("SELECT COALESCE(MAX(sequence),0)+1 FROM messages WHERE session_id=?1", [session_id], |r| r.get(0))?, None),
         };
         let created_at = Utc::now().to_rfc3339();
-        c.execute(
+        tx.execute(
             "INSERT INTO messages(id,session_id,turn_id,sequence,role,content,created_at,data) VALUES(?1,?2,NULL,?3,'notice',?4,?5,?6)",
             params![message_id, session_id, sequence, content, created_at, data],
         )?;
-        Ok(json!({"id":message_id,"sessionId":session_id,"turnId":"","sequence":sequence,"role":"notice","content":content,"createdAt":created_at,"meta":meta}))
+        tx.commit()?;
+        Ok((json!({"id":message_id,"sessionId":session_id,"turnId":"","sequence":sequence,"role":"notice","content":content,"createdAt":created_at,"meta":meta}), before))
     }
 }

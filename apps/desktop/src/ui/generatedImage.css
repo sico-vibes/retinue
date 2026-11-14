@@ -20,3 +20,15 @@
 .media-image.generated-image.compact img { max-height: 132px; }
 
 @media (prefers-reduced-motion: reduce) { .generated-image-pending-art { animation: none; } }
+
+/* An image still being made (owner, 14 November 2026): a picture-sized placeholder
+   where it will land, several side by side when a turn makes more than one. */
+.image-making-strip, .generated-image-strip { display: flex; gap: 10px; max-width: 100%; margin: 8px 0; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; padding-bottom: 4px; }
+.image-making { position: relative; flex: 0 0 auto; width: min(360px, 80%); aspect-ratio: 1; display: grid; place-items: end start; overflow: hidden; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-hover); scroll-snap-align: start; }
+.image-making-sheen { position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, color-mix(in srgb, var(--text-1) 7%, transparent) 50%, transparent 70%); background-size: 250% 100%; animation: image-making-sheen 1.6s linear infinite; }
+.image-making-label { position: relative; display: inline-flex; align-items: center; gap: 7px; margin: 12px; color: var(--text-2); font-size: var(--fs-xs); }
+.image-making-label small { color: var(--text-3); font-variant-numeric: tabular-nums; }
+@keyframes image-making-sheen { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .image-making-sheen { animation: none; } }
+.generated-image-strip > .generated-image-row { width: auto; flex: 0 0 auto; scroll-snap-align: start; }
+.generated-image-strip .media-image.generated-image { max-width: 360px; }

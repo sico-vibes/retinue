@@ -257,7 +257,7 @@
 .typing i:nth-child(3) { animation-delay: 0.28s; }
 @keyframes typing { 0%, 100% { transform: scale(0.6); } 50% { transform: scale(1.15); } }
 
-.composer-wrap { flex: 0 0 auto; width: min(800px, calc(100% - 40px)); margin: 0 auto; padding: 6px 0 14px; }
+.composer-wrap { position: relative; flex: 0 0 auto; width: min(800px, calc(100% - 40px)); margin: 0 auto; padding: 6px 0 14px; }
 .composer-send-mode { padding: 4px 12px; color: var(--text-2); font-size: var(--fs-xs); }
 .composer-send-reason { display: block; color: var(--text-3); margin-top: 3px; }
 .composer-execution-wrap { position: relative; flex: 0 0 auto; align-self: center; }
@@ -663,3 +663,28 @@
 .update-arrow:disabled { opacity: .6; cursor: default; }
 .update-arrow:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .update-arrow.is-downloading { color: var(--text-2); background: transparent; cursor: default; }
+
+/* Back to the latest message (owner, 14 November 2026): sits centred just above the composer. */
+.jump-latest { position: absolute; z-index: 3; left: 50%; top: -38px; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; color: var(--text-1); border: 1px solid var(--border-strong, var(--border)); border-radius: var(--radius-md, 10px); background: var(--surface-raised, var(--surface-2)); box-shadow: var(--shadow-sm, 0 2px 8px rgb(0 0 0 / .18)); transform: translateX(-50%); cursor: pointer; animation: jump-latest-in 160ms ease-out; }
+.jump-latest:hover { background: var(--surface-selected-strong); }
+.jump-latest:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@keyframes jump-latest-in { from { opacity: 0; transform: translate(-50%, 6px); } }
+@media (prefers-reduced-motion: reduce) { .jump-latest { animation: none; } }
+
+/* Coloured replies (owner, 14 November 2026, after OpenCode's terminal): headings,
+   inline code, bold and ==highlights== each get their own ink so the important parts
+   stand out. Colours are tokens, so both looks and both themes stay readable. */
+:root { --md-heading: #f0a8c8; --md-code: #8fd6a4; --md-strong: #ffffff; --md-mark-ink: #1a1a1a; --md-mark-bg: #f2d27a; --reply-ok: #7fd49a; --reply-bad: #ff9b9b; --reply-warn: #e8b04b; }
+:root[data-theme="light"] { --md-heading: #a12d68; --md-code: #1f7a3f; --md-strong: #000000; --md-mark-ink: #1a1a1a; --md-mark-bg: #f6df94; --reply-ok: #1f7a3f; --reply-bad: #8c1d1d; --reply-warn: #805300; }
+.message-row.agent .safe-markdown h2, .message-row.agent .safe-markdown h3, .message-row.agent .safe-markdown h4 { color: var(--md-heading); }
+.message-row.agent .safe-markdown code:not(pre code) { color: var(--md-code); }
+.message-row.agent .safe-markdown strong { color: var(--md-strong); }
+.safe-markdown mark.reply-mark { padding: 0 4px; color: var(--md-mark-ink); border-radius: 4px; background: var(--md-mark-bg); box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.safe-markdown .reply-icon { display: inline-block; width: 14px; height: 14px; margin: 0 3px -2px 0; color: var(--text-2); vertical-align: baseline; }
+.safe-markdown .reply-icon.ok { color: var(--reply-ok); }
+.safe-markdown .reply-icon.bad { color: var(--reply-bad); }
+.safe-markdown .reply-icon.warn { color: var(--reply-warn); }
+
+/* Launch background (owner, 14 November 2026): React Bits' Gradient ASCII. */
+.launch-ascii { position: absolute; inset: 0; z-index: 0; opacity: .85; }
+.launch-intro-content { position: relative; z-index: 1; }

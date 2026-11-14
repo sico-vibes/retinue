@@ -371,6 +371,13 @@ export function BlobSettings({ draft, runtimes, projects = [], errors, execution
       </div>
     </EditGroup>}
 
+    {show('notifications') && <EditGroup id="reply-style" title="Reply style">
+      <div className="settings-row">
+        <RowCopy label="Icons and emoji" hint={`Lets this ${noun} start table cells, list items and status words with a small icon or emoji, so a reply is easier to scan.`} />
+        <span className="settings-row-control"><button type="button" className={`toggle ${draft.replyIcons ? 'on' : ''}`} role="switch" aria-label="Icons and emoji in replies" aria-checked={!!draft.replyIcons} disabled={locked} onClick={() => onDraftChange({ ...draft, replyIcons: !draft.replyIcons })}><span /></button></span>
+      </div>
+    </EditGroup>}
+
     {show('notifications') && <EditGroup id="notifications" title="Notifications">
       <div className="settings-row">
         <RowCopy label="Notify me" hint={NOTIFICATION_LEVEL_HELP[draft.notificationLevel ?? 'all']} />

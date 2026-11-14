@@ -72,3 +72,5 @@
   .ps-shimmer { animation: none; background: none; color: var(--status-working); }
   .ps-fold, .ps-add, .ps-bot, .ps-bot-main, .ps-convo, .sidebar-view-switch button { transition: none; }
 }
+.ps-convo-line { min-width: 0; display: flex; align-items: center; gap: 5px; }
+.ps-convo-line .ps-convo-title { min-width: 0; flex: 1; }

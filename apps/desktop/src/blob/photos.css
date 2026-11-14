@@ -105,3 +105,13 @@
 .profile-photo-dots { display: flex; gap: 6px; }
 .profile-photo-dots button { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--line-strong); cursor: pointer; }
 .profile-photo-dots button.on { background: var(--text-1); }
+
+/* Owner, 14 November 2026: a chosen photo is marked like a chosen look, a ring set
+   off by a gap around the circle, and the page arrows never move: the grid keeps
+   the height of three full rows however many photos a page has. */
+.profile-photo-grid { grid-auto-rows: 52px; min-height: calc(52px * 3 + 6px * 2); align-content: start; }
+.profile-photo-grid .profile-photo-option { width: 52px; height: 52px; justify-self: center; padding: 4px; border: 2px solid transparent; border-radius: 50% !important; }
+.profile-photo-grid .profile-photo-option:hover { background: transparent; border-color: var(--line-strong); }
+.profile-photo-grid .profile-photo-option.selected { border-color: var(--text-1); background: transparent; }
+.profile-photo-grid .profile-photo-upload { border-style: dashed !important; border-width: 1px !important; }
+.look-panel .profile-photo-pager { margin-top: auto; padding-top: 4px; }

@@ -13,7 +13,9 @@ fn hire_data_dir(st: &AppState) -> std::path::PathBuf {
 }
 
 fn skills_on(st: &AppState, agent_id: &str) -> Vec<String> {
-    skills::skills_for_agent(st, Some(agent_id)).unwrap().iter().map(|row| row["name"].as_str().unwrap().to_owned()).collect()
+    // The built-in skills are always on for every bot, so this counts the pool
+    // skills an employee actually chose.
+    skills::skills_for_agent(st, Some(agent_id)).unwrap().iter().filter(|row| row["builtin"] != true).map(|row| row["name"].as_str().unwrap().to_owned()).collect()
 }
 
 #[tokio::test]

@@ -7,7 +7,9 @@ import { ConfirmDialog } from './BlobPage'
 import { fetchCached, useCachedRpc } from './catalogCache'
 import { LOCKED_CONTROL_TOOLTIP, moveMenuFocus, usePopoverDismiss } from './ComposerControls'
 import { ProviderLogo, providerBrand } from './providerBrand'
-import { positionFromPointer, SessionEffortMeter, type EffortMeterStyle } from './SessionEffortMeter'
+import { positionFromPointer, type EffortMeterStyle } from './SessionEffortMeter'
+import { EffortSparks, EffortTrack } from './EffortTrack'
+import { createPortal } from 'react-dom'
 import { Tip } from './Tip'
 import { labelizeEffort, effortIconName, type EffortIconName } from './effortLabels'
 import { concreteModelForSelection } from './modelPreferences'
@@ -316,6 +318,8 @@ function EffortControl({ provider, providerStyle, modelName, efforts, defaultThi
   onCommit: (value: string | null) => boolean | Promise<boolean>
 }) {
   const [open, setOpen] = useState(false)
+  const [composerBox, setComposerBox] = useState<Element | null>(null)
+  useEffect(() => { setComposerBox(rootRef.current?.closest('.composer-box') ?? null) }, [])
   const [position, setPosition] = useState(0)
   /** 'drag': the knob follows the pointer exactly. 'settle': it glides to the released stop. */
   const [mode, setMode] = useState<'rest' | 'drag' | 'settle'>('rest')
@@ -404,7 +408,7 @@ function EffortControl({ provider, providerStyle, modelName, efforts, defaultThi
   const pointerPosition = (clientX: number) => {
     const g = gesture.current
     if (!g || g.left === undefined || g.width === undefined) return positionRef.current
-    return positionFromPointer(clientX, g.left, g.width, efforts.length, providerStyle)
+    return positionFromPointer(clientX, g.left, g.width, efforts.length, 'neutral')
   }
   const beginPointer = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (disabled || (event.button !== undefined && event.button !== 0)) return
@@ -470,13 +474,19 @@ function EffortControl({ provider, providerStyle, modelName, efforts, defaultThi
   const savedTop = efforts.length > 1 && value === efforts[efforts.length - 1]
   const trigger = <button type="button" className={`composer-pill session-effort-trigger ${savedTop ? 'highest' : ''} ${isTopTierEffort(value) ? 'max-tier' : ''} ${lockedReason ? 'locked' : ''}`} aria-haspopup="dialog" aria-expanded={open} aria-label={lockedReason ? `Effort: ${triggerLabel}. ${lockedReason}` : `Effort: ${triggerLabel}`} aria-disabled={lockedReason ? true : undefined} title={locked && !lockedReason ? LOCKED_CONTROL_TOOLTIP : undefined} disabled={disabled && !lockedReason} onClick={toggle}>
     {/* Owner, 28 October 2026: the thinking level wears one static brain; the menu still shows each level's bars. */}
+    {savedTop && <EffortSparks on className="pill-sparks" />}
     <Brain size={14} aria-hidden="true" className="effort-icon" />
     <span>{triggerLabel}</span>
     <ChevronDown size={12} aria-hidden="true" className="composer-pill-chevron" />
   </button>
-  return <div ref={rootRef} className={`session-effort-control composer-popover-anchor ${providerStyle}`}>
+  // Owner, 14 November 2026: one effort control for every coding agent; at the highest level
+  // sparks rise in the panel and behind the composer.
+  const maxNow = efforts.length > 1 && (open ? atTop : savedTop)
+  return <div ref={rootRef} className={`session-effort-control composer-popover-anchor unified${maxNow ? ' max' : ''}`}>
+    {composerBox && createPortal(<EffortSparks on={maxNow} className="composer-sparks" />, composerBox)}
     {lockedReason ? <Tip text={lockedReason}>{trigger}</Tip> : trigger}
-    {open && <div className={`session-effort-popover ${providerStyle} ${lastIsUltra ? 'has-ultra' : ''}`} role="dialog" aria-label={`Effort for ${modelName}`}>
+    {open && <div className={`session-effort-popover unified${lastIsUltra ? ' has-ultra' : ''}${atTop ? ' max' : ''}`} role="dialog" aria-label={`Effort for ${modelName}`}>
+      <EffortSparks on={atTop} className="popover-sparks" />
       <div className="session-effort-popover-heading">
         <span className="session-effort-title">Effort</span>
         <span className={`session-effort-value ${isTopTierEffort(visibleIndex >= 0 ? efforts[visibleIndex] : null) ? 'ultra' : ''}`} aria-live="polite"><span key={visibleLabel} className="session-effort-value-in">{visibleLabel}</span></span>
@@ -484,7 +494,7 @@ function EffortControl({ provider, providerStyle, modelName, efforts, defaultThi
       {efforts.length > 0 ? <>
         <div className="session-effort-meter-frame">
           <div className="session-effort-caption"><span>Faster</span><span>Smarter</span></div>
-          <SessionEffortMeter trackRef={trackRef} style={providerStyle} count={efforts.length} position={displayedPosition} recommendedIndex={-1} top={atTop} dragging={mode === 'drag'} settling={mode === 'settle'} valueText={mode === 'rest' && visibleIndex < 0 ? visibleLabel : labelizeEffort(efforts[stop] ?? '', provider)} disabled={disabled} onPointerDown={beginPointer} onPointerMove={movePointer} onPointerUp={finishPointer} onPointerCancel={abandonPointer} onLostPointerCapture={abandonPointer} onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />
+          <EffortTrack trackRef={trackRef} count={efforts.length} position={displayedPosition} top={atTop} dragging={mode === 'drag'} valueText={mode === 'rest' && visibleIndex < 0 ? visibleLabel : labelizeEffort(efforts[stop] ?? '', provider)} disabled={disabled} onPointerDown={beginPointer} onPointerMove={movePointer} onPointerUp={finishPointer} onPointerCancel={abandonPointer} onLostPointerCapture={abandonPointer} onKeyDown={handleKeyDown} onKeyUp={handleKeyUp} />
           <div className="session-effort-labels" role="group" aria-label="Effort levels">{efforts.map((effort, index) => <button type="button" key={`${effort}-${index}`} className={`${visibleIndex === index ? 'selected' : ''} ${isTopTierEffort(effort) ? 'ultra' : ''}`} aria-pressed={visibleIndex === index} disabled={disabled} onClick={() => choose(effort)}><EffortIcon value={effort} size={12} /><span>{labelizeEffort(effort, provider)}</span></button>)}</div>
         </div>
         {provider.toLowerCase() === 'claude' && !efforts.includes('ultracode') && <p className="session-effort-note">{workflowEnabled ? 'Claude Code did not report Ultracode for this model. The model needs catalog-reported Extra high support; managed policy may also keep it unavailable.' : 'Ultracode needs a model with catalog-reported Extra high and Claude dynamic workflows. Retinue did not enable workflows for this conversation; its setting applies to new conversations. Claude config or managed policy may still provide it. Max remains separate.'}</p>}

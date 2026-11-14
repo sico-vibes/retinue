@@ -402,8 +402,25 @@ fn short_reason(raw: &str) -> String {
 /// served by the `ui_guide` tool, so this stays short.
 const OPENUI_INSTRUCTIONS: &str = "Interactive views. You may answer with an interactive view in a ```openui block (cards, stats, tables, charts, lists, tabs and buttons that reply), only when it genuinely helps. Call the `ui_guide` tool first for the exact components and syntax. Keep a one-line text summary outside the block, and never invent data.";
 
+/// The task-list line. The list a bot keeps with its provider's own to-do tool
+/// is what the window shows under the conversation (daemon event `session.plan`),
+/// so the bot is asked for the list itself, never for a format of its own.
+const TASK_LIST_INSTRUCTIONS: &str = "For work with more than two steps, make a task list first with your to-do tool and keep it current as you finish each step.";
+
 /// The OpenUI Lang guide for bots, read by the `ui_guide` tool and the external MCP.
 pub(crate) const OPENUI_GUIDE: &str = include_str!("openui_guide.md");
+
+/// The reply-style paragraph, appended to every bot's instructions beside the
+/// OpenUI one (14 November 2026, B3). This text is the contract with the
+/// renderer: `==text==` is drawn as a highlight, and an icon is a Lucide name in
+/// colons. Kept short, two lines at most.
+const REPLY_STYLE_INSTRUCTIONS: &str = "Formatting replies. Use ## headings for sections in longer replies, **bold** for the key facts, `inline code` for file names, commands and identifiers, and short tables for comparisons. Put ==text== around the one or two most important points: the app draws it as a highlight.";
+
+/// The same paragraph, when the bot's own `replyIcons` setting is on.
+const REPLY_ICONS_ON: &str = "You may start a table cell, a list item or a status word with one emoji or a Lucide icon written as `:lucide-name:` (for example `:lucide-check:`, `:lucide-x:`, `:lucide-alert-triangle:`, `:lucide-clock:`), sparingly, at most one per cell.";
+
+/// And when it is off, which is the default.
+const REPLY_ICONS_OFF: &str = "Do not use emoji or icons in replies.";
 
 /// The chart and table block schemas, appended to every bot's instructions.
 ///
@@ -507,6 +524,11 @@ pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, works
     // side-conversation block.
     lines.push(CHART_TABLE_INSTRUCTIONS.into());
     lines.push(OPENUI_INSTRUCTIONS.into());
+    lines.push(TASK_LIST_INSTRUCTIONS.into());
+    // 14 November 2026: how a reply should read, and whether this bot may mark it
+    // with an emoji or a Lucide icon (its own setting, off by default).
+    lines.push(REPLY_STYLE_INSTRUCTIONS.into());
+    lines.push(if agent["replyIcons"].as_bool() == Some(true) { REPLY_ICONS_ON } else { REPLY_ICONS_OFF }.into());
     if link["kind"] == "side" {
         let peer = link["peerName"].as_str().unwrap_or(noun.as_str());
         lines.push(String::new());
@@ -569,6 +591,16 @@ pub fn attach(st: &AppState, session_id: &str, agent_id: Option<&str>, link: &Va
         // the daemon holds the Harbor credential).
         if let Some(computer) = crate::computer::mcp_server_for(st, session_id) {
             options.mcp_servers.push(computer);
+        }
+        // The browser on that computer is its own server too, offered under the
+        // same conditions: linked and switched on.
+        if let Some(browser) = crate::browser::mcp_server_for(st, session_id) {
+            options.mcp_servers.push(browser);
+        }
+        // Phase C: the owner's own computer, only while its switch is on. Off means
+        // no server, so the tools do not exist for this conversation at all.
+        if let Some(owner) = crate::owner_computer::mcp_server_for(st, session_id) {
+            options.mcp_servers.push(owner);
         }
     }
 }

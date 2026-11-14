@@ -99,3 +99,11 @@
 .convo-project-fold:focus-visible { box-shadow: var(--focus-ring); }
 .convo-project-fold > svg { flex: 0 0 auto; }
 .convo-project-count { flex: 0 0 auto; color: var(--text-2); font-size: var(--fs-2xs); }
+
+/* 14 November 2026 (owner): one "More" button per row instead of four, and the
+   title makes room for it so the two never overlap. Right-click opens the same menu. */
+.convo-row.main:hover .convo-open, .convo-row.main:focus-within .convo-open { padding-right: 32px; }
+.convo-title-line { min-width: 0; display: flex; align-items: center; gap: 5px; }
+.convo-title-line .convo-title { min-width: 0; flex: 1; }
+.mcp-mark { flex: 0 0 auto; display: inline-grid; place-items: center; color: var(--text-3); }
+.convo-row.active .mcp-mark { color: var(--text-2); }

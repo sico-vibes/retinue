@@ -72,7 +72,7 @@ export function AppearancePage() {
     </div>
   }
   return <div className="appearance-page">
-    <SettingsGroup title="Look"><div className="settings-row stacked"><LookPicker value={style} onChange={(id) => void pickLook(id)} compact /></div></SettingsGroup>
+    <SettingsGroup title="Look"><div className="settings-row stacked"><LookPicker value={style} onChange={(id) => void pickLook(id)} variant="cards" /></div></SettingsGroup>
     <SettingsGroup title="Colour"><SettingsRow label="Theme"><SegmentedControl label="Theme" value={themeChoice} options={(['system','dark','light'] as const).map((id) => ({ value: id, label: id[0]!.toUpperCase()+id.slice(1) }))} onChange={async (id) => { await save('appearance.theme', id); setThemeChoice(id); document.documentElement.dataset.themeChoice=id; try { localStorage.setItem('retinue.appearance', JSON.stringify({ ...savedAppearance(), theme: id })) } catch { /* The daemon remains the persisted source. */ } applyAppearance(document.documentElement, id, textSize) }} /></SettingsRow><SettingsRow label="Accent" hint={style === 'haze' ? 'Also colours the Haze background.' : undefined}><AccentPicker value={accent} onChange={(next) => { void save('appearance.accent', next).then(() => setAccentColor(next)) }} /></SettingsRow></SettingsGroup>
     {style === 'haze' && <HazeTuningSettings />}
     {style === 'haze' && <ChatBackgroundSettings />}

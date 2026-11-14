@@ -244,6 +244,9 @@ async function discover() {
         !source.startsWith('.claude/') &&
         // Bundled third-party skills (their own licences), not project documentation.
         !source.startsWith('crates/retinue-daemon/skill_library/') &&
+        // The website's own pages (apps/site): they link by site routes (`/docs/...`), not
+        // repository paths, and the site builds them itself (14 November 2026).
+        !source.startsWith('apps/site/content/') &&
         existsSync(path.join(root, source)),
     )
     .sort();

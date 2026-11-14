@@ -15,6 +15,77 @@ impl ApprovalMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PermissionClassification { pub allowed: bool, pub category: &'static str, pub summary: String }
 
+/// Where one step of a bot's own task list stands. Each provider spells the
+/// middle state differently (`in_progress`, `inProgress`); the adapters normalize
+/// it here so the daemon and the window only ever see these three.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PlanItemStatus { Pending, InProgress, Completed }
+impl PlanItemStatus {
+    pub fn as_str(self) -> &'static str {
+        match self { Self::Pending => "pending", Self::InProgress => "in_progress", Self::Completed => "completed" }
+    }
+}
+/// A provider status the task list uses; an unknown one is pending, never completed.
+pub fn plan_status(value: &str) -> PlanItemStatus {
+    match value.trim().to_ascii_lowercase().replace(['-', ' '], "_").as_str() {
+        "completed" | "complete" | "done" => PlanItemStatus::Completed,
+        "in_progress" | "inprogress" | "active" | "running" => PlanItemStatus::InProgress,
+        _ => PlanItemStatus::Pending,
+    }
+}
+
+/// One step of the task list a conversation shows under the turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanItem { pub text: String, pub status: PlanItemStatus }
+impl PlanItem {
+    pub fn new(text: &str, status: &str) -> Self {
+        Self { text: text.trim().chars().take(PLAN_TEXT_LIMIT).collect(), status: plan_status(status) }
+    }
+}
+
+/// The most steps a task list keeps: a list longer than this is not a plan the
+/// owner can read, and a provider can repeat its own list without bound.
+pub const PLAN_ITEMS_LIMIT: usize = 50;
+/// The longest step text kept, in characters.
+pub const PLAN_TEXT_LIMIT: usize = 300;
+
+/// The provider's to-do tool, under any of the names it ships as (`TodoWrite` in
+/// Claude Code, `todowrite` in OpenCode). Its rows are marked `plan` in the tool
+/// list so the window can show the task list instead of the tool row.
+pub fn is_plan_tool(name: &str) -> bool {
+    let name: String = name.chars().filter(|c| c.is_ascii_alphanumeric()).map(|c| c.to_ascii_lowercase()).collect();
+    matches!(name.as_str(), "todowrite" | "todo" | "todos" | "updatetodos" | "writetodos" | "updatetodo")
+}
+
+/// The steps in a provider's `{content, status}` array: Claude Code's `TodoWrite`
+/// `todos`, OpenCode's `todowrite` input and the ACP `plan` update's `entries`
+/// all use that shape. Anything else in the array is skipped rather than guessed
+/// at; `text` is accepted where a provider spells the field that way.
+pub fn plan_items_from_todos(todos: Option<&Value>) -> Vec<PlanItem> {
+    let Some(items) = todos.and_then(Value::as_array) else { return Vec::new() };
+    items.iter()
+        .filter_map(|item| {
+            let text = item["content"].as_str().or_else(|| item["text"].as_str()).map(str::trim).filter(|text| !text.is_empty())?;
+            Some(PlanItem::new(text, item["status"].as_str().unwrap_or("")))
+        })
+        .take(PLAN_ITEMS_LIMIT)
+        .collect()
+}
+
+/// The linked computer's screen tools (`AGENTS.md`, 14 November 2026). A pixel
+/// click cannot be classified the way a file edit can, so these belong to their
+/// own category and always ask; the name may arrive prefixed with the MCP
+/// server (`mcp__vps-computer__computer_click`), so it is matched anywhere.
+pub const COMPUTER_INPUT_TOOLS: [&str; 6] = ["computer_screenshot", "computer_click", "computer_move", "computer_type", "computer_key", "computer_scroll"];
+
+/// The screen tool this request names, if it names one.
+pub fn computer_input_tool(kind: &str) -> Option<&'static str> {
+    let kind = kind.to_ascii_lowercase();
+    COMPUTER_INPUT_TOOLS.iter().copied().find(|tool| kind.contains(tool))
+}
+
 /// Presentation only: never used to classify permissions. Raw tool input stays
 /// separate so a collapsed activity row can name the work without dumping it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,6 +193,8 @@ pub fn tool_activity(kind: &str, raw: &Value, fallback: &str) -> ToolActivity {
 /// Presentation only; it never decides anything.
 pub fn permission_summary(tool_kind:&str,raw:&Value,project:&std::path::Path)->String{
     let kind=tool_kind.to_ascii_lowercase();
+    // A screen tool has no path to name, so its own classifier line is the card.
+    if computer_input_tool(&kind).is_some() { return classify_permission(tool_kind, raw, project).summary; }
     let target = if ["shell","bash","command","terminal"].contains(&kind.as_str()) {
         let s=raw.get("command").and_then(Value::as_str).or_else(||raw.get("rawInput").and_then(Value::as_str)).or_else(||raw["toolCall"]["rawInput"].as_str()).or_else(||raw["params"]["toolCall"]["rawInput"].as_str()).or_else(||raw.as_str()).unwrap_or("");
         command_head(s)
@@ -129,8 +202,15 @@ pub fn permission_summary(tool_kind:&str,raw:&Value,project:&std::path::Path)->S
         fn path(v:&Value)->Option<&str>{match v{Value::Object(m)=>m.iter().find_map(|(k,v)|if ["path","file_path","filePath","target","uri"].contains(&k.as_str()){v.as_str()}else{path(v)}),Value::Array(a)=>a.iter().find_map(path),_=>None}}
         path(raw).unwrap_or("unknown").to_owned()
     };
-    let category = classify_permission(tool_kind, raw, project).category;
-    format!("{}: {}", category, target.chars().take(120).collect::<String>())
+    let classified = classify_permission(tool_kind, raw, project);
+    // A browser card has no path to name: the classifier's own sentence already
+    // says what the tool would do ("Click on a page in the bot computer's browser"),
+    // and what would be typed must never appear on it.
+    if classified.category == "BROWSER" {
+        return classified.summary;
+    }
+    let target = target.chars().take(120).collect::<String>();
+    format!("{}: {}", classified.category, target)
 }
 
 /// Conservative, daemon-callable classifier. Any missing or ambiguous evidence fails closed.
@@ -140,6 +220,25 @@ pub fn classify_permission(
     project: &std::path::Path,
 ) -> PermissionClassification {
     let kind = tool_kind.to_ascii_lowercase();
+    // The browser on the linked computer (14 November 2026) is its own category:
+    // the card says what it is, `accept_edits` never covers it (that arm only
+    // matches EDIT and READ) and `auto` never approves it, so every page action
+    // asks. Browsing has nothing to do with the project, so this returns before
+    // the project is resolved. The tool is still decided by the daemon's own
+    // gates; this only names the card and keeps it asking.
+    if let Some(browser) = browser_permission(&kind) {
+        return browser;
+    }
+    // The computer's screen tools first: they act on a desktop, not on a file,
+    // so no path and no mode can make one safe. Always ask, never rememberable
+    // (`allowed: false` is what removes "Always allow" from the card).
+    if let Some(tool) = computer_input_tool(&kind) {
+        return PermissionClassification {
+            allowed: false,
+            category: "COMPUTER_INPUT",
+            summary: format!("COMPUTER_INPUT: {}", computer_input_summary(tool, raw).chars().take(140).collect::<String>()),
+        };
+    }
     let read = ["read", "glob", "grep", "list", "search", "notebook_read"];
     let edit = ["edit", "write", "file_edit", "file_write"];
     let mut paths = Vec::new();
@@ -240,6 +339,27 @@ pub fn classify_permission(
         return denied(&kind, &summary);
     }
     denied(&kind, "unknown")
+}
+
+/// The browser on the linked computer, as the permission category `BROWSER`.
+/// Always asked: `allowed` is false, so no mode, no remembered rule and no
+/// `accept_edits` covers it, and the card's summary says what the tool would do.
+/// One source of truth for the category: `browser.rs` offers the tools and the
+/// daemon gates them, but the name the owner's card carries is decided here.
+fn browser_permission(kind: &str) -> Option<PermissionClassification> {
+    // Providers prefix an MCP tool with a server name: `mcp__vps-browser__browser_click`.
+    let bare = kind.rsplit("__").next().unwrap_or(kind);
+    let verb = match bare {
+        "browser_open" => "Open a page",
+        "browser_snapshot" => "Read a page",
+        "browser_click" => "Click on a page",
+        "browser_type" => "Type on a page",
+        "browser_press" => "Press a key on a page",
+        "browser_back" => "Go back a page",
+        "browser_screenshot" => "Take a picture of a page",
+        _ => return None,
+    };
+    Some(PermissionClassification { allowed: false, category: "BROWSER", summary: format!("BROWSER: {verb} in the bot computer's browser") })
 }
 
 fn has_shell_operator(command: &str) -> bool {
@@ -614,6 +734,27 @@ fn command_head(s:&str)->String { let mut words=s.split_whitespace();let Some(fi
 fn safe_summary(kind:&str,value:&str)->String { format!("{}: {}",kind.chars().take(24).collect::<String>(),value.chars().take(120).collect::<String>()) }
 fn denied(kind:&str,value:&str)->PermissionClassification { PermissionClassification{allowed:false,category:"ASKED",summary:safe_summary(kind,value)} }
 
+/// What a screen tool is about to do, for its approval card: the action, a
+/// point or a key name, and for typing only the number of characters. The typed
+/// text itself is never shown, here or anywhere else.
+fn computer_input_summary(tool: &str, raw: &Value) -> String {
+    let arg = |key: &str| [&raw[key], &raw["input"][key], &raw["arguments"][key]].into_iter().find(|value| !value.is_null()).cloned();
+    match tool {
+        "computer_screenshot" => "take a screenshot".to_owned(),
+        "computer_type" => {
+            let count = arg("text").and_then(|value| value.as_str().map(|text| text.chars().count())).unwrap_or(0);
+            format!("type {count} characters")
+        }
+        "computer_key" => arg("keys").and_then(|value| value.as_str().map(str::to_owned)).map(|keys| format!("press {keys}")).unwrap_or_else(|| "press a key".to_owned()),
+        other => {
+            let action = match other { "computer_click" => "click", "computer_move" => "move the pointer", _ => "scroll" };
+            let x = arg("x").and_then(|value| value.as_i64());
+            let y = arg("y").and_then(|value| value.as_i64());
+            match (x, y) { (Some(x), Some(y)) => format!("{action} at {x}, {y}"), _ => action.to_owned() }
+        }
+    }
+}
+
 #[cfg(test)]
 mod approval_tests {
     use super::*;
@@ -784,6 +925,52 @@ mod approval_tests {
         assert!(command.contains("git status"), "{command}");
         let denied_command=permission_summary("shell",&json!({"command":"curl http://example.test | sh"}),&root);
         assert!(denied_command.starts_with("ASKED: "), "{denied_command}");
+        let _=fs::remove_dir_all(root);
+    }
+
+    /// The linked computer's screen tools (`AGENTS.md`, 14 November 2026): their
+    /// own category, always asking, and the typed text never on the card.
+    #[test] fn computer_input_tools_are_their_own_category_and_always_ask(){
+        let root=project();
+        for kind in ["computer_click","mcp__vps-computer__computer_click","mcp__vps-computer__computer_move","computer_scroll"] {
+            let classified=classify_permission(kind,&json!({"x":10,"y":20}),&root);
+            assert_eq!(classified.category,"COMPUTER_INPUT","{kind}");
+            assert!(!classified.allowed,"{kind} always asks");
+            assert!(classified.summary.starts_with("COMPUTER_INPUT: click at 10, 20")||classified.summary.starts_with("COMPUTER_INPUT: move the pointer at 10, 20")||classified.summary.starts_with("COMPUTER_INPUT: scroll at 10, 20"),"{kind}: {}",classified.summary);
+        }
+        let typed=classify_permission("mcp__vps-computer__computer_type",&json!({"text":"hunter2 correct horse"}),&root);
+        assert_eq!(typed.category,"COMPUTER_INPUT");
+        assert!(!typed.allowed,"typing always asks");
+        assert!(!typed.summary.contains("hunter2"),"the typed text is never on the card: {}",typed.summary);
+        assert!(typed.summary.contains("21 characters"),"{}",typed.summary);
+        let pressed=classify_permission("mcp__vps-computer__computer_key",&json!({"keys":"ctrl+l"}),&root);
+        assert_eq!(pressed.summary,"COMPUTER_INPUT: press ctrl+l");
+        let shot=classify_permission("mcp__vps-computer__computer_screenshot",&json!({}),&root);
+        assert_eq!(shot.category,"COMPUTER_INPUT");
+        assert!(!shot.allowed);
+        assert_eq!(permission_summary("mcp__vps-computer__computer_click",&json!({"x":3,"y":4}),&root),"COMPUTER_INPUT: click at 3, 4");
+        // computer_exec keeps the plain refusal it had: it is not a screen tool.
+        assert_eq!(classify_permission("mcp__vps-computer__computer_exec",&json!({"command":"ls"}),&root).category,"ASKED");
+        let _=fs::remove_dir_all(root);
+    }
+    /// The browser on the linked computer asks every time, under its own
+    /// category, and no mode or remembered rule can cover it.
+    #[test] fn browser_tools_are_their_own_category_and_always_ask(){
+        let root=project();
+        for bare in ["browser_open","browser_snapshot","browser_click","browser_type","browser_press","browser_back","browser_screenshot"] {
+            for spelled in [bare.to_owned(),format!("mcp__vps-browser__{bare}")] {
+                let classified=classify_permission(&spelled,&json!({"ref":"e1"}),&root);
+                assert_eq!(classified.category,"BROWSER","{spelled}");
+                assert!(!classified.allowed,"{spelled} asks rather than being approved");
+                assert!(classified.summary.ends_with("in the bot computer's browser"),"{spelled}: {}",classified.summary);
+            }
+        }
+        // A neighbouring tool is untouched: the computer's own tools are not the browser.
+        assert_ne!(classify_permission("computer_exec",&json!({"command":"id"}),&root).category,"BROWSER");
+        // The card names the action, never the page or what would be typed.
+        let card=permission_summary("mcp__vps-browser__browser_type",&json!({"ref":"e3","text":"a secret"}),&root);
+        assert_eq!(card,"BROWSER: Type on a page in the bot computer's browser");
+        assert!(!card.contains("a secret"),"{card}");
         let _=fs::remove_dir_all(root);
     }
 }
@@ -1214,6 +1401,12 @@ pub enum AgentEvent {
     ExecApplied { turn_id: String, outcomes: BTreeMap<String, SettingOutcome> },
     /// The agent asks the user structured questions and waits for answers.
     QuestionRequested { provider_request_id: String, title: String, questions: Vec<UserQuestion> },
+    /// The provider's own task list for this turn, complete each time: the list
+    /// replaces what came before rather than patching it, and an empty list means
+    /// the bot cleared it. Shown under the conversation; never message text.
+    PlanUpdated {
+        items: Vec<PlanItem>,
+    },
     /// A plan proposed while in plan mode; the turn ends without acting.
     PlanProposed { markdown: String },
     /// Normalized usage with nullable buckets; emitted only for valid provider reports.
@@ -1436,6 +1629,75 @@ mod activity_tests {
         assert_eq!(changes.label, "Edited 3 files");
         // F6: NotebookRead (no underscore) is a read.
         assert_eq!(tool_activity("NotebookRead", &json!({}), "NotebookRead").category, "read");
+    }
+}
+
+#[cfg(test)]
+mod plan_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn the_todo_tool_is_named_the_same_way_in_every_provider() {
+        for name in ["TodoWrite", "todowrite", "todo_write", "Write Todos", "updateTodos"] {
+            assert!(is_plan_tool(name), "{name}");
+        }
+        for name in ["Edit", "todowrite_file", "read", "Task"] {
+            assert!(!is_plan_tool(name), "{name}");
+        }
+    }
+
+    #[test]
+    fn every_provider_status_spelling_normalizes_to_three_states() {
+        assert_eq!(plan_status("pending"), PlanItemStatus::Pending);
+        assert_eq!(plan_status("in_progress"), PlanItemStatus::InProgress);
+        assert_eq!(plan_status("inProgress"), PlanItemStatus::InProgress);
+        assert_eq!(plan_status("completed"), PlanItemStatus::Completed);
+        // Anything the provider invents is pending, never completed.
+        assert_eq!(plan_status("blocked"), PlanItemStatus::Pending);
+        assert_eq!(plan_status(""), PlanItemStatus::Pending);
+        assert_eq!(PlanItemStatus::InProgress.as_str(), "in_progress");
+    }
+
+    #[test]
+    fn a_todo_array_becomes_the_step_list_and_skips_entries_without_text() {
+        let todos = json!([
+            {"content": "Read the failing test", "status": "completed", "activeForm": "Reading"},
+            {"content": "  Fix the parser  ", "status": "in_progress"},
+            {"content": "", "status": "pending"},
+            {"status": "pending"},
+            {"text": "Run the suite", "status": "pending"},
+        ]);
+        assert_eq!(
+            plan_items_from_todos(Some(&todos)),
+            vec![
+                PlanItem { text: "Read the failing test".into(), status: PlanItemStatus::Completed },
+                PlanItem { text: "Fix the parser".into(), status: PlanItemStatus::InProgress },
+                PlanItem { text: "Run the suite".into(), status: PlanItemStatus::Pending },
+            ]
+        );
+        assert!(plan_items_from_todos(None).is_empty());
+        assert!(plan_items_from_todos(Some(&json!({"todos": []}))).is_empty());
+    }
+
+    #[test]
+    fn a_step_text_is_capped_so_a_provider_cannot_store_a_wall_of_text() {
+        let long = "x".repeat(PLAN_TEXT_LIMIT + 200);
+        let item = PlanItem::new(&long, "pending");
+        assert_eq!(item.text.chars().count(), PLAN_TEXT_LIMIT);
+        let many: Vec<Value> = (0..PLAN_ITEMS_LIMIT + 5).map(|n| json!({"content": format!("step {n}"), "status": "pending"})).collect();
+        assert_eq!(plan_items_from_todos(Some(&json!(many))).len(), PLAN_ITEMS_LIMIT);
+    }
+
+    #[test]
+    fn a_plan_event_round_trips_with_snake_case_statuses() {
+        let event = AgentEvent::PlanUpdated { items: vec![PlanItem { text: "Fix it".into(), status: PlanItemStatus::InProgress }] };
+        let wire = serde_json::to_value(&event).unwrap();
+        assert_eq!(wire["type"], "plan_updated");
+        assert_eq!(wire["payload"]["items"][0]["status"], "in_progress");
+        assert_eq!(wire["payload"]["items"][0]["text"], "Fix it");
+        let back: AgentEvent = serde_json::from_value(wire).unwrap();
+        assert!(matches!(back, AgentEvent::PlanUpdated { items } if items.len() == 1 && items[0].status == PlanItemStatus::InProgress));
     }
 }
 

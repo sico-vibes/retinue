@@ -25,6 +25,10 @@ export interface ComputerStatus {
   desktopUrl: string | null
   checkedAt: string | null
   problem: string | null
+  /** Clicks, keys and screenshots (phase A, 14 November 2026): null until the daemon has checked. */
+  input: { ready: boolean; missing: string[] } | null
+  /** The browser on the computer (phase B): null until checked. */
+  browser: { ready: boolean; missing: string[] } | null
 }
 
 export interface ComputerRoutine {
@@ -79,7 +83,15 @@ export function parseComputerStatus(raw: unknown): ComputerStatus | null {
     desktopUrl: linked && sameOrigin ? desktop : null,
     checkedAt: text(item.checkedAt),
     problem: linked ? text(item.problem) : null,
+    input: readiness(item.input),
+    browser: readiness(item.browser),
   }
+}
+
+function readiness(value: unknown): { ready: boolean; missing: string[] } | null {
+  if (!value || typeof value !== 'object') return null
+  const row = value as Record<string, unknown>
+  return { ready: row.ready === true, missing: Array.isArray(row.missing) ? row.missing.filter((item): item is string => typeof item === 'string' && /^[a-z0-9.+-]{1,40}$/i.test(item)) : [] }
 }
 
 export function parseRoutines(raw: unknown): ComputerRoutine[] {

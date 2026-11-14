@@ -2,12 +2,13 @@ import { lazy, Suspense, useMemo, useState, type ReactNode } from 'react'
 import { VisualReply, visualFence } from './VisualReply'
 const OpenUiBlock = lazy(() => import('./openui/OpenUiBlock').then((module) => ({ default: module.OpenUiBlock })))
 import { Copy, Github, Paperclip } from 'lucide-react'
+import { ReplyIcon } from './replyIcons'
 import { RichChart } from './RichChart'
 import { RichTable } from './RichTable'
 import { MediaDialog, isLocalPath, isPreviewablePath, MediaPreview } from './MediaPreview'
 import { parseChartSpec, parseDelimited, parseTableSpec, tableFromJson, tableFromMarkdownRows, type DataTable, type Parsed } from './richData'
 
-type InlineToken = { kind: 'text' | 'code' | 'strong' | 'em' | 'link' | 'file'; text: string; url?: string }
+type InlineToken = { kind: 'text' | 'code' | 'strong' | 'em' | 'link' | 'file' | 'mark' | 'icon'; text: string; url?: string }
 type MarkdownBlock = { kind: 'paragraph' | 'heading' | 'quote' | 'code' | 'list' | 'table' | 'literal' | 'image'; text?: string; src?: string; level?: number; language?: string; rows?: string[][]; ordered?: boolean; items?: Array<{ depth: number; text: string }> }
 
 function safeHttpUrl(value: string) {
@@ -19,13 +20,15 @@ function safeHttpUrl(value: string) {
 
 export function tokenizeInlineMarkdown(text: string): InlineToken[] {
   const tokens: InlineToken[] = []
-  const pattern = /(`[^`\n]+`|\*\*[^*\n]+\*\*|\*[^*\n]+\*|(?<![\p{L}\p{N}_])_[^_\n]+_(?![\p{L}\p{N}_])|\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)|\[[^\]\n]+\]\((?!https?:\/\/)[^\s)]+\)|https?:\/\/[^\s<>"']+)/giu
+  const pattern = /(`[^`\n]+`|==[^=\n]+==|:lucide-[a-z0-9-]+:|\*\*[^*\n]+\*\*|\*[^*\n]+\*|(?<![\p{L}\p{N}_])_[^_\n]+_(?![\p{L}\p{N}_])|\[[^\]\n]+\]\(https?:\/\/[^\s)]+\)|\[[^\]\n]+\]\((?!https?:\/\/)[^\s)]+\)|https?:\/\/[^\s<>"']+)/giu
   let cursor = 0
   for (const match of text.matchAll(pattern)) {
     const index = match.index ?? 0
     if (index > cursor) tokens.push({ kind: 'text', text: text.slice(cursor, index) })
     const value = match[0]
     if (value.startsWith('`')) tokens.push({ kind: 'code', text: value.slice(1, -1) })
+    else if (value.startsWith('==')) tokens.push({ kind: 'mark', text: value.slice(2, -2) })
+    else if (value.startsWith(':lucide-')) tokens.push({ kind: 'icon', text: value.slice(8, -1) })
     else if (value.startsWith('**') || value.startsWith('__')) tokens.push({ kind: 'strong', text: value.slice(2, -2) })
     else if (value.startsWith('*') || value.startsWith('_')) tokens.push({ kind: 'em', text: value.slice(1, -1) })
     else if (/^https?:\/\//i.test(value)) {
@@ -213,6 +216,8 @@ export function SafeMarkdown({ text, onOpenLink }: { text: string; onOpenLink: (
   const inline = (value: string, keyPrefix: string) => tokenizeInlineMarkdown(value).map((token, index) => {
     const key = `${keyPrefix}-${index}`
     if (token.kind === 'code') return <code key={key}>{token.text}</code>
+    if (token.kind === 'mark') return <mark key={key} className="reply-mark">{token.text}</mark>
+    if (token.kind === 'icon') return <ReplyIcon key={key} name={token.text} />
     if (token.kind === 'strong') return <strong key={key}>{token.text}</strong>
     if (token.kind === 'em') return <em key={key}>{token.text}</em>
     if (token.kind === 'link') return <SafeLink key={key} url={token.url!} text={token.text} onOpenLink={onOpenLink} />
@@ -239,6 +244,8 @@ export function SafeMarkdown({ text, onOpenLink }: { text: string; onOpenLink: (
 export function SafeMarkdownInline({ text, onOpenLink }: { text: string; onOpenLink: (url: string) => void }) {
   return <>{tokenizeInlineMarkdown(text).map((token, index) => {
     if (token.kind === 'code') return <code key={index}>{token.text}</code>
+    if (token.kind === 'mark') return <mark key={index} className="reply-mark">{token.text}</mark>
+    if (token.kind === 'icon') return <ReplyIcon key={index} name={token.text} />
     if (token.kind === 'strong') return <strong key={index}>{token.text}</strong>
     if (token.kind === 'em') return <em key={index}>{token.text}</em>
     if (token.kind === 'link') return <SafeLink key={index} url={token.url!} text={token.text} onOpenLink={onOpenLink} />

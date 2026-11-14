@@ -1,0 +1,13 @@
+.metallic-mark { position: relative; display: inline-grid; place-items: center; flex: 0 0 auto; }
+.metallic-mark > * { grid-area: 1 / 1; }
+.metallic-mark-png { width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; transition: opacity 260ms ease; }
+.metallic-mark-png.on-light { display: none; }
+:root[data-theme="light"] .metallic-mark-png.on-dark { display: none; }
+:root[data-theme="light"] .metallic-mark-png.on-light { display: block; }
+.metallic-mark-paint { position: absolute; inset: -6%; pointer-events: none; animation: metallic-mark-in 260ms ease both; }
+.metallic-mark.playing .metallic-mark-png { opacity: 0; transition-delay: 160ms; }
+@keyframes metallic-mark-in { from { opacity: 0; } }
+.brand-logo-stack { position: relative; display: inline-grid; place-items: center; flex: 0 0 auto; }
+.brand-logo-stack > img { grid-area: 1 / 1; transition: opacity 220ms ease; }
+.metallic-overlay { position: absolute; inset: -4px; pointer-events: none; animation: metallic-mark-in 220ms ease both; }
+.brand-lockup.painting .brand-logo-stack > img { opacity: 0; transition-delay: 140ms; }

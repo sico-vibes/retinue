@@ -31,6 +31,7 @@ use axum::{
     Router,
 };
 use chrono::{SecondsFormat, Utc};
+use base64::Engine as _;
 use futures_util::{SinkExt, StreamExt};
 use retinue_agent_core::McpServerSpec;
 use retinue_storage::ComputerLink;
@@ -98,9 +99,37 @@ const NO_VIEW: &str = "Your server does not offer its screen to Retinue yet. Upd
 const NOT_LINKED: &str = "No computer is linked in Retinue, so there is no computer to use. Ask the owner to link one in Settings.";
 const SWITCHED_OFF: &str = "The computer is switched off in Retinue, so this conversation has no computer tools. Ask the owner to switch it on.";
 const UNATTENDED: &str = "This conversation runs unattended, so it cannot run commands, create routines or start routines on the computer.";
+/// The gate the owner's amendment puts on the input tools: Full access removes
+/// every approval card, and this is the capability that must keep asking.
+const FULL_ACCESS: &str = "This conversation has Full access, so it does not get the computer's mouse, keyboard or screenshots: those keep asking, even here. Change the conversation's permission mode and try again.";
+/// The gate for a turn a teammate started (`AGENTS.md`, 14 November 2026): a
+/// chain of bots never drives the owner's screen, even in an attended
+/// conversation. The owner's own next message brings it back.
+const TEAM_REPLY: &str = "This turn was started by a teammate's message, so it cannot drive the computer's screen. Follow up in the conversation, and use the screen in a turn the owner starts.";
+
+/// The screen tools (`AGENTS.md`, 14 November 2026). They act on the
+/// container's desktop through the same `exec` path as everything else, and
+/// they are commands for the unattended refusal: a scheduled run never drives a
+/// mouse. Every one is also refused in a Full-access conversation.
+const INPUT_TOOLS: [&str; 6] = ["computer_screenshot", "computer_click", "computer_move", "computer_type", "computer_key", "computer_scroll"];
 
 /// The tools that change the computer, refused while nobody is watching.
-const COMMAND_TOOLS: [&str; 3] = ["computer_exec", "computer_create_routine", "computer_run_routine"];
+const COMMAND_TOOLS: [&str; 9] = ["computer_exec", "computer_create_routine", "computer_run_routine", "computer_screenshot", "computer_click", "computer_move", "computer_type", "computer_key", "computer_scroll"];
+
+/// The most characters one `computer_type` call may send.
+const TYPE_MAX: usize = 2_000;
+/// The most steps one scroll may take, and its default.
+const SCROLL_MAX: u64 = 50;
+const SCROLL_DEFAULT: u64 = 3;
+/// A screenshot is downscaled to this width before it is kept.
+const SCREENSHOT_MAX_WIDTH: u32 = 1_280;
+/// The largest screenshot kept as one image, the size an attached image is capped at.
+const SCREENSHOT_MAX_BYTES: usize = 8 * 1024 * 1024;
+/// The capture tools the container may have; the first one found is used.
+const CAPTURE_TOOLS: [&str; 3] = ["scrot", "gnome-screenshot", "import"];
+/// How long a probe is believed: `computer.status` asks the container again
+/// after this, so a poll does not run a command every few seconds.
+const INPUT_PROBE_TTL: Duration = Duration::from_secs(300);
 
 /// What the daemon remembers between reads: the last status it announced, so an
 /// unchanged read does not produce an event, and the live tickets for the
@@ -111,6 +140,9 @@ pub struct Computer {
     /// A frame cannot send the daemon's capability, so the screen is served
     /// under single-purpose tickets instead: random, short-lived, never logged.
     view: StdMutex<Vec<ViewTicket>>,
+    /// The last probe of the container's input tools and display, kept for
+    /// `INPUT_PROBE_TTL` so a status poll does not run a command every time.
+    input: StdMutex<Option<InputProbe>>,
 }
 
 /// One live view ticket, and when it was last used.
@@ -163,6 +195,26 @@ impl Computer {
     fn clear_view_tickets(&self) {
         if let Ok(mut tickets) = self.view.lock() {
             tickets.clear();
+        }
+    }
+
+    /// The last input probe, while it is still believed.
+    fn cached_input(&self) -> Option<InputProbe> {
+        let probe = self.input.lock().unwrap_or_else(|poison| poison.into_inner()).clone()?;
+        (probe.at.elapsed() < INPUT_PROBE_TTL).then_some(probe)
+    }
+
+    fn remember_input(&self, probe: InputProbe) {
+        if let Ok(mut input) = self.input.lock() {
+            *input = Some(probe);
+        }
+    }
+
+    /// A link, an unlink or a switch changes which container is asked, so the
+    /// next status read probes again.
+    fn clear_input(&self) {
+        if let Ok(mut input) = self.input.lock() {
+            *input = None;
         }
     }
 }
@@ -283,7 +335,7 @@ fn harbor_for(link: &ComputerLink) -> Result<Harbor, DispatchError> {
 }
 
 /// Whether employees get the computer's tools: linked and switched on.
-fn enabled_link(st: &AppState) -> Option<ComputerLink> {
+pub(crate) fn enabled_link(st: &AppState) -> Option<ComputerLink> {
     st.db.computer_link().ok().flatten().filter(|link| link.enabled)
 }
 
@@ -377,6 +429,7 @@ fn unlinked_status() -> Value {
         "diskBytes": null,
         "limits": null,
         "desktopUrl": null,
+        "input": null,
         "checkedAt": null,
         "problem": null,
     })
@@ -416,6 +469,7 @@ pub(crate) fn map_status(address: &str, enabled: bool, body: &Value) -> Value {
         "diskBytes": computer["disk_bytes"].as_u64(),
         "limits": limits,
         "desktopUrl": body["desktop_url"].as_str().filter(|url| same_origin(address, url)),
+        "input": Value::Null,
         "checkedAt": now_iso(),
         "problem": Value::Null,
     })
@@ -440,6 +494,7 @@ fn offline_status(link: &ComputerLink, name: Option<&str>, problem: String) -> V
         "diskBytes": null,
         "limits": null,
         "desktopUrl": null,
+        "input": null,
         "checkedAt": now_iso(),
         "problem": problem,
     })
@@ -470,12 +525,189 @@ async fn read_status(st: &AppState) -> Value {
     };
     let address = link.address.clone();
     let enabled = link.enabled;
-    match harbor.call(reqwest::Method::GET, "", None, STATUS_TIMEOUT).await {
+    let status = match harbor.call(reqwest::Method::GET, "", None, STATUS_TIMEOUT).await {
         Ok(body) if body["computer"].is_object() => map_status(&address, enabled, &body),
         Ok(_) => offline_status(&link, name.as_deref(), "That address answered, but not like Harbor.".into()),
         Err(error) => offline_status(&link, name.as_deref(), problem_of(error)),
+    };
+    with_input(st, &link, status).await
+}
+
+// ---------------------------------------------------------------------------
+// The container's input tools: what it can drive, and the screen it shows
+
+/// What one probe of the container found. `missing` names what to install, in
+/// the wording `computer.status` reports and a tool result repeats.
+#[derive(Clone)]
+struct InputProbe {
+    at: std::time::Instant,
+    /// The X display the desktop stream draws on, as `:1`.
+    display: Option<String>,
+    width: u32,
+    height: u32,
+    missing: Vec<String>,
+}
+
+impl InputProbe {
+    /// Everything the six tools need: xdotool, one capture tool and a display
+    /// whose size can be read.
+    fn ready(&self) -> bool {
+        self.missing.is_empty() && self.display.is_some() && self.width > 0 && self.height > 0
     }
 }
+
+/// One probe of the container, run as one script: which of the tools exist,
+/// which display answers, and how large its screen is. The display is found
+/// rather than assumed: the panel's own `DISPLAY`, then the sockets under
+/// `/tmp/.X11-unix`, then the two numbers a web desktop usually uses.
+///
+/// Nothing here is built from a caller's input, so the script is a constant.
+const PROBE_SCRIPT: &str = r#"# retinue:probe
+for t in xdotool scrot gnome-screenshot import convert; do
+  if command -v "$t" >/dev/null 2>&1; then echo "have:$t"; else echo "miss:$t"; fi
+done
+cands="${DISPLAY:-}"
+if [ -d /tmp/.X11-unix ]; then for s in /tmp/.X11-unix/X*; do cands="$cands ${s##*X}"; done; fi
+cands="$cands 1 0"
+for d in $cands; do
+  d="${d#:}"
+  g=$(DISPLAY=":$d" xdotool getdisplaygeometry 2>/dev/null) || continue
+  echo "display:$d"
+  echo "geometry:$g"
+  break
+done
+"#;
+
+/// `1`, `:1` or `:1.0` as `:1`. A display spec may carry a screen number, which
+/// X ignores when a tool asks for the whole display. Anything that is not a
+/// display number is no display: a remote display's host name is never put back
+/// into a command.
+fn display_for(raw: &str) -> Option<String> {
+    let spec = raw.trim().trim_start_matches(':');
+    // `host:0` or `host:0.0` would name a host; only a bare number is ours.
+    let digits = spec.split('.').next().unwrap_or("");
+    if digits.is_empty() || digits.len() > 3 || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    if !spec[digits.len()..].trim_start_matches('.').bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    Some(format!(":{digits}"))
+}
+
+/// `xdotool getdisplaygeometry` answers `WxH`, and some versions answer `W H`.
+fn screen_size(raw: &str) -> (u32, u32) {
+    let cleaned = raw.trim().replace('x', " ");
+    let mut parts = cleaned.split_whitespace().filter_map(|part| part.parse::<u32>().ok());
+    match (parts.next(), parts.next()) {
+        (Some(width), Some(height)) => (width, height),
+        _ => (0, 0),
+    }
+}
+
+/// The probe's own output, as the probe describes it. Never fails: a script
+/// that printed nothing describes a container with no tools and no display.
+fn parse_probe(output: &str) -> InputProbe {
+    let mut have: Vec<String> = Vec::new();
+    let mut display = None;
+    let mut size = (0, 0);
+    for line in output.lines() {
+        let line = line.trim();
+        if let Some(name) = line.strip_prefix("have:") {
+            have.push(name.trim().to_owned());
+        } else if let Some(value) = line.strip_prefix("display:") {
+            display = display_for(value);
+        } else if let Some(value) = line.strip_prefix("geometry:") {
+            size = screen_size(value);
+        }
+    }
+    let mut missing = Vec::new();
+    if !have.iter().any(|name| name == "xdotool") {
+        missing.push("xdotool".to_owned());
+    }
+    if !CAPTURE_TOOLS.iter().any(|tool| have.iter().any(|name| name == tool)) {
+        // Any one of them will do; scrot is the smallest to install.
+        missing.push(CAPTURE_TOOLS[0].to_owned());
+    }
+    InputProbe { at: std::time::Instant::now(), display, width: size.0, height: size.1, missing }
+}
+
+/// What a probe that found no tools tells the model to install, and where.
+fn missing_tools_message(missing: &[String]) -> String {
+    let packages = missing.join(" ");
+    format!("The bot computer is missing {} for clicks, keys and screenshots. Install it in the container with: apt-get install -y {packages}.", missing.join(" and "))
+}
+
+/// Harbor's `/exec` answer as (exit code, output). A body that says `ok`
+/// without a code counts as success, as does a body with neither.
+fn exec_answer(body: &Value) -> (i64, String) {
+    let output = body["output"].as_str().or_else(|| body["stdout"].as_str()).unwrap_or("").to_owned();
+    let code = body["code"].as_i64().or_else(|| body["exitCode"].as_i64()).unwrap_or(0);
+    let ok = body["ok"].as_bool().unwrap_or(code == 0);
+    if ok { (0, output) } else if code == 0 { (1, output) } else { (code, output) }
+}
+
+/// A failed command's own first line, bounded and free of control characters.
+fn first_line(output: &str) -> Option<String> {
+    let line = output.lines().find(|line| !line.trim().is_empty())?.trim().chars().filter(|ch| !ch.is_control()).take(200).collect::<String>();
+    if line.is_empty() { None } else { Some(line) }
+}
+
+/// Runs one of Retinue's own scripts in the container, and answers what it
+/// printed or the container's own complaint. The caller builds every script from
+/// numbers, key names and base64, never from typed text.
+async fn run_script(harbor: &Harbor, script: &str, limit: Duration) -> Result<String, String> {
+    let timeout_ms = (limit.as_millis() as u64).clamp(1, EXEC_MAX_MS);
+    let body = harbor
+        .call(reqwest::Method::POST, "/exec", Some(json!({"command": script, "timeout_ms": timeout_ms})), limit + EXEC_MARGIN)
+        .await
+        .map_err(problem_of)?;
+    let (code, output) = exec_answer(&body);
+    if code != 0 {
+        return Err(first_line(&output).unwrap_or_else(|| format!("The command inside the computer failed (exit code {code}).")));
+    }
+    Ok(output)
+}
+
+/// One probe for a tool call: tools and display, or the sentence saying what to
+/// install. A tool always probes again, because a container can gain or lose a
+/// package between calls.
+async fn probe_for_tool(harbor: &Harbor) -> Result<InputProbe, String> {
+    let probe = parse_probe(&run_script(harbor, PROBE_SCRIPT, ACTION_TIMEOUT).await?);
+    if !probe.missing.is_empty() {
+        return Err(missing_tools_message(&probe.missing));
+    }
+    if probe.display.is_none() || probe.width == 0 || probe.height == 0 {
+        return Err("The bot computer has no desktop running, so there is no screen to use. Wake it, and start its desktop if it stays off.".into());
+    }
+    Ok(probe)
+}
+
+/// The input probe for a status read, from the cache while it is fresh. One
+/// command at most every `INPUT_PROBE_TTL`.
+async fn input_probe(st: &AppState, link: &ComputerLink) -> Option<InputProbe> {
+    if let Some(probe) = st.computer.cached_input() {
+        return Some(probe);
+    }
+    let harbor = Harbor { address: link.address.clone(), token: token_of(link).ok()? };
+    let probe = parse_probe(&run_script(&harbor, PROBE_SCRIPT, STATUS_TIMEOUT).await.ok()?);
+    st.computer.remember_input(probe.clone());
+    Some(probe)
+}
+
+/// Adds `input` to a linked status: whether the computer can be driven right
+/// now, and which tools it is missing. `null` when the computer is not switched
+/// on, is asleep, or the probe did not answer: there is nothing to set up then.
+async fn with_input(st: &AppState, link: &ComputerLink, mut status: Value) -> Value {
+    if status["reachable"] != true || status["state"] != "awake" || !link.enabled {
+        return status;
+    }
+    if let Some(probe) = input_probe(st, link).await {
+        status["input"] = json!({"ready": probe.ready(), "missing": probe.missing});
+    }
+    status
+}
+
 
 /// Two status objects that differ only in `checkedAt` describe the same state.
 fn same_state(a: &Value, b: &Value) -> bool {
@@ -562,6 +794,7 @@ async fn link(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
     let status = map_status(&address, false, &body);
     // A new link is a new token: the old link's tickets die with it.
     st.computer.clear_view_tickets();
+    st.computer.clear_input();
     publish(st, status.clone(), true).await;
     Ok(status)
 }
@@ -571,6 +804,7 @@ async fn unlink(st: &AppState) -> Result<Value, DispatchError> {
     let previous = st.db.computer_link().ok().flatten();
     st.db.computer_link_clear().map_err(|_| internal("The computer's link could not be removed."))?;
     st.computer.clear_view_tickets();
+    st.computer.clear_input();
     if let Some(previous) = previous {
         let _ = crate::secrets::store::delete(&previous.token_ref);
     }
@@ -591,6 +825,7 @@ async fn set_enabled(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
         return Err(invalid("confirm: true is required"));
     }
     st.db.computer_link_set_enabled(enabled).map_err(|_| internal("The computer's switch could not be saved."))?;
+    st.computer.clear_input();
     let status = read_status(st).await;
     publish(st, status.clone(), true).await;
     Ok(status)
@@ -612,6 +847,7 @@ async fn action(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
         .map_err(|error| unavailable(&problem_of(error), StatusCode::BAD_GATEWAY))?;
     // Harbor's own action reply carries no limits or desktop URL, so the status
     // comes from a fresh read. A wake can still be settling when this runs.
+    st.computer.clear_input();
     let status = read_status(st).await;
     publish(st, status.clone(), true).await;
     Ok(status)
@@ -782,10 +1018,10 @@ async fn probe_view(link: &ComputerLink, token: &str) -> Result<StatusCode, Harb
 // ---------------------------------------------------------------------------
 // The bridge: MCP tools over stdio, forwarded here
 
-/// The ten tools, their names, descriptions and schemas, exactly as the VPS
-/// computer proposal's Node bridge (`tools/vps-computer-mcp/`, commit `2182a94`)
-/// defines them. That folder is not in this branch; this module is its Retinue
-/// side.
+/// The sixteen tools: the ten the VPS computer proposal's Node bridge
+/// (`tools/vps-computer-mcp/`, commit `2182a94`) defines with the same names,
+/// descriptions and schemas, then the six screen tools of 14 November 2026.
+/// That folder is not in this branch; this module is its Retinue side.
 pub fn tool_schemas() -> Vec<Value> {
     vec![
         json!({"name":"computer_status","description":"Read the bot computer state, CPU/memory usage, port and persistent disk usage.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}),
@@ -798,6 +1034,12 @@ pub fn tool_schemas() -> Vec<Value> {
         json!({"name":"computer_create_routine","description":"Create a cron routine that runs a shell command inside the computer. Routines run only while the computer is awake.","inputSchema":{"type":"object","properties":{"name":{"type":"string"},"cron":{"type":"string","description":"Five-field cron in Europe/London, e.g. 0 8 * * *."},"command":{"type":"string"}},"required":["name","cron","command"],"additionalProperties":false}}),
         json!({"name":"computer_run_routine","description":"Run an existing routine immediately.","inputSchema":{"type":"object","properties":{"id":{"type":"string"}},"required":["id"],"additionalProperties":false}}),
         json!({"name":"computer_desktop_url","description":"Return the owner-only live desktop URL. Opening it requires a Harbor owner login.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}),
+        json!({"name":"computer_screenshot","description":"Take one screenshot of the bot computer's desktop and store it in this conversation as an image. Never on a timer and never in a loop; use it when the desktop's text is not enough.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}),
+        json!({"name":"computer_click","description":"Click at a point on the bot computer's screen. Use computer_screenshot first to see where things are.","inputSchema":{"type":"object","properties":{"x":{"type":"number","description":"Pixels from the left edge."},"y":{"type":"number","description":"Pixels from the top edge."},"button":{"type":"string","enum":["left","middle","right"],"description":"Default left."},"double":{"type":"boolean","description":"Click twice, one double click."}},"required":["x","y"],"additionalProperties":false}}),
+        json!({"name":"computer_move","description":"Move the pointer on the bot computer's screen without clicking.","inputSchema":{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"}},"required":["x","y"],"additionalProperties":false}}),
+        json!({"name":"computer_type","description":"Type text at the current focus, as the desktop user. The text is never recorded: only how many characters were sent.","inputSchema":{"type":"object","properties":{"text":{"type":"string","description":"At most 2,000 characters."}},"required":["text"],"additionalProperties":false}}),
+        json!({"name":"computer_key","description":"Press a key or a combination, like Return, Tab, Escape, ctrl+l or ctrl+shift+t.","inputSchema":{"type":"object","properties":{"keys":{"type":"string","description":"Key names joined by +, e.g. ctrl+l or Return."}},"required":["keys"],"additionalProperties":false}}),
+        json!({"name":"computer_scroll","description":"Scroll at a point on the bot computer's screen.","inputSchema":{"type":"object","properties":{"x":{"type":"number"},"y":{"type":"number"},"direction":{"type":"string","enum":["up","down","left","right"]},"amount":{"type":"number","description":"Steps, 1 to 50, default 3."}},"required":["x","y","direction"],"additionalProperties":false}}),
     ]
 }
 
@@ -826,11 +1068,30 @@ fn as_text(value: &Value) -> String {
 
 /// Whether nobody is watching this conversation: an automation, an unattended
 /// task, or a delegated child of one. An unreadable session counts as nobody.
-fn nobody_is_watching(st: &AppState, session_id: &str) -> bool {
-    match st.db.session_detail(session_id) {
-        Ok(session) => crate::questions::may_ask(st, &session).is_err(),
-        Err(_) => true,
-    }
+fn nobody_is_watching(st: &AppState, session: Option<&Value>) -> bool {
+    session.map_or(true, |session| crate::questions::may_ask(st, session).is_err())
+}
+
+/// Whether this conversation's newest prompt came from a teammate rather than
+/// the owner: a message, a relayed reply or an update from another bot. Those
+/// are not the owner watching, so the screen stays out of reach. Only the newest
+/// prompt counts, because it is the one that started the running turn; the
+/// owner's own next message brings the screen back.
+fn woken_by_a_teammate(session: Option<&Value>) -> bool {
+    let Some(messages) = session.and_then(|session| session["messages"].as_array()) else { return false };
+    messages
+        .iter()
+        .rev()
+        .find(|message| message["role"] == "user")
+        .is_some_and(|prompt| matches!(prompt["meta"]["kind"].as_str(), Some("blob_message" | "blob_reply" | "blob_update")))
+}
+
+/// Whether this conversation runs with Full access. Full access removes every
+/// approval card, and the computer's input tools are the capability that must
+/// keep asking, so a `bypass` conversation never gets them (`AGENTS.md`,
+/// 14 November 2026).
+fn full_access(st: &AppState, session: Option<&Value>) -> bool {
+    session.is_some_and(|session| crate::approval_mode_for_session(st, session) == retinue_agent_core::ApprovalMode::Bypass)
 }
 
 /// One tool call, with the gate every call passes: the computer has to be
@@ -844,8 +1105,17 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
     if !tool_schemas().iter().any(|tool| tool["name"].as_str() == Some(name)) {
         return Err(format!("Unknown tool {name}."));
     }
-    if COMMAND_TOOLS.contains(&name) && nobody_is_watching(st, session_id) {
+    // One read of the conversation, for the two gates that need it. An
+    // unreadable conversation is never given a mouse.
+    let session = st.db.session_detail(session_id).ok();
+    if COMMAND_TOOLS.contains(&name) && nobody_is_watching(st, session.as_ref()) {
         return Err(UNATTENDED.into());
+    }
+    if INPUT_TOOLS.contains(&name) && woken_by_a_teammate(session.as_ref()) {
+        return Err(TEAM_REPLY.into());
+    }
+    if INPUT_TOOLS.contains(&name) && full_access(st, session.as_ref()) {
+        return Err(FULL_ACCESS.into());
     }
     let harbor = Harbor { address: link.address.clone(), token: token_of(&link).map_err(|error| error.1.message)? };
     let failure = |error: HarborError| problem_of(error);
@@ -895,7 +1165,214 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
             }))
             .unwrap_or_default())
         }
+        "computer_screenshot" | "computer_click" | "computer_move" | "computer_type" | "computer_key" | "computer_scroll" => {
+            let (result, activity) = input_tool(st, &harbor, session_id, name, args).await?;
+            // One content-free row per action class: the action, never the text
+            // that was typed and never a pixel.
+            crate::team::note(st, session_id, &activity, json!({"kind":"computer_action","action":action_class(name)})).await;
+            Ok(result)
+        }
         other => Err(format!("Unknown tool {other}.")),
+    }
+}
+
+/// The action an input tool is recorded as.
+fn action_class(name: &str) -> &'static str {
+    match name {
+        "computer_screenshot" => "screenshot",
+        "computer_click" => "click",
+        "computer_move" => "move",
+        "computer_type" => "type",
+        "computer_key" => "key",
+        _ => "scroll",
+    }
+}
+
+/// A coordinate pair as the caller sent it: whole numbers, never negative.
+fn point(args: &Value) -> Result<(i64, i64), String> {
+    let read = |key: &str| args.get(key).and_then(Value::as_i64).ok_or_else(|| format!("{key} must be a whole number of pixels."));
+    let x = read("x")?;
+    let y = read("y")?;
+    if x < 0 || y < 0 {
+        return Err("x and y must be zero or more pixels from the top-left corner.".into());
+    }
+    Ok((x, y))
+}
+
+/// The mouse button as a number xdotool knows: 1 left, 2 middle, 3 right.
+fn button_of(args: &Value) -> Result<u8, String> {
+    let name = match args.get("button") {
+        None | Some(Value::Null) => return Ok(1),
+        Some(Value::Number(number)) => number.as_u64().map(|number| number.to_string()),
+        Some(Value::String(text)) => Some(text.trim().to_ascii_lowercase()),
+        _ => None,
+    };
+    match name.as_deref() {
+        Some("left" | "1") => Ok(1),
+        Some("middle" | "2") => Ok(2),
+        Some("right" | "3") => Ok(3),
+        _ => Err("button must be left, middle, right, 1, 2 or 3.".into()),
+    }
+}
+
+fn button_name(button: u8) -> &'static str {
+    match button { 2 => "middle", 3 => "right", _ => "left" }
+}
+
+/// A keystroke as xdotool names it: `Return`, `ctrl+l`, `ctrl+shift+t`. Each
+/// `+`-separated part is letters, digits and `_` only, so a key name can never
+/// become anything but a key name in the container's shell.
+fn keys_of(args: &Value) -> Result<String, String> {
+    let raw = args["keys"].as_str().map(str::trim).filter(|keys| !keys.is_empty()).ok_or("keys is required.")?;
+    if raw.len() > 60 {
+        return Err("keys must be at most 60 characters.".into());
+    }
+    let parts = raw.split('+').collect::<Vec<_>>();
+    let valid = !parts.is_empty()
+        && parts.len() <= 8
+        && parts.iter().all(|part| !part.is_empty() && part.len() <= 20 && part.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_'));
+    if !valid {
+        return Err("keys must be key names joined by +, like Return, Tab or ctrl+l.".into());
+    }
+    Ok(raw.to_owned())
+}
+
+/// The PNG from the capture script's own output, or the reason it is not one.
+fn screenshot_bytes(output: &str) -> Result<Vec<u8>, String> {
+    let encoded = output.lines().find_map(|line| line.trim().strip_prefix("RETINUE_PNG:")).ok_or("The screenshot did not come back from the computer.")?;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(encoded.trim().as_bytes()).map_err(|_| "The screenshot came back damaged.".to_owned())?;
+    if bytes.is_empty() {
+        return Err("The screenshot came back empty.".to_owned());
+    }
+    if bytes.len() > SCREENSHOT_MAX_BYTES {
+        return Err("The screenshot was too large to keep.".to_owned());
+    }
+    if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return Err("The screenshot was not a PNG.".to_owned());
+    }
+    Ok(bytes)
+}
+
+/// The six screen tools, in one place: validate what the caller sent, probe the
+/// container once, refuse a point that is off its screen, then run one command.
+/// `Ok((result for the agent, one content-free activity line))`.
+async fn input_tool(st: &AppState, harbor: &Harbor, session_id: &str, name: &str, args: &Value) -> Result<(String, String), String> {
+    // Everything the caller sends is checked before the container is asked
+    // anything, so a bad argument costs no round trip.
+    let placed = matches!(name, "computer_click" | "computer_move" | "computer_scroll");
+    let position = if placed { Some(point(args)?) } else { None };
+    let button = if name == "computer_click" { Some(button_of(args)?) } else { None };
+    let double = args["double"].as_bool().unwrap_or(false);
+    let keys = if name == "computer_key" { Some(keys_of(args)?) } else { None };
+    let typed = if name == "computer_type" {
+        let text = args["text"].as_str().filter(|text| !text.is_empty()).ok_or("text is required.")?;
+        let count = text.chars().count();
+        if count > TYPE_MAX {
+            return Err(format!("text must be at most {TYPE_MAX} characters."));
+        }
+        if text.contains('\0') {
+            return Err("text cannot carry a NUL character.".into());
+        }
+        Some((text.to_owned(), count))
+    } else {
+        None
+    };
+    let scroll = if name == "computer_scroll" {
+        let direction = args["direction"].as_str().unwrap_or("").trim().to_ascii_lowercase();
+        let button = match direction.as_str() {
+            "up" => 4u8,
+            "down" => 5,
+            "left" => 6,
+            "right" => 7,
+            _ => return Err("direction must be up, down, left or right.".into()),
+        };
+        let amount = match args.get("amount") {
+            None | Some(Value::Null) => SCROLL_DEFAULT,
+            Some(value) => value.as_u64().filter(|amount| (1..=SCROLL_MAX).contains(amount)).ok_or("amount must be a whole number of steps, 1 to 50.")?,
+        };
+        Some((direction, button, amount))
+    } else {
+        None
+    };
+    let probe = probe_for_tool(harbor).await?;
+    let display = probe.display.clone().unwrap_or_default();
+    if let Some((x, y)) = position {
+        if x >= probe.width as i64 || y >= probe.height as i64 {
+            return Err(format!("That point is off the screen: the bot computer's screen is {} by {} pixels.", probe.width, probe.height));
+        }
+    }
+    match name {
+        "computer_move" => {
+            let (x, y) = position.unwrap_or((0, 0));
+            let script = format!("# retinue:move\nexport DISPLAY={display}\nxdotool mousemove --sync {x} {y}\n");
+            run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            Ok((format!("Moved the pointer to {x}, {y}."), "Moved the pointer in the bot computer.".to_owned()))
+        }
+        "computer_click" => {
+            let (x, y) = position.unwrap_or((0, 0));
+            let button = button.unwrap_or(1);
+            let mut script = format!("# retinue:click\nexport DISPLAY={display}\nxdotool mousemove --sync {x} {y}\n");
+            if double {
+                script.push_str(&format!("xdotool click --repeat 2 --delay 90 {button}\n"));
+            } else {
+                script.push_str(&format!("xdotool click {button}\n"));
+            }
+            run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            let with = button_name(button);
+            if double {
+                Ok((format!("Clicked twice at {x}, {y} with the {with} button."), "Clicked twice in the bot computer.".to_owned()))
+            } else {
+                Ok((format!("Clicked at {x}, {y} with the {with} button."), "Clicked in the bot computer.".to_owned()))
+            }
+        }
+        "computer_scroll" => {
+            let (x, y) = position.unwrap_or((0, 0));
+            let (direction, button, amount) = scroll.ok_or("direction is required.")?;
+            let script = format!("# retinue:scroll\nexport DISPLAY={display}\nxdotool mousemove --sync {x} {y}\nxdotool click --repeat {amount} --delay 40 {button}\n");
+            run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            Ok((format!("Scrolled {direction} {amount} steps at {x}, {y}."), format!("Scrolled {direction} in the bot computer.")))
+        }
+        "computer_type" => {
+            let (text, count) = typed.ok_or("text is required.")?;
+            // The text travels as base64 and appears nowhere else: not in the
+            // command, not in the reply, not in the activity row, not in a log.
+            let encoded = base64::engine::general_purpose::STANDARD.encode(text.as_bytes());
+            let script = format!("# retinue:type\nexport DISPLAY={display}\nprintf '%s' '{encoded}' | base64 -d | xdotool type --clearmodifiers --delay 12 --file -\n");
+            run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            Ok((format!("Typed {count} characters."), format!("Typed {count} characters in the bot computer.")))
+        }
+        "computer_key" => {
+            let keys = keys.ok_or("keys is required.")?;
+            let script = format!("# retinue:key\nexport DISPLAY={display}\nxdotool key --clearmodifiers {keys}\n");
+            run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            Ok((format!("Pressed {keys}."), format!("Pressed {keys} in the bot computer.")))
+        }
+        _ => {
+            // One screenshot per call, downscaled before it is carried back, and
+            // kept as a media record: never inline bytes in the transcript.
+            let file = format!("/tmp/retinue-shot-{}.png", Uuid::new_v4());
+            let script = format!(r#"# retinue:screenshot
+export DISPLAY={display}
+f={file}
+if command -v scrot >/dev/null 2>&1; then scrot -o -q 90 "$f"
+elif command -v gnome-screenshot >/dev/null 2>&1; then gnome-screenshot -f "$f"
+else import -window root "$f"
+fi
+[ -s "$f" ] || {{ echo "The screenshot came back empty."; exit 1; }}
+if command -v convert >/dev/null 2>&1; then convert "$f" -resize '{SCREENSHOT_MAX_WIDTH}x>' "$f" 2>/dev/null || true; fi
+echo "RETINUE_BYTES:$(wc -c <"$f" | tr -d ' ')"
+echo "RETINUE_PNG:$(base64 "$f" | tr -d '\n')"
+rm -f "$f"
+"#);
+            let output = run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            let png = screenshot_bytes(&output)?;
+            let media_id = crate::media::store_screenshot(st, session_id, &png).await?;
+            let caption = "Screenshot of the bot computer";
+            Ok((
+                format!("{caption} ({} by {} pixels, kept at most {SCREENSHOT_MAX_WIDTH} pixels wide).\nmediaId: {media_id}\nCaption: {caption}", probe.width, probe.height),
+                "Took a screenshot of the bot computer.".to_owned(),
+            ))
+        }
     }
 }
 
@@ -1015,6 +1492,11 @@ pub(crate) fn workplace_on(agent: &Value) -> bool {
 /// The instructions section for a workplace employee, or `None` when the switch
 /// is off or no computer is linked and switched on. Names the computer when a
 /// status read has already told us its name; never its address or its token.
+///
+/// Kept to two lines: the detail (folders, logs, routines, waking and sleeping)
+/// is the built-in `cloud-computer` skill, listed for this employee only while
+/// the section is. Changing this text still changes the instruction hash, so it
+/// carries only what must be true before the bot reads the skill.
 pub(crate) fn workplace_instructions(st: &AppState, agent: &Value) -> Option<String> {
     if !workplace_on(agent) { return None; }
     enabled_link(st)?;
@@ -1025,11 +1507,8 @@ pub(crate) fn workplace_instructions(st: &AppState, agent: &Value) -> Option<Str
     Some([
         "## Your workplace",
         &opening,
-        "Clone repositories, build, run and test projects there under /config/work/<project>, using computer_exec from your vps-computer tools.",
-        "Start anything that runs longer than a few minutes (a server, a long build, a watcher) in the background, with its output in a log file under /config/work/logs, then read that log to check it.",
-        "Use computer_create_routine for anything on a schedule.",
-        "When you finish, report what you did and where the files are.",
-        "Use this machine's own folder only for what the owner asked to be here.",
+        "Run the work itself there with computer_exec, under /config/work/<project>, not in the files on this machine.",
+        "Load the skill \"cloud-computer\" before your first command there: it covers where work goes, logs, routines, waking and sleeping, and how work gets back into the owner's project.",
     ].join("\n"))
 }
 

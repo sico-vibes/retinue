@@ -28,3 +28,7 @@ apps/desktop/src-tauri/binaries/retinue-hook-*.exe
 /output/
 /.playwright-cli/
 apps/desktop/src-tauri/binaries/*.exe
+
+# Phase C: the Windows computer-use driver is fetched, checked and staged, never
+# committed (see docs/operations/owner-computer-driver.md).
+open-computer-use.exe

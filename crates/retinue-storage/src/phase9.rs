@@ -49,6 +49,16 @@ pub(super) fn ensure_phase9_schema(c: &Connection) -> Result<(), StorageError> {
     if !has_personality {
         c.execute_batch("ALTER TABLE agents ADD COLUMN personality TEXT")?;
     }
+    // Whether a bot may mark table cells, list items and status words with an emoji
+    // or a `:lucide-name:` icon (14 November 2026). Off unless the owner turns it on.
+    let has_reply_icons: bool = c.query_row(
+        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('agents') WHERE name='reply_icons')",
+        [],
+        |r| r.get(0),
+    )?;
+    if !has_reply_icons {
+        c.execute_batch("ALTER TABLE agents ADD COLUMN reply_icons INTEGER NOT NULL DEFAULT 0")?;
+    }
     Ok(())
 }
 

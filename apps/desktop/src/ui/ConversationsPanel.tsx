@@ -7,8 +7,9 @@ import { Marquee } from './Marquee'
 import { StatusLabel, conversationStatus } from './ProjectsSidebar'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { MachineBadge } from './MachineBots'
+import { McpMark } from './McpMark'
 import { attentionOrder, attentionRank, hasSettled, settleOrder } from './sidebarOrder'
-import { Archive, ArrowLeftRight, BellOff, BellRing, ChevronDown, ChevronRight, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Smile, Tag, Trash2 } from 'lucide-react'
+import { Archive, ArrowLeftRight, BellOff, BellRing, ChevronDown, ChevronRight, Copy, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Smile, Tag, Trash2 } from 'lucide-react'
 import type { Agent, Project, Session } from '../types'
 import { BlobCanvas } from '../blob/BlobCanvas'
 import { agentLook } from '../blob/look'
@@ -122,6 +123,16 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
   const [iconTarget, setIconTarget] = useState<{ projectId: string; x: number; y: number } | null>(null)
   const closeMenu = () => { const trigger = menu?.trigger; setMenu(null); requestAnimationFrame(() => trigger?.focus()) }
   const openMenu = (trigger: HTMLElement, label: string, items: MenuItem[]) => { lastTrigger.current = trigger; const rect = trigger.getBoundingClientRect(); setMenu({ items, label, x: rect.left, y: rect.bottom + 4, trigger }) }
+  const openMenuAt = (trigger: HTMLElement, label: string, items: MenuItem[], x: number, y: number) => { lastTrigger.current = trigger; setMenu({ items, label, x, y, trigger }) }
+  const copyIdItem = (session: Session): MenuItem => ({ label: 'Copy conversation ID', icon: <Copy size={15} />, onSelect: () => { void navigator.clipboard?.writeText(session.id).catch(() => undefined) } })
+  const rowItems = (session: Session, title: string, busy: boolean, needsYou: boolean): MenuItem[] => [
+    { label: 'Rename', icon: <Pencil size={15} />, onSelect: () => setRenaming(session.id) },
+    ...(onSnooze && !needsYou ? [{ label: session.snoozed ? 'Wake' : 'Snooze until it needs you', icon: session.snoozed ? <BellRing size={15} /> : <BellOff size={15} />, onSelect: () => onSnooze(session, session.snoozed !== true) } as MenuItem] : []),
+    copyIdItem(session),
+    'separator',
+    ...(onArchive ? [{ label: 'Archive', icon: <Archive size={15} />, disabled: busy, onSelect: () => onArchive(session) } as MenuItem] : []),
+    { label: `Delete ${title.length > 28 ? 'conversation' : `“${title}”`}`, icon: <Trash2 size={15} />, danger: true, disabled: busy, onSelect: () => onDelete(session) },
+  ]
   const pickerItems = (): MenuItem[] => [
     ...projects.map((project): MenuItem => ({ label: project.name, icon: <ProjectIcon project={project} size={15} />, checked: project.id === fallback?.id, disabled: !project.path, onSelect: () => onNew(project.id) })),
     { label: 'No project', icon: <FolderOpen size={15} />, checked: !fallback, onSelect: () => onNew(null) },
@@ -153,7 +164,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
     const title = node.kind === 'side' ? sideTitle(session, agents as Agent[]) : (session.title?.trim() || 'New chat')
     const open_ = () => node.kind === 'side' ? onOpenSide(session.id) : onSelect(session)
     return <li key={session.id} className="convo-item" role="treeitem" aria-level={depth + 1} aria-selected={active} aria-expanded={node.children.length ? open : undefined}>
-      <div className={`convo-row ${active ? 'active' : ''} ${node.kind}${node.children.length > 0 ? ' branch' : ''}`} style={{ ['--depth' as string]: depth }}>
+      <div className={`convo-row ${active ? 'active' : ''} ${node.kind}${node.children.length > 0 ? ' branch' : ''}`} style={{ ['--depth' as string]: depth }} onContextMenu={(event) => { if (renaming === session.id) return; event.preventDefault(); openMenuAt(event.currentTarget as HTMLElement, `Actions for ${title}`, node.kind === 'main' ? rowItems(session, title, busy, needsYou) : [copyIdItem(session)], event.clientX, event.clientY) }}>
         {node.children.length > 0
           ? <button type="button" className={`convo-twisty ${open ? 'open' : ''}`} aria-label={open ? `Hide conversations under ${title}` : `Show ${node.children.length} conversation${node.children.length === 1 ? '' : 's'} under ${title}`} onClick={() => toggle(session.id)}><ChevronRight size={12} aria-hidden="true" /></button>
           : <span className="convo-twisty-space" aria-hidden="true" />}
@@ -162,7 +173,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
           : <button type="button" className="convo-open marquee-host" onClick={open_} onDoubleClick={() => { if (node.kind === 'main') setRenaming(session.id) }} title={title}>
             {node.kind === 'side' && <span className="convo-pair" aria-hidden="true"><Face agent={node.role === 'sender' ? agent : peer} name={node.role === 'sender' ? agent.name : peerName} /><ArrowLeftRight size={10} /><Face agent={node.role === 'sender' ? peer : agent} name={node.role === 'sender' ? peerName : agent.name} /></span>}
             <span className="convo-copy">
-              <Marquee className="convo-title" text={title} active={active} />
+              <span className="convo-title-line">{session.origin?.kind === 'mcp' && <McpMark client={session.origin.client} />}<Marquee className="convo-title" text={title} active={active} /></span>
               {node.kind === 'side'
                 ? <span className="convo-sub">{node.role === 'sender' ? `Asked ${peerName}` : `From ${peerName}`}</span>
                 : <span className="convo-sub convo-meta"><time>{relativeTime(session.lastMessageAt ?? session.updatedAt ?? session.createdAt, now)}</time><span aria-hidden="true">·</span><StatusLabel {...conversationStatus({ ...session, state: presentedSessionState(session) }, false)} /></span>}
@@ -170,10 +181,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
             {session.link?.movedTo ? <MachineBadge name={session.link.movedTo.name} /> : node.kind !== 'side' ? null : needsYou ? <span className="convo-flag needs">Needs you</span> : failed ? <span className="convo-flag failed">Failed</span> : busy ? <i className="convo-dot" aria-label="Working" /> : node.kind === 'side' ? <time className="convo-time">{relativeTime(session.lastMessageAt ?? session.updatedAt ?? session.createdAt, now)}</time> : null}
           </button>}
         {node.kind === 'main' && renaming !== session.id && <span className="convo-actions">
-          <button type="button" className="convo-action" aria-label={`Rename ${title}`} title="Rename" onClick={() => setRenaming(session.id)}><Pencil size={12} aria-hidden="true" /></button>
-          {onSnooze && !needsYou && <button type="button" className="convo-action" aria-pressed={session.snoozed === true} aria-label={session.snoozed ? `Wake ${title}` : `Snooze ${title} until it needs you`} title={session.snoozed ? 'Wake: alert me about its progress again' : 'Snooze until it needs you: no alerts for progress, but approvals, questions and failures still reach you'} onClick={() => onSnooze(session, session.snoozed !== true)}>{session.snoozed ? <BellRing size={12} aria-hidden="true" /> : <BellOff size={12} aria-hidden="true" />}</button>}
-          {onArchive && <button type="button" className="convo-action" aria-label={`Archive ${title}`} title="Archive (restore it from the employee's page)" disabled={busy} onClick={() => onArchive(session)}><Archive size={12} aria-hidden="true" /></button>}
-          <button type="button" className="convo-action danger" aria-label={`Delete ${title}`} title="Delete" disabled={busy} onClick={() => onDelete(session)}><Trash2 size={12} aria-hidden="true" /></button>
+          <button type="button" className="convo-action" aria-label={`Actions for ${title}`} title="More" aria-haspopup="menu" onClick={(event) => openMenu(event.currentTarget, `Actions for ${title}`, rowItems(session, title, busy, needsYou))}><MoreHorizontal size={13} aria-hidden="true" /></button>
         </span>}
       </div>
       {node.children.length > 0 && <Collapse open={open}><ul role="group" className="convo-children" style={{ ['--parent-depth' as string]: depth }}>{node.children.map((child) => renderNode(child, depth + 1))}</ul></Collapse>}

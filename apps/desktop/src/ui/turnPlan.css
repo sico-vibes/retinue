@@ -1,0 +1,23 @@
+/* A bot's task list (owner, 14 November 2026). */
+.turn-plan { margin: 6px 0 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-md, 12px); background: var(--surface-raised); max-width: 640px; }
+.turn-plan ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.turn-plan li { display: flex; align-items: flex-start; gap: 9px; color: var(--text-1); font-size: var(--fs-sm); line-height: 1.45; }
+.turn-plan li[data-status="pending"] { color: var(--text-2); }
+.turn-plan li[data-status="completed"] { color: var(--text-3); }
+.turn-plan-text { position: relative; min-width: 0; }
+.turn-plan li[data-status="completed"] .turn-plan-text { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--text-3) 70%, transparent); }
+.turn-plan li[data-status="in_progress"] .turn-plan-text { font-weight: 500; }
+
+.plan-mark { flex: 0 0 auto; margin-top: 2px; overflow: visible; color: var(--text-3); }
+.plan-mark-ring { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; transform-origin: 12px 12px; transition: stroke-dasharray 300ms cubic-bezier(.77, 0, .175, 1), fill 200ms ease; }
+.plan-mark[data-status="pending"] .plan-mark-ring { stroke-dasharray: 3.75 8.75; }
+.plan-mark[data-status="in_progress"] { color: var(--text-1); }
+.plan-mark[data-status="in_progress"] .plan-mark-ring { stroke-dasharray: 68 32; animation: plan-mark-spin 1.1s linear infinite; }
+.plan-mark[data-status="completed"] { color: var(--reply-ok, #22c55e); }
+.plan-mark[data-status="completed"] .plan-mark-ring { stroke-dasharray: 100 0; fill: color-mix(in srgb, currentColor 14%, transparent); }
+.plan-mark[data-status="failed"] { color: var(--reply-bad, #ef4444); }
+.plan-mark[data-status="failed"] .plan-mark-ring { stroke-dasharray: 100 0; }
+.plan-mark-glyph { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 100; stroke-dashoffset: 100; animation: plan-mark-draw 240ms 80ms ease-out forwards; }
+@keyframes plan-mark-spin { to { transform: rotate(360deg); } }
+@keyframes plan-mark-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .plan-mark-ring, .plan-mark-glyph { animation: none; transition: none; } .plan-mark-glyph { stroke-dashoffset: 0; } }

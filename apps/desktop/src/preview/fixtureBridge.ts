@@ -4,7 +4,7 @@
 import { DEPARTMENTS, PRESETS } from '../team/presets'
 import { handleFixtureTaskRpc } from './fixtureTasks'
 import { EXPERIMENTS } from '../ui/experiments'
-import type { Agent, DaemonEvent, DaemonSupervisor, MessageMeta, PermissionRequest, Project, Runtime, Session, Snapshot, WindowBackdrop } from '../types'
+import type { Agent, DaemonEvent, ImportRow, DaemonSupervisor, MessageMeta, PermissionRequest, Project, Runtime, Session, Snapshot, WindowBackdrop } from '../types'
 import { answerUsageAnalytics } from '../ui/analyticsFixtures'
 import { normalizeAnalytics } from '../ui/analyticsFormat'
 import { parseCapabilities, parseExecSnapshot, parseModelCatalog } from '../executionContract'
@@ -85,6 +85,7 @@ const fixtureStash: Array<{ id: string; text: string; attachments: Array<{ file:
 const fixtureExternal: { enabled: boolean; tier: string; lastCallAt: string | null; lastClient: string | null; allowFullAccess: boolean } = fixturePreset() === 'mcp' ? { enabled: true, tier: 'operator', lastCallAt: new Date(Date.now() - 4 * 60_000).toISOString(), lastClient: 'claude-code', allowFullAccess: false } : { enabled: false, tier: 'chat', lastCallAt: null, lastClient: null, allowFullAccess: false }
 // The computer on the owner's server. `?preset=computer` is linked, awake and shared with employees;
 // `computer-asleep`, `computer-away` (the server does not answer) and `computer-linked` (linked, not shared yet).
+// `?flag=computer-no-input` is an awake computer missing the screen tools, for the setup card.
 const computerPreset = (fixturePreset() ?? '').startsWith('computer') ? fixturePreset()! : null
 const fixtureComputer: { linked: boolean; enabled: boolean; awake: boolean; away: boolean; since: string } = { linked: !!computerPreset, enabled: !!computerPreset && computerPreset !== 'computer-linked', awake: computerPreset !== 'computer-asleep', away: computerPreset === 'computer-away', since: new Date(Date.now() - 5 * 3_600_000).toISOString() }
 const fixtureRoutines: Array<Record<string, unknown>> = [
@@ -150,7 +151,7 @@ let sessions: Session[] = [
     id: 'session-codex', runtimeId: 'runtime-codex', agentId: 'agent-codex', title: 'Invoice parser tests', projectPath: 'C:/work/korus', ...(fixturePreset() === 'moved' ? { link: { movedTo: { machineId: 'preview-laptop', name: 'Work laptop', at: new Date().toISOString() } } } : {}), state: flags().has('idle') ? 'idle' : 'working', model: 'gpt-6.1-sol', updatedAt: minutesAgo(fixturePreset() === 'generated-image' ? 0 : 2),
     messages: [
       { id: 'm1', role: 'user', content: 'Can you make the invoice parser tests pass?', createdAt: minutesAgo(9), ...(fixturePreset() === 'mcp' ? { meta: { origin: { kind: 'mcp', client: 'claude-code' } } } : {}) },
-      { id: 'm2', role: 'assistant', content: 'Sure. I found two failing cases in **tests/invoice.test.ts**: the currency field is parsed before the locale is known, and totals use floats.\n\nI will switch totals to integer minor units and parse the locale first.', createdAt: minutesAgo(8) },
+      { id: 'm2', role: 'assistant', turnId: 'turn-codex-1', content: 'Sure. I found two failing cases in **tests/invoice.test.ts**: the currency field is parsed before the locale is known, and totals use floats.\n\nI will switch totals to integer minor units and parse the locale first.', createdAt: minutesAgo(8) },
       ...(fixturePreset() === 'openui' ? [{ id: 'openui-1', role: 'assistant', content: "Here is the test run at a glance.\n\n```openui\nroot = Stack([title, stats, tabs, card])\ntitle = Heading(\"Test run\", 1)\nstats = Row([Stat(\"Passed\", 1687, \"+12\", \"good\"), Stat(\"Failed\", 2, \"-1\", \"good\"), Stat(\"Duration\", \"4m 12s\"), Badge(\"main\", \"info\")])\ntabs = Tabs([Tab(\"By suite\", [chart]), Tab(\"Failures\", [table])])\nchart = Chart(\"bar\", [\"ui\", \"daemon\", \"storage\"], [{name: \"tests\", values: [1687, 966, 160]}], \"Tests by suite\")\ntable = Table([\"Test\", \"Suite\", \"Reason\"], [[\"composer sends\", \"ui\", \"timeout\"], [\"warm resume\", \"daemon\", \"assertion\"]])\ncard = Card(\"Next step\", [Text(\"Two tests fail on Windows only.\"), Progress(\"Release checklist\", 70), form])\nform = Form(\"next\", [Select(\"who\", \"Who fixes them\", [\"Ada\", \"Sleuth\"]), Checkbox(\"release\", \"Release after\")], \"Send to the team\")\n```", createdAt: new Date().toISOString(), sequence: 101 }] : []),
       ...(fixturePreset() === 'visual' ? [{ id: 'visual-1', role: 'assistant', content: "Here is a mock of the card.\n\n```retinue-visual\n<div style=\"padding:16px;border-radius:12px;background:#eef\"><h3 style=\"margin:0\">Invoice 104</h3><p>Paid on 31 October</p><script>document.body.innerHTML=\"SCRIPT RAN\"</script></div>\n```\n\nAnd as SVG:\n\n```svg\n<svg width=\"120\" height=\"60\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"120\" height=\"60\" rx=\"10\" fill=\"#7a7\"/></svg>\n```", createdAt: new Date().toISOString(), sequence: 100 }] : []),
       ...(fixturePreset() === 'generated-image' ? [
@@ -158,12 +159,24 @@ let sessions: Session[] = [
         { id: 'img-ready', role: 'notice', content: 'Generated an image: sunrise.png', createdAt: minutesAgo(7), meta: { kind: 'generated_image', mediaId: 'img-ready', status: 'ready', name: 'sunrise.png', bytes: 182_400, mediaType: 'image/png', provider: 'codex' } },
         { id: 'img-pending', role: 'notice', content: 'Generating an image…', createdAt: minutesAgo(6), meta: { kind: 'generated_image', mediaId: 'img-pending', status: 'pending' } },
       ] : []),
-      { id: 'm3', role: 'assistant', content: fixturePreset() === 'message-links'
+      { id: 'm3', role: 'assistant', turnId: 'turn-codex-2', content: fixturePreset() === 'message-links'
         ? 'Here are the projects I found:\n\n| Project | Stars | Licence | What it gives you |\n| --- | ---: | --- | --- |\n| [dicebear/dicebear](https://github.com/dicebear/dicebear) | 9.9k | MIT | 61 styles for avatars and characters |\n| [Alain00/blobatar](https://github.com/Alain00/blobatar) | 1.5k | MIT | Parametric blob illustrations |\n\nMore details: https://github.com/hardbeat920/monocode.'
         : 'Patched `parseInvoice` and the fixture loader. Running the suite now.', createdAt: minutesAgo(3) },
     ],
+    turns: [
+      { id: 'turn-codex-1', state: 'completed', createdAt: minutesAgo(9), completedAt: minutesAgo(8) },
+      // A half-done task list: two steps finished, one in progress, one waiting.
+      { id: 'turn-codex-2', state: 'working', createdAt: minutesAgo(3), plan: { items: [
+        { text: 'Read tests/invoice.test.ts and the parser', status: 'completed' },
+        { text: 'Switch totals to integer minor units', status: 'completed' },
+        { text: 'Parse the locale before the currency', status: 'in_progress' },
+        { text: 'Run the invoice suite', status: 'pending' },
+      ], updatedAt: minutesAgo(1) } },
+    ],
     tools: [
       { id: 't1', title: 'npm test', kind: 'command', state: 'running', command: 'npm test -- invoice', sequence: 4 },
+      // The to-do tool's own row: kind `plan`, so the window shows the list instead.
+      { id: 't-plan', turnId: 'turn-codex-2', title: 'Updated the task list', kind: 'plan', state: 'completed', sequence: 5 },
       // `?subbots=1` also shows a provider's own sub-agent, with its steps under it.
       ...(flags().get('subbots') ? [
         { id: 'agent-1', title: 'Agent', kind: 'Agent', state: 'completed', sequence: 4, detail: { tool: 'Agent', subagent: { type: 'general-purpose', model: 'haiku', description: 'Count the invoice fixtures' }, output: 'Async agent launched successfully. (This tool result is internal metadata)\nagentId: a1 (internal ID)\nThe agent is working in the background.\nThere are 12 invoice fixtures.' } },
@@ -188,7 +201,7 @@ let sessions: Session[] = [
   // `?preset=usage-limit`: Claude reached its usage limit, so the conversation offers a handoff (wave 13).
   { id: 'session-claude', runtimeId: 'runtime-claude', agentId: 'agent-claude', title: 'Landing page copy', projectPath: 'C:/work/site', state: fixturePreset() === 'usage-limit' ? 'limited' : 'completed', ...(fixturePreset() === 'usage-limit' ? { provider: 'claude', limitedUntil: new Date(Date.now() + 2 * 3_600_000).toISOString() } : {}), model: 'claude-opus', updatedAt: minutesAgo(41), messages: [{ id: 'c1', role: 'assistant', content: 'Updated the hero copy and the pricing table.', createdAt: minutesAgo(41) },
     ...(fixturePreset() === 'usage-limit' ? [{ id: 'c-limit', role: 'notice', content: "Limited until 14:00. I'll pick up when the window opens.", createdAt: minutesAgo(40), meta: { kind: 'usage_limit' } }] : [])] },
-  { id: 'session-opencode', runtimeId: 'runtime-opencode', agentId: 'agent-opencode', title: 'Refactor auth', projectPath: 'C:/work/api', state: 'idle', updatedAt: minutesAgo(60 * 26), messages: [] },
+  { id: 'session-opencode', runtimeId: 'runtime-opencode', agentId: 'agent-opencode', title: 'Refactor auth', projectPath: 'C:/work/api', state: 'idle', updatedAt: minutesAgo(60 * 26), messages: [], origin: { kind: 'mcp', client: 'claude-code' } },
   { id: 'session-legacy', runtimeId: 'runtime-codex', agentId: null, title: 'Untied notes', projectPath: 'C:/work/notes', state: 'idle', updatedAt: minutesAgo(90), messages: [] },
   { id: 'session-claude-2', runtimeId: 'runtime-claude', agentId: 'agent-claude', title: 'Hero follow-up', projectPath: 'c:\\work\\site\\', state: 'idle', updatedAt: minutesAgo(20), modelLock: flags().get('preset') === 'claude-context' ? { model:'claude-sonnet-5-5', thinking:'high' } : undefined, contextUsed: flags().get('preset') === 'claude-context' ? 17_340 : null, contextSize: flags().get('preset') === 'claude-context' ? 1_000_000 : null, contextModel: flags().get('preset') === 'claude-context' ? 'claude-sonnet-5-5' : null, contextEstimated: flags().get('preset') === 'claude-context', messages: [] },
   { id: 'session-claude-web', runtimeId: 'runtime-claude', agentId: 'agent-claude', title: 'Pricing page', projectPath: 'C:\\work\\web', state: 'completed', updatedAt: minutesAgo(80), messages: [] },
@@ -449,6 +462,32 @@ function fixtureSubbots() {
 }
 // Phase 5: accounts, custom models and secrets. `?secretrequest=1` shows a bot asking for one.
 let fixtureAccounts: Array<{ id: string; provider: string; name: string; signedIn: boolean; label: string | null; plan: string | null; bots: number }> = [{ id: 'preview-account-1', provider: 'claude', name: 'Work', signedIn: true, label: 'work@example.com', plan: 'max', bots: 2 }]
+
+// Phase 10: what `import.*` answers in the browser preview. Synthetic rows only.
+function fixtureImportSources() {
+  return [
+    { source: 'claude', label: 'Claude Code', folder: 'C:\\Users\\you\\.claude\\projects', conversations: 62, recent: 18, newest: '2026-11-13T21:05:00Z', oldest: '2025-02-01T09:00:00Z', bytes: 356_000_000, error: null },
+    { source: 'codex', label: 'Codex', folder: 'C:\\Users\\you\\.codex\\sessions', conversations: 44, recent: 11, newest: '2026-11-13T23:36:00Z', oldest: '2025-03-12T18:00:00Z', bytes: 268_000_000, error: null },
+    { source: 'opencode', label: 'OpenCode', folder: 'C:\\Users\\you\\.local\\share\\opencode\\opencode.db', conversations: 465, recent: 96, newest: '2026-11-14T08:10:00Z', oldest: '2025-05-04T12:00:00Z', bytes: 164_000_000, error: null },
+  ]
+}
+
+function fixtureImportRows(): ImportRow[] {
+  return [
+    { conversationId: '9afaf311-90be-4722-92c3-42957a067383', source: 'claude', agent: 'claude', agentLabel: 'Claude Code', title: 'Invoice parser tests', projectPath: 'C:/Users/you/Projects/Retinue', firstUser: 'Why is the invoice parser skipping line 2?', messageCount: 42, bytes: 1_240_000, updatedAt: '2026-11-13T21:05:00Z', canResumeWith: 'claude', alreadyImported: false, importedSessionId: null, error: null },
+    { conversationId: '0c2b1c4a-1f5e-4a5e-9d3a-4c9f4a1a2b3c', source: 'claude', agent: 'claude', agentLabel: 'Claude Code', title: 'Rename the billing route', projectPath: 'C:/Users/you/Projects/Billing', firstUser: 'Move /invoice to /invoices and keep the old one working.', messageCount: 18, bytes: 420_000, updatedAt: '2026-11-12T14:20:00Z', canResumeWith: 'claude', alreadyImported: false, importedSessionId: null, error: null },
+    { conversationId: 'rollout-2026-11-13T11-00-00-0190aaaa-bbbb-cccc-dddd-eeeeffff0000', source: 'codex', agent: 'codex', agentLabel: 'Codex', title: 'Add a health check endpoint', projectPath: 'C:/Users/you/Projects/Retinue', firstUser: 'Add a health check endpoint to the daemon.', messageCount: 27, bytes: 8_900_000, updatedAt: '2026-11-13T11:10:00Z', canResumeWith: 'codex', alreadyImported: false, importedSessionId: null, error: null },
+    { conversationId: 'ses_ec891daf6ffeDRFk6xOTB3X8kb', source: 'opencode', agent: 'opencode', agentLabel: 'OpenCode', title: 'Install coding CLIs', projectPath: 'C:/Users/you/Documents/Default Project', firstUser: 'Install the opencode, claude and codex CLIs on this machine.', messageCount: 63, bytes: 980_000, updatedAt: '2026-11-14T08:10:00Z', canResumeWith: 'opencode', alreadyImported: false, importedSessionId: null, error: null },
+  ]
+}
+
+function fixtureImportedRow() {
+  return { ...fixtureImportRows()[0], conversationId: 'seen-1', title: 'Old migration notes', alreadyImported: true, importedSessionId: 'preview-import-seen-1' }
+}
+
+function fixtureImportedIds() {
+  return ['preview-import-9afaf311-90be-4722-92c3-42957a067383']
+}
 let fixtureCustomModels: Array<{ id: string; provider: string; modelId: string; label: string; efforts: string[] }> = []
 let fixtureSecrets: Array<{ name: string; updatedAt: string | null; usedBy: string[] }> = [{ name: 'GITHUB_TOKEN', updatedAt: null, usedBy: ['Codex'] }]
 let fixtureSecretAnswered = false
@@ -1167,8 +1206,8 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   if (method.startsWith('computer.')) {
     const address = 'https://dashboard.example.com'
     const status = () => !fixtureComputer.linked
-      ? { linked: false, enabled: false, address: null, name: null, reachable: false, state: 'unknown', since: null, restarts: 0, cpuPercent: null, memoryPercent: null, memoryText: null, pids: null, diskBytes: null, limits: null, desktopUrl: null, checkedAt: null, problem: null }
-      : { linked: true, enabled: fixtureComputer.enabled, address, name: 'retinue-01', reachable: !fixtureComputer.away, state: fixtureComputer.away ? 'unknown' : fixtureComputer.awake ? 'awake' : 'asleep', since: fixtureComputer.awake ? fixtureComputer.since : null, restarts: 0, cpuPercent: fixtureComputer.awake ? 7 : null, memoryPercent: fixtureComputer.awake ? 31 : null, memoryText: fixtureComputer.awake ? '1.24 GiB / 4 GiB' : null, pids: fixtureComputer.awake ? 188 : null, diskBytes: 2_340_000_000, limits: { cpu: '2', memory: '4g' }, desktopUrl: `${address}/harbor/computer/view/`, checkedAt: new Date().toISOString(), problem: fixtureComputer.away ? 'Your server did not answer in time.' : null }
+      ? { linked: false, enabled: false, address: null, name: null, reachable: false, state: 'unknown', since: null, restarts: 0, cpuPercent: null, memoryPercent: null, memoryText: null, pids: null, diskBytes: null, limits: null, desktopUrl: null, input: null, checkedAt: null, problem: null }
+      : { linked: true, enabled: fixtureComputer.enabled, address, name: 'retinue-01', reachable: !fixtureComputer.away, state: fixtureComputer.away ? 'unknown' : fixtureComputer.awake ? 'awake' : 'asleep', since: fixtureComputer.awake ? fixtureComputer.since : null, restarts: 0, cpuPercent: fixtureComputer.awake ? 7 : null, memoryPercent: fixtureComputer.awake ? 31 : null, memoryText: fixtureComputer.awake ? '1.24 GiB / 4 GiB' : null, pids: fixtureComputer.awake ? 188 : null, diskBytes: 2_340_000_000, limits: { cpu: '2', memory: '4g' }, desktopUrl: `${address}/harbor/computer/view/`, input: fixtureComputer.awake && fixtureComputer.enabled && !fixtureComputer.away ? (flags().has('computer-no-input') ? { ready: false, missing: ['xdotool', 'scrot'] } : { ready: true, missing: [] }) : null, checkedAt: new Date().toISOString(), problem: fixtureComputer.away ? 'Your server did not answer in time.' : null }
     const changed = () => { notifyFixtureDaemon('computer.changed', status()); return status() as T }
     if (method === 'computer.status') return status() as T
     if (method === 'computer.link') {
@@ -1203,6 +1242,34 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     if (!session) throw rpcError('not_found', 'session not found')
     const servers = session.id === SCENE_SESSION_ID && fixtureScene?.servers ? fixtureScene.servers : []
     return { sessionId: session.id, servers } as T
+  }
+  // Phase 10: importing conversations from Claude Code, Codex and OpenCode.
+  if (method === 'import.scan') return { sinceDays: 30, scannedAt: new Date().toISOString(), sources: fixtureImportSources() } as T
+  if (method === 'import.preview') {
+    const source = String(params.source)
+    const rows = fixtureImportRows().filter((row) => row.source === source && !row.alreadyImported)
+    if (flags().has('import-seen') && source === 'claude') rows.push(fixtureImportedRow())
+    const offset = Number(params.offset ?? 0)
+    const limit = Number(params.limit ?? 50)
+    return { source, total: rows.length, offset, limit, next: offset + limit < rows.length ? offset + limit : null, rows: rows.slice(offset, offset + limit) } as T
+  }
+  if (method === 'import.apply') {
+    const items = Array.isArray(params.items) ? params.items as Array<{ source: string; conversationId: string }> : []
+    for (const [index, item] of items.entries()) {
+      window.setTimeout(() => notifyFixtureDaemon('import.progress', { importId: 'preview-import', index: index + 1, total: items.length, source: item.source, conversationId: item.conversationId, state: 'done', importedSessionId: `preview-import-${item.conversationId}` }), 400 * (index + 1))
+    }
+    const importedSessions = items.map((item) => `preview-import-${item.conversationId}`)
+    window.setTimeout(() => notifyFixtureDaemon('import.completed', { importId: 'preview-import', imported: importedSessions.length, skipped: 0, failed: 0, conversationIds: importedSessions }), 400 * (items.length + 1))
+    return { importId: 'preview-import', imported: importedSessions.length, skipped: 0, failed: 0, sessions: importedSessions } as T
+  }
+  if (method === 'import.distribute') {
+    const ids = Array.isArray(params.ids) ? params.ids.map(String) : fixtureImportedIds()
+    return { suggestions: ids.map((id, index) => ({ conversationId: id, sessionId: id, title: 'Invoice parser tests', source: 'claude', agentId: index % 2 === 0 ? 'agent-codex' : null, reason: index % 2 === 0 ? 'project' : 'balance', detail: index % 2 === 0 ? 'same folder as Retinue' : 'no bot is free; the CEO can file it' })) } as T
+  }
+  if (method === 'import.assign') {
+    const session = sessions.find((item) => item.id === params.sessionId)
+    if (!session) throw rpcError('not_found', 'session not found')
+    return { session: { ...session, agentId: params.agentId ?? null } } as T
   }
   if (method === 'session.git.scopes') {
     return { sessionId: params.sessionId, scopes: [
@@ -1534,6 +1601,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       instructions: typeof params.instructions === 'string' ? params.instructions : existing.instructions,
       color: typeof params.color === 'string' ? params.color : existing.color,
       computerWorkplace: typeof params.computerWorkplace === 'boolean' ? params.computerWorkplace : existing.computerWorkplace,
+      replyIcons: typeof params.replyIcons === 'boolean' ? params.replyIcons : existing.replyIcons,
       // The look the editor saved (icon, art, profile photo); the real daemon keeps it too.
       ...(params.look && typeof params.look === 'object' && !Array.isArray(params.look) ? { look: params.look as Agent['look'] } : {}),
       runtimeId: nextRuntime,

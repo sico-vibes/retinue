@@ -4,7 +4,14 @@ export function isNegativePermissionChoice(choice: string): boolean {
   return false
 }
 
-export function permissionChoiceLabel(choice: string) {
+export function permissionChoiceLabel(choice: string, kind?: unknown) {
+  // Phase C (14 November 2026): an employee asking to control this computer. The
+  // allow choice lasts for the conversation, so it says so.
+  if (kind === 'owner_computer') {
+    if (choice === 'allow') return 'Allow for this conversation'
+    if (choice === 'allow_once') return 'Once'
+    if (choice === 'deny') return 'No'
+  }
   if (choice === 'allow_once') return 'Allow once'
   if (choice === 'allow_session') return 'Allow this session'
   if (choice === 'deny') return 'Deny'

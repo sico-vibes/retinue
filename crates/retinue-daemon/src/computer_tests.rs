@@ -431,13 +431,14 @@ async fn computer_desktop_url_is_text_and_only_from_the_linked_origin() {
 }
 
 #[tokio::test]
-async fn computer_bridge_lists_the_ten_tools_and_answers_unknown_ones() {
+async fn computer_bridge_lists_the_sixteen_tools_and_answers_unknown_ones() {
     let (st, _) = state();
     let listed = computer::mcp_rpc(&st, "computer-session", "mcp.computer.list", &json!({})).await.unwrap();
     let names = listed["tools"].as_array().unwrap().iter().map(|tool| tool["name"].as_str().unwrap().to_owned()).collect::<Vec<_>>();
     assert_eq!(names, vec![
         "computer_status", "computer_wake", "computer_sleep", "computer_restart", "computer_logs", "computer_exec",
         "computer_list_routines", "computer_create_routine", "computer_run_routine", "computer_desktop_url",
+        "computer_screenshot", "computer_click", "computer_move", "computer_type", "computer_key", "computer_scroll",
     ]);
     let unknown = computer::mcp_rpc(&st, "computer-session", "mcp.computer.call", &json!({"name": "computer_sudo", "arguments": {}})).await.unwrap();
     assert_eq!(unknown["isError"], true, "an unknown tool is not forwarded anywhere");
@@ -445,7 +446,366 @@ async fn computer_bridge_lists_the_ten_tools_and_answers_unknown_ones() {
 
 
 // ---------------------------------------------------------------------------
-// The screen, framed by the app
+// The screen tools (14 November 2026): screenshots, mouse, keyboard, scrolling
+
+/// A live session with a computer that has every tool: xdotool, a capture tool,
+/// and a readable display.
+const READY_PROBE: &str = "have:xdotool\nhave:scrot\nhave:convert\nmiss:gnome-screenshot\nmiss:import\ndisplay:1\ngeometry:1280x800\n";
+
+/// A 1x1 PNG, what a capture tool hands back.
+const ONE_PIXEL_PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+/// A fake Harbor that answers the screen tools' own scripts: the probe reports
+/// `probe`'s lines, a capture answers `png`, and every other command succeeds
+/// with no output. Every `/exec` command is recorded in `seen`.
+async fn input_harbor(probe: &'static str, png: Option<&'static str>, seen: Arc<TestMutex<Vec<String>>>) -> String {
+    fake_harbor(move |_, path, body| {
+        if path.ends_with("/exec") {
+            let command = body["command"].as_str().unwrap_or("").to_owned();
+            seen.lock().unwrap().push(command.clone());
+            if command.contains("retinue:probe") {
+                return (200, json!({"ok": true, "code": 0, "output": probe}));
+            }
+            if command.contains("retinue:screenshot") {
+                if let Some(png) = png {
+                    return (200, json!({"ok": true, "code": 0, "output": format!("RETINUE_BYTES:1\nRETINUE_PNG:{png}\n")}));
+                }
+            }
+            return (200, json!({"ok": true, "code": 0, "output": ""}));
+        }
+        (200, harbor_body("running", None))
+    })
+    .await
+}
+
+/// Every screen tool, with arguments that are valid on a 1280x800 screen.
+fn input_calls() -> Vec<(&'static str, Value)> {
+    vec![
+        ("computer_screenshot", json!({})),
+        ("computer_click", json!({"x": 400, "y": 300})),
+        ("computer_move", json!({"x": 400, "y": 300})),
+        ("computer_type", json!({"text": "hello"})),
+        ("computer_key", json!({"keys": "Return"})),
+        ("computer_scroll", json!({"x": 400, "y": 300, "direction": "down"})),
+    ]
+}
+
+async fn input_rpc(st: &AppState, session: &str, name: &str, args: Value) -> Value {
+    computer::mcp_rpc(st, session, "mcp.computer.call", &json!({"name": name, "arguments": args})).await.unwrap()
+}
+
+/// The text of a tool result, error or not.
+fn result_text(reply: &Value) -> String {
+    reply["content"][0]["text"].as_str().unwrap_or("").to_owned()
+}
+
+/// A conversation with a computer that has every tool, for the screen tests.
+async fn screen_setup(probe: &'static str, png: Option<&'static str>, seen: Arc<TestMutex<Vec<String>>>) -> (AppState, String, String) {
+    let address = input_harbor(probe, png, seen).await;
+    let (st, _) = state();
+    st.db.create_session("screen-session", "rt-test", "codex", ".", "Chat").unwrap();
+    st.db.update_session_state("screen-session", "idle").unwrap();
+    link_directly(&st, &format!("http://{address}"), HARBOR_TOKEN, true);
+    (st, "screen-session".to_owned(), address)
+}
+
+#[tokio::test]
+async fn computer_input_tools_are_refused_while_the_computer_is_off_or_unlinked() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let (st, session, _) = screen_setup(READY_PROBE, None, seen.clone()).await;
+    st.db.computer_link_set_enabled(false).unwrap();
+
+    for (name, args) in input_calls() {
+        let refused = input_rpc(&st, &session, name, args).await;
+        assert_eq!(refused["isError"], true, "{name}");
+        assert!(result_text(&refused).contains("switched off"), "{name}: {refused}");
+    }
+    assert!(seen.lock().unwrap().is_empty(), "a switched-off computer is never asked anything");
+
+    st.db.computer_link_set_enabled(true).unwrap();
+    dispatch(&st, "computer.unlink", json!({})).await.unwrap();
+    for (name, args) in input_calls() {
+        let refused = input_rpc(&st, &session, name, args).await;
+        assert!(result_text(&refused).contains("No computer is linked"), "{name}: {refused}");
+    }
+    assert!(seen.lock().unwrap().is_empty());
+    assert!(!st.db.session_detail(&session).unwrap().to_string().contains(HARBOR_TOKEN));
+}
+
+#[tokio::test]
+async fn computer_input_tools_are_refused_in_an_unattended_conversation() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let address = input_harbor(READY_PROBE, None, seen.clone()).await;
+    let (st, _) = state();
+    st.db.create_session("scheduled-run", "rt-test", "codex", ".", "Scheduled").unwrap();
+    st.db.set_session_link("scheduled-run", &json!({"kind": "automation", "automationId": "auto-1"})).unwrap();
+    st.db.update_session_state("scheduled-run", "idle").unwrap();
+    link_directly(&st, &format!("http://{address}"), HARBOR_TOKEN, true);
+
+    for (name, args) in input_calls() {
+        let refused = input_rpc(&st, "scheduled-run", name, args).await;
+        assert_eq!(refused["isError"], true, "{name}");
+        assert!(result_text(&refused).contains("runs unattended"), "{name}: {refused}");
+    }
+    assert!(seen.lock().unwrap().is_empty(), "a scheduled run never drives a mouse");
+}
+
+#[tokio::test]
+async fn computer_input_tools_are_refused_in_a_turn_a_teammate_started() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let (st, session, _) = screen_setup(READY_PROBE, None, seen.clone()).await;
+
+    // The relay stores the teammate's message as the conversation's own prompt,
+    // which is what starts the running turn.
+    st.db.append_message_with_data(&session, "", "user", "[Reply from Mate] done", &json!({"meta":{"kind":"blob_reply","fromName":"Mate"}})).unwrap();
+    for (name, args) in input_calls() {
+        let refused = input_rpc(&st, &session, name, args).await;
+        assert_eq!(refused["isError"], true, "{name}");
+        assert!(result_text(&refused).contains("teammate"), "{name}: {refused}");
+    }
+    assert!(seen.lock().unwrap().is_empty(), "a teammate's turn never drives a mouse");
+
+    // The owner's own next message brings the screen back.
+    st.db.append_message_with_data(&session, "", "user", "carry on", &json!({})).unwrap();
+    let moved = input_rpc(&st, &session, "computer_move", json!({"x": 10, "y": 10})).await;
+    assert_eq!(moved["isError"], Value::Null, "{moved}");
+}
+
+#[tokio::test]
+async fn computer_input_tools_are_refused_in_a_full_access_conversation() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let address = input_harbor(READY_PROBE, None, seen.clone()).await;
+    let (st, _) = state();
+    let agent = st.db.agent_create(&json!({"name": "Full", "runtimeId": "rt-test", "approvalMode": "bypass"})).unwrap().0;
+    let id = agent["id"].as_str().unwrap().to_owned();
+    st.db.create_session_for_agent("full-access", "rt-test", "codex", ".", "Full", Some(&id)).unwrap();
+    st.db.update_session_state("full-access", "idle").unwrap();
+    link_directly(&st, &format!("http://{address}"), HARBOR_TOKEN, true);
+    assert_eq!(crate::approval_mode_for_session(&st, &st.db.session_detail("full-access").unwrap()), retinue_agent_core::ApprovalMode::Bypass);
+
+    for (name, args) in input_calls() {
+        let refused = input_rpc(&st, "full-access", name, args).await;
+        assert_eq!(refused["isError"], true, "{name}");
+        assert!(result_text(&refused).contains("Full access"), "{name}: {refused}");
+    }
+    assert!(seen.lock().unwrap().is_empty(), "Full access never covers the computer's screen");
+    // A conversation that only auto-approves edits is not Full access: it may
+    // use the screen, and its own approval card still asks.
+    let plain = st.db.agent_create(&json!({"name": "Edits", "runtimeId": "rt-test", "approvalMode": "accept_edits"})).unwrap().0;
+    st.db.create_session_for_agent("edits", "rt-test", "codex", ".", "Edits", Some(plain["id"].as_str().unwrap())).unwrap();
+    st.db.update_session_state("edits", "idle").unwrap();
+    let moved = input_rpc(&st, "edits", "computer_move", json!({"x": 10, "y": 10})).await;
+    assert_eq!(moved["isError"], Value::Null, "{moved}");
+}
+
+#[tokio::test]
+async fn computer_click_refuses_a_point_off_the_screen_and_sends_no_click() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let (st, session, _) = screen_setup(READY_PROBE, None, seen.clone()).await;
+
+    let refused = input_rpc(&st, &session, "computer_click", json!({"x": 5000, "y": 10})).await;
+    assert_eq!(refused["isError"], true);
+    let text = result_text(&refused);
+    assert!(text.contains("off the screen") && text.contains("1280 by 800"), "{text}");
+    let commands = seen.lock().unwrap().clone();
+    assert!(commands.iter().any(|command| command.contains("retinue:probe")), "the probe ran first");
+    assert!(!commands.iter().any(|command| command.contains("retinue:click")), "no click was sent: {commands:?}");
+
+    // A negative point is refused before the container is asked anything.
+    let before = commands.len();
+    let refused = input_rpc(&st, &session, "computer_click", json!({"x": -1, "y": 10})).await;
+    assert!(result_text(&refused).contains("zero or more"), "{}", result_text(&refused));
+    assert_eq!(seen.lock().unwrap().len(), before, "nothing was sent for a negative point");
+
+    // The bottom-right pixel is on the screen; one past it is not.
+    assert_eq!(input_rpc(&st, &session, "computer_move", json!({"x": 1279, "y": 799})).await["isError"], Value::Null);
+    let outside = input_rpc(&st, &session, "computer_move", json!({"x": 1280, "y": 0})).await;
+    assert_eq!(outside["isError"], true);
+}
+
+#[tokio::test]
+async fn computer_click_drives_the_screen_and_records_one_content_free_row() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let (st, session, _) = screen_setup(READY_PROBE, None, seen.clone()).await;
+
+    let clicked = input_rpc(&st, &session, "computer_click", json!({"x": 400, "y": 300, "button": "right", "double": true})).await;
+    assert_eq!(clicked["isError"], Value::Null, "{clicked}");
+    assert_eq!(result_text(&clicked), "Clicked twice at 400, 300 with the right button.");
+    let commands = seen.lock().unwrap().clone();
+    let click = commands.iter().find(|command| command.contains("retinue:click")).expect("a click command");
+    assert!(click.contains("xdotool mousemove --sync 400 300"), "{click}");
+    assert!(click.contains("xdotool click --repeat 2 --delay 90 3"), "{click}");
+    assert!(click.contains("DISPLAY=:1"), "the display the probe found: {click}");
+
+    // One activity row, in words, with no coordinates that could be a secret.
+    let detail = st.db.session_detail(&session).unwrap();
+    let notes = detail["messages"].as_array().unwrap().iter().filter(|message| message["role"] == "notice").cloned().collect::<Vec<_>>();
+    assert_eq!(notes.len(), 1, "{detail}");
+    assert_eq!(notes[0]["content"], "Clicked twice in the bot computer.");
+    assert_eq!(notes[0]["meta"]["kind"], "computer_action");
+    assert_eq!(notes[0]["meta"]["action"], "click");
+}
+
+#[tokio::test]
+async fn computer_type_sends_the_text_as_base64_and_never_records_it() {
+    const SECRET: &str = "correct horse battery staple";
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let (st, session, _) = screen_setup(READY_PROBE, None, seen.clone()).await;
+
+    let typed = input_rpc(&st, &session, "computer_type", json!({"text": SECRET})).await;
+    assert_eq!(typed["isError"], Value::Null, "{typed}");
+    assert_eq!(result_text(&typed), "Typed 28 characters.");
+    let commands = seen.lock().unwrap().clone();
+    let command = commands.iter().find(|command| command.contains("retinue:type")).expect("a type command");
+    assert!(!command.contains(SECRET), "the typed text is never in the command: {command}");
+    assert!(command.contains(&base64::engine::general_purpose::STANDARD.encode(SECRET)), "it travels as base64: {command}");
+    assert!(command.contains("xdotool type --clearmodifiers --delay 12 --file -"), "{command}");
+
+    // Nothing the daemon keeps carries the text: not the transcript, not the notice.
+    let detail = st.db.session_detail(&session).unwrap();
+    assert!(!detail.to_string().contains(SECRET), "the transcript never carries the typed text");
+    let notes = detail["messages"].as_array().unwrap().iter().filter(|message| message["role"] == "notice").cloned().collect::<Vec<_>>();
+    assert_eq!(notes[0]["content"], "Typed 28 characters in the bot computer.");
+
+    // Empty, oversized and NUL text are refused without a round trip.
+    let before = seen.lock().unwrap().len();
+    for text in [json!(""), json!("x".repeat(2_001)), json!("a\u{0000}b"), json!(7)] {
+        let refused = input_rpc(&st, &session, "computer_type", json!({"text": text})).await;
+        assert_eq!(refused["isError"], true, "{text}");
+    }
+    assert_eq!(seen.lock().unwrap().len(), before, "a refused argument is never sent");
+}
+
+#[tokio::test]
+async fn computer_key_accepts_key_names_and_refuses_anything_else() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let (st, session, _) = screen_setup(READY_PROBE, None, seen.clone()).await;
+
+    for keys in ["ctrl+l", "Return", "ctrl+shift+t", "Page_Down"] {
+        let pressed = input_rpc(&st, &session, "computer_key", json!({"keys": keys})).await;
+        assert_eq!(pressed["isError"], Value::Null, "{keys}: {pressed}");
+        assert_eq!(result_text(&pressed), format!("Pressed {keys}."));
+    }
+    assert!(seen.lock().unwrap().iter().any(|command| command.contains("xdotool key --clearmodifiers ctrl+l")));
+
+    let before = seen.lock().unwrap().len();
+    for keys in ["ctrl+l; rm -rf /", "$(id)", "ctrl+`", "ctrl++x", "ctrl+l && id", "ctrl+-"] {
+        let refused = input_rpc(&st, &session, "computer_key", json!({"keys": keys})).await;
+        assert_eq!(refused["isError"], true, "{keys}: {refused}");
+        assert!(result_text(&refused).contains("key names joined by +"), "{keys}: {}", result_text(&refused));
+    }
+    for missing in [json!(""), json!("   "), json!(7)] {
+        let refused = input_rpc(&st, &session, "computer_key", json!({"keys": missing})).await;
+        assert_eq!(refused["isError"], true, "{missing}");
+        assert!(result_text(&refused).contains("keys is required"), "{missing}: {}", result_text(&refused));
+    }
+    assert_eq!(seen.lock().unwrap().len(), before, "nothing but a key name reaches the container");
+}
+
+#[tokio::test]
+async fn computer_input_tools_name_what_to_install_when_the_container_lacks_it() {
+    // xdotool missing: the click says what to install, and nothing is clicked.
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let bare = input_harbor("have:scrot\nmiss:xdotool\nmiss:convert\nmiss:gnome-screenshot\nmiss:import\ndisplay:1\ngeometry:1024x768\n", None, seen.clone()).await;
+    let (st, _) = state();
+    st.db.create_session("install-session", "rt-test", "codex", ".", "Chat").unwrap();
+    st.db.update_session_state("install-session", "idle").unwrap();
+    link_directly(&st, &format!("http://{bare}"), HARBOR_TOKEN, true);
+    let refused = input_rpc(&st, "install-session", "computer_click", json!({"x": 10, "y": 10})).await;
+    let text = result_text(&refused);
+    assert!(text.contains("apt-get install -y xdotool"), "{text}");
+    assert!(!seen.lock().unwrap().iter().any(|command| command.contains("retinue:click")), "nothing was clicked");
+
+    // No capture tool: the screenshot says what to install for it.
+    let no_capture = input_harbor("have:xdotool\nmiss:scrot\nmiss:gnome-screenshot\nmiss:import\nmiss:convert\ndisplay:1\ngeometry:1024x768\n", None, Arc::new(TestMutex::new(Vec::new()))).await;
+    dispatch(&st, "computer.unlink", json!({})).await.unwrap();
+    link_directly(&st, &format!("http://{no_capture}"), HARBOR_TOKEN, true);
+    let refused = input_rpc(&st, "install-session", "computer_screenshot", json!({})).await;
+    assert!(result_text(&refused).contains("apt-get install -y scrot"), "{}", result_text(&refused));
+}
+
+#[tokio::test]
+async fn computer_input_accepts_a_screen_number_and_never_a_remote_display() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let (st, session, _) = screen_setup("have:xdotool\nhave:scrot\nmiss:gnome-screenshot\nmiss:import\nmiss:convert\ndisplay:1.0\ngeometry:1024x768\n", None, seen.clone()).await;
+    let moved = input_rpc(&st, &session, "computer_move", json!({"x": 5, "y": 6})).await;
+    assert_eq!(moved["isError"], Value::Null, "{moved}");
+    let commands = seen.lock().unwrap().clone();
+    assert!(commands.iter().any(|command| command.contains("DISPLAY=:1\n")), "the screen number is dropped: {commands:?}");
+
+    // A display spec naming another host is no display at all, and the host
+    // never reaches a command.
+    let elsewhere = input_harbor("have:xdotool\nhave:scrot\nmiss:gnome-screenshot\nmiss:import\nmiss:convert\ndisplay:otherbox:1\ngeometry:1024x768\n", None, seen.clone()).await;
+    dispatch(&st, "computer.unlink", json!({})).await.unwrap();
+    link_directly(&st, &format!("http://{elsewhere}"), HARBOR_TOKEN, true);
+    let seen_before = seen.lock().unwrap().len();
+    let refused = input_rpc(&st, &session, "computer_move", json!({"x": 5, "y": 6})).await;
+    assert_eq!(refused["isError"], true);
+    assert!(result_text(&refused).contains("no desktop running"), "{}", result_text(&refused));
+    let later = seen.lock().unwrap()[seen_before..].to_vec();
+    assert!(!later.iter().any(|command| command.contains("otherbox")), "a remote display is never used: {later:?}");
+}
+
+#[tokio::test]
+async fn computer_status_reports_the_screen_tools_and_what_is_missing() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let (st, _, _) = screen_setup(READY_PROBE, None, seen.clone()).await;
+    let probes = |seen: &Arc<TestMutex<Vec<String>>>| seen.lock().unwrap().iter().filter(|command| command.contains("retinue:probe")).count();
+
+    let status = dispatch(&st, "computer.status", json!({})).await.unwrap();
+    assert_eq!(status["input"], json!({"ready": true, "missing": []}));
+    assert_eq!(probes(&seen), 1, "the status read probed once");
+    dispatch(&st, "computer.status", json!({})).await.unwrap();
+    assert_eq!(probes(&seen), 1, "the probe is believed for five minutes");
+
+    // A container with no capture tool says what to install.
+    let bare = input_harbor("have:xdotool\nmiss:scrot\nmiss:gnome-screenshot\nmiss:import\nmiss:convert\ndisplay:1\ngeometry:1024x768\n", None, Arc::new(TestMutex::new(Vec::new()))).await;
+    dispatch(&st, "computer.unlink", json!({})).await.unwrap();
+    link_directly(&st, &format!("http://{bare}"), HARBOR_TOKEN, true);
+    let status = dispatch(&st, "computer.status", json!({})).await.unwrap();
+    assert_eq!(status["input"], json!({"ready": false, "missing": ["scrot"]}));
+
+    // Switched off: there is nothing to set up yet.
+    st.db.computer_link_set_enabled(false).unwrap();
+    assert_eq!(dispatch(&st, "computer.status", json!({})).await.unwrap()["input"], Value::Null);
+    // Unswitched links and unreachable servers answer `input: null` too.
+    st.db.computer_link_clear().unwrap();
+    assert_eq!(dispatch(&st, "computer.status", json!({})).await.unwrap()["input"], Value::Null);
+}
+
+#[tokio::test]
+async fn computer_screenshot_is_stored_as_an_image_and_its_record_carries_no_path() {
+    let seen = Arc::new(TestMutex::new(Vec::<String>::new()));
+    let (st, session, _) = screen_setup(READY_PROBE, Some(ONE_PIXEL_PNG), seen.clone()).await;
+    let dir = std::env::temp_dir().join(format!("retinue-screenshot-{}", Uuid::new_v4()));
+    std::fs::create_dir_all(&dir).unwrap();
+    *st.team.data_dir.lock().unwrap() = Some(dir.clone());
+
+    let shot = input_rpc(&st, &session, "computer_screenshot", json!({})).await;
+    assert_eq!(shot["isError"], Value::Null, "{shot}");
+    let text = result_text(&shot);
+    assert!(text.contains("Caption: Screenshot of the bot computer"), "{text}");
+    assert!(!text.contains(ONE_PIXEL_PNG), "no bytes are inline in the tool row");
+    let media_id = text.lines().find_map(|line| line.trim().strip_prefix("mediaId: ")).expect("a media id").to_owned();
+
+    // It is a media record: the chat's own preview returns the PNG.
+    let preview = dispatch(&st, "media.preview", json!({"sessionId": session, "mediaId": media_id})).await.unwrap();
+    assert_eq!(preview["status"], "ok", "{preview}");
+    assert!(preview["dataUrl"].as_str().unwrap().starts_with("data:image/png;base64,"));
+    assert_eq!(preview["relativePath"], Value::Null, "the record's path never leaves the daemon");
+
+    // The transcript's card names the id and carries no path and no bytes.
+    let detail = st.db.session_detail(&session).unwrap();
+    let card = detail["messages"].as_array().unwrap().iter().find(|message| message["meta"]["kind"] == "generated_image").cloned().expect("an image card");
+    assert_eq!(card["meta"]["mediaId"], media_id);
+    assert_eq!(card["meta"]["status"], "ready");
+    assert!(card["meta"].get("path").is_none(), "no path in meta: {}", card["meta"]);
+    assert_eq!(card["content"], "Took a screenshot of the bot computer");
+    assert!(!detail.to_string().contains(ONE_PIXEL_PNG), "no bytes in the transcript");
+
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 
 /// A fake Harbor that answers raw HTTP, so a test can choose every header.
 /// `answer(method, path, request head)` returns the whole response; every
@@ -792,14 +1152,17 @@ async fn computer_workplace_instructions_appear_only_when_the_switch_and_the_com
     let text = instructions(&id);
     assert!(text.contains("## Your workplace"), "{text}");
     assert!(text.contains("/config/work/<project>"), "the work folder is named");
-    assert!(text.contains("/config/work/logs"), "the log folder is named");
     assert!(text.contains("computer_exec"), "the tool is named");
-    assert!(text.contains("computer_create_routine"), "routines are named");
-    assert!(text.contains("report what you did and where the files are"));
+    assert!(text.contains("cloud-computer"), "the skill that carries the detail is pointed at");
     assert!(!text.contains(HARBOR_TOKEN), "never the token");
     assert!(!text.contains("harbor.example.com"), "never the address");
     assert!(text.len() < 9_000, "a short section, not a page: {}", text.len());
     assert!(!instructions(&plain).contains("## Your workplace"), "a bot without the switch gets what it got before");
+    // The detail the section used to carry now lives in the built-in skill.
+    let skill = crate::skills::builtin_body_for_test("cloud-computer");
+    for needle in ["/config/work/logs", "computer_create_routine", "report what you did"] {
+        assert!(skill.contains(needle), "the cloud-computer skill covers {needle}: {skill}");
+    }
 
     // The computer's own name is used once a status read has told us it.
     let awake = Arc::new(std::sync::atomic::AtomicBool::new(true));

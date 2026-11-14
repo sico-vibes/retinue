@@ -12,7 +12,7 @@ use retinue_adapter_acp::AcpAdapter;
 use retinue_adapter_claude::ClaudeAdapter;
 use retinue_adapter_codex::CodexAdapter;
 use retinue_agent_core::{
-    AgentAdapter, AgentEvent, ApprovalMode, ContextChangeReason, ExecOptions, ModelSwitch, NewSessionRequest, PromptAttachment, PromptRequest, ResumeSessionRequest, RuntimeSpec,
+    AgentAdapter, AgentEvent, ApprovalMode, ContextChangeReason, ExecOptions, ModelSwitch, NewSessionRequest, PLAN_ITEMS_LIMIT, PromptAttachment, PromptRequest, ResumeSessionRequest, RuntimeSpec,
     SessionHandle, SteerOutcome, SteerRequest,
 };
 use retinue_protocol::{
@@ -116,8 +116,14 @@ mod machines_tests;
 mod secrets;
 // The owner's linked VPS computer (Harbor) and its employee tools.
 mod computer;
+// The browser employees get on that computer (14 November 2026).
+mod browser;
+// Phase C: the owner's own Windows computer, behind `owner_*` tools and a card.
+mod owner_computer;
 /// Phase 5, section 8: webhook triggers and their signature.
 mod webhooks;
+/// Phase 10: conversations imported from Claude Code, Codex and OpenCode.
+mod import;
 
 use quota::{normalize_codex_quota, PollFailure, PollOutcome, QuotaPollGate, QUOTA_POLL_INTERVAL, QUOTA_REQUEST_TIMEOUT};
 
@@ -174,6 +180,12 @@ struct AppState {
     /// The linked VPS computer (Harbor): the last status announced, so an
     /// unchanged read is not announced twice.
     computer: Arc<computer::Computer>,
+    /// The conversations with an open browser context on that computer, and the
+    /// last browser readiness read and announced.
+    browser: Arc<browser::Browser>,
+    /// Phase C: live grants for the owner's own computer, the cards in flight and
+    /// the driver process a call is running. Memory only.
+    owner_computer: Arc<owner_computer::OwnerComputer>,
 }
 #[derive(Clone)]
 struct Adapters {
@@ -491,6 +503,12 @@ async fn main_rpc(
         // tools are the linked computer's, and the Harbor token stays here.
         let result = if req.method.starts_with("mcp.computer.") {
             computer::mcp_rpc(&st, &session, &req.method, &req.params).await
+        } else if req.method.starts_with("mcp.browser.") {
+            // The `vps-browser` bridge: the browser on that same linked computer.
+            browser::mcp_rpc(&st, &session, &req.method, &req.params).await
+        } else if req.method.starts_with("mcp.owner.") {
+            // Phase C: the owner's own computer. Same capability, its own gates.
+            owner_computer::mcp_rpc(&st, &session, &req.method, &req.params).await
         } else {
             team::mcp_rpc(&st, &session, &req.method, &req.params).await
         };
@@ -1129,7 +1147,23 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "secret.list" | "secret.set" | "secret.delete" | "secret.request.list" | "secret.request.answer" | "secret.request.decline" => secrets::rpc(st, method, &p).await,
         // The linked VPS computer (Harbor): desktop only, never remote, and no
         // employee tool reaches these (they go through `mcp.computer.*`).
-        "computer.status" | "computer.link" | "computer.unlink" | "computer.setEnabled" | "computer.action" | "computer.routines" | "computer.routine.run" | "computer.logs" | "computer.view" => computer::rpc(st, method, &p).await,
+        // The status also carries the browser's readiness, added by the browser
+        // module; everything else there is the computer's own answer.
+        "computer.status" => {
+            let mut status = computer::rpc(st, method, &p).await?;
+            browser::add_status(st, &mut status).await;
+            Ok(status)
+        }
+        // The browser employees get on that computer: desktop only, and its one
+        // read is `browser.status` (the tools go through `mcp.browser.*`).
+        "browser.status" => browser::rpc(st, method, &p).await,
+        "computer.link" | "computer.unlink" | "computer.setEnabled" | "computer.action" | "computer.routines" | "computer.routine.run" | "computer.logs" | "computer.view" => computer::rpc(st, method, &p).await,
+        // Phase 10: conversations from other coding agents. Desktop only: it reads
+        // the owner's own files under `~/.claude`, `~/.codex` and OpenCode's store.
+        "import.scan" | "import.preview" | "import.apply" | "import.distribute" | "import.assign" => import::rpc(st, method, &p).await,
+        // Phase C: Stop, from the conversation's bar or the companion pill, and
+        // nothing else. Desktop only and never remote, as the computer methods are.
+        "owner_computer.stop" => owner_computer::rpc(st, method, &p).await,
         "project.findByIdentity" => repo_identity::find_by_identity(st, &p),
         "project.sharedSettings.get" | "project.sharedSettings.trust" | "project.sharedSettings.untrust" | "project.sharedSettings.write" => shared_settings::rpc(st, method, &p),
         "worktree.abandoned" | "worktree.removeAbandoned" => worktree_cleanup::rpc(st, method, &p).await,
@@ -1655,6 +1689,21 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             if provider_id.starts_with("mcp:") && st.db.permission_kind(id).ok().flatten().as_deref() == Some("question") {
                 return questions::reply_mcp_question(st, id, &session_id, choice, &p).await;
             }
+            // Phase C: the owner's answer to a consent card is recorded in memory
+            // and starts (or does not start) the grant. No provider is told.
+            if provider_id.starts_with("owner:") {
+                let answer = owner_computer::reply_consent(st, id, &session_id, choice).await;
+                if answer.is_err() {
+                    let _ = st.db.finish_permission_reply(id, false);
+                    return answer;
+                }
+                let _ = st.db.finish_permission_reply(id, true);
+                let _ = st.db.update_session_state(&session_id, "working");
+                if let Ok(summary) = st.db.session_event_summary(&session_id) { st.emit("session.changed", summary).await; }
+                st.emit("permission.resolved", json!({"permissionId":id,"choice":choice})).await;
+                crate::tasks::permission_resolved(st, &session_id).await;
+                return answer;
+            }
             let gate = gate_for_session(st, &session_id).await;
             let active = {
                 let _guard = gate.lock().await;
@@ -1843,7 +1892,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             }
             let value = validate_setting(k, &p["value"])?;
             if k == "permissions.default_mode" && value == "bypass" && p["confirm"] != true { return Err(derr("invalid_argument", "Confirm making Full access the default first.", StatusCode::BAD_REQUEST)); }
-            let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k=="composer.sendShortcut"||k=="shortcuts.bindings";
+            let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k=="composer.sendShortcut"||k=="shortcuts.bindings"||k=="experimental.ownerComputer"||k=="ownerComputer.denyList";
             let events=st.db.set_setting(k, &value).map_err(|e| {
                 derr(
                     if validation_key{"invalid_argument"}else{"internal"},
@@ -1856,6 +1905,11 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             // clears what it produced (no restart).
             if k == "usage.readCliSignIns" {
                 apply_usage_read_switch(st, value.as_bool().unwrap_or(false)).await;
+            }
+            // Phase C: the owner's computer going off releases every live grant at
+            // once, before the next call can look at the switch.
+            if k == "experimental.ownerComputer" && value.as_bool() != Some(true) {
+                owner_computer::switch_off(st).await;
             }
             // Turning a coding agent off (or back on) scans again and publishes
             // `runtime.changed`; an off agent is never probed.
@@ -1977,6 +2031,10 @@ fn validate_setting(k: &str, value: &Value) -> Result<Value, DispatchError> {
         }
     }
     if k == "usage.readCliSignIns" && !value.is_boolean() { return Err(derr("invalid_argument", "usage.readCliSignIns requires a JSON boolean", StatusCode::BAD_REQUEST)); }
+    // Phase C: the owner's own computer. Off by default; on only with the owner's
+    // deliberate choice, and the deny-list beside it.
+    if k == "experimental.ownerComputer" && !value.is_boolean() { return Err(derr("invalid_argument", "experimental.ownerComputer requires a JSON boolean", StatusCode::BAD_REQUEST)); }
+    if k == "ownerComputer.denyList" && !owner_computer::valid_deny_list(value) { return Err(derr("invalid_argument", "ownerComputer.denyList must hold at most 40 entries of 1 to 64 characters each", StatusCode::BAD_REQUEST)); }
     if k == "composer.sendShortcut" && !valid_send_shortcut(value) { return Err(derr("invalid_argument", "composer.sendShortcut must be enter, ctrl+enter or shift+enter", StatusCode::BAD_REQUEST)); }
     if k == "shortcuts.bindings" && !valid_shortcut_bindings(value) { return Err(derr("invalid_argument", "shortcuts.bindings must map at most 40 action ids to a printable ASCII shortcut of up to 40 characters, or null", StatusCode::BAD_REQUEST)); }
     if k == "automations.maxConcurrent" && !value.as_u64().is_some_and(|count| (1..=3).contains(&count)) { return Err(derr("invalid_argument", "automations.maxConcurrent requires an integer between 1 and 3", StatusCode::BAD_REQUEST)); }
@@ -2140,6 +2198,15 @@ fn exec_options_for_session(st:&AppState,session:&Value)->Result<ExecOptions,Dis
         team::attach(st, session_id, session["agentId"].as_str(), &session["link"], folder.as_deref(), session["projectId"].as_str(), &mut options);
     }
     Ok(options)
+}
+
+/// The mode a conversation's turns run in, through the resolver the turn itself
+/// uses (the conversation's pin, its project, its bot, the default, and the
+/// unattended rail). The computer's input tools read it, so a conversation in
+/// Full access never gets them (`AGENTS.md`, 14 November 2026). An unreadable
+/// conversation is treated as `ask`, the mode that keeps asking.
+pub(crate) fn approval_mode_for_session(st: &AppState, session: &Value) -> ApprovalMode {
+    exec_options_for_session(st, session).map(|options| options.approval_mode).unwrap_or(ApprovalMode::Ask)
 }
 
 /// FIX39 item 19 / P5 audit F3: the conversation's own lock, written when the
@@ -2800,12 +2867,22 @@ fn environment_host()->String{
 
 pub(crate) async fn new_session(st: &AppState, p: Value) -> Result<Value, DispatchError> { new_session_with(st, p, None).await }
 
+/// B2 (14 November 2026): a conversation the Retinue MCP started carries where it
+/// came from (`{kind:"mcp", client}`). The origin is passed in code, never read
+/// from a request, so no caller can stamp one on a conversation of its own.
+pub(crate) async fn new_session_from_mcp(st: &AppState, p: Value, origin: Value) -> Result<Value, DispatchError> { new_session_in(st, p, None, Some(&origin)).await }
+
 /// Phase 8: the access a sub-bot's conversation is pinned to at launch, the
 /// parent conversation's own. It is passed in code and never read from a request,
 /// so no client can ask for more than the parent has.
 pub(crate) struct ModePin { pub mode: String, pub plan: bool }
 
 pub(crate) async fn new_session_with(st: &AppState, p: Value, pin: Option<&ModePin>) -> Result<Value, DispatchError> {
+    new_session_in(st, p, pin, None).await
+}
+
+/// The one conversation-creation path. `origin` is set only by the MCP paths.
+async fn new_session_in(st: &AppState, p: Value, pin: Option<&ModePin>, origin: Option<&Value>) -> Result<Value, DispatchError> {
     let agent_supplied=p.get("agentId").is_some(); let runtime_supplied=p.get("runtimeId").is_some();
     if agent_supplied==runtime_supplied{return Err(derr("invalid_argument","exactly one of agentId or runtimeId is required",StatusCode::BAD_REQUEST));}
     let agent_id=if agent_supplied{Some(p["agentId"].as_str().ok_or_else(||derr("invalid_argument","agentId must be a string",StatusCode::BAD_REQUEST))?.to_owned())}else{None};
@@ -2937,6 +3014,8 @@ pub(crate) async fn new_session_with(st: &AppState, p: Value, pin: Option<&ModeP
     // Stamp the conversation's project. A null stamp is left absent and inferred later.
     // Explicit null stamps nothing (a null stamp reads back as no project).
     st.db.merge_session_data(&id, &json!({"projectId": if explicit_none { None } else { project_id.clone() }})).map_err(agent_error)?;
+    // B2: the origin an MCP-started conversation carries; absent for one started in the app.
+    if let Some(origin) = origin { st.db.merge_session_data(&id, &json!({"origin": origin})).map_err(agent_error)?; }
     // Phase 9: a conversation in a project hires its bot into that project, so
     // every way of opening a conversation (a new chat, a task, an approved
     // assignment, a side conversation) keeps the project's team true.
@@ -4245,6 +4324,9 @@ async fn session_prompt_impl(st: &AppState, p: Value, origin: PromptOrigin) -> R
     if session_before["archived"] == true { return Err(derr("not_found", "Conversation is archived.", StatusCode::NOT_FOUND)); }
     // Phase 4: a conversation another machine runs, or is taking right now, can't start a turn here.
     machines::refuse_if_moved(st, &session_before)?;
+    // Phase 10: an imported conversation is history. It continues only when the bot's
+    // own agent wrote it and its file is still on this computer.
+    import::refuse_read_only(st, &session_before).await?;
     // A question answer is daemon-written, and it is the only way a delegated
     // bot's pending question can continue its own assignment.
     if is_read_only_side(&session_before["link"]) && !matches!(origin, PromptOrigin::Team | PromptOrigin::Queue | PromptOrigin::QuestionAnswer) { return Err(derr("read_only", "Side conversations are read-only. Send a new message in the main conversation.", StatusCode::FORBIDDEN)); }
@@ -5306,6 +5388,7 @@ async fn forward_events_with_timeouts(
                 | AgentEvent::ToolUpdated { .. }
                 | AgentEvent::ToolCompleted { .. }
                 | AgentEvent::SubagentText { .. }
+                | AgentEvent::PlanUpdated { .. }
                 | AgentEvent::FileChanged { .. }
                 | AgentEvent::PermissionRequested { .. }
         ) {
@@ -5421,6 +5504,21 @@ async fn forward_events_with_timeouts(
                     "tool.changed",
                     json!({"sessionId":sid,"turnId":turn,"id":tool["id"],"kind":tool["kind"],"title":tool["title"],"state":tool["state"],"startedAt":tool["startedAt"],"completedAt":tool["completedAt"],"parentToolCallId":tool["parentToolCallId"],"detail":tool["detail"]}),
                 )
+            }
+            AgentEvent::PlanUpdated { items } => {
+                // The task list is the turn's own, replaced whole on every
+                // update. It is stored on the turn so a reopened conversation
+                // shows it, and never becomes message text or a tool row.
+                let updated_at = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+                let items: Vec<Value> = items
+                    .iter()
+                    .take(PLAN_ITEMS_LIMIT)
+                    .map(|item| json!({"text": item.text, "status": item.status.as_str()}))
+                    .collect();
+                if let Some(t) = turn.as_deref() {
+                    let _ = st.db.merge_turn_data(t, &json!({"plan":{"items":items,"updatedAt":updated_at}}));
+                }
+                ("session.plan", json!({"sessionId":sid,"turnId":turn,"items":items,"updatedAt":updated_at}))
             }
             AgentEvent::FileChanged { path, raw } => {
                 let _ = st.db.insert_file_in_turn(&sid, turn.as_deref(), &path, &raw);
@@ -5991,6 +6089,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         attention: Arc::new(attention::Attention::default()),
         preview: Arc::new(preview::Preview::default()),
         computer: Arc::new(computer::Computer::default()),
+        browser: Arc::new(browser::Browser::default()),
+        owner_computer: Arc::new(owner_computer::OwnerComputer::default()),
     };
     // A send right after boot must not fail with "runtime is not installed":
     // show the saved roster until discovery replaces it. `validate_spawn_target`
@@ -6018,6 +6118,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Drop automatic retries that missed their window while the daemon was down.
     retry::reconcile_restart(&st).await;
     tokio::spawn(retry::sweep_loop(st.clone()));
+    // The browser's contexts are closed when their turn ends or after ten idle
+    // minutes, wherever the owner goes next.
+    tokio::spawn(browser::sweep_loop(st.clone()));
     // Native approval and question cards left pending by the previous process
     // cannot be answered any more: the adapter that raised them is gone. Each is
     // announced as expired and its conversation gets one content-free note, so a
@@ -6047,7 +6150,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
     *st.team.address.lock().unwrap() = Some(addr.to_string());
-    if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); computer::sweep_endpoints(dir); }
+    if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); computer::sweep_endpoints(dir); browser::sweep_endpoints(dir); owner_computer::sweep_endpoints(dir); }
     *st.team.data_dir.lock().unwrap() = data_dir;
     stash::prune_restored(&st);
     git_ops::prune_reverted(&st);
@@ -6162,6 +6265,28 @@ async fn daemon_main() {
         mcp_bridge::run_computer(std::path::PathBuf::from(endpoint)).await;
         return;
     }
+    // Phase C: `retinued owner-server --endpoint <file>`, the owner's own
+    // computer's tools for one conversation. Same shape, same capability.
+    if std::env::args().nth(1).as_deref() == Some("owner-server") {
+        let args = std::env::args().skip(2).collect::<Vec<_>>();
+        let Some(endpoint) = args.iter().position(|arg| arg == "--endpoint").and_then(|at| args.get(at + 1)) else {
+            eprintln!("usage: owner-server --endpoint <file>");
+            std::process::exit(2);
+        };
+        mcp_bridge::run_owner(std::path::PathBuf::from(endpoint)).await;
+        return;
+    }
+    // The browser's bridge: `retinued browser-server --endpoint <file>`, same
+    // shape as the computer's, for the browser on that computer.
+    if std::env::args().nth(1).as_deref() == Some("browser-server") {
+        let args = std::env::args().skip(2).collect::<Vec<_>>();
+        let Some(endpoint) = args.iter().position(|arg| arg == "--endpoint").and_then(|at| args.get(at + 1)) else {
+            eprintln!("usage: browser-server --endpoint <file>");
+            std::process::exit(2);
+        };
+        mcp_bridge::run_browser(std::path::PathBuf::from(endpoint)).await;
+        return;
+    }
     if let Err(error) = retinue_usage::shipped_official_price_rules() {
         eprintln!("official price table validation failed: {error}");
         std::process::exit(1);
@@ -6174,6 +6299,9 @@ async fn daemon_main() {
 
 #[cfg(test)]
 mod media_tests;
+
+#[cfg(test)]
+mod import_tests;
 
 #[cfg(test)]
 mod phase2a_tests {
@@ -7127,11 +7255,11 @@ mod phase2a_tests {
                 tokio::time::sleep(std::time::Duration::from_millis(1)).await;
             }
         }).await.unwrap();
-        assert!(provider_text.starts_with("Explain this line\n\n<retinue_reply_context>"));
+        assert!(sent_text(&provider_text).starts_with("Explain this line\n\n<retinue_reply_context>"));
         assert!(provider_text.contains("quoted, untrusted conversation data"));
         assert!(provider_text.contains("\\u003c/retinue_reply_context\\u003e"));
         assert!(!provider_text.contains("Quoted text says </retinue_reply_context>"));
-        wait_for_messages(&st, &sid, |messages| messages.iter().any(|message| message["role"] == "assistant" && message["content"] == "handled: Explain this line")).await;
+        wait_for_messages(&st, &sid, |messages| messages.iter().any(|message| message["role"] == "assistant" && message["content"].as_str().map(sent_text).as_deref() == Some("handled: Explain this line"))).await;
     }
 
     #[tokio::test]
@@ -7420,7 +7548,7 @@ mod phase2a_tests {
     /// a second state on the same file.
     pub(crate) fn state_with(db:Storage)->(AppState,broadcast::Receiver<EventEnvelope>){
         let db=Arc::new(db);db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"})).unwrap();let(events,rx)=broadcast::channel(64);
-        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default())};(st,rx)
+        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default())};(st,rx)
     }
     #[tokio::test]
     async fn bot_purge_is_confirmed_atomic_and_removes_both_sides_only() {
@@ -7837,13 +7965,13 @@ mod phase2a_tests {
         assert_eq!(result["state"], "starting");
         tokio::time::timeout(std::time::Duration::from_secs(1), async {
             loop {
-                if adapter.prompts.lock().unwrap().contains(&"continue the saved task".to_owned()) { break; }
+                if adapter.prompts.lock().unwrap().iter().any(|text| sent_text(text) == "continue the saved task") { break; }
                 tokio::time::sleep(std::time::Duration::from_millis(1)).await;
             }
         }).await.unwrap();
         assert_eq!(adapter.resume_calls.load(std::sync::atomic::Ordering::SeqCst), 1);
         assert_eq!(adapter.new_calls.load(std::sync::atomic::Ordering::SeqCst), 0);
-        assert_eq!(*adapter.prompts.lock().unwrap(), ["continue the saved task"]);
+        assert_eq!(adapter.prompts.lock().unwrap().iter().map(|text| sent_text(text)).collect::<Vec<_>>(), ["continue the saved task"]);
         let detail = st.db.session_detail("restart-resume").unwrap();
         assert_eq!(detail["messages"].as_array().unwrap().iter().filter(|message| message["role"] == "user").count(), 1);
         assert_eq!(st.db.session_context("restart-resume").unwrap(), (Some(420), Some(1000)));
@@ -9859,7 +9987,8 @@ mod phase2a_tests {
         restarted.sessions.lock().await.insert("queue-side".into(), ActiveSession { handle, runtime, adapter: adapter.clone(), launch_approval_mode: ApprovalMode::Ask });
         team::drain_queued_deliveries(&restarted, None).await;
         assert!(wait_for_prompt(&adapter).await, "the brief reached the provider");
-        assert_eq!(adapter.prompts.lock().unwrap()[0], "Do it");
+        assert_eq!(sent_text(&adapter.prompts.lock().unwrap()[0]), "Do it");
+        assert!(adapter.prompts.lock().unwrap()[0].contains("<retinue_skills>"), "the first prompt carries the skills index, with the built-in skill in it");
         assert_eq!(restarted.team.queued_len("queue-side").await, 0);
         assert!(restarted.db.team_queue_rows(Some("queue-side")).unwrap().is_empty(), "a delivered brief is gone from the table");
         assert_eq!(restarted.db.delegation_get(&delegation_id_of(&restarted, "queue-side")).unwrap()["status"], "running");
@@ -10964,7 +11093,7 @@ mod phase2a_tests {
         async fn close_session(&self, _: &SessionHandle) -> Result<(), retinue_agent_core::AdapterError> { Ok(()) }
     }
     impl QueueAdapter {
-        fn texts(&self) -> Vec<String> { self.prompts.lock().unwrap().iter().map(|(_, text)| text.clone()).collect() }
+        fn texts(&self) -> Vec<String> { self.prompts.lock().unwrap().iter().map(|(_, text)| sent_text(text)).collect() }
         fn steer_calls(&self) -> Vec<(String,String)> { self.steers.lock().unwrap().clone() }
         fn set_steer_outcome(&self, outcome: SteerOutcome) { *self.steer_outcome.lock().unwrap() = Some(outcome); }
     }
@@ -10989,6 +11118,23 @@ mod phase2a_tests {
     async fn wait_for(done: impl Fn() -> bool) -> bool {
         for _ in 0..300 { if done() { return true; } tokio::time::sleep(std::time::Duration::from_millis(20)).await; }
         false
+    }
+    /// The text a test adapter was asked to run, without Retinue's own per-turn
+    /// blocks. Every conversation's first prompt carries the shared-skills index
+    /// (the built-in `retinue` skill is listed for every bot), so an assertion
+    /// about the message itself reads it through here. The index has its own
+    /// tests; this keeps a queue or delivery test about the queue and delivery.
+    /// A test adapter that echoes the prompt's first line can cut the block
+    /// short, so an unterminated block is removed from its opening tag on.
+    pub(crate) fn sent_text(text: &str) -> String {
+        let mut out = text.to_owned();
+        while let Some(start) = out.find("<retinue_skills>") {
+            match out[start..].find("</retinue_skills>") {
+                Some(end) => out.replace_range(start..start + end + "</retinue_skills>".len(), ""),
+                None => { out.truncate(start); break; }
+            }
+        }
+        out
     }
     fn past_due_at(secs: i64) -> String {
         (Utc::now() - chrono::Duration::seconds(secs)).to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
@@ -12822,7 +12968,9 @@ mod phase2a_tests {
         let toggled = dispatch(&st, "skills.toggle", json!({"name":"alpha","enabled":false})).await.unwrap();
         assert_eq!(toggled["skill"]["enabled"], false);
         assert_eq!(events.recv().await.unwrap().event_type, "skills.changed");
-        assert_eq!(dispatch(&st, "skills.list", json!({})).await.unwrap()["skills"][0]["enabled"], false);
+        let listed = dispatch(&st, "skills.list", json!({})).await.unwrap()["skills"].clone();
+        let alpha = listed.as_array().unwrap().iter().find(|row| row["name"] == "alpha").expect("the imported skill is listed");
+        assert_eq!(alpha["enabled"], false, "a built-in is listed first and is always on; alpha is the imported one");
 
         dispatch(&st, "skills.delete", json!({"name":"alpha"})).await.unwrap();
         assert_eq!(events.recv().await.unwrap().event_type, "skills.changed");
@@ -12876,7 +13024,8 @@ mod phase2a_tests {
         assert!(skills::index_for_prompt(&st, sid).is_none(), "an unchanged index is not re-sent");
 
         dispatch(&st, "skills.toggle", json!({"name":"delta","enabled":false})).await.unwrap();
-        assert!(skills::index_for_prompt(&st, sid).is_none(), "nothing is injected when the pool is off");
+        let block = skills::index_for_prompt(&st, sid).expect("the built-in skill is still listed");
+        assert!(!block.contains("delta"), "a switched-off skill leaves the index: {block}");
         dispatch(&st, "skills.toggle", json!({"name":"delta","enabled":true})).await.unwrap();
         assert!(skills::index_for_prompt(&st, sid).is_some(), "a change forces a re-send");
         assert!(skills::index_for_prompt(&st, sid).is_none(), "and again it is not repeated");
@@ -12929,7 +13078,8 @@ mod phase2a_tests {
         assert_eq!(toggled["skill"]["disabledFor"], json!([agent.as_str()]));
         assert_eq!(st.db.skills_get("beta").unwrap()["enabled"], true, "a per-bot opt-out is not the global switch");
         skills::forget_index(&st, sid);
-        assert!(skills::index_for_prompt(&st, sid).is_none(), "an opted-out skill is gone from the index");
+        let block = skills::index_for_prompt(&st, sid).expect("the built-in skill is still listed");
+        assert!(!block.contains("beta"), "an opted-out skill is gone from the index: {block}");
         assert!(!call_tool(&st, sid, "list_skills", json!({})).await["content"][0]["text"].as_str().unwrap().contains("beta"), "and from list_skills");
         let load = call_tool(&st, sid, "load_skill", json!({"name":"beta"})).await;
         assert_eq!(load["isError"], true, "load_skill refuses an opted-out skill");
@@ -12954,7 +13104,8 @@ mod phase2a_tests {
         for provider in ["claude", "codex"] {
             let sid = format!("native-{provider}");
             skills_session(&st, &sid, provider);
-            assert!(skills::index_for_prompt(&st, &sid).is_none(), "{provider} loads gamma natively, so it is not injected");
+            let block = skills::index_for_prompt(&st, &sid).expect("the built-in skill is listed for every bot");
+            assert!(!block.contains("gamma"), "{provider} loads gamma natively, so it is not injected: {block}");
             let listed = call_tool(&st, &sid, "list_skills", json!({})).await["content"][0]["text"].as_str().unwrap().to_owned();
             assert!(!listed.contains("gamma"), "{provider}: {listed}");
         }
@@ -13004,6 +13155,118 @@ mod phase2a_tests {
         assert_eq!(missing["isError"], true);
         let unknown = call_tool(&st, sid, "load_skill", json!({"name":"nope"})).await;
         assert_eq!(unknown["isError"], true);
+        let _ = std::fs::remove_dir_all(&data);
+    }
+
+    // ── Built-in skills: `retinue` for every bot, `cloud-computer` while on ──
+
+    /// A conversation for `agent` on `provider`. The built-in gate needs a real
+    /// agent, which `skills_session` does not make.
+    fn builtin_session(st: &AppState, sid: &str, provider: &str, agent: Option<&str>) {
+        st.db.create_session_for_agent(sid, "rt-test", provider, ".", "Built-in", agent).unwrap();
+        st.db.update_session_state(sid, "idle").unwrap();
+    }
+
+    #[tokio::test]
+    async fn built_in_retinue_skill_is_listed_and_loadable_for_every_bot() {
+        let (st, _events, data) = skills_state();
+        let agent = memory_agent(&st, "Built-in bot");
+        for (index, provider) in ["claude", "codex", "opencode"].into_iter().enumerate() {
+            for agent in [None, Some(agent.as_str())] {
+                let sid = format!("builtin-{index}-{}", agent.is_some());
+                builtin_session(&st, &sid, provider, agent);
+                let index_block = skills::index_for_prompt(&st, &sid).expect("the index is sent");
+                assert!(index_block.contains("- retinue:"), "{provider}: {index_block}");
+                let listed = call_tool(&st, &sid, "list_skills", json!({})).await["content"][0]["text"].as_str().unwrap().to_owned();
+                assert!(listed.contains("- retinue:"), "{provider}: {listed}");
+                let loaded = call_tool(&st, &sid, "load_skill", json!({"name":"retinue"})).await;
+                assert_eq!(loaded["isError"], Value::Null, "{provider}: {loaded}");
+                let text = loaded["content"][0]["text"].as_str().unwrap();
+                assert!(text.contains("How Retinue works"), "{provider}: {text}");
+                assert!(text.contains("tools.md") && text.contains("working.md"), "the references are listed: {text}");
+                // The references are served from memory, not from a folder.
+                let tools = call_tool(&st, &sid, "read_skill_file", json!({"name":"retinue","path":"tools.md"})).await;
+                assert_eq!(tools["isError"], Value::Null, "{provider}: {tools}");
+                assert!(tools["content"][0]["text"].as_str().unwrap().contains("message_blob"));
+                let missing = call_tool(&st, &sid, "read_skill_file", json!({"name":"retinue","path":"nope.md"})).await;
+                assert_eq!(missing["isError"], true, "an unknown file is refused");
+            }
+        }
+        // The management list shows it, marked as built in.
+        let rows = dispatch(&st, "skills.list", json!({})).await.unwrap()["skills"].clone();
+        let row = rows.as_array().unwrap().iter().find(|row| row["name"] == "retinue").cloned().expect("retinue is listed");
+        assert_eq!(row["source"], "builtin");
+        assert_eq!(row["builtin"], true);
+        assert_eq!(row["nativeFor"], json!([]));
+        let got = dispatch(&st, "skills.get", json!({"name":"retinue"})).await.unwrap();
+        assert_eq!(got["builtin"], true);
+        assert!(got["body"].as_str().unwrap().contains("The words"));
+        assert!(got["files"].as_array().unwrap().iter().any(|file| file["path"] == "working.md"));
+        let _ = std::fs::remove_dir_all(&data);
+    }
+
+    #[tokio::test]
+    async fn built_in_cloud_computer_skill_appears_only_with_the_switch_and_the_link() {
+        let (st, _events, data) = skills_state();
+        let worker = st.db.agent_create(&json!({"name":"Worker","runtimeId":"rt-test","computerWorkplace":true})).unwrap().0["id"].as_str().unwrap().to_owned();
+        let plain = memory_agent(&st, "Plain");
+        let worker_sid = "builtin-worker";
+        let plain_sid = "builtin-plain";
+        builtin_session(&st, worker_sid, "codex", Some(&worker));
+        builtin_session(&st, plain_sid, "codex", Some(&plain));
+
+        // Nothing linked: neither the index nor list_skills carries it.
+        let index_block = skills::index_for_prompt(&st, worker_sid).expect("the index is sent");
+        assert!(!index_block.contains("cloud-computer"), "{index_block}");
+        assert!(!call_tool(&st, worker_sid, "list_skills", json!({})).await["content"][0]["text"].as_str().unwrap().contains("cloud-computer"));
+
+        // Linked but switched off for employees: still nothing.
+        link_directly(&st, "https://harbor.example.com", HARBOR_TOKEN, false);
+        skills::forget_index(&st, worker_sid);
+        assert!(!skills::index_for_prompt(&st, worker_sid).unwrap().contains("cloud-computer"));
+
+        // Linked and on: listed for the workplace employee only.
+        st.db.computer_link_set_enabled(true).unwrap();
+        skills::forget_index(&st, worker_sid);
+        let index_block = skills::index_for_prompt(&st, worker_sid).expect("the index is sent");
+        assert!(index_block.contains("- cloud-computer:"), "{index_block}");
+        assert!(!skills::index_for_prompt(&st, plain_sid).unwrap().contains("cloud-computer"), "a bot without the workplace switch does not get it");
+        let listed = call_tool(&st, worker_sid, "list_skills", json!({})).await["content"][0]["text"].as_str().unwrap().to_owned();
+        assert!(listed.contains("- cloud-computer:"), "{listed}");
+        let loaded = call_tool(&st, worker_sid, "load_skill", json!({"name":"cloud-computer"})).await;
+        assert_eq!(loaded["isError"], Value::Null, "{loaded}");
+        let text = loaded["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("/config/work/<project>"), "{text}");
+        assert!(text.contains("computer_exec") && text.contains("computer_create_routine"), "the tools are named: {text}");
+        assert!(!text.contains(HARBOR_TOKEN), "never the token");
+        assert!(!text.contains("harbor.example.com"), "never the address");
+        let refused = call_tool(&st, plain_sid, "load_skill", json!({"name":"cloud-computer"})).await;
+        assert_eq!(refused["isError"], true, "a bot without the workplace switch is refused");
+
+        // Switched off again: gone from the next index.
+        st.db.computer_link_set_enabled(false).unwrap();
+        skills::forget_index(&st, worker_sid);
+        assert!(!skills::index_for_prompt(&st, worker_sid).unwrap().contains("cloud-computer"));
+        let _ = std::fs::remove_dir_all(&data);
+    }
+
+    #[tokio::test]
+    async fn built_in_skills_cannot_be_deleted_toggled_or_imported_over() {
+        let (st, _events, data) = skills_state();
+        for name in ["retinue", "cloud-computer"] {
+            assert_eq!(dispatch(&st, "skills.delete", json!({"name":name})).await.unwrap_err().1.code, "invalid_argument", "{name}");
+            assert_eq!(dispatch(&st, "skills.toggle", json!({"name":name,"enabled":false})).await.unwrap_err().1.code, "invalid_argument", "{name}");
+            assert_eq!(dispatch(&st, "skills.toggle", json!({"name":name,"enabled":false,"agentId":"any"})).await.unwrap_err().1.code, "invalid_argument", "{name}");
+        }
+        // A folder that claims the same name is skipped, and the built-in stays.
+        let source = data.join("src");
+        write_skill(&source.join("retinue"), "retinue", "An older copy.", &[]);
+        let result = dispatch(&st, "skills.import", json!({"path": source.join("retinue").to_string_lossy()})).await.unwrap();
+        assert_eq!(result["imported"], json!([]));
+        assert!(result["skipped"][0]["reason"].as_str().unwrap().contains("built into Retinue"), "{result}");
+        assert!(st.db.skills_list().unwrap().is_empty(), "nothing is stored over it");
+        assert!(!data.join("skills").join("retinue").exists(), "no files are copied over it");
+        assert!(skills::builtin_body_for_test("retinue").contains("The words"), "the built-in body is unchanged");
         let _ = std::fs::remove_dir_all(&data);
     }
 
@@ -14029,6 +14292,12 @@ mod phase2a_tests {
 
     // The linked VPS computer (Harbor): linking, state, routines and the tools.
     include!("computer_tests.rs");
+
+    // The browser on that computer (14 November 2026).
+    include!("browser_tests.rs");
+
+    // Phase C: the owner's own computer, its card, its clocks and its deny-list.
+    include!("owner_computer_tests.rs");
 
     #[tokio::test]
     async fn team_update_project_move_does_not_archive() {

@@ -28,6 +28,16 @@ describe('daemon event reconciliation', () => {
     expect(messages[2]?.meta?.status).toBe('pending')
   })
 
+  // A live task list replaces the turn's whole list and is created when the turn
+  // row has not arrived yet; the daemon's stored copy comes back on session.get.
+  it('keeps the latest task list on its turn, whole each time', () => {
+    const plan = (sequence: number, turnId: string, items: Array<{ text: string; status: string }>) => event('session.plan', sequence, { sessionId: 's-a', turnId, items, updatedAt: `2026-11-14T10:0${sequence}:00Z` })
+    let next = applyEvent(base(), plan(5, 't-a', [{ text: 'Read the test', status: 'completed' }, { text: 'Fix it', status: 'in_progress' }]))
+    expect(next.sessions?.[0]?.turns).toEqual([{ id: 't-a', plan: { items: [{ text: 'Read the test', status: 'completed' }, { text: 'Fix it', status: 'in_progress' }], updatedAt: '2026-11-14T10:05:00Z' } }])
+    next = applyEvent(next, plan(6, 't-a', [{ text: 'Fix it', status: 'completed' }, { text: '', status: 'pending' }, { text: 'Ship it', status: 'nonsense' }]))
+    expect(next.sessions?.[0]?.turns?.[0]?.plan?.items).toEqual([{ text: 'Fix it', status: 'completed' }, { text: 'Ship it', status: 'pending' }])
+  })
+
   it('replaces the runtime roster when background discovery completes', () => {
     const next = applyEvent(base(), event('runtime.changed', 5, {
       runtimes: [{ id: 'rt-claude', provider: 'claude' }],

@@ -25,6 +25,8 @@ export interface AgentDraft {
   notificationLevel?: 'all' | 'input' | 'muted'
   /** Works on the linked computer by default. Absent means off. */
   computerWorkplace?: boolean
+  /** May put icons and emoji in tables and lists (owner, 14 November 2026). Absent means off. */
+  replyIcons?: boolean
   /** Team placement, saved separately through agent.team.update. */
   role: string
   projectId: string | null
@@ -94,6 +96,7 @@ export function draftFromAgent(agent: Agent): AgentDraft {
     projectId: typeof agent.projectId === 'string' ? agent.projectId : null,
     leader: agent.leader === true,
     computerWorkplace: agent.computerWorkplace === true,
+    replyIcons: agent.replyIcons === true,
   }
 }
 
@@ -134,6 +137,7 @@ export function isAgentDirty(draft: AgentDraft, baseline: AgentDraft) {
     || (draft.approvalMode ?? null) !== (baseline.approvalMode ?? null)
     || (draft.notificationLevel ?? 'all') !== (baseline.notificationLevel ?? 'all')
     || !!draft.computerWorkplace !== !!baseline.computerWorkplace
+    || !!draft.replyIcons !== !!baseline.replyIcons
 }
 
 export function validateAgentDraft(draft: AgentDraft, otherActiveNames: readonly string[]): FieldErrors {
@@ -169,6 +173,7 @@ export function createParams(draft: AgentDraft, gate: ExecutionSendGate = CLOSED
   params.approvalMode = draft.approvalMode
   if (draft.notificationLevel === 'input' || draft.notificationLevel === 'muted') params.notificationLevel = draft.notificationLevel
   if (draft.computerWorkplace) params.computerWorkplace = true
+  if (draft.replyIcons) params.replyIcons = true
   return params
 }
 
@@ -189,6 +194,7 @@ export function duplicateParams(source: Agent, name: string): Record<string, unk
     defaultProject: source.defaultProject,
     approvalMode: source.approvalMode ?? null,
     ...(source.computerWorkplace ? { computerWorkplace: true } : {}),
+    ...(source.replyIcons ? { replyIcons: true } : {}),
   }
 }
 
@@ -207,6 +213,7 @@ export function updateParams(agentId: string, draft: AgentDraft, baseline: Agent
   if ((draft.approvalMode ?? null) !== (baseline.approvalMode ?? null)) params.approvalMode = draft.approvalMode
   if ((draft.notificationLevel ?? 'all') !== (baseline.notificationLevel ?? 'all')) params.notificationLevel = draft.notificationLevel === 'input' || draft.notificationLevel === 'muted' ? draft.notificationLevel : null
   if (!!draft.computerWorkplace !== !!baseline.computerWorkplace) params.computerWorkplace = !!draft.computerWorkplace
+  if (!!draft.replyIcons !== !!baseline.replyIcons) params.replyIcons = !!draft.replyIcons
   return params
 }
 
@@ -288,6 +295,7 @@ export function changedFields(draft: AgentDraft, baseline: AgentDraft): ChangedF
   if (!!draft.computerWorkplace !== !!baseline.computerWorkplace) add('computerWorkplace', 'Works on the computer', 'model')
   if ((draft.approvalMode ?? null) !== (baseline.approvalMode ?? null)) add('approvalMode', 'Approvals', 'permissions')
   if ((draft.notificationLevel ?? 'all') !== (baseline.notificationLevel ?? 'all')) add('notificationLevel', 'Notifications', 'notifications')
+  if (!!draft.replyIcons !== !!baseline.replyIcons) add('replyIcons', 'Reply style', 'notifications')
   return out
 }
 

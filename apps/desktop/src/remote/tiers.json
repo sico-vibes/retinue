@@ -9,6 +9,13 @@
       "params": null
     },
     {
+      "method": "browser.status",
+      "class": "never",
+      "minTier": null,
+      "why": "Whether the browser on the linked computer can start is the owner's at the desktop, and the answer names a path inside that computer.",
+      "params": null
+    },
+    {
       "method": "events.replay",
       "class": "read",
       "minTier": "viewer",
@@ -405,6 +412,13 @@
       "class": "never",
       "minTier": null,
       "why": "The owner's live screen is framed at the desktop; the address and its ticket never leave the host.",
+      "params": null
+    },
+    {
+      "method": "owner_computer.*",
+      "class": "never",
+      "minTier": null,
+      "why": "The owner's own Windows computer is the one capability that must keep asking: it is driven only from the desktop, only with the owner's switch on, and only after a card in that conversation. The `owner_*` tools reach the daemon as `mcp.owner.*`, which the `mcp.*` row already keeps off a device; this row keeps Stop and anything added beside it on the host too, until a streaming design exists.",
       "params": null
     },
     {
@@ -1577,6 +1591,13 @@
       "params": null
     },
     {
+      "method": "import.*",
+      "class": "never",
+      "minTier": null,
+      "why": "Importing reads the owner's own Claude Code, Codex and OpenCode history on this computer and writes conversations from it; only the desktop may ask.",
+      "params": null
+    },
+    {
       "method": "session.checkpoints",
       "class": "never",
       "minTier": null,
@@ -1753,6 +1774,8 @@
     "runtime.models.changed": "allow",
     "machine.changed": "drop",
     "computer.changed": "drop",
+    "browser.changed": "drop",
+    "owner_computer.grant": "drop",
     "secret.request.changed": "drop",
     "machine.pair.changed": "drop",
     "machine.takeOver.changed": "drop",
@@ -1779,6 +1802,7 @@
     "session.context.reset": "drop",
     "session.context.updated": "drop",
     "session.context_exhausted": "drop",
+    "session.plan": "drop",
     "session.replaced": "drop",
     "session.resume_rejected": "drop",
     "settings.changed": "drop",
@@ -1800,7 +1824,9 @@
     "media.generated": "drop",
     "fanout.changed": "drop",
     "stash.changed": "drop",
-    "preview.changed": "drop"
+    "preview.changed": "drop",
+    "import.progress": "drop",
+    "import.completed": "drop"
   },
   "settingsAllowlist": [
     "appearance.style",

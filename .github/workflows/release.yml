@@ -56,13 +56,26 @@ jobs:
           "version=$version" >> $env:GITHUB_OUTPUT
           Write-Host "Building Retinue $version"
           # The updater artifacts are made locally, where the updater key lives.
-          '{"bundle":{"createUpdaterArtifacts":false}}' | Set-Content -Encoding utf8NoBOM (Join-Path $env:RUNNER_TEMP 'release.conf.json')
+          # The release also ships the pinned computer-use driver beside the daemon (owner amendment,
+          # 14 November 2026); only this build lists it, so local and CI builds don't need it.
+          '{"bundle":{"createUpdaterArtifacts":false,"externalBin":["binaries/retinued","binaries/retinue-hook","binaries/open-computer-use"]}}' | Set-Content -Encoding utf8NoBOM (Join-Path $env:RUNNER_TEMP 'release.conf.json')
 
       - name: Build the daemon and the hook
         run: cargo build -p retinue-daemon --bin retinued -p retinue-hook --bin retinue-hook --release
 
       - name: Stage them beside the app
         run: node scripts/stage-daemon.mjs --release
+
+      # `open-computer-use` 1.1.4 (MIT), fetched from its GitHub release and refused unless the zip
+      # and the exe match the hashes pinned in the script (docs/operations/owner-computer-driver.md).
+      - name: Fetch and check the computer-use driver
+        shell: pwsh
+        run: |
+          $triple = (rustc -vV | Select-String '^host: (.+)$').Matches[0].Groups[1].Value
+          $dir = Join-Path $env:RUNNER_TEMP 'owner-computer-driver'
+          node scripts/fetch-owner-computer-driver.mjs --dest $dir
+          if ($LASTEXITCODE -ne 0) { throw 'The computer-use driver could not be fetched and checked.' }
+          Copy-Item (Join-Path $dir 'open-computer-use.exe') "apps/desktop/src-tauri/binaries/open-computer-use-$triple.exe" -Force
 
       - name: Build the app without bundling
         shell: pwsh

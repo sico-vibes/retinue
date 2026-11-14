@@ -2,6 +2,13 @@
 
 Last reviewed: 2026-10-22 (Rust 1.94.0 stable, Node 24, OpenCode 2.0.32, Codex CLI 0.163). Update this file when a gate, tool or environment fact changes.
 
+## Smart App Control on the owner's PC (14 November 2026)
+
+- `cargo check`/`cargo test` in the main checkout's own `target` can stop at a build script with `An Application Control policy has blocked this file. (os error 4551)`. Use a lane worktree's target whose build scripts already ran: `CARGO_TARGET_DIR='C:\Users\Sico Vibes\Desktop\DevCN\Retinue-retinue\<worktree>\target'`, with `TEMP`/`TMP` at `C:\tmp`.
+- Test only the changed crates (`-p retinue-daemon -p retinue-storage ...`): `--workspace` pulls a crate whose new build script is blocked. Test programs that start helper binaries (the Codex adapter's `app_server` tests with `fake_codex_server`, agent core's unit tests) are blocked too; CI runs them. Say so in the report.
+- `remoteBuild.test.ts` runs `npm run build:remote` itself and measured 1.72 MB at `520b340` (limit 1.5 MB): it was failing before the 14 November wave. A plain `npm run build:remote` is about 1.45 MB.
+- `npm run docs:check` skips `apps/site/content/` (website pages link by site routes).
+
 ## Gates (run all before calling work done)
 
 From the repository root (or a worktree):
@@ -29,6 +36,9 @@ cargo test -p retinue-desktop --lib
 - The Codex sandbox cannot let Vite write its temp config through a `node_modules` junction (`EPERM`): add `--configLoader runner` to `vite build` and `vitest run` there, or run the gate yourself.
 - `cargo test --workspace` stops at the first crate that fails, so later crates never run. Add `--no-fail-fast` when you need every failure (2026-10-27).
 - A `../tauri` export missing from a test's `vi.mock` factory makes every App-mounting test in that file fail with the same "No "x" export is defined" error, which hides the real failures behind it. After adding the export, expect more failures to appear (2026-10-27: 121 hid 32).
+- The daemon's test binary (`cargo test -p retinue-daemon`) takes about 20 minutes to link from a cold target on this machine, so a foreground run with a 20-minute timeout dies before a single test runs. Start it in the background (or with a much longer timeout) and keep working; once built, rerunning with a different filter or no filter reuses the binary (2026-11-14, backend lane, B6).
+- `computer_tests.rs` is `include!`d into the daemon's test module (`crates/retinue-daemon/src/main.rs:14031`), not declared as a module: its helpers (`link_directly`, `HARBOR_TOKEN`, `harbor_body`, `state`) are in scope for any test in the same module, and a test file cannot see them on its own (2026-11-14).
+- Two daemon tests fail on this machine whatever the diff, because the machine is the owner's (2026-11-14): `remote::tests::an_absent_web_folder_serves_the_built_in_page` and `a_folder_with_files_but_no_entry_page_serves_the_built_in_page` see the `RETINUE_REMOTE_WEB_DIR` the owner's environment sets (`...\AppData\Local\Retinue\remote-web`), so a page is served instead of the "not installed" one; clear it for the run (`$env:RETINUE_REMOTE_WEB_DIR=""`). `doctor::tests::database_and_hook_rows_are_one_line_and_actionable` expects no `retinue-hook.exe` beside the binary, and finds the installed app's copy (`outside::hook_bridge_path()`). Check both against a run of the suite before blaming your change, and `machines_tests::one_offline_machine_does_not_hold_up_another` flakes under full-suite concurrency but passes alone.
 
 ## Checking the desktop crate from a worktree whose path has an apostrophe (8 November 2026)
 

@@ -1,0 +1,9 @@
+/* An employee controlling this computer (owner amendment, 14 November 2026): always visible, with Stop. */
+.owner-computer-bar { display: flex; align-items: center; gap: 9px; margin: 0 auto 8px; padding: 8px 10px 8px 12px; color: var(--text-1); border: 1px solid var(--warning-line, var(--line)); border-radius: var(--radius-md, 12px); background: color-mix(in srgb, var(--status-working) 12%, var(--surface-raised)); font-size: var(--fs-sm); }
+.owner-computer-bar > svg { flex: 0 0 auto; color: var(--status-working); }
+.owner-computer-bar > span { min-width: 0; flex: 1; }
+.owner-computer-bar small { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.owner-computer-stop { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; color: #fff; border: 0; border-radius: 8px; background: var(--status-danger, #c0392b); font: inherit; font-weight: 600; cursor: pointer; }
+.owner-computer-stop:disabled { opacity: .6; cursor: default; }
+.owner-computer-stop:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.owner-computer-bar.compact { margin: 6px 8px; padding: 6px 8px; font-size: var(--fs-xs); }

@@ -206,7 +206,12 @@ async fn start_one(st: &AppState, agent: &Value, scope: &Scope, text: &str, atta
     if let Some(path) = &path { params["projectPath"] = json!(path.to_string_lossy()); }
     params["projectId"] = project_id.as_ref().map_or(Value::Null, |id| json!(id));
     if !link.is_null() { params["link"] = link; }
-    let session = match crate::new_session(st, params).await {
+    // B2: a fan-out the Retinue MCP started says so on every conversation it opens.
+    let opened = match mcp_client {
+        Some(client) => crate::new_session_from_mcp(st, params, crate::external::origin(Some(client))).await,
+        None => crate::new_session(st, params).await,
+    };
+    let session = match opened {
         Ok(session) => session,
         Err(error) => {
             if let Some(copy) = made { discard(copy).await; }

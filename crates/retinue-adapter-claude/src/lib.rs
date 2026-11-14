@@ -585,11 +585,21 @@ async fn parse_line(
                             }
                         }
                         "tool_use" => {
+                            let name = c["name"].as_str().unwrap_or("tool");
+                            let plan_tool = is_plan_tool(name);
+                            // The provider's own task list is a step list, not a
+                            // tool row: send it first, then mark its row `plan`
+                            // so the window can show the list instead.
+                            if plan_tool {
+                                if let Some(todos) = c["input"].get("todos").filter(|todos| todos.is_array()) {
+                                    let _ = tx.send(AgentEvent::PlanUpdated { items: plan_items_from_todos(Some(todos)) }).await;
+                                }
+                            }
                             let _ = tx
                                 .send(AgentEvent::ToolStarted {
                                     tool_call_id: c["id"].as_str().unwrap_or("claude-tool").into(),
-                                    kind: c["name"].as_str().unwrap_or("tool").into(),
-                                    title: tool_activity(c["name"].as_str().unwrap_or("tool"), c, c["name"].as_str().unwrap_or("Claude tool")).label,
+                                    kind: if plan_tool { "plan".into() } else { name.into() },
+                                    title: if plan_tool { "Updated the task list".into() } else { tool_activity(name, c, "Claude tool").label },
                                     raw: c.clone(),
                                     parent_tool_call_id: parent.clone(),
                                 })
@@ -1406,6 +1416,35 @@ mod tests {
             assert!(matches!(rx.recv().await, Some(AgentEvent::ToolStarted { title, raw, .. }) if title == expected && raw["input"] == input), "{name}");
         }
     }
+    #[tokio::test]
+    async fn the_todo_tool_emits_the_task_list_and_marks_its_row() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        let id = Mutex::new(None);
+        let permissions = Mutex::new(HashMap::new());
+        let active = Mutex::new(Some("turn".to_owned()));
+        let context = Mutex::new(ClaudeContextWindow::default());
+        let line = json!({"type":"assistant","message":{"content":[{"type":"tool_use","name":"TodoWrite","id":"todo-1","input":{"todos":[
+            {"content":"Read the failing test","status":"completed","activeForm":"Reading the failing test"},
+            {"content":"Fix the parser","status":"in_progress","activeForm":"Fixing the parser"},
+            {"content":"Run the suite","status":"pending","activeForm":"Running the suite"}
+        ]}}]}});
+        parse_line(&tx, &line, &id, &permissions, "session", &active, &context).await;
+        match rx.recv().await {
+            Some(AgentEvent::PlanUpdated { items }) => {
+                assert_eq!(items.len(), 3);
+                assert_eq!(items[1].text, "Fix the parser");
+                assert_eq!(items[1].status, PlanItemStatus::InProgress);
+                assert_eq!(items[2].status, PlanItemStatus::Pending);
+            }
+            _ => panic!("the task list comes before the tool row"),
+        }
+        assert!(matches!(rx.recv().await, Some(AgentEvent::ToolStarted { kind, title, .. }) if kind == "plan" && title == "Updated the task list"));
+        // A tool that is not the to-do tool stays an ordinary row with its own kind.
+        let read = json!({"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","id":"read-1","input":{"file_path":"a.txt"}}]}});
+        parse_line(&tx, &read, &id, &permissions, "session", &active, &context).await;
+        assert!(matches!(rx.recv().await, Some(AgentEvent::ToolStarted { kind, title, .. }) if kind == "Read" && title == "Read a.txt"));
+    }
+
     #[test]
     fn only_the_team_server_is_pre_approved_so_a_computer_tool_asks() {
         let spec = |name: &str| retinue_agent_core::McpServerSpec { name: name.into(), command: std::path::PathBuf::from("retinued.exe"), args: Vec::new(), env: Default::default() };

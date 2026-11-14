@@ -38,6 +38,9 @@ const TEAM_TIMEOUT: Duration = Duration::from_secs(60);
 const EXTERNAL_TIMEOUT: Duration = Duration::from_secs(660);
 /// The computer bridge's request timeout: one `exec` may run for 300 s, plus a margin.
 const COMPUTER_TIMEOUT: Duration = Duration::from_secs(330);
+/// The owner's computer's bridge: a card may wait for the owner, and a read or an
+/// action has its own deadline inside the daemon, so the margin is generous.
+const OWNER_TIMEOUT: Duration = Duration::from_secs(180);
 /// How long the hello after `initialize` may take; it never holds up the client for long.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -61,6 +64,10 @@ enum Kind {
     External,
     /// The linked computer's tools (`mcp.computer.*`).
     Computer,
+    /// The browser on that computer (`mcp.browser.*`).
+    Browser,
+    /// Phase C: the owner's own computer's tools (`mcp.owner.*`).
+    Owner,
 }
 
 struct Backend {
@@ -87,6 +94,16 @@ impl Backend {
         Self { kind: Kind::Computer, endpoint: Some(endpoint), creds: StdMutex::new(creds), timeout: COMPUTER_TIMEOUT }
     }
 
+    fn owner(endpoint: PathBuf) -> Self {
+        let creds = read_endpoint(&endpoint).unwrap_or_default();
+        Self { kind: Kind::Owner, endpoint: Some(endpoint), creds: StdMutex::new(creds), timeout: OWNER_TIMEOUT }
+    }
+
+    fn browser(endpoint: PathBuf) -> Self {
+        let creds = read_endpoint(&endpoint).unwrap_or_default();
+        Self { kind: Kind::Browser, endpoint: Some(endpoint), creds: StdMutex::new(creds), timeout: COMPUTER_TIMEOUT }
+    }
+
     fn is_external(&self) -> bool {
         self.kind == Kind::External
     }
@@ -95,11 +112,21 @@ impl Backend {
         self.kind == Kind::Computer
     }
 
+    fn is_owner(&self) -> bool {
+        self.kind == Kind::Owner
+    }
+
+    fn is_browser(&self) -> bool {
+        self.kind == Kind::Browser
+    }
+
     fn list_method(&self) -> &'static str {
         match self.kind {
             Kind::Team => "mcp.tools.list",
             Kind::External => "ext.tools.list",
             Kind::Computer => "mcp.computer.list",
+            Kind::Browser => "mcp.browser.list",
+            Kind::Owner => "mcp.owner.list",
         }
     }
 
@@ -108,6 +135,8 @@ impl Backend {
             Kind::Team => "mcp.tools.call",
             Kind::External => "ext.tools.call",
             Kind::Computer => "mcp.computer.call",
+            Kind::Browser => "mcp.browser.call",
+            Kind::Owner => "mcp.owner.call",
         }
     }
 
@@ -145,6 +174,7 @@ impl Backend {
 fn failure_message(kind: Kind, failure: Failure) -> String {
     match failure {
         Failure::Unauthorized if kind == Kind::Computer => "Retinue no longer recognises this conversation's computer bridge. Start a new conversation to use the computer.".to_owned(),
+        Failure::Unauthorized if kind == Kind::Browser => "Retinue no longer recognises this conversation's browser bridge. Start a new conversation to use the browser.".to_owned(),
         Failure::Unauthorized => "Retinue refused the request. Turn the Retinue MCP on in Retinue > Settings > Connections.".to_owned(),
         Failure::Unreachable(message) | Failure::Other(message) => message,
     }
@@ -172,6 +202,17 @@ pub async fn run_external(endpoint: PathBuf) {
 /// `retinued computer-server --endpoint <file>`.
 pub async fn run_computer(endpoint: PathBuf) {
     serve(Arc::new(Backend::computer(endpoint)), BufReader::new(tokio::io::stdin()), tokio::io::stdout()).await;
+}
+
+/// `retinued owner-server --endpoint <file>`: the owner's own computer's tools
+/// (Phase C). Every decision is the daemon's; the child only carries the call.
+pub async fn run_owner(endpoint: PathBuf) {
+    serve(Arc::new(Backend::owner(endpoint)), BufReader::new(tokio::io::stdin()), tokio::io::stdout()).await;
+}
+
+/// `retinued browser-server --endpoint <file>`.
+pub async fn run_browser(endpoint: PathBuf) {
+    serve(Arc::new(Backend::browser(endpoint)), BufReader::new(tokio::io::stdin()), tokio::io::stdout()).await;
 }
 
 async fn serve<R, W>(backend: Arc<Backend>, reader: R, mut writer: W)
@@ -213,10 +254,20 @@ async fn handle(backend: &Backend, message: &Value) -> Option<Value> {
                 let hello = backend.call("ext.hello", json!({"clientName": client}));
                 let _ = timeout(HELLO_TIMEOUT, hello).await;
             }
-            let (name, instructions) = if backend.is_computer() {
+            let (name, instructions) = if backend.is_owner() {
+                (
+                    "retinue-owner-computer",
+                    "The owner's own Windows computer, only while they have allowed this conversation to use it: read one app's window as text, click an element, put text in a field, press one key and scroll. No screenshot exists. Read before you act; anything that changes the screen makes element indexes stale.",
+                )
+            } else if backend.is_browser() {
+                (
+                    "retinue-vps-browser",
+                    "A browser of your own on the owner's linked computer: open a page, read what it shows, click, type, press a key, go back, and take one picture. A sign-in, a verification code, payment details or a post button pauses and asks the owner.",
+                )
+            } else if backend.is_computer() {
                 (
                     "retinue-vps-computer",
-                    "The owner's linked computer (Harbor): read its state, wake it, sleep it, restart it, run commands and manage its routines. Commands run inside its container, never on the host.",
+                    "The owner's linked computer (Harbor): read its state, wake it, sleep it, restart it, run commands and manage its routines, and see its screen with clicks, typing and scrolling. Commands run inside its container, never on the host.",
                 )
             } else if backend.is_external() {
                 (
@@ -240,6 +291,11 @@ async fn handle(backend: &Backend, message: &Value) -> Option<Value> {
                 // One content-free line per call: the tool's own name, never its
                 // arguments, its output or the address.
                 eprintln!("vps-computer: {}", tool_name(message));
+            } else if backend.is_browser() {
+                eprintln!("vps-browser: {}", tool_name(message));
+            }
+            if backend.is_owner() {
+                eprintln!("owner-computer: {}", tool_name(message));
             }
             backend.call(backend.call_method(), message["params"].clone()).await
                 .or_else(|error| Ok(json!({"content":[{"type":"text","text":error}],"isError":true})))

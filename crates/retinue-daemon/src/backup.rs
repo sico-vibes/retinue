@@ -141,7 +141,13 @@ fn internal(message: &str) -> DispatchError {
 
 /// Whether a settings key may be exported. A forbidden key is always refused;
 /// `experimental.*` is allowed only as a boolean; everything else must be on
-/// the explicit allowlist.
+/// the explicit allowlist. The tests read the same rule through the hook below,
+/// so a machine capability cannot be exported by accident.
+#[cfg(test)]
+pub(crate) fn exportable_setting_for_test(key: &str, value: &Value) -> bool {
+    exportable_setting(key, value)
+}
+
 fn exportable_setting(key: &str, value: &Value) -> bool {
     let lower = key.to_ascii_lowercase();
     if lower.starts_with("exec_gate.")
@@ -155,6 +161,11 @@ fn exportable_setting(key: &str, value: &Value) -> bool {
         || lower.starts_with("usage.")
         // Which coding agents are switched off belongs to this machine's installs.
         || lower.starts_with("runtimes.")
+        // Phase C: the owner's own computer is this machine's, switched on here and
+        // approved here; a restored install turns it on again itself. The deny-list
+        // names apps this machine has.
+        || lower == "experimental.ownercomputer"
+        || lower.starts_with("ownercomputer.")
         || lower.starts_with("speech.cloud.consent")
         || lower == "companion.positions"
         // A machine's folder path is the owner's own machine, so it is set again on another one.
@@ -227,6 +238,7 @@ pub(crate) fn export_bot(agent: &Value, runtimes: &[Value]) -> Value {
         "approvalMode": agent["approvalMode"],
         "notificationLevel": agent["notificationLevel"],
         "computerWorkplace": agent["computerWorkplace"],
+        "replyIcons": agent["replyIcons"],
         "leader": agent["leader"],
         "hidden": agent["hidden"],
         "maxConcurrency": agent["maxConcurrency"],
@@ -727,6 +739,7 @@ async fn import(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
             "notificationLevel": bot["notificationLevel"],
             // An older backup has none, and anything but true is off.
             "computerWorkplace": bot["computerWorkplace"].as_bool() == Some(true),
+            "replyIcons": bot["replyIcons"].as_bool() == Some(true),
             "leader": leader,
             "hidden": bot["hidden"].as_bool().unwrap_or(false),
             "maxConcurrency": bot["maxConcurrency"].as_i64().filter(|count| (1..=50).contains(count)).unwrap_or(1),

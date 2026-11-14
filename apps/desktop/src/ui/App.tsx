@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useMemo, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import { Activity, UserPlus, Stethoscope, Cable, Clock, Split, SquareTerminal, ListChecks, ListPlus, ArrowUp, ArrowUpRight, ChevronDown, ChevronLeft, ChevronUp, CircleAlert, ClipboardCopy, Code2, FileDown, FileText, FolderOpen, FolderInput, FolderPlus, Hash, Import, Gauge, GitCompare, GitPullRequest, LoaderCircle, MessageCircle, Maximize2, Minimize2, MoreHorizontal, PanelLeft, PanelLeftClose, PanelRight, Paperclip, Plus, RefreshCw, RotateCw, Settings2, ShieldAlert, Sparkles, Square, SquarePen, Terminal, Volume2, VolumeX, X, BriefcaseBusiness } from 'lucide-react'
+import { Activity, ArrowDown, Download, UserPlus, Stethoscope, Cable, Clock, Split, SquareTerminal, ListChecks, ListPlus, ArrowUp, ArrowUpRight, ChevronDown, ChevronLeft, ChevronUp, CircleAlert, ClipboardCopy, Code2, FileDown, FileText, FolderOpen, FolderInput, FolderPlus, Hash, Import, Gauge, GitCompare, GitPullRequest, LoaderCircle, MessageCircle, Maximize2, Minimize2, MoreHorizontal, PanelLeft, PanelLeftClose, PanelRight, Paperclip, Plus, RefreshCw, RotateCw, Settings2, ShieldAlert, Sparkles, Square, SquarePen, Terminal, Volume2, VolumeX, X, BriefcaseBusiness } from 'lucide-react'
 import { outsideSender } from './messageOrigin'
 import { agentLook, SHAPE_LABELS, type BlobLook } from '../blob/look'
 import { MAX_COMPANION_PEERS } from '../blob/companionLayout'
@@ -20,8 +20,6 @@ import type { DaemonSchedule } from './automationSchedule'
 import { previewSchedule } from './schedulePreview'
 import { isPendingPermissionLive, nextPermissionDeadline, selectPendingPermission } from './permissionSelection'
 import { ApprovalCard, type PermissionReplyOptions } from './ApprovalCard'
-import retinueTileDark from '../assets/brand/retinue-tile-dark.png'
-import retinueTileLight from '../assets/brand/retinue-tile-light.png'
 import { sessionsForPauseRequest } from './trayActions'
 import { applyEvent, formatUnknownSafe, isPermissionReplyAllowed, labelize, isAutomation, normalizeQueueState, type Agent, type AutomationRun, type QueuedPrompt, type ChatMessage, type ConnectionState, type DaemonEvent, type PermissionRequest, type Project, type Runtime, type Session, type Snapshot } from '../types'
 import { agentColorHex } from './agentColor'
@@ -50,7 +48,7 @@ import { earlierWindow, isNearBottom, metricsOf } from './chatScroll'
 import { SoundVolumeSlider } from './SoundVolumeSlider'
 import { DEFAULT_SOUND_VOLUME, normalizeSoundVolume } from '../blob/soundVolume'
 import { applySoundPrefs, saveSoundsEnabled, saveSoundVolume, soundPrefsFromSettings, subscribeSoundPrefs, SOUNDS_CHANGED_EVENT, SOUND_VOLUME_CHANGED_EVENT } from './soundPrefs'
-import { ActivitySteps, ActivitySummaryLine } from './ActivityDetails'
+import { ActivitySteps, ActivitySummaryLine, ImageMakingCards, isMakingImage } from './ActivityDetails'
 import { eventSessionId, noteSessionActivity } from './sessionActivity'
 import { busyDelivery, busySendMode, BUSY_SEND_SETTING, newClientMessageId, sendWithDelivery, steerRuntimeId, useSteerAvailable, type BusySendMode } from './busySend'
 import { fetchCached, invalidateCatalog, useCachedRpc } from './catalogCache'
@@ -144,7 +142,12 @@ import { ContextualHints } from './tour/ContextualHints'
 import { startTour } from './tour/startTour'
 import { ComposerStatus, type LimitLine } from './PromptQueue'
 import { AttachMenu, AttachmentTray, MAX_COMPOSER_ATTACHMENTS, MessageAttachments, PermissionModeControl, prepareImageBytes, sessionApprovalMode, type ComposerAttachment } from './ComposerControls'
-import { GeneratedImage, generatedImageMeta, imagePromptFrom } from './GeneratedImage'
+import { WorkingMark } from './WorkingMark'
+import { ImportDialog } from './ImportDialog'
+import { OwnerComputerBar, useOwnerGrants } from './OwnerComputer'
+import { TurnPlan, planOf } from './TurnPlan'
+import { BrandLockup } from './BrandLockup'
+import { GeneratedImage, generatedImageMeta, imagePromptFrom, type GeneratedImageMeta } from './GeneratedImage'
 import { ConversationOutline, outlineItemsFromMessages } from './ConversationOutline'
 import { SlashCommandChip, SlashMenu } from './SlashMenu'
 import { COMPANION_SLASH_ACTIONS, commandMessage, leadingCommand, requestExecutionPicker, slashItems, slashQuery, type SlashCommand, type SlashItem, type SlashSkill } from './slashCommands'
@@ -449,6 +452,12 @@ export function App() {
   /** The outline only appears once the conversation is long enough to scroll. */
   const [conversationScrollable, setConversationScrollable] = useState(false)
   const stickToBottom = useRef(true)
+  /** Owner, 14 November 2026: scrolled well up, a button above the composer goes back down. */
+  const [farFromBottom, setFarFromBottom] = useState(false)
+  /** Importing conversations from other coding agents (14 November 2026). */
+  const [importOpen, setImportOpen] = useState(false)
+  /** Employees controlling this computer right now (owner amendment, 14 November 2026). */
+  const ownerGrants = useOwnerGrants()
   const queuedEvents = useRef<DaemonEvent[]>([])
   const hydrating = useRef(true)
   const appearanceHydrated = useRef(false)
@@ -808,7 +817,15 @@ export function App() {
   // Only a running turn can have a running step: one that ended mid-step must not read "Working" for ever.
   const shownSession = sideSession ?? selectedSession
   const liveTurn = ['working', 'starting', 'waiting_permission', 'cancelling'].includes(String(shownSession?.state ?? '')) ? (typeof shownSession?.turns?.at(-1)?.id === 'string' ? shownSession.turns.at(-1)!.id as string : true) : false
-  const groupedConversationItems = groupConversationActivity(activityDetails || sideSession ? conversationItems : conversationItems.filter((item) => item.kind === 'message' || item.activityKind === 'turn' || isSubagentItem(item)), liveTurn)
+  // The newest turn's task list (14 November 2026): `session.plan` keeps it on the turn row.
+  const latestPlan = useMemo(() => {
+    const session = sideSession ?? selectedSession
+    const turns = Array.isArray(session?.turns) ? session!.turns : []
+    const last = turns[turns.length - 1]
+    const plan = last ? planOf(last.plan) : null
+    return plan ? { plan, live: !['completed', 'error', 'failed', 'cancelled', 'interrupted'].includes(String(last?.state ?? '')) } : null
+  }, [sideSession, selectedSession])
+  const groupedConversationItems = groupConversationActivity(activityDetails || sideSession ? conversationItems : conversationItems.filter((item) => item.kind === 'message' || item.activityKind === 'turn' || isSubagentItem(item) || isMakingImage(item)), liveTurn)
   // Messages this conversation's bot sent to teammates read as one assignment card per turn, with the daemon's recorded status.
   const delegationLedger = useDelegations(selectedSession && !isDraftSession(selectedSession) ? selectedSession.id : null, connection === 'connected')
   const { runs: delegationRunMap, folded: delegationFolded } = delegationRuns(groupedConversationItems)
@@ -2989,7 +3006,7 @@ ${fileReferenceText(sentFile)}` : typed
     <main className={`app-shell ${detailsVisible ? 'inspector-open' : ''} ${convosOpen && activeSelectedAgent && !schedulesOpen && !tasksOpen && !compareOpen ? 'convos-open' : ''} ${reducedLaunchFade ? 'reduced-launch-fade' : ''}`} style={{ ...(accent ? { '--agent-accent': accent } : {}), ...(reducedLaunchFade ? { '--launch-fade-duration': '180ms' } : {}) } as React.CSSProperties}>
       <aside className="sidebar" aria-label="Agents">
         <div className="sidebar-top">
-          <div className="brand-lockup"><img className="brand-logo theme-on-dark" src={retinueTileDark} alt="Retinue logo" /><img className="brand-logo theme-on-light" src={retinueTileLight} alt="" /><strong>Retinue</strong></div>
+          <BrandLockup />
           <div className="sidebar-create-actions">
             <NeedsYouBell permissions={snapshot?.permissions ?? []} sessions={sessions} agents={agents} now={permissionClock} onOpen={(sessionId) => { const target = sessions.find((item) => item.id === sessionId); if (!target) return; if (isSideSession(target)) openSideConversation(sessionId); else { setSideSessionId(null); selectSession(target) } }} />
             <button type="button" className={`icon-button${tasksOpen ? ' active' : ''}`} title="Tasks" aria-label="Tasks" aria-pressed={tasksOpen} disabled={connection !== 'connected'} onClick={() => { setTasksOpen((open) => !open); setSchedulesOpen(false); setAnalyticsOpen(false); setBlobPage(null) }}><ListChecks size={16} /></button>
@@ -2998,6 +3015,7 @@ ${fileReferenceText(sentFile)}` : typed
               {plusMenuOpen && <div className="menu-surface more-menu" role="menu" aria-label="New">
                 <button className="menu-item" role="menuitem" onClick={() => { setPlusMenuOpen(false); openTeam('hire') }}><BriefcaseBusiness size={15} />Hire an employee…</button>
                 <button className="menu-item" role="menuitem" disabled={runtimes.length === 0} onClick={() => { setPlusMenuOpen(false); openCreate() }}><UserPlus size={15} />Create your own employee…</button>
+                <button className="menu-item" role="menuitem" onClick={() => { setPlusMenuOpen(false); setImportOpen(true) }}><Download size={15} />Import conversations…</button>
                 <span className="menu-separator" role="separator" />
                 <button className="menu-item" role="menuitem" onClick={() => { setPlusMenuOpen(false); void openNewProject().then((project) => { if (project) setStaffProject(project) }) }}><FolderPlus size={15} />New project…</button>
               </div>}
@@ -3106,17 +3124,25 @@ ${fileReferenceText(sentFile)}` : typed
           {!sideSession && <ChangeBanner session={selectedSession} dismissed={reviewDismissals[selectedSession.id] ?? []} onDiff={(path, content) => setDiffViewer({ path, content })} onUndo={(file) => setRevertTarget({ sessionId: selectedSession.id, file })} onDismiss={(ids) => setReviewDismissals((current) => ({ ...current, [selectedSession.id]: [...(current[selectedSession.id] ?? []), ...ids] }))} onNewConversation={() => newSession()} />}
           <div className="conversation-frame">
             {conversationScrollable && <ConversationOutline key={selectedSession.id} sessionId={selectedSession.id} items={outlineItems} />}
-          <section ref={messageListRef} className="message-list" aria-label="Conversation" onScroll={(event) => { const node = event.currentTarget; stickToBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 72 }}>
+          <section ref={messageListRef} className="message-list" aria-label="Conversation" onScroll={(event) => { const node = event.currentTarget; const gap = node.scrollHeight - node.scrollTop - node.clientHeight; stickToBottom.current = gap < 72; setFarFromBottom(gap > 360) }}>
             <div className="conversation-layout">
               <div className="chat-column">
               {groupedConversationItems.length === 0 && visiblePendingSends.length === 0 && !waitingDelegation && !sideSession ? <div className="session-first-state"><BlobCanvas color={accent || '#e6e9ee'} size={112} mood={selectedMood} effectOverscanTop={118} look={activeSelectedAgent ? agentLook(activeSelectedAgent) : null} label={activeSelectedAgent?.name ?? agentName} /><h2>{runtimeReady ? 'Ready when you are.' : 'This employee needs attention.'}</h2><p>{runtimeReady ? currentProjectName ? <>Ask {agentName} to explore <code>{currentProjectName}</code> or make a change.</> : <>Ask {agentName} a question or make a change.</> : selectedRuntime?.status === 'error' ? 'Open Settings → Coding agents. Update or repair this CLI, then choose Scan again.' : 'Open Settings → Coding agents and scan again before starting a conversation.'}</p></div> : groupedConversationItems.map((item, index) => {
+                // Owner, 14 November 2026: images made one after another sit side by side in one strip that scrolls.
+                const imageOf = (entry: (typeof groupedConversationItems)[number] | undefined) => entry?.kind === 'message' && String(entry.value?.role ?? '') === 'notice' ? generatedImageMeta(entry.value?.meta) : null
+                if (imageOf(item) && imageOf(groupedConversationItems[index - 1])) return null
+                if (imageOf(item) && imageOf(groupedConversationItems[index + 1])) {
+                  const run: Array<{ id: string; meta: GeneratedImageMeta }> = []
+                  for (let at = index; imageOf(groupedConversationItems[at]); at += 1) run.push({ id: groupedConversationItems[at]!.id, meta: imageOf(groupedConversationItems[at])! })
+                  return <div key={item.id} className="generated-image-strip" role="group" aria-label={`${run.length} generated images`}>{run.map((entry) => <GeneratedImage key={entry.id} id={`conversation-message-${encodeURIComponent(entry.id)}`} sessionId={(sideSession ?? selectedSession)?.id} meta={entry.meta} />)}</div>
+                }
                 if (delegationFolded.has(item.id)) return null
                 const delegationRun = delegationRunMap.get(item.id)
                 if (delegationRun) return <div key={item.id} id={`conversation-message-${encodeURIComponent(item.id)}`}><DelegationGroup originSessionId={selectedSession?.id} onFollowUp={(row) => { setComposer((current) => `${current ? `${current}
 ` : ''}Check on ${row.name}'s work on "${row.topic}" and tell me where it stands.`); requestAnimationFrame(() => composerRef.current?.focus()) }} rows={buildDelegationRows(delegationRun, delegationLedger.records, sessions, agents, delegationApprovals, newestLegacyBySide, Date.now(), delegationQuestions)} onOpen={openSideConversation} /></div>
                 const team = item.kind === 'message' ? teamItem(item.value!, item.id) : null
                 const content = item.kind === 'activity-group'
-                  ? <ActivitySummaryLine group={item} onDiff={(path, content) => setDiffViewer({ path, content })} />
+                  ? (activityDetails || sideSession || !item.items.every((entry) => isMakingImage(entry)) ? <ActivitySummaryLine group={item} onDiff={(path, content) => setDiffViewer({ path, content })} /> : <ImageMakingCards group={item} />)
                   : item.kind === 'message'
                     ? (team && experiments.search && !team.props.id ? <div id={`conversation-message-${encodeURIComponent(item.id)}`}>{team}</div> : team) ?? <MessageItem id={`conversation-message-${encodeURIComponent(item.id)}`} message={item.value!} accent={accent} agentName={agentName} avatar={activeSelectedAgent ? <BlobCanvas decorative color={accent} size={36} look={agentLook(activeSelectedAgent)} label={agentName} /> : undefined} showAvatar={!isUserMessage(item.value) && (index === 0 || isPreviousItemNonMessageOrUser(groupedConversationItems, index))} mood={index === lastAgentIndex ? selectedMood : 'idle'} agents={agents} onOpenReference={openSideConversation} sourceSessionId={selectedSession?.id ?? ''} sourceMessages={sessionMessages} onJumpToMessage={jumpToMessage} onContextMenu={item.value?.role === 'user' && !sideSession ? (event) => openUserMessageMenu(event, item.value!) : undefined} onToggleReaction={experiments.messageActions && !sideSession && item.value?.id ? (emoji) => { void toggleMessageReaction(selectedSession.id, String(item.value!.id), emoji).catch(() => setError('Could not save your reaction. Try again.')) } : undefined} onTroubleshoot={managerOf(agents) && activeSelectedAgent && activeSelectedAgent.systemRole !== 'manager' ? (turnId) => void askCeoToTroubleshoot(selectedSession.id, turnId) : undefined} />
                     : <ActivityItem item={item} onDiff={(path, content) => setDiffViewer({ path, content })} runtime={selectedRuntime} onSignedIn={() => void refresh()} />
@@ -3154,9 +3180,10 @@ ${fileReferenceText(sentFile)}` : typed
                 ? <QuestionCard request={activePermission} onAnswer={(answers) => answerQuestion(activePermission, answers)} onDismiss={() => void answerQuestion(activePermission, null)} />
                 : <ApprovalCard permission={activePermission} focusOnMount={approvalFocusOnMount} onReply={(choice, options) => answerPermission(activePermission, choice, options)} />)}
               {!sideSession && lastTurnWasPlan && !latestPlanId && <div className="plan-ready-bar" role="status"><span>Plan mode is on. Approve the plan to let {agentName} start building.</span><button type="button" className="primary-button small" onClick={() => void approvePlan()}>Approve &amp; build</button></div>}
-              {selectedSession.state === 'starting' && <div className="working-indicator starting" role="status"><span className="typing" aria-hidden="true"><i /><i /><i /></span>Starting {agentName}…</div>}
-              {selectedSession.state === 'working' && <div className="working-indicator" role="status"><span className="typing" aria-hidden="true"><i /><i /><i /></span>{agentName} is working</div>}
-              {waitingDelegation && selectedSession.state !== 'working' && <div className="working-indicator waiting" role="status"><span className="typing" aria-hidden="true"><i /><i /><i /></span>Waiting for a free working slot for {sideAgent?.name ?? agentName}…</div>}
+              {latestPlan && <TurnPlan plan={latestPlan.plan} stopped={!turnLive && latestPlan.live} />}
+              {selectedSession.state === 'starting' && <div className="working-indicator starting"><WorkingMark label={`Starting ${agentName}…`} timer={false} /></div>}
+              {selectedSession.state === 'working' && <div className="working-indicator"><WorkingMark label={`${agentName} is working`} /></div>}
+              {waitingDelegation && selectedSession.state !== 'working' && <div className="working-indicator waiting"><WorkingMark label={`Waiting for a free working slot for ${sideAgent?.name ?? agentName}…`} timer={false} /></div>}
               </div>
             </div>
           </section>
@@ -3164,6 +3191,8 @@ ${fileReferenceText(sentFile)}` : typed
           {!sideSession && <ReplyAnnotator container={messageListRef} full={annotations.length >= MAX_ANNOTATIONS} onAdd={addAnnotation} />}
           {!sideSession && selectedSession && !isDraftSession(selectedSession) && <SubbotFleet sessionId={selectedSession.id} parent={activeSelectedAgent ?? undefined} onOpen={openSideConversation} />}
           {sideSession?.link?.subbot === true ? <SubbotComposer sessionId={sideSession.id} name={agents.find((agent) => agent.id === sideSession.agentId)?.name ?? 'this helper'} onClose={closeSideConversation} /> : sideSession ? <div className="side-close"><button type="button" className="secondary-button" onClick={closeSideConversation}>Close chat</button></div> : selectedSession?.link?.movedTo ? <MovedBar sessionId={selectedSession.id} movedTo={selectedSession.link.movedTo} machines={machines} onMoved={() => { void refresh(); void reloadMachines() }} /> : <div className="composer-wrap">
+            {ownerGrants.filter((grant) => grant.sessionId === selectedSession?.id).map((grant) => <OwnerComputerBar key={grant.sessionId} grant={grant} name={agents.find((agent) => agent.id === grant.agentId)?.name ?? agentName} />)}
+            {farFromBottom && <button type="button" className="jump-latest" aria-label="Back to the latest message" title="Back to the latest message" onClick={() => { const node = messageListRef.current; if (!node) return; stickToBottom.current = true; node.scrollTo({ top: node.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }) }}><ArrowDown size={15} aria-hidden="true" /></button>}
             {usageTip && <UsageTip tip={usageTip} onDismiss={() => dismissUsageTip(usageTip)} onViewUsage={() => showUsage()} />}
             <div data-tour="composer" className={`composer-box ${composerDropActive ? 'drop-active' : ''}`} onDragOver={(event) => { if (!imagesSupported || !Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) return; event.preventDefault(); setComposerDropActive(true) }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setComposerDropActive(false) }} onDrop={(event) => { setComposerDropActive(false); if (!imagesSupported) return; const files = Array.from(event.dataTransfer.files); if (!files.length) return; event.preventDefault(); addAttachments(files) }}>
               <ComposerStatus onInterrupt={turnLive && composer.trim() && !busy ? () => void interruptAndSend() : undefined} items={promptQueue?.items ?? []} paused={promptQueue?.paused ?? false} sessionBusy={sessionBusy} notice={deliveryNotice} nowMs={queueNowMs} disabled={connection !== 'connected'} limit={limitLine} editing={queueEdit && queueEdit.key === composerKey ? { id: queueEdit.id, onCancel: cancelQueueEdit } : null} botName={agentName} steer={steerAvailable && selectedSession?.state === 'working'} waitNote={queueWaitNote} onResume={resumeQueue} onSendNow={sendQueuedNow} onSteer={(id) => void steerQueued(id)} onStopAndSend={turnLive ? (id) => void stopAndSendQueued(id) : undefined} onEdit={editQueued} onDelete={(id) => { if (queueEdit?.id === id) cancelQueueEdit(); deleteQueued(id) }} onReorder={reorderQueued} onCancelRetry={cancelAutoRetry} />
@@ -3296,6 +3325,7 @@ ${fileReferenceText(sentFile)}` : typed
       {newProjectOpen && !companion && <NewProjectDialog onCancel={() => finishNewProject(null)} onDone={finishNewProject} />}
       {staffProject && !companion && <StaffProjectDialog project={staffProject} ceoName={managerOf(agents)?.name ?? 'the CEO'} canAskCeo={!!managerOf(agents) && connection === 'connected'} onAskCeo={() => { const id = staffProject.id; setStaffProject(null); void askCeoToStaff(id) }} onHire={() => { const id = staffProject.id; setStaffProject(null); openTeam('hire', id) }} onSkip={() => setStaffProject(null)} />}
       <UndoToasts toasts={undoToasts} onRemove={removeUndoToast} onError={setError} />
+      {importOpen && <ImportDialog agents={agents} ceo={agents.find((agent) => agent.systemRole === 'manager' && !agent.archived) ?? null} onClose={() => { setImportOpen(false); void refresh() }} onOpen={(sessionId) => { void refresh().then(() => { const session = snapshotRef.current?.sessions?.find((item) => item.id === sessionId); if (session) selectSession(session) }) }} />}
       {revertTarget && <ConfirmDialog title={`Revert ${String(revertTarget.file.path)}?`} body="Only this turn’s saved change will be reversed. Later edits that conflict with it prevent the revert." confirmLabel="Revert change" cancelLabel="Keep it" tone="warning" onConfirm={async () => {
         try {
           await rpc('file.revert', { sessionId: revertTarget.sessionId, fileChangeId: revertTarget.file.id })
@@ -3699,6 +3729,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
   const previousPeekStates = useRef<PeekSessionState[]>([])
   const chatAnchor = useRef<{ id: string; delta: number } | null>(null)
   const stickToBottom = useRef(true)
+  const companionGrants = useOwnerGrants()
   const dropPhaseRef = useRef(dropPhase)
   const viewRef = useRef(view)
   const droppedFileRef = useRef(droppedFile)
@@ -4441,6 +4472,7 @@ function Companion({ sendShortcut = 'enter', deliveryNotice, busyMode = 'steer',
   const shell = <div className="companion-shell">
     <aside className="cs-roster" aria-label={`All ${nouns}`}>
       <div className="cs-brand" data-tauri-drag-region><span data-tauri-drag-region>Retinue</span><NeedsYouBadge count={waitingAgents.length} compact onOpen={openNextWaiting} /></div>
+      {companionGrants.map((grant) => <OwnerComputerBar key={grant.sessionId} compact grant={grant} name={agents.find((item) => item.id === grant.agentId)?.name ?? 'An employee'} />)}
       <div className="cs-bots" data-companion-no-drag="">{roster.map(({ item, state, session: rowSession }, rowIndex) => {
         const focused = item.id === agent?.id
         return <button key={item.id} type="button" className={`cs-bot${focused ? ' on' : ''}${state === 'offline' ? ' offline' : ''}${state === 'waiting' ? ' state-waiting' : ''}`} aria-keyshortcuts={[rowIndex < 9 ? `Control+${rowIndex + 1}` : '', state === 'waiting' && roster.findIndex((entry) => entry.state === 'waiting') === rowIndex ? 'N' : ''].filter(Boolean).join(' ') || undefined} aria-current={focused || undefined} aria-label={`${item.name}${state === 'waiting' ? ', needs you' : state === 'working' ? ', working' : ''}`} onClick={() => { selectTeamBlob(item); openView('chat') }}>

@@ -1,6 +1,6 @@
 // Phase 6: how the sidebar orders bots, per computer. "Mine" keeps the order the owner dragged.
 import type { Agent, Project, Session } from '../types'
-import { mainSessionFor, sessionIsBusy } from './teamSelectors'
+import { activityAt, mainSessionFor, sessionIsBusy } from './teamSelectors'
 
 export type SidebarSort = 'manual' | 'recent' | 'name' | 'status'
 const SORT_KEY = 'retinue.sidebar.sort'
@@ -25,7 +25,7 @@ export function storeSidebarView(view: SidebarView) { try { localStorage.setItem
 export function storedSidebarGrouping(): boolean { try { return localStorage.getItem(GROUP_KEY) === '1' } catch { return false } }
 export function storeSidebarGrouping(on: boolean) { try { localStorage.setItem(GROUP_KEY, on ? '1' : '0') } catch { /* private mode */ } }
 
-const latest = (agent: Agent, sessions: readonly Session[]) => String(mainSessionFor(sessions as Session[], agent.id)?.updatedAt ?? '')
+const latest = (agent: Agent, sessions: readonly Session[]) => { const session = mainSessionFor(sessions as Session[], agent.id); return session ? activityAt(session) : '' }
 
 /** Needs you first, then working, then the rest. */
 function urgency(agent: Agent, sessions: readonly Session[]): number {
@@ -68,7 +68,7 @@ export function hasSettled(session: Session, now: number, unread: boolean): bool
   if (unread || sessionIsBusy(session)) return false
   const state = String(session.state ?? '').toLowerCase()
   if (state === 'waiting_permission' || state === 'error' || state === 'failed') return false
-  const at = Date.parse(String(session.updatedAt ?? session.createdAt ?? ''))
+  const at = Date.parse(activityAt(session))
   return Number.isFinite(at) && now - at > SETTLE_AFTER_MS
 }
 

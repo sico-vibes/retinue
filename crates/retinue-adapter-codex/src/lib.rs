@@ -1027,6 +1027,17 @@ fn map_notification(method: &str, p: &Value) -> Option<AgentEvent> {
             tool_call_id: p["itemId"].as_str()?.to_owned(),
             raw: json!({"type":"mcpToolCall","progress":p["message"].as_str()?}),
         }),
+        // The whole plan each time, so an empty array clears the list.
+        "turn/plan/updated" => p["plan"].as_array().map(|steps| AgentEvent::PlanUpdated {
+            items: steps
+                .iter()
+                .filter_map(|step| {
+                    let text = step["step"].as_str().map(str::trim).filter(|text| !text.is_empty())?;
+                    Some(PlanItem::new(text, step["status"].as_str().unwrap_or("")))
+                })
+                .take(PLAN_ITEMS_LIMIT)
+                .collect(),
+        }),
         "item/started" => {
             let i = &p["item"];
             match i["type"].as_str().unwrap_or("") {
@@ -1939,6 +1950,30 @@ mod tests {
         assert_eq!(title(json!({"type":"dynamicToolCall","id":"d","namespace":"search","tool":"find_page"})), "search · find_page");
         assert_eq!(title(json!({"type":"webSearch","id":"w","query":"tauri drag"})), "Searched tauri drag");
         assert_eq!(title(json!({"type":"somethingNew","id":"x"})), "Something new");
+    }
+
+    /// The turn's plan notification is the whole list each time, and its three
+    /// statuses normalize to the daemon's three.
+    #[test]
+    fn the_turn_plan_notification_becomes_the_normalized_task_list() {
+        let notification = json!({"threadId":"t","turnId":"u","explanation":"Two steps left","plan":[
+            {"step":"Read the parser","status":"completed"},
+            {"step":"  Fix the float totals  ","status":"inProgress"},
+            {"step":"Run the suite","status":"pending"},
+            {"step":"","status":"pending"},
+        ]});
+        match map_notification("turn/plan/updated", &notification) {
+            Some(AgentEvent::PlanUpdated { items }) => {
+                assert_eq!(items.len(), 3, "a step with no text is not a step");
+                assert_eq!(items[0], PlanItem { text: "Read the parser".into(), status: PlanItemStatus::Completed });
+                assert_eq!(items[1], PlanItem { text: "Fix the float totals".into(), status: PlanItemStatus::InProgress });
+                assert_eq!(items[2].status, PlanItemStatus::Pending);
+            }
+            other => panic!("a normalized plan was expected, not {other:?}"),
+        }
+        // An empty plan clears the list; a notification with no plan array does nothing.
+        assert!(matches!(map_notification("turn/plan/updated", &json!({"plan":[]})), Some(AgentEvent::PlanUpdated { items }) if items.is_empty()));
+        assert!(map_notification("turn/plan/updated", &json!({})).is_none());
     }
 
     /// The completed image item names its file, and the tool row it leaves

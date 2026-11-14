@@ -152,7 +152,8 @@ function daemonEventTypes(): string[] {
   const types = new Set<string>()
   for (const dir of [DAEMON_SRC, STORAGE_SRC]) {
     for (const entry of readdirSync(dir)) {
-      if (!entry.endsWith('.rs')) continue
+      // Tests build fixtures (a Codex rollout's `timestamp` and `type`) that are not events the daemon sends.
+      if (!entry.endsWith('.rs') || entry.endsWith('_tests.rs')) continue
       const source = readFileSync(join(dir, entry), 'utf8')
       // `st.emit("type", ...)`, including the multi-line calls.
       for (const match of source.matchAll(/\.emit\(\s*"([a-z][a-zA-Z0-9_.]*)"/g)) types.add(match[1])

@@ -176,6 +176,9 @@ pub(crate) async fn add_marked(st: &AppState, p: Value, mcp_client: Option<&str>
     if crate::is_read_only_side(&session["link"]) {
         return Err(derr("read_only", "Side conversations are read-only. Send a new message in the main conversation.", StatusCode::FORBIDDEN));
     }
+    // An imported conversation is history unless its own agent still owns it, and
+    // that is refused here too so a queued send cannot sit there failing.
+    crate::import::refuse_read_only(st, &session).await?;
     crate::machines::refuse_if_moved(st, &session)?;
     let attachments = validate_body(&session, &p)?;
     // A command is validated before it is queued, so a bad one fails here

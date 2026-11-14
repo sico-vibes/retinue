@@ -1257,12 +1257,29 @@ async fn emit_update(tx: &SessionEventSink, p: &Value, context_model: Option<Str
     let event = match kind {
         "agent_message_chunk" => Some(AgentEvent::AssistantDelta { text: text.into() }),
         "agent_thought_chunk" => Some(AgentEvent::ThinkingDelta { text: text.into() }),
-        "tool_call" => Some(AgentEvent::ToolStarted {
-            tool_call_id: u["toolCallId"].as_str().unwrap_or("tool").into(),
-            kind: u["kind"].as_str().unwrap_or("other").into(),
-            title: tool_activity(u["kind"].as_str().unwrap_or("other"), u, u["title"].as_str().unwrap_or("Tool call")).label,
-            raw: u.clone(),
-            parent_tool_call_id: None,
+        "tool_call" => {
+            let name = u["name"].as_str().or_else(|| u["title"].as_str()).unwrap_or("");
+            let plan_tool = is_plan_tool(name);
+            // OpenCode's `todowrite` carries the whole list in its input; when it
+            // does, that list is the plan, and its row is marked `plan` rather
+            // than shown as a tool.
+            if plan_tool {
+                if let Some(todos) = u["rawInput"].get("todos").or_else(|| u["input"].get("todos")).filter(|todos| todos.is_array()) {
+                    let _ = tx.enqueue(AgentEvent::PlanUpdated { items: plan_items_from_todos(Some(todos)) });
+                }
+            }
+            Some(AgentEvent::ToolStarted {
+                tool_call_id: u["toolCallId"].as_str().unwrap_or("tool").into(),
+                kind: if plan_tool { "plan".into() } else { u["kind"].as_str().unwrap_or("other").into() },
+                title: if plan_tool { "Updated the task list".into() } else { tool_activity(u["kind"].as_str().unwrap_or("other"), u, u["title"].as_str().unwrap_or("Tool call")).label },
+                raw: u.clone(),
+                parent_tool_call_id: None,
+            })
+        }
+        // The provider's own plan: the whole list each time, so an empty one
+        // clears it. `entries` is `[{content, priority, status}]`.
+        "plan" => u["entries"].is_array().then(|| AgentEvent::PlanUpdated {
+            items: plan_items_from_todos(Some(&u["entries"])),
         }),
         "tool_call_update" => {
             let tool_call_id = u["toolCallId"].as_str().unwrap_or("tool").into();
@@ -1861,6 +1878,40 @@ mod tests {
             emit_update(&sink, &json!({"update":{"sessionUpdate":"tool_call","toolCallId":"tool","kind":kind,"title":kind,"rawInput":input}}), None).await;
             assert!(matches!(rx.recv().await, Some(AgentEvent::ToolStarted { title, .. }) if title == expected), "{kind}");
         }
+    }
+
+    /// OpenCode reports its task list twice over: as an ACP `plan` update, and
+    /// through its `todowrite` tool call. Both reach the daemon as one normalized
+    /// list, and the tool row is marked `plan` so the window can hide it.
+    #[tokio::test]
+    async fn the_acp_plan_update_and_the_todowrite_tool_both_become_the_task_list() {
+        let (tx, mut rx) = tokio::sync::mpsc::channel(8);
+        let sink = SessionEventSink::new(tx);
+        let plan = json!({"update":{"sessionUpdate":"plan","entries":[
+            {"content":"Read the parser","priority":"high","status":"completed"},
+            {"content":"Fix the float totals","priority":"medium","status":"in_progress"},
+            {"content":"Run the suite","priority":"low","status":"pending"}
+        ]}});
+        emit_update(&sink, &plan, None).await;
+        match rx.recv().await {
+            Some(AgentEvent::PlanUpdated { items }) => {
+                assert_eq!(items.len(), 3);
+                assert_eq!(items[1], PlanItem { text: "Fix the float totals".into(), status: PlanItemStatus::InProgress });
+                assert_eq!(items[0].status, PlanItemStatus::Completed);
+            }
+            _ => panic!("the plan update was expected"),
+        }
+        // An empty plan clears the list rather than being ignored.
+        emit_update(&sink, &json!({"update":{"sessionUpdate":"plan","entries":[]}}), None).await;
+        assert!(matches!(rx.recv().await, Some(AgentEvent::PlanUpdated { items }) if items.is_empty()));
+        // The tool call alone still gives the list, and its row is a plan row.
+        let call = json!({"update":{"sessionUpdate":"tool_call","toolCallId":"todo-1","status":"in_progress","kind":"other","title":"todowrite","rawInput":{"todos":[
+            {"content":"Write the fix","status":"in_progress"},
+            {"content":"Run the suite","status":"pending"}
+        ]}}});
+        emit_update(&sink, &call, None).await;
+        assert!(matches!(rx.recv().await, Some(AgentEvent::PlanUpdated { items }) if items.len() == 2));
+        assert!(matches!(rx.recv().await, Some(AgentEvent::ToolStarted { kind, title, .. }) if kind == "plan" && title == "Updated the task list"));
     }
 
     /// The image tool's finished update carries `rawOutput.metadata.path` (the

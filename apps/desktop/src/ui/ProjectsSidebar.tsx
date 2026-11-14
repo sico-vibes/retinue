@@ -6,7 +6,7 @@
 // selected name or title longer than its row scrolls (Marquee). Folding is
 // animated (Collapse). Spacing follows the density tokens in density.css.
 import { useMemo, useRef, useState } from 'react'
-import { BellRing, ChevronRight, CircleAlert, Plus } from 'lucide-react'
+import { BellRing, ChevronRight, CircleAlert, Copy, Plus } from 'lucide-react'
 import type { Agent, Project, Session } from '../types'
 import { BlobCanvas } from '../blob/BlobCanvas'
 import { agentLook } from '../blob/look'
@@ -14,17 +14,18 @@ import { agentColorHex } from './agentColor'
 import { Collapse } from './Collapse'
 import { Marquee } from './Marquee'
 import { ProjectIcon } from './ProjectIcon'
+import { McpMark } from './McpMark'
 import type { MembersByProject } from './projectMembers'
 import { shortTime } from './rosterSelectors'
 import { attentionOrder, attentionRank } from './sidebarOrder'
-import { isManager, isSideSession, projectOfSession, sessionIsBusy } from './teamSelectors'
+import { activityAt, isManager, isSideSession, projectOfSession, sessionIsBusy } from './teamSelectors'
 import { TeamMenu, type MenuItem } from './TeamSidebar'
 import './projectsSidebar.css'
 
 const FOLDED_KEY = 'retinue.sidebar.foldedProjects'
 const RECENT_PER_BOT = 4
 
-const stampOf = (session: Session) => String(session.lastMessageAt ?? session.updatedAt ?? session.createdAt ?? '')
+const stampOf = activityAt
 
 type BotInProject = { agent: Agent; sessions: Session[] }
 type ProjectBlock = { key: string; project: Project | null; bots: BotInProject[]; latest: string }
@@ -170,14 +171,14 @@ export function ProjectsSidebar({ agents, projects, sessions, members = null, se
                       <span className="ps-bot-sub">{agent.role?.trim() || (latest ? (latest.title?.trim() || 'New chat') : 'No conversations yet')}</span>
                     </span>
                   </button>
-                  {recent.length > 1 && <button type="button" className="icon-button tiny ps-more" aria-label={`${expanded ? 'Hide' : 'Show'} ${agent.name}'s conversations in ${name}`} aria-expanded={expanded} onClick={() => setOpenFor(rowKey, !expanded)}><ChevronRight size={12} aria-hidden="true" className={`fold-chevron${expanded ? ' open' : ''}`} /></button>}
+                  {recent.length > 0 && <button type="button" className="icon-button tiny ps-more" aria-label={`${expanded ? 'Hide' : 'Show'} ${agent.name}'s conversations in ${name}`} aria-expanded={expanded} onClick={() => setOpenFor(rowKey, !expanded)}><ChevronRight size={12} aria-hidden="true" className={`fold-chevron${expanded ? ' open' : ''}`} /></button>}
                 </div>
                 <Collapse open={expanded}>
                   <ul className="ps-convos" role="group">{recent.map((session) => {
                     const selected = session.id === selectedSessionId
                     const status = conversationStatus(session, approvalSessionIds?.has(session.id) ?? false)
-                    return <li key={session.id} role="none"><button type="button" role="treeitem" aria-current={selected ? 'true' : undefined} className={`ps-convo marquee-host${selected ? ' selected' : ''}`} onClick={() => onOpenConversation(agent, session)}>
-                      <Marquee className="ps-convo-title" text={session.title?.trim() || 'New chat'} active={selected} />
+                    return <li key={session.id} role="none"><button type="button" role="treeitem" aria-current={selected ? 'true' : undefined} className={`ps-convo marquee-host${selected ? ' selected' : ''}`} onClick={() => onOpenConversation(agent, session)} onContextMenu={(event) => { event.preventDefault(); trigger.current = event.currentTarget; setMenu({ label: `Actions for ${session.title?.trim() || 'New chat'}`, x: event.clientX, y: event.clientY, items: [{ label: 'Open', onSelect: () => onOpenConversation(agent, session) }, { label: 'Copy conversation ID', icon: <Copy size={15} />, onSelect: () => { void navigator.clipboard?.writeText(session.id).catch(() => undefined) } }] }) }}>
+                      <span className="ps-convo-line">{session.origin?.kind === 'mcp' && <McpMark client={session.origin.client} />}<Marquee className="ps-convo-title" text={session.title?.trim() || 'New chat'} active={selected} /></span>
                       <span className="ps-convo-meta"><time dateTime={stampOf(session)}>{shortTime(stampOf(session))}</time><span aria-hidden="true">·</span><StatusLabel tone={status.tone} label={status.label} /></span>
                     </button></li>
                   })}</ul>

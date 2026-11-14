@@ -266,17 +266,18 @@ describe('composer attachments', () => {
     expect(thumb.getAttribute('aria-label')).toBe('Open shot.png')
     expect(host.querySelector<HTMLImageElement>('.message-image img')?.getAttribute('src')).toBe('data:image/png;base64,iVBORw0KGgo=')
     await act(async () => { thumb.click() })
-    const viewer = host.querySelector('.message-image-viewer')!
+    // 14 November 2026 (owner): the viewer covers the whole window, so it renders on the document body.
+    const viewer = document.querySelector('.message-image-viewer')!
     expect(viewer.getAttribute('role')).toBe('dialog')
     expect(viewer.querySelector('img')?.getAttribute('src')).toBe('data:image/png;base64,iVBORw0KGgo=')
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Close image')
     await act(async () => { document.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape', bubbles:true })) })
-    expect(host.querySelector('.message-image-viewer')).toBeNull()
+    expect(document.querySelector('.message-image-viewer')).toBeNull()
     expect(document.activeElement?.getAttribute('aria-label')).toBe('Open shot.png')
     // The backdrop closes it too.
     await act(async () => { host.querySelector<HTMLButtonElement>('.message-image')!.click() })
-    await act(async () => { host.querySelector<HTMLElement>('.message-image-viewer')!.click() })
-    expect(host.querySelector('.message-image-viewer')).toBeNull()
+    await act(async () => { document.querySelector<HTMLElement>('.message-image-viewer')!.click() })
+    expect(document.querySelector('.message-image-viewer')).toBeNull()
   })
 
   it('shows a placeholder instead of a broken picture when the image is gone', async () => {
