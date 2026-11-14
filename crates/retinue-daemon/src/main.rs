@@ -11880,14 +11880,14 @@ mod phase2a_tests {
         let changed = events.recv().await.unwrap();
         assert_eq!(changed.event_type, "session.changed");
         assert_eq!(changed.payload["snoozed"], true);
-        assert_eq!(st.db.session_snoozed("snooze-rpc").unwrap(), true);
+        assert!(st.db.session_snoozed("snooze-rpc").unwrap());
         // The row carries it in session.get and in the list, and the unrelated
         // usage-limit snooze is untouched.
         assert_eq!(dispatch(&st, "session.get", json!({"sessionId":"snooze-rpc"})).await.unwrap()["snoozed"], true);
         let listed = st.db.sessions().unwrap();
         let row = listed.iter().find(|row| row["id"] == "snooze-rpc").unwrap();
         assert_eq!(row["snoozed"], true);
-        assert_eq!(st.db.session_limit_flags("snooze-rpc").unwrap().1, false, "limit_snoozed is a different column");
+        assert!(!st.db.session_limit_flags("snooze-rpc").unwrap().1, "limit_snoozed is a different column");
         // Setting it again changes nothing, so nothing is announced.
         dispatch(&st, "session.snooze", json!({"sessionId":"snooze-rpc","snoozed":true})).await.unwrap();
         assert!(events.try_recv().is_err(), "no event for an unchanged flag");

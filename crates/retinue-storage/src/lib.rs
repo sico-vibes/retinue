@@ -11483,18 +11483,18 @@ mod p8_watchdog_tests {
         let db = Storage::open_in_memory().unwrap();
         db.upsert_runtime(&json!({"id":"r","provider":"codex"})).unwrap();
         db.create_session("s","r","codex",".","Chat").unwrap();
-        assert_eq!(db.session_snoozed("s").unwrap(), false);
-        assert_eq!(db.session_snoozed("missing").unwrap(), false, "a missing conversation is simply not snoozed");
+        assert!(!db.session_snoozed("s").unwrap());
+        assert!(!db.session_snoozed("missing").unwrap(), "a missing conversation is simply not snoozed");
         assert!(db.session_set_snoozed("s", true).unwrap(), "a real change is reported");
         assert!(!db.session_set_snoozed("s", true).unwrap(), "setting it twice changes nothing");
-        assert_eq!(db.session_snoozed("s").unwrap(), true);
+        assert!(db.session_snoozed("s").unwrap());
         let row = db.session_list(false).unwrap().into_iter().find(|row| row["id"]=="s").unwrap();
         assert_eq!(row["snoozed"], json!(true));
         assert!(row.get("limitSnoozed").is_none(), "the limit snooze stays with the limit state");
         assert_eq!(db.session_event_summary("s").unwrap()["snoozed"], json!(true));
         assert_eq!(db.session_detail("s").unwrap()["snoozed"], json!(true));
         assert_eq!(db.session_execution_row("s").unwrap()["snoozed"], json!(true));
-        assert_eq!(db.session_limit_flags("s").unwrap().1, false, "the two snoozes are separate columns");
+        assert!(!db.session_limit_flags("s").unwrap().1, "the two snoozes are separate columns");
         assert!(db.session_set_snoozed("s", false).unwrap());
         for cleared in [db.session_list(false).unwrap()[0].clone(), db.session_event_summary("s").unwrap(), db.session_detail("s").unwrap(), db.session_execution_row("s").unwrap()] {
             assert!(cleared.get("snoozed").is_none(), "{cleared}");

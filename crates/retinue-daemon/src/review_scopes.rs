@@ -528,22 +528,20 @@ fn nothing(path: &str, reason: Option<&str>) -> Value {
 /// One file's whole change between a scope's two ends, in the same shape as the answer against
 /// `HEAD`.
 async fn ranged_file(root: &Path, ends: &Ends, status: &[Change], path: &str, untracked: bool) -> Value {
-    if untracked {
-        if status.iter().any(|change| change.untracked && change.repository_path == path) {
-            let (diff, truncated, binary, added, removed) = crate::git_ops::synthesise(root, path);
-            return json!({
-                "repositoryPath": path,
-                "previousPath": Value::Null,
-                "change": "added",
-                "diff": diff,
-                "truncated": truncated,
-                "binary": binary,
-                "addedLines": added,
-                "removedLines": removed,
-                "staged": "none",
-                "reason": Value::Null,
-            });
-        }
+    if untracked && status.iter().any(|change| change.untracked && change.repository_path == path) {
+        let (diff, truncated, binary, added, removed) = crate::git_ops::synthesise(root, path);
+        return json!({
+            "repositoryPath": path,
+            "previousPath": Value::Null,
+            "change": "added",
+            "diff": diff,
+            "truncated": truncated,
+            "binary": binary,
+            "addedLines": added,
+            "removedLines": removed,
+            "staged": "none",
+            "reason": Value::Null,
+        });
     }
     let changes = match entries(root, ends).await {
         Ok(changes) => changes,
@@ -794,7 +792,6 @@ mod tests {
         assert_eq!(file["addedLines"], 1);
         assert_eq!(file["removedLines"], 1);
         assert!(file["diff"].as_str().unwrap().contains("+two"));
-        assert!(view["path"] != Value::Null || true);
         assert_eq!(view["addedLines"], 1);
         assert_eq!(view["removedLines"], 1);
         assert_eq!(view["files"].as_array().unwrap().len(), 1, "a file the turn did not change is not listed");

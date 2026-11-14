@@ -494,9 +494,11 @@ pub fn key_is_single(key: &str) -> bool {
 }
 
 /// Kills the driver process tree. Stopping is a kill, not a request: a hung UI
-/// Automation call only ends when its process does.
+/// Automation call only ends when its process does. The blocking standard-library
+/// `Command` on purpose: Tokio's `.status()` is a future that does nothing until
+/// awaited, so the kill never ran (clippy `let_underscore_future`, 14 November 2026).
 fn kill_tree(pid: u32) {
-    let _ = Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status();
+    let _ = std::process::Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status();
 }
 
 /// One driver call: start the pinned child, handshake, call one tool, read one
@@ -873,7 +875,7 @@ pub(crate) async fn call_tool(st: &AppState, session_id: &str, name: &str, args:
 pub fn window_title(text: &str) -> Option<String> {
     let line = text.lines().find(|line| line.starts_with("Window: "))?;
     let rest = line.trim_start_matches("Window: ").trim();
-    let title = rest.splitn(2, ", App:").next().unwrap_or("").trim().trim_matches('"');
+    let title = rest.split(", App:").next().unwrap_or("").trim().trim_matches('"');
     (!title.is_empty()).then(|| title.to_owned())
 }
 

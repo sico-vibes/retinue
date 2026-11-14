@@ -86,7 +86,7 @@ pub const ACP_PROVIDERS: &[AcpProvider] = &[
 /// The providers that are always on (owner decision, 11 November 2026): Claude
 /// Code, Codex and OpenCode. Every other provider is optional and off until the
 /// owner turns it on; `runtimes.disabled` cannot switch these three off.
-pub const MAIN_PROVIDERS: [&'static str; 3] = ["claude", "codex", "opencode"];
+pub const MAIN_PROVIDERS: [&str; 3] = ["claude", "codex", "opencode"];
 
 /// Whether a provider is one of the three that are always on.
 pub fn is_main_provider(provider: &str) -> bool {

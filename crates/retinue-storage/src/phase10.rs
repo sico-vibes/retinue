@@ -204,12 +204,9 @@ impl Storage {
         let exists: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM sessions WHERE id=?1 AND json_extract(data,'$.import') IS NOT NULL)", [session_id], |r| r.get(0))?;
         if !exists { return Err(StorageError::AgentNotFound); }
         if let Some(agent) = agent {
-            match agent {
-                Some(agent_id) => {
-                    let found: Option<bool> = tx.query_row("SELECT archived FROM agents WHERE id=?1", [agent_id], |r| r.get(0)).optional()?;
-                    if found != Some(false) { return Err(StorageError::AgentNotFound); }
-                }
-                None => {}
+            if let Some(agent_id) = agent {
+                let found: Option<bool> = tx.query_row("SELECT archived FROM agents WHERE id=?1", [agent_id], |r| r.get(0)).optional()?;
+                if found != Some(false) { return Err(StorageError::AgentNotFound); }
             }
             tx.execute("UPDATE sessions SET agent_id=?2 WHERE id=?1", params![session_id, agent])?;
             if let Some(runtime) = runtime { tx.execute("UPDATE sessions SET runtime_id=?2 WHERE id=?1", params![session_id, runtime])?; }

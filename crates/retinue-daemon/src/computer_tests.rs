@@ -365,7 +365,7 @@ async fn computer_tools_refuse_after_unlink_and_while_switched_off() {
     let status = computer::mcp_rpc(&st, "computer-session", "mcp.computer.call", &json!({"name": "computer_status", "arguments": {}})).await.unwrap();
     assert_eq!(status["isError"], Value::Null);
     let exec = computer::mcp_rpc(&st, "computer-session", "mcp.computer.call", &json!({"name": "computer_exec", "arguments": {"command": "echo hi"}})).await.unwrap();
-    assert_eq!(exec["content"][0]["text"].as_str().unwrap().contains("hello"), true);
+    assert!(exec["content"][0]["text"].as_str().unwrap().contains("hello"));
 
     dispatch(&st, "computer.unlink", json!({})).await.unwrap();
     for name in ["computer_status", "computer_exec"] {

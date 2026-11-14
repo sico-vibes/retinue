@@ -1069,7 +1069,7 @@ fn as_text(value: &Value) -> String {
 /// Whether nobody is watching this conversation: an automation, an unattended
 /// task, or a delegated child of one. An unreadable session counts as nobody.
 fn nobody_is_watching(st: &AppState, session: Option<&Value>) -> bool {
-    session.map_or(true, |session| crate::questions::may_ask(st, session).is_err())
+    session.is_none_or(|session| crate::questions::may_ask(st, session).is_err())
 }
 
 /// Whether this conversation's newest prompt came from a teammate rather than
