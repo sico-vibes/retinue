@@ -81,6 +81,19 @@ The terminal dock uses [xterm.js](https://github.com/xtermjs/xterm.js) (`@xterm/
 
 PDFs in chat are drawn by [pdf.js](https://github.com/mozilla/pdf.js) (`pdfjs-dist` 4.10.38, legacy build, Apache-2.0), loaded only when a PDF is shown. Its worker is bundled with the app; no remote code or font is fetched.
 
+## open-computer-use
+
+The installer ships `open-computer-use.exe` 1.1.4 from [iFurySt/open-computer-use](https://github.com/iFurySt/open-computer-use) (MIT), unmodified. Retinue runs it as a supervised child process only when the owner lets employees control this computer. The release is pinned by the SHA-256 of its zip (`6635efc5…6817a`) and of the executable (`c8ca36d8…e90854`); `scripts/fetch-owner-computer-driver.mjs` refuses anything else. See `docs/operations/owner-computer-driver.md`. Its MIT licence is the one quoted below.
+
+## React Bits
+
+Five pieces are adapted from [React Bits](https://github.com/DavidHDev/react-bits) (MIT + Commons Clause License Condition v1.0, Copyright (c) 2026 David Haz), used as part of Retinue and never sold or redistributed on their own:
+
+- `apps/desktop/src/ui/reactbits/GradientASCII.tsx` and `.css` (the launch background), `MetallicPaint.tsx` and `.css` (the logo on the launch screen and on hover), and `LatticeLoader.tsx` and `.css` (the working state in a conversation): copied with small changes.
+- `apps/desktop/src/ui/EffortTrack.tsx` (the effort slider and its sparks) follows Prompt Bar's effort control, and `apps/desktop/src/ui/TurnPlan.tsx` (the task list marks) follows Status Mark; both are rewritten for Retinue without the `motion` and Hugeicons dependencies.
+
+The licence permits use, copying and modification "as part of an application, website, or product", with this notice kept, and forbids selling, sublicensing or redistributing the components themselves. Its warranty disclaimer is the same as the MIT licence's below.
+
 ## T3 Code
 
 The chat work log, checkpoint, terminal and rich-content designs were informed by reading [T3 Code](https://github.com/pingdotgg/t3code) (MIT, Copyright (c) 2026 T3 Tools Inc.), pinned at commit 220eb735. No T3 source file was copied; the implementations are written for Retinue. If code is ever copied, keep T3's copyright and permission notice with it.

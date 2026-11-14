@@ -1,12 +1,12 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "2b3b9aa",
-  "documentCount": 394,
+  "revision": "24987c8",
+  "documentCount": 403,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
-      "sha256": "2225d7eb8834896ce53583cf4ce8704e2fd467dd7021f6517df6b93359b8b678"
+      "sha256": "5e6cce5b8d594e4922c33d28f598e73956e531337573a5d5dd5b9dddeae3ddb7"
     },
     {
       "source": "docs/library/assets/diagrams/approval-flow.svg",
@@ -671,7 +671,7 @@
       "title": "Automations, memory and skills",
       "section": "Working with Retinue",
       "status": "Guide",
-      "sha256": "0e5c181f72c5fcdc34cde3c552c36bd53dd10c1d8bcc1bda008488751a45f342",
+      "sha256": "87a306ada36c6c97e2c4fba61475233012deae803ba7eb457ad0927a90bcaba3",
       "headings": [
         {
           "id": "before-you-start",
@@ -726,6 +726,11 @@
         {
           "id": "what-a-skill-is",
           "text": "What a skill is",
+          "level": 3
+        },
+        {
+          "id": "built-in-skills",
+          "text": "Built-in skills",
           "level": 3
         },
         {
@@ -2809,6 +2814,171 @@
       ]
     },
     {
+      "id": "project/research/owner-requests-2026-11-14",
+      "source": "docs/research/owner-requests-2026-11-14.md",
+      "title": "Owner requests, 14 November 2026",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "397a3cead24ed766d3456d123eab56ee6b39ccda1de37e6fa3804db6f8f399c4",
+      "headings": [
+        {
+          "id": "1-showing-that-an-image-is-being-generated",
+          "text": "1. Showing that an image is being generated",
+          "level": 2
+        },
+        {
+          "id": "what-the-owner-wants",
+          "text": "What the owner wants",
+          "level": 3
+        },
+        {
+          "id": "what-the-codex-app-server-actually-sends",
+          "text": "What the Codex app-server actually sends",
+          "level": 3
+        },
+        {
+          "id": "where-the-two-signals-currently-diverge-in-retinue",
+          "text": "Where the two signals currently diverge in Retinue",
+          "level": 3
+        },
+        {
+          "id": "recommendation-what-the-placeholder-can-honestly-show",
+          "text": "Recommendation: what the placeholder can honestly show",
+          "level": 3
+        },
+        {
+          "id": "assumptions-i-did-not-verify",
+          "text": "Assumptions I did not verify",
+          "level": 3
+        },
+        {
+          "id": "2-importing-conversations-from-other-coding-agents",
+          "text": "2. Importing conversations from other coding agents",
+          "level": 2
+        },
+        {
+          "id": "first-a-correction-about-capyai",
+          "text": "First, a correction about capy.ai",
+          "level": 3
+        },
+        {
+          "id": "how-the-reference-implementation-does-it-openaicodex",
+          "text": "How the reference implementation does it (openai/codex)",
+          "level": 3
+        },
+        {
+          "id": "where-each-agents-history-actually-lives-checked-on-this-machine",
+          "text": "Where each agent's history actually lives — checked on this machine",
+          "level": 3
+        },
+        {
+          "id": "can-an-imported-conversation-be-resumed-by-the-cli",
+          "text": "Can an imported conversation be resumed by the CLI?",
+          "level": 3
+        },
+        {
+          "id": "what-retinue-stores-and-what-it-must-never-copy",
+          "text": "What Retinue stores, and what it must never copy",
+          "level": 3
+        },
+        {
+          "id": "proposed-design",
+          "text": "Proposed design",
+          "level": 3
+        },
+        {
+          "id": "unverified-in-this-section",
+          "text": "Unverified in this section",
+          "level": 3
+        },
+        {
+          "id": "3-coloured-highlighted-replies-opencodes-look",
+          "text": "3. Coloured, highlighted replies (OpenCode's look)",
+          "level": 2
+        },
+        {
+          "id": "the-answer-to-the-question-it-is-the-terminal-renderer-not-the-model",
+          "text": "The answer to the question: it is the terminal renderer, not the model",
+          "level": 3
+        },
+        {
+          "id": "where-retinue-stands-today",
+          "text": "Where Retinue stands today",
+          "level": 3
+        },
+        {
+          "id": "recommendation-which-elements-to-colour",
+          "text": "Recommendation: which elements to colour",
+          "level": 3
+        },
+        {
+          "id": "a-formatting-guide-for-bots",
+          "text": "A formatting guide for bots",
+          "level": 3
+        },
+        {
+          "id": "what-i-could-not-verify",
+          "text": "What I could not verify",
+          "level": 3
+        },
+        {
+          "id": "4-browser-use-and-computer-use-including-the-owners-own-computer",
+          "text": "4. Browser use and computer use, including the owner's own computer",
+          "level": 2
+        },
+        {
+          "id": "41-what-exists-today-precisely",
+          "text": "4.1 What exists today, precisely",
+          "level": 3
+        },
+        {
+          "id": "42-cloud-computer-screenshots-mouse-keyboard",
+          "text": "4.2 Cloud computer: screenshots, mouse, keyboard",
+          "level": 3
+        },
+        {
+          "id": "43-browser-use",
+          "text": "4.3 Browser use",
+          "level": 3
+        },
+        {
+          "id": "44-the-owners-windows-computer",
+          "text": "4.4 The owner's Windows computer",
+          "level": 3
+        },
+        {
+          "id": "45-the-consent-model",
+          "text": "4.5 The consent model",
+          "level": 3
+        },
+        {
+          "id": "46-logging-and-keeping-secrets-out",
+          "text": "4.6 Logging, and keeping secrets out",
+          "level": 3
+        },
+        {
+          "id": "47-draft-agentsmd-amendment",
+          "text": "4.7 Draft AGENTS.md amendment",
+          "level": 3
+        },
+        {
+          "id": "48-phased-plan",
+          "text": "4.8 Phased plan",
+          "level": 3
+        },
+        {
+          "id": "unverified-in-this-section-1",
+          "text": "Unverified in this section",
+          "level": 3
+        },
+        {
+          "id": "proposed-skill-updates-not-applied-this-run-changed-no-code-and-no-docs-outside-this-file",
+          "text": "Proposed skill updates (not applied: this run changed no code and no docs outside this file)",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/reference/phase-5-analytics-contract",
       "source": "docs/reference/phase-5-analytics-contract.md",
       "title": "Phase 5 contract: cost and usage analytics (daemon RPC + UI)",
@@ -2919,7 +3089,7 @@
       "title": "Retinue collaboration instructions",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "2b7329fe2c9d432ace8da949b85dd7aae94fcec038f06d44e6326f7e3867d4eb",
+      "sha256": "fc51b7829fb3f4ef920389eaee50144e24629eabf4f1466c685d9887a0f46384",
       "headings": [
         {
           "id": "resume-1-october-2026-evening-superseded-by-delegation-pipeline-above",
@@ -2949,7 +3119,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "95f7f72ecf84fb6b9366f5e1f5e2547b823e9f058c6bd10773fffb2a397f6e56",
+      "sha256": "f30dd53d2d255926cb74d31c51784e0bdb515d2b6a1f156720427756dc1102d8",
       "headings": [
         {
           "id": "update-commands",
@@ -3179,6 +3349,11 @@
         {
           "id": "the-linked-vps-computer-harbor-13-november-2026",
           "text": "The linked VPS computer: Harbor (13 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "phase-10-importing-conversations-from-other-coding-agents-14-november-2026",
+          "text": "Phase 10: importing conversations from other coding agents (14 November 2026)",
           "level": 2
         }
       ]
@@ -3504,6 +3679,41 @@
       ]
     },
     {
+      "id": "repository/apps/site/README",
+      "source": "apps/site/README.md",
+      "title": "Retinue site",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "27423912b091b5c10185f3d9d786e8ae2b81231e00684b6b34417c7f1de50fb4",
+      "headings": [
+        {
+          "id": "run-and-build",
+          "text": "Run and build",
+          "level": 2
+        },
+        {
+          "id": "where-things-are",
+          "text": "Where things are",
+          "level": 2
+        },
+        {
+          "id": "screenshots",
+          "text": "Screenshots",
+          "level": 2
+        },
+        {
+          "id": "adding-a-react-bits-component",
+          "text": "Adding a React Bits component",
+          "level": 2
+        },
+        {
+          "id": "rules-learned-building-it",
+          "text": "Rules learned building it",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "repository/apps/website/README",
       "source": "apps/website/README.md",
       "title": "Retinue website",
@@ -3539,6 +3749,46 @@
         {
           "id": "conventions",
           "text": "Conventions",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "repository/crates/retinue-daemon/src/skills/retinue/SKILL",
+      "source": "crates/retinue-daemon/src/skills/retinue/SKILL.md",
+      "title": "Retinue, from the inside",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "fd3d82e1593978a2066ee99d98e8979aae22755eff434f37d830362f8ca5cdfe",
+      "headings": [
+        {
+          "id": "name-retinue-description-how-retinue-works-from-the-inside-the-words-employees-projects-conversations-the-ceo-which-tool-does-what-and-who-may-call-it-how-conversation-ids-work-and-the-rules-every-bot-follows-read-it-before-you-delegate-hire-schedule-or-open-work-in-another-project",
+          "text": "name: retinue\ndescription: How Retinue works from the inside: the words (employees, projects, conversations, the CEO), which tool does what and who may call it, how conversation ids work, and the rules every bot follows. Read it before you delegate, hire, schedule or open work in another project.",
+          "level": 2
+        },
+        {
+          "id": "the-words",
+          "text": "The words",
+          "level": 2
+        },
+        {
+          "id": "conversations-and-ids",
+          "text": "Conversations and ids",
+          "level": 2
+        },
+        {
+          "id": "who-may-do-what",
+          "text": "Who may do what",
+          "level": 2
+        },
+        {
+          "id": "rules",
+          "text": "Rules",
+          "level": 2
+        },
+        {
+          "id": "common-jobs",
+          "text": "Common jobs",
           "level": 2
         }
       ]
@@ -3679,6 +3929,76 @@
       ]
     },
     {
+      "id": "project/research/t3code-skill-2026-11-14",
+      "source": "docs/research/t3code-skill-2026-11-14.md",
+      "title": "T3 Code's skill, and a Retinue skill proposal",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "f398d0909b38bd9d9927e17d940e65fd8be6373aa8325856ac273e8428d242c6",
+      "headings": [
+        {
+          "id": "1-what-t3-code-ships-repository-pingdotggt3code",
+          "text": "1. What T3 Code ships (repository pingdotgg/t3code)",
+          "level": 2
+        },
+        {
+          "id": "2-how-skills-reach-agents-and-per-cli-discovery",
+          "text": "2. How skills reach agents, and per-CLI discovery",
+          "level": 2
+        },
+        {
+          "id": "3-keeping-it-up-to-date",
+          "text": "3. Keeping it up to date",
+          "level": 2
+        },
+        {
+          "id": "4-conditional-skills",
+          "text": "4. Conditional skills",
+          "level": 2
+        },
+        {
+          "id": "retinue-for-comparison-all-v-unless-marked",
+          "text": "Retinue, for comparison (all [V] unless marked)",
+          "level": 2
+        },
+        {
+          "id": "proposal",
+          "text": "Proposal",
+          "level": 2
+        },
+        {
+          "id": "a-user-facing-retinue-skill-for-the-owners-own-agents-claude-code-and-others",
+          "text": "A. User-facing \"Retinue\" skill for the owner's own agents (Claude Code and others)",
+          "level": 3
+        },
+        {
+          "id": "b-in-app-employee-skill-for-bots-inside-retinue-for-example-the-ceo",
+          "text": "B. In-app employee skill for bots inside Retinue (for example the CEO)",
+          "level": 3
+        },
+        {
+          "id": "c-cloud-computer-sub-skill-on-only-while-the-computer-is-on",
+          "text": "C. Cloud computer sub-skill, on only while the computer is on",
+          "level": 3
+        },
+        {
+          "id": "things-that-must-never-go-in-any-skill-agentsmd",
+          "text": "Things that must never go in any skill (AGENTS.md)",
+          "level": 3
+        },
+        {
+          "id": "open-items-unverified",
+          "text": "Open items (unverified)",
+          "level": 2
+        },
+        {
+          "id": "sources",
+          "text": "Sources",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "reference/task-board",
       "source": "docs/library/content/reference/task-board.md",
       "title": "Task board",
@@ -3809,6 +4129,216 @@
       ]
     },
     {
+      "id": "repository/crates/retinue-daemon/src/skills/cloud-computer/SKILL",
+      "source": "crates/retinue-daemon/src/skills/cloud-computer/SKILL.md",
+      "title": "The cloud computer",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "f9c0e771ef7439c3e0cb5bb1d4af985287ac3f2646ecd66525a24bb3152ad590",
+      "headings": [
+        {
+          "id": "name-cloud-computer-description-the-owners-cloud-computer-what-it-is-the-vps-computer-tools-and-what-each-is-for-where-work-goes-on-it-when-to-wake-it-and-let-it-sleep-and-how-it-differs-from-the-owners-project-folder-read-it-before-you-run-anything-on-the-computer",
+          "text": "name: cloud-computer\ndescription: The owner's cloud computer: what it is, the vps-computer tools and what each is for, where work goes on it, when to wake it and let it sleep, and how it differs from the owner's project folder. Read it before you run anything on the computer.",
+          "level": 2
+        },
+        {
+          "id": "the-tools",
+          "text": "The tools",
+          "level": 2
+        },
+        {
+          "id": "where-work-goes",
+          "text": "Where work goes",
+          "level": 2
+        },
+        {
+          "id": "when-to-wake-it-and-when-to-let-it-sleep",
+          "text": "When to wake it, and when to let it sleep",
+          "level": 2
+        },
+        {
+          "id": "how-it-differs-from-the-owners-project-folder",
+          "text": "How it differs from the owner's project folder",
+          "level": 2
+        },
+        {
+          "id": "reporting",
+          "text": "Reporting",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/owner-computer-driver-2026-11-14",
+      "source": "docs/research/owner-computer-driver-2026-11-14.md",
+      "title": "The driver for the owner's Windows computer (Phase C), 14 November 2026",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "9d7b13af32091dff0cd341370f8f8669c55d73634bce0a48822a2cfa14c4c7cb",
+      "headings": [
+        {
+          "id": "what-this-report-settles-in-one-paragraph",
+          "text": "What this report settles, in one paragraph",
+          "level": 2
+        },
+        {
+          "id": "1-candidate-drivers-for-windows",
+          "text": "1. Candidate drivers for Windows",
+          "level": 2
+        },
+        {
+          "id": "11-how-i-judged-them",
+          "text": "1.1 How I judged them",
+          "level": 3
+        },
+        {
+          "id": "12-the-shortlist",
+          "text": "1.2 The shortlist",
+          "level": 3
+        },
+        {
+          "id": "13-open-computer-use-what-the-windows-runtime-actually-does",
+          "text": "1.3 open-computer-use: what the Windows runtime actually does",
+          "level": 3
+        },
+        {
+          "id": "14-windows-mcp-bigger-and-the-size-is-the-problem",
+          "text": "1.4 Windows-MCP: bigger, and the size is the problem",
+          "level": 3
+        },
+        {
+          "id": "15-flaui-mcp-the-closest-competitor-and-the-two-defaults-that-decide-it",
+          "text": "1.5 FlaUI-MCP: the closest competitor, and the two defaults that decide it",
+          "level": 3
+        },
+        {
+          "id": "16-nuphus-mcp-a-rust-implementation-that-already-exists",
+          "text": "1.6 nuphus-mcp: a Rust implementation that already exists",
+          "level": 3
+        },
+        {
+          "id": "17-what-is-not-a-candidate-at-all",
+          "text": "1.7 What is not a candidate at all",
+          "level": 3
+        },
+        {
+          "id": "2-writing-our-own-in-rust",
+          "text": "2. Writing our own, in Rust",
+          "level": 2
+        },
+        {
+          "id": "21-what-each-crate-covers",
+          "text": "2.1 What each crate covers",
+          "level": 3
+        },
+        {
+          "id": "22-what-it-would-take",
+          "text": "2.2 What it would take",
+          "level": 3
+        },
+        {
+          "id": "23-where-it-would-live-and-the-shape-i-would-give-it",
+          "text": "2.3 Where it would live, and the shape I would give it",
+          "level": 3
+        },
+        {
+          "id": "24-the-honest-summary-of-this-option",
+          "text": "2.4 The honest summary of this option",
+          "level": 3
+        },
+        {
+          "id": "3-recommendation-for-phase-cs-first-cut",
+          "text": "3. Recommendation for Phase C's first cut",
+          "level": 2
+        },
+        {
+          "id": "31-the-recommendation",
+          "text": "3.1 The recommendation",
+          "level": 3
+        },
+        {
+          "id": "32-what-gets-pinned-and-where-it-is-recorded",
+          "text": "3.2 What gets pinned, and where it is recorded",
+          "level": 3
+        },
+        {
+          "id": "33-how-it-sits-in-retinue",
+          "text": "3.3 How it sits in Retinue",
+          "level": 3
+        },
+        {
+          "id": "34-what-retinue-must-force-rather-than-trust",
+          "text": "3.4 What Retinue must force rather than trust",
+          "level": 3
+        },
+        {
+          "id": "35-the-screenshot-path-when-it-comes",
+          "text": "3.5 The screenshot path, when it comes",
+          "level": 3
+        },
+        {
+          "id": "36-risks-and-what-each-one-costs",
+          "text": "3.6 Risks, and what each one costs",
+          "level": 3
+        },
+        {
+          "id": "37-what-i-would-check-before-committing-to-it",
+          "text": "3.7 What I would check before committing to it",
+          "level": 3
+        },
+        {
+          "id": "38-what-would-make-me-change-this-recommendation",
+          "text": "3.8 What would make me change this recommendation",
+          "level": 3
+        },
+        {
+          "id": "4-what-i-could-not-verify",
+          "text": "4. What I could not verify",
+          "level": 2
+        },
+        {
+          "id": "5-proposed-skill-updates-not-applied",
+          "text": "5. Proposed skill updates (not applied)",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "repository/crates/retinue-daemon/src/skills/retinue/tools",
+      "source": "crates/retinue-daemon/src/skills/retinue/tools.md",
+      "title": "Tools, by who may call them",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "dc4ad694f7b45d010de0a33a0dee341bc6f49914ab18dcd669ebabdff5518a48",
+      "headings": [
+        {
+          "id": "every-bot",
+          "text": "Every bot",
+          "level": 2
+        },
+        {
+          "id": "the-ceo-only",
+          "text": "The CEO only",
+          "level": 2
+        },
+        {
+          "id": "memory-when-the-owner-turns-it-on",
+          "text": "Memory, when the owner turns it on",
+          "level": 2
+        },
+        {
+          "id": "the-cloud-computer-while-it-is-linked-and-switched-on",
+          "text": "The cloud computer, while it is linked and switched on",
+          "level": 2
+        },
+        {
+          "id": "what-no-bot-has",
+          "text": "What no bot has",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/guides/windows-development",
       "source": "docs/guides/windows-development.md",
       "title": "Windows desktop development",
@@ -3839,6 +4369,61 @@
         {
           "id": "running-executable-lock-repair-1-october",
           "text": "Running-executable lock repair, 1 October",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "repository/crates/retinue-daemon/src/skills/retinue/working",
+      "source": "crates/retinue-daemon/src/skills/retinue/working.md",
+      "title": "Working: delegation, projects, tasks, schedules",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "bdc10eec47030e9196ffb3bdb7f0756601f3e8ca93c06e07358a47ff1c9372ec",
+      "headings": [
+        {
+          "id": "delegation",
+          "text": "Delegation",
+          "level": 2
+        },
+        {
+          "id": "projects-and-routing",
+          "text": "Projects and routing",
+          "level": 2
+        },
+        {
+          "id": "worktrees",
+          "text": "Worktrees",
+          "level": 2
+        },
+        {
+          "id": "tasks",
+          "text": "Tasks",
+          "level": 2
+        },
+        {
+          "id": "schedules",
+          "text": "Schedules",
+          "level": 2
+        },
+        {
+          "id": "sub-bots",
+          "text": "Sub-bots",
+          "level": 2
+        },
+        {
+          "id": "fan-out",
+          "text": "Fan-out",
+          "level": 2
+        },
+        {
+          "id": "approvals-and-permissions",
+          "text": "Approvals and permissions",
+          "level": 2
+        },
+        {
+          "id": "the-ceos-loop",
+          "text": "The CEO's loop",
           "level": 2
         }
       ]
@@ -4783,12 +5368,47 @@
       ]
     },
     {
+      "id": "project/operations/owner-computer-driver",
+      "source": "docs/operations/owner-computer-driver.md",
+      "title": "The owner's computer driver",
+      "section": "Operations",
+      "status": "Operations",
+      "sha256": "5334229fd9d68e11989fb5d2323278b6cb07b598bf53b72b08cef81c10a6eb09",
+      "headings": [
+        {
+          "id": "the-pin",
+          "text": "The pin",
+          "level": 2
+        },
+        {
+          "id": "how-it-is-fetched",
+          "text": "How it is fetched",
+          "level": 2
+        },
+        {
+          "id": "what-it-is-and-is-not",
+          "text": "What it is and is not",
+          "level": 2
+        },
+        {
+          "id": "what-was-checked-in-this-pin-and-what-was-not",
+          "text": "What was checked in this pin, and what was not",
+          "level": 2
+        },
+        {
+          "id": "how-to-upgrade",
+          "text": "How to upgrade",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/legal/third-party-notices",
       "source": "docs/legal/third-party-notices.md",
       "title": "Third-party notices",
       "section": "Legal",
       "status": "Legal notice",
-      "sha256": "c46017338ba57f3c990822b1afcf82c1da79e53d593c2f0702c2a1ec1bf4b71b",
+      "sha256": "b919845bfef0c7d58f8c894231abe06bbd03f7e90053ff2809e8e50c9f74c777",
       "headings": [
         {
           "id": "bundled-fonts",
@@ -4853,6 +5473,16 @@
         {
           "id": "pdf-preview",
           "text": "PDF preview",
+          "level": 2
+        },
+        {
+          "id": "open-computer-use",
+          "text": "open-computer-use",
+          "level": 2
+        },
+        {
+          "id": "react-bits",
+          "text": "React Bits",
           "level": 2
         },
         {
@@ -19929,7 +20559,7 @@
       "title": "Remote mode: threat model",
       "section": "Remote specifications",
       "status": "Remote specification",
-      "sha256": "d68e8194099b86db7fc879c06682f50452189838e61c9842267303a68cd8e394",
+      "sha256": "00ced8dfe94d854d2020228d9436c2b79665241e4b94f43013ae9fa35b1eda63",
       "headings": [
         {
           "id": "1-the-core-fact",
@@ -20034,6 +20664,11 @@
         {
           "id": "18-webhook-triggers-31-october-2026",
           "text": "18. Webhook triggers (31 October 2026)",
+          "level": 2
+        },
+        {
+          "id": "19-browsers-and-computer-control-14-november-2026",
+          "text": "19. Browsers and computer control (14 November 2026)",
           "level": 2
         }
       ]

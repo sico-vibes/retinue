@@ -2,6 +2,21 @@
 
 **Every agent, whatever the model: before working in this repository, read `.claude/skills/retinue-development/SKILL.md` and the reference it points to for your task. Before you report a task done, update that skill with anything the task taught (a fix and its root cause, a changed design rule, a new pattern, a changed tool or gate), as its "Keep this skill current" section describes. If your sandbox is read-only, put the proposed update in your report.**
 
+# Amendment (14 November 2026): browsers and computer control
+
+Owner decision of 14 November 2026 ("Approve as drafted", live session; drafted by Grey in `docs/research/owner-requests-2026-11-14.md`, section 4). Bots may use a browser, drive the linked cloud computer, and — only after the owner turns it on — control the owner's own Windows computer. This amends the "never remote", "no copied provider authentication" and loopback rules for this path only, and adds one egress path that the threat model must now carry.
+
+- **Cloud computer input is a tool, not a shell.** Screenshots, mouse, keyboard and scrolling are `computer_*` MCP tools executed inside the linked computer's container. They run only while the computer is linked and switched on at the moment of the call, and never in an unattended run, an automation, or a turn woken by a teammate's reply.
+- **A screenshot is a media attachment, never inline bytes and never a log line.** It follows the generated-image path: `generated_media`, one image per call, the tool row carries an id and a caption, and the meta carries no path.
+- **Bots browse in a Retinue profile.** The default browser is Retinue's own Chromium profile under the app's data folder, with no imported cookies or extensions. Using the owner's signed-in browser is a per-conversation opt-in, never a default, and every sign-in, 2FA, payment or post pauses for the owner.
+- **The owner's computer is off until three things happen:** the Settings switch `experimental.ownerComputer` is on (off by default, and off after an update that changes the feature's shape), the owner approves a card in that conversation, and the conversation is attended. Turning the switch off releases every live grant at once.
+- **A live grant is visible and stoppable.** A bar in the conversation and a floating pill in the companion both say which bot is controlling the computer; either stops it at once, as does a global hotkey, the app losing the foreground for too long, or the machine locking. A grant lasts at most 5 minutes, a turn at most 15, and 60 seconds of no action ends it.
+- **Screens are sent only when the owner sends them.** The default is the accessibility tree with password fields masked. A picture of the screen goes to a provider only after the owner sees that exact frame and approves it. Never on a timer, never on a loop, never for every step.
+- **What is recorded is content-free:** the app name, the action class and a count ("typed 12 characters"). Never a screenshot in a log, a backup, a diagnostics bundle or a push payload; never the typed text; never the accessibility tree.
+- **Never remote, never unattended, never Full access.** Every `owner_*` and new `computer_*` method stays `tiers.json` class `never` and its events `drop` until a streaming design exists. A remote tier, an automation or a `bypass` conversation never gets them. Full access does not cover them, because this is the capability that must keep asking.
+- **A third-party driver is a supervised child.** If Retinue runs an open-source computer-use server, it runs it as its own child process behind Retinue's own tools, so the consent, the indicator, the log and the tier rules stay in the daemon. The licence and the pinned version of that server are recorded in `docs/operations/`.
+- **Release gate.** `docs/remote/THREAT_MODEL.md` gains a row for "the model receives a picture of the owner's screen" and one for "a bot can act as the owner on a signed-in site", and a release that changes these defaults needs the owner's live check before it ships.
+
 # Amendment (31 October 2026, later): finish the plan, mostly on Gogo
 
 Owner directive for the rest of `docs/plans/expansion-plan-v3.md`, until the owner says otherwise. It amends the 30 October lanes below.

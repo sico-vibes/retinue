@@ -79,6 +79,15 @@ A skill is a folder with a `SKILL.md` at its root: a name (lower-case letters, d
 
 The pool is shared: one copy serves every bot. A global switch turns the pool on or off, and each bot can opt out of an individual skill. A skill that already exists in a coding agent's own skill folder is not offered twice.
 
+### Built-in skills
+
+Two skills ship inside Retinue and are always up to date with the app. They are listed first in Settings › Skills, marked as built in, and cannot be edited, deleted or switched off; importing a skill with the same name is skipped.
+
+- **retinue** explains the app from the inside to every bot: what employees, projects, conversations and the CEO are, which tool does what and who may call it, how conversation ids work, and the rules (proposals and approvals, permission modes, no secrets in text, never commit or push, never invent numbers). Every bot has it, including an automation run.
+- **cloud-computer** explains the linked cloud computer: the `vps-computer` tools, where work goes on it, when to wake it and let it sleep, and how its files differ from the project folder on this computer. It is listed only for an employee whose workplace switch is on, and only while a computer is linked and switched on for employees.
+
+A built-in is not copied into a coding agent's own skill folder, so a native copy of the same name is never preferred over it.
+
 ### Import and use
 
 1. Open Settings › Skills. **Scan** reads the standard skill folders without changing them.
