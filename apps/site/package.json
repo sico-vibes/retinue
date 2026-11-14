@@ -1,0 +1,43 @@
+{
+  "name": "retinue-site",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 5300",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "build": "next build",
+    "prebuild": "node scripts/optimize-art.mjs && npm run lint",
+    "art": "node scripts/optimize-art.mjs"
+  },
+  "dependencies": {
+    "@gsap/react": "^2.1.2",
+    "@hugeicons/core-free-icons": "^4.4.0",
+    "@hugeicons/react": "^1.1.10",
+    "@types/three": "^0.187.0",
+    "clsx": "^2.1.1",
+    "gsap": "^3.13.0",
+    "lenis": "^1.3.4",
+    "lucide-react": "^0.550.0",
+    "marked": "^16.4.2",
+    "motion": "^12.23.12",
+    "next": "^16.4.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.3.1",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.5",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.5",
+    "playwright-core": "^1.65.1",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^5.9.3"
+  }
+}

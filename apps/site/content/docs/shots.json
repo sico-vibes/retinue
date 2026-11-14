@@ -1,0 +1,16 @@
+[
+  {"name":"docs-main","path":"/?session=session-codex&agent=agent-codex","width":1440,"height":900,"out":"public/docs"},
+  {"name":"docs-team","path":"/?idle","width":1440,"height":900,"click":["Team"],"out":"public/docs"},
+  {"name":"docs-hire","path":"/?idle","width":1440,"height":900,"click":["Team","Hire"],"out":"public/docs"},
+  {"name":"docs-ceo","path":"/?session=session-manager&agent=agent-manager","width":1440,"height":900,"out":"public/docs"},
+  {"name":"docs-queue","path":"/?scene=queue","width":1440,"height":900,"out":"public/docs"},
+  {"name":"docs-approvals","path":"/?scene=approval-many","width":1440,"height":900,"out":"public/docs"},
+  {"name":"docs-review","path":"/?open=changes&session=session-codex&agent=agent-codex","width":1440,"height":900,"out":"public/docs"},
+  {"name":"docs-compare","path":"/?open=compare","width":1440,"height":900,"out":"public/docs"},
+  {"name":"docs-schedules","path":"/?open=schedules","width":1440,"height":900,"out":"public/docs"},
+  {"name":"docs-tasks","path":"/?open=tasks","width":1440,"height":900,"out":"public/docs"},
+  {"name":"docs-machines","path":"/?machines=1","width":1440,"height":900,"out":"public/docs"},
+  {"name":"docs-computer","path":"/?preview-settings&open=settings:Computer&preset=computer","width":1440,"height":900,"out":"public/docs"},
+  {"name":"docs-providers","path":"/?preview-settings&open=settings:Providers","width":1440,"height":900,"out":"public/docs"},
+  {"name":"docs-companion","path":"/?companion&mode=home&view=chat","width":760,"height":420,"out":"public/docs"}
+]

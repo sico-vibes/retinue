@@ -1,0 +1,114 @@
+@import 'tailwindcss';
+
+/* Retinue site. Near-monochrome, one accent, two themes. Tokens first; Tailwind reads them below. */
+:root {
+  --bg: #f6f5f2;
+  --bg-raise: #ffffff;
+  --panel: #eeede8;
+  --panel-2: #e6e4dd;
+  --line: rgb(11 11 12 / 0.12);
+  --line-strong: rgb(11 11 12 / 0.24);
+  --ink: #0b0b0c;
+  --ink-2: #3f3f46;
+  --ink-3: #6b6b73;
+  --accent: #4f5bd5;
+  --accent-soft: rgb(79 91 213 / 0.12);
+  --on-accent: #ffffff;
+  --ok: #16a34a;
+  --warn: #c2410c;
+  --shadow: 0 1px 0 rgb(11 11 12 / 0.04), 0 18px 40px -24px rgb(11 11 12 / 0.28);
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  --bg: #0b0b0c;
+  --bg-raise: #121214;
+  --panel: #17171a;
+  --panel-2: #1d1d21;
+  --line: rgb(255 255 255 / 0.09);
+  --line-strong: rgb(255 255 255 / 0.18);
+  --ink: #f4f4f5;
+  --ink-2: #c8c8cf;
+  --ink-3: #8b8b94;
+  --accent: #7c86ff;
+  --accent-soft: rgb(124 134 255 / 0.14);
+  --on-accent: #0b0b0c;
+  --ok: #4ade80;
+  --warn: #fb923c;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.03), 0 24px 60px -30px rgb(0 0 0 / 0.8);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-raise: var(--bg-raise);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --font-display: var(--font-display-face), 'Arial Narrow', sans-serif;
+  --font-sans: var(--font-sans-face), system-ui, sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, monospace;
+  --shadow-card: var(--shadow);
+}
+
+html { background: var(--bg); color: var(--ink); }
+body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+::selection { background: var(--accent); color: var(--on-accent); }
+
+/* Lenis */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+/* Display headings: condensed, upper case, tight. */
+.display { font-family: var(--font-display); text-transform: uppercase; font-weight: 800; font-stretch: 62%; letter-spacing: -0.01em; line-height: 0.9; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* One image per theme (components/theme.tsx, Themed). */
+:root[data-theme='light'] .theme-dark { display: none !important; }
+:root:not([data-theme='light']) .theme-light { display: none !important; }
+
+/* Iris's textures, as backgrounds so a missing file shows nothing. */
+.tex-halftone { background: url('/art/textures/halftone-dark.webp') center / cover no-repeat; }
+:root[data-theme='light'] .tex-halftone { background-image: url('/art/textures/halftone-light.webp'); }
+.tex-grain { background: url('/art/textures/grain-dark.webp') center / 512px repeat; }
+:root[data-theme='light'] .tex-grain { background-image: url('/art/textures/grain-light.webp'); }
+
+/* Props hanging from card edges sway a little; floating ones drift. */
+@keyframes sway { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
+@keyframes drift { 0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); } 50% { transform: translateY(-12px) rotate(var(--tilt, 0deg)); } }
+.float { animation: drift 9s ease-in-out infinite; }
+
+/* Long-form text: docs and release notes. */
+.prose-retinue { color: var(--ink-2); font-size: 16.5px; line-height: 1.75; max-width: 760px; }
+.prose-retinue > * + * { margin-top: 1.1em; }
+.prose-retinue h2 { margin-top: 2.2em; color: var(--ink); font-size: 26px; font-weight: 650; line-height: 1.25; letter-spacing: -0.01em; }
+.prose-retinue h3 { margin-top: 1.8em; color: var(--ink); font-size: 19px; font-weight: 650; }
+.prose-retinue strong { color: var(--ink); font-weight: 600; }
+.prose-retinue a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+.prose-retinue ul, .prose-retinue ol { padding-left: 1.3em; }
+.prose-retinue ul { list-style: disc; }
+.prose-retinue ol { list-style: decimal; }
+.prose-retinue li + li { margin-top: 0.4em; }
+.prose-retinue li::marker { color: var(--ink-3); }
+.prose-retinue code { padding: 0.1em 0.4em; border-radius: 6px; background: var(--panel); color: var(--ink); font-family: var(--font-mono); font-size: 0.88em; }
+.prose-retinue pre { overflow-x: auto; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.prose-retinue pre code { padding: 0; background: none; }
+.prose-retinue blockquote { padding-left: 1em; border-left: 2px solid var(--accent); color: var(--ink-2); }
+.prose-retinue img { width: 100%; border: 1px solid var(--line-strong); border-radius: 14px; box-shadow: var(--shadow); }
+.prose-retinue hr { border-color: var(--line); }
+.prose-retinue table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.prose-retinue th, .prose-retinue td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; }

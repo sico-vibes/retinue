@@ -1,0 +1,738 @@
+[
+  {
+    "file": "characters/ada.png",
+    "width": 1024,
+    "height": 1536,
+    "transparent": true,
+    "who": "Ada",
+    "description": "Ada stands with an open laptop balanced on one forearm, calm and confident."
+  },
+  {
+    "file": "characters/mira.png",
+    "width": 1024,
+    "height": 1536,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/wu.png",
+    "width": 1024,
+    "height": 1536,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/ada.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/mira.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/nova.png",
+    "width": 1024,
+    "height": 1536,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/wu.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/volt.png",
+    "width": 1024,
+    "height": 1536,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/iris.png",
+    "width": 1024,
+    "height": 1536,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "scenes/hero-team.png",
+    "width": 1774,
+    "height": 887,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "scenes/team-row.png",
+    "width": 1998,
+    "height": 787,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/queue.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/machines.png",
+    "width": 1536,
+    "height": 1024,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/cloud-computer.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/phone.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/privacy.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/approval.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "textures/halftone-dark.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "textures/halftone-light.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/amy.png",
+    "width": 1024,
+    "height": 1536,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/grey.png",
+    "width": 1024,
+    "height": 1536,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/amy.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/grey.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/iris.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/nova.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/volt.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/approval.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/cloud-computer.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/machines.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/phone.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/privacy.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/queue.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/review.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "scenes/hero-team.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "scenes/team-row.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/providers.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/download.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "textures/grain-dark.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "textures/grain-light.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "textures/paper-dark.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "textures/paper-light.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/ceo.png",
+    "width": 1024,
+    "height": 1536,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/headphones.png",
+    "width": 1312,
+    "height": 1199,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/chair.png",
+    "width": 1136,
+    "height": 1385,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/cactus.png",
+    "width": 1199,
+    "height": 1312,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/hanging-plant.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/facade-dark.png",
+    "width": 768,
+    "height": 2048,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/hanging-plant-2.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/facade-light.png",
+    "width": 768,
+    "height": 2048,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/monstera.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/calendar.png",
+    "width": 1536,
+    "height": 1024,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/skyline-dark.png",
+    "width": 2172,
+    "height": 724,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/plug.png",
+    "width": 1536,
+    "height": 1024,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/skyline-light.png",
+    "width": 2172,
+    "height": 724,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/notebook.png",
+    "width": 1536,
+    "height": 1024,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/mug.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/clock.png",
+    "width": 1312,
+    "height": 1199,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/sticky-notes.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/briefcase.png",
+    "width": 1536,
+    "height": 1024,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/paper-plane.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/badge.png",
+    "width": 1132,
+    "height": 1390,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/office-dark.png",
+    "width": 2172,
+    "height": 724,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/papers.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/office-light.png",
+    "width": 2172,
+    "height": 724,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "characters/ceo.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/facade-dark.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/facade-light.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/office-dark.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/office-light.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/lamp.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/skyline-dark.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "lines/skyline-light.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/download.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/providers.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "objects/review.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/badge.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/briefcase.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/cactus.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/calendar.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/chair.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/clock.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/folders.png",
+    "width": 1254,
+    "height": 1254,
+    "transparent": true,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/hanging-plant-2.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/hanging-plant.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/headphones.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/monstera.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/mug.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/notebook.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/paper-plane.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/papers.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/plug.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  },
+  {
+    "file": "props/sticky-notes.webp",
+    "width": null,
+    "height": null,
+    "transparent": false,
+    "who": null,
+    "description": ""
+  }
+]

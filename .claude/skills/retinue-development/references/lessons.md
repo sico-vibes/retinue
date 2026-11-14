@@ -807,3 +807,10 @@ The computer's screen (`computer.view`, `computer.rs`) is the first route on the
 ## 2026-11-13 · Computer · An employee's workplace
 
 - `computerWorkplace` on an employee (`agents.computer_workplace`, added by `ensure_computer_link_schema` in `crates/retinue-storage/src/computer_link.rs`) adds a `## Your workplace` section to new conversations' instructions (`computer::workplace_instructions`, from `team::runtime_instructions_in`) and wakes a sleeping computer once per conversation at the top of `run_turn` (`computer::before_first_turn`, claimed through `Storage::session_take_computer_wake`, 20 s budget, never sleeps it). Only when a computer is linked and shared with employees. The window's switch is `ComputerWorkplaceRow` in `ui/BlobSettings.tsx`, shown only when a computer is shared or the switch is already on.
+
+## 2026-11-14 · Site · The new website in apps/site
+
+- **Where:** `apps/site` (Next.js static export, Tailwind, React Bits, GSAP, Lenis). It replaces `apps/website`, which stays until the owner retires it. Its README lists the scripts: art optimisation, roster and badges from the app's presets, screenshots from the desktop preview with `?demo&clean` (real employees with photos), whole-page review captures.
+- **WebGL:** a page holds only a few WebGL contexts, so every React Bits shader sits in `WhenVisible`; React Strict Mode is off because those shaders release their context on unmount and the development double-run then reuses a lost one.
+- **Art by Iris (Codex `gpt-6-luna`, high) in the running app:** her turns end after two or three images, so feed her two or three files per message and check each with `node scripts/check-art.mjs`. Two of her conversations can run at once on different files.
+- **Never write Markdown or regex through a double-quoted `sed` or `node -e` in Bash:** backticks run as commands and backslashes are eaten. Use the Write or Edit tool, or a script file.
