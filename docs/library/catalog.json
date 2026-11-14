@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "24987c8",
-  "documentCount": 403,
+  "revision": "fbe7654",
+  "documentCount": 404,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -20269,6 +20269,31 @@
         {
           "id": "before-you-use-it",
           "text": "Before you use it",
+          "level": 2
+        },
+        {
+          "id": "installation",
+          "text": "Installation",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/releases/0.2.0-beta.4",
+      "source": "docs/releases/0.2.0-beta.4.md",
+      "title": "Retinue 0.2.0-beta.4",
+      "section": "Release notes",
+      "status": "Release note",
+      "sha256": "5f0e0952d4d33c49f259ec4afad287d37f929cb31fce2221813d75d3c03bc03e",
+      "headings": [
+        {
+          "id": "new",
+          "text": "New",
+          "level": 2
+        },
+        {
+          "id": "changed",
+          "text": "Changed",
           "level": 2
         },
         {
