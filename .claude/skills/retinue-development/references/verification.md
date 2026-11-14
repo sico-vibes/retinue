@@ -6,7 +6,7 @@ Last reviewed: 2026-10-22 (Rust 1.94.0 stable, Node 24, OpenCode 2.0.32, Codex C
 
 - `cargo check`/`cargo test` in the main checkout's own `target` can stop at a build script with `An Application Control policy has blocked this file. (os error 4551)`. Use a lane worktree's target whose build scripts already ran: `CARGO_TARGET_DIR='C:\Users\Sico Vibes\Desktop\DevCN\Retinue-retinue\<worktree>\target'`, with `TEMP`/`TMP` at `C:\tmp`.
 - Test only the changed crates (`-p retinue-daemon -p retinue-storage ...`): `--workspace` pulls a crate whose new build script is blocked. Test programs that start helper binaries (the Codex adapter's `app_server` tests with `fake_codex_server`, agent core's unit tests) are blocked too; CI runs them. Say so in the report.
-- `remoteBuild.test.ts` runs `npm run build:remote` itself and measured 1.72 MB at `520b340` (limit 1.5 MB): it was failing before the 14 November wave. A plain `npm run build:remote` is about 1.45 MB.
+- `remoteBuild.test.ts` runs `npm run build:remote` itself. Under Vitest `NODE_ENV` is `test`, and the build inherited it, measuring 1.72 MB against the real 1.45 MB, so the test failed on `main` and CI skipped every later step (daemon tests, clippy, builds) on every push. Fixed 14 November 2026 by building with `NODE_ENV=production`. When CI fails at the unit tests, check whether the Rust steps ran at all.
 - `npm run docs:check` skips `apps/site/content/` (website pages link by site routes).
 
 ## Gates (run all before calling work done)

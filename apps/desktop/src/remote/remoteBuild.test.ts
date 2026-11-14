@@ -32,7 +32,9 @@ function pngSize(file: string): { width: number; height: number } {
 }
 
 beforeAll(() => {
-  execSync('npm run build:remote', { cwd: DESKTOP_DIR, stdio: 'pipe' })
+  // The production build, as shipped: Vitest sets NODE_ENV=test, and a build that inherits it is
+  // not the bundle a phone downloads (it measured 1.72 MB against 1.45 MB, 14 November 2026).
+  execSync('npm run build:remote', { cwd: DESKTOP_DIR, stdio: 'pipe', env: { ...process.env, NODE_ENV: 'production' } })
   expect(existsSync(DIST)).toBe(true)
 }, BUILD_TIMEOUT)
 
