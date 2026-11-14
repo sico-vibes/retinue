@@ -298,6 +298,18 @@ pub struct Browser {
 /// One conversation's context, and when it was last used.
 struct Opened {
     last_used: Instant,
+    /// Tests only: idle regardless of the clock. A Windows `Instant` counts from
+    /// boot, so a CI runner up for less than ten minutes cannot backdate one.
+    #[cfg(test)]
+    stale: bool,
+}
+
+impl Opened {
+    fn idle(&self) -> bool {
+        #[cfg(test)]
+        if self.stale { return true; }
+        self.last_used.elapsed() >= IDLE_LIMIT
+    }
 }
 
 fn now_iso() -> String {
@@ -671,7 +683,7 @@ impl Browser {
     fn track(&self, session_id: &str) {
         let now = Instant::now();
         let mut open = self.open.lock().unwrap_or_else(|poison| poison.into_inner());
-        open.insert(session_id.to_owned(), Opened { last_used: now });
+        open.insert(session_id.to_owned(), Opened { last_used: now, #[cfg(test)] stale: false });
     }
 
     fn forget(&self, session_id: &str) {
@@ -692,7 +704,10 @@ impl Browser {
     pub(crate) fn age_for_tests(&self, session_id: &str, by: Duration) {
         let mut open = self.open.lock().unwrap();
         if let Some(entry) = open.get_mut(session_id) {
-            entry.last_used = entry.last_used.checked_sub(by).unwrap_or(entry.last_used);
+            match entry.last_used.checked_sub(by) {
+                Some(earlier) => entry.last_used = earlier,
+                None => entry.stale = by >= IDLE_LIMIT,
+            }
         }
     }
 
@@ -751,7 +766,7 @@ pub(crate) async fn sweep_once(st: &AppState) {
         };
         let expired: Vec<String> = open
             .iter()
-            .filter(|(session_id, entry)| entry.last_used.elapsed() >= IDLE_LIMIT || turn_is_over(st, session_id))
+            .filter(|(session_id, entry)| entry.idle() || turn_is_over(st, session_id))
             .map(|(session_id, _)| session_id.clone())
             .collect();
         for session_id in &expired {

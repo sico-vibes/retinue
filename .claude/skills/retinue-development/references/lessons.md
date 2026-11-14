@@ -2,6 +2,13 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-14 · Tests · Backdating an `Instant` fails on a freshly booted CI runner
+
+- **Symptom:** in CI only, `browser_contexts_close_when_the_turn_ends_and_after_ten_idle_minutes` failed ("an idle context is closed": 1, not 0) and `computer_view_refuses_a_wrong_expired_or_unlinked_ticket_without_forwarding` panicked with "overflow when subtracting duration from instant"; the same commit's tests had passed on an earlier run.
+- **Cause:** a Windows `Instant` counts from boot. On a runner up for less than ten minutes, `Instant::now() - 600 s` panics, and `checked_sub` returns `None` (the browser helper then silently left the time unchanged).
+- **Fix:** test helpers backdate with `checked_sub` and fall back to a test-only flag (`Opened::stale`) or to what expiry does (drop the tickets). Never write `Instant::now() - long_duration` in a test; `attention.rs:217` and `remote/push.rs:708` still do with short spans.
+- **Also from this release:** clippy `let_underscore_future` caught `let _ = tokio::process::Command::new("taskkill")...status();`, which never ran: a dropped Tokio future does nothing. One-shot kills use `std::process::Command`.
+
 ## 2026-11-14 - Tools - PowerShell `Get-Content -Raw` + `Set-Content` corrupts a UTF-8 Rust file
 
 A scripted replace on `crates/retinue-daemon/src/browser.rs` (`Get-Content -Raw`, `.Replace(...)`, `Set-Content -Encoding utf8`) turned every em dash into `â€"` and put a BOM at the top: Windows PowerShell 5.1 reads a BOM-less file as ANSI, so the bytes arrive wrong and are then written back as UTF-8. `cargo check` still passes (the damage was in comments), so it is easy to miss in review. Use the `edit` tool (exact text, byte-preserving) for any edit to a source file; when a script is unavoidable, read and write with `[System.IO.File]::ReadAllText($p, [System.Text.Encoding]::UTF8)` and `New-Object System.Text.UTF8Encoding($false)`. Check with `($bytes[0..3] -join ',')` (no 239,187,191) and by grepping for `â€`.

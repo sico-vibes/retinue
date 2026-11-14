@@ -1768,8 +1768,11 @@ impl Computer {
 
     pub(crate) fn expire_view_tickets_for_tests(&self) {
         let mut tickets = self.view.lock().unwrap_or_else(|poison| poison.into_inner());
-        for ticket in tickets.iter_mut() {
-            ticket.last_used = std::time::Instant::now() - VIEW_TTL - Duration::from_secs(1);
+        // A Windows `Instant` counts from boot, so a runner up for less than the
+        // lifetime cannot backdate one; dropping the tickets is what expiry does.
+        match std::time::Instant::now().checked_sub(VIEW_TTL + Duration::from_secs(1)) {
+            Some(earlier) => for ticket in tickets.iter_mut() { ticket.last_used = earlier; },
+            None => tickets.clear(),
         }
     }
 }
