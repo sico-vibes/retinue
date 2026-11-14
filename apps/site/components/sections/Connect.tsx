@@ -2,7 +2,7 @@
 // Bring your own tools: the Retinue MCP, dictation and the coding agents, in three plain cards.
 import { useState } from 'react'
 import { Check, Copy, Mic, Plug, Bot } from 'lucide-react'
-import { Art, Container, Reveal, SectionHead } from '@/components/ui'
+import { Container, Reveal, SectionHead } from '@/components/ui'
 import { connect } from '@/content/site'
 
 const icons = [Plug, Mic, Bot]
@@ -18,9 +18,9 @@ function CopyCode({ code }: { code: string }) {
 export function Connect() {
   return <section className="relative border-t border-line py-[clamp(96px,14vh,160px)]">
     <Container>
-      <SectionHead object="/art/props/plug.webp" eyebrow="Plugs into your tools" title={<>Bring your own<br />everything</>} lead="Your coding agents, your terminal, your voice." />
+      <SectionHead eyebrow="Plugs into your tools" title={<>Bring your own<br />everything</>} lead="Your coding agents, your terminal, your voice." />
       <div className="mt-16 grid gap-5 lg:grid-cols-3">
-        {connect.map((item, index) => { const Icon = icons[index]; return <Reveal key={item.title} delay={index * 0.06}>
+        {connect.map((item, index) => { const Icon = icons[index]; return <Reveal key={item.title} delay={index * 0.06} className="min-w-0">
           <article className="relative h-full rounded-[18px] border border-line bg-raise p-7">
             <span className="grid size-11 place-items-center rounded-[12px] bg-accent-soft text-accent"><Icon size={20} aria-hidden="true" /></span>
             <h3 className="display mt-8 text-[36px] text-ink">{item.title}</h3>
@@ -29,7 +29,6 @@ export function Connect() {
           </article>
         </Reveal> })}
       </div>
-      <Art src="/art/props/notebook.webp" className="pointer-events-none mx-auto mt-10 hidden w-[120px] opacity-90 lg:block" />
     </Container>
   </section>
 }

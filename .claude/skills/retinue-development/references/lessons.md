@@ -814,3 +814,8 @@ The computer's screen (`computer.view`, `computer.rs`) is the first route on the
 - **WebGL:** a page holds only a few WebGL contexts, so every React Bits shader sits in `WhenVisible`; React Strict Mode is off because those shaders release their context on unmount and the development double-run then reuses a lost one.
 - **Art by Iris (Codex `gpt-6-luna`, high) in the running app:** her turns end after two or three images, so feed her two or three files per message and check each with `node scripts/check-art.mjs`. Two of her conversations can run at once on different files.
 - **Never write Markdown or regex through a double-quoted `sed` or `node -e` in Bash:** backticks run as commands and backslashes are eaten. Use the Write or Edit tool, or a script file.
+
+- **Site art from Iris often has a coloured halo** (green or yellow fringe left by background removal). Shrink the alpha a few pixels and soften it with sharp (blur the alpha channel about 2 px, threshold near 235, blur 0.8) before `optimize-art.mjs`, and check the result composited on the dark background.
+- **Site props must be anchored.** The owner rejected props dropped on top of screenshots and plants hanging from nothing. A prop sits beside an element on its baseline, is pressed onto an edge, or hangs from a section's top border; big edge pieces (`art/edges/`) come in from the page sides at 2xl only.
+- **Grid cells holding long code overflow phones.** A `truncate` line inside a grid item still sets the item's minimum width; give the grid child `min-w-0`. Check `document.documentElement.scrollWidth` at 375 px.
+- **Headless Edge captures show no WebGL** (the lanyard and shaders are blank in `review.mjs` shots). Check those in the browser pane.

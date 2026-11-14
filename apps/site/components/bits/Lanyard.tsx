@@ -40,6 +40,8 @@ export interface LanyardProps {
   breeze?: number;
   interactive?: boolean;
   intro?: boolean;
+  /** Retinue: which side faces the viewer. Changing it spins the card over, as a tap does. */
+  showBack?: boolean;
   className?: string;
   style?: CSSProperties;
 }
@@ -889,12 +891,16 @@ const Lanyard = ({
   breeze = 0.5,
   interactive = true,
   intro = true,
+  showBack = false,
   className = '',
   style
 }: LanyardProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const settingsRef = useRef<Settings | null>(null);
   const applyRef = useRef<(() => void) | null>(null);
+  // Retinue: lets the page turn the card over (see showBack).
+  const turnRef = useRef<((back: boolean) => void) | null>(null);
+  useEffect(() => { turnRef.current?.(showBack); }, [showBack]);
 
   settingsRef.current = {
     frontImage,
@@ -1352,6 +1358,11 @@ const Lanyard = ({
       }
       sim.turn = sim.turn === 0 ? Math.PI * direction : 0;
       body.angular.addScaledVector(up, FLIP_SPIN * direction);
+    };
+    // Retinue: turn to a given side from outside, the same way a tap does.
+    turnRef.current = (back: boolean) => {
+      if ((sim.turn !== 0) === back) return;
+      flip(scratch.d.copy(sim.body.position).add(new THREE.Vector3(0.05, 0, 0)));
     };
 
     const onPointerDown = (event: PointerEvent) => {

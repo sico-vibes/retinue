@@ -8,7 +8,7 @@ export function Privacy() {
     <Lines name="facade" className="pointer-events-none absolute -left-24 top-0 hidden h-full w-auto opacity-25 xl:block" />
     <Lines name="facade" className="pointer-events-none absolute -right-24 top-0 hidden h-full w-auto -scale-x-100 opacity-25 xl:block" />
     <Container className="relative">
-      <SectionHead id="privacy" object="/art/objects/privacy.webp" eyebrow="Private by design" title={<>No account.<br />No data collected.</>} center />
+      <SectionHead id="privacy" eyebrow="Private by design" title={<>No account.<br />No data collected.</>} center />
       <div className="mt-16 grid gap-px overflow-hidden rounded-[18px] border border-line bg-line sm:grid-cols-2 lg:grid-cols-4">
         {privacy.map((item, index) => <Reveal key={item.title} delay={index * 0.06} className="h-full">
           <div className="h-full bg-raise p-7">

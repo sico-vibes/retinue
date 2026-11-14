@@ -8,10 +8,11 @@ import { site } from '@/content/site'
 /** The last word: the team standing on top of a panel with a slow grainy gradient. */
 export function Closing() {
   const theme = useTheme()
-  return <section className="relative pb-24 pt-[clamp(180px,22vw,300px)]">
+  return <section className="relative pb-24 pt-[clamp(260px,40vw,520px)]">
     <Container>
       <Reveal className="relative">
-        <Art src="/art/scenes/team-row.webp" alt="The team, standing together" className="pointer-events-none absolute bottom-[calc(100%-6px)] left-1/2 z-10 w-[min(92%,980px)] -translate-x-1/2" />
+        {/* The team posing together for a photo, standing on the top edge of the panel. */}
+        <Art src="/art/scenes/team-photo.webp" alt="The team, posing together" className="pointer-events-none absolute bottom-[calc(100%-10px)] left-1/2 z-10 w-[min(88%,860px)] -translate-x-1/2" />
         <div className="relative overflow-hidden rounded-[24px] border border-line-strong bg-panel px-[clamp(24px,6vw,80px)] py-[clamp(56px,9vw,112px)] text-center">
           <WhenVisible className="absolute inset-0">
             <Grainient key={theme} lightMode={theme === 'light'} colors={theme === 'dark' ? ['#0b0b0c', '#20244f', '#5a63d8'] : ['#f6f5f2', '#dfe1fb', '#9aa2ff']} grainAmount={0.08} speed={0.4} />

@@ -89,6 +89,10 @@ html.lenis, html.lenis body { height: auto; }
 
 /* Props hanging from card edges sway a little; floating ones drift. */
 @keyframes sway { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+.marquee { animation: marquee var(--marquee-time, 80s) linear infinite; }
+.marquee:hover { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .marquee { animation: none; } }
 @keyframes drift { 0%, 100% { transform: translateY(0) rotate(var(--tilt, 0deg)); } 50% { transform: translateY(-12px) rotate(var(--tilt, 0deg)); } }
 .float { animation: drift 9s ease-in-out infinite; }
 

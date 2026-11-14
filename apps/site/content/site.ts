@@ -9,7 +9,7 @@ export const site = {
 }
 
 export const nav = [
-  { label: 'CEO', href: '/#ceo' },
+  { label: 'How it works', href: '/#how' },
   { label: 'Team', href: '/team/' },
   { label: 'Anywhere', href: '/#anywhere' },
   { label: 'Docs', href: '/docs/' },

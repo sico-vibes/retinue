@@ -8,16 +8,20 @@ import { roleIcon } from '@/components/roleIcon'
 import { byId, departmentName, skillLabel, type Person } from '@/content/roster'
 import { site } from '@/content/site'
 
-export function EmployeeCard({ person, compact = false }: { person: Person; compact?: boolean }) {
-  return <a href={`#employee-${person.id}`} className="group relative isolate flex h-full flex-col overflow-hidden rounded-[16px] border border-line p-5 transition-[transform,border-color] duration-300 hover:-translate-y-0.5 hover:border-line-strong"
-    style={{ background: `color-mix(in srgb, ${person.color} 8%, var(--bg-raise))` }} aria-label={`${person.name}, ${person.role}. Read more`}>
+/** With onSelect, the card is a button that puts this employee on the badge; without it, a link to their dialog. */
+export function EmployeeCard({ person, compact = false, onSelect, selected = false }: { person: Person; compact?: boolean; onSelect?: () => void; selected?: boolean }) {
+  const className = `group relative isolate flex h-full w-full flex-col overflow-hidden rounded-[16px] border p-5 text-left transition-[transform,border-color,box-shadow] duration-300 hover:-translate-y-0.5 ${selected ? 'border-transparent' : 'border-line hover:border-line-strong'}`
+  const style = { background: `color-mix(in srgb, ${person.color} ${selected ? 16 : 8}%, var(--bg-raise))`, boxShadow: selected ? `0 0 0 2px ${person.color}` : undefined }
+  const Tag = onSelect ? 'button' : 'a'
+  const props = onSelect ? { type: 'button' as const, onClick: onSelect, 'aria-pressed': selected, 'aria-label': `${person.name}, ${person.role}. Show their badge` } : { href: `#employee-${person.id}`, 'aria-label': `${person.name}, ${person.role}. Read more` }
+  return <Tag {...props} className={className} style={style}>
     {createElement(roleIcon(person.role), { 'aria-hidden': true, strokeWidth: 1.1, className: 'pointer-events-none absolute -right-[12%] -top-[4%] -z-10 size-[62%] -rotate-[10deg] opacity-20 transition-transform duration-500 [mask-image:linear-gradient(to_bottom,black,transparent)] group-hover:-rotate-[6deg] group-hover:scale-105', style: { color: person.color } })}
     <img src={person.photo} alt="" className="size-[68px] rounded-full object-cover" style={{ boxShadow: `0 0 0 2px color-mix(in srgb, ${person.color} 55%, transparent)` }} loading="lazy" />
     <p className="mt-4 text-[19px] font-semibold text-ink">{person.name}</p>
     <p className="text-[14px] font-medium text-ink-2">{person.role}</p>
     {!compact && <p className="mt-2 line-clamp-2 text-[14px] leading-relaxed text-ink-3">{person.description}</p>}
     {!compact && <div className="mt-auto flex flex-wrap gap-1.5 pt-4">{person.tags.slice(0, 3).map((tag) => <span key={tag} className="rounded-full border border-line px-2 py-0.5 font-mono text-[11px] text-ink-3">{tag}</span>)}</div>}
-  </a>
+  </Tag>
 }
 
 /** Opens for #employee-<id>; closing clears the hash without jumping the page. */
