@@ -153,6 +153,8 @@ import { SlashCommandChip, SlashMenu } from './SlashMenu'
 import { COMPANION_SLASH_ACTIONS, commandMessage, leadingCommand, requestExecutionPicker, slashItems, slashQuery, type SlashCommand, type SlashItem, type SlashSkill } from './slashCommands'
 import { SafeMarkdown, SafeMarkdownInline } from './SafeMarkdown'
 import { MediaPreview, isPreviewablePath, setMediaScope } from './MediaPreview'
+import { DocumentPane, useDocumentPanelSlot } from './DocumentPane'
+import { useOpenDocument } from './documentStore'
 import { setActivityProvider } from './liveOutput'
 import { TerminalDock } from './TerminalDock'
 import { NeedsYouBell } from './NeedsYou'
@@ -172,6 +174,11 @@ function cachedFont(key: string) { try { return localStorage.getItem(key) ?? '' 
 
 export function App() {
   const companion = new URLSearchParams(location.search).has('companion')
+  // Project files open in a panel beside the chat, not a dialog (owner, 16 November 2026).
+  useDocumentPanelSlot(!companion)
+  const openDoc = useOpenDocument()
+  const [docExpanded, setDocExpanded] = useState(false)
+  useEffect(() => { if (!openDoc) setDocExpanded(false) }, [openDoc])
   useEffect(() => { void applyFonts(cachedFont('retinue.font'), cachedFont('retinue.monoFont'), themeStyle()) }, [])
   const noun = useEntityNoun()
   const Noun = useEntityNoun({ capital: true })
@@ -2855,6 +2862,7 @@ ${fileReferenceText(sentFile)}` : typed
   const lastAgentIndex = conversationItems.reduce((last, item, index) => item.kind === 'message' && !isUserMessage(item.value) ? index : last, -1)
   // The details panel describes the open conversation, so it steps aside for the blob editor and Analytics.
   const detailsVisible = inspectorOpen && !blobPage && !analyticsOpen && !tasksOpen && !compareOpen
+  const docVisible = !!openDoc && !companion && !blobPage && !analyticsOpen && !tasksOpen && !compareOpen
   const toggleInspector = () => setInspectorOpen((open) => { localStorage.setItem('retinue.inspector.open', open ? '0' : '1'); return !open })
   const editingAgent = blobPage?.mode === 'edit' ? agents.find((agent) => agent.id === blobPage.agentId) ?? null : null
   const otherNames = activeAgents(bots).filter((agent) => agent.id !== editingAgent?.id).map((agent) => agent.name)
@@ -3003,7 +3011,7 @@ ${fileReferenceText(sentFile)}` : typed
     <>
     {!companion && <AppWallpaper />}
     <PhotoOwnersContext.Provider value={photoOwnerMap}>
-    <main className={`app-shell ${detailsVisible ? 'inspector-open' : ''} ${convosOpen && activeSelectedAgent && !schedulesOpen && !tasksOpen && !compareOpen ? 'convos-open' : ''} ${reducedLaunchFade ? 'reduced-launch-fade' : ''}`} style={{ ...(accent ? { '--agent-accent': accent } : {}), ...(reducedLaunchFade ? { '--launch-fade-duration': '180ms' } : {}) } as React.CSSProperties}>
+    <main className={`app-shell ${detailsVisible ? 'inspector-open' : ''} ${docVisible ? `doc-open${docExpanded ? ' doc-expanded' : ''}` : ''} ${convosOpen && activeSelectedAgent && !schedulesOpen && !tasksOpen && !compareOpen ? 'convos-open' : ''} ${reducedLaunchFade ? 'reduced-launch-fade' : ''}`} style={{ ...(accent ? { '--agent-accent': accent } : {}), ...(reducedLaunchFade ? { '--launch-fade-duration': '180ms' } : {}) } as React.CSSProperties}>
       <aside className="sidebar" aria-label="Agents">
         <div className="sidebar-top">
           <BrandLockup />
@@ -3260,7 +3268,8 @@ ${fileReferenceText(sentFile)}` : typed
         {!tasksOpen && !compareOpen && <TerminalDock session={selectedSession && !isDraftSession(selectedSession) ? selectedSession : null} botName={activeSelectedAgent?.name ?? 'The employee'} open={terminalDockOpen} projectPath={selectedSession && !isDraftSession(selectedSession) ? selectedSession.projectPath ?? null : null} onHide={() => setTerminalDockOpen(false)} onError={(message) => setError(message)} />}
       </section>
 
-      <aside className="context-pane" aria-label="Conversation details" aria-hidden={!detailsVisible} inert={!detailsVisible}>
+      {docVisible && openDoc && <DocumentPane doc={openDoc} expanded={docExpanded} onToggleExpanded={() => setDocExpanded((value) => !value)} onOpenLink={(url) => void openSafeLink(url)} />}
+      <aside className="context-pane" aria-label="Conversation details" aria-hidden={!detailsVisible || docVisible} inert={!detailsVisible || docVisible}>
         <section className="context-head compact">
           {activeSelectedAgent ? <BlobCanvas color={accent} size={32} mood={selectedMood} look={agentLook(activeSelectedAgent)} label={activeSelectedAgent.name} /> : <span className="context-head-placeholder"><Code2 size={20} /></span>}
           <h2>{agentName}</h2>

@@ -2,6 +2,16 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-16 · Daemon · "OpenCode sign-in expired" was really an empty pay-as-you-go balance
+
+- **Symptom:** every turn in one Ace (CEO, OpenCode) conversation failed in 2–3 s with "The coding agent's sign-in expired… run opencode auth login". `opencode auth list` showed both credentials stored, `opencode run` worked, and new Grey and Ace conversations answered.
+- **Real error** (only in OpenCode's own log, `%USERPROFILE%\.local\share\opencode\log\opencode.log`, "Failed to drain Session"): "Insufficient balance… billed to OpenCode Models credits… OpenCode Go covers only requests to the OpenCode Go provider."
+- **Cause 1, the model lock:** that conversation's `sessions.model_lock_json` (`%LOCALAPPDATA%\Retinue\retinue.db`) held `opencode/deepseek-v4.1-flash` (Zen, pay-as-you-go), not `opencode-go/…`. Changing the bot's model doesn't change an existing conversation's lock.
+- **Cause 2, the wrong label:** the error carries a billing URL with a 26-character workspace id. `retinue_security::contains_secret_marker` treats any 40+ character key-like word as a secret, so `safe_provider_error_detail` (`retinue-daemon/src/main.rs`) swapped the whole text for "authentication or credential problem". `sign_in_hint` then matched "credential problem" and set `failureClass: unauthenticated`. The daemon log was empty, so nothing kept the real text.
+- **Fixed (same day):** `safe_provider_error_detail` now hides only the secret-looking words (`redact_secret_words`, "[hidden]") and falls back to the generic sentence only if a marker survives. `failure_detail_and_sign_in` judges the sign-in from the raw text, `sign_in_hint` no longer matches "credential problem", and "401" must be a whole word.
+- **Owner rule (16 November 2026): never OpenCode pay-as-you-go.** Only Zen's free models (`opencode/*-free`, `opencode/big-pickle`) and OpenCode Go when linked (`gatewayAuthStates["opencode-go"] == "authenticated"`; an empty map leaves it to OpenCode). `catalog::keep_opencode_included_models` filters every served catalog (`get`, `cached`, prewarm compare), so cached lists follow it too. `validate_exec_catalog` refuses a paid Zen model even in an old conversation (`OPENCODE_PAID_ZEN_MESSAGE`). Other providers configured in OpenCode with the owner's own keys are untouched.
+- **How to diagnose next time:** read `opencode.log` near the turn's `startedAt`, and check the conversation's `model_lock_json`.
+
 ## 2026-11-14 · Tests · Backdating an `Instant` fails on a freshly booted CI runner
 
 - **Symptom:** in CI only, `browser_contexts_close_when_the_turn_ends_and_after_ten_idle_minutes` failed ("an idle context is closed": 1, not 0) and `computer_view_refuses_a_wrong_expired_or_unlinked_ticket_without_forwarding` panicked with "overflow when subtracting duration from instant"; the same commit's tests had passed on an earlier run.

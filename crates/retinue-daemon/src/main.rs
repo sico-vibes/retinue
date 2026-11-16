@@ -300,7 +300,10 @@ fn failure_detail_and_sign_in(provider: &str, failure_class: &str, raw: &str) ->
         return (None, false);
     }
     let mut detail = safe_provider_error_detail(raw);
-    let sign_in = detail.as_deref().and_then(|text| sign_in_hint(provider, text));
+    // Judge the sign-in from what the provider said, never from the redacted
+    // detail: a hidden billing link once made "Insufficient balance" read as an
+    // expired sign-in (16 November 2026). The raw text is only matched, never kept.
+    let sign_in = sign_in_hint(provider, raw);
     let is_sign_in = sign_in.is_some();
     if let Some(hint) = sign_in {
         detail = Some(format!("{hint} ({})", detail.unwrap_or_default()));
@@ -312,7 +315,9 @@ fn failure_detail_and_sign_in(provider: &str, failure_class: &str, raw: &str) ->
 /// tell the user which CLI to sign in to instead of a generic provider error.
 fn sign_in_hint(provider: &str, detail: &str) -> Option<String> {
     let lower = detail.to_ascii_lowercase();
-    let auth = ["failed to authenticate", "oauth", "not logged in", "please log in", "login required", "unauthorized", "invalid api key", "credential problem", "401"].iter().any(|needle| lower.contains(needle));
+    let auth = ["failed to authenticate", "oauth", "not logged in", "please log in", "login required", "unauthorized", "invalid api key"].iter().any(|needle| lower.contains(needle))
+        // A bare 401 status, not "401" inside an id or a longer number.
+        || lower.split(|ch: char| !ch.is_ascii_alphanumeric()).any(|word| word == "401");
     if !auth { return None; }
     Some(match provider {
         "claude" => "Claude Code needs you to sign in again: run claude in a terminal and use /login, then retry.".to_owned(),
@@ -343,12 +348,33 @@ fn safe_provider_error_detail(raw: &str) -> Option<String> {
 
     // Provider diagnostics can contain API credentials. The marker list is
     // shared with the memory-write rails in `retinue-security`; if one is
-    // present, replace the entire line rather than trying to retain fragments.
+    // present, hide each word that carries it (and the value after a "Bearer"
+    // or "Authorization:" style label). Only when a marker survives that is the
+    // entire line replaced, so a billing link's long id no longer hides the
+    // reason itself.
     if retinue_security::contains_secret_marker(&normalized) {
-        return Some("The provider reported an authentication or credential problem. Check the CLI sign-in and credential configuration.".into());
+        let redacted = redact_secret_words(&normalized);
+        if retinue_security::contains_secret_marker(&redacted) {
+            return Some("The provider reported an authentication or credential problem. Check the CLI sign-in and credential configuration.".into());
+        }
+        return Some(redacted.chars().take(240).collect());
     }
 
     Some(normalized.chars().take(240).collect())
+}
+
+/// Replaces every word that looks like a secret with `[hidden]`, and a
+/// credential label such as `Bearer` or `api_key=` together with the word after it.
+fn redact_secret_words(text: &str) -> String {
+    let mut hide_next = false;
+    text.split(' ').map(|word| {
+        let lower = word.to_ascii_lowercase();
+        let label = lower == "bearer"
+            || ((lower.ends_with(':') || lower.ends_with('=')) && ["authorization", "api_key", "api-key", "x-api-key", "access_token", "refresh_token", "token", "password", "secret"].iter().any(|key| lower.contains(key)));
+        let hide = hide_next || label || retinue_security::contains_secret_marker(word);
+        hide_next = label;
+        if hide { "[hidden]" } else { word }
+    }).collect::<Vec<_>>().join(" ")
 }
 
 fn safe_timeout_diagnostic(provider: &str, diagnostic: Option<retinue_agent_core::AgentDiagnostic>) -> Option<String> {
@@ -409,8 +435,26 @@ fn provider_error_detail_tests() {
     assert!(!credential.contains("sk-ant-test-secret"));
     assert!(safe_provider_error_detail(&"x".repeat(500)).unwrap().len() <= 240);
     assert!(sign_in_hint("claude", "Failed to authenticate: OAuth session expired and could not be refreshed").unwrap().contains("/login"));
-    assert!(sign_in_hint("codex", &credential).unwrap().contains("codex login"));
+    assert!(sign_in_hint("codex", "Invalid API key sk-ant-test-secret").unwrap().contains("codex login"));
     assert!(sign_in_hint("claude", "429 rate limit exceeded; retry later").is_none());
+    // Owner report, 16 November 2026: OpenCode's "Insufficient balance" carries
+    // a billing link whose long id looks like a key. Only the link is hidden,
+    // the reason stays, and it is not an expired sign-in.
+    let balance = "AI.Error: Insufficient balance. This request is pay-as-you-go, billed to OpenCode Models credits. Top up at https://opencode.ai/console/wrk_01KMZC9BGPB64C4T1E0EVZR83E/billing?credits=1. OpenCode Go covers only requests to the OpenCode Go provider.";
+    let shown = safe_provider_error_detail(balance).unwrap();
+    assert!(shown.contains("Insufficient balance") && shown.contains("[hidden]"), "{shown}");
+    assert!(!shown.contains("wrk_01KMZC9BGPB64C4T1E0EVZR83E"), "{shown}");
+    let (detail, sign_in) = failure_detail_and_sign_in("opencode", "provider_error", balance);
+    assert!(!sign_in);
+    assert!(detail.unwrap().contains("Insufficient balance"));
+    // The generic credential sentence is not itself a sign-in failure, and a
+    // "401" inside an id is not a status.
+    assert!(sign_in_hint("opencode", &credential).is_none());
+    assert!(sign_in_hint("opencode", "request req_84019 failed").is_none());
+    assert!(sign_in_hint("opencode", "HTTP 401 from provider").is_some());
+    // A bearer value is hidden and the rest of the line stays.
+    let bearer = safe_provider_error_detail("upstream rejected Bearer abc123 for model x").unwrap();
+    assert!(bearer.contains("upstream rejected") && !bearer.contains("abc123"), "{bearer}");
     let timeout = safe_timeout_diagnostic(
         "claude",
         Some(retinue_agent_core::AgentDiagnostic {
@@ -2610,8 +2654,14 @@ async fn validate_exec_catalog(st:&AppState,runtime:&Value,options:&ExecOptions)
     }
     if options.model.is_none()&&options.thinking.is_none()&&options.service_tier.is_none(){return Ok(())}
     validate_option_values_against_catalog(options.model.as_deref(),options.thinking.as_deref(),options.service_tier.as_deref(),catalog.as_ref(),runtime["provider"]=="codex")
+const OPENCODE_PAID_ZEN_MESSAGE: &str = "This model bills OpenCode's pay-as-you-go credits, which Retinue doesn't use. Choose a free OpenCode Zen model or an OpenCode Go model.";
 }
 async fn preflight_exec_options(st:&AppState,runtime:&Value,provider:&str,options:&ExecOptions)->Option<(String,DispatchError)>{
+    // Never spend OpenCode's pay-as-you-go credits, even for a conversation
+    // that kept a paid Zen model from before this rule (owner, 16 November 2026).
+    if runtime["provider"]=="opencode" && options.model.as_deref().is_some_and(catalog::opencode_paid_zen_model) {
+        return Err(derr("invalid_argument",OPENCODE_PAID_ZEN_MESSAGE,StatusCode::BAD_REQUEST));
+    }
     if let Ok(Some((setting,reason)))=exec_option_rejection(st,provider,options){return Some((setting.into(),derr("unsupported",reason,StatusCode::BAD_REQUEST)))}
     if let Err(error)=validate_exec_catalog(st,runtime,options).await {
         let setting=if error.1.message.contains("thinking"){"thinking"}else if error.1.message.contains("serviceTier"){"serviceTier"}else{"model"};return Some((setting.into(),error))
@@ -10612,7 +10662,7 @@ mod phase2a_tests {
         let runtime_id = "rt-effort-unreported-test";
         let catalog = retinue_agent_core::ModelCatalog {
             models: vec![retinue_agent_core::ModelInfo {
-                id: "opencode/example-model".into(),
+                id: "opencode/example-model-free".into(),
                 display_name: "Example model".into(),
                 provider_id: None,
                 supported_thinking: Vec::new(),
@@ -10650,7 +10700,7 @@ mod phase2a_tests {
         validate_agent_catalog(
             &st,
             runtime_id,
-            &json!({"model":"opencode/example-model","thinking":"high"}),
+            &json!({"model":"opencode/example-model-free","thinking":"high"}),
         )
         .await
         .unwrap();

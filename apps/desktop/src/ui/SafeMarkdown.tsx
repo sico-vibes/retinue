@@ -6,10 +6,11 @@ import { ReplyIcon } from './replyIcons'
 import { RichChart } from './RichChart'
 import { RichTable } from './RichTable'
 import { MediaDialog, isLocalPath, isPreviewablePath, MediaPreview } from './MediaPreview'
+import { openDocument } from './documentStore'
 import { parseChartSpec, parseDelimited, parseTableSpec, tableFromJson, tableFromMarkdownRows, type DataTable, type Parsed } from './richData'
 
 type InlineToken = { kind: 'text' | 'code' | 'strong' | 'em' | 'link' | 'file' | 'mark' | 'icon'; text: string; url?: string }
-type MarkdownBlock = { kind: 'paragraph' | 'heading' | 'quote' | 'code' | 'list' | 'table' | 'literal' | 'image'; text?: string; src?: string; level?: number; language?: string; rows?: string[][]; ordered?: boolean; items?: Array<{ depth: number; text: string }> }
+export type MarkdownBlock = { kind: 'paragraph' | 'heading' | 'quote' | 'code' | 'list' | 'table' | 'literal' | 'image' | 'rule'; text?: string; src?: string; level?: number; language?: string; rows?: string[][]; ordered?: boolean; items?: Array<{ depth: number; text: string }> }
 
 function safeHttpUrl(value: string) {
   try {
@@ -69,6 +70,9 @@ function isTableSeparator(line: string) {
 
 function cells(line: string) { return line.trim().replace(/^\||\|$/g, '').split('|').map((cell) => cell.trim()) }
 
+/** A thematic break: three or more `-`, `*` or `_`, optionally spaced. */
+const RULE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/
+
 export function parseMarkdownBlocks(source: string): MarkdownBlock[] {
   const lines = source.replace(/\r\n?/g, '\n').split('\n')
   const blocks: MarkdownBlock[] = []
@@ -89,7 +93,8 @@ export function parseMarkdownBlocks(source: string): MarkdownBlock[] {
     }
     const image = /^!\[([^\]\n]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)\s*$/.exec(line)
     if (image) { blocks.push({ kind: 'image', text: image[1]!, src: image[2]! }); index += 1; continue }
-    const heading = /^(#{1,3})\s+(.+)$/.exec(line)
+    if (RULE.test(line)) { blocks.push({ kind: 'rule' }); index += 1; continue }
+    const heading = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/.exec(line)
     if (heading) { blocks.push({ kind: 'heading', level: heading[1]!.length, text: heading[2]! }); index += 1; continue }
     if (line.startsWith('|') && isTableSeparator(lines[index + 1] ?? '')) {
       const rows = [cells(line)]
@@ -117,7 +122,7 @@ export function parseMarkdownBlocks(source: string): MarkdownBlock[] {
     }
     const paragraph = [line]
     index += 1
-    while (index < lines.length && (lines[index] ?? '').trim() && !/^(?:#{1,3}\s|```|>\s?|\s*[-*+] |\s*\d+\. )/.test(lines[index] ?? '') && !(lines[index] ?? '').startsWith('|') ) paragraph.push(lines[index++] ?? '')
+    while (index < lines.length && (lines[index] ?? '').trim() && !/^(?:#{1,6}\s|```|>\s?|\s*[-*+] |\s*\d+\. )/.test(lines[index] ?? '') && !RULE.test(lines[index] ?? '') && !(lines[index] ?? '').startsWith('|') ) paragraph.push(lines[index++] ?? '')
     blocks.push({ kind: 'paragraph', text: paragraph.join('\n') })
   }
   return blocks
@@ -179,11 +184,12 @@ function MarkdownImage({ alt, src, onOpenLink }: { alt: string; src: string; onO
   return <p className="markdown-remote-image">{url ? <><span>Remote image not loaded: </span><SafeLink url={url} text={alt || url} onOpenLink={onOpenLink} /></> : <span>Image not shown: {alt || 'unsupported address'}</span>}</p>
 }
 
-/** A link to a project file: a button that opens the daemon-authorised preview in a dialog. */
+/** A link to a project file: opens it in the document panel beside the chat, or in a dialog where there is no panel (the companion). */
 function FileLink({ path, text }: { path: string; text: string }) {
   const [open, setOpen] = useState(false)
+  const show = () => { if (!openDocument(path, text)) setOpen(true) }
   return <>
-    <button type="button" className="markdown-file-link" aria-haspopup="dialog" title={`Preview ${path}`} onClick={() => setOpen(true)}><Paperclip size={12} aria-hidden="true" />{text}</button>
+    <button type="button" className="markdown-file-link" title={`Open ${path}`} onClick={show}><Paperclip size={12} aria-hidden="true" />{text}</button>
     {open && <MediaDialog path={path} title={text} onClose={() => setOpen(false)} />}
   </>
 }
@@ -229,7 +235,8 @@ export function SafeMarkdown({ text, onOpenLink }: { text: string; onOpenLink: (
     if (block.kind === 'literal') return <p key={key} className="markdown-literal">{block.text}</p>
     if (block.kind === 'code') return <FencedBlock key={key} language={block.language ?? ''} code={block.text ?? ''} />
     if (block.kind === 'image') return <MarkdownImage key={key} alt={block.text ?? ''} src={block.src ?? ''} onOpenLink={onOpenLink} />
-    if (block.kind === 'heading') { const content = inline(block.text ?? '', key); return block.level === 1 ? <h2 key={key}>{content}</h2> : block.level === 2 ? <h3 key={key}>{content}</h3> : <h4 key={key}>{content}</h4> }
+    if (block.kind === 'heading') { const content = inline(block.text ?? '', key); return block.level === 1 ? <h2 key={key}>{content}</h2> : block.level === 2 ? <h3 key={key}>{content}</h3> : block.level === 3 ? <h4 key={key}>{content}</h4> : <h5 key={key}>{content}</h5> }
+    if (block.kind === 'rule') return <hr key={key} />
     if (block.kind === 'quote') return <blockquote key={key}>{(block.text ?? '').split('\n').map((line, lineIndex) => <p key={`${key}-${lineIndex}`}>{inline(line, `${key}-${lineIndex}`)}</p>)}</blockquote>
     if (block.kind === 'list') {
       const Tag = block.ordered ? 'ol' : 'ul'

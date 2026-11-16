@@ -250,7 +250,11 @@ pub(crate) fn resolve_probe(st: &AppState, runtime: &Value, workflow_override: O
 /// starts a refresh, so `list_models` can be asked as often as a bot likes.
 pub(crate) fn cached(st: &AppState, runtime: &Value) -> Option<Served> {
     let probe = resolve_probe(st, runtime, None, None);
-    st.catalog.usable_value(&probe.key).or_else(|| st.catalog.load_persisted(st, &probe.key))
+    let served = st.catalog.usable_value(&probe.key).or_else(|| st.catalog.load_persisted(st, &probe.key));
+    served.map(|mut served| {
+        if probe.provider == "opencode" { keep_opencode_included_models(runtime, &mut served.value); }
+        served
+    })
 }
 
 /// Puts a catalog in the cache under the key `cached` reads, for tests.
@@ -270,12 +274,13 @@ pub async fn get(
     mode: Mode,
 ) -> Result<Option<Served>, DispatchError> {
     let probe = resolve_probe(st, runtime, workflow_override, model_hint);
-    match mode {
-        Mode::Fresh => {
-            if let Some(served) = st.catalog.fresh_value(&probe.key) { return Ok(Some(served)); }
-            Ok(Some(fetch(st, runtime, &probe, false).await?))
-        }
-        Mode::Refresh => Ok(Some(fetch(st, runtime, &probe, true).await?)),
+    let opencode = probe.provider == "opencode";
+    let served = match mode {
+        Mode::Fresh => match st.catalog.fresh_value(&probe.key) {
+            Some(served) => Some(served),
+            None => Some(fetch(st, runtime, &probe, false).await?),
+        },
+        Mode::Refresh => Some(fetch(st, runtime, &probe, true).await?),
         Mode::CachedOnly => {
             let served = st.catalog.usable_value(&probe.key).or_else(|| st.catalog.load_persisted(st, &probe.key));
             // A stale or missing read starts one background refresh, unless a
@@ -283,8 +288,44 @@ pub async fn get(
             if served.as_ref().is_none_or(|value| value.stale) && st.catalog.failure(&probe.key).is_none() {
                 spawn_refresh(st, runtime.clone(), probe);
             }
-            Ok(served)
+            served
         }
+    };
+    // Filtered when served, not when stored, so a catalog cached before this
+    // rule (or before OpenCode Go was linked or unlinked) follows it too.
+    Ok(served.map(|mut served| {
+        if opencode { keep_opencode_included_models(runtime, &mut served.value); }
+        served
+    }))
+}
+
+/// OpenCode Zen's paid models bill pay-as-you-go credits, which Retinue never
+/// uses (owner, 16 November 2026): only Zen's free models (`-free`, and Big
+/// Pickle) and, when it is linked, OpenCode Go. Other providers the owner set
+/// up in OpenCode with their own keys are untouched.
+pub(crate) fn opencode_paid_zen_model(id: &str) -> bool {
+    match id.strip_prefix("opencode/") {
+        Some(name) => !(name.ends_with("-free") || name == "big-pickle"),
+        None => false,
+    }
+}
+
+/// Whether OpenCode Go may be offered. A runtime whose sign-ins could not be
+/// read leaves the choice to OpenCode, which lists Go models only when linked.
+fn opencode_go_linked(runtime: &Value) -> bool {
+    match runtime["gatewayAuthStates"].as_object() {
+        Some(states) if !states.is_empty() => states.get("opencode-go").and_then(Value::as_str) == Some("authenticated"),
+        _ => true,
+    }
+}
+
+fn keep_opencode_included_models(runtime: &Value, catalog: &mut Value) {
+    let go = opencode_go_linked(runtime);
+    if let Some(models) = catalog["models"].as_array_mut() {
+        models.retain(|model| {
+            let id = model["id"].as_str().unwrap_or("");
+            !opencode_paid_zen_model(id) && (go || !id.starts_with("opencode-go/"))
+        });
     }
 }
 
@@ -392,7 +433,11 @@ pub async fn prewarm_all(st: &AppState) {
 
 async fn prewarm_one(st: &AppState, runtime: &Value) {
     let probe = resolve_probe(st, runtime, None, None);
-    let previous = st.catalog.read_entry(&probe.key).map(|entry| entry.value);
+    // Compared as served, so the OpenCode filter alone never reads as a change.
+    let previous = st.catalog.read_entry(&probe.key).map(|mut entry| {
+        if probe.provider == "opencode" { keep_opencode_included_models(runtime, &mut entry.value); }
+        entry.value
+    });
     if let Ok(Some(served)) = get(st, runtime, None, None, Mode::Fresh).await {
         if catalog_changed(previous.as_ref(), &served.value) {
             st.emit("runtime.models.changed", json!({"runtimeId": runtime["id"]})).await;
@@ -418,4 +463,55 @@ fn model_signature(value: &Value) -> Vec<(String, Vec<String>, Vec<String>)> {
             (model["id"].as_str().unwrap_or("").to_owned(), thinking, tiers)
         }).collect()
     }).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod opencode_billing_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn catalog() -> Value {
+        json!({"models":[
+            {"id":"opencode/big-pickle"},{"id":"opencode/deepseek-v4.1-flash-free"},
+            {"id":"opencode/deepseek-v4.1-flash"},{"id":"opencode/claude-opus-5-5"},
+            {"id":"opencode-go/deepseek-v4.1-flash"},{"id":"ollama/llama4"}
+        ]})
+    }
+    fn ids(value: &Value) -> Vec<&str> { value["models"].as_array().unwrap().iter().map(|m| m["id"].as_str().unwrap()).collect() }
+
+    #[test]
+    fn paid_zen_models_are_recognised() {
+        assert!(opencode_paid_zen_model("opencode/deepseek-v4.1-flash"));
+        assert!(opencode_paid_zen_model("opencode/claude-opus-5-5"));
+        assert!(!opencode_paid_zen_model("opencode/deepseek-v4.1-flash-free"));
+        assert!(!opencode_paid_zen_model("opencode/big-pickle"));
+        assert!(!opencode_paid_zen_model("opencode-go/deepseek-v4.1-flash"));
+        assert!(!opencode_paid_zen_model("ollama/llama4"));
+    }
+
+    #[test]
+    fn only_free_zen_and_linked_go_models_are_offered() {
+        // Owner, 16 November 2026: Zen's free models, or OpenCode Go when linked; never pay-as-you-go.
+        let linked = json!({"gatewayAuthStates":{"opencode":"authenticated","opencode-go":"authenticated"}});
+        let mut value = catalog();
+        keep_opencode_included_models(&linked, &mut value);
+        assert_eq!(ids(&value), ["opencode/big-pickle","opencode/deepseek-v4.1-flash-free","opencode-go/deepseek-v4.1-flash","ollama/llama4"]);
+
+        let zen_only = json!({"gatewayAuthStates":{"opencode":"authenticated"}});
+        let mut value = catalog();
+        keep_opencode_included_models(&zen_only, &mut value);
+        assert_eq!(ids(&value), ["opencode/big-pickle","opencode/deepseek-v4.1-flash-free","ollama/llama4"]);
+
+        let signed_out_go = json!({"gatewayAuthStates":{"opencode-go":"unauthenticated"}});
+        let mut value = catalog();
+        keep_opencode_included_models(&signed_out_go, &mut value);
+        assert!(!ids(&value).iter().any(|id| id.starts_with("opencode-go/")));
+
+        // Unreadable sign-ins leave Go to OpenCode, which lists it only when linked.
+        let unknown = json!({"gatewayAuthStates":{}});
+        let mut value = catalog();
+        keep_opencode_included_models(&unknown, &mut value);
+        assert!(ids(&value).contains(&"opencode-go/deepseek-v4.1-flash"));
+        assert!(!ids(&value).contains(&"opencode/deepseek-v4.1-flash"));
+    }
 }

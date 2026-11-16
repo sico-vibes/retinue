@@ -10,6 +10,16 @@ describe('safe Markdown parsing', () => {
     expect(blocks[5]).toMatchObject({ language: 'ts', text: 'const x = 1' })
   })
 
+  it('reads deeper headings and thematic breaks, as research reports use them', () => {
+    // Owner report, 16 November 2026: "####" and "---" showed as plain text in a report.
+    const blocks = parseMarkdownBlocks('#### Risks\nA paragraph\n---\n\n* * *\n\n## Closed ##\n\n- a\n- b')
+    expect(blocks.map((block) => block.kind)).toEqual(['heading', 'paragraph', 'rule', 'rule', 'heading', 'list'])
+    expect(blocks[0]).toMatchObject({ level: 4, text: 'Risks' })
+    expect(blocks[1]).toMatchObject({ text: 'A paragraph' })
+    expect(blocks[4]).toMatchObject({ level: 2, text: 'Closed' })
+    expect(parseMarkdownBlocks('####### seven')[0]).toMatchObject({ kind: 'paragraph' })
+  })
+
   it('supports ordered lists, emphasis, strong text, inline code, and safe web links', () => {
     expect(parseMarkdownBlocks('1. first\n2. second')[0]).toMatchObject({ kind: 'list', ordered: true })
     const tokens = tokenizeInlineMarkdown('**strong** *em* `code` [web](https://example.invalid/path) [bad](javascript:alert(1))')

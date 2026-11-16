@@ -161,6 +161,7 @@ let sessions: Session[] = [
       ] : []),
       { id: 'm3', role: 'assistant', turnId: 'turn-codex-2', content: fixturePreset() === 'message-links'
         ? 'Here are the projects I found:\n\n| Project | Stars | Licence | What it gives you |\n| --- | ---: | --- | --- |\n| [dicebear/dicebear](https://github.com/dicebear/dicebear) | 9.9k | MIT | 61 styles for avatars and characters |\n| [Alain00/blobatar](https://github.com/Alain00/blobatar) | 1.5k | MIT | Parametric blob illustrations |\n\nMore details: https://github.com/hardbeat920/monocode.'
+        : fixturePreset() === 'document' ? 'The research is done. Report: [docs/research/n8n-nod/05-messaging.md](docs/research/n8n-nod/05-messaging.md)'
         : 'Patched `parseInvoice` and the fixture loader. Running the suite now.', createdAt: minutesAgo(3) },
     ],
     turns: [
@@ -1427,6 +1428,11 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       ? { supported: true, enabled: fixtureSettings['exec_gate.codex.steer'] !== false, scope: 'turn', evidence: 'none', ...(fixtureSettings['exec_gate.codex.steer'] === false ? { reason: 'execution entry gate is disabled' } : {}) }
       : { supported: false, enabled: false, scope: 'turn', evidence: 'none', reason: 'setting is unsupported by this runtime' }
     return { runtimeId: params.runtimeId, generatesImages: params.runtimeId === 'runtime-codex', settings: { model: supported, thinking, serviceTier: supported, instructions: supported, customEnv: supported, steer } } as T
+  }
+  if (method === 'media.preview' && typeof params.path === 'string' && /\.(md|markdown)$/i.test(params.path)) {
+    // Preview-only: a research report for the document panel (?preset=document).
+    const text = ['# nod (n8n labs): Telegram and WhatsApp channels, against Retinue Remote', '', '> **What this is:** a research report on how nod connects to chat apps, compared with Retinue.', '> **Status:** current', '', '## Summary', '', '1. nod talks to chat apps through two official APIs and one unofficial one.', '2. Exactly one person may talk to the bot, by `user id` or phone number.', '3. A pairing code is issued as a deep link; the bot records a *candidate* until the owner approves.', '', '---', '', '## How nod does it', '', '### Telegram', '', 'Long polling against the Bot API. No public URL is needed.', '', '- `getUpdates` with a 30 second timeout', '- an allow list of one user id', '  - stored in the app settings', '', '### WhatsApp', '', 'The Cloud API needs a webhook, so a public URL or relay.', '', '#### Risks', '', 'A stranger can message the number; replies are refused unless paired.', '', '## How Retinue does it now', '', '| Path | Reach | Pairing |', '| --- | --- | --- |', '| Tailscale | tailnet only | code + desktop approval |', '| Native | internet, TLS | password + approval |', '', '```ts', "const tier = 'chat'", '```', '', '## Open questions', '', 'Should a chat channel be its own device kind?'].join(String.fromCharCode(10))
+    return { status: 'ok', name: params.path.split('/').pop(), relativePath: params.path, kind: 'text', mediaType: 'text/markdown', size: text.length, text, truncated: false, language: 'md' } as unknown as T
   }
   if (method === 'media.preview' && typeof params.mediaId === 'string') {
     const canvas = document.createElement('canvas')

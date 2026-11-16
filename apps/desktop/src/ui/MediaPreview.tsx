@@ -18,6 +18,8 @@ export function setMediaScope(scope: MediaScope | null) {
   currentScope = scope
   scopeListeners.forEach((listener) => listener())
 }
+/** The scope right now, for code outside React such as opening the document panel. */
+export function getMediaScope(): MediaScope | null { return currentScope }
 export function useMediaScope(): MediaScope | null {
   return useSyncExternalStore((listener) => { scopeListeners.add(listener); return () => { scopeListeners.delete(listener) } }, () => currentScope)
 }
@@ -100,6 +102,11 @@ function usePreviewReply(sessionId: string | null, source: { path: string } | { 
 
 function useMediaReply(scope: MediaScope | null, path: string) {
   return usePreviewReply(scope?.sessionId ?? null, { path })
+}
+
+/** A project file's preview for a given conversation. Pass null for no file. */
+export function useFilePreview(sessionId: string | null, path: string | null): MediaReplyState {
+  return usePreviewReply(sessionId, path ? { path } : null)
 }
 
 /** A generated image's preview. Pass null until the image is ready, so nothing is asked for early. */

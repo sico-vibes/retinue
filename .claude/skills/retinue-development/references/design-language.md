@@ -96,6 +96,7 @@ Haze character portraits keep their source SVG colours. Small marks and picker c
 - **Dictation is the recorder bubble only.** No live words, no "Words appear when you stop" line, no cloud note in the island, bubble, companion or composer banner. The final transcript goes into the box when recording stops; a failure shows one plain error line.
 - **The rail's Changes card is the repository's state.** It lists Git's working tree against HEAD with the real branch and +/− totals, and says so in its heading. Files the conversation recorded stay under "Edited earlier in this conversation". Never imply that the conversation wrote every change.
 - **Create PR always asks first.** The dialog says it sends the whole repository's uncommitted state, and the dialog closes only after the daemon accepts the message.
+- **Files open beside the chat, not in a dialog** (owner, 16 November 2026: "open on the side like Claude Code"). A file the agent names opens in the document panel on the right, with a tab, rendered Markdown, an outline and a source toggle; the chat stays usable next to it. Dialogs remain only where there is no panel (the companion) and in Search's own dialog.
 - **Hold to delete keeps one footprint.** Idle, holding, armed and pending read the same size and place; the armed label is short (`Release to <first word>`), and the button never scales.
 - **Archived bots** show three skeleton rows with a status label while they load.
 - **Drafts stay in the box.** A typed draft is never cut short on screen; only the restart backup is bounded.
