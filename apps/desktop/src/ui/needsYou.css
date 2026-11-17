@@ -15,3 +15,7 @@
 .needs-bell-copy strong, .needs-bell-copy span { min-width: 0; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .needs-bell-copy strong { color: var(--text-1); font-size: var(--fs-sm); font-weight: 400; }
 .needs-bell-copy span { color: var(--text-3); font-size: var(--fs-2xs); }
+/* Unopened failed conversations (17 November 2026): the badge turns red when failures are all that is waiting. */
+.needs-bell-count.failed { color: #fff; background: var(--status-danger); }
+.needs-bell-row.failure { align-items: center; }
+.needs-bell-failure-icon { flex: 0 0 auto; color: var(--status-danger); }

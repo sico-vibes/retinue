@@ -22,6 +22,19 @@ export function isAutomationSession(session: Session | null | undefined) {
  */
 export const activityAt = (session: Session) => String(session.lastMessageAt ?? session.createdAt ?? session.updatedAt ?? '')
 
+/** A conversation that stopped with an error. */
+export const sessionFailed = (session: Session | null | undefined) => ['error', 'failed'].includes(String(session?.state ?? '').toLowerCase())
+
+/**
+ * An employee's conversations that stopped with an error the owner hasn't opened since, newest first. Any
+ * conversation counts, not only the newest: a failed lane hid behind a newer one that finished (owner, 17 November 2026).
+ */
+export function unseenFailures(sessions: readonly Session[], agentId: string, unread: ReadonlySet<string>): Session[] {
+  return sessions
+    .filter((session) => session.agentId === agentId && !session.archived && sessionFailed(session) && unread.has(session.id))
+    .sort((a, b) => activityAt(b).localeCompare(activityAt(a)))
+}
+
 /** A blob's main conversation: its newest open session that is neither a side conversation nor a scheduled run. */
 export function mainSessionFor(sessions: readonly Session[], agentId: string): Session | null {
   return sessions

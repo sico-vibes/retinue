@@ -3016,7 +3016,7 @@ ${fileReferenceText(sentFile)}` : typed
         <div className="sidebar-top">
           <BrandLockup />
           <div className="sidebar-create-actions">
-            <NeedsYouBell permissions={snapshot?.permissions ?? []} sessions={sessions} agents={agents} now={permissionClock} onOpen={(sessionId) => { const target = sessions.find((item) => item.id === sessionId); if (!target) return; if (isSideSession(target)) openSideConversation(sessionId); else { setSideSessionId(null); selectSession(target) } }} />
+            <NeedsYouBell permissions={snapshot?.permissions ?? []} sessions={sessions} agents={agents} now={permissionClock} unread={unreadSessionIds} onOpen={(sessionId) => { const target = sessions.find((item) => item.id === sessionId); if (!target) return; if (isSideSession(target)) openSideConversation(sessionId); else { setSideSessionId(null); selectSession(target) } }} />
             <button type="button" className={`icon-button${tasksOpen ? ' active' : ''}`} title="Tasks" aria-label="Tasks" aria-pressed={tasksOpen} disabled={connection !== 'connected'} onClick={() => { setTasksOpen((open) => !open); setSchedulesOpen(false); setAnalyticsOpen(false); setBlobPage(null) }}><ListChecks size={16} /></button>
             <div className="more-menu-wrap" onKeyDown={(event) => { if (event.key === 'Escape') setPlusMenuOpen(false) }}>
               <button data-testid="create-blob" className="icon-button" title="New" aria-label="New project or employee" aria-haspopup="menu" aria-expanded={plusMenuOpen} disabled={connection !== 'connected' || busy} onClick={() => { setCreateMenuOpen(false); setPlusMenuOpen((open) => !open) }}><Plus size={17} /></button>

@@ -2,6 +2,12 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-17 · UI · A failed conversation hid behind a newer one
+
+- **Symptom:** an Ada lane stopped with an error, but Ada's row showed no error and the bell stayed empty.
+- **Cause:** the employee row reads only `mainSessionFor` (the newest conversation), and a newer Ada lane had finished; the bell (`NeedsYou.tsx`) listed only approvals, questions and proposals. The Windows notification on failure is skipped while the window is in front (`mainAttention`).
+- **Fix:** `unseenFailures` (`teamSelectors.ts`) finds every failed, unopened, unarchived conversation of an employee; the row shows a red dot and "A conversation stopped with an error". `needsYouItems` takes `unread` and lists each one as a `failure` row that opens the conversation; opening it marks it seen and clears both. Preview: `?preset=failure`. Tests: `failureAttention.test.ts`.
+
 ## 2026-11-16 · Daemon · "OpenCode sign-in expired" was really an empty pay-as-you-go balance
 
 - **Symptom:** every turn in one Ace (CEO, OpenCode) conversation failed in 2–3 s with "The coding agent's sign-in expired… run opencode auth login". `opencode auth list` showed both credentials stored, `opencode run` worked, and new Grey and Ace conversations answered.

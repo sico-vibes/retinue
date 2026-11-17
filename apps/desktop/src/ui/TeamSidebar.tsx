@@ -14,7 +14,7 @@ import { agentColorHex } from './agentColor'
 import { deriveCompanionStatus } from './companionStatus'
 import { RuntimeProblemMarker, runtimeProblem } from './RuntimeProblemMarker'
 import { shortTime } from './rosterSelectors'
-import { conversationPreview, isManager, mainSessionFor, managerOf, rosterAgents, sessionIsBusy, sessionIsLimited, sidebarSubtitle } from './teamSelectors'
+import { conversationPreview, isManager, mainSessionFor, managerOf, rosterAgents, sessionIsBusy, sessionIsLimited, sidebarSubtitle, unseenFailures } from './teamSelectors'
 import { friendlyErrorText } from './errorCopy'
 import { readCachedCatalogModels, useCatalogVersion } from './catalogCache'
 import { useEntityNoun } from './vocabulary'
@@ -338,9 +338,12 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
     const working = sessionIsBusy(session) && !waiting
     const preview = !connected ? 'Offline' : (status.mood === 'offline' || status.mood === 'error' || sessionIsLimited(session) || session?.state === 'retrying') ? status.label : waiting ? 'Waiting for you' : working ? status.label : sidebarModel ? sidebarSubtitle(agent, runtime?.provider, readCachedCatalogModels(agent.runtimeId)) : conversationPreview(session) ?? (agent.description?.trim() || 'Say hi to get started')
     const runtimeIssue = runtimeProblem(runtime)
-    const failed = connected && status.mood === 'error'
+    // Any unopened failure counts, not only the newest conversation's (owner, 17 November 2026).
+    const otherFailures = connected ? unseenFailures(sessions, agent.id, unreadSessionIds).filter((item) => item.id !== session?.id) : []
+    const failed = connected && (status.mood === 'error' || otherFailures.length > 0)
+    const failedPreview = otherFailures.length && !waiting && !working ? (otherFailures.length === 1 ? 'A conversation stopped with an error' : `${otherFailures.length} conversations stopped with an error`) : null
     return <button key={agent.id} type="button" role="treeitem" data-agent-id={agent.id} aria-current={selected ? 'true' : undefined} aria-selected={selected} aria-describedby={runtimeIssue ? `runtime-problem-${runtime!.id}-${agent.id}` : undefined}
-      aria-label={`${agent.name}${agent.role ? `, ${agent.role}` : ''}${isManager(agent) ? ', Manager' : ''}${approval ? ', needs approval' : unread ? ', unread' : ''}`}
+      aria-label={`${agent.name}${agent.role ? `, ${agent.role}` : ''}${isManager(agent) ? ', Manager' : ''}${approval ? ', needs approval' : failedPreview ? `, ${failedPreview.toLowerCase()}` : unread ? ', unread' : ''}`}
       tabIndex={selected || (!selectedAgentId && rowOrder[0]?.id === agent.id) ? 0 : -1}
       className={`bot-row team-row ${selected ? 'selected' : ''} ${agent.hidden ? 'hidden-blob' : ''} ${dragId === agent.id ? 'dragging' : ''} ${dropHint?.kind === 'row' && dropHint.agentId === agent.id ? `drop-${dropHint.edge}` : ''}`}
       onMouseEnter={() => { if (runtimeIssue) setRuntimeTooltipAgentId(agent.id) }}
@@ -406,10 +409,10 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
       <span className="bot-row-copy">
         <span className="bot-row-line">
           <span className="team-row-name">{runtimeLogos && !haze && <RuntimeMark provider={runtime?.provider} />}<strong>{agent.name}</strong>{isManager(agent) && <span className="leader-star" title="CEO" aria-label="CEO"><Star size={11} fill="currentColor" strokeWidth={0} /></span>}<RuntimeProblemMarker runtime={runtime} inline idSuffix={agent.id} showTooltip={runtimeTooltipAgentId === agent.id} />{agent.role?.trim() && <span className="role-chip">{agent.role.trim()}</span>}</span>
-          {(unread || approval) && <i className={`unread-dot ${approval ? 'approval' : ''}`} aria-hidden="true" />}
+          {(unread || approval || failedPreview) && <i className={`unread-dot ${approval ? 'approval' : failedPreview || (unread && failed) ? 'failed' : ''}`} aria-hidden="true" />}
           {haze && (waiting || failed || working) ? <span className={`haze-row-state ${waiting ? 'needs' : failed ? 'failed' : 'working'}`}>{waiting ? 'Needs you' : failed ? 'Failed' : 'Working'}</span> : (session?.lastMessageAt ?? session?.updatedAt) && <time>{shortTime((session.lastMessageAt ?? session.updatedAt)!)}</time>}
         </span>
-        <span className="bot-row-line"><span className={`bot-row-preview ${waiting ? 'waiting' : working ? 'active' : ''}`}>{preview}</span></span>
+        <span className="bot-row-line"><span className={`bot-row-preview ${waiting ? 'waiting' : working ? 'active' : failedPreview ? 'failed' : ''}`}>{failedPreview ?? preview}</span></span>
       </span>
     </button>
   }
