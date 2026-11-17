@@ -36,17 +36,8 @@ async fn report(st: &AppState, session_id: &str, detail: &Value) -> Value {
     let worktree = link["worktree"].as_object().map(|_| link["worktree"].clone());
     // `isolated` only when the copy's own folder is where this conversation runs,
     // compared the way Windows compares paths (case and separators aside).
-    let isolated = worktree.as_ref().is_some_and(|worktree| {
-        let path = worktree["path"].as_str().unwrap_or("");
-        !path.is_empty() && !project_path.is_empty() && folder_key(Path::new(path)) == folder_key(Path::new(&project_path))
-    });
-    let mode = if project_path.is_empty() {
-        "unknown"
-    } else if isolated {
-        "isolated"
-    } else {
-        "shared"
-    };
+    let mode = isolation_of(detail);
+    let isolated = mode == "isolated";
     let isolation = link["worktreeError"].as_str().map(str::trim).filter(|reason| !reason.is_empty())
         .map(|reason| one_line(reason, 200));
     let worktree_answer = if isolated {
@@ -76,6 +67,9 @@ async fn report(st: &AppState, session_id: &str, detail: &Value) -> Value {
         "worktree": worktree_answer,
         "isolationFailure": isolation,
         "sharedWith": shared_with(st, session_id, &project_path),
+        // Wave 2: where this conversation's disposable files belong. Made on the
+        // first read, and `null` when there is no data folder to put it in.
+        "scratchFolder": crate::scratch::ensure(st, session_id).map(|folder| folder.to_string_lossy().into_owned()),
     })
 }
 
@@ -102,6 +96,22 @@ pub(crate) fn shared_with(st: &AppState, session_id: &str, project_path: &str) -
 fn folder_key(path: &Path) -> String {
     let resolved = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     crate::worktree::normalize(&resolved)
+}
+
+/// `shared`, `isolated` or `unknown` for one stored conversation row: whether it
+/// works in the project folder itself or in its own copy of the repository. The
+/// one rule behind `session.workspace` and the reach statement, so the two
+/// cannot disagree.
+pub(crate) fn isolation_of(detail: &Value) -> &'static str {
+    let project_path = detail["projectPath"].as_str().unwrap_or("").trim();
+    if project_path.is_empty() {
+        return "unknown";
+    }
+    let path = detail["link"]["worktree"]["path"].as_str().unwrap_or("");
+    if path.is_empty() {
+        return "shared";
+    }
+    if folder_key(Path::new(path)) == folder_key(Path::new(project_path)) { "isolated" } else { "shared" }
 }
 
 /// One line, collapsed, capped: a stored reason is never a paragraph.

@@ -1724,6 +1724,13 @@
       "params": null
     },
     {
+      "method": "reach.statement",
+      "class": "never",
+      "minTier": null,
+      "why": "The reach statement names the host's own folder and what the bot can touch on this computer; it is the owner's to read at the desktop.",
+      "params": null
+    },
+    {
       "method": "media.preview",
       "class": "never",
       "minTier": null,

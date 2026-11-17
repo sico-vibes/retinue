@@ -23,6 +23,7 @@ mod channels; // 16 November 2026: chat channels to the CEO, and the inbound led
 mod vault; // 16 November 2026: vault item metadata and the content-free ledger
 mod computer_link; // The linked VPS computer (Harbor): address, switch, token reference
 mod connectors; // Section D: owner-added MCP servers the daemon calls
+mod wave2; // Wave 2 (nod adoption): the per-model failure ledger
 pub use computer_link::ComputerLink;
 #[cfg(test)]
 mod phase9_tests;
@@ -2578,7 +2579,7 @@ impl Storage {
         { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; phase1b::ensure_phase1b_schema(&c)?; phase2::ensure_phase2_schema(&c)?; phase4::ensure_phase4_schema(&c)?; phase5::ensure_phase5_schema(&c)?; phase6::ensure_phase6_schema(&c)?; phase8::ensure_phase8_schema(&c)?; phase9::ensure_phase9_schema(&c)?; phase10::ensure_phase10_schema(&c)?; ensure_tasks_schema(&c)?; connectors::ensure_connectors_schema(&c)?; ensure_delegation_schema(&c)?; ensure_permission_rules_schema(&c)?; ensure_team_queue_schema(&c)?; ensure_client_message_id_indexes(&c)?; }
         { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; phase9::ensure_phase9_data(&c)?; }
         { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; channels::ensure_channel_schema(&c)?; }
-        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; secret_refs::ensure_secret_refs_schema(&c)?; computer_link::ensure_computer_link_schema(&c)?; vault::ensure_vault_schema(&c)?; ensure_pi_gates(&c)?; }
+        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; secret_refs::ensure_secret_refs_schema(&c)?; computer_link::ensure_computer_link_schema(&c)?; vault::ensure_vault_schema(&c)?; ensure_pi_gates(&c)?; wave2::ensure_wave2_schema(&c)?; }
         Ok(storage)
     }
     fn migrate_versions(mut conn: Connection, path: Option<&Path>) -> Result<Self, StorageError> {

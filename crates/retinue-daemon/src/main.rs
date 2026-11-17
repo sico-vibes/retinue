@@ -1241,6 +1241,9 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "project.findByIdentity" => repo_identity::find_by_identity(st, &p),
         "project.sharedSettings.get" | "project.sharedSettings.trust" | "project.sharedSettings.untrust" | "project.sharedSettings.write" => shared_settings::rpc(st, method, &p),
         "worktree.abandoned" | "worktree.removeAbandoned" => worktree_cleanup::rpc(st, method, &p).await,
+        // Wave 2: what a bot can reach, in plain words, for a conversation or a
+        // bot. Desktop only, because the answer names the owner's own folder.
+        "reach.statement" => reach::rpc(st, &p).await,
         "project.clone" | "project.clone.cancel" | "project.clone.list" | "project.discover" => project_clone::rpc(st, method, &p).await,
         "project.files.search" | "project.content.search" => project_search::rpc(st, method, &p).await,
         "project.icon.set" | "project.favicon" => project_icon::rpc(st, method, &p).await,
@@ -2610,6 +2613,9 @@ async fn runtime_models(st: &AppState, p: &Value) -> Result<Value, DispatchError
     if p.get("sessionId").is_none() { migrate_legacy_agent_models(st, id, &catalog).await?; }
     // Phase 5: the owner's own model names join the catalog, after its own.
     custom_models::append_to(st, &mut catalog, runtime["provider"].as_str().unwrap_or(""));
+    // Wave 2: what each model costs, and whether it failed lately. An unknown
+    // price stays null, which the window shows as unknown.
+    model_cues::apply(st, runtime["provider"].as_str().unwrap_or(""), &mut catalog);
     Ok(catalog)
 }
 async fn validate_agent_catalog(st: &AppState, runtime_id: &str, value: &Value) -> Result<(), DispatchError> {
@@ -4502,6 +4508,9 @@ async fn session_prompt_impl(st: &AppState, p: Value, origin: PromptOrigin) -> R
     // A question answer is daemon-written, and it is the only way a delegated
     // bot's pending question can continue its own assignment.
     if is_read_only_side(&session_before["link"]) && !matches!(origin, PromptOrigin::Team | PromptOrigin::Queue | PromptOrigin::QuestionAnswer) { return Err(derr("read_only", "Side conversations are read-only. Send a new message in the main conversation.", StatusCode::FORBIDDEN)); }
+    // Wave 2: a model that failed twice in a row pauses unattended work only. The
+    // owner's own message always runs, and nothing here switches the model.
+    if let Some(refusal) = model_health::refusal(st, &sid, &session_before["link"]) { return Err(refusal); }
     // A chosen skill or Manager command adds a hidden per-turn directive to the
     // provider prompt; the stored message keeps the text exactly as typed.
     let command_directive = commands::directive(st, &sid, &p["command"])?;
@@ -5297,6 +5306,9 @@ async fn finish_turn_failed(
         if let Some(active) = active { let _ = active.adapter.close_session(&active.handle).await; }
     }
     let _ = st.db.update_turn_outcome(turn_id, "error", Some(failure_class));
+    // Wave 2: remember the model's own trouble across restarts, so unattended
+    // work stops paying for the same failure. An owner's turn never reads this.
+    model_health::note_failure(st, sid, failure_class, detail.as_deref());
     let _ = st.db.update_session_state(sid, session_state);
     st.active_turns.lock().await.remove(sid);
     finish_turn_delivery(st, turn_id, true).await;
@@ -5917,6 +5929,9 @@ async fn forward_events_with_timeouts(
                 }
                 // A completed turn proves the CLI sign-in works again.
                 clear_runtime_sign_in_failed_after_success(&st, &runtime_id).await;
+                // Wave 2: and that the model works again, so unattended work on it
+                // is no longer paused.
+                model_health::note_success(&st, &sid);
                 let _ = st.db.update_session_state(&sid, "completed");
                 st.active_turns.lock().await.remove(&sid);
                 if let Ok(summary) = st.db.session_event_summary(&sid) {
@@ -6355,6 +6370,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     *st.team.address.lock().unwrap() = Some(addr.to_string());
     if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); computer::sweep_endpoints(dir); browser::sweep_endpoints(dir); owner_computer::sweep_endpoints(dir); }
     *st.team.data_dir.lock().unwrap() = data_dir;
+    // Wave 2: the data folder is the owner's alone, and the two folders this wave
+    // keeps its disposables in are swept of old files.
+    sandbox::at_startup(&st);
+    scratch::prune(&st);
+    tool_output::prune(&st);
     stash::prune_restored(&st);
     git_ops::prune_reverted(&st);
     // The outside-session hook needs this run's address and token.
@@ -6505,6 +6525,15 @@ async fn daemon_main() {
 
 #[cfg(test)]
 mod media_tests;
+// Wave 2 (nod adoption, 17 November 2026), safety and providers: the data
+// folder's permissions, a scratch folder per conversation, what a bot can reach,
+// head-and-tail output caps, the per-model failure ledger and the catalogue cues.
+mod sandbox;
+mod scratch;
+mod reach;
+mod tool_output;
+mod model_health;
+mod model_cues;
 
 #[cfg(test)]
 mod import_tests;
@@ -14538,6 +14567,9 @@ mod phase2a_tests {
 
     // The linked VPS computer (Harbor): linking, state, routines and the tools.
     include!("computer_tests.rs");
+
+    // Wave 2: the reach statement and the paused-model rail (17 November 2026).
+    include!("safety_tests.rs");
 
     // The browser on that computer (14 November 2026).
     include!("browser_tests.rs");
