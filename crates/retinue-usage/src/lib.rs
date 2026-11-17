@@ -432,6 +432,31 @@ pub fn major_currency_decimal_to_minor(value: &str, currency: &str) -> Option<i6
     let numerator = scaled.checked_mul(minor_units_per_major(currency))?;
     round_half_up_ratio(numerator, 1_000_000_000_000_000_000i128)
 }
+
+/// Exact non-negative decimal major units, at 18 fractional places. Used for
+/// sums and projections of costs a provider reported, so no sub-cent amount is
+/// rounded away while it is being added up or averaged.
+pub fn major_units(value: &str) -> Option<i128> {
+    decimal_scaled_at(value.trim(), 18).filter(|units| *units >= 0)
+}
+
+/// The decimal text of `major_units`, with trailing fractional zeros removed.
+pub fn major_units_decimal(units: i128) -> String {
+    if units <= 0 { return "0".into(); }
+    let whole = units / 1_000_000_000_000_000_000i128;
+    let fraction = units % 1_000_000_000_000_000_000i128;
+    if fraction == 0 { return whole.to_string(); }
+    let fraction = format!("{fraction:018}").trim_end_matches('0').to_owned();
+    format!("{whole}.{fraction}")
+}
+
+/// `units * numerator / denominator`, rounded half up, all in exact units.
+/// Non-negative inputs only; an overflow or a zero divisor is `None`.
+pub fn major_units_ratio(units: i128, numerator: i128, denominator: i128) -> Option<i128> {
+    if units < 0 || numerator < 0 || denominator <= 0 { return None; }
+    let product = units.checked_mul(numerator)?;
+    Some(product.checked_add(denominator / 2)? / denominator)
+}
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -19,6 +19,12 @@ Newest first. One entry per lesson: date, area, symptom, root cause with evidenc
 - **Symptom:** the merged backend suite re-ran from scratch three times and never reported.
 - **Cause:** the loop retried `cargo test ... --no-fail-fast` whenever the log held `os error 4551`. With `--no-fail-fast` the other binaries still run, so one refused binary (here the Pi adapter's) restarted everything and overwrote the finished log.
 - **Fix:** run the suite once, read every binary's result, then retry only the refused binaries (`-p <crate> --test <name>`, or touch its source so it relinks with a new hash). A stale `Fresh` crate in a shared target can also hide your sources (`cannot find function` for a function that exists); `touch` the crate roots to rebuild them.
+## 2026-11-17 · Build · A shared `CARGO_TARGET_DIR` between worktrees runs another lane's test binary
+
+- **Symptom:** `cargo test -p retinue-storage` reported 169 passing, then `-- --list` did not contain tests that had just been written in this worktree; one run also failed with `cannot find function major_units in crate retinue_usage` for a function that exists in this worktree's source.
+- **Cause:** this PC's Smart App Control blocks freshly built build scripts (os error 4551), so lanes point `CARGO_TARGET_DIR` at the main checkout's warm `target`. When two lanes build the same package there, one lane's artifacts and test executable can satisfy the other lane's invocation, because the package units share the target but not the source.
+- **Fix (for now):** after any build in a shared target, confirm the test binary is yours with `cargo test -p <crate> -- --list | Select-String <new test name>` before trusting a green result. A private target works only if it is seeded from a working one; cargo's build-script fingerprints use paths relative to the target, so copying `target\debug` to a private directory should avoid re-running blocked build scripts (untested at the time of writing).
+- **Do not** claim tests passed from a shared target without that check; say which tests were seen running.
 
 ## 2026-11-17 · Git · Partial staging with `git apply --cached --unidiff-zero` misplaces insertions
 

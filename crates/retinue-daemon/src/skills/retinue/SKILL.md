@@ -33,7 +33,7 @@ This file is the map. `tools.md` lists every tool, what it does and who may call
 
 ## Who may do what
 
-- **Every bot**: `list_blobs`, `list_conversations`, `message_blob`, `schedule_task`, `list_my_schedules`, `ui_guide`, `list_skills`, `load_skill`, `read_skill_file`, plus `ask_user` and `request_secret` where someone can answer. A bot that is not a sub-bot also has `list_models` and `spawn_subbots`.
+- **Every bot**: `list_blobs`, `list_conversations`, `message_blob`, `schedule_task`, `list_my_schedules`, `ui_guide`, `list_skills`, `load_skill`, `read_skill_file`, plus `ask_user` and `request_secret` where someone can answer. A bot that is not a sub-bot also has `list_models` and `spawn_subbots`. Inside a task run, `check_back` plans one later check of that task.
 - **The CEO** adds the read tools (`list_projects`, `read_blob`, `read_project`, `read_conversation`, `get_conversation_permission`, `project_status`, `list_presets`), the proposal tools (`propose_project`, `propose_bot`, `propose_hires`, `update_blob`, `update_project`, `assign_task`, `create_task`, `start_conversation`, `open_conversation`, `set_conversation_permission`), its notes (`remember_about_user`, `forget_about_user`, `recall_about_user`, `update_playbook`) and `open_issue`.
 - **A scheduled run** has only memory and skill tools. It cannot message, delegate or schedule, and it cannot change automations.
 - **A sub-bot** cannot start sub-bots and works with no more access than the conversation that started it.

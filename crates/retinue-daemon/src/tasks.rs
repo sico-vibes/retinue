@@ -158,6 +158,7 @@ fn safe_task_event(task: &Value) -> Value {
         "id": task["id"], "projectId": task["projectId"], "parentTaskId": task["parentTaskId"], "rootTaskId": task["rootTaskId"],
         "assigneeAgentId": task["assigneeAgentId"], "state": task["state"], "queuePosition": task["queuePosition"], "version": task["version"],
         "updatedAt": task["updatedAt"], "assignedAt": task["assignedAt"], "startedAt": task["startedAt"], "completedAt": task["completedAt"],
+        "nextCheckAt": task["nextCheckAt"],
     })
 }
 
@@ -197,6 +198,10 @@ fn check_policy(policy: &Value) -> Result<(), DispatchError> {
         _ => Err(derr("invalid_argument", "supervisionPolicy must be report_only.", StatusCode::BAD_REQUEST)),
     }
 }
+
+/// The fixed nudge a check-back run carries, so the bot knows why it has woken
+/// without a new schedule or a clone of the whole task.
+const CHECK_BACK_NUDGE: &str = "This task's planned check is due. Look at what changed since the last run, then update the task or finish it.";
 
 /// The task prompt handed to the bot: the same three user-authored parts every
 /// time, so a run is reproducible from the ledger alone.
@@ -328,8 +333,36 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
             st.db.task_get(task_id).map_err(storage_error)?;
             Ok(json!({"runs": st.db.task_runs_list(task_id).map_err(storage_error)?}))
         }
+        "task.checkBack" => {
+            let id = required_str(p, "taskId")?;
+            let at = match p.get("at") {
+                None | Some(Value::Null) => None,
+                Some(value) => {
+                    let text = value.as_str().filter(|text| !text.is_empty()).ok_or_else(|| derr("invalid_argument", "at must be an RFC3339 instant or null", StatusCode::BAD_REQUEST))?;
+                    Some(check_back_instant(text, MAX_OWNER_CHECK_DAYS)?)
+                }
+            };
+            let task = st.db.task_set_next_check(id, required_version(p)?, at.as_deref()).map_err(storage_error)?;
+            emit_task(st, &task).await;
+            Ok(json!({"task": task}))
+        }
         _ => Err(derr("not_found", "unknown task method", StatusCode::NOT_FOUND)),
     }
+}
+
+/// How far ahead an owner may plan a check, and how far ahead a bot may.
+const MAX_OWNER_CHECK_DAYS: i64 = 90;
+const MAX_BOT_CHECK_DAYS: i64 = 30;
+
+/// Validate a planned check instant: at least a minute ahead (so it cannot fire
+/// in the same tick it was stored) and at most `days` ahead.
+fn check_back_instant(text: &str, days: i64) -> Result<String, DispatchError> {
+    let at = parse_time(text).ok_or_else(|| derr("invalid_argument", "at must be an RFC3339 instant", StatusCode::BAD_REQUEST))?;
+    let ahead = (at - Utc::now()).num_seconds();
+    if !(60..=days * 24 * 60 * 60).contains(&ahead) {
+        return Err(derr("invalid_argument", &format!("at must be between one minute and {days} days ahead"), StatusCode::BAD_REQUEST));
+    }
+    Ok(format_time(at))
 }
 
 /// The owner's drop action. One call assigns, claims and either starts or
@@ -385,10 +418,14 @@ async fn start_claimed(st: &AppState, task: &Value, run: &Value) -> Result<(Valu
         emit_outcome(st, &task, &run).await;
         return Err(derr("conflict", "That bot is archived, so it cannot take a task.", StatusCode::CONFLICT));
     }
+    // A run that starts from a planned check is unattended like a scheduled one,
+    // but only this run: the task's own flag is left alone, so a later manual
+    // drop keeps asking.
+    let from_check = st.db.task_take_check_pending(&task_id).unwrap_or(false);
     let workspace = crate::team::workspace_for(st, &agent);
     let mut link = json!({"kind":"task","taskId":task_id,"runId":run_id,"rootTaskId":task["rootTaskId"],"parentTaskId":task["parentTaskId"]});
     // A run a schedule started has nobody at the keyboard: it keeps the unattended rails (never bypass).
-    if task["unattended"] == true { link["unattended"] = json!(true); link["approvalMode"] = json!("auto"); }
+    if task["unattended"] == true || from_check { link["unattended"] = json!(true); link["approvalMode"] = json!("auto"); }
     let created = Box::pin(new_session(st, json!({
         "agentId": agent_id,
         "projectPath": workspace.to_string_lossy(),
@@ -408,7 +445,13 @@ async fn start_claimed(st: &AppState, task: &Value, run: &Value) -> Result<(Valu
     let (task, run) = st.db.task_run_bind_session(&run_id, &session_id).map_err(storage_error)?;
     emit_task(st, &task).await;
     emit_run(st, &run).await;
-    let text = task_prompt(&task);
+    let mut text = task_prompt(&task);
+    // A run that starts from a planned check carries the fixed nudge, whichever
+    // path started it (a free slot now or a queued start later).
+    if from_check {
+        text.push_str("\n\n");
+        text.push_str(CHECK_BACK_NUDGE);
+    }
     let prompt = json!({"sessionId": session_id, "text": text, "attachments": prompt_images(st, &task), "meta": {"kind":"task","taskId":task_id,"runId":run_id}});
     if let Err(error) = Box::pin(session_prompt_for_task(st, prompt)).await {
         let (task, run) = st.db.task_run_finish(&run_id, "failed", Some(&error.1.code), None).map_err(storage_error)?;
@@ -449,7 +492,45 @@ pub async fn advance_queue(st: &AppState) {
 pub async fn sweep(st: &AppState) {
     watchdog(st).await;
     schedules(st).await;
+    check_backs(st).await;
     advance_queue(st).await;
+}
+
+/// Fire the planned checks that are due (idea 4.3). A check never becomes a
+/// schedule: it starts one new run of the same task through the same queue, and
+/// it is consumed exactly once. A task that is busy keeps its check for a later tick.
+async fn check_backs(st: &AppState) {
+    let settings = st.db.settings().unwrap_or(Value::Null);
+    if settings["task.globalPaused"] == true { return }
+    let due = st.db.task_checks_due(&stamp()).unwrap_or_default();
+    for task in due {
+        let id = task["id"].as_str().unwrap_or("").to_owned();
+        let Some(agent_id) = task["assigneeAgentId"].as_str().filter(|id| !id.is_empty()) else { continue };
+        if queue_reason(st, agent_id, &settings).await.is_some() { continue }
+        let Some(due_at) = task["nextCheckAt"].as_str().map(str::to_owned) else { continue };
+        let Some(task) = st.db.task_take_due_check(&id, &due_at).ok().flatten() else { continue };
+        emit_task(st, &task).await;
+        let _ = st.db.task_mark_check_pending(&id);
+        let key = format!("check:{id}:{due_at}");
+        let _ = dispatch(st, &json!({"taskId": id, "assigneeAgentId": agent_id, "idempotencyKey": key, "expectedVersion": task["version"]}), true).await;
+    }
+}
+
+/// MCP `check_back`: inside a task run, plan one check of this task instead of
+/// asking for a whole schedule. Returns a plain sentence.
+pub async fn check_back_tool(st: &AppState, session_id: &str, args: &Value) -> Result<String, String> {
+    let session = st.db.session_detail(session_id).map_err(|_| "This conversation is no longer available.".to_string())?;
+    if session["link"]["kind"] != "task" {
+        return Err("A check-back belongs to a task run; this conversation is not one.".into());
+    }
+    let task_id = session["link"]["taskId"].as_str().ok_or("This task conversation has no task id.")?.to_owned();
+    let at = args["at"].as_str().map(str::trim).filter(|at| !at.is_empty()).ok_or("at is required: an RFC3339 instant.")?;
+    let at = check_back_instant(at, MAX_BOT_CHECK_DAYS).map_err(|error| error.1.message)?;
+    let task = st.db.task_get(&task_id).map_err(|error| error.to_string())?;
+    let version = task["version"].as_i64().unwrap_or(0);
+    let updated = st.db.task_set_next_check(&task_id, version, Some(&at)).map_err(|error| error.to_string())?;
+    emit_task(st, &updated).await;
+    Ok(format!("I will check back on this task at {}.", updated["nextCheckAt"].as_str().unwrap_or(&at)))
 }
 
 /// The task's time limit: a run the provider has been working on for longer than its `maxRuntimeSecs` is

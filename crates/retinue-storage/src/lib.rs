@@ -668,13 +668,31 @@ fn ensure_automation_schema(c: &Connection) -> Result<(), StorageError> {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_automation_runs_single_flight ON automation_runs(automation_id) WHERE status='running';
     CREATE INDEX IF NOT EXISTS idx_automation_runs_automation ON automation_runs(automation_id,started_at DESC);
-    CREATE INDEX IF NOT EXISTS idx_automation_runs_session ON automation_runs(session_id);")?;
+    CREATE INDEX IF NOT EXISTS idx_automation_runs_session ON automation_runs(session_id);
+    CREATE TABLE IF NOT EXISTS automation_run_costs(
+        run_id TEXT PRIMARY KEY NOT NULL,
+        automation_id TEXT NOT NULL,
+        cost_decimal TEXT,
+        currency TEXT NOT NULL DEFAULT 'USD',
+        reported_updates INTEGER NOT NULL DEFAULT 0,
+        unreported_updates INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_automation_run_costs_automation ON automation_run_costs(automation_id,updated_at DESC);")?;
     // Phase 5, section 8: an automation may also be started by a signed webhook.
-    // Additive and idempotent, like the other schemas, so an older database that
-    // already has the table gains the columns on open.
+    // Wave 2: the project fingerprint skip, the spend check-in and the
+    // authorisation record. Additive and idempotent, like the other schemas, so
+    // an older database that already has the table gains the columns on open.
     for (column, ddl) in [
         ("webhook_enabled", "INTEGER NOT NULL DEFAULT 0 CHECK(webhook_enabled IN (0,1))"),
         ("webhook_include_body", "INTEGER NOT NULL DEFAULT 0 CHECK(webhook_include_body IN (0,1))"),
+        ("skip_unchanged", "INTEGER NOT NULL DEFAULT 0 CHECK(skip_unchanged IN (0,1))"),
+        ("last_fingerprint", "TEXT"),
+        ("spend_check_usd", "TEXT"),
+        ("authorised_by", "TEXT"),
+        ("authorised_message_id", "TEXT"),
+        ("approved_definition", "TEXT"),
+        ("approved_at", "TEXT"),
     ] {
         let present: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('automations') WHERE name=?1)", [column], |r| r.get(0))?;
         if !present { c.execute_batch(&format!("ALTER TABLE automations ADD COLUMN {column} {ddl};"))?; }
@@ -1260,6 +1278,8 @@ fn ensure_tasks_schema(c: &Connection) -> Result<(), StorageError> {
         ("schedule_last_at", "TEXT"),
         ("schedule_last_outcome", "TEXT"),
         ("unattended", "INTEGER NOT NULL DEFAULT 0"),
+        ("next_check_at", "TEXT"),
+        ("check_pending", "INTEGER NOT NULL DEFAULT 0"),
     ] {
         let present: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('tasks') WHERE name=?1)", [column], |r| r.get(0))?;
         if !present { c.execute_batch(&format!("ALTER TABLE tasks ADD COLUMN {column} {ddl};"))?; }
@@ -1524,9 +1544,9 @@ fn task_read(c: &Connection, id: &str) -> Result<Value, StorageError> {
     .ok_or(StorageError::AgentNotFound)?;
     let snapshot: Value = serde_json::from_str(&row.11)?;
     let extra = c.query_row(
-        "SELECT attachments_json,schedule_json,schedule_agent_id,schedule_next_at,schedule_state,schedule_last_at,schedule_last_outcome,unattended FROM tasks WHERE id=?1",
+        "SELECT attachments_json,schedule_json,schedule_agent_id,schedule_next_at,schedule_state,schedule_last_at,schedule_last_outcome,unattended,next_check_at FROM tasks WHERE id=?1",
         [id],
-        |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<String>>(5)?, r.get::<_, Option<String>>(6)?, r.get::<_, i64>(7)?)),
+        |r| Ok((r.get::<_, String>(0)?, r.get::<_, Option<String>>(1)?, r.get::<_, Option<String>>(2)?, r.get::<_, Option<String>>(3)?, r.get::<_, Option<String>>(4)?, r.get::<_, Option<String>>(5)?, r.get::<_, Option<String>>(6)?, r.get::<_, i64>(7)?, r.get::<_, Option<String>>(8)?)),
     )?;
     let images: Value = serde_json::from_str(&extra.0).unwrap_or_else(|_| json!([]));
     let schedule: Value = match extra.1 { Some(raw) => serde_json::from_str(&raw).unwrap_or(Value::Null), None => Value::Null };
@@ -1539,6 +1559,7 @@ fn task_read(c: &Connection, id: &str) -> Result<Value, StorageError> {
         "assignedAt":row.19,"startedAt":row.20,"completedAt":row.21,
         "images":images,"schedule":schedule,"scheduleAgentId":extra.2,"scheduleNextAt":extra.3,"scheduleState":extra.4,
         "scheduleLastAt":extra.5,"scheduleLastOutcome":extra.6,"unattended":extra.7 != 0,
+        "nextCheckAt":extra.8,
     }))
 }
 
@@ -1843,7 +1864,7 @@ fn automation_schedule(kind: &str, cron: Option<&str>, timezone: &str, once_at: 
 }
 
 fn automation_run_dto(c: &Connection, id: &str) -> Result<Value, StorageError> {
-    c.query_row(
+    let mut run = c.query_row(
         "SELECT id,automation_id,session_id,status,reason,scheduled_for,started_at,finished_at FROM automation_runs WHERE id=?1",
         [id],
         |r| Ok(json!({
@@ -1858,7 +1879,40 @@ fn automation_run_dto(c: &Connection, id: &str) -> Result<Value, StorageError> {
         })),
     )
     .optional()?
-    .ok_or(StorageError::AgentNotFound)
+    .ok_or(StorageError::AgentNotFound)?;
+    run["cost"] = automation_cost_read(c, id)?;
+    Ok(run)
+}
+
+/// The reported cost of one run, only what the provider reported. `amount` stays
+/// null until something was reported, and `unreported` counts the reports that
+/// carried no cost, so a caller can show "no cost reported" rather than zero.
+fn automation_cost_read(c: &Connection, run_id: &str) -> Result<Value, StorageError> {
+    let row: Option<(Option<String>, String, i64, i64)> = c
+        .query_row(
+            "SELECT cost_decimal,currency,reported_updates,unreported_updates FROM automation_run_costs WHERE run_id=?1",
+            [run_id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+        )
+        .optional()?;
+    let (amount, currency, reported, unreported) = row.unwrap_or((None, "USD".to_owned(), 0, 0));
+    Ok(json!({"amount":amount,"currency":currency,"reported":reported,"unreported":unreported}))
+}
+
+/// The definition an owner approved: everything that decides what the schedule
+/// runs and how. Stored as JSON text; never any message text.
+fn automation_definition(dto: &Value) -> String {
+    json!({
+        "name": dto["name"],
+        "prompt": dto["prompt"],
+        "schedule": dto["schedule"],
+        "sessionMode": dto["sessionMode"],
+        "approvalMode": dto["approvalMode"],
+        "maxRuntimeSecs": dto["maxRuntimeSecs"],
+        "skipUnchanged": dto["skipUnchanged"],
+        "spendCheckUsd": dto["spendCheckUsd"],
+    })
+    .to_string()
 }
 
 fn automation_read(c: &Connection, id: &str) -> Result<Value, StorageError> {
@@ -1880,6 +1934,11 @@ fn automation_read(c: &Connection, id: &str) -> Result<Value, StorageError> {
     let (id, agent_id, name, prompt, schedule_kind, cron, timezone, once_at, session_mode, approval_mode, max_runtime_secs, enabled, created_by, reuse_session_id, next_run_at, last_run_at, consecutive_failures, pause_reason, created_at, updated_at, webhook_enabled, webhook_include_body) = row;
     let running: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM automation_runs WHERE automation_id=?1 AND status='running')", [&id], |r| r.get(0))?;
     let last_run_id: Option<String> = c.query_row("SELECT id FROM automation_runs WHERE automation_id=?1 ORDER BY started_at DESC,id DESC LIMIT 1", [&id], |r| r.get(0)).optional()?;
+    let extra = c.query_row(
+        "SELECT skip_unchanged,last_fingerprint,spend_check_usd,authorised_by,authorised_message_id,approved_at FROM automations WHERE id=?1",
+        [&id],
+        |r| Ok((r.get::<_,bool>(0)?, r.get::<_,Option<String>>(1)?, r.get::<_,Option<String>>(2)?, r.get::<_,Option<String>>(3)?, r.get::<_,Option<String>>(4)?, r.get::<_,Option<String>>(5)?)),
+    )?;
     let mut dto = json!({
         "id":id,"agentId":agent_id,"name":name,"prompt":prompt,
         "schedule":automation_schedule(&schedule_kind,cron.as_deref(),&timezone,once_at.as_deref()),
@@ -1887,6 +1946,8 @@ fn automation_read(c: &Connection, id: &str) -> Result<Value, StorageError> {
         "createdBy":created_by,"reuseSessionId":reuse_session_id,"nextRunAt":next_run_at,"lastRunAt":last_run_at,
         "consecutiveFailures":consecutive_failures,"pauseReason":pause_reason,"running":running,
         "webhook":{"enabled":webhook_enabled,"includeBody":webhook_include_body},
+        "skipUnchanged":extra.0,"lastFingerprint":extra.1,"spendCheckUsd":extra.2,
+        "authorisedBy":extra.3,"authorisedMessageId":extra.4,"approvedAt":extra.5,
         "createdAt":created_at,"updatedAt":updated_at,
     });
     if let Some(last) = last_run_id {
@@ -1918,6 +1979,57 @@ fn automation_runtime_secs(input: &Value) -> Result<i64, StorageError> {
         None | Some(Value::Null) => Ok(1800),
         Some(value) => value.as_i64().filter(|secs| (60..=14_400).contains(secs)).ok_or(StorageError::InvalidAgent),
     }
+}
+
+/// The owner's spend check-in for a run, as an exact decimal in major units.
+/// `None` is off. At most two decimal places and at most 10,000.
+fn automation_spend_check(input: &Value) -> Result<Option<String>, StorageError> {
+    match input.get("spendCheckUsd") {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(raw)) => {
+            let text = raw.trim();
+            let (whole, fraction) = text.split_once('.').unwrap_or((text, ""));
+            if whole.is_empty() || whole.len() > 5 || !whole.bytes().all(|b| b.is_ascii_digit())
+                || fraction.len() > 2 || !fraction.bytes().all(|b| b.is_ascii_digit())
+            {
+                return Err(StorageError::InvalidAgent);
+            }
+            let units: u64 = whole.parse().map_err(|_| StorageError::InvalidAgent)?;
+            if units > 10_000 { return Err(StorageError::InvalidAgent); }
+            Ok(Some(if fraction.is_empty() { whole.to_owned() } else { format!("{whole}.{fraction:0<2}") }))
+        }
+        _ => Err(StorageError::InvalidAgent),
+    }
+}
+
+/// The message an owner acted on when authorising a schedule. An id only, never
+/// its text, and never anything that could be mistaken for message content.
+fn automation_message_id(input: &Value, key: &str) -> Result<Option<String>, StorageError> {
+    match input.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(id)) => {
+            let id = id.trim();
+            if id.is_empty() { return Ok(None); }
+            if id.len() > 128 || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+                return Err(StorageError::InvalidAgent);
+            }
+            Ok(Some(id.to_owned()))
+        }
+        _ => Err(StorageError::InvalidAgent),
+    }
+}
+
+/// Add one exact reported amount to a stored total. A total that cannot be
+/// parsed is kept as it is rather than replaced by a partial sum.
+fn automation_cost_total(total: Option<&str>, add: i128) -> Option<String> {
+    let base = match total {
+        None => 0,
+        Some(text) => match retinue_usage::major_units(text) {
+            Some(units) => units,
+            None => return Some(text.to_owned()),
+        },
+    };
+    base.checked_add(add).map(retinue_usage::major_units_decimal)
 }
 
 fn migrate_session_controls(c: &mut Connection, path: Option<&Path>, backup_done: bool) -> Result<(), StorageError> {
@@ -3552,6 +3664,12 @@ impl Storage {
         let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         Ok(c.query_row("SELECT EXISTS(SELECT 1 FROM messages WHERE session_id=?1 AND role IN ('user','assistant'))", [id], |r| r.get(0))?)
     }
+    /// The id of the newest user message, for provenance records that keep an id
+    /// and never the text.
+    pub fn session_latest_user_message_id(&self, session: &str) -> Result<Option<String>, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        Ok(c.query_row("SELECT id FROM messages WHERE session_id=?1 AND role='user' ORDER BY sequence DESC LIMIT 1", [session], |r| r.get::<_, String>(0)).optional()?)
+    }
     /// The assistant text of the latest turn that replied, used to recognise a
     /// scheduled run that ended with the silent `(pass)`.
     pub fn latest_turn_reply(&self, session: &str) -> Result<Option<String>, StorageError> {
@@ -5074,6 +5192,76 @@ impl Storage {
         Ok(())
     }
 
+    /// Plan (or clear) a check-back on a task (idea 4.3). `at` is a UTC instant;
+    /// the version moves so an open board re-reads the card.
+    pub fn task_set_next_check(&self, id: &str, expected: i64, at: Option<&str>) -> Result<Value, StorageError> {
+        let at = match at {
+            None => None,
+            Some(text) => Some(cron::format_utc(cron::parse_rfc3339_utc(text)?)),
+        };
+        let mut c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        task_read(&tx, id)?;
+        let now = task_stamp();
+        if tx.execute(
+            "UPDATE tasks SET next_check_at=?2,version=version+1,updated_at=?3 WHERE id=?1 AND version=?4",
+            params![id, at, now, expected],
+        )? == 0 {
+            return Err(StorageError::AgentConflict);
+        }
+        let dto = task_read(&tx, id)?;
+        tx.commit()?;
+        Ok(dto)
+    }
+
+    /// Tasks whose planned check is due and whose board slot is free. A task that
+    /// is queued, running or waiting on a person is left for a later tick; it is
+    /// never dropped.
+    pub fn task_checks_due(&self, now: &str) -> Result<Vec<Value>, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let ids = {
+            let mut q = c.prepare("SELECT id FROM tasks WHERE next_check_at IS NOT NULL AND next_check_at<=?1 AND state NOT IN ('queued','running','needs_you') ORDER BY next_check_at,id LIMIT 20")?;
+            let rows = q.query_map([now], |r| r.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()?;
+            rows
+        };
+        ids.iter().map(|id| task_read(&c, id)).collect()
+    }
+
+    /// Take one due check exactly once: the stored instant is the guard, so two
+    /// ticks (or a restart) can never fire it twice. Returns `None` when it was
+    /// already taken or cleared.
+    pub fn task_take_due_check(&self, id: &str, due_at: &str) -> Result<Option<Value>, StorageError> {
+        let mut c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let now = task_stamp();
+        if tx.execute(
+            "UPDATE tasks SET next_check_at=NULL,version=version+1,updated_at=?3 WHERE id=?1 AND next_check_at=?2",
+            params![id, due_at, now],
+        )? == 0 {
+            return Ok(None);
+        }
+        let dto = task_read(&tx, id)?;
+        tx.commit()?;
+        Ok(Some(dto))
+    }
+
+    /// Mark that the next run of this task starts from its planned check, so the
+    /// fixed nudge is appended whichever path starts it (a free slot now, or a
+    /// queued start later). Set inside the same write as taking the check.
+    pub fn task_mark_check_pending(&self, id: &str) -> Result<(), StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        if c.execute("UPDATE tasks SET check_pending=1 WHERE id=?1", [id])? == 0 { return Err(StorageError::AgentNotFound); }
+        Ok(())
+    }
+
+    /// Whether the next run starts from a planned check, and clears the flag.
+    pub fn task_take_check_pending(&self, id: &str) -> Result<bool, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let pending: bool = c.query_row("SELECT check_pending=1 FROM tasks WHERE id=?1", [id], |r| r.get(0)).optional()?.unwrap_or(false);
+        if pending { c.execute("UPDATE tasks SET check_pending=0 WHERE id=?1", [id])?; }
+        Ok(pending)
+    }
+
     /// One occurrence of a repeating task: a new unassigned task that copies the template's text, images,
     /// project and limits, hangs under the template, and carries the unattended flag.
     pub fn task_clone_scheduled(&self, template_id: &str) -> Result<Value, StorageError> {
@@ -5469,6 +5657,9 @@ impl Storage {
         let enabled = match input.get("enabled") { None | Some(Value::Null) => false, Some(value) => value.as_bool().ok_or(StorageError::InvalidAgent)? };
         let created_by = match input.get("createdBy") { None | Some(Value::Null) => "user".to_owned(), Some(Value::String(value)) if value == "user" || value == "agent" => value.clone(), _ => return Err(StorageError::InvalidAgent) };
         let pause_reason = match input.get("pauseReason") { None | Some(Value::Null) => None, Some(Value::String(value)) => Some(value.clone()), _ => return Err(StorageError::InvalidAgent) };
+        let skip_unchanged = match input.get("skipUnchanged") { None | Some(Value::Null) => false, Some(value) => value.as_bool().ok_or(StorageError::InvalidAgent)? };
+        let spend_check_usd = automation_spend_check(input)?;
+        let source_message_id = automation_message_id(input, "sourceMessageId")?;
         let now = Utc::now();
         let schedule = cron::parse_schedule(&input["schedule"], Some(now))?;
         let next_run_at = cron::next_run_at(&schedule, now)?;
@@ -5481,10 +5672,21 @@ impl Storage {
         if count >= 50 { return Err(StorageError::AgentConflict); }
         let id = Uuid::new_v4().to_string();
         let now_text = now.to_rfc3339_opts(SecondsFormat::Millis, true);
+        // The authoriser is recorded from the first write: a bot may only ever
+        // propose, and a schedule created off (`enabled` false by a bot) has no
+        // approved definition until the owner resumes it.
+        let authorised_by = if created_by == "agent" { "bot" } else { "owner" };
         tx.execute(
-            "INSERT INTO automations(id,agent_id,name,prompt,schedule_kind,cron,timezone,once_at,session_mode,approval_mode,max_runtime_secs,enabled,created_by,reuse_session_id,next_run_at,last_run_at,consecutive_failures,pause_reason,created_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,NULL,?14,NULL,0,?15,?16,?16)",
-            params![id, agent_id, name, prompt, schedule.kind, schedule.cron, schedule.timezone, schedule.once_at, session_mode, approval_mode, max_runtime_secs, enabled, created_by, next_run_at, pause_reason, now_text],
+            "INSERT INTO automations(id,agent_id,name,prompt,schedule_kind,cron,timezone,once_at,session_mode,approval_mode,max_runtime_secs,enabled,created_by,reuse_session_id,next_run_at,last_run_at,consecutive_failures,pause_reason,created_at,updated_at,skip_unchanged,spend_check_usd,authorised_by,authorised_message_id) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,NULL,?14,NULL,0,?15,?16,?16,?17,?18,?19,?20)",
+            params![id, agent_id, name, prompt, schedule.kind, schedule.cron, schedule.timezone, schedule.once_at, session_mode, approval_mode, max_runtime_secs, enabled, created_by, next_run_at, pause_reason, now_text, skip_unchanged, spend_check_usd, authorised_by, source_message_id],
         )?;
+        let dto = automation_read(&tx, &id)?;
+        if enabled {
+            tx.execute(
+                "UPDATE automations SET approved_definition=?2,approved_at=?3 WHERE id=?1",
+                params![id, automation_definition(&dto), now_text],
+            )?;
+        }
         let dto = automation_read(&tx, &id)?;
         tx.commit()?;
         Ok(dto)
@@ -5518,24 +5720,42 @@ impl Storage {
         let session_mode = match input.get("sessionMode") { None => existing["sessionMode"].as_str().unwrap_or("new").to_owned(), Some(_) => automation_session_mode(input)? };
         let approval_mode = match input.get("approvalMode") { None => existing["approvalMode"].as_str().unwrap_or("auto").to_owned(), Some(_) => automation_approval_mode(input, "auto")? };
         let max_runtime_secs = match input.get("maxRuntimeSecs") { None => existing["maxRuntimeSecs"].as_i64().unwrap_or(1800), Some(_) => automation_runtime_secs(input)? };
-        let enabled = match input.get("enabled") { None => existing["enabled"].as_bool().unwrap_or(false), Some(value) => value.as_bool().ok_or(StorageError::InvalidAgent)? };
+        let skip_unchanged = match input.get("skipUnchanged") { None => existing["skipUnchanged"].as_bool().unwrap_or(false), Some(value) => value.as_bool().ok_or(StorageError::InvalidAgent)? };
+        let spend_check_usd = match input.get("spendCheckUsd") { None => existing["spendCheckUsd"].as_str().map(str::to_owned), Some(_) => automation_spend_check(input)? };
+        let awaiting_approval = existing["pauseReason"].as_str() == Some("needs_approval");
+        let approve = match input.get("approve") { None | Some(Value::Null) => false, Some(value) => value.as_bool().ok_or(StorageError::InvalidAgent)? };
+        let mut enabled = match input.get("enabled") { None => existing["enabled"].as_bool().unwrap_or(false), Some(value) => value.as_bool().ok_or(StorageError::InvalidAgent)? };
         let schedule = match input.get("schedule") {
             None => cron::parse_schedule(&existing["schedule"], None)?,
             Some(value) => cron::parse_schedule(value, Some(now))?,
         };
         let next_run_at = cron::next_run_at(&schedule, now)?;
-        let pause_reason: Option<String> = match input.get("pauseReason") {
+        let mut pause_reason: Option<String> = match input.get("pauseReason") {
             None => existing["pauseReason"].as_str().map(str::to_owned),
             Some(Value::Null) => None,
             Some(Value::String(value)) => Some(value.clone()),
             _ => return Err(StorageError::InvalidAgent),
         };
+        // `approve` is the owner saving an edit of a proposal: it is the one path
+        // that can turn a waiting row on, and it records the definition.
+        if approve && awaiting_approval { enabled = true; pause_reason = None; }
         let now_text = now.to_rfc3339_opts(SecondsFormat::Millis, true);
         tx.execute(
-            "UPDATE automations SET name=?2,prompt=?3,schedule_kind=?4,cron=?5,timezone=?6,once_at=?7,session_mode=?8,approval_mode=?9,max_runtime_secs=?10,enabled=?11,next_run_at=?12,pause_reason=?13,updated_at=?14 WHERE id=?1",
-            params![id, name, prompt, schedule.kind, schedule.cron, schedule.timezone, schedule.once_at, session_mode, approval_mode, max_runtime_secs, enabled, next_run_at, pause_reason, now_text],
+            "UPDATE automations SET name=?2,prompt=?3,schedule_kind=?4,cron=?5,timezone=?6,once_at=?7,session_mode=?8,approval_mode=?9,max_runtime_secs=?10,enabled=?11,next_run_at=?12,pause_reason=?13,updated_at=?14,skip_unchanged=?15,spend_check_usd=?16 WHERE id=?1",
+            params![id, name, prompt, schedule.kind, schedule.cron, schedule.timezone, schedule.once_at, session_mode, approval_mode, max_runtime_secs, enabled, next_run_at, pause_reason, now_text, skip_unchanged, spend_check_usd],
         )?;
-        let dto = automation_read(&tx, id)?;
+        let mut dto = automation_read(&tx, id)?;
+        let changed = automation_definition(&existing) != automation_definition(&dto);
+        let authorised = approve || !dto["pauseReason"].as_str().is_some_and(|reason| reason == "needs_approval");
+        if authorised && (changed || approve) {
+            let message_id = automation_message_id(input, "sourceMessageId")?;
+            tx.execute(
+                "UPDATE automations SET approved_definition=?2,approved_at=?3,authorised_by='owner',authorised_message_id=COALESCE(?4,authorised_message_id) WHERE id=?1",
+                params![id, automation_definition(&dto), now_text, message_id],
+            )?;
+            dto = automation_read(&tx, id)?;
+        }
+        dto["definitionChanged"] = json!(changed);
         tx.commit()?;
         Ok(dto)
     }
@@ -5545,16 +5765,19 @@ impl Storage {
     }
 
     /// Resume clears the failure counter and pause reason and recomputes the
-    /// next occurrence from now.
-    pub fn automation_resume(&self, id: &str) -> Result<Value, StorageError> {
+    /// next occurrence from now. It is also the owner's approval of a proposed
+    /// schedule: the definition it approves is stored next to the record of who
+    /// authorised it, so a later change can be recognised as a different thing.
+    pub fn automation_resume(&self, id: &str, message_id: Option<&str>) -> Result<Value, StorageError> {
         let mut c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
         let existing = automation_read(&tx, id)?;
         let schedule = cron::parse_schedule(&existing["schedule"], None)?;
         let next_run_at = cron::next_run_at(&schedule, Utc::now())?;
+        let now = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
         tx.execute(
-            "UPDATE automations SET enabled=1,pause_reason=NULL,consecutive_failures=0,next_run_at=?2,updated_at=?3 WHERE id=?1",
-            params![id, next_run_at, Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)],
+            "UPDATE automations SET enabled=1,pause_reason=NULL,consecutive_failures=0,next_run_at=?2,updated_at=?3,authorised_by='owner',approved_definition=?4,approved_at=?3,authorised_message_id=COALESCE(?5,authorised_message_id) WHERE id=?1",
+            params![id, next_run_at, now, automation_definition(&existing), message_id],
         )?;
         let dto = automation_read(&tx, id)?;
         tx.commit()?;
@@ -5675,6 +5898,112 @@ impl Storage {
         let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         c.execute("UPDATE automations SET reuse_session_id=?2,updated_at=?3 WHERE id=?1", params![id, session_id, Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)])?;
         Ok(())
+    }
+
+    /// Remember the project fingerprint a successful run saw, for the opt-in
+    /// "skip when nothing changed" check (idea 4.5). A hash, never a path.
+    pub fn automation_set_fingerprint(&self, id: &str, fingerprint: Option<&str>) -> Result<(), StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        c.execute("UPDATE automations SET last_fingerprint=?2 WHERE id=?1", params![id, fingerprint])?;
+        Ok(())
+    }
+
+    /// The automation run a conversation belongs to, read from the session's own
+    /// link (never the transcript), so a cost report lands on the run that made
+    /// it even when the session is reused across runs.
+    pub fn automation_link_for_session(&self, session_id: &str) -> Result<Option<(String, String)>, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let row: Option<(Option<String>, Option<String>)> = c
+            .query_row(
+                "SELECT json_extract(data,'$.link.automationId'),json_extract(data,'$.link.runId') FROM sessions WHERE id=?1 AND json_extract(data,'$.link.kind')='automation'",
+                [session_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        Ok(row.and_then(|(automation_id, run_id)| Some((automation_id?, run_id?))))
+    }
+
+    /// Record one provider usage report against a run's reported total. `amount`
+    /// is the cost that report carried, when it carried one; an unreported
+    /// report only increments its counter, so a screen can say "no cost
+    /// reported" instead of showing zero. Never stored for any other kind of
+    /// conversation: reported money stays out of the general usage model.
+    pub fn automation_cost_add(&self, run_id: &str, automation_id: &str, amount: Option<&str>, currency: &str) -> Result<(), StorageError> {
+        let add = amount.and_then(retinue_usage::major_units);
+        let now = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+        let mut c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let existing: Option<(Option<String>, i64, i64)> = tx
+            .query_row(
+                "SELECT cost_decimal,reported_updates,unreported_updates FROM automation_run_costs WHERE run_id=?1",
+                [run_id],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+            )
+            .optional()?;
+        let (total, mut reported, mut unreported) = existing.unwrap_or((None, 0, 0));
+        let total = match add {
+            Some(add) => {
+                reported += 1;
+                automation_cost_total(total.as_deref(), add)
+            }
+            None => {
+                unreported += 1;
+                total
+            }
+        };
+        tx.execute(
+            "INSERT INTO automation_run_costs(run_id,automation_id,cost_decimal,currency,reported_updates,unreported_updates,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(run_id) DO UPDATE SET cost_decimal=?3,currency=?4,reported_updates=?5,unreported_updates=?6,updated_at=?7",
+            params![run_id, automation_id, total, currency, reported, unreported, now],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Whether a run's reported total has reached `amount`, an exact decimal in
+    /// major units. A run that reported nothing never reaches it.
+    pub fn automation_run_cost_at_least(&self, run_id: &str, amount: &str) -> Result<bool, StorageError> {
+        let threshold = retinue_usage::major_units(amount).ok_or(StorageError::InvalidAgent)?;
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let total: Option<String> = c
+            .query_row("SELECT cost_decimal FROM automation_run_costs WHERE run_id=?1", [run_id], |r| r.get::<_, Option<String>>(0))
+            .optional()?
+            .flatten();
+        Ok(total.and_then(|total| retinue_usage::major_units(&total)).is_some_and(|total| total >= threshold))
+    }
+
+    /// The reported cost of one run, as `{amount, currency, reported, unreported}`.
+    pub fn automation_run_cost(&self, run_id: &str) -> Result<Value, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        automation_cost_read(&c, run_id)
+    }
+
+    /// The priced runs a monthly projection averages: the last `limit` runs of an
+    /// automation that reported a cost, summed exactly. `pricedRuns` is how many
+    /// the total came from; `total` and `currency` stay null when none did.
+    pub fn automation_costs_recent(&self, automation_id: &str, limit: usize) -> Result<Value, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let rows = {
+            let mut q = c.prepare("SELECT cost_decimal,currency FROM automation_run_costs WHERE automation_id=?1 AND cost_decimal IS NOT NULL ORDER BY updated_at DESC LIMIT ?2")?;
+            let collected = q.query_map(params![automation_id, limit as i64], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?
+                .collect::<Result<Vec<_>, _>>()?;
+            collected
+        };
+        let Some((_, currency)) = rows.first().cloned() else {
+            return Ok(json!({"pricedRuns":0,"total":Value::Null,"currency":Value::Null}));
+        };
+        let mut total = 0i128;
+        let mut priced = 0i64;
+        for (amount, row_currency) in rows {
+            if row_currency != currency { continue; }
+            let Some(units) = retinue_usage::major_units(&amount) else { continue };
+            total += units;
+            priced += 1;
+        }
+        Ok(json!({
+            "pricedRuns":priced,
+            "total":(priced > 0).then(|| retinue_usage::major_units_decimal(total)),
+            "currency":(priced > 0).then_some(currency),
+        }))
     }
 
     // ── Automation runs ────────────────────────────────────────────────────
@@ -10786,7 +11115,7 @@ mod automation_tests {
         let paused = db.automation_pause(&id).unwrap();
         assert_eq!(paused["enabled"], false);
         assert_eq!(paused["pauseReason"], "user");
-        let resumed = db.automation_resume(&id).unwrap();
+        let resumed = db.automation_resume(&id, None).unwrap();
         assert_eq!(resumed["enabled"], true);
         assert_eq!(resumed["pauseReason"], Value::Null);
         assert_eq!(resumed["consecutiveFailures"], 0);
@@ -10841,6 +11170,94 @@ mod automation_tests {
         assert_eq!(paused[0]["enabled"], false);
         assert_eq!(paused[0]["pauseReason"], "user");
         assert!(db.automation_pause_for_agent(&agent_id).unwrap().is_empty(), "already paused");
+    }
+
+    #[test]
+    fn automation_costs_add_exactly_and_unknown_stays_unknown() {
+        let (db, agent_id) = fixture();
+        let created = db.automation_create(&cron_task(&agent_id, "Priced", true)).unwrap();
+        let id = created["id"].as_str().unwrap().to_owned();
+        let run = db.automation_run_insert("run-cost", &id, Some("s-cost"), "completed", None, None, &now_text()).unwrap();
+        assert_eq!(run["cost"]["amount"], Value::Null, "no report yet is null, never zero");
+        assert_eq!(run["cost"]["reported"], 0);
+        db.automation_cost_add("run-cost", &id, Some("0.0015894"), "USD").unwrap();
+        db.automation_cost_add("run-cost", &id, None, "USD").unwrap();
+        db.automation_cost_add("run-cost", &id, Some("0.000048588"), "USD").unwrap();
+        let cost = db.automation_run_cost("run-cost").unwrap();
+        assert_eq!(cost["amount"], "0.001637988", "exact decimal addition, no rounding to cents");
+        assert_eq!(cost["reported"], 2);
+        assert_eq!(cost["unreported"], 1);
+        assert_eq!(db.automation_run_get("run-cost").unwrap()["cost"]["amount"], "0.001637988");
+        assert!(db.automation_run_cost_at_least("run-cost", "0.0016").unwrap());
+        assert!(!db.automation_run_cost_at_least("run-cost", "0.002").unwrap());
+        let recent = db.automation_costs_recent(&id, 20).unwrap();
+        assert_eq!(recent["pricedRuns"], 1);
+        assert_eq!(recent["total"], "0.001637988");
+        assert_eq!(recent["currency"], "USD");
+        // A run that reported nothing never reaches a check-in.
+        let quiet = db.automation_run_insert("run-quiet", &id, Some("s-quiet"), "completed", None, None, &now_text()).unwrap();
+        assert_eq!(quiet["cost"]["amount"], Value::Null);
+        assert!(!db.automation_run_cost_at_least("run-quiet", "0.0001").unwrap());
+        assert_eq!(db.automation_costs_recent(&id, 20).unwrap()["pricedRuns"], 1, "an unreported run is not averaged in as zero");
+    }
+
+    #[test]
+    fn automation_provenance_records_who_authorised_and_a_waiting_row_is_not_enabled_by_an_edit() {
+        let (db, agent_id) = fixture();
+        // A bot proposal: a bot, no approved definition until the owner acts.
+        let proposed = db.automation_create(&json!({"agentId":agent_id,"name":"Proposed","prompt":"p","schedule":{"kind":"cron","cron":"0 9 * * *","timezone":"UTC"},"enabled":false,"createdBy":"agent","pauseReason":"needs_approval","sourceMessageId":"message-1"})).unwrap();
+        assert_eq!(proposed["authorisedBy"], "bot");
+        assert_eq!(proposed["authorisedMessageId"], "message-1");
+        assert_eq!(proposed["approvedAt"], Value::Null);
+        let id = proposed["id"].as_str().unwrap().to_owned();
+        // Editing a waiting row changes it but never approves it.
+        let edited = db.automation_update(&id, &json!({"name":"Proposed again"})).unwrap();
+        assert_eq!(edited["definitionChanged"], true);
+        assert_eq!(edited["pauseReason"], "needs_approval");
+        assert_eq!(edited["approvedAt"], Value::Null);
+        assert_eq!(edited["authorisedBy"], "bot");
+        // The owner approves it.
+        let approved = db.automation_resume(&id, Some("message-2")).unwrap();
+        assert_eq!(approved["authorisedBy"], "owner");
+        assert_eq!(approved["authorisedMessageId"], "message-2");
+        assert!(approved["approvedAt"].is_string());
+        // A later edit by the owner re-records the definition and the authoriser.
+        let changed = db.automation_update(&id, &json!({"prompt":"do something else"})).unwrap();
+        assert_eq!(changed["definitionChanged"], true);
+        assert_eq!(changed["authorisedBy"], "owner");
+        assert!(changed["approvedAt"].is_string(), "a definition change re-records the owner's approval");
+        // An identical save is not a change.
+        let same = db.automation_update(&id, &json!({"prompt":"do something else"})).unwrap();
+        assert_eq!(same["definitionChanged"], false);
+        // The owner's `approve` turns a proposal on.
+        let second = db.automation_create(&json!({"agentId":agent_id,"name":"Second","prompt":"p","schedule":{"kind":"cron","cron":"0 10 * * *","timezone":"UTC"},"enabled":false,"createdBy":"agent","pauseReason":"needs_approval"})).unwrap();
+        let second_id = second["id"].as_str().unwrap().to_owned();
+        let approved = db.automation_update(&second_id, &json!({"approve":true})).unwrap();
+        assert_eq!(approved["enabled"], true);
+        assert_eq!(approved["pauseReason"], Value::Null);
+        assert_eq!(approved["authorisedBy"], "owner");
+        assert!(approved["approvedAt"].is_string());
+    }
+
+    #[test]
+    fn automation_spend_check_is_a_bounded_decimal() {
+        let (db, agent_id) = fixture();
+        for bad in [json!("-1"), json!("1.234"), json!("10001"), json!("abc"), json!(2)] {
+            let mut input = cron_task(&agent_id, "Check", false);
+            input["spendCheckUsd"] = bad.clone();
+            assert!(db.automation_create(&input).is_err(), "should reject {bad}");
+        }
+        let mut input = cron_task(&agent_id, "Check", false);
+        input["spendCheckUsd"] = json!("2.5");
+        let created = db.automation_create(&input).unwrap();
+        assert_eq!(created["spendCheckUsd"], "2.50");
+        let cleared = db.automation_update(created["id"].as_str().unwrap(), &json!({"spendCheckUsd":null})).unwrap();
+        assert_eq!(cleared["spendCheckUsd"], Value::Null);
+        let skip = db.automation_update(created["id"].as_str().unwrap(), &json!({"skipUnchanged":true})).unwrap();
+        assert_eq!(skip["skipUnchanged"], true);
+        assert_eq!(skip["definitionChanged"], true, "the skip setting is part of the approved definition");
+        db.automation_set_fingerprint(created["id"].as_str().unwrap(), Some("abc123")).unwrap();
+        assert_eq!(db.automation_get(created["id"].as_str().unwrap()).unwrap()["lastFingerprint"], "abc123");
     }
 }
 
@@ -11810,6 +12227,47 @@ mod task_ledger_tests {
         assert_eq!(db.task_get(queued_id).unwrap()["state"], "queued", "queued work resumes instead of being abandoned");
         assert_eq!(db.task_run_latest(claimed_id).unwrap().unwrap()["id"], claimed_run["id"], "no duplicate run is created");
         assert!(db.task_recover_after_restart().unwrap().is_empty(), "recovery runs once");
+    }
+
+    /// Wave 2 (idea 4.3): a planned check is stored on the task, is taken exactly
+    /// once, and a busy task keeps it for a later tick instead of losing it.
+    #[test]
+    fn task_check_back_is_planned_taken_once_and_waits_while_busy() {
+        let (db, _, agent) = ledger();
+        let task = draft(&db, json!({}));
+        let id = task["id"].as_str().unwrap();
+        let due = (chrono::Utc::now() + Duration::hours(3)).to_rfc3339_opts(SecondsFormat::Millis, true);
+        let planned = db.task_set_next_check(id, 1, Some(&due)).unwrap();
+        assert_eq!(planned["nextCheckAt"], due);
+        assert_eq!(planned["version"], 2, "the card re-reads");
+        // Not due yet.
+        assert!(db.task_checks_due(&chrono::Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true)).unwrap().iter().all(|row| row["id"] != id));
+        // Make it due and take it.
+        db.task_set_next_check(id, 2, Some(&(chrono::Utc::now() - Duration::minutes(1)).to_rfc3339_opts(SecondsFormat::Millis, true))).unwrap();
+        let now = chrono::Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+        let due_rows = db.task_checks_due(&now).unwrap();
+        let row = due_rows.iter().find(|row| row["id"] == id).expect("due");
+        let due_at = row["nextCheckAt"].as_str().unwrap().to_owned();
+        let taken = db.task_take_due_check(id, &due_at).unwrap().expect("taken once");
+        assert_eq!(taken["nextCheckAt"], Value::Null);
+        assert!(db.task_take_due_check(id, &due_at).unwrap().is_none(), "a second tick cannot fire it again");
+        // The flag that carries the nudge survives until the run starts.
+        assert!(!db.task_take_check_pending(id).unwrap());
+        db.task_mark_check_pending(id).unwrap();
+        assert!(db.task_take_check_pending(id).unwrap(), "the next run carries the nudge");
+        assert!(!db.task_take_check_pending(id).unwrap(), "and only the next run");
+        // A task waiting for a person is left for a later tick.
+        let busy = draft(&db, json!({}));
+        let busy_id = busy["id"].as_str().unwrap();
+        db.task_set_next_check(busy_id, 1, Some(&(chrono::Utc::now() - Duration::minutes(1)).to_rfc3339_opts(SecondsFormat::Millis, true))).unwrap();
+        db.task_dispatch_claim(busy_id, &agent, 2, "check-busy", true, Some("global_limit")).unwrap();
+        let now = chrono::Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+        assert!(db.task_checks_due(&now).unwrap().iter().all(|row| row["id"] != busy_id), "a queued task keeps its check for later");
+        // Clearing works, and a stale version conflicts.
+        let cleared = db.task_set_next_check(id, taken["version"].as_i64().unwrap(), None).unwrap();
+        assert_eq!(cleared["nextCheckAt"], Value::Null);
+        assert!(matches!(db.task_set_next_check(id, 1, Some(&due)), Err(StorageError::AgentConflict)));
+        assert!(db.task_set_next_check(id, cleared["version"].as_i64().unwrap(), Some("not a time")).is_err(), "the instant is validated");
     }
 
     /// FIX43: a database an earlier version left has no task tables and a current schema

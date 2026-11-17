@@ -5844,6 +5844,13 @@ async fn forward_events_with_timeouts(
                     .map(|id| format!("{}:{}", turn_id, id));
                 let usage = json!({"id":Uuid::new_v4().to_string(),"runtimeId":runtime_id,"sessionId":sid,"turnId":turn_id,"provider":provider,"model":model,"timestamp":timestamp,"inputTokens":report.input_tokens,"outputTokens":report.output_tokens,"cacheReadTokens":report.cache_read_tokens,"cacheWriteTokens":report.cache_write_tokens,"reasoningTokens":report.reasoning_tokens,"source":"terminal","raw":{},"providerUpdateId":provider_update_id,"usageStatus":report.usage_status,"contextUsed":report.context_used,"contextSize":report.context_size});
                 let _ = st.db.insert_usage(&usage);
+                // Wave 2 (idea 4.2): an automation run keeps the cost its
+                // provider reported, and only that. General usage still ignores
+                // reported money (the retired monetary model), so this is the
+                // one narrow store and the schedules screen is its only reader.
+                if let Ok(Some((automation_id, run_id))) = st.db.automation_link_for_session(&sid) {
+                    let _ = st.db.automation_cost_add(&run_id, &automation_id, report.reported_cost_decimal.as_deref(), "USD");
+                }
                 ("usage.updated", json!({"id":usage["id"],"runtimeId":runtime_id,"sessionId":sid,"turnId":turn_id,"provider":provider,"model":model,"timestamp":timestamp,"inputTokens":report.input_tokens,"outputTokens":report.output_tokens,"cacheReadTokens":report.cache_read_tokens,"cacheWriteTokens":report.cache_write_tokens,"reasoningTokens":report.reasoning_tokens,"source":"stream","usageStatus":report.usage_status,"contextUsed":report.context_used,"contextSize":report.context_size}))
             }
             AgentEvent::TurnCompleted => {
@@ -12497,6 +12504,32 @@ mod phase2a_tests {
 
     fn cron_automation(st:&AppState,agent:&str,name:&str)->Value{
         st.db.automation_create(&json!({"agentId":agent,"name":name,"prompt":"do the thing","schedule":{"kind":"cron","cron":"*/5 * * * *","timezone":"UTC"},"enabled":true})).unwrap()
+    }
+
+    #[tokio::test]
+    async fn a_schedule_projects_spend_only_from_reported_costs(){
+        let(st,_)=automation_state();
+        let agent=unique_agent(&st,None);
+        let daily=|name:&str| st.db.automation_create(&json!({"agentId":agent.clone(),"name":name,"prompt":"p","schedule":{"kind":"cron","cron":"0 9 * * *","timezone":"UTC"},"enabled":true})).unwrap();
+        let id=daily("Priced")["id"].as_str().unwrap().to_owned();
+        let now=Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis,true);
+        st.db.automation_run_insert("p1",&id,Some("s1"),"completed",None,None,&now).unwrap();
+        st.db.automation_cost_add("p1",&id,Some("0.50"),"USD").unwrap();
+        // A second run that reported nothing is not averaged in as zero.
+        st.db.automation_run_insert("p2",&id,Some("s2"),"completed",None,None,&now).unwrap();
+        let dto=automations::with_spend(&st,st.db.automation_get(&id).unwrap());
+        assert_eq!(dto["spend"]["basis"],"recent_runs");
+        assert_eq!(dto["spend"]["sampledRuns"],1);
+        // A daily schedule fires 29 or 30 times in the next 30 days, depending on the hour.
+        let month_runs=dto["spend"]["monthRuns"].as_i64().unwrap();
+        assert!(month_runs==29||month_runs==30,"{month_runs}");
+        assert_eq!(dto["spend"]["projection"],if month_runs==30 {"15"} else {"14.5"},"0.50 a run times the occurrences");
+        assert_eq!(dto["spend"]["currency"],"USD");
+        let plain_id=daily("Plain")["id"].as_str().unwrap().to_owned();
+        let projected=automations::with_spend(&st,st.db.automation_get(&plain_id).unwrap());
+        assert_eq!(projected["spend"]["basis"],"no_priced_runs");
+        assert_eq!(projected["spend"]["projection"],Value::Null,"unknown stays unknown, never zero");
+        assert_eq!(projected["spend"]["currency"],Value::Null);
     }
 
     #[tokio::test]
