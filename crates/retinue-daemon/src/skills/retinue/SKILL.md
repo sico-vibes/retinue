@@ -56,3 +56,5 @@ This file is the map. `tools.md` lists every tool, what it does and who may call
 - **Split work across a team**: the CEO proposes `propose_hires` or `assign_task`; anything the owner must approve becomes a card, and the replies come back to the CEO's conversation.
 - **Explore several options**: `spawn_subbots` with one brief and one model per helper, at most five per call.
 - **Look something up on a schedule**: `schedule_task`, then tell the owner it is waiting for their approval.
+- **Answer a question about Retinue itself** (a setting, a screen, a tool, a rule): call `search_docs`, then `read_doc` on the page that fits, and cite the path. The pages describe shipped behaviour, not the state of this machine; for what this machine is doing, read the tool's own reply or ask.
+- **Find what was decided earlier**: `search_history` with `scope` `conversation` (this chat) or `project` (its project's conversations). Use it instead of asking the owner to repeat themselves.

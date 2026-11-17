@@ -1802,6 +1802,7 @@
     "session.context.reset": "drop",
     "session.context.updated": "drop",
     "session.context_exhausted": "drop",
+    "session.note": "drop",
     "session.plan": "drop",
     "session.replaced": "drop",
     "session.resume_rejected": "drop",

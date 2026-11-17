@@ -3,13 +3,43 @@ use super::*;
 impl Storage {
     /// Only normalized message fields are returned; provider data stays in storage.
     pub fn search_messages(&self, query: &str) -> Result<Vec<Value>, StorageError> {
+        Ok(self.search_messages_scoped(query, MessageSearchScope::default())?.results)
+    }
+
+    /// The same search, narrowed to one conversation or one project and to a
+    /// date window (wave 2, nod idea 7). Archived conversations are never
+    /// searched. `truncated` says another page exists beyond `limit`.
+    ///
+    /// The query is matched with LIKE rather than an FTS index: every message
+    /// delta would otherwise re-index a whole assistant row, and the message
+    /// write path is on every turn. A scan bounded by the conversation (or the
+    /// project's conversations) and by `limit` is what the search box needs;
+    /// an FTS table is the follow-up once the perf gate has measured it.
+    pub fn search_messages_scoped(&self, query: &str, scope: MessageSearchScope<'_>) -> Result<MessageSearchPage, StorageError> {
         let query = query.trim();
-        if query.is_empty() || query.chars().count() > 200 { return Ok(vec![]); }
+        if query.is_empty() || query.chars().count() > 200 { return Ok(MessageSearchPage::default()); }
         let pattern = format!("%{}%", query.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"));
+        let limit = scope.limit.unwrap_or(50).clamp(1, 50);
+        let from = scope.from.and_then(search_date_prefix);
+        let to = scope.to.and_then(search_date_prefix);
         let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
-        let mut q = c.prepare("SELECT m.id,m.session_id,s.agent_id,s.title,m.role,m.created_at,m.content FROM messages m JOIN sessions s ON s.id=m.session_id WHERE s.archived=0 AND m.role IN ('user','assistant') AND m.content LIKE ?1 ESCAPE '\\' ORDER BY m.created_at DESC,m.id LIMIT 50")?;
-        let rows = q.query_map([pattern], |r| Ok((r.get::<_, String>(0)?,r.get::<_, String>(1)?,r.get::<_, Option<String>>(2)?,r.get::<_, String>(3)?,r.get::<_, String>(4)?,r.get::<_, String>(5)?,r.get::<_, String>(6)?)))?;
-        rows.map(|row| {
+        let mut q = c.prepare(
+            "SELECT m.id,m.session_id,s.agent_id,s.title,m.role,m.created_at,m.content \
+             FROM messages m JOIN sessions s ON s.id=m.session_id \
+             WHERE s.archived=0 AND m.role IN ('user','assistant') AND m.content LIKE ?1 ESCAPE '\\' \
+               AND (?2 IS NULL OR m.session_id=?2) \
+               AND (?3 IS NULL OR COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(s.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=s.project_path))=?3) \
+               AND (?4 IS NULL OR substr(m.created_at,1,19)>=?4) \
+               AND (?5 IS NULL OR substr(m.created_at,1,19)<=?5) \
+             ORDER BY m.created_at DESC,m.id LIMIT ?6",
+        )?;
+        let rows = q.query_map(params![pattern, scope.session_id, scope.project_id, from, to, limit as i64 + 1], |r| {
+            Ok((r.get::<_, String>(0)?,r.get::<_, String>(1)?,r.get::<_, Option<String>>(2)?,r.get::<_, String>(3)?,r.get::<_, String>(4)?,r.get::<_, String>(5)?,r.get::<_, String>(6)?))
+        })?;
+        let mut results = Vec::new();
+        let mut truncated = false;
+        for row in rows {
+            if results.len() >= limit { truncated = true; break; }
             let (id, session, agent, title, role, created, content) = row?;
             let chars: Vec<char> = content.chars().collect();
             let needle: Vec<char> = query.chars().map(|c| c.to_ascii_lowercase()).collect();
@@ -18,8 +48,17 @@ impl Storage {
             let end = (start + 180).max(at + needle.len() + 45).min(chars.len());
             let snippet = format!("{}{}{}", if start > 0 { "…" } else { "" }, chars[start..end].iter().collect::<String>(), if end < chars.len() { "…" } else { "" });
             let blob = agent.as_deref().and_then(|id| agent_read(&c, id).ok()).map(|a| json!({"id":a["id"],"name":a["name"],"color":a["color"],"look":a["look"],"archived":a["archived"]}));
-            Ok(json!({"messageId":id,"sessionId":session,"blobId":agent,"blob":blob,"title":title,"role":role,"createdAt":created,"snippet":snippet}))
-        }).collect()
+            results.push(json!({"messageId":id,"sessionId":session,"blobId":agent,"blob":blob,"title":title,"role":role,"createdAt":created,"snippet":snippet}));
+        }
+        Ok(MessageSearchPage { results, truncated })
+    }
+
+    /// The conversation's stored plan (`sessions.data.plan`, written through
+    /// `merge_session_data`), or `None` when it has none.
+    pub fn session_plan(&self, id: &str) -> Result<Option<Value>, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let raw: Option<Option<String>> = c.query_row("SELECT json_extract(data,'$.plan') FROM sessions WHERE id=?1", [id], |row| row.get(0)).optional()?;
+        Ok(raw.flatten().and_then(|text| serde_json::from_str::<Value>(&text).ok()).filter(|plan| !plan.is_null()))
     }
 
     pub fn agent_restore(&self, id: &str) -> Result<(Value, Vec<Value>), StorageError> {

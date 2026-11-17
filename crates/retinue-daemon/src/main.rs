@@ -124,6 +124,12 @@ mod owner_computer;
 mod webhooks;
 /// Phase 10: conversations imported from Claude Code, Codex and OpenCode.
 mod import;
+/// Wave 2 (nod idea 2): the one-line status a bot writes while its turn runs.
+mod working_note;
+/// Wave 2 (nod idea 4): a plan kept on the conversation, not just the turn.
+mod plan;
+/// Wave 2 (nod idea 6): the documentation library, searchable offline by bots.
+mod docs_search;
 
 use quota::{normalize_codex_quota, PollFailure, PollOutcome, QuotaPollGate, QUOTA_POLL_INTERVAL, QUOTA_REQUEST_TIMEOUT};
 
@@ -1484,7 +1490,40 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "media.reveal" => media::reveal(st, &p).await,
         "search.messages" => {
             let query = p["query"].as_str().filter(|q| q.chars().count() <= 200).ok_or_else(|| derr("invalid_argument", "query must be at most 200 characters", StatusCode::BAD_REQUEST))?;
-            st.db.search_messages(query).map(|results| json!({"results":results})).map_err(|e| derr("internal", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))
+            // Wave 2 (nod idea 7): the same search, narrowed to one conversation
+            // or one project and to a date window. Every new parameter is
+            // optional, so the existing search box is unchanged.
+            let session_id = p["sessionId"].as_str().filter(|id| !id.is_empty());
+            let project_id = p["projectId"].as_str().filter(|id| !id.is_empty());
+            if let Some(id) = session_id {
+                let row = st.db.session_brief(id).map_err(|_| derr("not_found", "Conversation not found.", StatusCode::NOT_FOUND))?;
+                if row["archived"] == true { return Err(derr("not_found", "Conversation is archived.", StatusCode::NOT_FOUND)); }
+                if let Some(project) = project_id {
+                    if row["projectId"].as_str() != Some(project) {
+                        return Err(derr("invalid_argument", "That conversation is not in that project.", StatusCode::BAD_REQUEST));
+                    }
+                }
+            }
+            let date_bound = |key: &str| -> Result<Option<String>, DispatchError> {
+                let Some(raw) = p[key].as_str().map(str::trim).filter(|raw| !raw.is_empty()) else { return Ok(None) };
+                if chrono::DateTime::parse_from_rfc3339(raw).is_err() {
+                    return Err(derr("invalid_argument", &format!("{key} must be an RFC 3339 date and time"), StatusCode::BAD_REQUEST));
+                }
+                Ok(Some(raw.to_owned()))
+            };
+            let (from, to) = (date_bound("from")?, date_bound("to")?);
+            let limit = match p.get("limit") {
+                None | Some(Value::Null) => None,
+                Some(value) => Some(value.as_u64().filter(|n| (1..=50).contains(n)).ok_or_else(|| derr("invalid_argument", "limit must be between 1 and 50", StatusCode::BAD_REQUEST))? as usize),
+            };
+            let page = st.db.search_messages_scoped(query, retinue_storage::MessageSearchScope {
+                session_id,
+                project_id,
+                from: from.as_deref(),
+                to: to.as_deref(),
+                limit,
+            }).map_err(|e| derr("internal", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+            Ok(json!({"results": page.results, "truncated": page.truncated}))
         }
         "agent.restore" => {
             let id = p["agentId"].as_str().ok_or_else(|| derr("invalid_argument", "agentId is required", StatusCode::BAD_REQUEST))?;
@@ -4290,6 +4329,10 @@ struct TurnDriver {
     exec_options: ExecOptions,
     provider: String,
     desired_instruction_hash: Option<String>,
+    /// Wave 2: the turn began from something the owner sent (a message, a queued
+    /// message, an answer to a question, or the Retinue MCP), not from a
+    /// teammate's brief or an unattended run. Memory recall only runs for these.
+    owner_started: bool,
 }
 
 /// Phase A of a send: everything that can reject it, then reserve the turn and
@@ -4603,7 +4646,7 @@ async fn session_prompt_impl(st: &AppState, p: Value, origin: PromptOrigin) -> R
     // A send means this conversation is no longer just "warmed".
     st.warm_lru.lock().await.retain(|id| id != &sid);
     let state = st.clone();
-    let driver = TurnDriver { sid: sid.clone(), turn: turn.clone(), text, attachments, reply_snapshot, references, command_directive, annotation_block, exec_options, provider, desired_instruction_hash };
+    let driver = TurnDriver { sid: sid.clone(), turn: turn.clone(), text, attachments, reply_snapshot, references, command_directive, annotation_block, exec_options, provider, desired_instruction_hash, owner_started: matches!(origin, PromptOrigin::User | PromptOrigin::Queue | PromptOrigin::QuestionAnswer | PromptOrigin::Mcp) };
     tokio::spawn(async move { run_turn(state, driver).await; });
     Ok(json!({"turnId":turn,"accepted":true,"state":next_state}))
 }
@@ -4625,7 +4668,7 @@ async fn note_prompt_delivered(st: &AppState, sid: &str) {
 /// cancellation) exactly once.
 async fn run_turn(state: AppState, driver: TurnDriver) {
     let st = &state;
-    let TurnDriver { sid, turn, text, attachments, reply_snapshot, references, command_directive, annotation_block, exec_options, provider, desired_instruction_hash } = driver;
+    let TurnDriver { sid, turn, text, attachments, reply_snapshot, references, command_directive, annotation_block, exec_options, provider, desired_instruction_hash, owner_started } = driver;
     // A task copy that lost its files gets them back before anything runs in it.
     proposals::before_task_turn(st, &sid).await;
     // 0. The project's setup script, once, in this conversation's own worktree. A failure never stops the turn; the agent is told.
@@ -4757,9 +4800,16 @@ async fn run_turn(state: AppState, driver: TurnDriver) {
         // saving a memory never changes the instruction hash or forces a new
         // provider thread.
         let memory_context = crate::memory::catalog_for_prompt(st, &sid);
+        // Wave 2 (nod idea 3): the few saved notes that bear on this message,
+        // found by word search with no model call. Owner-started turns only, and
+        // never re-sent unchanged.
+        let recall_context = owner_started.then(|| crate::memory::recall_for_prompt(st, &sid, &text)).flatten();
         // The skills index is the same kind of per-turn suffix: it never
         // changes the instruction hash or forces a new provider thread.
         let skills_context = crate::skills::index_for_prompt(st, &sid);
+        // Wave 2 (nod idea 4): the plan the bot left on this conversation in an
+        // earlier turn, so multi-turn work does not lose its list.
+        let plan_context = crate::plan::carried_plan_for_prompt(st, &sid, &turn);
         // The Manager's profile and playbook travel in their own per-turn block
         // (never inside `<retinue_team>`), so editing either never changes the
         // instruction hash. A model change instead delivers the one-off
@@ -4774,12 +4824,14 @@ async fn run_turn(state: AppState, driver: TurnDriver) {
         let reply_context = reply_snapshot.as_ref().map(reply_prompt_context).unwrap_or_default();
         let command_context = command_directive.as_deref().unwrap_or("");
         format!(
-            "{setup_failure}{annotation_block}{text}{handover}{recap}{manager}{memory}{skills}{reference_context}{reply_context}{command}",
+            "{setup_failure}{annotation_block}{text}{handover}{recap}{manager}{memory}{recall}{skills}{plan}{reference_context}{reply_context}{command}",
             handover = handover_context.as_deref().unwrap_or(""),
             recap = recap_context.as_deref().unwrap_or(""),
             manager = manager_context.as_deref().unwrap_or(""),
             memory = memory_context.as_deref().unwrap_or(""),
+            recall = recall_context.as_deref().unwrap_or(""),
             skills = skills_context.as_deref().unwrap_or(""),
+            plan = plan_context.as_deref().unwrap_or(""),
             command = command_context
         )
     };
@@ -5568,6 +5620,9 @@ async fn forward_events_with_timeouts(
                 if let Some(t) = turn.as_deref() {
                     let _ = st.db.merge_turn_data(t, &json!({"plan":{"items":items,"updatedAt":updated_at}}));
                 }
+                // Wave 2 (nod idea 4): the conversation keeps the list too, so a
+                // plan survives the turn that made it. An empty list clears both.
+                crate::plan::record(&st, &sid, turn.as_deref(), &items);
                 ("session.plan", json!({"sessionId":sid,"turnId":turn,"items":items,"updatedAt":updated_at}))
             }
             AgentEvent::FileChanged { path, raw } => {
@@ -5963,6 +6018,10 @@ async fn forward_events_with_timeouts(
         // team/queue bookkeeping above has already touched the queue.
         if ty == "turn.error" { retry::after_failed_turn(&st, &sid, turn.as_deref()).await; }
     }
+    // Wave 2: the "now" line belongs to the turn that wrote it. This is the one
+    // point every terminal path passes through, so the window never has to time
+    // a note out. Nothing is emitted for a turn that wrote no note.
+    crate::working_note::announce_clear(&st, &sid).await;
 }
 
 async fn ws_client(mut socket: WebSocket, st: AppState) {
@@ -14348,6 +14407,10 @@ mod phase2a_tests {
 
     // Phase C: the owner's own computer, its card, its clocks and its deny-list.
     include!("owner_computer_tests.rs");
+
+    // Wave 2, agent experience: the "now" line, memory recall, a plan that
+    // outlives a turn, the docs tools and earlier-message search.
+    include!("wave2_tests.rs");
 
     #[tokio::test]
     async fn team_update_project_move_does_not_archive() {
