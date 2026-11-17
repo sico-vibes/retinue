@@ -2,6 +2,12 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-17 · Git · Partial staging with `git apply --cached --unidiff-zero` misplaces insertions
+
+- **Symptom:** commit `540314f` did not compile: a constant and a paid-model check landed nine lines off, inside the wrong function. The working copy, which passed every test, was right.
+- **Cause:** to commit only my hunks of a file that also held another session's work, I applied a filtered `git diff -U0` patch to the index. A zero-context *insertion* (`@@ -N,0 +M @@`) has no line to match, and it lands by its new-file number, which shifts when an earlier hunk is skipped. Replacements carry their old line and land correctly.
+- **Fix:** rebuild the file by content instead: take the base blob, walk `difflib.SequenceMatcher(base, working)` opcodes, keep your changes and the base text for the foreign ones, then `git hash-object -w` and `git update-index --cacheinfo`. Before committing, check out the index (`git ls-files | git checkout-index --prefix=C:/tmp/idx/ --stdin`) and build or typecheck that snapshot. For Rust, at least `rustfmt --emit stdout` the file from inside its crate folder (it resolves sibling modules).
+
 ## 2026-11-17 · UI · A failed conversation hid behind a newer one
 
 - **Symptom:** an Ada lane stopped with an error, but Ada's row showed no error and the bell stayed empty.

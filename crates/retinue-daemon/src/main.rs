@@ -2645,8 +2645,14 @@ fn validate_option_values_against_catalog(model_id:Option<&str>,thinking:Option<
     if let Some(tier)=service_tier.filter(|tier|!(allow_standard_turn_tier&&*tier=="standard")){let supported=selected.map(|m|m["serviceTiers"].as_array().is_some_and(|a|a.iter().any(|v|v["id"]==tier))).unwrap_or_else(||models.iter().any(|m|m["serviceTiers"].as_array().is_some_and(|a|a.iter().any(|v|v["id"]==tier))));if !supported{return Err(derr("invalid_argument",if selected.is_some(){"serviceTier is not supported by the selected model"}else{"serviceTier is not supported by the runtime catalog"},StatusCode::BAD_REQUEST));}}
     Ok(())
 }
+const OPENCODE_PAID_ZEN_MESSAGE: &str = "This model bills OpenCode's pay-as-you-go credits, which Retinue doesn't use. Choose a free OpenCode Zen model or an OpenCode Go model.";
 async fn validate_exec_catalog(st:&AppState,runtime:&Value,options:&ExecOptions)->Result<(),DispatchError>{
     for (name,value) in [("model",options.model.as_deref()),("thinking",options.thinking.as_deref()),("serviceTier",options.service_tier.as_deref())]{if value.is_some_and(str::is_empty){return Err(derr("invalid_argument",&format!("{name} must be a non-empty identifier"),StatusCode::BAD_REQUEST));}}
+    // Never spend OpenCode's pay-as-you-go credits, even for a conversation
+    // that kept a paid Zen model from before this rule (owner, 16 November 2026).
+    if runtime["provider"]=="opencode" && options.model.as_deref().is_some_and(catalog::opencode_paid_zen_model) {
+        return Err(derr("invalid_argument",OPENCODE_PAID_ZEN_MESSAGE,StatusCode::BAD_REQUEST));
+    }
     let workflow_scope = (runtime["provider"] == "claude").then_some(options.enable_workflows);
     let catalog = catalog::get(st, runtime, workflow_scope, options.model.as_deref(), catalog::Mode::CachedOnly).await.ok().flatten().map(|served| served.value);
     if options.model.is_none() && catalog.as_ref().is_some_and(|catalog| catalog["validated"] == true && catalog["fallback"] != true) {
@@ -2654,14 +2660,8 @@ async fn validate_exec_catalog(st:&AppState,runtime:&Value,options:&ExecOptions)
     }
     if options.model.is_none()&&options.thinking.is_none()&&options.service_tier.is_none(){return Ok(())}
     validate_option_values_against_catalog(options.model.as_deref(),options.thinking.as_deref(),options.service_tier.as_deref(),catalog.as_ref(),runtime["provider"]=="codex")
-const OPENCODE_PAID_ZEN_MESSAGE: &str = "This model bills OpenCode's pay-as-you-go credits, which Retinue doesn't use. Choose a free OpenCode Zen model or an OpenCode Go model.";
 }
 async fn preflight_exec_options(st:&AppState,runtime:&Value,provider:&str,options:&ExecOptions)->Option<(String,DispatchError)>{
-    // Never spend OpenCode's pay-as-you-go credits, even for a conversation
-    // that kept a paid Zen model from before this rule (owner, 16 November 2026).
-    if runtime["provider"]=="opencode" && options.model.as_deref().is_some_and(catalog::opencode_paid_zen_model) {
-        return Err(derr("invalid_argument",OPENCODE_PAID_ZEN_MESSAGE,StatusCode::BAD_REQUEST));
-    }
     if let Ok(Some((setting,reason)))=exec_option_rejection(st,provider,options){return Some((setting.into(),derr("unsupported",reason,StatusCode::BAD_REQUEST)))}
     if let Err(error)=validate_exec_catalog(st,runtime,options).await {
         let setting=if error.1.message.contains("thinking"){"thinking"}else if error.1.message.contains("serviceTier"){"serviceTier"}else{"model"};return Some((setting.into(),error))
