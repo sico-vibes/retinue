@@ -17,7 +17,7 @@ import { HelpTip } from './SettingsParts'
 import { Skeleton } from './Skeleton'
 import { usePlatform } from '../transport/platform'
 import { useRemoteStatus } from '../remote/useRemote'
-import { CheckpointsBody, WorkspaceBody } from './SessionRailExtras'
+import { CheckpointsBody, ReachBody, WorkspaceBody } from './SessionRailExtras'
 import { ScheduleOverview } from './ScheduleOverview'
 import { isDraftSession } from './teamSelectors'
 import { buildRailView, conversationFiles, repositoryRefreshKey, useSessionRepository, type RailFile, type RepositoryState } from './sessionRepository'
@@ -43,12 +43,15 @@ function useEnvironment(sessionId: string | null) {
   return value
 }
 
-function readOpen(id: string) {
-  try { return localStorage.getItem(`retinue.rail.${id}`) !== '0' } catch { return true }
+function readOpen(id: string, closed = false) {
+  try {
+    const saved = localStorage.getItem(`retinue.rail.${id}`)
+    return saved === null ? !closed : saved !== '0'
+  } catch { return !closed }
 }
 
-function Card({ id, title, aside, children }: { id: string; title: string; aside?: ReactNode; children: ReactNode }) {
-  const [open, setOpen] = useState(() => readOpen(id))
+function Card({ id, title, aside, closed, children }: { id: string; title: string; aside?: ReactNode; closed?: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(() => readOpen(id, closed))
   const toggle = () => setOpen((current) => { try { localStorage.setItem(`retinue.rail.${id}`, current ? '0' : '1') } catch { /* preference only */ } return !current })
   return <section className="rail-card" aria-labelledby={`rail-${id}`}>
     <header className="rail-card-head">
@@ -223,6 +226,10 @@ export function SessionRail({ session, usage, appliedModel, onOpenFile, onReveal
     <Card id="workspace" title="Workspace">
       <WorkspaceBody session={session} active={active} />
     </Card>
+
+    {platform.kind !== 'browser' && <Card id="reach" title="What it can reach" closed>
+      <ReachBody session={session} active={active} />
+    </Card>}
 
     {/* Only while there is one: the dev servers this conversation's coding agent started. A link opens in the system browser. */}
     {servers.length > 0 && <Card id="servers" title="Local servers">

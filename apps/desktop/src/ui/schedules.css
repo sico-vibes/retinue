@@ -74,3 +74,16 @@
 .schedule-idea:hover, .schedule-idea[aria-pressed="true"] { color: var(--text-1); border-color: var(--line-strong); background: var(--surface-selected); }
 .schedule-idea:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 @media (max-width: 560px) { .schedules-templates { grid-template-columns: 1fr; } }
+
+/* Wave 2 (17 November 2026): reported cost, skip-unchanged and the spend check-in. */
+.schedule-spend { color: var(--text-3); }
+.schedule-runs .run-cost { margin-left: auto; color: var(--text-3); font-size: var(--fs-xs); font-variant-numeric: tabular-nums; }
+.schedule-check { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.schedule-check input { margin-top: 3px; }
+.schedule-check span { display: grid; gap: 2px; }
+.schedule-check strong { font-size: var(--fs-sm); font-weight: 500; }
+.schedule-check small { color: var(--text-3); font-size: var(--fs-xs); line-height: 1.4; }
+.schedule-money { display: flex; align-items: center; gap: 6px; }
+.schedule-money > span { color: var(--text-3); }
+.schedule-money input { width: 9em; }
+.schedule-zone.over { color: var(--danger-ink); }

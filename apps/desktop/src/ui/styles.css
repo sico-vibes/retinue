@@ -106,3 +106,8 @@
 .message-row:hover .troubleshoot-button, .troubleshoot-button:focus-visible { opacity: 1; }
 .troubleshoot-button:hover { background: var(--surface-hover); }
 @media (hover: none) { .troubleshoot-button { opacity: 1; } }
+
+/* Message search scope (wave 2): all conversations or the open one. */
+.message-search-scope { display: flex; gap: 6px; padding: 8px 16px 0; }
+.message-search-scope button { padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--text-3); font-size: var(--fs-xs); cursor: pointer; }
+.message-search-scope button.active { border-color: var(--accent, var(--line)); color: var(--text-1); }

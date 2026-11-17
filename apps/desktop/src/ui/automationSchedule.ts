@@ -154,6 +154,53 @@ export function runReasonText(reason: string | null | undefined): string {
     case 'error_after_changes': return 'It stopped after changing things, so it was not retried on its own.'
     case 'timeout_after_changes': return 'It ran out of time after changing things, so it was not retried on its own.'
     case 'busy': return `The ${entityNoun(themeStyle())} was busy for too long.`
+    case 'unchanged': return 'The project had not changed since the last good run.'
+    case 'spend_check': return 'Stopped at your spend check-in.'
     default: return ''
   }
+}
+
+/** Dollars from a decimal string the daemon sent ("18.4" → "$18.40"); small amounts keep their precision. */
+export function formatUsd(amount: string | null | undefined): string | null {
+  if (amount == null || amount === '') return null
+  const value = Number(amount)
+  if (!Number.isFinite(value) || value < 0) return null
+  if (value > 0 && value < 0.01) return '<$0.01'
+  return `$${value.toFixed(2)}`
+}
+
+/**
+ * The schedule card's cost line (wave 2). Only costs the provider reported
+ * count, so a schedule with none says so instead of showing $0. Never
+ * "budget" or "limit": nothing here stops a run except the owner's check-in.
+ */
+export function spendLine(spend: { projection?: string | null; basis?: string; sampledRuns?: number } | null | undefined): string | null {
+  if (!spend) return null
+  switch (spend.basis) {
+    case 'recent_runs': {
+      const amount = formatUsd(spend.projection)
+      const runs = spend.sampledRuns ?? 0
+      return amount ? `About ${amount} a month, from ${runs} run${runs === 1 ? '' : 's'}` : 'No cost reported yet'
+    }
+    case 'no_priced_runs': return 'No cost reported yet'
+    case 'one_off': return 'One-time run'
+    case 'no_upcoming_runs': return null
+    default: return null
+  }
+}
+
+/** A run's reported cost, or null when the provider reported none (unknown, never zero). */
+export function runCostText(cost: { amount?: string | null; unreported?: number } | null | undefined): string | null {
+  const amount = formatUsd(cost?.amount ?? null)
+  if (!amount) return null
+  return cost?.unreported ? `${amount} reported, some not` : amount
+}
+
+/** A spend check-in the owner typed: empty is off; otherwise dollars with at most two decimals, up to 10,000. */
+export function parseSpendCheck(text: string): { ok: true; value: string | null } | { ok: false } {
+  const trimmed = text.trim().replace(/^\$/, '')
+  if (!trimmed) return { ok: true, value: null }
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return { ok: false }
+  const value = Number(trimmed)
+  return value > 10000 ? { ok: false } : { ok: true, value: trimmed }
 }

@@ -2,7 +2,7 @@
 // project, or the shared folder) and what each turn changed, with a single-file undo only where the daemon's own
 // dry run says the files still match what the agent wrote. Nothing is inferred in the browser.
 import { useCallback, useEffect, useState } from 'react'
-import { CircleAlert, FileText, GitBranch, Undo2, Users } from 'lucide-react'
+import { Check, CircleAlert, FileText, FolderPen, GitBranch, Minus, Undo2, Users } from 'lucide-react'
 import type { Session } from '../types'
 import { rpc } from '../tauri'
 import { Skeleton } from './Skeleton'
@@ -19,6 +19,19 @@ type Workspace = {
   worktree: { path: string; branch: string; base: string; baseCommit: string; repo: string } | null
   isolationFailure: string | null
   sharedWith: Array<{ sessionId: string; agentId: string; state: string }>
+  /** The conversation's own scratch folder (wave 2): a tidy place to write, never a boundary. */
+  scratchFolder?: string | null
+}
+
+/** `reach.statement` (wave 2): what a bot can reach, in the daemon's own plain words. Desktop only. */
+export type Reach = {
+  statement: string
+  folder: string | null
+  isolation: 'shared' | 'isolated' | 'unknown'
+  permissionSentence: string
+  unattended: boolean
+  tools: Array<{ id: string; label: string; on: boolean }>
+  limits: string[]
 }
 
 type CheckpointFile = { id: string; turnId: string | null; path: string; operation: string | null; additions: number | null; deletions: number | null; state: 'available' | 'reverted' | 'blocked'; reason: string | null }
@@ -57,6 +70,33 @@ export function WorkspaceBody({ session, active }: { session: Session; active: b
     {!own && data.mode === 'shared' && <p className="rail-note">{data.isGit && data.branch ? <>Branch <b>{data.branch}</b>{short(data.head) ? ` at ${short(data.head)}` : ''}. </> : null}Changes in a shared folder belong to the folder, not to one employee: anyone working here, or you, may have made them.</p>}
     {data.isolationFailure && <p className="rail-note rail-problem" role="alert"><CircleAlert size={12} aria-hidden="true" /><span>Retinue could not give this employee its own copy: {data.isolationFailure} It is working in the shared folder.</span></p>}
     {(data.sharedWith?.length ?? 0) > 0 && <p className="rail-note"><Users size={12} aria-hidden="true" /> {data.sharedWith.length} other {data.sharedWith.length === 1 ? 'conversation is' : 'conversations are'} working in this folder right now, so changes can overlap.</p>}
+    {data.scratchFolder && <div className="rail-row" title={data.scratchFolder}><FolderPen size={13} aria-hidden="true" /><span className="rail-row-main">Scratch folder</span><span className="rail-tag">notes and drafts</span></div>}
+  </>
+}
+
+/** What this conversation's bot can reach, as the daemon states it. Read when the card is open; nothing is guessed here. */
+export function ReachBody({ session, active }: { session: Session; active: boolean }) {
+  const [data, setData] = useState<Reach | null>(null)
+  const [failed, setFailed] = useState(false)
+  const draft = isDraftSession(session)
+  useEffect(() => {
+    if (!active || draft) return
+    let live = true
+    setFailed(false)
+    void rpc<{ reach: Reach }>('reach.statement', { sessionId: session.id })
+      .then((result) => { if (live) setData(result?.reach ?? null) })
+      .catch(() => { if (live) { setData(null); setFailed(true) } })
+    return () => { live = false }
+  }, [session.id, session.projectPath, session.permissionMode, active, draft])
+  if (draft) return <p className="rail-note">Shown once the first message is sent.</p>
+  if (failed) return <p className="rail-note">Retinue could not say what this conversation can reach just now.</p>
+  if (!data) return <div className="rail-loading" role="status" aria-busy="true"><span className="sr-only">Reading what it can reach…</span><Skeleton lines={2} variant="row" /></div>
+  return <>
+    <p className="rail-note rail-reach-statement">{data.statement}</p>
+    <ul className="rail-reach-tools" aria-label="What it can use">{data.tools.map((tool) => <li key={tool.id} data-on={tool.on}>
+      {tool.on ? <Check size={12} aria-hidden="true" /> : <Minus size={12} aria-hidden="true" />}<span>{tool.label}</span><span className="sr-only">{tool.on ? ', on' : ', off'}</span>
+    </li>)}</ul>
+    {data.limits.length > 0 && <ul className="rail-block-reasons">{data.limits.map((limit) => <li key={limit}>{limit}</li>)}</ul>}
   </>
 }
 

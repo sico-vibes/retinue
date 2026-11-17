@@ -10,7 +10,7 @@ import { SettingsGroup, SettingsRow } from './SettingsParts'
 
 export type HealthCheck = { id: string; area: string; label: string; status: 'ok' | 'warn' | 'fail'; detail: string; fix: { label: string; method: string; params?: Record<string, unknown> } | null }
 
-const AREA_TITLES: Record<string, string> = { runtime: 'Coding agents', database: 'Database', hooks: 'Hook', remote: 'Remote', speech: 'Speech' }
+const AREA_TITLES: Record<string, string> = { runtime: 'Coding agents', database: 'Database', hooks: 'Hook', remote: 'Remote', speech: 'Speech', safety: 'Safety' }
 
 function isCheck(value: unknown): value is HealthCheck {
   const check = value as Partial<HealthCheck> | null

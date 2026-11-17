@@ -44,7 +44,9 @@ type CatalogueEntry = { id: string; name: string; url: string; docsUrl: string; 
 ## Status, 17 November 2026
 
 - Wave 1 is merged on branch `integrate/nod-wave1`: Telegram works end to end; the vault, Pi, connectors and engineering hygiene are in. **WhatsApp is set aside for now (owner, 17 November 2026):** WhatsApp Web needs a client library whose licence and version we can verify, and the Business API needs a public webhook route; neither is built.
-- Wave 2 started on 17 November 2026 in worktrees `-7` (automations), `-8` (agent experience) and `-9` (safety and providers). Each lane keeps its contract and report in `docs/reports/wave2-<lane>.md` in its worktree.
+- Wave 2 started on 17 November 2026 in worktrees `-7` (automations), `-8` (agent experience) and `-9` (safety and providers). Each lane's contract and report is in `docs/reports/wave2-<lane>.md`.
+- Wave 2 is merged on the same branch, with its screens: the schedule card's cost line and projection, run costs, "skip when nothing changed" and the spend check-in in the editor; "Checking back" on tasks; the bot's own "now" line; a kept plan marked "From an earlier turn"; message search scoped to the open conversation; a "What it can reach" card and the scratch folder in the conversation rail; price and unattended-pause cues in the model menu; the Doctor's Safety area.
+- **Not done in wave 2** (lane 9's list): building the coding agents' environment instead of inheriting it; the grant clock (nothing runs locally yet); learning and masking a value typed during Take control (needs the vault's per-conversation set, now merged); capability rows in the provider table; a per-lane model choice for automations (needs an owner decision: same model or a named cheaper one); "your own model server" through a CLI's config. A spend check-in ends a run as `cancelled` with reason `spend_check`, not a new state.
 
 ## Wave 2
 

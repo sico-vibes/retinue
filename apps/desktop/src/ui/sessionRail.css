@@ -115,3 +115,9 @@
 .rail-file-open { justify-content: flex-start; gap: 8px; }
 .rail-file-open .rail-file-name { flex: 0 1 auto; }
 .rail-file-open .rail-tag { flex: 0 0 auto; margin-left: auto; font-size: var(--fs-2xs); }
+
+/* What it can reach (wave 2): the daemon's statement, then each tool family on or off. */
+.rail-reach-statement { color: var(--text-2); }
+.rail-reach-tools { display: grid; gap: 3px; margin: 6px 0; padding: 0; list-style: none; font-size: var(--fs-xs); }
+.rail-reach-tools li { display: flex; align-items: center; gap: 6px; color: var(--text-2); }
+.rail-reach-tools li[data-on="false"] { color: var(--text-3); }

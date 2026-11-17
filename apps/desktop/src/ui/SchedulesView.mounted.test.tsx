@@ -145,7 +145,7 @@ describe('SchedulesView', () => {
     await flush()
     expect(handlers.onCreate).toHaveBeenCalledWith({
       agentId: 'a1', name: 'Morning summary', prompt: 'Summarise the repository changes.', schedule: { kind: 'cron', cron: '0 9 * * *', timezone: expect.any(String) },
-      sessionMode: 'new', approvalMode: 'auto', maxRuntimeSecs: 1800, enabled: true,
+      sessionMode: 'new', approvalMode: 'auto', maxRuntimeSecs: 1800, enabled: true, skipUnchanged: false, spendCheckUsd: null,
     })
   })
 

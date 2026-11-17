@@ -35,9 +35,10 @@ export function StatusMark({ status }: { status: PlanStatus | 'failed' }) {
 const SPOKEN: Record<PlanStatus, string> = { pending: 'to do', in_progress: 'in progress', completed: 'done' }
 
 /** The list itself. `stopped` marks a turn that ended with steps still open: they stay as they were, not spinning. */
-export function TurnPlan({ plan, stopped = false }: { plan: TurnPlanData; stopped?: boolean }) {
+export function TurnPlan({ plan, stopped = false, earlier = false }: { plan: TurnPlanData; stopped?: boolean; earlier?: boolean }) {
   const done = plan.items.filter((item) => item.status === 'completed').length
-  return <section className="turn-plan" aria-label={`Task list, ${done} of ${plan.items.length} done`}>
+  return <section className={`turn-plan${earlier ? ' earlier' : ''}`} aria-label={`Task list${earlier ? ' from an earlier turn' : ''}, ${done} of ${plan.items.length} done`}>
+    {earlier && <p className="turn-plan-earlier">From an earlier turn</p>}
     <ol>
       {plan.items.map((item, index) => {
         const status: PlanStatus = stopped && item.status === 'in_progress' ? 'pending' : item.status

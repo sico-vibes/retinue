@@ -29,8 +29,11 @@ export function doingNowLabel(tool: ToolRecord): string {
 }
 
 /** What a conversation's running tool is doing, or null when no tool is running (wave 13: assignment cards). */
-export function doingNowFor(session: { state?: unknown; tools?: readonly ToolRecord[] } | null | undefined): string | null {
+export function doingNowFor(session: { state?: unknown; tools?: readonly ToolRecord[]; workingNote?: { text?: unknown } | null } | null | undefined): string | null {
   if (!session || !['working', 'starting'].includes(String(session.state ?? ''))) return null
+  // The bot's own note (wave 2) says it better than a tool name, so it comes first.
+  const note = text(session.workingNote?.text)
+  if (note) return clip(note, 96)
   const running = [...(session.tools ?? [])].reverse().find((tool) => ['running', 'pending', 'started'].includes(String(tool.state ?? '').toLowerCase()))
   return running ? doingNowLabel(running) : null
 }

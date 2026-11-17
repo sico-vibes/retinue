@@ -2,6 +2,12 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-17 · Daemon · A new RPC that nothing could call
+
+- **Symptom:** the remote-tiers parity test said `task.checkBack` was a stale row: "the dispatch no longer has" it.
+- **Cause:** the automations lane added the method inside `tasks::rpc` but not to the `"task.create" | "task.list" | …` arm in `main.rs` `dispatch`, so every call from the app fell through to "unsupported". Its report said "`task.` covers `task.checkBack`"; there is no prefix route for tasks. Its tests called storage directly, never `dispatch`.
+- **Fix:** the method is in the `main.rs` arm, and `task_check_back_is_dispatched_planned_and_cleared` calls it through `dispatch`. **Avoid:** test every new RPC through `dispatch(&st, "<name>", …)`, and treat a parity "stale row" as "the dispatch can't reach this", not as a row to delete.
+
 ## 2026-11-17 · Storage · A lane's vault hung every test that created an item
 
 - **Symptom:** six vault tests "running for over 60 seconds", even run alone; the rest of the suite passed. The lane had only compiled its code, never run it.

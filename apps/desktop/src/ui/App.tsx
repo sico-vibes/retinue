@@ -831,7 +831,11 @@ export function App() {
     const turns = Array.isArray(session?.turns) ? session!.turns : []
     const last = turns[turns.length - 1]
     const plan = last ? planOf(last.plan) : null
-    return plan ? { plan, live: !['completed', 'error', 'failed', 'cancelled', 'interrupted'].includes(String(last?.state ?? '')) } : null
+    if (plan) return { plan, live: !['completed', 'error', 'failed', 'cancelled', 'interrupted'].includes(String(last?.state ?? '')), earlier: false }
+    // The conversation keeps its plan across turns (wave 2): an older one with steps left is shown, marked as earlier.
+    const kept = planOf(session?.plan)
+    if (kept && session?.plan?.turnId !== last?.id && kept.items.some((item) => item.status !== 'completed')) return { plan: kept, live: false, earlier: true }
+    return null
   }, [sideSession, selectedSession])
   const groupedConversationItems = groupConversationActivity(activityDetails || sideSession ? conversationItems : conversationItems.filter((item) => item.kind === 'message' || item.activityKind === 'turn' || isSubagentItem(item) || isMakingImage(item)), liveTurn)
   // Messages this conversation's bot sent to teammates read as one assignment card per turn, with the daemon's recorded status.
@@ -2466,7 +2470,7 @@ ${fileReferenceText(sentFile)}` : typed
     const timer = window.setInterval(() => setSchedulesNowMs(Date.now()), 30_000)
     return () => window.clearInterval(timer)
   }, [schedulesOpen])
-  const automationPayload = (input: AutomationInput) => ({ agentId: input.agentId, name: input.name, prompt: input.prompt, schedule: input.schedule, sessionMode: input.sessionMode, approvalMode: input.approvalMode, maxRuntimeSecs: input.maxRuntimeSecs, ...(input.enabled === undefined ? {} : { enabled: input.enabled }) })
+  const automationPayload = (input: AutomationInput) => ({ agentId: input.agentId, name: input.name, prompt: input.prompt, schedule: input.schedule, sessionMode: input.sessionMode, approvalMode: input.approvalMode, maxRuntimeSecs: input.maxRuntimeSecs, ...(input.enabled === undefined ? {} : { enabled: input.enabled }), ...(input.skipUnchanged === undefined ? {} : { skipUnchanged: input.skipUnchanged }), ...(input.spendCheckUsd === undefined ? {} : { spendCheckUsd: input.spendCheckUsd }) })
   const createAutomation = async (input: AutomationInput) => { await rpc('automation.create', automationPayload(input)); await loadAutomations() }
   const updateAutomation = async (id: string, input: AutomationInput) => { await rpc('automation.update', { id, ...automationPayload(input) }); await loadAutomations() }
   const setAutomationEnabled = async (id: string, enabled: boolean) => { await rpc(enabled ? 'automation.resume' : 'automation.pause', { id }); await loadAutomations() }
@@ -3189,7 +3193,7 @@ ${fileReferenceText(sentFile)}` : typed
                 ? <QuestionCard request={activePermission} onAnswer={(answers) => answerQuestion(activePermission, answers)} onDismiss={() => void answerQuestion(activePermission, null)} />
                 : <ApprovalCard permission={activePermission} focusOnMount={approvalFocusOnMount} onReply={(choice, options) => answerPermission(activePermission, choice, options)} />)}
               {!sideSession && lastTurnWasPlan && !latestPlanId && <div className="plan-ready-bar" role="status"><span>Plan mode is on. Approve the plan to let {agentName} start building.</span><button type="button" className="primary-button small" onClick={() => void approvePlan()}>Approve &amp; build</button></div>}
-              {latestPlan && <TurnPlan plan={latestPlan.plan} stopped={!turnLive && latestPlan.live} />}
+              {latestPlan && <TurnPlan plan={latestPlan.plan} stopped={(!turnLive && latestPlan.live) || latestPlan.earlier} earlier={latestPlan.earlier} />}
               {selectedSession.state === 'starting' && <div className="working-indicator starting"><WorkingMark label={`Starting ${agentName}…`} timer={false} /></div>}
               {selectedSession.state === 'working' && <div className="working-indicator"><WorkingMark label={`${agentName} is working`} /></div>}
               {waitingDelegation && selectedSession.state !== 'working' && <div className="working-indicator waiting"><WorkingMark label={`Waiting for a free working slot for ${sideAgent?.name ?? agentName}…`} timer={false} /></div>}
@@ -3300,7 +3304,7 @@ ${fileReferenceText(sentFile)}` : typed
         setReplyTarget(messageMenu.replyTo)
         requestAnimationFrame(() => composerRef.current?.focus())
       }} />}
-      {messageSearchOpen && experiments.search && <MessageSearch agents={agents} onClose={() => setMessageSearchOpen(false)} onChoose={(result) => {
+      {messageSearchOpen && experiments.search && <MessageSearch agents={agents} currentSessionId={selectedSession && !isDraftSession(selectedSession) ? selectedSession.id : null} onClose={() => setMessageSearchOpen(false)} onChoose={(result) => {
         const session = sessions.find((s) => s.id === result.sessionId)
         if (!session) { setError('This conversation is no longer available.'); return }
         setBlobPage(null); setAnalyticsOpen(false); setSchedulesOpen(false)

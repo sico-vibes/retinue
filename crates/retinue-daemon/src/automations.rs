@@ -117,7 +117,8 @@ fn short_local(label: &str) -> String {
 
 /// "6 hours 12 minutes", for the late note.
 fn human_span(seconds: i64) -> String {
-    let minutes = (seconds / 60).max(1);
+    if seconds < 60 { return "less than a minute".to_owned(); }
+    let minutes = seconds / 60;
     let days = minutes / (24 * 60);
     let hours = (minutes % (24 * 60)) / 60;
     let mins = minutes % 60;
@@ -879,7 +880,7 @@ mod tests {
         let note = late_note(&daily(), "2026-11-16T09:00:00.000Z", utc("2026-11-18T15:12:00Z")).expect("late");
         assert!(note.contains("due at 16 November, 09:00"), "{note}");
         assert!(note.contains("started at 18 November, 15:12"), "{note}");
-        assert!(note.contains("2 days 6 hours 12 minutes late"), "{note}");
+        assert!(note.contains("2 days 6 hours late"), "a span of days leaves the minutes out: {note}");
         assert!(note.contains("2 later run(s) were skipped"), "{note}");
     }
 

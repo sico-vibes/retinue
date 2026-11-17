@@ -103,6 +103,17 @@ export interface AutomationRun extends JsonRecord {
   scheduledFor?: string | null
   startedAt: string
   finishedAt?: string | null
+  /** What the provider reported this run cost (wave 2). `amount` is null when nothing was reported: unknown, never zero. */
+  cost?: { amount: string | null; currency: 'USD' | string; reported: number; unreported: number } | null
+}
+
+/** A schedule's monthly cost projection, from provider-reported costs only (wave 2). */
+export interface AutomationSpend {
+  currency: 'USD' | string | null
+  projection: string | null
+  basis: 'recent_runs' | 'no_priced_runs' | 'one_off' | 'no_upcoming_runs' | string
+  sampledRuns: number
+  monthRuns: number | null
 }
 
 /** A schedule that prompts a blob by itself. Runs only while the daemon is up. */
@@ -123,6 +134,14 @@ export interface Automation extends JsonRecord {
   pauseReason?: 'user' | 'auto_failures' | 'needs_approval' | null
   running?: boolean
   lastRun?: AutomationRun | null
+  /** Skip a run when the project has not changed since the last good one (wave 2). */
+  skipUnchanged?: boolean
+  /** Stop a run and ask once its reported cost reaches this many dollars ("2.50"); null is off. A check-in, not a budget. */
+  spendCheckUsd?: string | null
+  authorisedBy?: 'owner' | 'bot' | null
+  authorisedMessageId?: string | null
+  approvedAt?: string | null
+  spend?: AutomationSpend | null
 }
 
 export function isAutomation(value: unknown): value is Automation {
@@ -323,6 +342,10 @@ export interface SessionModelLock {
 export interface Session extends JsonRecord {
   id: string
   runtimeId: string
+  /** The bot's own one-line "now" note for its running turn (wave 2, `session.note`); null once the turn ends. */
+  workingNote?: { turnId: string; text: string } | null
+  /** The conversation's latest plan, kept across turns (wave 2). Older than the newest turn when `turnId` differs. */
+  plan?: { items: { text: string; status: string }[]; updatedAt: string; turnId: string } | null
   agentId?: string | null
   provider?: string
   projectPath?: string
@@ -590,7 +613,7 @@ export function applyEvent(snapshot: Snapshot, event: DaemonEvent): Snapshot {
   }
   if (event.type === 'daemon.health') return { ...snapshot, sequence, daemon: { ...(snapshot.daemon ?? {}), ...payload } }
 
-  if (!['message.delta', 'message.completed', 'message.reactions.changed', 'tool.changed', 'command.changed', 'file.changed', 'permission.requested', 'usage.updated', 'turn.completed', 'turn.error', 'session.plan'].includes(event.type)) {
+  if (!['message.delta', 'message.completed', 'message.reactions.changed', 'tool.changed', 'command.changed', 'file.changed', 'permission.requested', 'usage.updated', 'turn.completed', 'turn.error', 'session.plan', 'session.note'].includes(event.type)) {
     return { ...snapshot, sequence }
   }
 
@@ -653,6 +676,12 @@ export function applyEvent(snapshot: Snapshot, event: DaemonEvent): Snapshot {
         if (index >= 0) files[index] = { ...files[index], ...file }
         else files.push(file)
         return { ...session, files }
+      }
+      if (event.type === 'session.note') {
+        // The bot's own "now" line (wave 2). An empty text means its turn ended.
+        const text = typeof payload.text === 'string' ? payload.text.trim() : ''
+        const turnId = typeof payload.turnId === 'string' ? payload.turnId : ''
+        return { ...session, workingNote: text && turnId ? { turnId, text } : null }
       }
       if (event.type === 'session.plan') {
         // The provider sends the whole list each time; a turn row that has not
@@ -753,6 +782,8 @@ export interface BoardTask extends JsonRecord {
   version: number
   createdAt: string
   updatedAt: string
+  /** When the bot asked to check back on this task by itself (wave 2); one run, not a schedule. UTC. */
+  nextCheckAt?: string | null
   assignedAt?: string | null
   startedAt?: string | null
   completedAt?: string | null

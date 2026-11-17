@@ -55,6 +55,10 @@ export interface CatalogModel {
   availability: string | null
   releaseDate?: string | null
   contextWindow?: number | null
+  /** Published per-million-token prices (wave 2); null means unknown, never free. */
+  price?: { inputPerMTok: string; outputPerMTok: string; currency: string; source: string | null; checkedAt: string | null } | null
+  /** Recent failures; `pausedUntil` is set while unattended work on this model is paused (wave 2). */
+  health?: { failures: number; pausedUntil: string | null; reason: string | null } | null
 }
 
 export interface ModelCatalog {
@@ -216,7 +220,35 @@ function parseModel(value: unknown): CatalogModel | null {
     availability: optionalString(value.availability),
     releaseDate: optionalString(value.releaseDate),
     contextWindow: typeof value.contextWindow === 'number' && Number.isFinite(value.contextWindow) && value.contextWindow > 0 ? Math.floor(value.contextWindow) : null,
+    price: parsePrice(value.price),
+    health: parseHealth(value.health),
   }
+}
+
+function parsePrice(value: unknown): CatalogModel['price'] {
+  if (!isRecord(value)) return null
+  const input = optionalString(value.inputPerMTok)
+  const output = optionalString(value.outputPerMTok)
+  if (!input || !output || !Number.isFinite(Number(input)) || !Number.isFinite(Number(output))) return null
+  return { inputPerMTok: input, outputPerMTok: output, currency: optionalString(value.currency) ?? 'USD', source: optionalString(value.source), checkedAt: optionalString(value.checkedAt) }
+}
+
+function parseHealth(value: unknown): CatalogModel['health'] {
+  if (!isRecord(value)) return null
+  const failures = typeof value.failures === 'number' && Number.isFinite(value.failures) ? Math.max(0, Math.floor(value.failures)) : 0
+  return { failures, pausedUntil: optionalString(value.pausedUntil), reason: optionalString(value.reason) }
+}
+
+/** One short cue for a model row (wave 2): its published price, and a pause on unattended work. An unknown price says nothing rather than $0. */
+export function modelCue(model: Pick<CatalogModel, 'price' | 'health'>, nowMs = Date.now()): { price: string | null; paused: string | null } {
+  const money = (text: string) => {
+    const value = Number(text)
+    return value < 1 || !Number.isInteger(value) ? `$${value.toFixed(2)}` : `$${value}`
+  }
+  const price = model.price && model.price.currency === 'USD' ? `${money(model.price.inputPerMTok)} in · ${money(model.price.outputPerMTok)} out per million tokens` : null
+  const until = model.health?.pausedUntil ? Date.parse(model.health.pausedUntil) : NaN
+  const paused = Number.isFinite(until) && until > nowMs ? `Paused for unattended work until ${new Date(until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : null
+  return { price, paused }
 }
 
 export function parseModelCatalog(value: unknown): ModelCatalog | null {

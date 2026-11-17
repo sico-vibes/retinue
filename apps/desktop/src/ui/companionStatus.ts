@@ -60,6 +60,11 @@ export function deriveCompanionStatus(input: { connected: boolean; runtime?: Run
   const activeTurnId = activeTurn?.id ?? session?.turnId
   const belongsToActiveTurn = (item: Record<string, unknown>) => !activeTurnId || item.turnId === activeTurnId
   const latestTool = [...(session?.tools ?? [])].reverse().find((item) => belongsToActiveTurn(item) && ['running', 'pending', 'started'].includes(String(item.state ?? '').toLowerCase()))
+  // The bot's own "now" note (wave 2) comes ahead of the tool-derived label, for its own turn only.
+  const note = session?.workingNote
+  if (note?.text && ['working', 'starting'].includes(session?.state ?? '') && (!activeTurnId || note.turnId === activeTurnId)) {
+    return { mood: latestTool ? 'tool_activity' : 'working', label: note.text.length > 96 ? `${note.text.slice(0, 95)}…` : note.text }
+  }
   if (latestTool) return { mood: 'tool_activity', label: doingNowLabel(latestTool) }
   // No tool is running and nothing has arrived for a while: say who it is waiting on.
   if (['working', 'starting'].includes(session?.state ?? '') && session?.id) {

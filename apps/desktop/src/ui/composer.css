@@ -384,3 +384,6 @@
 .session-effort-trigger > .effort-sparks { z-index: -1; }
 .session-effort-control.max .session-effort-trigger { color: var(--effort-spark); }
 @media (prefers-reduced-motion: reduce) { .effort-track-fill, .effort-track-thumb, .effort-sparks { transition: none; } }
+
+/* Model menu cues (wave 2): published price, or a pause on unattended work. */
+.composer-menu-text small.model-cue.paused { color: var(--danger-ink); }

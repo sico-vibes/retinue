@@ -21,3 +21,6 @@
 @keyframes plan-mark-spin { to { transform: rotate(360deg); } }
 @keyframes plan-mark-draw { to { stroke-dashoffset: 0; } }
 @media (prefers-reduced-motion: reduce) { .plan-mark-ring, .plan-mark-glyph { animation: none; transition: none; } .plan-mark-glyph { stroke-dashoffset: 0; } }
+/* A plan the conversation kept from an earlier turn (wave 2). */
+.turn-plan.earlier { border-style: dashed; }
+.turn-plan-earlier { margin: 0 0 6px; color: var(--text-3); font-size: var(--fs-xs); }

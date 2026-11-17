@@ -5747,7 +5747,7 @@ impl Storage {
         )?;
         let mut dto = automation_read(&tx, id)?;
         let changed = automation_definition(&existing) != automation_definition(&dto);
-        let authorised = approve || !dto["pauseReason"].as_str().is_some_and(|reason| reason == "needs_approval");
+        let authorised = approve || dto["pauseReason"].as_str().is_none_or(|reason| reason != "needs_approval");
         if authorised && (changed || approve) {
             let message_id = automation_message_id(input, "sourceMessageId")?;
             tx.execute(

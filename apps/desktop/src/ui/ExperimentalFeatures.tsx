@@ -34,29 +34,37 @@ export function highlightMatch(text: string, query: string): ReactNode {
   const end = index + query.trim().length
   return <>{text.slice(0, index)}<mark>{text.slice(index, end)}</mark>{text.slice(end)}</>
 }
-export function MessageSearch({ agents, onChoose, onClose }: { agents: Agent[]; onChoose: (result: MessageSearchResult) => void; onClose: () => void }) {
+export function MessageSearch({ agents, currentSessionId = null, onChoose, onClose }: { agents: Agent[]; currentSessionId?: string | null; onChoose: (result: MessageSearchResult) => void; onClose: () => void }) {
   const Noun = useEntityNoun({ capital: true })
   const { ref, close } = useDialogAccessibility(onClose)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<MessageSearchResult[]>([])
+  const [truncated, setTruncated] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [activeIndex, setActiveIndex] = useState(0)
+  // Narrow to the open conversation (wave 2); the daemon checks the scope itself.
+  const [here, setHere] = useState(false)
+  const scopeId = here && currentSessionId ? currentSessionId : null
   useEffect(() => {
     let active = true
-    setResults([]); setError(null); setActiveIndex(0); setLoading(!!query.trim())
+    setResults([]); setTruncated(false); setError(null); setActiveIndex(0); setLoading(!!query.trim())
     if (!query.trim()) return
     const timer = window.setTimeout(() => {
-      void rpc<{ results: MessageSearchResult[] }>('search.messages', { query: query.trim() }).then((r) => { if (active) setResults(r.results) }).catch(() => { if (active) setError('Could not search conversations. Try again.') }).finally(() => { if (active) setLoading(false) })
+      void rpc<{ results: MessageSearchResult[]; truncated?: boolean }>('search.messages', { query: query.trim(), ...(scopeId ? { sessionId: scopeId } : {}) }).then((r) => { if (active) { setResults(r.results); setTruncated(r.truncated === true) } }).catch(() => { if (active) setError('Could not search conversations. Try again.') }).finally(() => { if (active) setLoading(false) })
     }, 150)
     return () => { active = false; window.clearTimeout(timer) }
-  }, [query])
+  }, [query, scopeId])
   return <div className="sheet-backdrop quick-switcher-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) close() }}><section className="quick-switcher" ref={ref} role="dialog" aria-modal="true" aria-label="Search messages">
-    <label className="quick-switcher-search"><input data-dialog-initial-focus aria-label="Search message text" aria-controls="message-search-results" aria-activedescendant={results.length ? `message-search-${activeIndex}` : undefined} value={query} maxLength={200} placeholder="Search all conversations" onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && results.length) { e.preventDefault(); setActiveIndex((activeIndex + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length) } if (e.key === 'Enter' && results[activeIndex]) { e.preventDefault(); onChoose(results[activeIndex]); close() } }} /><button type="button" className="icon-button" aria-label="Close search" onClick={close}><X size={16} /></button></label>
+    <label className="quick-switcher-search"><input data-dialog-initial-focus aria-label="Search message text" aria-controls="message-search-results" aria-activedescendant={results.length ? `message-search-${activeIndex}` : undefined} value={query} maxLength={200} placeholder={scopeId ? 'Search this conversation' : 'Search all conversations'} onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && results.length) { e.preventDefault(); setActiveIndex((activeIndex + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length) } if (e.key === 'Enter' && results[activeIndex]) { e.preventDefault(); onChoose(results[activeIndex]); close() } }} /><button type="button" className="icon-button" aria-label="Close search" onClick={close}><X size={16} /></button></label>
+    {currentSessionId && <div className="message-search-scope" role="radiogroup" aria-label="Where to search">
+      <button type="button" role="radio" aria-checked={!here} className={!here ? 'active' : ''} onClick={() => setHere(false)}>All conversations</button>
+      <button type="button" role="radio" aria-checked={here} className={here ? 'active' : ''} onClick={() => setHere(true)}>This conversation</button>
+    </div>}
     <div id="message-search-results" className="quick-switcher-results" role="listbox" aria-label="Matching messages">{results.map((result, i) => {
       const agent = agents.find((a) => a.id === result.blobId) ?? result.blob
       return <button type="button" role="option" aria-selected={activeIndex === i} id={`message-search-${i}`} key={result.messageId} className={`menu-item message-search-result ${activeIndex === i ? 'active' : ''}`} onMouseMove={() => setActiveIndex(i)} onClick={() => { onChoose(result); close() }}>{agent && <BlobCanvas decorative color={agentColorHex(agent.color)} size={28} mood="idle" look={agentLook(agent)} label={agent.name} />}<span className="quick-switcher-copy"><strong>{agent?.name ?? Noun} · {result.title}</strong><small>{highlightMatch(result.snippet, query)}</small><time dateTime={result.createdAt}>{new Date(result.createdAt).toLocaleString()} · {result.role}</time></span></button>
-    })}</div><p className="quick-switcher-empty" role="status">{error ?? (loading ? 'Searching…' : !query.trim() ? 'Search saved message text.' : !results.length ? 'No matching messages.' : `${results.length} matching messages`)}</p>
+    })}</div><p className="quick-switcher-empty" role="status">{error ?? (loading ? 'Searching…' : !query.trim() ? 'Search saved message text.' : !results.length ? 'No matching messages.' : truncated ? `The ${results.length} newest matches. Add words to narrow it.` : `${results.length} matching messages`)}</p>
   </section></div>
 }
 

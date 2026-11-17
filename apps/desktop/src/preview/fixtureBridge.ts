@@ -110,6 +110,16 @@ if (fixturePreset() === 'schedule-retry') {
   fixtureAutomations.push({ ...base, id: 'auto-watch', name: 'Watch the build', prompt: 'Check the nightly build.', schedule: { kind: 'cron', cron: '0 * * * *', timezone: 'UTC' }, lastRunAt: quiet.startedAt, lastRun: quiet })
   fixtureRuns['auto-tidy'] = [changed]
   fixtureRuns['auto-watch'] = [quiet]
+  // Wave 2: reported cost, a projection, a skip when nothing changed and a stop at the spend check-in.
+  const tidy = fixtureAutomations.find((item) => item.id === 'auto-tidy')!
+  Object.assign(tidy, { spend: { currency: null, projection: null, basis: 'no_priced_runs', sampledRuns: 0, monthRuns: 30 }, spendCheckUsd: null, skipUnchanged: false })
+  const watch = fixtureAutomations.find((item) => item.id === 'auto-watch')!
+  Object.assign(watch, { spend: { currency: 'USD', projection: '18.4', basis: 'recent_runs', sampledRuns: 6, monthRuns: 720 }, spendCheckUsd: '0.50', skipUnchanged: true })
+  Object.assign(quiet, { cost: { amount: '0.0261', currency: 'USD', reported: 3, unreported: 0 } })
+  fixtureRuns['auto-watch'].push(
+    { id: 'run-same', automationId: 'auto-watch', sessionId: null, status: 'skipped', reason: 'unchanged', scheduledFor: at(120), startedAt: at(120), finishedAt: at(120), cost: { amount: null, currency: 'USD', reported: 0, unreported: 0 } },
+    { id: 'run-spend', automationId: 'auto-watch', sessionId: null, status: 'cancelled', reason: 'spend_check', scheduledFor: at(180), startedAt: at(180), finishedAt: at(176), cost: { amount: '0.52', currency: 'USD', reported: 4, unreported: 0 } },
+  )
 }
 /** Preview-only Manager knowledge (FIX36 D3): structured facts and a playbook. */
 const fixtureManagerFacts: Array<Record<string, unknown>> = [
@@ -763,6 +773,26 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     session.updatedAt = new Date().toISOString()
     notifyFixtureDaemon('session.changed', { session: { ...session } })
     return { session } as T
+  }
+  if (method === 'reach.statement') {
+    // Wave 2: the daemon's plain statement of what a conversation's bot can reach.
+    const session = sessions.find((item) => item.id === params.sessionId)
+    const agent = agents.find((item) => item.id === session?.agentId)
+    const name = agent?.name ?? 'This bot'
+    const folder = session?.projectPath ?? null
+    return { reach: {
+      sessionId: session?.id ?? null, agentId: agent?.id ?? null, botName: name,
+      statement: `${name} runs as you, as your own Windows account, in ${folder ?? 'no project folder'}, with your network and the tools you have installed.`,
+      folder, isolation: 'shared', runsAs: 'your own Windows account', network: 'your network', permissionMode: 'ask', permissionSentence: 'Every tool call asks you first.', unattended: false,
+      tools: [
+        { id: 'files', label: 'Files in its project folder', on: !!folder },
+        { id: 'commands', label: 'Commands in a terminal', on: true },
+        { id: 'internet', label: 'The internet', on: true },
+        { id: 'team', label: 'Messages to teammates', on: true },
+        { id: 'computer', label: 'Your linked computer', on: false },
+      ],
+      limits: ['It runs as your own Windows account, so it can change anything you can.', 'Every tool call asks you first.', "The coding agent's own sandbox, if it has one, is its own: Retinue does not add one."],
+    } } as T
   }
   if (method === 'search.messages') {
     const query = String(params.query ?? '').trim().toLowerCase()

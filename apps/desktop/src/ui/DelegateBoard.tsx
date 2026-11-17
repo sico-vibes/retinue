@@ -7,7 +7,7 @@ import { BlobCanvas } from '../blob/BlobCanvas'
 import { agentLook } from '../blob/look'
 import { agentColorHex } from './agentColor'
 import { Select } from './Select'
-import { taskStateLabel, SCHEDULE_OUTCOME_LABEL, draftTasks, finishedTasks, laneAvailability, laneTasks, assignableAgents, scheduleSummary, scheduledTasks } from './taskModel'
+import { checkBackLabel, taskStateLabel, SCHEDULE_OUTCOME_LABEL, draftTasks, finishedTasks, laneAvailability, laneTasks, assignableAgents, scheduleSummary, scheduledTasks } from './taskModel'
 import { describeNextRun } from './automationSchedule'
 import { useEntityNoun } from './vocabulary'
 
@@ -89,7 +89,7 @@ export function DelegateBoard({ tasks, agents, projects, nowMs, connected, busy,
     }
   }
 
-  const meta = (task: BoardTask) => [projectName(task.projectId), task.estimateMinutes ? `about ${task.estimateMinutes} min` : null, task.images?.length ? `${task.images.length} image${task.images.length === 1 ? '' : 's'}` : null, task.scheduleState === 'missed' ? 'Missed its time' : null].filter(Boolean).join(' · ')
+  const meta = (task: BoardTask) => [projectName(task.projectId), task.estimateMinutes ? `about ${task.estimateMinutes} min` : null, task.images?.length ? `${task.images.length} image${task.images.length === 1 ? '' : 's'}` : null, task.scheduleState === 'missed' ? 'Missed its time' : null, checkBackLabel(task, nowMs, describeNextRun)].filter(Boolean).join(' · ')
 
   return <div className="delegate-board">
     {dragging && card && <div className={`delegate-draft delegate-drag-card ${card.phase}`} style={{ width: card.width, transform: `translate3d(${card.x}px, ${card.y}px, 0)` }} aria-hidden="true">
@@ -146,7 +146,7 @@ export function DelegateBoard({ tasks, agents, projects, nowMs, connected, busy,
               <span className="delegate-lane-name"><strong>{agent.name}</strong>{runtimeName(agent).toLowerCase() !== agent.name.trim().toLowerCase() && <small>{runtimeName(agent)}</small>}</span>
               <span className="delegate-badges"><span className={`delegate-availability tone-${availability.tone}`}>{availability.label}</span>{availability.queued > 0 && <span className="delegate-availability">{availability.queued} queued</span>}</span>
             </header>
-            {lane.length > 0 && <ul className="delegate-chips">{lane.map((task) => <li key={task.id}><button type="button" className={`delegate-chip tone-${task.state}`} onClick={() => onOpen(task)}><span className="delegate-dot" aria-hidden="true" /><span className="delegate-chip-title">{task.title}</span><small>{task.state === 'queued' && task.queuePosition != null ? `Queued ${task.queuePosition + 1}` : taskStateLabel(task)}</small></button></li>)}</ul>}
+            {lane.length > 0 && <ul className="delegate-chips">{lane.map((task) => <li key={task.id}><button type="button" className={`delegate-chip tone-${task.state}`} onClick={() => onOpen(task)}><span className="delegate-dot" aria-hidden="true" /><span className="delegate-chip-title">{task.title}</span><small>{task.state === 'queued' && task.queuePosition != null ? `Queued ${task.queuePosition + 1}` : checkBackLabel(task, nowMs, describeNextRun) ?? taskStateLabel(task)}</small></button></li>)}</ul>}
           </section>
         </li>
       })}</ul>}

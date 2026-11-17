@@ -11,6 +11,14 @@ export const TASK_STATE_LABEL: Record<string, string> = {
  * "Starting" until the daemon's own answer replaces it (`pendingDispatch`); the
  * stored state behind it is the one the board already knew.
  */
+/** "Checking back in 3 h" while a bot's planned check is ahead and the task is idle (wave 2), else null. */
+export function checkBackLabel(task: Pick<BoardTask, 'state' | 'nextCheckAt'>, nowMs: number, describe: (at: string, nowMs: number) => string): string | null {
+  if (!task.nextCheckAt || task.state === 'running' || task.state === 'queued') return null
+  const at = Date.parse(task.nextCheckAt)
+  if (!Number.isFinite(at) || at <= nowMs) return null
+  return `Checking back ${describe(task.nextCheckAt, nowMs)}`
+}
+
 export function taskStateLabel(task: Pick<BoardTask, 'state' | 'pendingDispatch'>): string {
   if (task.pendingDispatch) return 'Starting'
   return TASK_STATE_LABEL[task.state] ?? task.state

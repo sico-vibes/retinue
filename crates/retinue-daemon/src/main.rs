@@ -1197,7 +1197,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "outside.status" | "outside.preview" | "outside.enable" | "outside.disable" | "outside.sessions" => outside::rpc(st, method, &p).await,
         "external.status" | "external.enable" | "external.disable" | "external.setTier" | "external.setFullAccess" | "external.rotate" => external::rpc(st, method, &p).await,
         "automation.create" | "automation.list" | "automation.get" | "automation.update" | "automation.pause" | "automation.resume" | "automation.delete" | "automation.run_now" | "automation.runs" | "automation.preview" => automations::rpc(st, method, &p).await,
-        "task.create" | "task.list" | "task.get" | "task.update" | "task.dispatch" | "task.unassign" | "task.reorder" | "task.cancel" | "task.stop" | "task.review" | "task.runs" | "task.image" => tasks::rpc(st, method, &p).await,
+        "task.create" | "task.list" | "task.get" | "task.update" | "task.dispatch" | "task.unassign" | "task.reorder" | "task.cancel" | "task.stop" | "task.review" | "task.runs" | "task.image" | "task.checkBack" => tasks::rpc(st, method, &p).await,
         "delegation.list" | "delegation.cancel" | "delegation.cancelGroup" => delegations::rpc(st, method, &p).await,
         "memory.list" | "memory.get" | "memory.create" | "memory.update" | "memory.approve" | "memory.delete" | "memory.restore" => memory::rpc(st, method, &p).await,
         // Section D: connectors. Desktop only, `never` remote.
@@ -16454,6 +16454,24 @@ mod task_board_tests {
         assert_eq!(dispatch(&st,"task.create",json!({"title":""})).await.unwrap_err().1.code,"invalid_argument");
         assert_eq!(dispatch(&st,"task.get",json!({"taskId":"missing"})).await.unwrap_err().1.code,"not_found");
         assert_eq!(dispatch(&st,"task.runs",json!({"taskId":"missing"})).await.unwrap_err().1.code,"not_found");
+    }
+
+    /// Wave 2: `task.checkBack` reaches the tasks module through dispatch (it once did not), plans one
+    /// check ahead, refuses a time in the past and a stale version, and clears with null.
+    #[tokio::test]
+    async fn task_check_back_is_dispatched_planned_and_cleared(){
+        let(st,_)=task_state();
+        let created=dispatch(&st,"task.create",json!({"title":"Watch the deploy"})).await.unwrap();
+        let id=created["task"]["id"].as_str().unwrap().to_owned();
+        let version=created["task"]["version"].clone();
+        let at=(Utc::now()+chrono::Duration::hours(2)).to_rfc3339();
+        let planned=dispatch(&st,"task.checkBack",json!({"taskId":id,"expectedVersion":version,"at":at})).await.unwrap();
+        assert!(planned["task"]["nextCheckAt"].as_str().is_some(),"{planned}");
+        let past=(Utc::now()-chrono::Duration::hours(1)).to_rfc3339();
+        assert_eq!(dispatch(&st,"task.checkBack",json!({"taskId":id,"expectedVersion":planned["task"]["version"],"at":past})).await.unwrap_err().1.code,"invalid_argument");
+        assert!(dispatch(&st,"task.checkBack",json!({"taskId":id,"expectedVersion":version,"at":null})).await.is_err(),"a stale version is refused");
+        let cleared=dispatch(&st,"task.checkBack",json!({"taskId":id,"expectedVersion":planned["task"]["version"],"at":null})).await.unwrap();
+        assert!(cleared["task"]["nextCheckAt"].is_null(),"{cleared}");
     }
 
     /// A data folder for the daemon and a staged PNG, as the desktop shell writes one before a task is saved.

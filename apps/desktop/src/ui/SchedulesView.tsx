@@ -15,7 +15,7 @@ import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
 import { Select } from './Select'
 import { ScheduleWhen } from './ScheduleWhen'
 import {
-  RUN_STATUS_LABEL, defaultDraft, describeNextRun, describeSchedule, draftToSchedule, localTimeZone, needsManualRetry, runReasonText, scheduleToDraft,
+  RUN_STATUS_LABEL, defaultDraft, describeNextRun, describeSchedule, draftToSchedule, formatUsd, localTimeZone, needsManualRetry, parseSpendCheck, runCostText, runReasonText, scheduleToDraft, spendLine,
   type DaemonSchedule, type ScheduleDraft, type SchedulePreset,
 } from './automationSchedule'
 import './schedules.css'
@@ -30,6 +30,10 @@ export interface AutomationInput {
   approvalMode: 'plan' | 'auto'
   maxRuntimeSecs: number
   enabled?: boolean
+  /** Skip a run when the project has not changed (wave 2). */
+  skipUnchanged?: boolean
+  /** Dollars as a decimal string, or null for no check-in (wave 2). */
+  spendCheckUsd?: string | null
 }
 
 export interface SchedulesViewProps {
@@ -220,6 +224,8 @@ function ScheduleCard({ automation, agent, nowMs, busy, onToggle, onRunNow, onEd
     : automation.nextRunAt ? `Next run ${describeNextRun(automation.nextRunAt, nowMs)}`
     : 'No upcoming run'
   const headingId = `schedule-${automation.id}`
+  const spend = spendLine(automation.spend)
+  const checkIn = formatUsd(automation.spendCheckUsd)
 
   return <li className={`schedule-card${automation.enabled ? '' : ' off'}${automation.running ? ' running' : ''}`}>
     <div className="schedule-row">
@@ -228,6 +234,7 @@ function ScheduleCard({ automation, agent, nowMs, busy, onToggle, onRunNow, onEd
         <strong id={headingId} className="schedule-name">{automation.name}</strong>
         <span className="schedule-sub">{agent?.name ?? `Unknown ${noun}`} · {describeSchedule(automation.schedule)}</span>
         <span className="schedule-sub schedule-state" role="status">{state}{automation.approvalMode === 'plan' ? ' · read-only' : ''}</span>
+        {(spend || checkIn || automation.skipUnchanged) && <span className="schedule-sub schedule-spend">{[spend, checkIn ? `check-in at ${checkIn} a run` : null, automation.skipUnchanged ? 'skips when nothing changed' : null].filter(Boolean).join(' · ')}</span>}
       </div>
       <div className="schedule-actions">
         {proposal
@@ -252,6 +259,7 @@ function ScheduleCard({ automation, agent, nowMs, busy, onToggle, onRunNow, onEd
         <i className={`run-dot ${statusDot(run.status)}`} aria-hidden="true" />
         <span className="run-when">{stamp(run.startedAt)}</span>
         <span className="run-status">{RUN_STATUS_LABEL[run.status] ?? run.status}{runReasonText(run.reason) ? ` · ${runReasonText(run.reason)}` : ''}</span>
+        {runCostText(run.cost) && <span className="run-cost" title="What the provider reported for this run">{runCostText(run.cost)}</span>}
         {run.sessionId && onOpenSession && <button type="button" className="queue-link" onClick={() => onOpenSession(String(run.sessionId))}>Open conversation</button>}
       </li>)}</ol>}
     </div>}
@@ -278,19 +286,22 @@ function AutomationEditor({ existing, template, agents, defaultAgentId, onClose,
   const [approvalMode, setApprovalMode] = useState<'plan' | 'auto'>(existing?.approvalMode ?? template?.approvalMode ?? 'auto')
   const [sessionMode, setSessionMode] = useState<'new' | 'reuse'>(existing?.sessionMode ?? 'new')
   const [maxRuntime, setMaxRuntime] = useState(String(existing?.maxRuntimeSecs ?? 1800))
+  const [skipUnchanged, setSkipUnchanged] = useState(existing?.skipUnchanged ?? false)
+  const [spendCheck, setSpendCheck] = useState(existing?.spendCheckUsd ?? '')
+  const spendParsed = parseSpendCheck(spendCheck)
   const [saving, setSaving] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
 
   const schedule = useMemo(() => draftToSchedule(draft), [draft])
 
-  const valid = name.trim().length > 0 && name.trim().length <= 80 && prompt.trim().length > 0 && prompt.length <= 8000 && !!agentId && !!schedule
+  const valid = name.trim().length > 0 && name.trim().length <= 80 && prompt.trim().length > 0 && prompt.length <= 8000 && !!agentId && !!schedule && spendParsed.ok
   const set = (patch: Partial<ScheduleDraft>) => setDraft((current) => ({ ...current, ...patch }))
   const submit = async () => {
     if (!valid || !schedule || saving) return
     setSaving(true)
     setFailure(null)
     try {
-      await onSave({ agentId, name: name.trim(), prompt: prompt.trim(), schedule, sessionMode, approvalMode, maxRuntimeSecs: Number(maxRuntime) })
+      await onSave({ agentId, name: name.trim(), prompt: prompt.trim(), schedule, sessionMode, approvalMode, maxRuntimeSecs: Number(maxRuntime), skipUnchanged, spendCheckUsd: spendParsed.ok ? spendParsed.value : null })
     } catch (reason) {
       setFailure(rpcFailure(reason).message)
       setSaving(false)
@@ -325,6 +336,11 @@ function AutomationEditor({ existing, template, agents, defaultAgentId, onClose,
       <div className="blob-field"><span>Stop a run after</span>
         <Select ariaLabel="Stop a run after" variant="field" value={maxRuntime} onChange={setMaxRuntime} options={RUNTIME_CHOICES} />
       </div>
+      <label className="schedule-check"><input type="checkbox" checked={skipUnchanged} onChange={(event) => setSkipUnchanged(event.target.checked)} /><span><strong>Skip when nothing changed</strong><small>If the project has no new commit or edit since the last good run, the run is skipped and no model is called.</small></span></label>
+      <label className="blob-field"><span>Spend check-in <HelpTip align="start" text="A check-in, not a budget. It counts only what the provider reports, so a run whose cost isn't reported is never stopped by it." /></span>
+        <span className="schedule-money"><span aria-hidden="true">$</span><input inputMode="decimal" value={spendCheck} placeholder="Off" aria-invalid={!spendParsed.ok} onChange={(event) => setSpendCheck(event.target.value)} /></span>
+        <small className={spendParsed.ok ? 'schedule-zone' : 'schedule-zone over'}>{spendParsed.ok ? 'A run stops and asks you once its reported cost reaches this. Leave it empty for no check-in.' : 'Give dollars, like 2.50, up to 10,000.'}</small>
+      </label>
       {failure && <p className="schedules-problem" role="alert">{failure}</p>}
       <div className="blob-dialog-actions">
         <button type="button" className="secondary-button" onClick={close}>Cancel</button>

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { Brain, Check, ChevronDown, Flame, Gauge, LoaderCircle, RotateCw, Search, Signal, SignalHigh, SignalLow, SignalMedium, SignalZero, Zap, type LucideIcon } from 'lucide-react'
 import type { Agent, ModelChangePlan, Session, SessionModelLock } from '../types'
 import { rpc } from '../tauri'
-import { parseModelCatalog, type CatalogModel, type ModelCatalog, type ServiceTierOption } from '../executionContract'
+import { modelCue, parseModelCatalog, type CatalogModel, type ModelCatalog, type ServiceTierOption } from '../executionContract'
 import { ConfirmDialog } from './BlobPage'
 import { fetchCached, useCachedRpc } from './catalogCache'
 import { LOCKED_CONTROL_TOOLTIP, moveMenuFocus, usePopoverDismiss } from './ComposerControls'
@@ -603,7 +603,7 @@ function ModelMenu({ provider, models, model, label, ariaLabel, fastTier, fastOn
         {visible.map((item, index) => <div key={item.id} role="none">
           {item.group && item.group !== visible[index - 1]?.group && <div className="composer-menu-group" role="presentation">{item.group}</div>}
           <button type="button" role="menuitemradio" aria-checked={model === item.id} className="composer-menu-item" data-value={item.id} disabled={saving} onClick={() => choose(item.id)}>
-            <span className="composer-menu-text"><strong>{presentedModelName(provider, item)}</strong></span>
+            <span className="composer-menu-text"><strong>{presentedModelName(provider, item)}</strong><ModelCueLine model={item} /></span>
             {model === item.id && <Check size={14} className="composer-menu-check" aria-hidden="true" />}
           </button>
         </div>)}
@@ -632,6 +632,14 @@ export function filterModels(provider: string, models: readonly CatalogModel[], 
     const haystack = `${presentedModelName(provider, item)} ${item.id} ${item.group ?? ''}`.toLocaleLowerCase()
     return words.every((word) => haystack.includes(word))
   })
+}
+
+/** A model row's price, or its unattended pause (wave 2). An unknown price shows nothing, never $0. */
+function ModelCueLine({ model }: { model: CatalogModel }) {
+  const cue = modelCue(model)
+  if (cue.paused) return <small className="model-cue paused" title={model.health?.reason ?? undefined}>{cue.paused}</small>
+  if (cue.price) return <small className="model-cue" title={model.price?.checkedAt ? `Published price, checked ${model.price.checkedAt}` : 'Published price'}>{cue.price}</small>
+  return null
 }
 
 function resolveProviderStyle(runtimeProvider: string, modelProvider: string | null | undefined, modelId: string | null | undefined, displayName?: string): EffortMeterStyle {
