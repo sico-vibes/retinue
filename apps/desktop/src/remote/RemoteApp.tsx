@@ -19,6 +19,7 @@ import type { RemoteConnectionStatus, RemoteMe } from './remoteTransport'
 import { codeFromHash, createPreviewDeviceApi, describeThisDevice, errorCode, previewDeviceOptionsFromUrl, type RemoteDeviceApi } from './deviceApi'
 import { applyUpdate, onUpdateReady } from './serviceWorker'
 import { PushCard } from './PushCard'
+import { MachinePicker, PhoneMachine, usePhoneMachines } from './PhoneMachines'
 
 type Screen = 'checking' | 'connect' | 'waiting' | 'bots' | 'chat' | 'device'
 const TIER_WORD: Record<RemoteTier, string> = { viewer: 'View only', chat: 'Chat', operator: 'Chat and approve' }
@@ -267,6 +268,11 @@ export function RemoteApp({ device: deviceProp, pollMs = PAIR_POLL_MS }: { devic
   }, [listed, loaded])
   const openAgent = (id: string) => { setAgentId(id); setConversationId(null); setListOpen(false); setScreen('chat') }
   const preApproval = screen === 'checking' || screen === 'connect' || screen === 'waiting'
+  // The machines this host is linked to (17 November 2026); null is this host itself.
+  const { machines: linked } = usePhoneMachines(online && !preApproval)
+  const [machineId, setMachineId] = useState<string | null>(null)
+  const pickedMachine = machineId ? linked.find((item) => item.id === machineId) ?? null : null
+  const onAnotherMachine = !!pickedMachine && (screen === 'bots' || screen === 'chat')
 
   return <div className="rm-stage" data-layout={layout}>
     <div className="rm-phone" data-screen={screen}>
@@ -294,7 +300,9 @@ export function RemoteApp({ device: deviceProp, pollMs = PAIR_POLL_MS }: { devic
         </header>
         {!online && <p className="rm-connection" role="status">{connection === 'offline' ? `Offline. Retinue will reconnect to ${hostName} when the network is back.` : `Reconnecting to ${hostName}…`}</p>}
         {me?.quietHoursActive && <p className="rm-connection quiet" role="status">Quiet hours: this device can read but not send.</p>}
-        <div className={wide ? 'rm-workspace' : 'rm-content'}>
+        {(screen === 'bots' || screen === 'chat') && <MachinePicker hostName={hostName} machines={linked} current={pickedMachine?.id ?? null} onPick={(id) => { setMachineId(id); setScreen('bots') }} />}
+        {onAnotherMachine && pickedMachine && <div className="rm-content"><PhoneMachine key={pickedMachine.id} machine={pickedMachine} hostName={hostName} tier={tier} online={online} quiet={me?.quietHoursActive === true} /></div>}
+        {!onAnotherMachine && <div className={wide ? 'rm-workspace' : 'rm-content'}>
         {(wide || screen === 'bots') && <aside className="rm-roster" aria-label={nouns}>
           {wide && <>
             <div className="rm-roster-top"><strong>{hostName}</strong><button type="button" className="rm-text-button" onClick={() => setScreen(screen === 'device' ? activeAgent ? 'chat' : 'bots' : 'device')}>This device</button></div>
@@ -309,7 +317,7 @@ export function RemoteApp({ device: deviceProp, pollMs = PAIR_POLL_MS }: { devic
             canApprove={tier === 'operator' && me?.approvalsFromRemote === true} quiet={me?.quietHoursActive === true} agents={agents} />}
           {screen === 'device' && me && <DeviceScreen me={me} noun={noun} onLogout={() => void logout()} layoutOverride={override} onLayoutChange={changeOverride} />}
         </main>
-        </div>
+        </div>}
         {!wide && <nav className="rm-tabs" aria-label="Sections">
           <button type="button" className={screen === 'bots' || screen === 'chat' ? 'on' : ''} onClick={() => setScreen('bots')}><Monitor size={19} aria-hidden="true" /><span>{nouns.charAt(0).toUpperCase() + nouns.slice(1)}</span>{waiting.length > 0 && <i className="rm-badge" aria-label={`${waiting.length} need you`}>{waiting.length}</i>}</button>
           <button type="button" className={screen === 'device' ? 'on' : ''} onClick={() => setScreen('device')}><Smartphone size={19} aria-hidden="true" /><span>This device</span></button>

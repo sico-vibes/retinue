@@ -5,6 +5,7 @@ import { machineFreshness, machineKindWord, normalizeMachineSessions, normalizeM
 import { leafOf, repoNameOf } from './MachineRemote'
 import { suggestionsFrom } from './ProjectSuggestions'
 import { signInLine } from './ConnectorsPage'
+import { effectiveTier } from '../remote/PhoneMachines'
 
 describe('another machine', () => {
   it('reads kind and live from the link row, and defaults them for an older daemon', () => {
@@ -68,5 +69,15 @@ describe('connector sign-in', () => {
     expect(signInLine({ ...base, status: 'pending' })).toMatch(/in your browser/)
     expect(signInLine({ ...base, status: 'authorized' })).toBe('Signed in')
     expect(signInLine({ ...base, status: 'error', detail: 'The sign-in was not completed in time. Try again.' })).toBe('The sign-in was not completed in time. Try again.')
+  })
+})
+
+describe('the phone through its host', () => {
+  it('works at the lower of its own level and the host link', () => {
+    expect(effectiveTier('operator', 'chat')).toBe('chat')
+    expect(effectiveTier('chat', 'operator')).toBe('chat')
+    expect(effectiveTier('operator', 'operator')).toBe('operator')
+    expect(effectiveTier('viewer', 'operator')).toBe('viewer')
+    expect(effectiveTier('operator', 'unknown')).toBe('viewer')
   })
 })
