@@ -48,6 +48,8 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { page: 'Appearance', group: 'Employee list', label: 'Coding agent logos', keywords: 'claude codex opencode logo sidebar header runtime' },
   { page: 'Appearance', group: 'Employee list', label: 'Model and effort under the name', keywords: 'sidebar subtitle model effort' },
   { page: 'Chat', group: 'Sending', label: 'Send a message with', keywords: 'enter ctrl shift send shortcut new line composer' },
+  { page: 'Chat', group: 'What a bot reads first', label: 'Context before your message', keywords: 'prompt order context first instructions compare' },
+  { page: 'Machines', group: 'Projects from your other devices', label: 'Let them start projects here', keywords: 'phone laptop vps clone folder remote project base folder' },
   { page: 'Chat', group: 'Sending', label: 'When you send while an employee is working', keywords: 'steer queue message enter keyboard busy send' },
   { page: 'Chat', group: 'Sending', label: 'Steer a running Codex turn', keywords: 'steer codex running' },
   { page: 'Chat', group: 'Sending', label: 'Steer a running Claude Code turn', keywords: 'steer claude running send now' },

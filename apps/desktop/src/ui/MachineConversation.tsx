@@ -1,12 +1,15 @@
-// Phase 4: a bot on another machine. Its conversations are read-only here, because only one
-// machine runs a conversation. The one action is Take over, which moves it to this machine.
+// A bot on another machine. Its conversation runs there (only one machine runs a conversation); from here
+// the owner reads it live, messages, steers or stops it, answers its approvals, or takes it over.
+// Since 17 November 2026 the daemon holds a live socket to each linked machine and announces changes
+// with `machine.session.changed` (ids only), so this view re-reads on change and polls only as a fallback.
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { CircleAlert, CircleCheck, FolderGit2, GitBranch, Info, Laptop, LoaderCircle, Plus, RefreshCw, SendHorizontal, Square, X } from 'lucide-react'
-import type { Session } from '../types'
+import type { PermissionRequest, Session } from '../types'
 import { rpc } from '../tauri'
 import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
-import { canChat, canTakeOver, machineBusyBots, useMachines, type Machine, type MachineBot, type TakeOverJob, type TakeOverPreview } from './machines'
+import { canChat, canTakeOver, machineBusyBots, normalizeMachineSessions, useMachineSessionChanges, useMachines, type Machine, type MachineBot, type TakeOverJob, type TakeOverPreview } from './machines'
+import { doingNowLabel } from './doingNow'
 import { MachineBadge, openMachineBotInMainWindow } from './MachineBots'
 import { openSafeLink } from './openSafeLink'
 import { SafeMarkdown } from './SafeMarkdown'
@@ -16,9 +19,12 @@ import './machines.css'
 
 const messageOf = (reason: unknown, fallback: string) => reason instanceof Error && reason.message ? reason.message : typeof reason === 'string' && reason ? reason : fallback
 const POLL_MS = 3000
+/** With a live link, a slow safety read in case an event was missed. */
+const LIVE_POLL_MS = 20000
+
+type Conversation = { id: string; title?: string | null; updatedAt?: string | null; projectName?: string | null; state?: string | null; link?: Session['link']; offline?: boolean }
 const STEP_WORD: Record<string, string> = { prepare: 'Saved the work on the other machine', code: 'Got the code', bot: 'Matched the employee', import: 'Copied the conversation', commit: 'Handed over', open: 'Opened it here' }
 
-type Conversation = { id: string; title?: string | null; updatedAt?: string | null; projectName?: string | null; state?: string | null; link?: Session['link'] }
 
 function conversationsFrom(raw: unknown): Conversation[] {
   const rows = raw && typeof raw === 'object' ? (raw as { conversations?: unknown }).conversations : null
@@ -187,6 +193,9 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
   const scroller = useRef<HTMLDivElement>(null)
   const pinned = useRef(true)
   const [reread, setReread] = useState(0)
+  const [listTick, setListTick] = useState(0)
+  const [approvals, setApprovals] = useState<PermissionRequest[]>([])
+  const [answering, setAnswering] = useState<string | null>(null)
   const [starting, setStarting] = useState(false)
   const chat = canChat(machine)
   const startConversation = async () => {
@@ -210,24 +219,52 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
       // Keep a conversation just started here while the other machine's list catches up.
       setConversations((current) => [...(current ?? []).filter((row) => !rows.some((item) => item.id === row.id) && row.title === 'New conversation'), ...rows])
       setSelected((current) => current ?? rows[0]?.id ?? null)
-    }).catch((reason) => { if (live) { setConversations((current) => current ?? []); setFailure(messageOf(reason, `${machine.name} can't be reached right now.`)) } })
+    }).catch(async (reason) => {
+      // The machine can't be reached: show its last known conversations, greyed and read-only.
+      const known = await rpc('machine.sessions', { machineId: machine.id }).then(normalizeMachineSessions).catch(() => [])
+      if (!live) return
+      const rows = known.filter((row) => row.agentId === bot.id && !row.archived).map((row): Conversation => ({ id: row.id, title: row.title, updatedAt: row.updatedAt, projectName: row.projectName, state: row.state, offline: true }))
+      setConversations((current) => rows.length ? rows : current ?? [])
+      setSelected((current) => current ?? rows[0]?.id ?? null)
+      setFailure(messageOf(reason, `${machine.name} can't be reached right now.`))
+    })
     void load()
-    const timer = window.setInterval(() => void load(), 15000)
+    const timer = window.setInterval(() => void load(), machine.live ? LIVE_POLL_MS : 15000)
     return () => { live = false; window.clearInterval(timer) }
-  }, [machine.id, bot.id, machine.name, reread])
+  }, [machine.id, bot.id, machine.name, machine.live, reread])
 
   useEffect(() => {
     if (!selected) { setSession(null); return }
     let live = true
     setSession(null)
     pinned.current = true
-    const load = () => rpc<{ session?: Session }>('machine.conversation', { machineId: machine.id, sessionId: selected }).then((reply) => {
-      if (live) { setSession(reply?.session ?? null); setFailure(null) }
-    }).catch((reason) => { if (live) setFailure(messageOf(reason, `${machine.name} can't be reached right now.`)) })
-    void load()
-    const timer = window.setInterval(() => { if (!document.hidden) void load() }, POLL_MS)
+    const load = () => {
+      void rpc<{ session?: Session }>('machine.conversation', { machineId: machine.id, sessionId: selected }).then((reply) => {
+        if (live) { setSession(reply?.session ?? null); setFailure(null) }
+      }).catch((reason) => { if (live) setFailure(messageOf(reason, `${machine.name} can't be reached right now.`)) })
+      // Approvals waiting there, so they can be answered here. An older machine has no such read.
+      void rpc<{ permissions?: PermissionRequest[] }>('machine.permissions', { machineId: machine.id, sessionId: selected }).then((reply) => {
+        if (live) setApprovals(Array.isArray(reply?.permissions) ? reply.permissions.filter((card) => card && typeof card.id === 'string' && card.kind !== 'question' && card.kind !== 'proposal') : [])
+      }).catch(() => { if (live) setApprovals([]) })
+    }
+    load()
+    const timer = window.setInterval(() => { if (!document.hidden) load() }, machine.live ? LIVE_POLL_MS : POLL_MS)
     return () => { live = false; window.clearInterval(timer) }
-  }, [machine.id, selected, machine.name, reread])
+  }, [machine.id, selected, machine.name, machine.live, reread])
+
+  // Live: re-read when the other machine reports a change to this bot's conversations.
+  useMachineSessionChanges(true, (change) => {
+    if (change.machineId !== machine.id) return
+    if (change.sessionId === selected) setReread((value) => value + 1)
+    else setListTick((value) => value + 1)
+  })
+  useEffect(() => {
+    if (!listTick) return
+    void rpc('machine.conversations', { machineId: machine.id, agentId: bot.id }).then((reply) => {
+      const rows = conversationsFrom(reply)
+      if (rows.length) setConversations((current) => [...(current ?? []).filter((row) => !rows.some((item) => item.id === row.id) && row.title === 'New conversation'), ...rows])
+    }).catch(() => undefined)
+  }, [listTick, machine.id, bot.id])
 
   useEffect(() => {
     const element = scroller.current
@@ -236,6 +273,22 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
 
   const state = takeOverState(machine, session, selfId)
   const messages = (session?.messages ?? []).filter((message) => ['user', 'assistant', 'notice'].includes(String(message.role)) && String(message.content ?? '').trim())
+  // The work log: between the owner's own machines it carries tool titles and details (owner decision,
+  // 17 November 2026); an older machine still sends the bare word "Tool", which is left out.
+  const steps = (session?.tools ?? []).filter((tool) => String(tool.title ?? '').trim() && String(tool.title) !== 'Tool' && !tool.parentToolCallId)
+  const stamp = (value: unknown) => { const at = Date.parse(String(value ?? '')); return Number.isFinite(at) ? at : 0 }
+  const items: Array<{ kind: 'message'; at: number; message: (typeof messages)[number] } | { kind: 'step'; at: number; step: (typeof steps)[number] }> = [
+    ...messages.map((message) => ({ kind: 'message' as const, at: stamp(message.createdAt), message })),
+    ...steps.map((step) => ({ kind: 'step' as const, at: stamp(step.startedAt ?? step.completedAt), step })),
+  ].sort((a, b) => a.at - b.at)
+  const answer = async (card: PermissionRequest, allow: boolean) => {
+    setAnswering(card.id); setFailure(null)
+    try {
+      await rpc('machine.permission.reply', { machineId: machine.id, permissionId: card.id, choice: allow ? 'allow_once' : 'deny' })
+      setApprovals((rows) => rows.filter((row) => row.id !== card.id))
+      setReread((value) => value + 1)
+    } catch (reason) { setFailure(messageOf(reason, `${machine.name} didn't take that answer.`)) } finally { setAnswering(null) }
+  }
   const busy = sessionIsBusy(session)
   const movedAway = !!session?.link?.movedTo
   const waitingForYou = session?.state === 'waiting_permission'
@@ -245,7 +298,7 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
       <header className="machine-view-head">
         <div className="machine-view-title">
           <h2 id="machine-view-title">{bot.name}</h2>
-          <small>On {machine.name}{machine.lastSeenAt && machine.state !== 'online' ? ` · last seen ${shortTime(machine.lastSeenAt)}` : ''}</small>
+          <small>On {machine.name}{machine.lastSeenAt && machine.state !== 'online' ? ` · last seen ${shortTime(machine.lastSeenAt)}` : ''} <span className={`machine-live-mark${machine.live && machine.state === 'online' ? ' live' : ''}`} title={machine.live ? 'Changes arrive as they happen.' : 'No live link right now; this view checks every few seconds.'}><i aria-hidden="true" />{machine.state !== 'online' ? 'Offline' : machine.live ? 'Live' : 'Checking every few seconds'}</span></small>
         </div>
         <button type="button" className="icon-button" aria-label="Close" onClick={close}><X size={16} aria-hidden="true" /></button>
       </header>
@@ -257,7 +310,7 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
           <ul className="machine-view-list" aria-label={`${bot.name}'s conversations`}>
             {conversations === null && <li><small>Loading…</small></li>}
             {conversations?.length === 0 && <li><small>No conversations yet.</small></li>}
-            {conversations?.map((item) => <li key={item.id}><button type="button" aria-current={item.id === selected ? 'true' : undefined} onClick={() => setSelected(item.id)}>
+            {conversations?.map((item) => <li key={item.id} className={item.offline ? 'offline' : undefined}><button type="button" aria-current={item.id === selected ? 'true' : undefined} title={item.offline ? `Last known, while ${machine.name} can't be reached` : undefined} onClick={() => setSelected(item.id)}>
               <strong>{item.title || 'Conversation'}</strong>
               <small>{[item.projectName, item.updatedAt ? shortTime(item.updatedAt) : null].filter(Boolean).join(' · ')}</small>
             </button></li>)}
@@ -267,14 +320,26 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
           <div ref={scroller} className="machine-transcript" tabIndex={0} aria-label={chat ? "Conversation" : "Conversation, read only"} onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48 }}>
             {selected && !session && !failure && <p role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading…</p>}
             {!selected && conversations?.length !== 0 && conversations !== null && <p>Choose a conversation.</p>}
-            {messages.map((message) => <article key={String(message.id)} className={`machine-message ${String(message.role)}`}>
-              {message.role !== 'notice' && <small>{message.role === 'user' ? 'You' : bot.name}{message.createdAt ? ` · ${shortTime(String(message.createdAt))}` : ''}</small>}
-              {message.role === 'assistant'
-                ? <SafeMarkdown text={String(message.content)} onOpenLink={openSafeLink} />
-                : <div>{String(message.content)}</div>}
-            </article>)}
+            {items.map((item) => item.kind === 'step'
+              ? <p key={`step-${String(item.step.id)}`} className="machine-step" data-state={String(item.step.state ?? '')}><span aria-hidden="true">·</span><code title={String(item.step.title ?? '')}>{doingNowLabel(item.step)}</code></p>
+              : <article key={String(item.message.id)} className={`machine-message ${String(item.message.role)}`}>
+                {item.message.role !== 'notice' && <small>{item.message.role === 'user' ? 'You' : bot.name}{item.message.createdAt ? ` · ${shortTime(String(item.message.createdAt))}` : ''}</small>}
+                {item.message.role === 'assistant'
+                  ? <SafeMarkdown text={String(item.message.content)} onOpenLink={openSafeLink} />
+                  : <div>{String(item.message.content)}</div>}
+              </article>)}
             {busy && !waitingForYou && <p className="machine-message notice" role="status">{bot.name} is working on {machine.name}…</p>}
-            {waitingForYou && <p className="machine-message notice" role="status">{bot.name} is waiting for an approval. Answer it on {machine.name}.</p>}
+            {approvals.map((card) => <section key={card.id} className="machine-approval" aria-label={`Approval on ${machine.name}`}>
+              <strong>{card.title || `${bot.name} asks to continue`}</strong>
+              {(card.command || card.description) && <code>{String(card.command || card.description)}</code>}
+              <small>Asked on {machine.name}. Your answer goes there; {machine.name} may refuse it if approvals from other devices are off there.</small>
+              <div className="machine-approval-actions">
+                <button type="button" className="secondary-button small" disabled={!!answering || !canTakeOver(machine)} onClick={() => void answer(card, false)}>Deny</button>
+                <button type="button" className="primary-button small" disabled={!!answering || !canTakeOver(machine)} onClick={() => void answer(card, true)}>{answering === card.id ? 'Sending…' : 'Allow'}</button>
+              </div>
+              {!canTakeOver(machine) && <small>Answering needs the Operator level for this machine on {machine.name}.</small>}
+            </section>)}
+            {waitingForYou && !approvals.length && <p className="machine-message notice" role="status">{bot.name} is waiting for an approval. Answer it on {machine.name}.</p>}
           </div>
           {failure && <p className="new-project-error" role="alert">{failure}</p>}
           {selected && chat && !movedAway && session && <MachineComposer machine={machine} bot={bot} sessionId={selected} busy={busy} onSent={() => { pinned.current = true; setReread((value) => value + 1) }} />}

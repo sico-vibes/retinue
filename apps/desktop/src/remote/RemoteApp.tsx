@@ -461,7 +461,22 @@ function ChatScreen({ agent, session, permissions, hostName, online, tier, canAp
   const [problem, setProblem] = useState<string | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
   const canSend = online && tier !== 'viewer' && !quiet && !!session
-  const messages = (session?.messages ?? []).filter((message) => (message.role === 'user' || message.role === 'assistant') && String(message.content ?? '').trim())
+  // The host sends a long conversation's newest window only (wave 3); earlier pages load on request.
+  const [older, setOlder] = useState<{ messages: NonNullable<Session['messages']>; cursor: string | null; more: boolean } | null>(null)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const windowCursor = typeof session?.messagesCursor === 'string' ? session.messagesCursor : null
+  const cursor = older ? older.cursor : windowCursor
+  const hasEarlier = older ? older.more : session?.messagesTruncated === true && !!windowCursor
+  const loadEarlier = async () => {
+    if (!session || !cursor || loadingOlder) return
+    setLoadingOlder(true)
+    try {
+      const page = await rpc<Session>('session.get', { sessionId: session.id, beforeMessageId: cursor })
+      const rows = Array.isArray(page?.messages) ? page.messages : []
+      setOlder((current) => ({ messages: [...rows, ...(current?.messages ?? [])], cursor: typeof page?.messagesCursor === 'string' ? page.messagesCursor : null, more: page?.messagesTruncated === true && typeof page?.messagesCursor === 'string' }))
+    } catch { setProblem('Earlier messages could not be loaded.') } finally { setLoadingOlder(false) }
+  }
+  const messages = [...(older?.messages ?? []), ...(session?.messages ?? [])].filter((message) => (message.role === 'user' || message.role === 'assistant') && String(message.content ?? '').trim())
   // A sent message shows at once and gives way to the copy the computer saved.
   const saved = new Set(messages.filter((message) => message.role === 'user').map((message) => String(message.content).trim()))
   const local = sent.filter((message) => !saved.has(message.text))
@@ -484,7 +499,8 @@ function ChatScreen({ agent, session, permissions, hostName, online, tier, canAp
   return <section className="rm-chat">
     <div className="rm-log" ref={logRef} role="log" aria-live="polite" aria-label={`Conversation with ${agent.name}`}>
       {messages.length === 0 && local.length === 0 && <p className="rm-empty">Nothing here yet. Say hello to {agent.name}.</p>}
-      {messages.slice(-30).map((message) => <p key={message.id} className={`rm-msg ${message.role}`}>{plain(String(message.content))}</p>)}
+      {hasEarlier && <button type="button" className="rm-earlier" disabled={loadingOlder || !online} onClick={() => void loadEarlier()}>{loadingOlder ? 'Loading…' : 'Earlier messages'}</button>}
+      {(older ? messages : messages.slice(-30)).map((message) => <p key={message.id} className={`rm-msg ${message.role}`}>{plain(String(message.content))}{message.contentTruncated === true && <span className="rm-cut"> … The rest is on {hostName}.</span>}</p>)}
       {local.map((message) => <p key={message.id} className="rm-msg user pending">{message.text}</p>)}
     </div>
     {pending && (canApprove

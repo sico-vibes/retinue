@@ -27,7 +27,7 @@ import { canTakeOver, machineBusyBots, machineUrlProblem, normalizeMachines, typ
 import { SharedSettingsSection } from './ProjectSettingsDialog'
 
 const bot = (over = {}) => ({ id: 'rae', name: 'Rae', color: 'mint', role: null, provider: 'claude', model: null, busy: false, activeSessionId: null, conversations: 1, ...over })
-const machine = (over: Partial<Machine> = {}): Machine => ({ id: 'laptop', name: 'Work laptop', url: 'https://laptop.example.ts.net', auth: 'code', fingerprint: null, tier: 'operator', pairedAt: null, lastSeenAt: null, state: 'online', detail: null, version: '1', bots: [bot()], ...over })
+const machine = (over: Partial<Machine> = {}): Machine => ({ id: 'laptop', name: 'Work laptop', url: 'https://laptop.example.ts.net', auth: 'code', fingerprint: null, tier: 'operator', pairedAt: null, lastSeenAt: null, state: 'online', detail: null, version: '1', bots: [bot()], kind: null, live: false, ...over })
 const preview = (over: Partial<TakeOverPreview> = {}): TakeOverPreview => ({ ready: true, reason: null, title: 'T', bot: { id: 'rae', name: 'Rae', provider: 'claude', model: null, agentId: 'rae', willCreate: false }, repo: { identity: 'github.com/a/b', url: 'https://github.com/a/b', branch: 'retinue/t', isWorktree: true, hasRemote: true }, uncommitted: 0, commitsAhead: 1, project: { id: 'p', name: 'korus' }, needsProject: false, runtimeReady: true, ...over })
 
 let root: Root | null = null
