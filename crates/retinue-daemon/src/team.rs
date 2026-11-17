@@ -621,22 +621,30 @@ fn tools(is_automation: bool, memory_enabled: bool, ask_user: bool, is_manager: 
     // automation runs (the index is what tells a bot the pool exists).
     let skill_tools = crate::skills::tool_schemas();
     let ui_guide = json!({"name":"ui_guide","description":"The guide to answering with an interactive view in an ```openui block: the components, their syntax and examples. Read it before you write one.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}});
+    let working_note = crate::working_note::tool_schema();
+    // Wave 2 (nod idea 6): the docs tools are read-only and offline, so every
+    // bot gets them, automation runs included.
+    let docs_tools = crate::docs_search::tool_schemas();
     if is_automation {
         let mut list = memory;
         list.extend(skill_tools);
         // Section D: an unattended run may still search connectors, and may call
         // only a tool the connector marks read-only (enforced in `connectors`).
         list.extend(crate::connectors::tool_schemas());
+        list.extend(docs_tools);
         return json!(list);
     }
     let mut list: Vec<Value> = vec![
         json!({"name":"list_blobs","description":"List your teammates in Retinue: name, role, what each is for, project, whether they are busy, and which one is the CEO.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}}),
         json!({"name":"list_conversations","description":"List your side conversations with teammates, newest first: id, topic, teammate, who started it, size and the latest reply. Use it to find a conversation to continue.","inputSchema":{"type":"object","properties":{"blob":{"type":"string","description":"Only conversations with this teammate (optional)."}},"additionalProperties":false}}),
+        json!({"name":"search_history","description":"Search earlier messages, for a decision or a fact that is no longer in front of you. Scope \"conversation\" searches this conversation; \"project\" searches every conversation in its project. Results give the date, the author, the conversation and an excerpt.","inputSchema":{"type":"object","properties":{"query":{"type":"string","description":"Words to look for, up to 200 characters."},"scope":{"type":"string","enum":["conversation","project"],"description":"This conversation (default) or every conversation in its project."}},"required":["query"],"additionalProperties":false}}),
         json!({"name":"message_blob","description":"Send a message to one teammate in a private side conversation. Use it whenever the user asks you to message, ask or hand work to a teammate: it is sent at once, with no approval card. Continue an earlier conversation you started by passing its id as `conversation`, or start a new one with a short `topic`. Returns at once; their reply is delivered to you later as a message starting with \"[Reply from <name>]\". After sending, tell the user who you asked and end your turn.","inputSchema":{"type":"object","properties":{"blob":{"type":"string","description":"The teammate's name, as shown by list_blobs."},"message":{"type":"string","description":BRIEF_LINES},"doneGoal":{"type":"string","description":"What must be true for the work to count as done. It is relayed back with the reply as a 'Done when' line (optional)."},"topic":{"type":"string","description":"For a new conversation: a short title of 3 to 6 words, like a chat title."},"conversation":{"type":"string","description":"The id of a conversation you started with this teammate, from list_conversations, to continue it."},"project":{"type":"string","description":"For a new conversation: the project (an id, an exact name, or a tag only one project carries) it opens in. Defaults to the project of this conversation."}},"required":["blob","message"],"additionalProperties":false}}),
         json!({"name":"schedule_task","description":format!("Propose a scheduled task for your {noun}. It is created disabled and will never run until the user approves it in Retinue. Use this only when the user asks for something recurring or at a set time."),"inputSchema":{"type":"object","properties":{"name":{"type":"string","description":"A short title, 1 to 80 characters."},"prompt":{"type":"string","description":"The instruction to run unattended when the task fires."},"when":{"type":"object","description":"A schedule object: {\"kind\":\"once\",\"at\":\"<RFC3339>\"} or {\"kind\":\"cron\",\"cron\":\"m h dom mon dow\",\"timezone\":\"Area/City\"}."}},"required":["name","prompt","when"],"additionalProperties":false}}),
         json!({"name":"list_my_schedules","description":format!("List this {noun}'s scheduled tasks, whether each is enabled, and when it next runs."),"inputSchema":{"type":"object","properties":{},"additionalProperties":false}}),
         json!({"name":"check_back","description":"Inside a task run: plan one check of this task at a later time instead of asking for a whole schedule. When the time comes the task runs once more in a new conversation, with a note that its planned check is due.","inputSchema":{"type":"object","properties":{"at":{"type":"string","description":"When to check back, as an RFC3339 instant at least a minute and at most 30 days ahead."}},"required":["at"],"additionalProperties":false}}),
     ];
+    list.push(working_note);
+    list.extend(docs_tools);
     list.push(ui_guide);
     // Section D: the two connector meta-tools.
     list.extend(crate::connectors::tool_schemas());
@@ -705,7 +713,7 @@ pub async fn mcp_rpc(st: &AppState, session_id: &str, method: &str, params: &Val
         "mcp.tools.list" => Ok(json!({"tools":tools(is_automation, memory_enabled, ask_user, is_manager, !crate::subbots::is_subbot_session(st, session_id), &entity_noun(false), &entity_noun(true))})),
         "mcp.tools.call" => {
             let name = params["name"].as_str().unwrap_or("");
-            if is_automation && !name.starts_with("memory_") && !matches!(name, "list_skills" | "load_skill" | "read_skill_file" | "connector_search" | "connector_call") {
+            if is_automation && !name.starts_with("memory_") && !matches!(name, "list_skills" | "load_skill" | "read_skill_file" | "connector_search" | "connector_call" | "search_docs" | "read_doc") {
                 return Err(derr("forbidden", "Automation runs cannot use team or scheduling tools.", StatusCode::FORBIDDEN));
             }
             let args = &params["arguments"];
@@ -763,6 +771,12 @@ pub async fn mcp_rpc(st: &AppState, session_id: &str, method: &str, params: &Val
                 "memory_update" if memory_enabled => crate::memory::tool_update(st, session_id, args).await,
                 "memory_forget" if memory_enabled => crate::memory::tool_forget(st, session_id, args).await,
                 "ui_guide" => Ok(OPENUI_GUIDE.to_owned()),
+                // Wave 2 (nod ideas 2, 6 and 7): the bot's own "now" line, the
+                // offline docs, and earlier messages.
+                "set_working_note" => crate::working_note::set_note(st, session_id, args).await,
+                "search_docs" => crate::docs_search::search(args["query"].as_str().unwrap_or("")),
+                "read_doc" => crate::docs_search::read(args["path"].as_str().unwrap_or(""), args["offset"].as_u64().unwrap_or(0).min(100_000) as usize),
+                "search_history" => search_history(st, session_id, args),
                 "open_issue" if is_manager => crate::troubleshoot::open_issue_tool(st, session_id, args).await,
                 "open_issue" => Err(non_manager_error(st)),
                 "list_skills" => crate::skills::tool_list(st, session_id).await,
@@ -779,6 +793,38 @@ pub async fn mcp_rpc(st: &AppState, session_id: &str, method: &str, params: &Val
         }
         _ => Err(derr("not_found", "unknown team method", StatusCode::NOT_FOUND)),
     }
+}
+
+/// `search_history`: earlier messages in this conversation, or in every
+/// conversation of its project (wave 2, nod idea 7). The daemon scopes it to the
+/// conversation's own project, so a bot never reads another project's history.
+fn search_history(st: &AppState, session_id: &str, args: &Value) -> Result<String, String> {
+    let query = args["query"].as_str().map(str::trim).filter(|query| !query.is_empty()).ok_or("query is required.")?;
+    if query.chars().count() > 200 { return Err("query must be 200 characters or fewer.".into()); }
+    let scope = args["scope"].as_str().map(str::trim).filter(|scope| !scope.is_empty()).unwrap_or("conversation");
+    if !matches!(scope, "conversation" | "project") { return Err("scope must be conversation or project.".into()); }
+    let row = st.db.session_brief(session_id).map_err(|_| "This conversation is no longer available.".to_string())?;
+    let project_id = row["projectId"].as_str().filter(|id| !id.is_empty()).map(str::to_owned);
+    if scope == "project" && project_id.is_none() {
+        return Err("This conversation is not in a project, so there is no project history. Search this conversation instead.".into());
+    }
+    let page = st.db.search_messages_scoped(query, retinue_storage::MessageSearchScope {
+        session_id: (scope == "conversation").then_some(session_id),
+        project_id: (scope == "project").then_some(project_id.as_deref()).flatten(),
+        from: None,
+        to: None,
+        limit: Some(10),
+    }).map_err(|error| error.to_string())?;
+    if page.results.is_empty() { return Ok(format!("No earlier message matches \"{query}\".")); }
+    let rows = page.results.iter().map(|result| {
+        let date = result["createdAt"].as_str().unwrap_or("").chars().take(16).collect::<String>();
+        let who = if result["role"].as_str() == Some("user") { "you" } else { "the bot" };
+        let title = result["title"].as_str().unwrap_or("");
+        format!("- {date} · {who} · {title} — {}", result["snippet"].as_str().unwrap_or(""))
+    }).collect::<Vec<_>>();
+    let where_ = if scope == "project" { "in this project" } else { "in this conversation" };
+    let more = if page.truncated { " (more matches exist; narrow the words)" } else { "" };
+    Ok(format!("Matches for \"{query}\" {where_}{more}:\n{}", rows.join("\n")))
 }
 
 pub(crate) async fn session_busy(st: &AppState, session_id: &str) -> bool {

@@ -144,3 +144,137 @@ Two daemons on one computer can stand in for two machines: give each its own `RE
 ## Live test of sub-bots (31 October 2026)
 
 One daemon on a throwaway `RETINUE_DB_PATH` is enough, and it costs a few cents. Call `runtime.models` for each provider first, because `spawn_subbots` reads only the cached catalog. Create a parent on the Go model, then ask it for one sub-bot on `claude-haiku-5-5` and one on the Go model, with one-word briefs. Check `subbot.list`, each conversation's words, a direct message to one, and that deleting the parent archives them. **Not reachable this way:** the real app's windows, and Claude's own `Agent` tool, which is tested from a recorded transcript.
+# Verification
+
+Last reviewed: 2026-10-22 (Rust 1.94.0 stable, Node 24, OpenCode 2.0.32, Codex CLI 0.163). Update this file when a gate, tool or environment fact changes.
+
+## Smart App Control on the owner's PC (14 November 2026)
+
+- `cargo check`/`cargo test` in the main checkout's own `target` can stop at a build script with `An Application Control policy has blocked this file. (os error 4551)`. Use a lane worktree's target whose build scripts already ran: `CARGO_TARGET_DIR='C:\Users\Sico Vibes\Desktop\DevCN\Retinue-retinue\<worktree>\target'`, with `TEMP`/`TMP` at `C:\tmp`.
+- **A blocked binary is blocked by content, not path** (17 November 2026): copying it elsewhere and running it fails the same way, and a *newly linked test binary* is blocked too (`could not execute process ...retinued-<hash>.exe (never executed)`), even though the same tests ran from the binary built minutes earlier. `cargo clippy --all-targets` still compiles the test target, so a lane can prove its last edits compile when the run is refused; say so in the report instead of claiming the tests ran.
+- **The daemon's own build script cannot be re-run on this PC** (17 November 2026). Editing `crates/retinue-daemon/build.rs` (or adding a generated table there) makes cargo link a fresh build-script exe, and SAC blocks it: `cargo check -p retinue-daemon` then fails with 4551 however warm the target is. The workaround is to move `build.rs` aside and stub the `include!(concat!(env!("OUT_DIR"), "/skill_library_files.rs"))` line in `skill_library.rs`, check, then restore both with `git checkout --` and confirm `git diff` shows neither. Prefer a design that needs no build script at all: the docs tools embed `docs/library/content` with `include_str!` for exactly this reason.
+- **Never round-trip a source file through `Get-Content -Raw` + `Set-Content`** (re-confirmed 17 November 2026): it corrupted the em dashes in a new Rust file (all but one vanished, and the file still looked clean in a quick scan). Use the edit tool, or `[System.IO.File]::WriteAllText($p, $text, (New-Object System.Text.UTF8Encoding($false)))` when a script is unavoidable, then check a known non-ASCII line.
+- Test only the changed crates (`-p retinue-daemon -p retinue-storage ...`): `--workspace` pulls a crate whose new build script is blocked. Test programs that start helper binaries (the Codex adapter's `app_server` tests with `fake_codex_server`, agent core's unit tests) are blocked too; CI runs them. Say so in the report.
+- `remoteBuild.test.ts` runs `npm run build:remote` itself. Under Vitest `NODE_ENV` is `test`, and the build inherited it, measuring 1.72 MB against the real 1.45 MB, so the test failed on `main` and CI skipped every later step (daemon tests, clippy, builds) on every push. Fixed 14 November 2026 by building with `NODE_ENV=production`. When CI fails at the unit tests, check whether the Rust steps ran at all.
+- `npm run docs:check` skips `apps/site/content/` (website pages link by site routes).
+
+## Gates (run all before calling work done)
+
+From the repository root (or a worktree):
+
+```powershell
+npm run typecheck                         # tsc -b
+npm test                                  # vitest, all files
+cd apps/desktop; npm run build            # tsc -b && vite build (the production bundle)
+cd apps/desktop; npm run build:remote         # the phone PWA, when remote code changed (script is in apps/desktop)
+$env:RUST_MIN_STACK='33554432'            # some daemon tests overflow the default test stack
+cargo test --workspace --exclude retinue-desktop
+cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings
+# desktop crate: only from a short path (see below)
+$env:TAURI_CONFIG='{"bundle":{"externalBin":[]}}'   # skip staged sidecars for a check
+cargo test -p retinue-desktop --lib
+```
+
+- Run vitest from `apps/desktop` (`cd apps/desktop; npx vitest run <file>`); from the root, `--root apps/desktop` fails for tests that mount `App` ("Denied ID ...docs/releases"). `FIX37.updateBadge` fails on `main` at `30c7b3d` (expects beta.36), and `cargo clippy --workspace` fails inside `retinue-desktop` on Rust 1.94 in untouched code; use `--exclude retinue-desktop` for a clean clippy run. `cargo clippy -p retinue-desktop` itself (8 November 2026, beta.50) stops at one error, `power.rs:222` `clippy::never_loop`, plus 8 warnings in `speech.rs`, `pty.rs`, `lib.rs` — all untouched code, none in a new command.
+- A fresh `CARGO_TARGET_DIR` makes `sherpa-onnx-sys`'s build script download 1.1 GB of prebuilt libs into `<target>\sherpa-onnx-prebuilt`; on 8 November 2026 that failed with HTTP 503 from GitHub. Don't copy the cache: point `SHERPA_ONNX_LIB_DIR` at an existing one (`<any other target>\sherpa-onnx-prebuilt\sherpa-onnx-v1.13.8-win-x64-static-MT-Release-lib\lib`).
+- Run the Vitest suite on a quiet machine. When lanes or cargo builds run at the same time, mounted tests time out in large numbers (57 and 100 false failures were seen); re-run the failing files alone, or use `npx vitest run --maxWorkers=4`, before believing a failure.
+- When filtering output in PowerShell, `Select-String` is case-insensitive: a pattern for `FAILED` also matches test names containing "failed" and can push the summary line out of view. Use `-CaseSensitive`.
+- The desktop crate cannot build from a path containing an apostrophe (the main checkout `D:\Basem's\...`): the Windows resource compiler mangles the icon path. Use a worktree or clone at `D:\fxNN`.
+- In a fresh worktree or clone, run `npm run build` in `apps/desktop` before `cargo test -p retinue-desktop`: `tauri::generate_context!()` fails with "The `frontendDist` configuration is set to `../dist` but this path doesn't exist". Afterwards revert the line-ending churn in `apps/desktop/src-tauri/gen/schemas/` (`git checkout --`), or the release script refuses the unclean checkout (beta.36).
+- From the root, run `npm test` (or `npx vitest` inside `apps/desktop`), never a bare `npx vitest run` at the root: it collects the test files of every worktree under `.claude/worktrees` and reports thousands of false failures (beta.36: 4,079 failed files).
+- The Codex sandbox cannot let Vite write its temp config through a `node_modules` junction (`EPERM`): add `--configLoader runner` to `vite build` and `vitest run` there, or run the gate yourself.
+- `cargo test --workspace` stops at the first crate that fails, so later crates never run. Add `--no-fail-fast` when you need every failure (2026-10-27).
+- A `../tauri` export missing from a test's `vi.mock` factory makes every App-mounting test in that file fail with the same "No "x" export is defined" error, which hides the real failures behind it. After adding the export, expect more failures to appear (2026-10-27: 121 hid 32).
+- The daemon's test binary (`cargo test -p retinue-daemon`) takes about 20 minutes to link from a cold target on this machine, so a foreground run with a 20-minute timeout dies before a single test runs. Start it in the background (or with a much longer timeout) and keep working; once built, rerunning with a different filter or no filter reuses the binary (2026-11-14, backend lane, B6).
+- `computer_tests.rs` is `include!`d into the daemon's test module (`crates/retinue-daemon/src/main.rs:14031`), not declared as a module: its helpers (`link_directly`, `HARBOR_TOKEN`, `harbor_body`, `state`) are in scope for any test in the same module, and a test file cannot see them on its own (2026-11-14).
+- Two daemon tests fail on this machine whatever the diff, because the machine is the owner's (2026-11-14): `remote::tests::an_absent_web_folder_serves_the_built_in_page` and `a_folder_with_files_but_no_entry_page_serves_the_built_in_page` see the `RETINUE_REMOTE_WEB_DIR` the owner's environment sets (`...\AppData\Local\Retinue\remote-web`), so a page is served instead of the "not installed" one; clear it for the run (`$env:RETINUE_REMOTE_WEB_DIR=""`). `doctor::tests::database_and_hook_rows_are_one_line_and_actionable` expects no `retinue-hook.exe` beside the binary, and finds the installed app's copy (`outside::hook_bridge_path()`). Check both against a run of the suite before blaming your change, and `machines_tests::one_offline_machine_does_not_hold_up_another` flakes under full-suite concurrency but passes alone.
+
+## Checking the desktop crate from a worktree whose path has an apostrophe (8 November 2026)
+
+`CARGO_TARGET_DIR` on a short path does **not** get past `RC2135: file not found: D:\Basem's\...`: the resource compiler is fed the icon path inside the source tree, not the target dir. Copy the tree (about 15 MB without `.git`, `target`, `node_modules`) to a short path such as `D:\gw1\src`, add stub `apps/desktop/dist/index.html` and `apps/desktop/dist-remote/index.html`, then run `cargo check -p retinue-desktop` there with `TAURI_CONFIG='{"bundle":{"externalBin":[]}}'`, `CARGO_TARGET_DIR='D:\gw1\target'` and `SHERPA_ONNX_LIB_DIR` as above. Delete the copy afterwards; the real worktree stays untouched, which also keeps the `gen/schemas` churn out of `git status`.
+
+## T3 wave verification (2026-10-26)
+
+Owner rule: no tests and no screenshots in that wave. What was run instead: `npx tsc -p apps/desktop --noEmit`, `npm run build` and `npm run build:remote` in `apps/desktop`, and `cargo check -p retinue-daemon -p retinue-storage -p retinue-desktop` (with `TAURI_CONFIG='{"bundle":{"externalBin":[]}}'` and a stub `apps/desktop/dist/index.html`) from `D:\t3`. `team_p10_tests.rs` still compiles through a `#[cfg(test)]` shim of `prepare_worktree`.
+
+## T7 wave verification (2026-10-27)
+
+No tests were run in the wave itself: only production-only `tsc`, `vite build` and `cargo check`. Round 2 (same day) added the wake/cancel/pause lane (`D:/v1`) and the ambiguous-send/limited lane (`D:/v2`); the exact unverified cases are in `docs/history/t7/REPORT-round2.md`.
+
+## T3 and T7 gates restored (2026-10-27, Claude, main checkout)
+
+The full gates now pass on the uncommitted T3 and T7 work: `npm run typecheck`, `npm test` (1,481), `cargo test --workspace --exclude retinue-desktop` (939), `cargo clippy --workspace --exclude retinue-desktop --all-targets -D warnings`, `npm run build` and `npm run build:remote`. **Not run:** `cargo test -p retinue-desktop` (needs a short path, see above). What the fixes were, and which tests changed because the behaviour changed on purpose, is in `lessons.md` under the same date.
+
+
+## Live development without releases (2026-10-20)
+
+Run `npm run desktop:dev` from a checkout without an apostrophe. The launcher builds/stages the daemon and hook, uses Vite on a free port from 1420–1435 and identifier `com.retinue.desktop.dev`, and now defaults `RETINUE_DB_PATH` to `<CARGO_TARGET_DIR>/dev-data/retinue.db`. An explicit override is retained. Development skips migration of the installed shared store and autostart entry. UI edits refresh through Vite; daemon edits still require rebuilding, restaging and restarting the development shell. No installer or release is required. Keep test projects separate too: a private database does not isolate project-file edits.
+
+For rapid Haze UI review (26 October 2026), `D:/retinue-review46/Run Retinue Review.cmd` now runs Tauri dev with `review-hotreload.json`, Vite on 1420, and the existing isolated review database. React/CSS/SVG edits in the haze-avatar-review checkout refresh automatically; compiled review EXEs do not. Tauri dev runs `target/debug/retinue-desktop.exe` (not the renamed packaged `RetinueReview.exe`). Backend/native changes still require a build and restart. No UI sweep is implied by restarting this review app.
+
+The fixture preview is not a live client. The remote PWA is a separate restricted interface. Full browser parity needs a trusted local bridge and separation of daemon connectivity from `inDesktop` guards; never expose the capability or enable broad CORS to achieve it. Keep production bundle checks: Vite dev can hide CSS chunking bugs.
+
+When measuring theme contrast, wait for colour transitions to finish (250 ms in this review); sampling immediately after changing theme produced false failures. Check user-bubble links as well as selected rows, inline code and fenced code. Native clipboard verification used a generated PNG written with the browser clipboard API, the real native clipboard reader, then the composer's Ctrl+V handler; real Codex image delivery also passed.
+
+## The browser preview
+
+`npx vite --config apps/desktop/vite.preview.config.ts apps/desktop --port 5174 --strictPort --host 127.0.0.1` (the Claude desktop app has this as the `desktop-preview` launch config). It swaps `tauri.ts` for `preview/fixtureBridge.ts` (fixture bots and conversations, no daemon).
+
+The task board is on `main` (phase 1, 22 October 2026). Its browser-preview data comes from `apps/desktop/src/preview/fixtureTasks.ts`, a preview-only ledger that mimics the task contract, so the board checks run without the daemon. Any local launch file (`.claude/launch.json`, git-ignored) and worktree from the earlier `exp/board-ui` lane are historical; check them before reuse.
+
+Useful URLs: `/` (main window; add `?style=retinue|stone`, `&theme=light|dark`, `&wallpaper=`, `&glass=`, `&font=`, `&accent=%23rrggbb`, `&density=`), `/?preview-settings` (settings sheet), `/?companion&mode=home&view=chat|activity|settings`, `/preview.html` (bot art sheet, which shows all six arts, including Flat and Dot that the picker does not offer; `?art=robot|robot-flat|robot-pop|robot-dot|blob|painted`). Pass `?style=retinue` or `?style=stone` for the look; `pop`, `dot` and `legacy` were retired and are not offered, `/launch-preview.html?fixture=in-progress|onboarding-step-1`, `/dictation-preview.html`, `/gallery.html`.
+
+The app plays a launch intro and fades the shell in; screenshots taken in the first seconds show a dimmed or empty window. Wait or check `getComputedStyle(document.querySelector('.app-shell')).opacity === '1'`. The real window is at least 1000 px wide; layout overlaps seen only below that width are not bugs.
+
+**A background preview tab draws no frames** (2026-11-16). While the browser pane is hidden, CSS transitions and smooth scrolls stay at `currentTime 0`: `getComputedStyle` reports the start value (a grid column read as `0px`, a `scrollTop` that never moves) and screenshots time out. A screenshot forces a frame. Before calling a layout broken, check `element.getAnimations()`, take a screenshot, or read the value again after one.
+
+**The preview is Vite's dev server, not the production bundle.** Anything that depends on bundling (dynamic imports, CSS chunking, asset URLs, preloads), on native APIs or on WebView2 must also be checked in `npm run build` output or in the installed app.
+
+
+## The inspector (31 October 2026)
+
+`npm run inspect` opens `/inspector.html`: every screen and state of the frontend, in the real App with fixture data, with look, theme, window size, side by side, and a note on each state that Copy all notes returns as one list.
+
+- **Add a state:** one row in `src/preview/inspector/scenarios.ts`, with `expect` text that proves it appeared. A conversation state is one entry in `src/preview/fixtureScenes.ts` (`?scene=<id>`). A screen is one line in App's `?open=` table. A state only a click reaches uses `steps`, not a new App hook.
+- **Check all** opens every state in a hidden frame, runs its steps and looks for its text. Run `window.__inspector.run()` and read `window.__inspector.checks` from a script. A state with no `expect` only proves the page didn't go blank.
+- **`&clean`** (added by the index for the main window) turns off first-run hints, the tour and What's New. Mark a scenario `raw` to keep them.
+- It runs on the Vite dev server, so it doesn't prove the production bundle or WebView2.
+- **Reviewing many screens:** drive the system Chrome headless with Playwright (`chromium.launch({ channel: 'chrome' })`, `reducedMotion: 'reduce'`, URL plus `&no-intro&clean`) and save PNGs. It's far faster than a hidden pane, and it renders what a person would see.
+- **Driving it from an agent's hidden browser pane:** transitions and the launch fade crawl, so a column looks too narrow and the shell looks dim. It isn't the app. Inject `*{transition:none!important;animation-duration:1ms!important} .app-shell{opacity:1!important}` before a screenshot.
+
+## Checking the installed app (read-only)
+
+To see what the real window has (attributes, loaded stylesheets, console errors), restart Retinue with the WebView2 debugging port. Restarting stops the daemon and interrupts any bot that is working, so first get the owner's explicit permission at a moment when nothing they care about is running; never restart it as a side effect of another check. Then:
+
+```powershell
+Get-Process -Name Retinue | Stop-Process          # the daemon exits with it
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--remote-debugging-port=9229 --remote-allow-origins=http://127.0.0.1:9229'
+Start-Process "$env:LOCALAPPDATA\Retinue\Retinue.exe"
+Invoke-RestMethod http://127.0.0.1:9229/json      # pages: /, ?companion=1, ?dictation=1
+```
+
+Then connect to the page's `webSocketDebuggerUrl` with a small Node script (`new WebSocket(...)`, `Runtime.evaluate` with `returnByValue`) and read `document.documentElement.dataset`, `[...document.styleSheets].map(s => s.href)`, `performance.getEntriesByType('resource')`, computed styles, and console/log events. Read only; never print localStorage values that hold tokens. **Afterwards restart Retinue normally without the variable** (the open port lets any local program control the app) and confirm the port is closed.
+
+## UI review checklist
+
+Both supported looks (Retinue and Stone), in dark and light; selected, hover, focus and disabled states; text contrast of 4.5:1 or more; no pill or circle controls in the new looks (the Manager and lock badges and the look orbs excepted); companion and dictation windows if styles changed; reduced motion; the production build when styles or assets load differently.
+
+**Checking `retinue-desktop` from a lane worktree.** It needs three things a worktree lacks: a path with no apostrophe (else `tauri-winres` fails with `RC2135`), `apps/desktop/dist`, and the staged `binaries/retinued-*.exe`. Copy the tree without `target`, `node_modules`, `.git` and `dist` to a short path, run `cargo check -p retinue-desktop` there with `TAURI_CONFIG='{"bundle":{"externalBin":[]},"build":{"frontendDist":"../dist-remote"}}'`, and delete the copy afterwards. The build also rewrites `src-tauri/gen/schemas/*.json`: revert those.
+
+**Flaky under load, besides the known one:** `stopping_a_turn_stops_its_setup_script`. It failed once with five parallel git tests running and passed alone. Mounted UI tests time out if run during cargo builds.
+
+**Check D's free space before starting lanes.** A daemon test build needs about 6 GB. If a lane must build elsewhere, `$env:CARGO_TARGET_DIR` works.
+
+## Live test of machine links (31 October 2026)
+
+Two daemons on one computer can stand in for two machines: give each its own `RETINUE_DB_PATH`, turn on Native on loopback ports, and answer the pairing with `remote.pair.confirm` from the `remote.pairing.requested` event. Use a local bare repository as `origin`. Its path has no identity, so `needsProject` isn't exercised this way; unit tests cover it. A conversation only has a task copy if its `link` holds `{"kind": "main", "worktree": {repo, path, branch, base, baseCommit}}`, and a `fanout.start` row is refused for a move. **Not reachable this way:** a real Tailscale certificate, a real second computer, and the real app's windows.
+
+## The performance gate (31 October 2026)
+
+`npm run perf` runs `scripts/perf-gate.mjs`: cold start and `app.snapshot` bytes, lazy and full, on a database seeded by `perf-seed`. Build both binaries first (`cargo build -p retinue-daemon --bin retinued -p retinue-storage --bin perf-seed`). `--self-test` runs the same code with a 1 ms budget and is expected to exit 1. `npm run perf:render` mounts a 1,000-message conversation in happy-dom; it takes about a minute, so it isn't in `npm test`. Budgets live in `perf-budgets.json`, set from measurements. Under load, run `npx vitest run --testTimeout=30000` from `apps/desktop`: mounted tests hit the 5-second limit while Rust compiles, and the root `npm test` swallows the flag.
+
+**Timing the real thing (1 November 2026).** `cargo run --release -p retinue-storage --example snapshot-timing -- <db copy> [--runs 3] [--concurrent 20] [--index] [--plans]` opens a *copy* of the owner's database through `Storage` and reports lazy and full `app.snapshot` (ms and JSON bytes), the per-session context and `turn.error` reads with the plan SQLite chooses, one message-delta write, and how long `settings.get` waits while a snapshot runs. Since the data rework it also reports, as the median of five, the storage work behind changing effort (`agent.update` + `session.model.update`) and assigning a task (`task.create` + `task.dispatch`), each idle, while every conversation is read back to back, and again with `synchronous=NORMAL` (the shipped value stays `FULL`); one conversation opened cold and warm; the same row without its transcript; and a `turnDetailProof` that compares the per-turn `turn.error` lookup with the correlated form it replaced, for every turn. `--index` drops and rebuilds the two `app_events` indexes first and proves every answer is unchanged; `--plans` prints only the query plans of the several shapes of the per-turn lookup (the correlated one is a full scan — see `lessons.md`). It is an example, so `cargo test` never runs it. Copy `%LOCALAPPDATA%\Retinue\retinue.db` **with its `-wal`** into a temp folder, measure there, then delete the copy.
+
+## Live test of sub-bots (31 October 2026)
+
+One daemon on a throwaway `RETINUE_DB_PATH` is enough, and it costs a few cents. Call `runtime.models` for each provider first, because `spawn_subbots` reads only the cached catalog. Create a parent on the Go model, then ask it for one sub-bot on `claude-haiku-5-5` and one on the Go model, with one-word briefs. Check `subbot.list`, each conversation's words, a direct message to one, and that deleting the parent archives them. **Not reachable this way:** the real app's windows, and Claude's own `Agent` tool, which is tested from a recorded transcript.

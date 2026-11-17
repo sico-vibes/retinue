@@ -7875,6 +7875,31 @@ impl Storage {
         }
         Ok(out)
     }
+    /// Recall before a turn (wave 2, nod idea 3): the best notes that share any
+    /// of `terms` with the message. Each term is OR-ed, so one shared word is
+    /// enough; ranking is FTS5's own `bm25`, best first. Visibility is the same
+    /// as every other read (live, reviewed, bot/project/shared).
+    pub fn memory_visible_recall(&self, agent_id: &str, project_id: Option<&str>, terms: &[String], limit: usize) -> Result<Vec<Value>, StorageError> {
+        let expression = terms.iter()
+            .map(|term| format!("\"{}\"*", term.replace('"', "\"\"")))
+            .collect::<Vec<_>>()
+            .join(" OR ");
+        if expression.is_empty() { return Ok(Vec::new()); }
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let ids = {
+            let mut statement = c.prepare("SELECT record_id FROM memory_fts WHERE memory_fts MATCH ?1 ORDER BY bm25(memory_fts)")?;
+            let rows = statement.query_map([expression], |row| row.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()?;
+            rows
+        };
+        let mut out = Vec::new();
+        for id in ids {
+            if out.len() >= limit { break; }
+            if let Some(row) = memory_read(&c, &id)? {
+                if memory_is_live_reviewed(&row) && memory_visible_to(&row, agent_id, project_id) { out.push(row); }
+            }
+        }
+        Ok(out)
+    }
     pub fn memory_visible_get(&self, id: &str, agent_id: &str, project_id: Option<&str>) -> Result<Option<Value>, StorageError> {
         let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         let Some(row) = memory_read(&c, id)? else { return Ok(None) };
@@ -8233,6 +8258,37 @@ fn valid_usage_tip_dismissals(value: &Value) -> bool {
 /// One conversation's messages, oldest first, as the session DTO carries them.
 const SESSION_MESSAGES_SQL: &str = "SELECT json_object('id',id,'turnId',turn_id,'sequence',sequence,'role',role,'content',content,'createdAt',created_at,'attachments',json_extract(data,'$.attachments'),'meta',json_extract(data,'$.meta'),'references',json_extract(data,'$.references'),'reactions',json(COALESCE((SELECT json_group_array(emoji) FROM (SELECT emoji FROM message_reactions mr WHERE mr.session_id=messages.session_id AND mr.message_id=messages.id ORDER BY CASE emoji WHEN '👍' THEN 0 WHEN '👎' THEN 1 WHEN '❤️' THEN 2 WHEN '😂' THEN 3 WHEN '🎉' THEN 4 ELSE 5 END)), '[]'))) FROM messages WHERE session_id=?1 ORDER BY sequence";
 
+/// How far a message search reaches (wave 2, nod idea 7). Every field is
+/// optional; the default is every non-archived conversation.
+#[derive(Clone, Copy, Default)]
+pub struct MessageSearchScope<'a> {
+    /// Only this conversation.
+    pub session_id: Option<&'a str>,
+    /// Only conversations in this project.
+    pub project_id: Option<&'a str>,
+    /// RFC 3339; matches messages created at or after it.
+    pub from: Option<&'a str>,
+    /// RFC 3339; matches messages created at or before it.
+    pub to: Option<&'a str>,
+    /// 1 to 50; the caller clamps.
+    pub limit: Option<usize>,
+}
+
+/// The rows a message search returns, and whether another page exists.
+#[derive(Default)]
+pub struct MessageSearchPage {
+    pub results: Vec<Value>,
+    pub truncated: bool,
+}
+
+/// An RFC 3339 bound as the `YYYY-MM-DDTHH:MM:SS` prefix every stored
+/// `messages.created_at` starts with, so the comparison is text and timezone
+/// independent (stored rows are UTC with either `Z` or `+00:00`).
+fn search_date_prefix(raw: &str) -> Option<String> {
+    let parsed = chrono::DateTime::parse_from_rfc3339(raw.trim()).ok()?;
+    Some(parsed.naive_utc().format("%Y-%m-%dT%H:%M:%S").to_string())
+}
+
 fn session_event_summary_locked(c: &Connection, id: &str) -> Result<Value, StorageError> {
     let json: Option<String> = c.query_row(
         "SELECT json_object('id',id,'runtimeId',runtime_id,'agentId',agent_id,'provider',provider,'title',COALESCE(title_override,title),'modelLock',json(model_lock_json),'archived',json(CASE WHEN archived=1 THEN 'true' ELSE 'false' END),'state',state,'limitedUntil',limited_until,'limitAutoResume',json(CASE WHEN limit_auto_resume!=0 THEN 'true' ELSE 'false' END),'limitSnoozed',json(CASE WHEN limit_snoozed!=0 THEN 'true' ELSE 'false' END),'snoozed',json(CASE WHEN snoozed_until_needed!=0 THEN 'true' ELSE 'false' END),'resumable',json(CASE WHEN resumable!=0 THEN 'true' ELSE 'false' END),'createdAt',created_at,'updatedAt',updated_at,'workspaceLabel',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path),'Casual'),'projectId',COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),'projectName',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path)),'fanoutId',(SELECT f.id FROM fanouts f WHERE f.id=json_extract(sessions.data,'$.fanoutId')),'origin',json(json_extract(data,'$.origin')),'projectApprovalMode',(SELECT CASE WHEN json_valid(q.overrides_json) THEN json_extract(q.overrides_json,'$.approvalMode') END FROM projects q WHERE q.id=COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path))),'link',json_extract(data,'$.link'),'lastMessageAt',(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1)) FROM sessions WHERE id=?1",
@@ -8266,12 +8322,16 @@ fn session_event_summary_locked(c: &Connection, id: &str) -> Result<Value, Stora
 /// `session.permissions.set`) read only this: they never need a single message
 /// or tool payload (2026-11-01).
 fn session_row_locked(c: &Connection, id: &str) -> Result<Value, StorageError> {
-    let base:Option<String>=c.query_row("SELECT json_object('id',id,'runtimeId',runtime_id,'agentId',agent_id,'provider',provider,'providerSessionId',provider_session_id,'projectPath',project_path,'title',COALESCE(title_override,title),'modelLock',json(model_lock_json),'archived',json(CASE WHEN archived=1 THEN 'true' ELSE 'false' END),'state',state,'limitedUntil',limited_until,'limitAutoResume',json(CASE WHEN limit_auto_resume!=0 THEN 'true' ELSE 'false' END),'limitSnoozed',json(CASE WHEN limit_snoozed!=0 THEN 'true' ELSE 'false' END),'snoozed',json(CASE WHEN snoozed_until_needed!=0 THEN 'true' ELSE 'false' END),'resumable',json(CASE WHEN resumable!=0 THEN 'true' ELSE 'false' END),'createdAt',created_at,'updatedAt',updated_at,'workspaceLabel',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path),'Casual'),'projectId',COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),'projectName',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path)),'fanoutId',(SELECT f.id FROM fanouts f WHERE f.id=json_extract(sessions.data,'$.fanoutId')),'origin',json(json_extract(data,'$.origin')),'projectApprovalMode',(SELECT CASE WHEN json_valid(q.overrides_json) THEN json_extract(q.overrides_json,'$.approvalMode') END FROM projects q WHERE q.id=COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path))),'link',json_extract(data,'$.link'),'lastMessageAt',(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1)) FROM sessions WHERE id=?1",[id],|r|r.get(0)).optional()?;
+    let base:Option<String>=c.query_row("SELECT json_object('id',id,'runtimeId',runtime_id,'agentId',agent_id,'provider',provider,'providerSessionId',provider_session_id,'projectPath',project_path,'title',COALESCE(title_override,title),'modelLock',json(model_lock_json),'archived',json(CASE WHEN archived=1 THEN 'true' ELSE 'false' END),'state',state,'limitedUntil',limited_until,'limitAutoResume',json(CASE WHEN limit_auto_resume!=0 THEN 'true' ELSE 'false' END),'limitSnoozed',json(CASE WHEN limit_snoozed!=0 THEN 'true' ELSE 'false' END),'snoozed',json(CASE WHEN snoozed_until_needed!=0 THEN 'true' ELSE 'false' END),'resumable',json(CASE WHEN resumable!=0 THEN 'true' ELSE 'false' END),'createdAt',created_at,'updatedAt',updated_at,'workspaceLabel',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path),'Casual'),'projectId',COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),'projectName',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path)),'fanoutId',(SELECT f.id FROM fanouts f WHERE f.id=json_extract(sessions.data,'$.fanoutId')),'origin',json(json_extract(data,'$.origin')),'projectApprovalMode',(SELECT CASE WHEN json_valid(q.overrides_json) THEN json_extract(q.overrides_json,'$.approvalMode') END FROM projects q WHERE q.id=COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path))),'link',json_extract(data,'$.link'),'plan',json(json_extract(data,'$.plan')),'lastMessageAt',(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1)) FROM sessions WHERE id=?1",[id],|r|r.get(0)).optional()?;
     let mut v: Value =
         serde_json::from_str(&base.ok_or(rusqlite::Error::QueryReturnedNoRows)?)?;
     // B2: a conversation started in the app has no origin at all, not a null one.
     if v["origin"].is_null() {
         if let Some(object) = v.as_object_mut() { object.remove("origin"); }
+    }
+    // Wave 2: the conversation's plan is present only while it has one.
+    if v["plan"].is_null() {
+        if let Some(object) = v.as_object_mut() { object.remove("plan"); }
     }
     if v["state"] != "limited" {
         if let Some(object) = v.as_object_mut() { object.remove("limitAutoResume"); object.remove("limitSnoozed"); }
@@ -10320,6 +10380,63 @@ mod tests {
         assert_eq!(db.session_detail("plan-session").unwrap()["turns"][0]["plan"]["items"].as_array().unwrap().len(), 1);
         db.create_turn("no-plan-turn", "plan-session").unwrap();
         assert!(db.session_detail("plan-session").unwrap()["turns"][1]["plan"].is_null());
+    }
+
+    /// Wave 2 (nod idea 4): the conversation keeps its own plan, and a cleared
+    /// one leaves no field on the session DTO.
+    #[test]
+    fn a_conversations_plan_round_trips_and_clears() {
+        let db = Storage::open_in_memory().unwrap();
+        db.create_session("carry-session", "runtime", "codex", ".", "Carry").unwrap();
+        assert!(db.session_plan("carry-session").unwrap().is_none());
+        let plan = json!({"items":[{"text":"Read the parser","status":"completed"}],"updatedAt":"2026-11-17T10:00:00.000Z","turnId":"turn-1"});
+        db.merge_session_data("carry-session", &json!({"plan":plan})).unwrap();
+        assert_eq!(db.session_plan("carry-session").unwrap().unwrap(), plan);
+        assert_eq!(db.session_detail("carry-session").unwrap()["plan"], plan);
+        // RFC 7396: a null removes the key, so the window sees no plan at all.
+        db.merge_session_data("carry-session", &json!({"plan": Value::Null})).unwrap();
+        assert!(db.session_plan("carry-session").unwrap().is_none());
+        assert!(db.session_detail("carry-session").unwrap().get("plan").is_none());
+    }
+
+    /// Wave 2 (nod idea 7): one search, narrowed to a conversation, a project or
+    /// a date window, and never widened by a conversation that is archived.
+    #[test]
+    fn message_search_narrows_by_conversation_project_and_date() {
+        let db = Storage::open_in_memory().unwrap();
+        let project = db.project_create("Search project", None).unwrap().0;
+        let other = db.project_create("Other project", None).unwrap().0;
+        db.create_session("search-a", "runtime", "codex", ".", "A").unwrap();
+        db.create_session("search-b", "runtime", "codex", ".", "B").unwrap();
+        db.merge_session_data("search-a", &json!({"projectId": project["id"]})).unwrap();
+        db.merge_session_data("search-b", &json!({"projectId": other["id"]})).unwrap();
+        db.append_message("search-a", "", "user", "We keep the retry budget under 30 seconds.").unwrap();
+        db.append_message("search-b", "", "user", "The retry budget is unbounded here.").unwrap();
+        let all = db.search_messages("retry budget").unwrap();
+        assert_eq!(all.len(), 2);
+        let one = db.search_messages_scoped("retry budget", MessageSearchScope { session_id: Some("search-a"), ..Default::default() }).unwrap();
+        assert_eq!(one.results.len(), 1);
+        assert!(!one.truncated);
+        assert_eq!(one.results[0]["sessionId"], "search-a");
+        let by_project = db.search_messages_scoped("retry budget", MessageSearchScope { project_id: Some(project["id"].as_str().unwrap()), ..Default::default() }).unwrap();
+        assert_eq!(by_project.results.len(), 1);
+        assert_eq!(by_project.results[0]["sessionId"], "search-a");
+        // A limit reports that more matches exist.
+        let limited = db.search_messages_scoped("retry budget", MessageSearchScope { limit: Some(1), ..Default::default() }).unwrap();
+        assert_eq!((limited.results.len(), limited.truncated), (1, true));
+        // A date window, in either direction.
+        let now = chrono::Utc::now().to_rfc3339();
+        assert_eq!(db.search_messages_scoped("retry budget", MessageSearchScope { from: Some(now.as_str()), ..Default::default() }).unwrap().results.len(), 2);
+        let later = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
+        assert_eq!(db.search_messages_scoped("retry budget", MessageSearchScope { from: Some(later.as_str()), ..Default::default() }).unwrap().results.len(), 0);
+        assert_eq!(db.search_messages_scoped("retry budget", MessageSearchScope { to: Some(later.as_str()), ..Default::default() }).unwrap().results.len(), 2);
+        // An archived conversation is never searched.
+        db.session_archive("search-a", true).unwrap();
+        let after = db.search_messages("retry budget").unwrap();
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0]["sessionId"], "search-b");
+        // Like-pattern characters in the query are escaped, not wildcards.
+        assert!(db.search_messages("%").unwrap().is_empty());
     }
 
     #[test]

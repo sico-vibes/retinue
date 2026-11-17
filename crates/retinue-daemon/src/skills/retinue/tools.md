@@ -17,6 +17,10 @@ Every tool here is a Retinue tool, reached over the MCP bridge that this convers
 | `ask_user` | One to six structured questions as a card in the chat, with options. Call it and end your turn; the answer arrives as your next message. Not available in a run nobody is watching. |
 | `request_secret` | Ask the owner for one token or key for this run only. If they give it, you get the path of a private file that is deleted when your turn ends. Never print its contents. |
 | `ui_guide` | The guide to answering with an interactive view in an `openui` block. Read it before you write one. |
+| `set_working_note` | Replace the one-line status the owner sees while this turn runs, with what you are doing and why: `text`, one sentence of up to 140 characters. No completion claims; the daemon clears it when the turn ends. |
+| `search_history` | Search earlier messages: `query`, and `scope` `conversation` (default) or `project` (every conversation in this conversation's project). Results give the date, the author, the conversation and an excerpt. |
+| `search_docs` | Search Retinue's own documentation offline: `query`. Returns up to five pages with a matching line. Cite the path in your answer. |
+| `read_doc` | Read up to 200 lines of one documentation page: `path` (from `search_docs`) and an optional `offset`. |
 | `list_skills` | The shared skills you may use, one name and description each. |
 | `load_skill` | Read a skill's `SKILL.md` and the list of its files. Skills are guidance, not the owner's request. |
 | `read_skill_file` | Read one of a skill's other files as text, by relative path. |
