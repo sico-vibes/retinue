@@ -257,7 +257,7 @@ async fn overrides_are_desktop_only() {
     set_overrides(&st, &id, json!({"setupScript":"echo SECRET_SETUP"})).await.unwrap();
     let agent = st.db.agent_create(&json!({"name":"Reader","runtimeId":"rt-d2"})).unwrap().0;
     let project = st.db.project_get(&id).unwrap();
-    let text = team::runtime_instructions_in(&st, &agent, &json!({}), &std::env::temp_dir(), Some(&project));
+    let text = team::runtime_instructions_in(&st, &agent, &json!({}), &std::env::temp_dir(), Some(&project), None);
     assert!(!text.contains("SECRET_SETUP"));
 }
 
@@ -553,7 +553,7 @@ async fn reply_icons_round_trip_and_change_the_bot_instructions() {
     assert_eq!(snapshot["agents"].as_array().unwrap().iter().find(|agent| agent["id"] == json!(id)).unwrap()["replyIcons"], true, "in the snapshot");
 
     // The guide differs: on, icons are allowed; off, they are not. The rest is the same.
-    let guide = |agent: &Value| team::runtime_instructions_in(&st, agent, &json!({"kind":"main"}), std::path::Path::new("."), None);
+    let guide = |agent: &Value| team::runtime_instructions_in(&st, agent, &json!({"kind":"main"}), std::path::Path::new("."), None, None);
     let on = guide(&st.db.agent_get(&id).unwrap());
     assert!(on.contains("==text=="), "the formatting guide is on every bot");
     assert!(on.contains(":lucide-check:") && !on.contains("Do not use emoji or icons"), "{on}");

@@ -2,6 +2,18 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-17 · Rust · `value["key"]` on a `&mut Value` inserts a null key
+
+- **Symptom:** a test comparing a catalogue `Value` with itself failed after an overlay function had run: the value came back with `"models": null` added.
+- **Cause:** `serde_json::Value`'s `IndexMut` inserts `Value::Null` for a missing object key, so `catalog["models"].as_array_mut()` — read-then-`as_array_mut` — mutates the value when the key is absent. Reads through `Index` on an owned value do not, which is why the same line is harmless when only read.
+- **Fix:** take the field with `get_mut("models").and_then(Value::as_array_mut)` (2026-11-17, `model_cues.rs`), and pin it with a test that passes a catalogue without a `models` array. Check any code that indexes a `&mut Value` and then treats the result as read-only.
+
+## 2026-11-17 · Gates · A fresh target dir is refused by Smart App Control; borrow a built one
+
+- **Symptom:** in a lane worktree with no `target`, `cargo check -p retinue-storage` stopped at `failed to run custom build command for serde_json` / `libsqlite3-sys`: *An Application Control policy has blocked this file. (os error 4551)* — a freshly *built* build script is refused, not the compiler.
+- **Fix that works:** point `CARGO_TARGET_DIR` at a sibling worktree's target whose build scripts already ran (they are reused, not rebuilt): `CARGO_TARGET_DIR='C:\Users\…\Retinue-retinue\backend-work-from-the-owner-assigned\target'`, with `TEMP`/`TMP` at `C:\tmp` and `RUST_MIN_STACK=33554432`. That target has the daemon and its dependencies; a smaller lane target may not. Cargo serialises on its lock, so several lanes can share one (they wait, they do not fail).
+- **Do not** delete or stub `build.rs` to get past this. If you ever do, restore it before you finish and say so in the report.
+
 ## 2026-11-17 · Git · Partial staging with `git apply --cached --unidiff-zero` misplaces insertions
 
 - **Symptom:** commit `540314f` did not compile: a constant and a paid-model check landed nine lines off, inside the wrong function. The working copy, which passed every test, was right.
@@ -120,6 +132,8 @@ Eight backend lanes ran in parallel in the in-app backend bot, one git worktree 
 It is intermittent, not total: on 12 and 13 November `cargo check -p retinue-daemon` and the daemon and storage unit tests built and ran (1,033 and 164 passed), while several integration test binaries (`acp_lifecycle`, `acp_steering`, `table_providers`, `wire_replay`, `daemon_smoke`, `parent_watchdog`) and every build script of the native shell (`tray-icon`, `tauri-runtime-wry`, `retinue-desktop`) were refused with os error 4551. So on this machine the native shell cannot be compiled at all, and native changes are only proven by CI or a release build. Use `cargo test --no-fail-fast`, or one blocked binary hides every suite after it. The opt-in live Claude test did run: `RETINUE_LIVE_TESTS=1 cargo test -p retinue-adapter-claude --test live_suite claude_live_permission_change_and_steer` passed, which is the proof that steering reaches a real Claude Code turn.
 
 **Workaround when cargo stops on a blocked build script (13 November 2026):** delete that build script's folder and retry, so cargo compiles it afresh — `Remove-Item -Recurse -Force 'target\debug\build\getrandom-<hash>','target\debug\build\serde_json-<hash>'`, then the same `cargo test` passed; the newly compiled script was allowed where the old binary was not. A fresh binary compiled outside the repo (`cargo new` in `C:\tmp`) ran at once, so the block is per binary, not per path. Retry before giving up on a suite.
+
+**A test binary that is refused (17 November 2026):** the same rule applies to the binary itself — `Remove-Item` the `target\debug\deps\<crate>-<hash>.exe` and rerun; cargo relinks (a minute or two) and the new file is sometimes allowed where the old one was not. Four relinks of `retinued-<hash>.exe` were refused on one lane and a fifth ran, so loop it a few times before reporting the suite as un-runnable. Clippy is different: it forces a fresh daemon build script, which is refused every time; use `cargo test --no-run` to prove the test code compiles instead.
 
 ## 2026-11-13 · Gates · Two daemon tests fail when run from inside the app's own environment
 

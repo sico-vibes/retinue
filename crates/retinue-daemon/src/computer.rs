@@ -254,6 +254,9 @@ enum HarborError {
     Unauthorized,
     /// No answer, a timeout, or a connection that never completed.
     Unreachable,
+    /// The request went out and no answer came back in time. For a tool that
+    /// changes something this is not a failure with no effect: it may have acted.
+    Unanswered,
     /// Anything else, already a plain sentence.
     Other(String),
 }
@@ -302,9 +305,12 @@ impl Harbor {
         if let Some(body) = body {
             request = request.json(&body);
         }
-        let response = request.send().await.map_err(|_| HarborError::Unreachable)?;
+        // A request that timed out may have arrived and been carried out; a
+        // connection that never completed certainly did nothing. The two are
+        // kept apart so a tool that changes something can say which it is.
+        let response = request.send().await.map_err(|error| if error.is_timeout() { HarborError::Unanswered } else { HarborError::Unreachable })?;
         let status = response.status();
-        let text = response.text().await.unwrap_or_default();
+        let text = response.text().await.map_err(|_| HarborError::Unanswered)?;
         if status == reqwest::StatusCode::UNAUTHORIZED {
             return Err(HarborError::Unauthorized);
         }
@@ -505,7 +511,21 @@ fn problem_of(error: HarborError) -> String {
     match error {
         HarborError::Unauthorized => "Harbor refused the token. The owner needs to link the computer again.".into(),
         HarborError::Unreachable => "The computer's server did not answer. It may be off, or the address may have changed.".into(),
+        HarborError::Unanswered => "The computer's server stopped answering.".into(),
         HarborError::Other(message) => message,
+    }
+}
+
+/// The sentence for a tool that changes something and whose answer was lost
+/// (`01-sandbox.md`, idea 3). nod's rule, adopted here: no final answer means
+/// "uncertain", never success and never "nothing happened", and the next step is
+/// to look before doing it again. Retinue does not retry a step like this itself.
+const MAY_HAVE_ACTED_DONE: &str = "The computer did not answer, so this step may have happened. Look at the computer before running it again; Retinue did not repeat it.";
+
+fn may_have_acted(error: HarborError) -> String {
+    match error {
+        HarborError::Unanswered => MAY_HAVE_ACTED_DONE.to_owned(),
+        other => problem_of(other),
     }
 }
 
@@ -656,12 +676,12 @@ fn first_line(output: &str) -> Option<String> {
 /// Runs one of Retinue's own scripts in the container, and answers what it
 /// printed or the container's own complaint. The caller builds every script from
 /// numbers, key names and base64, never from typed text.
-async fn run_script(harbor: &Harbor, script: &str, limit: Duration) -> Result<String, String> {
+async fn run_script(harbor: &Harbor, script: &str, limit: Duration, acting: bool) -> Result<String, String> {
     let timeout_ms = (limit.as_millis() as u64).clamp(1, EXEC_MAX_MS);
     let body = harbor
         .call(reqwest::Method::POST, "/exec", Some(json!({"command": script, "timeout_ms": timeout_ms})), limit + EXEC_MARGIN)
         .await
-        .map_err(problem_of)?;
+        .map_err(|error| if acting { may_have_acted(error) } else { problem_of(error) })?;
     let (code, output) = exec_answer(&body);
     if code != 0 {
         return Err(first_line(&output).unwrap_or_else(|| format!("The command inside the computer failed (exit code {code}).")));
@@ -673,7 +693,7 @@ async fn run_script(harbor: &Harbor, script: &str, limit: Duration) -> Result<St
 /// install. A tool always probes again, because a container can gain or lose a
 /// package between calls.
 async fn probe_for_tool(harbor: &Harbor) -> Result<InputProbe, String> {
-    let probe = parse_probe(&run_script(harbor, PROBE_SCRIPT, ACTION_TIMEOUT).await?);
+    let probe = parse_probe(&run_script(harbor, PROBE_SCRIPT, ACTION_TIMEOUT, false).await?);
     if !probe.missing.is_empty() {
         return Err(missing_tools_message(&probe.missing));
     }
@@ -690,7 +710,7 @@ async fn input_probe(st: &AppState, link: &ComputerLink) -> Option<InputProbe> {
         return Some(probe);
     }
     let harbor = Harbor { address: link.address.clone(), token: token_of(link).ok()? };
-    let probe = parse_probe(&run_script(&harbor, PROBE_SCRIPT, STATUS_TIMEOUT).await.ok()?);
+    let probe = parse_probe(&run_script(&harbor, PROBE_SCRIPT, STATUS_TIMEOUT, false).await.ok()?);
     st.computer.remember_input(probe.clone());
     Some(probe)
 }
@@ -776,6 +796,7 @@ async fn link(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
     let body = harbor.call(reqwest::Method::GET, "", None, STATUS_TIMEOUT).await.map_err(|error| match error {
         HarborError::Unauthorized => invalid("Harbor refused that token."),
         HarborError::Unreachable => unavailable("That address did not answer. Check the address and that Harbor is running.", StatusCode::BAD_GATEWAY),
+        HarborError::Unanswered => unavailable("That address stopped answering. Check the address and that Harbor is running.", StatusCode::BAD_GATEWAY),
         HarborError::Other(message) => unavailable(&message, StatusCode::BAD_GATEWAY),
     })?;
     if !body["computer"].is_object() {
@@ -1059,6 +1080,27 @@ pub(crate) fn cap_output(text: String) -> String {
     cut
 }
 
+/// `computer_exec`'s answer when its output is long: the first and last 32 KiB
+/// stay in the reply, the whole text is kept beside it, and the JSON says how
+/// large it was and where the rest is. A tail-only cut used to hide the error that
+/// came first, which is usually the one that says what went wrong
+/// (`01-sandbox.md`, idea 5).
+fn exec_output_answer(st: &AppState, session_id: &str, body: Value) -> String {
+    // Half the module's rule each way: this answer is a JSON object and still
+    // passes through `cap_output`'s 64 KiB ceiling on the way out, which must not
+    // cut the tail a second time.
+    let Some(output) = body["output"].as_str() else { return as_text(&body) };
+    let capped = crate::tool_output::head_and_tail(output, crate::tool_output::HEAD_BYTES / 2, crate::tool_output::TAIL_BYTES / 2);
+    if !capped.truncated { return as_text(&body) }
+    let saved = crate::tool_output::save(st, session_id, "computer_exec", output);
+    let mut body = body;
+    body["output"] = json!(capped.text);
+    body["outputBytes"] = json!(capped.bytes);
+    body["outputTruncated"] = json!(true);
+    body["fullOutputPath"] = saved.map(|path| json!(path.display().to_string())).unwrap_or(Value::Null);
+    as_text(&body)
+}
+
 fn as_text(value: &Value) -> String {
     match value {
         Value::String(text) => text.clone(),
@@ -1119,6 +1161,8 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
     }
     let harbor = Harbor { address: link.address.clone(), token: token_of(&link).map_err(|error| error.1.message)? };
     let failure = |error: HarborError| problem_of(error);
+    // A command, a routine created or a routine started all change the computer: a lost answer to one of those may have acted.
+    let acting_failure = |error: HarborError| may_have_acted(error);
     match name {
         "computer_status" => harbor.call(reqwest::Method::GET, "", None, STATUS_TIMEOUT).await.map(|body| as_text(&body)).map_err(failure),
         "computer_wake" => harbor.call(reqwest::Method::POST, "/action/wake", Some(json!({})), ACTION_TIMEOUT).await.map(|body| as_text(&body)).map_err(failure),
@@ -1139,7 +1183,7 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
             if let Some(ms) = timeout_ms {
                 body["timeout_ms"] = json!(ms);
             }
-            harbor.call(reqwest::Method::POST, "/exec", Some(body), limit).await.map(|body| as_text(&body)).map_err(failure)
+            harbor.call(reqwest::Method::POST, "/exec", Some(body), limit).await.map(|body| exec_output_answer(st, session_id, body)).map_err(acting_failure)
         }
         "computer_list_routines" => harbor.call(reqwest::Method::GET, "/routines", None, ACTION_TIMEOUT).await.map(|body| as_text(&body)).map_err(failure),
         "computer_create_routine" => {
@@ -1150,11 +1194,11 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
                 .call(reqwest::Method::POST, "/routines", Some(json!({"name": routine_name, "cron": cron, "command": command})), ACTION_TIMEOUT)
                 .await
                 .map(|body| as_text(&body))
-                .map_err(failure)
+                .map_err(acting_failure)
         }
         "computer_run_routine" => {
             let id = args["id"].as_str().filter(|id| (1..=ROUTINE_ID_MAX).contains(&id.len())).ok_or("id is required.")?;
-            harbor.call(reqwest::Method::POST, &format!("/routines/{}/run", path_segment(id)), Some(json!({})), ACTION_TIMEOUT).await.map(|body| as_text(&body)).map_err(failure)
+            harbor.call(reqwest::Method::POST, &format!("/routines/{}/run", path_segment(id)), Some(json!({})), ACTION_TIMEOUT).await.map(|body| as_text(&body)).map_err(acting_failure)
         }
         "computer_desktop_url" => {
             let body = harbor.call(reqwest::Method::GET, "", None, STATUS_TIMEOUT).await.map_err(failure)?;
@@ -1305,7 +1349,9 @@ async fn input_tool(st: &AppState, harbor: &Harbor, session_id: &str, name: &str
         "computer_move" => {
             let (x, y) = position.unwrap_or((0, 0));
             let script = format!("# retinue:move\nexport DISPLAY={display}\nxdotool mousemove --sync {x} {y}\n");
-            run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            // Moving the pointer changes nothing, so a lost answer is not a step
+            // that may have happened.
+            run_script(harbor, &script, ACTION_TIMEOUT, false).await?;
             Ok((format!("Moved the pointer to {x}, {y}."), "Moved the pointer in the bot computer.".to_owned()))
         }
         "computer_click" => {
@@ -1317,7 +1363,7 @@ async fn input_tool(st: &AppState, harbor: &Harbor, session_id: &str, name: &str
             } else {
                 script.push_str(&format!("xdotool click {button}\n"));
             }
-            run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            run_script(harbor, &script, ACTION_TIMEOUT, true).await?;
             let with = button_name(button);
             if double {
                 Ok((format!("Clicked twice at {x}, {y} with the {with} button."), "Clicked twice in the bot computer.".to_owned()))
@@ -1329,7 +1375,7 @@ async fn input_tool(st: &AppState, harbor: &Harbor, session_id: &str, name: &str
             let (x, y) = position.unwrap_or((0, 0));
             let (direction, button, amount) = scroll.ok_or("direction is required.")?;
             let script = format!("# retinue:scroll\nexport DISPLAY={display}\nxdotool mousemove --sync {x} {y}\nxdotool click --repeat {amount} --delay 40 {button}\n");
-            run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            run_script(harbor, &script, ACTION_TIMEOUT, true).await?;
             Ok((format!("Scrolled {direction} {amount} steps at {x}, {y}."), format!("Scrolled {direction} in the bot computer.")))
         }
         "computer_type" => {
@@ -1338,13 +1384,13 @@ async fn input_tool(st: &AppState, harbor: &Harbor, session_id: &str, name: &str
             // command, not in the reply, not in the activity row, not in a log.
             let encoded = base64::engine::general_purpose::STANDARD.encode(text.as_bytes());
             let script = format!("# retinue:type\nexport DISPLAY={display}\nprintf '%s' '{encoded}' | base64 -d | xdotool type --clearmodifiers --delay 12 --file -\n");
-            run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            run_script(harbor, &script, ACTION_TIMEOUT, true).await?;
             Ok((format!("Typed {count} characters."), format!("Typed {count} characters in the bot computer.")))
         }
         "computer_key" => {
             let keys = keys.ok_or("keys is required.")?;
             let script = format!("# retinue:key\nexport DISPLAY={display}\nxdotool key --clearmodifiers {keys}\n");
-            run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            run_script(harbor, &script, ACTION_TIMEOUT, true).await?;
             Ok((format!("Pressed {keys}."), format!("Pressed {keys} in the bot computer.")))
         }
         _ => {
@@ -1364,7 +1410,7 @@ echo "RETINUE_BYTES:$(wc -c <"$f" | tr -d ' ')"
 echo "RETINUE_PNG:$(base64 "$f" | tr -d '\n')"
 rm -f "$f"
 "#);
-            let output = run_script(harbor, &script, ACTION_TIMEOUT).await?;
+            let output = run_script(harbor, &script, ACTION_TIMEOUT, false).await?;
             let png = screenshot_bytes(&output)?;
             let media_id = crate::media::store_screenshot(st, session_id, &png).await?;
             let caption = "Screenshot of the bot computer";

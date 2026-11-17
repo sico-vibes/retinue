@@ -474,11 +474,11 @@ fn project_section(project: &Value, workspace: &std::path::Path) -> Vec<String> 
 #[cfg(test)]
 pub fn runtime_instructions(st: &AppState, agent: &Value, link: &Value, workspace: &std::path::Path) -> String {
     let project = agent["projectId"].as_str().and_then(|id| st.db.project_get(id).ok());
-    runtime_instructions_in(st, agent, link, workspace, project.as_ref())
+    runtime_instructions_in(st, agent, link, workspace, project.as_ref(), None)
 }
 
 /// The same, for a conversation in `project` (`None` = the bot's private workspace).
-pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, workspace: &std::path::Path, project: Option<&Value>) -> String {
+pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, workspace: &std::path::Path, project: Option<&Value>, session_id: Option<&str>) -> String {
     let name = agent_name(agent);
     let noun = entity_noun(false);
     let nouns = entity_noun(true);
@@ -495,6 +495,11 @@ pub fn runtime_instructions_in(st: &AppState, agent: &Value, link: &Value, works
     match project {
         Some(project) => lines.extend(project_section(project, workspace)),
         None => lines.push(format!("You are a casual {noun}, not tied to a project. Your scratch workspace is {}; take general requests and work wherever the user points you.", workspace.display())),
+    }
+    // Wave 2: where disposable files go, so they never become untracked noise in
+    // a diff. It is a tidy place to write, never a boundary.
+    if let Some(line) = session_id.and_then(|id| crate::scratch::instruction_line(st, id)) {
+        lines.push(line);
     }
     if agent["systemRole"].as_str() == Some("manager") {
         lines.push(format!("You are {name}, the user's CEO: chat like a capable team lead. Your team works in projects. Ground yourself with list_projects and list_blobs, then route by role, description, tags and project. Read the user's message for the project first: a #Name in it is a project, matched by its name or one of its tags. When the request needs a project and they named none, call ask_user and offer the projects as options before you delegate; never let a bot's own placement decide where its work lands, and pass `project` on message_blob and start_conversation whenever you know it. With no project, research goes to a free bot tagged researcher; for project P, use P's researcher. If none fits, propose_bot for that project (or propose_project when a project is needed); do small things yourself when appropriate; you ask the user before creating projects, bots, hiring or assigning tasks."));
@@ -571,7 +576,7 @@ pub fn attach(st: &AppState, session_id: &str, agent_id: Option<&str>, link: &Va
     let Some(agent) = agent_id.and_then(|id| st.db.agent_get(id).ok()) else { return };
     let workspace = folder.map(std::path::Path::to_path_buf).unwrap_or_else(|| workspace_for(st, &agent));
     let project = project_id.and_then(|id| st.db.project_get(id).ok());
-    let team = runtime_instructions_in(st, &agent, link, &workspace, project.as_ref());
+    let team = runtime_instructions_in(st, &agent, link, &workspace, project.as_ref(), Some(session_id));
     options.instructions = Some(match options.instructions.as_deref().map(str::trim).filter(|text| !text.is_empty()) {
         Some(own) => format!("{team}\n\n{own}"),
         None => team,

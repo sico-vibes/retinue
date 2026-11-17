@@ -212,6 +212,8 @@ pub async fn run(st: &AppState) -> Result<Value, DispatchError> {
     checks.extend(hook_checks());
     checks.extend(remote_checks(st));
     checks.extend(speech_checks());
+    // Wave 2: who can read Retinue's own data folder.
+    checks.extend(crate::sandbox::doctor_checks(st));
     if checks.is_empty() {
         return Err(derr("conflict", "There is nothing to check yet.", StatusCode::CONFLICT));
     }
@@ -251,7 +253,7 @@ mod tests {
         assert!(!checks.is_empty());
         for row in checks {
             let area = row["area"].as_str().unwrap();
-            assert!(["runtime", "database", "hooks", "remote", "speech"].contains(&area), "{area}");
+            assert!(["runtime", "database", "hooks", "remote", "speech", "safety"].contains(&area), "{area}");
             assert!(["ok", "warn", "fail"].contains(&row["status"].as_str().unwrap()), "{row}");
             assert!(row["id"].as_str().is_some_and(|id| !id.is_empty()));
             assert!(row["label"].as_str().is_some_and(|label| !label.is_empty()));
