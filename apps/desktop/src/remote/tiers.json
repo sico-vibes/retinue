@@ -331,6 +331,34 @@
       "params": null
     },
     {
+      "method": "pi.providers",
+      "class": "never",
+      "minTier": null,
+      "why": "Which model providers Pi has a key for, and how many models each offers, is a desktop answer: a key never crosses to a device, and the list exists to manage keys.",
+      "params": null
+    },
+    {
+      "method": "pi.key.set",
+      "class": "never",
+      "minTier": null,
+      "why": "Saving a model-provider key for Pi is a desktop action; the value is typed at the desktop, kept in Credential Manager and never travels.",
+      "params": null
+    },
+    {
+      "method": "pi.key.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "Removing a key is a desktop action, for the same reason adding one is.",
+      "params": null
+    },
+    {
+      "method": "pi.key.test",
+      "class": "never",
+      "minTier": null,
+      "why": "A key test spends a provider request with the owner's key, so only the owner at the desktop can start one.",
+      "params": null
+    },
+    {
       "method": "secret.request.list",
       "class": "never",
       "minTier": null,
@@ -349,6 +377,118 @@
       "class": "never",
       "minTier": null,
       "why": "Only the owner at the desktop answers a secret request.",
+      "params": null
+    },
+    {
+      "method": "vault.list",
+      "class": "never",
+      "minTier": null,
+      "why": "The vault lists the owner's saved logins, cards and keys, and every vault method keeps its values at the desktop.",
+      "params": null
+    },
+    {
+      "method": "vault.create",
+      "class": "never",
+      "minTier": null,
+      "why": "Saving a login or a card is the owner's at the desktop; a paired device must never write a vault value.",
+      "params": null
+    },
+    {
+      "method": "vault.update",
+      "class": "never",
+      "minTier": null,
+      "why": "Changing a saved login or card is the owner's at the desktop.",
+      "params": null
+    },
+    {
+      "method": "vault.delete",
+      "class": "never",
+      "minTier": null,
+      "why": "Deleting a saved login or card is the owner's at the desktop.",
+      "params": null
+    },
+    {
+      "method": "vault.reveal",
+      "class": "never",
+      "minTier": null,
+      "why": "A revealed vault value is shown only at the desktop; it must never reach a paired device.",
+      "params": null
+    },
+    {
+      "method": "vault.totp",
+      "class": "never",
+      "minTier": null,
+      "why": "An authenticator code is as good as the password, so it is shown only at the desktop.",
+      "params": null
+    },
+    {
+      "method": "vault.activity",
+      "class": "never",
+      "minTier": null,
+      "why": "The vault's use ledger is the owner's audit view at the computer.",
+      "params": null
+    },
+    {
+      "method": "vault.use.list",
+      "class": "never",
+      "minTier": null,
+      "why": "A use waiting for the owner's approval is answered at the desktop only, by the owner's decision of 16 November 2026.",
+      "params": null
+    },
+    {
+      "method": "vault.use.answer",
+      "class": "never",
+      "minTier": null,
+      "why": "Approving a vault use is never done from a phone or chat: the card is answered at the desktop.",
+      "params": null
+    },
+    {
+      "method": "connector.list",
+      "class": "never",
+      "minTier": null,
+      "why": "The owner's connectors and their tokens stay at the desktop.",
+      "params": null
+    },
+    {
+      "method": "connector.add",
+      "class": "never",
+      "minTier": null,
+      "why": "Adding a connector, and typing its token, is a desktop action.",
+      "params": null
+    },
+    {
+      "method": "connector.update",
+      "class": "never",
+      "minTier": null,
+      "why": "Changing a connector's name, token or switches is a desktop action.",
+      "params": null
+    },
+    {
+      "method": "connector.remove",
+      "class": "never",
+      "minTier": null,
+      "why": "Removing a connector, and deleting its token, is a desktop action.",
+      "params": null
+    },
+    {
+      "method": "connector.test",
+      "class": "never",
+      "minTier": null,
+      "why": "A check reaches a third-party service with the owner's token, so only the desktop starts one.",
+      "params": null
+    },
+    {
+      "method": "connector.tools",
+      "class": "never",
+      "minTier": null,
+      "why": "A connector's tools and their approval rules stay at the desktop.",
+      "params": null
+    },
+    {
+      "method": "connector.tool.rule",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner sets a standing allow or deny for a connector tool.",
       "params": null
     },
     {
@@ -1750,9 +1890,66 @@
       "minTier": null,
       "why": "It names the host's local dev servers, their ports and the process ids behind them: a map of what is running on this computer, which only the owner at the desktop may see.",
       "params": null
+    },
+    {
+      "method": "channel.list",
+      "class": "never",
+      "minTier": null,
+      "why": "The channels are the owner's own bot tokens and paired phone numbers; setting them up and reading their state happens at the desktop only.",
+      "params": null
+    },
+    {
+      "method": "channel.telegram.connect",
+      "class": "never",
+      "minTier": null,
+      "why": "It takes a bot token, which is a host credential, and opens a pairing window: the desktop only.",
+      "params": null
+    },
+    {
+      "method": "channel.whatsappWeb.start",
+      "class": "never",
+      "minTier": null,
+      "why": "Starting a WhatsApp Web client links the owner's whole WhatsApp account as a device: the desktop only, and it needs the owner's QR scan there.",
+      "params": null
+    },
+    {
+      "method": "channel.whatsappCloud.connect",
+      "class": "never",
+      "minTier": null,
+      "why": "It stores Meta's access token and app secret, which are host credentials: the desktop only.",
+      "params": null
+    },
+    {
+      "method": "channel.pairing.answer",
+      "class": "never",
+      "minTier": null,
+      "why": "Approving the one sender a channel accepts is the owner's decision at the desktop, like a remote pairing.",
+      "params": null
+    },
+    {
+      "method": "channel.update",
+      "class": "never",
+      "minTier": null,
+      "why": "Whether an approval may be answered in a chat is a safety setting, so it is set where the cards are shown, at the desktop.",
+      "params": null
+    },
+    {
+      "method": "channel.disconnect",
+      "class": "never",
+      "minTier": null,
+      "why": "It removes a bot token and the paired sender; nothing outside this computer may do that.",
+      "params": null
+    },
+    {
+      "method": "channel.test",
+      "class": "never",
+      "minTier": null,
+      "why": "It sends a message from the owner's own bot to their phone, which is a send as the owner: the desktop only.",
+      "params": null
     }
   ],
   "events": {
+    "connector.changed": "drop",
     "message.delta": "allow",
     "message.completed": "allow",
     "session.changed": "allow",
@@ -1777,6 +1974,8 @@
     "browser.changed": "drop",
     "owner_computer.grant": "drop",
     "secret.request.changed": "drop",
+    "vault.use.requested": "drop",
+    "vault.use.updated": "drop",
     "machine.pair.changed": "drop",
     "machine.takeOver.changed": "drop",
     "backup.imported": "drop",
@@ -1826,7 +2025,10 @@
     "stash.changed": "drop",
     "preview.changed": "drop",
     "import.progress": "drop",
-    "import.completed": "drop"
+    "import.completed": "drop",
+    "channel.updated": "drop",
+    "channel.qr": "drop",
+    "channel.pairing.candidate": "drop"
   },
   "settingsAllowlist": [
     "appearance.style",

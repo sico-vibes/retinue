@@ -19,7 +19,10 @@ mod phase9; // Phase 9: employees, hiring and the CEO
 pub use phase9::agent_accepts_preset;
 mod phase10; // Phase 10: conversations imported from other coding agents
 mod secret_refs; // Phase 5: environment references to secrets
+mod channels; // 16 November 2026: chat channels to the CEO, and the inbound ledger
+mod vault; // 16 November 2026: vault item metadata and the content-free ledger
 mod computer_link; // The linked VPS computer (Harbor): address, switch, token reference
+mod connectors; // Section D: owner-added MCP servers the daemon calls
 pub use computer_link::ComputerLink;
 #[cfg(test)]
 mod phase9_tests;
@@ -325,6 +328,18 @@ fn migrate_agent_outfit_ids(c: &mut Connection, path: Option<&Path>, backup_done
 
 const AGENT_MODE_CHECK_OLD: &str = "approval_mode IN ('ask','auto','bypass')";
 const AGENT_MODE_CHECK_NEW: &str = "approval_mode IN ('ask','auto','accept_edits','bypass')";
+
+/// Pi's execution gates (16 November 2026). The schema-3 seed ran once, so an
+/// existing database has no `exec_gate.pi.*` row, and every Pi turn with a model
+/// or instructions would be refused as "unavailable". These four rows are
+/// inserted on every open with `OR IGNORE`, so an owner's choice is never
+/// rewritten.
+fn ensure_pi_gates(c: &Connection) -> Result<(), StorageError> {
+    for key in ["exec_gate.pi.model", "exec_gate.pi.thinking", "exec_gate.pi.instructions", "exec_gate.pi.steer"] {
+        c.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?1,'true')", [key])?;
+    }
+    Ok(())
+}
 
 /// Phase 1: `agents.approval_mode` accepts `accept_edits`. SQLite cannot alter a CHECK, so the
 /// table is rebuilt from its own stored DDL (it has grown columns since version 9, so a fixed
@@ -2448,9 +2463,10 @@ impl Storage {
     fn migrate(conn: Connection, path: Option<&Path>) -> Result<Self, StorageError> {
         let storage = Self::migrate_versions(conn, path)?;
         { let mut c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; ensure_agent_accept_edits(&mut c, path)?; }
-        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; phase1b::ensure_phase1b_schema(&c)?; phase2::ensure_phase2_schema(&c)?; phase4::ensure_phase4_schema(&c)?; phase5::ensure_phase5_schema(&c)?; phase6::ensure_phase6_schema(&c)?; phase8::ensure_phase8_schema(&c)?; phase9::ensure_phase9_schema(&c)?; phase10::ensure_phase10_schema(&c)?; ensure_tasks_schema(&c)?; ensure_delegation_schema(&c)?; ensure_permission_rules_schema(&c)?; ensure_team_queue_schema(&c)?; ensure_client_message_id_indexes(&c)?; }
+        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; phase1b::ensure_phase1b_schema(&c)?; phase2::ensure_phase2_schema(&c)?; phase4::ensure_phase4_schema(&c)?; phase5::ensure_phase5_schema(&c)?; phase6::ensure_phase6_schema(&c)?; phase8::ensure_phase8_schema(&c)?; phase9::ensure_phase9_schema(&c)?; phase10::ensure_phase10_schema(&c)?; ensure_tasks_schema(&c)?; connectors::ensure_connectors_schema(&c)?; ensure_delegation_schema(&c)?; ensure_permission_rules_schema(&c)?; ensure_team_queue_schema(&c)?; ensure_client_message_id_indexes(&c)?; }
         { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; phase9::ensure_phase9_data(&c)?; }
-        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; secret_refs::ensure_secret_refs_schema(&c)?; computer_link::ensure_computer_link_schema(&c)?; }
+        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; channels::ensure_channel_schema(&c)?; }
+        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; secret_refs::ensure_secret_refs_schema(&c)?; computer_link::ensure_computer_link_schema(&c)?; vault::ensure_vault_schema(&c)?; ensure_pi_gates(&c)?; }
         Ok(storage)
     }
     fn migrate_versions(mut conn: Connection, path: Option<&Path>) -> Result<Self, StorageError> {

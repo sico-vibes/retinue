@@ -4,7 +4,7 @@ import { Keys } from './Keys'
 import { normalizeBindings, normalizeSendShortcut, oppositeKeys, SEND_SHORTCUTS, type SendShortcut, type ShortcutBindings } from './shortcuts'
 import type { ApprovalMode } from '../types'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { Bot, Cable, Brain, Check, ChevronDown, ChevronRight, Download, MessageSquare, Plus, RefreshCw, ShieldAlert, ShieldCheck, SlidersHorizontal, Wrench, X, Palette, Search, Smartphone, BriefcaseBusiness, Sparkles } from 'lucide-react'
+import { Bot, Cable, Brain, Check, ChevronDown, ChevronRight, Download, MessageSquare, Plus, RefreshCw, ShieldAlert, ShieldCheck, SlidersHorizontal, Wrench, X, Palette, Search, Smartphone, BriefcaseBusiness, Sparkles, LockKeyhole } from 'lucide-react'
 import { emitNative, invokeNative, listenNative } from '../transport/nativeBridge'
 import { SettingsSkeleton } from './SettingsSkeleton'
 import { usePlatform } from '../transport/platform'
@@ -38,6 +38,10 @@ import { MachinesPage } from './MachinesPage'
 import { ProvidersPage } from './ProvidersPage'
 import { AccountsPage } from './AccountsPage'
 import { SecretsPage } from './SecretsPage'
+import { VaultPage } from './VaultPage'
+import { ConnectorsPage } from './ConnectorsPage'
+import { ChannelsPage } from './ChannelsPage'
+import { PiPage } from './PiPage'
 import { ConnectionsPage } from './ConnectionsPage'
 import { ComputerPage } from './ComputerPage'
 import { DiagnosticsDialog } from './DiagnosticsDialog'
@@ -53,7 +57,7 @@ import { useEntityNoun } from './vocabulary'
 import { useThemeStyle } from '../blob/retinue'
 import './retinueUi.css'
 
-export type SettingsPageId = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Computer' | 'Secrets' | 'Updates' | 'Backup' | 'Health'
+export type SettingsPageId = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Computer' | 'Secrets' | 'Connectors' | 'Vault' | 'Channels' | 'Pi' | 'Updates' | 'Backup' | 'Health'
 
 type SettingsTab = { label: string; icon: typeof SlidersHorizontal; pages: Array<{ id: SettingsPageId; label: string }> }
 
@@ -66,14 +70,15 @@ const NAV: Array<{ label: string; tabs: SettingsTab[] }> = [
     { label: 'Companion', icon: Sparkles, pages: [{ id: 'Companion', label: 'Companion' }] },
   ] },
   { label: 'Employees', tabs: [
-    { label: 'Coding agents', icon: Bot, pages: [{ id: 'Agents', label: 'Agents' }, { id: 'Accounts', label: 'Accounts' }, { id: 'Providers', label: 'Providers' }] },
+    { label: 'Coding agents', icon: Bot, pages: [{ id: 'Agents', label: 'Agents' }, { id: 'Accounts', label: 'Accounts' }, { id: 'Providers', label: 'Providers' }, { id: 'Pi', label: 'Pi' }] },
     { label: 'CEO', icon: BriefcaseBusiness, pages: [{ id: 'Manager', label: 'CEO' }] },
     { label: 'Approvals', icon: ShieldCheck, pages: [{ id: 'Approvals', label: 'Approvals' }] },
     { label: 'Memory and skills', icon: Brain, pages: [{ id: 'Memory', label: 'Memory' }, { id: 'Skills', label: 'Skills' }] },
   ] },
   { label: 'Connections', tabs: [
-    { label: 'Remote access', icon: Smartphone, pages: [{ id: 'Remote', label: 'Remote' }, { id: 'Machines', label: 'Machines' }] },
-    { label: 'Integrations', icon: Cable, pages: [{ id: 'Connections', label: 'Retinue MCP' }, { id: 'Computer', label: 'Computer' }, { id: 'Secrets', label: 'Secrets' }] },
+    { label: 'Remote access', icon: Smartphone, pages: [{ id: 'Remote', label: 'Remote' }, { id: 'Channels', label: 'Chat apps' }, { id: 'Machines', label: 'Machines' }] },
+    { label: 'Vault', icon: LockKeyhole, pages: [{ id: 'Vault', label: 'Vault' }] },
+    { label: 'Integrations', icon: Cable, pages: [{ id: 'Connectors', label: 'Connectors' }, { id: 'Connections', label: 'Retinue MCP' }, { id: 'Computer', label: 'Computer' }, { id: 'Secrets', label: 'Secrets' }] },
   ] },
   { label: 'System', tabs: [
     { label: 'System', icon: Wrench, pages: [{ id: 'Updates', label: 'Updates' }, { id: 'Backup', label: 'Backup' }, { id: 'Health', label: 'Health check' }] },
@@ -704,6 +709,10 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
           {!loading && page === 'Accounts' && <AccountsPage runtimes={snapshot?.runtimes ?? EMPTY_RUNTIMES} />}
           {!loading && page === 'Providers' && <ProvidersPage disabled={disabledRuntimes} saving={saving} onChange={async (next) => { setDisabledRuntimes(next); return saveSetting('runtimes.disabled', next) }} />}
           {!loading && page === 'Secrets' && <SecretsPage />}
+          {!loading && page === 'Connectors' && <ConnectorsPage />}
+          {!loading && page === 'Vault' && <VaultPage />}
+          {!loading && page === 'Channels' && <ChannelsPage />}
+          {!loading && page === 'Pi' && <PiPage />}
           {!loading && page === 'Connections' && <ConnectionsPage connected={inDesktop && !!snapshot} />}
           {!loading && page === 'Computer' && <ComputerPage connected={inDesktop && !!snapshot} />}
 

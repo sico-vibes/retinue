@@ -2,10 +2,10 @@
 // group heading on that page, which the sheet scrolls to and flashes. Keep the
 // `group` strings equal to the `SettingsGroup title` values in SettingsSheet.
 
-export type SettingsPageName = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Computer' | 'Secrets' | 'Updates' | 'Backup' | 'Health'
+export type SettingsPageName = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Computer' | 'Secrets' | 'Connectors' | 'Vault' | 'Channels' | 'Pi' | 'Updates' | 'Backup' | 'Health'
 
 /** The page list, for anything that has to validate an incoming page name. */
-export const SETTINGS_PAGE_NAMES: readonly SettingsPageName[] = ['General', 'Appearance', 'Chat', 'Speech', 'Keyboard', 'Companion', 'Agents', 'Accounts', 'Providers', 'Manager', 'Approvals', 'Memory', 'Skills', 'Remote', 'Machines', 'Connections', 'Computer', 'Secrets', 'Updates', 'Backup', 'Health']
+export const SETTINGS_PAGE_NAMES: readonly SettingsPageName[] = ['General', 'Appearance', 'Chat', 'Speech', 'Keyboard', 'Companion', 'Agents', 'Accounts', 'Providers', 'Manager', 'Approvals', 'Memory', 'Skills', 'Remote', 'Machines', 'Connections', 'Computer', 'Secrets', 'Connectors', 'Vault', 'Channels', 'Pi', 'Updates', 'Backup', 'Health']
 
 /**
  * The page out of an open-settings event payload (C13): a known page name, or
@@ -103,6 +103,12 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { page: 'Computer', group: 'Employees', label: 'Let employees use this computer', keywords: 'vps server tools mcp exec commands browser automation' },
   { page: 'Computer', group: 'Routines', label: 'Routines', keywords: 'cron schedule vps server run now' },
   { page: 'Secrets', group: 'Saved', label: 'Secrets', keywords: 'environment token key credential manager password' },
+  { page: 'Connectors', group: 'Connected', label: 'Connectors', keywords: 'mcp server app integration linear notion github sentry stripe supabase tools' },
+  { page: 'Vault', group: 'Items', label: 'Vault', keywords: 'password login card credit card api key note authenticator 2fa totp fill' },
+  { page: 'Vault', group: 'Recent activity', label: 'Vault activity', keywords: 'audit history used revealed' },
+  { page: 'Channels', group: 'Telegram', label: 'Telegram', keywords: 'chat app phone message ceo bot botfather' },
+  { page: 'Channels', group: 'WhatsApp', label: 'WhatsApp', keywords: 'chat app phone message ceo qr business api' },
+  { page: 'Pi', group: 'Providers', label: 'Pi providers', keywords: 'pi api key models openai anthropic google openrouter llm provider' },
   { page: 'Updates', group: 'Updates', label: 'Updates and version', keywords: 'release check upgrade about' },
   { page: 'Backup', group: 'Export', label: 'Export a backup', keywords: 'save file employees memory skills automations settings' },
   { page: 'Backup', group: 'Restore', label: 'Restore a backup', keywords: 'import load file recover move computer' },

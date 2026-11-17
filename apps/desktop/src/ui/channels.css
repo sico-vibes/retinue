@@ -1,0 +1,22 @@
+/* Settings > Remote access > Chat apps (16 November 2026). */
+.channel-head { padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+.channel-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 3px; background: var(--line-strong); }
+.channel-dot.status-connected { background: var(--status-success); }
+.channel-dot.status-connecting, .channel-dot.status-pairing { background: var(--status-working); }
+.channel-dot.status-error { background: var(--status-danger); }
+.channel-method { padding: 0 12px 10px; }
+.channel-form, .channel-pairing { padding: 10px 12px; display: grid; gap: 10px; border-top: 1px solid var(--line); }
+.channel-form .new-project-field { margin: 0; }
+.channel-steps { margin: 0; padding-left: 20px; color: var(--text-2); font-size: var(--fs-sm); line-height: 1.6; }
+.channel-steps code, .channel-code code { padding: 1px 6px; border-radius: 5px; background: var(--line); font: var(--fs-xs) var(--font-mono); }
+.channel-form-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+.channel-note, .channel-pairing p { margin: 0; color: var(--text-2); font-size: var(--fs-sm); line-height: 1.5; }
+.channel-code { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--text-3); font-size: var(--fs-xs); }
+.channel-code code { color: var(--text-1); font-size: var(--fs-sm); letter-spacing: .04em; overflow-wrap: anywhere; }
+.channel-code .secondary-button { display: inline-flex; align-items: center; gap: 5px; }
+.channel-qr { width: 208px; height: 208px; padding: 10px; border-radius: var(--radius-md); background: #fff; image-rendering: pixelated; }
+.channel-candidate { margin: 0 12px 10px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-raised); }
+.channel-candidate .account-row-copy small { white-space: normal; }
+.channel-actions { padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 6px; border-top: 1px solid var(--line); }
+.channel-actions .secondary-button, .channel-actions .primary-button { display: inline-flex; align-items: center; gap: 5px; }
+.channel-form .channel-actions { padding: 0; border-top: 0; }

@@ -1,0 +1,10 @@
+/* Settings > Coding agents > Pi (16 November 2026). */
+.pi-status { padding: 10px 12px; display: grid; gap: 8px; }
+.pi-install { justify-self: start; padding: 4px 8px; color: var(--text-1); border-radius: var(--radius-sm); background: var(--line); font: var(--fs-xs) var(--font-mono); user-select: all; }
+.pi-row { padding: 8px 12px; display: grid; gap: 8px; color: var(--text-3); border-top: 1px solid var(--line); }
+.settings-card > .pi-row:first-child { border-top: 0; }
+.pi-row-main { display: flex; align-items: center; gap: 10px; }
+.pi-key-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; padding-left: 24px; }
+.pi-note { margin: 0; padding-left: 24px; display: flex; align-items: center; gap: 6px; font-size: var(--fs-xs); }
+.pi-note.ok { color: var(--text-2); }
+.pi-note.error { color: var(--danger-ink, var(--status-danger)); }

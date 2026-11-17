@@ -84,6 +84,11 @@ opencode session list                             # find session ids
 
 Read the full diff, not only the report. Check claims against the code; a lane's stated root cause can be wrong even when its fix works (FIX42). Check the UI yourself in the preview and, for loading/styling/native work, in the production build or installed app. Send concrete fixes back with measured values and file paths. When it passes, commit the reviewed work as Director (on the lane's branch, or as part of merging it) with a message that says what changed, why, and which lane did it; then run the full gates on the merged result before it lands on `main`.
 
+**New gates since 2026-11-16 (nod adoption, idea 1 and 2).** Run `npm run check:format`, `npm run check:architecture` and `npm run test:scripts` with the rest (details and the CI job in `verification.md`). Two things to expect from lanes:
+
+- A lane that adds a crate, a crate dependency or a network client has to add its row or its `ALLOWLIST` entry to `scripts/check-architecture.mjs`, with a one-line reason. A rule that is wrong should be changed, not worked around: keep the table short.
+- The hooks are opt-in (`npm run hooks:install`). They run on the Director's commit and push, which is where they are meant to run; a lane never commits, so the hook never sees a lane's work. Git keeps hooks in the clone's shared git directory (`git rev-parse --git-path hooks`), so installing once covers every worktree of that clone — and `--remove` takes them out for all of them too. Install from the main checkout, not from a lane worktree, and remember that the pre-commit scan needs `gitleaks` (it skips itself, loudly, when the binary is missing).
+
 ## Releasing (signed beta)
 
 1. All gates green on `main`, including clippy and the desktop crate from a short path.

@@ -10,6 +10,7 @@ members = [
   "crates/retinue-adapter-codex",
   "crates/retinue-adapter-claude",
   "crates/retinue-adapter-opencode",
+  "crates/retinue-adapter-pi",
   "crates/retinue-usage",
   "crates/retinue-budget",
   "crates/retinue-process",

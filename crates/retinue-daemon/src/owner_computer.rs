@@ -104,6 +104,10 @@ const STALE: &str = "The screen changed since you last read it, and element inde
 const NO_READ: &str = "Read the screen of that app first: element indexes come from a read, and an action needs a current one.";
 const NO_DRIVER: &str = "The computer driver is not installed, so Retinue cannot drive this computer. Run `node scripts/fetch-owner-computer-driver.mjs` to fetch and check it.";
 const GRANT_NOTE: &str = "The owner's computer grant is live. Read the screen again before the next action: anything that changes the screen makes element indexes stale.";
+/// The wording a timed-out driver call ends with. A fill that ends this way may
+/// have reached the app, so the vault records it as `uncertain` rather than
+/// claiming it did not happen.
+pub(crate) const MAY_HAVE_ARRIVED: &str = "may or may not have reached the app";
 
 /// The grant's three clocks, the card's wait, and the two call deadlines. The
 /// tests shorten them rather than waiting out the real ones.
@@ -528,7 +532,7 @@ async fn driver_call(exe: &Path, tool: &str, arguments: Value, limit: Duration) 
             if let Some(pid) = child.id() {
                 kill_tree(pid);
             }
-            Err("The computer did not answer in time, so Retinue stopped it. The call was abandoned; a click or a keystroke may or may not have reached the app.".to_owned())
+            Err(format!("The computer did not answer in time, so Retinue stopped it. The call was abandoned; a click or a keystroke {MAY_HAVE_ARRIVED}."))
         }
     }
 }

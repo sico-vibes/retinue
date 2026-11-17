@@ -42,6 +42,9 @@ mod accounts;
 mod provider_gate;
 mod custom_models;
 mod diagnostics;
+// Test-only: a test's own data folder and a quiet environment (plan idea 5).
+#[cfg(test)]
+mod test_env;
 mod fanout;
 mod issue_report;
 mod troubleshoot;
@@ -114,6 +117,15 @@ mod handoff;
 mod machines_tests;
 // Phase 5: secrets in the credential store and one-use secret requests.
 mod secrets;
+// Section D: connectors, owner-added MCP servers the daemon calls.
+mod connectors;
+// Section C (16 November 2026): Pi's providers and the keys Retinue holds for it.
+mod pi;
+
+/// 16 November 2026: Telegram and WhatsApp channels to the CEO.
+mod channels;
+
+mod vault;
 // The owner's linked VPS computer (Harbor) and its employee tools.
 mod computer;
 // The browser employees get on that computer (14 November 2026).
@@ -186,6 +198,9 @@ struct AppState {
     /// Phase C: live grants for the owner's own computer, the cards in flight and
     /// the driver process a call is running. Memory only.
     owner_computer: Arc<owner_computer::OwnerComputer>,
+    /// 16 November 2026: the chat channels to the CEO. Memory only: the status,
+    /// the paired sender and the conversation are in `Storage`.
+    channels: Arc<channels::Channels>,
 }
 #[derive(Clone)]
 struct Adapters {
@@ -1179,8 +1194,13 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "task.create" | "task.list" | "task.get" | "task.update" | "task.dispatch" | "task.unassign" | "task.reorder" | "task.cancel" | "task.stop" | "task.review" | "task.runs" | "task.image" => tasks::rpc(st, method, &p).await,
         "delegation.list" | "delegation.cancel" | "delegation.cancelGroup" => delegations::rpc(st, method, &p).await,
         "memory.list" | "memory.get" | "memory.create" | "memory.update" | "memory.approve" | "memory.delete" | "memory.restore" => memory::rpc(st, method, &p).await,
+        // Section D: connectors. Desktop only, `never` remote.
+        "connector.list" | "connector.add" | "connector.update" | "connector.remove" | "connector.test" | "connector.tools" | "connector.tool.rule" => connectors::rpc(st, method, &p).await,
         "skills.list" | "skills.get" | "skills.forAgent" | "skills.scan" | "skills.import" | "skills.delete" | "skills.toggle" => skills::rpc(st, method, &p).await,
         "backup.export" | "backup.preview" | "backup.import" => backup::rpc(st, method, &p).await,
+        // Section C: Pi's providers and the keys Retinue holds for it. Desktop
+        // only: a key never crosses to a device, and no method returns one.
+        "pi.providers" | "pi.key.set" | "pi.key.delete" | "pi.key.test" => pi::rpc(st, method, &p).await,
         "diagnostics.preview" | "diagnostics.export" | "diagnostics.issueDraft" | "diagnostics.issuePost" => diagnostics::rpc(st, method, &p).await,
         "fanout.start" | "fanout.get" | "fanout.list" | "fanout.pick" | "fanout.delete" => fanout::rpc(st, method, &p).await,
         "stash.add" | "stash.list" | "stash.update" | "stash.image" | "stash.restore" | "stash.delete" => stash::rpc(st, method, &p).await,
@@ -1189,6 +1209,10 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "subbot.list" => subbots::rpc(st, method, &p).await,
         "automation.webhook.enable" | "automation.webhook.rotate" | "automation.webhook.update" | "automation.webhook.disable" => webhooks::rpc(st, method, &p).await,
         "secret.list" | "secret.set" | "secret.delete" | "secret.request.list" | "secret.request.answer" | "secret.request.decline" => secrets::rpc(st, method, &p).await,
+        "channel.list" | "channel.telegram.connect" | "channel.whatsappWeb.start" | "channel.whatsappCloud.connect" | "channel.pairing.answer" | "channel.update" | "channel.disconnect" | "channel.test" => channels::rpc(st, method, &p).await,
+        // The vault (16 November 2026): values in Credential Manager, one use per
+        // owner-approved card. Desktop only; every method is `never` remotely.
+        "vault.list" | "vault.create" | "vault.update" | "vault.delete" | "vault.reveal" | "vault.totp" | "vault.activity" | "vault.use.list" | "vault.use.answer" => vault::rpc(st, method, &p).await,
         // The linked VPS computer (Harbor): desktop only, never remote, and no
         // employee tool reaches these (they go through `mcp.computer.*`).
         // The status also carries the browser's readiness, added by the browser
@@ -1748,6 +1772,21 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
                 crate::tasks::permission_resolved(st, &session_id).await;
                 return answer;
             }
+            // Section D: a connector call's card is answered by the daemon too;
+            // "always allow" writes the tool's standing rule.
+            if provider_id.starts_with("connector:") {
+                let answer = connectors::reply_approval(st, id, &session_id, choice, remember).await;
+                if answer.is_err() {
+                    let _ = st.db.finish_permission_reply(id, false);
+                    return answer;
+                }
+                let _ = st.db.finish_permission_reply(id, true);
+                let _ = st.db.update_session_state(&session_id, "working");
+                if let Ok(summary) = st.db.session_event_summary(&session_id) { st.emit("session.changed", summary).await; }
+                st.emit("permission.resolved", json!({"permissionId":id,"choice":choice})).await;
+                crate::tasks::permission_resolved(st, &session_id).await;
+                return answer;
+            }
             let gate = gate_for_session(st, &session_id).await;
             let active = {
                 let _guard = gate.lock().await;
@@ -2172,10 +2211,19 @@ fn adapter_for(a: &Adapters, provider: &str) -> Option<Arc<dyn AgentAdapter>> {
     match provider {
         "codex" => Some(a.codex.clone()),
         "claude" => Some(a.claude.clone()),
+        // Pi speaks its own JSONL RPC, so it has its own adapter. It is built
+        // once and shared: it keeps one child per conversation, nothing per
+        // daemon, and `Adapters` stays as it is for every other provider.
+        "pi" => Some(pi_adapter()),
         // OpenCode and every table provider run the same ACP adapter.
         p if retinue_runtime::is_acp_provider(p) => Some(a.acp.clone()),
         _ => None,
     }
+}
+/// The one Pi adapter this daemon uses.
+fn pi_adapter() -> Arc<dyn AgentAdapter> {
+    static PI: std::sync::OnceLock<Arc<retinue_adapter_pi::PiAdapter>> = std::sync::OnceLock::new();
+    PI.get_or_init(|| Arc::new(retinue_adapter_pi::PiAdapter::new())).clone()
 }
 /// Claude dynamic workflows (and therefore Ultracode) are on for new sessions
 /// unless the owner explicitly turns them off. An unset or non-boolean setting
@@ -2240,6 +2288,12 @@ fn exec_options_for_session(st:&AppState,session:&Value)->Result<ExecOptions,Dis
     if let Some(session_id) = session["id"].as_str() {
         let folder = session["projectPath"].as_str().filter(|path| !path.is_empty()).map(PathBuf::from);
         team::attach(st, session_id, session["agentId"].as_str(), &session["link"], folder.as_deref(), session["projectId"].as_str(), &mut options);
+    }
+    // Section C (16 November 2026): a Pi conversation's child gets the owner's
+    // provider keys from the credential store, and only that child. A Claude
+    // Code, Codex or OpenCode turn never carries one.
+    if session["provider"].as_str() == Some("pi") {
+        pi::add_keys_to_environment(&mut options.env)?;
     }
     Ok(options)
 }
@@ -2692,7 +2746,7 @@ fn gate_default(provider: &str, setting: &str) -> bool {
 /// Every other ACP provider omits that advertisement and is refused by the
 /// adapter itself.
 fn provider_can_steer(provider: &str) -> bool {
-    matches!(provider, "codex" | "claude" | "opencode")
+    matches!(provider, "codex" | "claude" | "opencode" | "pi")
 }
 const EXEC_UNAVAILABLE: &str = "The requested setting is unavailable for this runtime until its execution check passes.";
 fn safe_requested_options(options: &ExecOptions) -> Value {
@@ -2705,6 +2759,9 @@ fn exec_option_rejection(st: &AppState, provider: &str, options: &ExecOptions) -
         // OpenCode and every table provider: the same ACP adapter, so the same
         // row. `session/new` reports the models; there is no service tier.
         p if retinue_runtime::is_acp_provider(p) => &[("model",true),("thinking",true),("serviceTier",false),("instructions",true)],
+        // Pi (16 November 2026): a model and an effort over the live session, an
+        // appended system prompt at start, and no service tier.
+        "pi" => &[("model",true),("thinking",true),("serviceTier",false),("instructions",true)],
         _ => &[],
     };
     let settings = st.db.settings().map_err(|e| derr("internal", &e.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
@@ -2779,6 +2836,10 @@ async fn runtime_capabilities(st:&AppState,p:&Value)->Result<Value,DispatchError
         // A table provider is the same ACP adapter as OpenCode, so it earns the
         // same row by that code, not by a guess about the CLI.
         p if retinue_runtime::is_acp_provider(p)=>[("model",true,"session","provider_echo"),("thinking",true,"session","provider_echo"),("serviceTier",false,"session","none"),("instructions",true,"session","successful_turn"),("customEnv",true,"process","request_shape"),("steer",provider_can_steer(p),"turn","none")],
+        // Pi (16 November 2026): `set_model` and `set_thinking_level` answer with
+        // the provider's own echo on the live session; the instructions are the
+        // start-time system prompt, so their evidence is a successful turn.
+        "pi"=>[("model",true,"session","provider_echo"),("thinking",true,"session","provider_echo"),("serviceTier",false,"session","none"),("instructions",true,"spawn","successful_turn"),("customEnv",true,"process","request_shape"),("steer",provider_can_steer("pi"),"turn","none")],
         _=>[("model",false,"turn","none"),("thinking",false,"turn","none"),("serviceTier",false,"turn","none"),("instructions",false,"turn","none"),("customEnv",false,"process","none"),("steer",provider_can_steer(""),"turn","none")],
     };
     let settings=st.db.settings().map_err(|e|derr("internal",&e.to_string(),StatusCode::INTERNAL_SERVER_ERROR))?;
@@ -4179,6 +4240,9 @@ enum PromptOrigin {
     /// Wave 14: the Retinue MCP, an outside Claude Code session. It sends like a
     /// user, and its messages are marked `meta.origin = {kind:"mcp", client}`.
     Mcp,
+    /// 16 November 2026: an inbound chat-channel message. It sends like a user,
+    /// and its message is marked `meta = {channel: "telegram" | ...}`.
+    Channel,
 }
 
 /// An optional client-supplied key that makes a send safe to replay. Eight to
@@ -4235,6 +4299,15 @@ fn sanitize_prompt_meta(value: &Value, origin: PromptOrigin) -> Option<Value> {
             let run_id = object.get("runId")?.as_str().filter(|id| !id.is_empty())?;
             Some(json!({"kind":"task","taskId":task_id,"runId":run_id}))
         }
+        // The contract's shape is `meta: { channel: "telegram" }`; the channel
+        // kind is the only part a channel may set.
+        PromptOrigin::Channel => {
+            if kind != "channel" {
+                return None;
+            }
+            let channel = object.get("channel")?.as_str().filter(|channel| channels::KINDS.contains(channel))?;
+            Some(json!({"channel": channel}))
+        }
     }
 }
 
@@ -4274,6 +4347,12 @@ pub(crate) async fn session_prompt_for_task(st: &AppState, p: Value) -> Result<V
 /// `question_answer` meta survives sanitization here.
 pub(crate) async fn session_prompt_for_question_answer(st: &AppState, p: Value) -> Result<Value, DispatchError> {
     session_prompt_impl(st, p, PromptOrigin::QuestionAnswer).await
+}
+
+/// Entry point for an inbound chat-channel message. Only allowlisted
+/// `{kind:"channel", channel}` meta survives sanitization here.
+pub(crate) async fn session_prompt_for_channel(st: &AppState, p: Value) -> Result<Value, DispatchError> {
+    session_prompt_impl(st, p, PromptOrigin::Channel).await
 }
 
 /// Structured per-turn arguments handed to the spawned provider driver
@@ -4582,8 +4661,9 @@ async fn session_prompt_impl(st: &AppState, p: Value, origin: PromptOrigin) -> R
     };
     // Lane 6: the owner typing in a conversation keeps its routine alerts quiet
     // for a minute, and ends a snooze. Daemon-internal sends (a queue item, a
-    // retry, an automation, a task, a teammate, the MCP) are not the owner.
-    if origin == PromptOrigin::User {
+    // retry, an automation, a task, a teammate, the MCP) are not the owner; a
+    // chat-channel message is, since the owner wrote it.
+    if matches!(origin, PromptOrigin::User | PromptOrigin::Channel) {
         crate::attention::owner_sent(st, &sid).await;
     }
     // A question's answer starts a turn of its own: the assignment the question
@@ -5403,6 +5483,9 @@ async fn forward_events_with_timeouts(
                     let detail = safe_timeout_diagnostic(&provider, provider_diagnostic);
                     let public_message = silence_message(&provider, saw_semantic_progress, limit);
                     let after_detail = detail.clone().or(Some(public_message.clone()));
+                    // The adapter went quiet: the turn fails here, and the failure
+                    // is recorded so the owner's diagnostics bundle carries it.
+                    crate::diagnostics::record_failure("stalled_turn", if saw_semantic_progress { "silent" } else { "no_start" });
                     finish_turn_failed(&st, &sid, turn_id, "timeout", &public_message, detail, if resumed_session { "idle" } else { "error" }).await;
                     after_provider_failure(&st, &sid, turn_id, after_detail);
                     retry::after_failed_turn(&st, &sid, Some(turn_id)).await;
@@ -6141,6 +6224,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         computer: Arc::new(computer::Computer::default()),
         browser: Arc::new(browser::Browser::default()),
         owner_computer: Arc::new(owner_computer::OwnerComputer::default()),
+        channels: Arc::new(channels::Channels::default()),
     };
     // A send right after boot must not fail with "runtime is not installed":
     // show the saved roster until discovery replaces it. `validate_spawn_target`
@@ -6150,6 +6234,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // other provider starts off, applied once and never over what the owner
     // already uses (see `provider_gate`).
     if provider_gate::apply_defaults(&st.db).is_err() { tracing::warn!("provider defaults could not be saved"); }
+    // A provider added after those defaults ran (Pi, 16 November 2026) starts off
+    // the same way, once, unless the owner already uses it.
+    if provider_gate::apply_new_provider_defaults(&st.db).is_err() { tracing::warn!("provider defaults could not be saved"); }
     load_saved_runtimes(&st).await;
     if let Ok(paused) = st.db.queue_paused_sessions() { st.queue.mark_startup_paused(paused); }
     // A run interrupted by an unclean exit is not a failure; leave its session.
@@ -6208,6 +6295,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     outside::startup(&st);
     // Wave 14: a fresh token and endpoint file for the Retinue MCP, when it is on.
     external::startup(&st);
+    // 16 November 2026: a chat channel that still has its credential picks up
+    // polling again, so a restart does not silently stop the owner's chat.
+    channels::start_at_boot(&st).await;
     // FIX47: the deliveries a restart restored have a team address now, so one
     // drain can start them (the same fast path every turn ending uses).
     let restored_queue = st.clone();
@@ -7598,7 +7688,7 @@ mod phase2a_tests {
     /// a second state on the same file.
     pub(crate) fn state_with(db:Storage)->(AppState,broadcast::Receiver<EventEnvelope>){
         let db=Arc::new(db);db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"})).unwrap();let(events,rx)=broadcast::channel(64);
-        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default())};(st,rx)
+        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default()),channels:Arc::new(channels::Channels::default())};(st,rx)
     }
     #[tokio::test]
     async fn bot_purge_is_confirmed_atomic_and_removes_both_sides_only() {
@@ -8868,6 +8958,8 @@ mod phase2a_tests {
             }
             drop(tx);
             task.await.unwrap();
+            // The failure sink: a stalled adapter is reported, not only returned.
+            assert!(crate::diagnostics::failures_with("stalled_turn", if semantic_progress { "silent" } else { "no_start" }) >= 1, "a stalled turn records one failure");
             assert_eq!(st.db.turn_failure_class(turn).unwrap().as_deref(),Some("timeout"));
             assert!(!st.active_turns.lock().await.contains_key(sid));
             assert_eq!(adapter.close_calls.load(std::sync::atomic::Ordering::SeqCst),1);
@@ -12496,6 +12588,10 @@ mod phase2a_tests {
         assert_eq!(paused["enabled"],false);
         assert_eq!(paused["pauseReason"],"auto_failures");
         assert_eq!(paused["nextRunAt"],Value::Null);
+        // Each failed run is recorded for the diagnostics bundle. The sink is
+        // shared with the tests running beside this one, so this counts at
+        // least the four this test produced rather than exactly four.
+        assert!(crate::diagnostics::failures_with("schedule.run.failed","error")>=4,"every failed run is reported");
         // A later success resets the counter.
         let other=cron_automation(&st,&agent,"Reset");
         let other_id=other["id"].as_str().unwrap().to_owned();
@@ -12628,7 +12724,9 @@ mod phase2a_tests {
         st.db.create_session("guard-auto","rt-test","codex",".","Auto").unwrap();
         st.db.set_session_link("guard-auto",&json!({"kind":"automation","automationId":"x","runId":"y","approvalMode":"auto"})).unwrap();
         let auto_tools=tool_names(&team::mcp_rpc(&st,"guard-auto","mcp.tools.list",&json!({})).await.unwrap());
-        assert_eq!(auto_tools,vec!["list_skills".to_owned(),"load_skill".to_owned(),"read_skill_file".to_owned()],"an automation run gets only the read-only skill tools");
+        // Connector tools are offered too (16 November 2026): `connector_call` refuses an
+        // unattended run anything but a read-only tool on a connector set to Read-only.
+        assert_eq!(auto_tools,vec!["list_skills".to_owned(),"load_skill".to_owned(),"read_skill_file".to_owned(),"connector_search".to_owned(),"connector_call".to_owned()],"an automation run gets only the read-only skill tools and the gated connector tools");
         assert_eq!(team::mcp_rpc(&st,"guard-auto","mcp.tools.call",&json!({"name":"schedule_task","arguments":{}})).await.unwrap_err().1.code,"forbidden");
         assert_eq!(team::mcp_rpc(&st,"guard-auto","automation.create",&json!({})).await.unwrap_err().1.code,"forbidden");
     }
@@ -14274,6 +14372,9 @@ mod phase2a_tests {
         let _ = std::fs::remove_dir_all(data_dir);
     }
 
+    // Section D: connectors, the daemon's MCP client and its approval cards.
+    include!("connectors_tests.rs");
+
     #[tokio::test]
     async fn new_sessions_carry_project_id() {
         let (st, _) = online_team_state().await;
@@ -14340,6 +14441,9 @@ mod phase2a_tests {
     // Phase 5 (Sona S1): secrets in the credential store, and one-use secret requests.
     include!("secrets_tests.rs");
 
+    // Section C (16 November 2026): Pi's provider list and the keys Retinue holds.
+    include!("pi_tests.rs");
+
     // The linked VPS computer (Harbor): linking, state, routines and the tools.
     include!("computer_tests.rs");
 
@@ -14348,6 +14452,13 @@ mod phase2a_tests {
 
     // Phase C: the owner's own computer, its card, its clocks and its deny-list.
     include!("owner_computer_tests.rs");
+
+    // The vault (16 November 2026): values, cards, origins, the ledger and one
+    // owner-approved use.
+    include!("vault_tests.rs");
+
+    // 16 November 2026: the chat channels to the CEO.
+    include!("channels_tests.rs");
 
     #[tokio::test]
     async fn team_update_project_move_does_not_archive() {

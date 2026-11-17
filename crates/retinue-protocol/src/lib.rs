@@ -83,6 +83,10 @@ pub enum ProtocolFamily {
     Acp,
     CodexAppServer,
     ClaudeStream,
+    /// Pi's own JSONL records on stdin and stdout (`pi --mode rpc`): commands,
+    /// one `response` each, and session events. Not ACP (`docs/plans/vault-channels-pi.md`
+    /// section C).
+    PiRpc,
 }
 
 #[cfg(test)]

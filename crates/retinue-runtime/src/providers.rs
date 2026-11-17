@@ -83,6 +83,21 @@ pub const ACP_PROVIDERS: &[AcpProvider] = &[
     },
 ];
 
+/// Pi is not an ACP row: it speaks its own JSONL RPC on stdin and stdout
+/// (`pi --mode rpc`), so it has its own adapter (`retinue-adapter-pi`). It is
+/// still a coding agent Retinue discovers, offers and can switch off like every
+/// optional provider, so its label and install hint live here beside the rows.
+pub const PI_PROVIDER: &str = "pi";
+pub const PI_DISPLAY_NAME: &str = "Pi";
+/// The proof discovery looks for in `pi --help` (16 November 2026, package
+/// `@earendil-works/pi-coding-agent` 1.5.2, `docs/cli.md`): the CLI selects the
+/// long-lived protocol with `--mode rpc`.
+pub const PI_PROBE_TOKEN: &str = "--mode";
+pub const PI_INSTALL_HINT: &str = "Install Pi with npm install -g @earendil-works/pi-coding-agent (it needs Node 22.19 or newer), or with the installer at pi.dev.";
+/// What the owner runs to sign in to Pi's own providers. Retinue's Pi page
+/// stores keys instead; this is for the CLIs' other providers.
+pub const PI_SIGN_IN_COMMAND: &str = "pi auth login";
+
 /// The providers that are always on (owner decision, 11 November 2026): Claude
 /// Code, Codex and OpenCode. Every other provider is optional and off until the
 /// owner turns it on; `runtimes.disabled` cannot switch these three off.
@@ -121,8 +136,27 @@ pub fn acp_launch_args(provider: &str) -> &'static [&'static str] {
 }
 
 /// Every provider Retinue looks for on `PATH`, in display order.
-pub fn discovery_ids() -> [&'static str; 7] {
-    ["claude", "codex", "opencode", ACP_PROVIDERS[0].provider, ACP_PROVIDERS[1].provider, ACP_PROVIDERS[2].provider, ACP_PROVIDERS[3].provider]
+pub fn discovery_ids() -> [&'static str; 8] {
+    ["claude", "codex", "opencode", PI_PROVIDER, ACP_PROVIDERS[0].provider, ACP_PROVIDERS[1].provider, ACP_PROVIDERS[2].provider, ACP_PROVIDERS[3].provider]
+}
+
+/// The sentence Settings shows for a provider that is not installed, or that
+/// needs a sign-in command of its own. ACP rows carry their own; Pi is not a row.
+pub fn install_hint(provider: &str) -> Option<&'static str> {
+    match acp_provider(provider) {
+        Some(row) => Some(row.install_hint),
+        None if provider == PI_PROVIDER => Some(PI_INSTALL_HINT),
+        None => None,
+    }
+}
+
+/// The command the owner runs in a terminal to sign in to the provider's CLI.
+pub fn sign_in_command(provider: &str) -> Option<&'static str> {
+    match acp_provider(provider) {
+        Some(row) => Some(row.sign_in_command),
+        None if provider == PI_PROVIDER => Some(PI_SIGN_IN_COMMAND),
+        None => None,
+    }
 }
 
 #[cfg(test)]
@@ -163,17 +197,33 @@ mod tests {
         for optional in ["qwen", "cursor", "grok", "antigravity", "gemini", ""] {
             assert!(!is_main_provider(optional), "{optional}");
         }
-        assert_eq!(optional_providers(), ["qwen", "cursor", "grok", "antigravity"]);
+        assert_eq!(optional_providers(), ["pi", "qwen", "cursor", "grok", "antigravity"]);
     }
 
     #[test]
     fn only_opencode_and_the_table_rows_speak_acp() {
         assert!(is_acp_provider("opencode"));
         assert!(is_acp_provider("qwen") && is_acp_provider("cursor") && is_acp_provider("grok"));
-        for provider in ["claude", "codex", "", "gemini", "gemini-cli"] {
+        for provider in ["claude", "codex", "", "gemini", "gemini-cli", "pi"] {
             assert!(!is_acp_provider(provider), "{provider}");
             assert!(acp_provider(provider).is_none(), "{provider}");
         }
-        assert_eq!(discovery_ids(), ["claude", "codex", "opencode", "qwen", "cursor", "grok", "antigravity"]);
+        assert_eq!(discovery_ids(), ["claude", "codex", "opencode", "pi", "qwen", "cursor", "grok", "antigravity"]);
+    }
+
+    // Pi (16 November 2026): its own RPC protocol, so not an ACP row, but it is a
+    // provider Retinue lists and the owner can switch off.
+    #[test]
+    fn pi_is_a_provider_without_an_acp_row() {
+        assert!(discovery_ids().contains(&PI_PROVIDER));
+        assert!(!is_acp_provider(PI_PROVIDER));
+        assert!(!is_main_provider(PI_PROVIDER));
+        assert!(optional_providers().contains(&PI_PROVIDER));
+        assert_eq!(install_hint(PI_PROVIDER), Some(PI_INSTALL_HINT));
+        assert_eq!(sign_in_command(PI_PROVIDER), Some(PI_SIGN_IN_COMMAND));
+        // The ACP rows keep their own answers, and an unknown provider has none.
+        assert_eq!(install_hint("qwen"), Some(ACP_PROVIDERS[0].install_hint));
+        assert_eq!(install_hint("gemini"), None);
+        assert_eq!(sign_in_command("gemini"), None);
     }
 }

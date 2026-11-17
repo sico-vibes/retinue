@@ -68,7 +68,7 @@ const CONTAINER_DIR: &str = "/config/retinue/browser";
 /// The port the container's browser server listens on, on loopback only.
 const CONTAINER_PORT: u16 = 47_810;
 /// The marker the health check and the script agree on; a stale script is replaced.
-const SCRIPT_MARKER: &str = "retinue-browser-1";
+const SCRIPT_MARKER: &str = "retinue-browser-2";
 /// The line the bootstrap echoes when the server answers.
 const READY_MARK: &str = "BROWSER_READY";
 const RUNNING_MARK: &str = "BROWSER_RUNNING";
@@ -116,7 +116,9 @@ const TOKEN_REFUSED: &str = "Harbor refused the computer's token. The owner need
 /// The script the container runs: Playwright, one persistent profile per
 /// conversation, actions addressed by the references a snapshot stamps on the
 /// page. It holds no policy of its own; the daemon decides what may happen.
-const SERVER_SCRIPT: &str = r##"// retinue-browser-1: Playwright inside the bot computer, driven by the daemon.
+const SERVER_SCRIPT: &str = r##"// retinue-browser-2: Playwright inside the bot computer, driven by the daemon.
+// A filled or password field's value is never part of a snapshot's name: the
+// daemon lists the references it filled, and the page says "(filled)" instead.
 import http from 'node:http';
 import fs from 'node:fs';
 import { chromium } from 'playwright';
@@ -150,24 +152,34 @@ async function entryFor(id) {
   return entry;
 }
 
-async function snapshot(entry) {
-  const nodes = await entry.page.evaluate(() => {
+async function snapshot(entry, maskedRefs) {
+  const hidden = Array.isArray(maskedRefs) ? maskedRefs : [];
+  const nodes = await entry.page.evaluate((masked) => {
     const selector = 'a,button,input,select,textarea,summary,h1,h2,[role],[contenteditable="true"]';
     return Array.from(document.querySelectorAll(selector)).slice(0, 400).map((el, index) => {
       const ref = `e${index}`;
       el.setAttribute('data-retinue-ref', ref);
       const box = el.getBoundingClientRect();
+      const type = (el.getAttribute('type') || '').toLowerCase();
+      const autocomplete = (el.getAttribute('autocomplete') || '').toLowerCase();
+      const value = typeof el.value === 'string' ? el.value : '';
+      const label = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('name') || '').trim();
+      // A password, a card field, a code and anything the daemon filled never
+      // come back as their value (16 November 2026).
+      const sealed = type === 'password' || autocomplete.startsWith('cc-') || autocomplete === 'one-time-code' || masked.includes(ref);
+      const text = (el.innerText || '').trim();
+      const name = sealed ? (label || (type === 'password' ? 'password field' : 'field')) + (value ? ' (filled)' : '') : (el.getAttribute('aria-label') || text || value || el.getAttribute('placeholder') || el.name || '');
       return {
         ref,
         tag: el.tagName.toLowerCase(),
         role: el.getAttribute('role') || '',
-        type: (el.getAttribute('type') || '').toLowerCase(),
-        name: (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('placeholder') || el.name || '').trim().slice(0, 200),
-        autocomplete: (el.getAttribute('autocomplete') || '').toLowerCase(),
+        type,
+        name: name.trim().slice(0, 200),
+        autocomplete,
         visible: box.width > 0 && box.height > 0,
       };
     });
-  });
+  }, hidden);
   let tree = '';
   try {
     tree = await entry.page.locator(':root').ariaSnapshot();
@@ -178,65 +190,77 @@ async function snapshot(entry) {
 }
 
 // A page callback is serialised and runs in the page, so it cannot call any
-// helper defined here; both forms below repeat the same five fields inline.
-async function targetOf(entry, ref) {
+// helper defined here; the forms below repeat the same fields inline.
+async function targetOf(entry, ref, maskedRefs) {
+  const hidden = Array.isArray(maskedRefs) ? maskedRefs : [];
   if (!ref) {
-    return entry.page.evaluate(() => {
+    return entry.page.evaluate((masked) => {
       const el = document.activeElement;
       if (!el) return null;
-      return {
-        tag: el.tagName.toLowerCase(),
-        role: el.getAttribute('role') || '',
-        type: (el.getAttribute('type') || '').toLowerCase(),
-        name: (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('placeholder') || el.name || '').trim().slice(0, 200),
-        autocomplete: (el.getAttribute('autocomplete') || '').toLowerCase(),
-      };
-    });
+      const type = (el.getAttribute('type') || '').toLowerCase();
+      const autocomplete = (el.getAttribute('autocomplete') || '').toLowerCase();
+      const value = typeof el.value === 'string' ? el.value : '';
+      const sealed = type === 'password' || autocomplete.startsWith('cc-') || autocomplete === 'one-time-code' || masked.includes(el.getAttribute('data-retinue-ref') || '');
+      const label = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('name') || '').trim();
+      const name = sealed ? (label || (type === 'password' ? 'password field' : 'field')) + (value ? ' (filled)' : '') : (el.getAttribute('aria-label') || el.innerText || value || el.getAttribute('placeholder') || el.name || '');
+      return { tag: el.tagName.toLowerCase(), role: el.getAttribute('role') || '', type, name: name.trim().slice(0, 200), autocomplete };
+    }, hidden);
   }
   const locator = entry.page.locator(`[data-retinue-ref="${ref}"]`);
   if ((await locator.count()) !== 1) return { stale: true };
-  return locator.evaluate((el) => ({
-    tag: el.tagName.toLowerCase(),
-    role: el.getAttribute('role') || '',
-    type: (el.getAttribute('type') || '').toLowerCase(),
-    name: (el.getAttribute('aria-label') || el.innerText || el.value || el.getAttribute('placeholder') || el.name || '').trim().slice(0, 200),
-    autocomplete: (el.getAttribute('autocomplete') || '').toLowerCase(),
-  }));
+  return locator.evaluate((el, masked) => {
+    const type = (el.getAttribute('type') || '').toLowerCase();
+    const autocomplete = (el.getAttribute('autocomplete') || '').toLowerCase();
+    const value = typeof el.value === 'string' ? el.value : '';
+    const sealed = type === 'password' || autocomplete.startsWith('cc-') || autocomplete === 'one-time-code' || masked.includes(el.getAttribute('data-retinue-ref') || '');
+    const label = (el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('name') || '').trim();
+    const name = sealed ? (label || (type === 'password' ? 'password field' : 'field')) + (value ? ' (filled)' : '') : (el.getAttribute('aria-label') || el.innerText || value || el.getAttribute('placeholder') || el.name || '');
+    return { tag: el.tagName.toLowerCase(), role: el.getAttribute('role') || '', type, name: name.trim().slice(0, 200), autocomplete };
+  }, hidden);
 }
 
 const actions = {
   async open(entry, body) {
     await entry.page.goto(body.url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    return await snapshot(entry);
+    return await snapshot(entry, body.mask);
   },
-  async snapshot(entry) {
-    return await snapshot(entry);
+  async snapshot(entry, body) {
+    return await snapshot(entry, body.mask);
   },
   async describe(entry, body) {
-    const target = await targetOf(entry, body.ref);
-    return target && target.stale ? { stale: true } : { target };
+    const target = await targetOf(entry, body.ref, body.mask);
+    if (target && target.stale) return { stale: true };
+    return { target, url: entry.page.url() };
   },
   async click(entry, body) {
-    const target = await targetOf(entry, body.ref);
+    const target = await targetOf(entry, body.ref, body.mask);
     if (!target || target.stale) return { stale: true };
     await entry.page.locator(`[data-retinue-ref="${body.ref}"]`).click({ timeout: 15000 });
     await entry.page.waitForLoadState('domcontentloaded').catch(() => {});
-    return { target, ...(await snapshot(entry)) };
+    return { target, ...(await snapshot(entry, body.mask)) };
   },
   async type(entry, body) {
-    const target = await targetOf(entry, body.ref);
+    const target = await targetOf(entry, body.ref, body.mask);
     if (!target || target.stale) return { stale: true };
     await entry.page.locator(`[data-retinue-ref="${body.ref}"]`).fill(String(body.text ?? ''), { timeout: 15000 });
     return { target };
   },
+  // The vault's own fill: the value is written and nothing about it, or about
+  // the field's new value, comes back.
+  async fill(entry, body) {
+    const locator = entry.page.locator(`[data-retinue-ref="${body.ref}"]`);
+    if ((await locator.count()) !== 1) return { stale: true };
+    await locator.fill(String(body.text ?? ''), { timeout: 15000 });
+    return { filled: true };
+  },
   async press(entry, body) {
     await entry.page.keyboard.press(String(body.key));
     await entry.page.waitForLoadState('domcontentloaded').catch(() => {});
-    return await snapshot(entry);
+    return await snapshot(entry, body.mask);
   },
-  async back(entry) {
+  async back(entry, body) {
     await entry.page.goBack({ waitUntil: 'domcontentloaded', timeout: 20000 }).catch(() => {});
-    return await snapshot(entry);
+    return await snapshot(entry, body.mask);
   },
   async screenshot(entry) {
     const buffer = await entry.page.screenshot({ type: 'png' });
@@ -252,7 +276,7 @@ const server = http.createServer(async (request, response) => {
     response.end(text);
   };
   if (request.method === 'GET' && request.url === '/health') {
-    return send(200, { ok: true, version: 'retinue-browser-1', contexts: contexts.size });
+    return send(200, { ok: true, version: 'retinue-browser-2', contexts: contexts.size });
   }
   if (request.method !== 'POST' || request.url !== '/act') return send(404, { ok: false, error: 'not found' });
   let body = '';
@@ -293,7 +317,21 @@ pub struct Browser {
     open: StdMutex<BTreeMap<String, Opened>>,
     readiness: StdMutex<Option<(Instant, bool, Value)>>,
     announced: StdMutex<Option<Value>>,
+    /// The values this conversation has had typed into a page by the vault, and
+    /// the references they went into. Memory only, dropped with the context.
+    known: StdMutex<BTreeMap<String, Known>>,
 }
+
+/// One conversation's filled values and filled references. A value is only ever
+/// compared against text that is about to leave the daemon.
+#[derive(Default)]
+struct Known {
+    values: Vec<Zeroizing<String>>,
+    refs: Vec<String>,
+}
+
+/// At most this many values and references are remembered per conversation.
+const KNOWN_MAX: usize = 16;
 
 /// One conversation's context, and when it was last used.
 struct Opened {
@@ -551,6 +589,24 @@ fn host_of(url: &str) -> String {
     reqwest::Url::parse(url).ok().and_then(|url| url.host_str().map(str::to_owned)).unwrap_or_default()
 }
 
+/// Percent-encodes a value the way a form or a query string would, so a value
+/// that leaked into an address is still replaced. Letters, digits and `-_.~`
+/// stay as they are.
+fn percent_encode(value: &str) -> String {
+    const HEX: &[u8; 16] = b"0123456789ABCDEF";
+    let mut out = String::with_capacity(value.len() * 3);
+    for byte in value.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            out.push(char::from(byte));
+        } else {
+            out.push('%');
+            out.push(char::from(HEX[usize::from(byte >> 4)]));
+            out.push(char::from(HEX[usize::from(byte & 0x0f)]));
+        }
+    }
+    out
+}
+
 // ---------------------------------------------------------------------------
 // Talking to the container
 
@@ -689,6 +745,69 @@ impl Browser {
     fn forget(&self, session_id: &str) {
         let mut open = self.open.lock().unwrap_or_else(|poison| poison.into_inner());
         open.remove(session_id);
+        self.known.lock().unwrap_or_else(|poison| poison.into_inner()).remove(session_id);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn forget_for_tests(&self, session_id: &str) {
+        self.forget(session_id);
+    }
+
+    /// Remembers a value the vault typed into this conversation's page, and the
+    /// reference it went into, so neither is ever echoed back.
+    pub(crate) fn remember(&self, session_id: &str, value: &str, reference: Option<&str>) {
+        if value.is_empty() {
+            return;
+        }
+        let mut known = self.known.lock().unwrap_or_else(|poison| poison.into_inner());
+        let entry = known.entry(session_id.to_owned()).or_default();
+        if entry.values.len() >= KNOWN_MAX {
+            entry.values.remove(0);
+        }
+        entry.values.push(Zeroizing::new(value.to_owned()));
+        if let Some(reference) = reference.filter(|reference| !reference.is_empty()) {
+            if entry.refs.len() >= KNOWN_MAX {
+                entry.refs.remove(0);
+            }
+            if !entry.refs.iter().any(|known| known == reference) {
+                entry.refs.push(reference.to_owned());
+            }
+        }
+    }
+
+    /// The references whose value must never be shown for this conversation.
+    fn masked_refs(&self, session_id: &str) -> Vec<String> {
+        self.known.lock().unwrap_or_else(|poison| poison.into_inner()).get(session_id).map(|entry| entry.refs.clone()).unwrap_or_default()
+    }
+
+    /// Replaces every value this conversation filled with `[redacted]`, in any
+    /// text about to reach the bot: element names, the page's text, a title, a
+    /// URL. The plain form and its percent-encoded and JSON-escaped forms are
+    /// matched; a value the page draws in another shape cannot be (report 04).
+    pub(crate) fn redact(&self, session_id: &str, text: &str) -> String {
+        let values = {
+            let known = self.known.lock().unwrap_or_else(|poison| poison.into_inner());
+            known.get(session_id).map(|entry| entry.values.clone()).unwrap_or_default()
+        };
+        if values.is_empty() || text.is_empty() {
+            return text.to_owned();
+        }
+        let mut ordered: Vec<String> = values.iter().map(|value| value.to_string()).filter(|value| !value.is_empty()).collect();
+        // Longest first, so a value that contains another is replaced whole.
+        ordered.sort_by_key(|value| std::cmp::Reverse(value.len()));
+        let mut out = text.to_owned();
+        for value in ordered {
+            out = out.replace(&value, "[redacted]");
+            let escaped = serde_json::to_string(&value).map(|quoted| quoted.trim_matches('"').to_owned()).unwrap_or_default();
+            if !escaped.is_empty() && escaped != value {
+                out = out.replace(&escaped, "[redacted]");
+            }
+            let encoded = percent_encode(&value);
+            if !encoded.is_empty() && encoded != value {
+                out = out.replace(&encoded, "[redacted]");
+            }
+        }
+        out
     }
 
     fn contexts(&self) -> usize {
@@ -909,16 +1028,16 @@ fn page_outcome(reply: &Value, tool: &str, st: &AppState, session_id: &str) -> R
         elements.push(json!({
             "ref": node["ref"],
             "role": node["role"],
-            "name": node["name"],
+            "name": st.browser.redact(session_id, node["name"].as_str().unwrap_or("")),
         }));
     }
     let tree = reply["tree"].as_str().unwrap_or("").chars().take(SNAPSHOT_MAX_CHARS).collect::<String>();
     Ok(json!({
         "ok": true,
-        "url": url,
-        "title": reply["title"].as_str().unwrap_or(""),
+        "url": st.browser.redact(session_id, url),
+        "title": st.browser.redact(session_id, reply["title"].as_str().unwrap_or("")),
         "elements": elements,
-        "text": tree,
+        "text": st.browser.redact(session_id, &tree),
         "hint": "References stay valid until the page changes; take a new snapshot after that.",
     }))
 }
@@ -930,6 +1049,7 @@ fn activity(tool: &str, host: &str, typed: usize) {
         "browser_open" => tracing::info!("vps-browser: opened {host}"),
         "browser_click" => tracing::info!("vps-browser: clicked on {host}"),
         "browser_type" => tracing::info!("vps-browser: typed {typed} characters"),
+        "browser_fill" => tracing::info!("vps-browser: filled a saved value"),
         "browser_press" => tracing::info!("vps-browser: pressed a key on {host}"),
         "browser_back" => tracing::info!("vps-browser: went back on {host}"),
         "browser_snapshot" => tracing::debug!("vps-browser: read {host}"),
@@ -972,9 +1092,12 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
     let key = if name == "browser_press" { Some(key_of(args["key"].as_str().unwrap_or(""))?) } else { None };
     let text = if name == "browser_type" { Some(text_of(args["text"].as_str().unwrap_or(""))?) } else { None };
     let container = container_for(&link)?;
+    // The references the vault filled: the page masks their value, and it is
+    // redacted from anything that comes back.
+    let mask = || json!(st.browser.masked_refs(session_id));
     match name {
         "browser_open" => {
-            let request = json!({"action": "open", "conversation": conversation, "url": url.unwrap_or_default()});
+            let request = json!({"action": "open", "conversation": conversation, "url": url.unwrap_or_default(), "mask": mask()});
             let reply = act_with_server(&container, request).await?;
             if reply["ok"] == false {
                 return Err(server_failure(&reply, false));
@@ -982,7 +1105,7 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
             page_outcome(&reply, name, st, session_id)
         }
         "browser_snapshot" => {
-            let reply = act_with_server(&container, json!({"action": "snapshot", "conversation": conversation})).await?;
+            let reply = act_with_server(&container, json!({"action": "snapshot", "conversation": conversation, "mask": mask()})).await?;
             if reply["ok"] == false {
                 return Err(server_failure(&reply, false));
             }
@@ -990,7 +1113,7 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
         }
         "browser_click" => {
             let reference = reference.unwrap_or_default();
-            let described = act_with_server(&container, json!({"action": "describe", "conversation": conversation, "ref": reference})).await?;
+            let described = act_with_server(&container, json!({"action": "describe", "conversation": conversation, "ref": reference, "mask": mask()})).await?;
             if described["stale"] == true {
                 return Err(STALE.into());
             }
@@ -998,7 +1121,7 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
             if let Some(reason) = pause_reason(&[element_of(&described["target"])]) {
                 return Ok(needs_owner(&reason));
             }
-            let reply = act_with_server(&container, json!({"action": "click", "conversation": conversation, "ref": reference})).await?;
+            let reply = act_with_server(&container, json!({"action": "click", "conversation": conversation, "ref": reference, "mask": mask()})).await?;
             if reply["ok"] == false {
                 return Err(server_failure(&reply, false));
             }
@@ -1007,7 +1130,7 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
         "browser_type" => {
             let reference = reference.unwrap_or_default();
             let text = text.unwrap_or_default();
-            let described = act_with_server(&container, json!({"action": "describe", "conversation": conversation, "ref": reference})).await?;
+            let described = act_with_server(&container, json!({"action": "describe", "conversation": conversation, "ref": reference, "mask": mask()})).await?;
             if described["stale"] == true {
                 return Err(STALE.into());
             }
@@ -1015,31 +1138,31 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
                 return Ok(needs_owner(&reason));
             }
             let typed = text.chars().count();
-            let reply = act_with_server(&container, json!({"action": "type", "conversation": conversation, "ref": reference, "text": text})).await?;
+            let reply = act_with_server(&container, json!({"action": "type", "conversation": conversation, "ref": reference, "text": text, "mask": mask()})).await?;
             if reply["ok"] == false {
                 return Err(server_failure(&reply, true));
             }
             st.browser.track(session_id);
             activity(name, "", typed);
             let element = element_of(&described["target"]);
-            Ok(json!({"ok": true, "typed": typed, "field": element.name}))
+            Ok(json!({"ok": true, "typed": typed, "field": st.browser.redact(session_id, &element.name)}))
         }
         "browser_press" => {
             let key = key.unwrap_or_default();
             // The active element is described before a key is pressed, so a form's
             // own submit is caught here too.
-            let described = act_with_server(&container, json!({"action": "describe", "conversation": conversation, "ref": ""})).await?;
+            let described = act_with_server(&container, json!({"action": "describe", "conversation": conversation, "ref": "", "mask": mask()})).await?;
             if let Some(reason) = pause_reason(&[element_of(&described["target"])]) {
                 return Ok(needs_owner(&reason));
             }
-            let reply = act_with_server(&container, json!({"action": "press", "conversation": conversation, "key": key})).await?;
+            let reply = act_with_server(&container, json!({"action": "press", "conversation": conversation, "key": key, "mask": mask()})).await?;
             if reply["ok"] == false {
                 return Err(server_failure(&reply, false));
             }
             page_outcome(&reply, name, st, session_id)
         }
         "browser_back" => {
-            let reply = act_with_server(&container, json!({"action": "back", "conversation": conversation})).await?;
+            let reply = act_with_server(&container, json!({"action": "back", "conversation": conversation, "mask": mask()})).await?;
             if reply["ok"] == false {
                 return Err(server_failure(&reply, false));
             }
@@ -1092,8 +1215,48 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
     }
 }
 
-fn value_text(value: &Value) -> String {
-    match value {
+/// The vault's fill (16 November 2026): a saved value goes into one element of
+/// this conversation's page, and the bot never sees it. The gates are the
+/// browser's own, then the page's origin must be exactly the item's origin, and
+/// the container writes the value. The reply carries no page and no value.
+pub(crate) async fn fill_secret(st: &AppState, session_id: &str, origin: &str, reference: &str, value: &str) -> Result<(), crate::vault::FillRefusal> {
+    use crate::vault::FillRefusal;
+    let link = gate(st, session_id).map_err(FillRefusal::Refused)?;
+    let conversation = conversation_of(session_id).map_err(FillRefusal::Refused)?;
+    let container = container_for(&link).map_err(FillRefusal::Refused)?;
+    let described = act_with_server(
+        &container,
+        json!({"action": "describe", "conversation": conversation, "ref": reference, "mask": st.browser.masked_refs(session_id)}),
+    )
+    .await
+    .map_err(FillRefusal::Refused)?;
+    if described["stale"] == true {
+        return Err(FillRefusal::Refused(STALE.into()));
+    }
+    // The page must be the item's own origin. A page that cannot be read is a
+    // mismatch, never an allowance.
+    let page = described["url"].as_str().and_then(crate::vault::origin_of_url);
+    let wanted = crate::vault::origin_of_url(origin);
+    if page.is_none() || wanted.is_none() || page != wanted {
+        return Err(FillRefusal::WrongOrigin);
+    }
+    // Once this request is sent the value may be in the page, so an error from
+    // here on is "uncertain", never "refused".
+    let reply = act_with_server(&container, json!({"action": "fill", "conversation": conversation, "ref": reference, "text": value})).await;
+    match reply {
+        Ok(reply) if reply["ok"] == false => Err(FillRefusal::Uncertain(server_failure(&reply, true))),
+        Ok(reply) if reply["filled"] == true => {
+            st.browser.track(session_id);
+            st.browser.remember(session_id, value, Some(reference));
+            activity("browser_fill", "", value.chars().count());
+            Ok(())
+        }
+        Ok(_) => Err(FillRefusal::Uncertain("The page did not confirm the fill.".into())),
+        Err(text) => Err(FillRefusal::Uncertain(text)),
+    }
+}
+
+fn value_text(value: &Value) -> String {    match value {
         Value::String(text) => text.clone(),
         other => serde_json::to_string_pretty(other).unwrap_or_default(),
     }

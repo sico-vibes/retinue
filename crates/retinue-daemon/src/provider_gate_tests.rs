@@ -7,7 +7,7 @@
 #[tokio::test]
 async fn main_providers_are_always_on_and_the_optional_ones_start_off() {
     let (st, _events) = state();
-    assert_eq!(provider_gate::optional_providers(), ["qwen", "cursor", "grok", "antigravity"]);
+    assert_eq!(provider_gate::optional_providers(), ["pi", "qwen", "cursor", "grok", "antigravity"]);
     // A main provider cannot be turned off by the provider-level switch, and the
     // refusal says what to do instead.
     for (main, name) in [("claude", "Claude Code"), ("codex", "Codex"), ("opencode", "OpenCode")] {
@@ -61,6 +61,28 @@ async fn an_install_that_already_uses_an_optional_provider_keeps_it_on() {
     assert!(disabled.iter().any(|id| id == "qwen"), "{disabled:?}");
 }
 
+// A provider added after the one-time defaults ran (Pi, 16 November 2026) starts
+// off too, with its own marker so the switch is written once.
+#[tokio::test]
+async fn a_provider_added_later_starts_off_once_and_never_over_what_the_owner_uses() {
+    let (st, _events) = state();
+    // An install whose defaults ran before Pi existed.
+    st.db.set_setting(provider_gate::DEFAULTS_MARKER, &json!(true)).unwrap();
+    st.db.set_setting("runtimes.disabled", &json!([])).unwrap();
+    provider_gate::apply_new_provider_defaults(&st.db).unwrap();
+    assert_eq!(disabled_runtimes(&st.db), vec!["pi".to_owned()]);
+    // Once only: an owner who switched it on keeps it on.
+    st.db.set_setting("runtimes.disabled", &json!([])).unwrap();
+    provider_gate::apply_new_provider_defaults(&st.db).unwrap();
+    assert!(disabled_runtimes(&st.db).is_empty(), "the marker means one write, not one per start");
+    // A bot already on Pi keeps it on, the same rule the first defaults follow.
+    let (second, _events) = state();
+    second.db.upsert_runtime(&json!({"id":"rt_pi_abcd","provider":"pi","status":"online","executablePath":"x","launchArgs":[]})).unwrap();
+    second.db.agent_create(&json!({"name":"Pi employee","runtimeId":"rt_pi_abcd"})).unwrap();
+    provider_gate::apply_new_provider_defaults(&second.db).unwrap();
+    assert!(!disabled_runtimes(&second.db).iter().any(|id| id == "pi"), "an employee on it keeps it on");
+}
+
 #[tokio::test]
 async fn a_switched_off_provider_is_absent_from_choices_and_listed_with_its_state() {
     let (st, _events) = state();
@@ -88,7 +110,13 @@ async fn a_switched_off_provider_is_absent_from_choices_and_listed_with_its_stat
     assert!(grok["installHint"].as_str().is_some_and(|hint| !hint.is_empty()), "{grok}");
     assert!(grok["signInCommand"].as_str() == Some("grok login"));
     // A provider that is not installed is still a row, with no runtime.
-    assert_eq!(providers.len(), 7);
+    assert_eq!(providers.len(), 8);
+    // Pi (16 November 2026) is the eighth: its own runtime, not an ACP row, with
+    // its install hint beside the rows in `retinue-runtime`.
+    let pi = providers.iter().find(|row| row["provider"] == "pi").expect("Pi is listed");
+    assert_eq!(pi["optional"], true);
+    assert_eq!(pi["found"], false);
+    assert!(pi["installHint"].as_str().is_some_and(|hint| hint.contains("pi-coding-agent")), "{pi}");
     for main in ["claude", "codex", "opencode"] {
         let row = providers.iter().find(|row| row["provider"] == main).unwrap();
         assert_eq!(row["main"], true, "{main}");

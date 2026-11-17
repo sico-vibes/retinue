@@ -2,6 +2,17 @@
 
 **Every agent, whatever the model: before working in this repository, read `.claude/skills/retinue-development/SKILL.md` and the reference it points to for your task. Before you report a task done, update that skill with anything the task taught (a fix and its root cause, a changed design rule, a new pattern, a changed tool or gate), as its "Keep this skill current" section describes. If your sandbox is read-only, put the proposed update in your report.**
 
+# Amendment (16 November 2026): vault, chat channels and Pi
+
+Owner decisions of 16 November 2026 (live session, after Grey's nod reports in `docs/research/n8n-nod/`). Backend by Ada lanes, frontend by the Director. Each lane adds its rows to `docs/remote/THREAT_MODEL.md`.
+
+- **Vault: the model never holds a value.** A Vault page stores logins, cards, authenticator keys, API keys and notes. Values live in Windows Credential Manager (`Retinue/vault/<id>/<field>`), metadata in SQLite. A bot sees titles, kinds and origins only; to use an item it asks Retinue, the owner approves the card, and the daemon types the value into the browser, the linked cloud computer or (under the 14 November rules) the owner's computer. Every use, reveal and refusal goes to a content-free ledger. No value in the database, an event, a log, a backup, a diagnostics bundle, a push or a reply. `vault.*` is `never` remote.
+- **Telegram and WhatsApp reach the CEO only.** Telegram uses the official Bot API by polling. WhatsApp offers both WhatsApp Web (QR, unofficial, the owner accepts the ban risk) and the official Cloud API; the owner chooses in Settings. One paired sender per channel, approved on the desktop; groups are refused. Inbound messages go to the CEO's channel conversation; only the CEO's final reply goes back, never thinking, tool output, paths or secrets. This is a new egress: prompts and replies pass through Telegram or Meta.
+- **Approvals from chat, as buttons.** This amends "approvals from remote are off by default" for this path only: the CEO's approval cards arrive in the chat with Allow and Deny buttons (never a free-text or model-judged answer). Vault uses, `owner_*` and `computer_*` grants, Full access and settings changes are never approved from chat.
+- **Pi, with keys held by Retinue.** This amends "no copied provider authentication" for this path only: Retinue may store the owner's model-provider API keys (Credential Manager, `Retinue/pi/<provider>`) and give them to a supervised Pi child at spawn, to reach Pi's providers. The keys are never logged, returned, backed up or sent anywhere but that child. It is optional and off until a key is added.
+
+**Today's rules, each with the file and the test that enforces it: [`docs/reference/invariants.md`](docs/reference/invariants.md).** The amendments below are the history of how they got that way. Read the invariants page for what is true now; read the amendment it points to when you need the reason.
+
 # Amendment (14 November 2026): browsers and computer control
 
 Owner decision of 14 November 2026 ("Approve as drafted", live session; drafted by Grey in `docs/research/owner-requests-2026-11-14.md`, section 4). Bots may use a browser, drive the linked cloud computer, and — only after the owner turns it on — control the owner's own Windows computer. This amends the "never remote", "no copied provider authentication" and loopback rules for this path only, and adds one egress path that the threat model must now carry.

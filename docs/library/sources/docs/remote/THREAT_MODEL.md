@@ -27,6 +27,7 @@ Every control below exists because of that sentence, and the product says it in 
 | The host computer and the user's projects | A prompt can act on them. |
 | Conversations and tool output | May contain code, secrets pasted by the user, internal paths. |
 | Provider credentials (Claude, Codex, OpenCode auth files) | Read by the daemon locally; must never reach a device. |
+| Model-provider API keys Retinue holds for Pi (16 November 2026) | Written by the owner at the desktop, kept in Credential Manager, given only to one Pi child; must never reach a device, a backup, a log, a prompt, a reply or any other child process. |
 | The daemon capability token | Full authority over the loopback API. |
 | Device cookies | Prove a paired device; whoever holds one acts at its tier. |
 | The owner's Tailscale account | Decides which nodes can reach the host at all. |
@@ -314,3 +315,18 @@ Owner amendment of 14 November 2026 ("browsers and computer control", `AGENTS.md
 | C6 | Typed secrets or screens end up in logs, backups, diagnostics or push | Activity rows are content-free (app name, action class, character counts); screenshots and accessibility trees are never persisted outside the turn's media | Template mistakes; covered by tests in each module |
 
 **Release gate.** A release that changes these defaults (the switch's default, the screenshot rule, the grant limits, the pause list) needs the owner's live check before it ships.
+
+## 20. Pi, with keys held by Retinue (16 November 2026)
+
+Owner amendment of 16 November 2026 in `AGENTS.md` ("Pi, with keys held by Retinue"), plan `docs/plans/vault-channels-pi.md` section C, code `crates/retinue-daemon/src/pi.rs` and `crates/retinue-adapter-pi/`. This is the first time Retinue itself stores a model-provider API key. The exception is Pi only: Retinue is the thing that holds the key, and the only place a key goes is the environment of one supervised Pi child.
+
+| # | Abuse | Mitigation | Residual risk |
+|---|---|---|---|
+| P1 | **Retinue now holds the owner's provider keys** (a new asset on the host) | `Retinue/pi/<provider>` in Windows Credential Manager, written only by `pi.key.set` at the desktop, read only to build one child's environment; held in a `Zeroizing` string; no RPC returns a value and `pi.providers` answers `hasKey` only | An attacker who can already run as the owner can read the store, exactly as they could read any other credential on the machine |
+| P2 | A key reaching a child that is not the Pi conversation it belongs to | `pi::add_keys_to_environment` is called from `exec_options_for_session` only when the conversation's provider is `pi`; Claude Code, Codex and OpenCode children are built without touching it | A bot's own shell tool can print its environment: the key protects at rest and from other providers, not from the bot the owner gave it to (the same limit `secrets.rs` documents) |
+| P3 | A key in a backup, a diagnostics bundle, a log, an event, a prompt or a reply | Keys are not settings, not agent fields and not in SQLite, so `backup.*` and a diagnostics bundle never see one; nothing logs an environment value; Pi's own error text is bounded and a key-shaped word is replaced with `[hidden]` before it can become a turn's error | A provider that echoes a key in its own error would have it hidden, not verified byte for byte |
+| P4 | Two providers sharing one key variable (OpenCode Zen and Go, Moonshot global and China, the Qwen pairs) silently overriding each other | `pi.key.set` refuses a second key while another provider with the same `keyEnv` has one, naming both | None expected |
+| P5 | `pi.key.test` spending the owner's money on a request | The test runs Pi's own `auth check` (credential resolution, no model request) with a 20 s bound; the owner starts it at the desktop and `pi.key.test` is `never` for a device | Pi's `auth check` may refresh an OAuth token, which is a provider call |
+| P6 | A key crossing to a paired device | `pi.providers`, `pi.key.set`, `pi.key.delete` and `pi.key.test` are `tiers.json` class `never`; no `pi.*` event exists | None expected |
+| P7 | A project folder loading its own Pi extensions or settings into a bot | Pi is started with `--no-approve`, because a non-interactive Pi cannot ask whether to trust a folder; `AGENTS.md` and `CLAUDE.md` still load as context | Context files are still untrusted input, as Pi's own security page says |
+| P8 | A Pi child acting beyond what the owner expects | Pi has no per-tool approval prompt, so Retinue does not claim any: the runtime row says `permissions: false` and no card is shown. Pi runs with the owner's OS permissions, like the other CLIs | The approval brake that exists for Claude Code, Codex and ACP agents does not exist for a Pi bot |

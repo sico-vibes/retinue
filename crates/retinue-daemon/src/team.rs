@@ -571,7 +571,12 @@ pub fn attach(st: &AppState, session_id: &str, agent_id: Option<&str>, link: &Va
     let Some(agent) = agent_id.and_then(|id| st.db.agent_get(id).ok()) else { return };
     let workspace = folder.map(std::path::Path::to_path_buf).unwrap_or_else(|| workspace_for(st, &agent));
     let project = project_id.and_then(|id| st.db.project_get(id).ok());
-    let team = runtime_instructions_in(st, &agent, link, &workspace, project.as_ref());
+    let mut team = runtime_instructions_in(st, &agent, link, &workspace, project.as_ref());
+    // Section D: one line per enabled connector, not every schema (report 03, idea 4).
+    if let Some(connectors) = crate::connectors::instructions(st) {
+        team.push_str("\n\n");
+        team.push_str(&connectors);
+    }
     options.instructions = Some(match options.instructions.as_deref().map(str::trim).filter(|text| !text.is_empty()) {
         Some(own) => format!("{team}\n\n{own}"),
         None => team,
@@ -619,6 +624,9 @@ fn tools(is_automation: bool, memory_enabled: bool, ask_user: bool, is_manager: 
     if is_automation {
         let mut list = memory;
         list.extend(skill_tools);
+        // Section D: an unattended run may still search connectors, and may call
+        // only a tool the connector marks read-only (enforced in `connectors`).
+        list.extend(crate::connectors::tool_schemas());
         return json!(list);
     }
     let mut list: Vec<Value> = vec![
@@ -629,6 +637,8 @@ fn tools(is_automation: bool, memory_enabled: bool, ask_user: bool, is_manager: 
         json!({"name":"list_my_schedules","description":format!("List this {noun}'s scheduled tasks, whether each is enabled, and when it next runs."),"inputSchema":{"type":"object","properties":{},"additionalProperties":false}}),
     ];
     list.push(ui_guide);
+    // Section D: the two connector meta-tools.
+    list.extend(crate::connectors::tool_schemas());
     // Phase 8: a sub-bot is never offered the fleet tools.
     if subbots { list.extend(crate::subbots::tool_schemas(noun)); }
     if is_manager {
@@ -652,7 +662,7 @@ fn tools(is_automation: bool, memory_enabled: bool, ask_user: bool, is_manager: 
         }
     }
     // OpenCode has no native question tool over ACP, so the bridge offers one.
-    if ask_user { list.push(crate::questions::tool_schema()); list.push(crate::secrets::tool_schema()); }
+    if ask_user { list.push(crate::questions::tool_schema()); list.push(crate::secrets::tool_schema()); list.extend(crate::vault::tool_schemas()); }
     list.extend(memory);
     list.extend(skill_tools);
     json!(list)
@@ -694,7 +704,7 @@ pub async fn mcp_rpc(st: &AppState, session_id: &str, method: &str, params: &Val
         "mcp.tools.list" => Ok(json!({"tools":tools(is_automation, memory_enabled, ask_user, is_manager, !crate::subbots::is_subbot_session(st, session_id), &entity_noun(false), &entity_noun(true))})),
         "mcp.tools.call" => {
             let name = params["name"].as_str().unwrap_or("");
-            if is_automation && !name.starts_with("memory_") && !matches!(name, "list_skills" | "load_skill" | "read_skill_file") {
+            if is_automation && !name.starts_with("memory_") && !matches!(name, "list_skills" | "load_skill" | "read_skill_file" | "connector_search" | "connector_call") {
                 return Err(derr("forbidden", "Automation runs cannot use team or scheduling tools.", StatusCode::FORBIDDEN));
             }
             let args = &params["arguments"];
@@ -742,6 +752,9 @@ pub async fn mcp_rpc(st: &AppState, session_id: &str, method: &str, params: &Val
                 "ask_user" => Err("ask_user is not available in this conversation.".into()),
                 "request_secret" if ask_user => crate::secrets::request_secret_tool(st, session_id, args).await,
                 "request_secret" => Err("request_secret is not available here: nobody is watching this conversation to answer. Ask for it in a conversation the owner is in.".into()),
+                "vault_list" => crate::vault::tool_list(st, session_id, args).await,
+                "vault_fill" if ask_user => crate::vault::tool_fill(st, session_id, args).await,
+                "vault_fill" => Err("The vault is not available here: nobody is watching this conversation to approve a use.".into()),
                 "memory_search" if memory_enabled => crate::memory::tool_search(st, session_id, args).await,
                 "memory_get" if memory_enabled => crate::memory::tool_get(st, session_id, args).await,
                 "memory_write" if memory_enabled => crate::memory::tool_write(st, session_id, args).await,
@@ -753,6 +766,8 @@ pub async fn mcp_rpc(st: &AppState, session_id: &str, method: &str, params: &Val
                 "list_skills" => crate::skills::tool_list(st, session_id).await,
                 "load_skill" => crate::skills::tool_load(st, session_id, args).await,
                 "read_skill_file" => crate::skills::tool_read_file(st, session_id, args).await,
+                "connector_search" => crate::connectors::search_tool(st, session_id, args).await,
+                "connector_call" => crate::connectors::call_tool(st, session_id, args).await,
                 _ => Err(format!("Unknown tool {name}.")),
             };
             Ok(match result {

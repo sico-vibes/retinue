@@ -22,6 +22,78 @@ env:
   CARGO_INCREMENTAL: '0'
 
 jobs:
+  # Fast checks that need no toolchain: the import boundaries, the mechanical
+  # formatting rules, the secret scan and the tests of those checks. Separate
+  # from `gates` so a boundary or a committed key fails in a minute rather than
+  # at the end of a ninety-minute job, and so a red `main` says which kind of
+  # problem it is.
+  hygiene:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # The secret scan reads the history, and a pull request's own commits.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      # Every step below uses Node only: no `npm ci`, so a broken dependency
+      # cannot hide a committed key.
+
+      - name: Formatting and encoding
+        run: node scripts/check-format.mjs
+
+      - name: Import and dependency boundaries
+        run: node scripts/check-architecture.mjs
+
+      - name: Tests of the checks themselves
+        run: node --test "scripts/**/*.test.mjs"
+
+      - name: Install verified Gitleaks 8.30.1
+        shell: pwsh
+        run: |
+          $tool = Join-Path $env:RUNNER_TEMP 'gitleaks'
+          New-Item -ItemType Directory -Force -Path $tool | Out-Null
+          $zip = Join-Path $tool 'gitleaks.zip'
+          Invoke-WebRequest -Uri 'https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip' -OutFile $zip
+          # The digest published in gitleaks_8.30.1_checksums.txt, checked on 16 November 2026.
+          $expected = 'd29144deff3a68aa93ced33dddf84b7fdc26070add4aa0f4513094c8332afc4e'
+          $actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { Write-Host "::error::gitleaks zip digest $actual is not the published one"; exit 1 }
+          Expand-Archive -Path $zip -DestinationPath $tool -Force
+          "GITLEAKS_PATH=$tool\gitleaks.exe" >> $env:GITHUB_ENV
+
+      - name: Prove the scanning exceptions still detect secrets
+        run: node scripts/check-secret-config.mjs
+
+      - name: Scan the commits this run adds
+        shell: pwsh
+        # A pull request scans its own commits; a push scans what it pushes.
+        # With no base (the first push of a branch) it scans that commit alone:
+        # `--all` does not finish on this history inside the timeout, and the
+        # working-tree scan below covers everything that is here now. A
+        # full-history scan belongs in a nightly run (`docs/plans/nod-adoption-plan.md`,
+        # wave 3, "release safety").
+        run: |
+          $base = '${{ github.event.pull_request.base.sha }}'
+          if (-not $base) { $base = '${{ github.event.before }}' }
+          if ($base -and $base -ne '0000000000000000000000000000000000000000') {
+            & $env:GITLEAKS_PATH git --config .gitleaks.toml --redact --no-banner --verbose --timeout 600 --max-target-megabytes 1 --log-opts="$base..HEAD" .
+          } else {
+            & $env:GITLEAKS_PATH git --config .gitleaks.toml --redact --no-banner --verbose --timeout 300 --max-target-megabytes 1 --log-opts=HEAD .
+          }
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Scan the checked-out files
+        shell: pwsh
+        run: |
+          & $env:GITLEAKS_PATH dir --config .gitleaks.toml --redact --no-banner --verbose .
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
   gates:
     runs-on: windows-latest
     timeout-minutes: 90

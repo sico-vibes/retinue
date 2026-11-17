@@ -329,7 +329,11 @@ pub async fn after_turn(st: &AppState, session_id: &str, outcome: &str) {
         }
         "turn.error" => {
             let acted = run_acted(st, run_id, session_id);
-            if let Ok(Some(run)) = st.db.automation_run_finish(run_id, "failed", Some(if acted { "error_after_changes" } else { "error" })) {
+            let reason = if acted { "error_after_changes" } else { "error" };
+            // A failed scheduled run is recorded, so a schedule that keeps
+            // failing shows up in the diagnostics bundle.
+            crate::diagnostics::record_failure("schedule.run.failed", reason);
+            if let Ok(Some(run)) = st.db.automation_run_finish(run_id, "failed", Some(reason)) {
                 emit_run_changed(st, &run).await;
                 account_failure(st, &automation, &run, acted).await;
             }

@@ -43,6 +43,9 @@ const COMPUTER_TIMEOUT: Duration = Duration::from_secs(330);
 const OWNER_TIMEOUT: Duration = Duration::from_secs(180);
 /// How long the hello after `initialize` may take; it never holds up the client for long.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
+/// A connector call first waits for the owner's card (up to 50 s) and then reaches
+/// the server (up to 30 s), so the team bridge's 60 s would cut it short.
+const CONNECTOR_TIMEOUT: Duration = Duration::from_secs(150);
 
 /// Why a forwarded call failed.
 #[derive(Debug)]
@@ -150,8 +153,14 @@ impl Backend {
     }
 
     async fn attempt(&self, method: &str, params: &Value) -> Result<Value, Failure> {
+        self.attempt_for(method, params, self.timeout).await
+    }
+
+    /// One forwarded call with its own deadline, for a tool that legitimately waits
+    /// longer than the bridge's usual one.
+    async fn attempt_for(&self, method: &str, params: &Value, timeout: Duration) -> Result<Value, Failure> {
         let (address, token) = self.creds.lock().unwrap_or_else(|poison| poison.into_inner()).clone();
-        post(&address, &token, method, params.clone(), self.timeout).await
+        post(&address, &token, method, params.clone(), timeout).await
     }
 
     /// One forwarded call. The external server tries once more after reading a
@@ -297,8 +306,18 @@ async fn handle(backend: &Backend, message: &Value) -> Option<Value> {
             if backend.is_owner() {
                 eprintln!("owner-computer: {}", tool_name(message));
             }
-            backend.call(backend.call_method(), message["params"].clone()).await
-                .or_else(|error| Ok(json!({"content":[{"type":"text","text":error}],"isError":true})))
+            // A connector call may wait for the owner's card first, so it gets a
+            // longer deadline than the rest of the team tools.
+            if backend.kind == Kind::Team && tool_name(message) == "connector_call" {
+                backend
+                    .attempt_for(backend.call_method(), &message["params"], CONNECTOR_TIMEOUT)
+                    .await
+                    .map_err(|failure| failure_message(backend.kind, failure))
+                    .or_else(|error| Ok(json!({"content":[{"type":"text","text":error}],"isError":true})))
+            } else {
+                backend.call(backend.call_method(), message["params"].clone()).await
+                    .or_else(|error| Ok(json!({"content":[{"type":"text","text":error}],"isError":true})))
+            }
         }
         _ => Err(format!("Method {method} is not supported")),
     };

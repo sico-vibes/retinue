@@ -10,7 +10,7 @@
 //! keep that true:
 //!
 //! 1. no log call site passes user text (checked by
-//!    `every_daemon_log_call_site_is_a_fixed_message` in `main.rs`), and
+//!    `fix39_p12_tests::every_log_call_site_is_a_fixed_message` in `main.rs`), and
 //! 2. [`RedactingWriter`] scrubs secret-shaped material out of every line that
 //!    reaches the file, while [`scrub_events`] and [`scrub_settings`] remove
 //!    content and secrets from what goes into the zip.
@@ -99,6 +99,65 @@ pub fn redact(text: &str) -> String {
         }
     }
     out
+}
+
+// ---------------------------------------------------------------------------
+// The failure sink
+
+/// Record one failure: one line in the log, and — under `cfg(test)` only — one
+/// entry a test can assert on.
+///
+/// A failure path that returns an error without recording one is invisible in
+/// the diagnostics bundle the owner sends us, and no test noticed. `event` and
+/// `code` are fixed strings on purpose: nothing the owner typed can reach the
+/// line, so [`RedactingWriter`] stays the second line of defence. The sink is
+/// compiled only into test binaries, so production holds no second copy of
+/// anything.
+pub fn record_failure(event: &'static str, code: &'static str) {
+    tracing::error!(event, code, "a failure was recorded");
+    #[cfg(test)]
+    sink::push(event, code);
+}
+
+/// How many recorded failures carry this event and code. Test only: a test that
+/// asserts on the sink names the pair its own scenario produces, because the
+/// daemon's tests share one process.
+#[cfg(test)]
+pub(crate) fn failures_with(event: &str, code: &str) -> usize {
+    sink::count(event, code)
+}
+
+#[cfg(test)]
+mod sink {
+    //! Test-only. The log is not initialised in a test binary, so the same call
+    //! also lands here; a test then asserts that the failure was reported at
+    //! all, which is the property no test had.
+    use std::sync::{Mutex, OnceLock};
+
+    /// One recorded failure: its event and its code, and nothing else.
+    #[derive(Debug, Clone)]
+    pub(super) struct FailureRecord {
+        pub event: &'static str,
+        pub code: &'static str,
+    }
+
+    fn entries() -> &'static Mutex<Vec<FailureRecord>> {
+        static ENTRIES: OnceLock<Mutex<Vec<FailureRecord>>> = OnceLock::new();
+        ENTRIES.get_or_init(|| Mutex::new(Vec::new()))
+    }
+
+    pub(super) fn push(event: &'static str, code: &'static str) {
+        if let Ok(mut entries) = entries().lock() {
+            entries.push(FailureRecord { event, code });
+        }
+    }
+
+    pub(super) fn count(event: &str, code: &str) -> usize {
+        entries()
+            .lock()
+            .map(|entries| entries.iter().filter(|record| record.event == event && record.code == code).count())
+            .unwrap_or_default()
+    }
 }
 
 /// A writer that redacts every chunk before it reaches the file.
@@ -553,6 +612,19 @@ pub async fn rpc(st: &AppState, method: &str, params: &Value) -> Result<Value, D
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn record_failure_writes_one_entry_per_failure_and_carries_no_content() {
+        // A pair no call site uses, so a sibling test cannot add to the count.
+        assert_eq!(failures_with("test.example", "once"), 0);
+        record_failure("test.example", "once");
+        let before = failures_with("test.example", "once");
+        assert_eq!(before, 1, "one call records one failure");
+        record_failure("test.example", "once");
+        assert_eq!(failures_with("test.example", "once"), before + 1, "a second failure is a second entry");
+        // The same event with another class is a different failure.
+        assert_eq!(failures_with("test.example", "twice"), 0);
+    }
 
     #[test]
     fn redaction_removes_tokens_and_credentials_but_keeps_ids() {

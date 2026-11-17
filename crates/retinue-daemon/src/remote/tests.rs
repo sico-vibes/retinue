@@ -515,6 +515,26 @@ async fn a_missing_or_wrong_origin_is_refused_before_anything_else() {
 }
 
 #[tokio::test]
+async fn a_refused_origin_is_recorded_once_for_the_diagnostics_bundle() {
+    let gateway = gateway().await;
+    let before = crate::diagnostics::failures_with("remote.request.refused", "forbidden_origin");
+    let response = gateway
+        .client
+        .post(gateway.url("/api/rpc"))
+        .header("Origin", "https://evil.example.ts.net")
+        .json(&json!({"v": 1, "id": "r", "method": "daemon.health", "params": {}}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        crate::diagnostics::failures_with("remote.request.refused", "forbidden_origin"),
+        before + 1,
+        "one refused request records one failure"
+    );
+}
+
+#[tokio::test]
 async fn without_a_cookie_the_answer_is_unauthorized() {
     let gateway = gateway().await;
     let response = gateway
@@ -886,18 +906,22 @@ async fn path_traversal_is_a_404() {
 
 #[tokio::test]
 async fn an_absent_web_folder_serves_the_built_in_page() {
+    // The owner's running app sets `RETINUE_REMOTE_WEB_DIR` and this test once
+    // served their folder instead of the built-in page; `TestEnv` removes it for
+    // the length of the test (lessons.md, 2026-11-13).
+    let env = crate::test_env::TestEnv::new("remote-absent");
     let gateway = gateway().await;
     let response = raw_get(gateway.port, "/").await;
     assert!(response.contains("200 OK"), "{response}");
     assert!(response.contains("not installed"), "{response}");
     assert!(raw_get(gateway.port, "/anything.js").await.contains("404"));
+    assert!(env.data_root().exists(), "the test's own data folder is a real one");
 }
 
 #[tokio::test]
 async fn a_folder_with_files_but_no_entry_page_serves_the_built_in_page() {
-    let root = std::env::temp_dir();
-    let name = format!("retinue-remote-web-noentry-{}", uuid::Uuid::new_v4());
-    let dir = root.join(&name);
+    let env = crate::test_env::TestEnv::new("remote-noentry");
+    let dir = env.data_root().to_path_buf();
     std::fs::create_dir_all(dir.join("assets")).unwrap();
     std::fs::write(dir.join("assets/app-AbC123.js"), "console.log('remote')").unwrap();
 
@@ -915,8 +939,6 @@ async fn a_folder_with_files_but_no_entry_page_serves_the_built_in_page() {
     let response = raw_get(port, "/").await;
     assert!(response.contains("200 OK"), "{response}");
     assert!(response.contains("not installed"), "{response}");
-
-    let _ = std::fs::remove_dir_all(dir);
 }
 
 #[tokio::test]

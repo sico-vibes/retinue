@@ -23,6 +23,7 @@ retinue-agent-core = { path = "../retinue-agent-core" }
 retinue-adapter-acp = { path = "../retinue-adapter-acp" }
 retinue-adapter-codex = { path = "../retinue-adapter-codex" }
 retinue-adapter-claude = { path = "../retinue-adapter-claude" }
+retinue-adapter-pi = { path = "../retinue-adapter-pi" }
 chrono.workspace = true
 futures-util.workspace = true
 hkdf.workspace = true
@@ -40,6 +41,7 @@ webpki-roots = "1"
 regex.workspace = true
 rusqlite.workspace = true
 rand.workspace = true
+sha1 = "0.10"
 sha2.workspace = true
 subtle.workspace = true
 zeroize.workspace = true

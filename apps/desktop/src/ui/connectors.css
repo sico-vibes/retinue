@@ -1,0 +1,29 @@
+/* Settings > Integrations > Connectors (16 November 2026). */
+.connector-add { display: inline-flex; align-items: center; gap: 5px; }
+.connector-row { border-top: 1px solid var(--line); }
+.settings-card > .connector-row:first-child { border-top: 0; }
+.connector-row-main { min-height: 50px; padding: 6px 12px 6px 6px; display: flex; align-items: center; gap: 8px; }
+.connector-row.is-off .account-row-copy strong { color: var(--text-3); }
+.connector-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 3px; background: var(--line-strong); }
+.connector-dot.status-ok { background: var(--status-success); }
+.connector-dot.status-error { background: var(--status-danger); }
+.connector-detail { padding: 0 12px 12px 42px; display: grid; gap: 10px; }
+.connector-unattended { padding: 10px 12px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: var(--radius-md); }
+.connector-unattended .account-row-copy small { white-space: normal; }
+.connector-tools { display: grid; border: 1px solid var(--line); border-radius: var(--radius-md); overflow: hidden; }
+.connector-tool { padding: 8px 12px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--line); }
+.connector-tool:first-child { border-top: 0; }
+.connector-tool .account-row-copy strong { display: inline-flex; align-items: center; gap: 6px; }
+.connector-tag { padding: 0 6px; color: var(--text-3); border: 1px solid var(--line); border-radius: 5px; font-size: var(--fs-2xs); font-style: normal; font-weight: 500; }
+.connector-tools-note { margin: 0; color: var(--text-3); font-size: var(--fs-xs); }
+.connector-form { padding: 12px; display: grid; gap: 10px; border-top: 1px solid var(--line); }
+.settings-card > .connector-form:first-child { border-top: 0; }
+.connector-form .new-project-field { margin: 0; }
+.connector-form-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 10px; }
+.connector-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.connector-catalogue { padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+.connector-suggestion { height: 30px; padding: 0 12px; display: inline-flex; align-items: center; gap: 7px; color: var(--text-1); border: 1px solid var(--line); border-radius: var(--radius-sm); background: transparent; box-shadow: none; font-size: var(--fs-sm); cursor: pointer; }
+.connector-suggestion:hover { border-color: var(--line-strong); background: var(--surface-selected); }
+.connector-suggestion:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.connector-suggestion svg { color: var(--text-3); }
+@media (max-width: 760px) { .connector-form-grid { grid-template-columns: minmax(0, 1fr); } .connector-tool { flex-wrap: wrap; } }

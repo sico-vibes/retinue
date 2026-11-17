@@ -3,7 +3,7 @@ use retinue_process::{prepare_command, ProcessTree};
 use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 pub mod providers;
-pub use providers::{acp_launch_args, acp_provider, discovery_ids, is_acp_provider, is_main_provider, optional_providers, AcpProvider, ACP_PROVIDERS, MAIN_PROVIDERS};
+pub use providers::{acp_launch_args, acp_provider, discovery_ids, install_hint, is_acp_provider, is_main_provider, optional_providers, sign_in_command, AcpProvider, ACP_PROVIDERS, MAIN_PROVIDERS, PI_DISPLAY_NAME, PI_INSTALL_HINT, PI_PROBE_TOKEN, PI_PROVIDER, PI_SIGN_IN_COMMAND};
 use std::{
     collections::BTreeMap,
     env,
@@ -232,9 +232,10 @@ pub async fn discover_except(disabled: &[String]) -> Vec<DiscoveredRuntime> {
         move || discovery_ids().into_iter().zip(skip).map(|(id, off)| (id, if off { None } else { resolve_command(acp_provider(id).map_or(id, |row| row.command)) }, off)).collect::<Vec<_>>()
     }).await;
     let Ok(specs) = specs else { return Vec::new(); };
-    // The OpenCode stored-credential check is CLI-free and only ever reads
-    // these four variables; tests pass a synthetic set instead.
-    let environment = opencode_environment();
+    // The OpenCode stored-credential check and Pi's `auth.json` check are
+    // CLI-free and only ever read these variables; tests pass a synthetic set
+    // instead.
+    let environment = discovery_environment();
     let probes = specs.into_iter().map(|(id, resolved, off)| { let environment = &environment; async move { if off { None } else { discover_one(id, resolved, environment).await } } });
     futures_util::future::join_all(probes).await.into_iter().flatten().collect()
 }
@@ -255,6 +256,14 @@ fn safe_version(output: &str) -> Option<String> {
     Some(version.to_owned())
 }
 
+/// The version a CLI prints for `--version`, reduced to a numeric label. Shared
+/// with the daemon's Pi page, which asks the same question about the same binary.
+pub async fn version_of(executable: &Path, args: &[String]) -> Option<String> {
+    let mut argv = args.iter().map(String::as_str).collect::<Vec<_>>();
+    argv.push("--version");
+    safe_version(&bounded_output(executable, &argv).await.ok()?)
+}
+
 /// One provider's probes. Public so the account tests can drive a fake CLI
 /// through the exact discovery path.
 pub async fn discover_one(id: &str, resolved: Option<ResolvedCommand>, environment: &[(String, String)]) -> Option<DiscoveredRuntime> {
@@ -262,7 +271,7 @@ pub async fn discover_one(id: &str, resolved: Option<ResolvedCommand>, environme
     let mut runtime = DiscoveredRuntime {
         id: format!("rt_{id}_{}", short_hash(&resolved.executable.to_string_lossy())),
         host_id: "host_windows_local".into(), provider: id.into(), display_name: provider_display_name(id).into(),
-        protocol_family: match id { "codex" => ProtocolFamily::CodexAppServer, p if is_acp_provider(p) => ProtocolFamily::Acp, _ => ProtocolFamily::ClaudeStream },
+        protocol_family: match id { "codex" => ProtocolFamily::CodexAppServer, "pi" => ProtocolFamily::PiRpc, p if is_acp_provider(p) => ProtocolFamily::Acp, _ => ProtocolFamily::ClaudeStream },
         executable_path: resolved.executable.to_string_lossy().into_owned(), launch_args: resolved.args.clone(),
         version: None, auth_state: AuthState::Unknown, gateway_auth_states: BTreeMap::new(), account: None,
         status: "error".into(), capabilities: BTreeMap::new(), probe_error: None, probe_step: None,
@@ -279,6 +288,8 @@ pub async fn discover_one(id: &str, resolved: Option<ResolvedCommand>, environme
     let supported = help.as_ref().is_ok_and(|help| match id {
         "opencode" => help.contains("ACP") || help.contains("acp"),
         "codex" => help.contains("app-server"),
+        // Pi proves itself by advertising the mode flag it is launched with.
+        "pi" => help.contains(PI_PROBE_TOKEN) && help.contains("rpc"),
         // A table provider proves itself by advertising the flag it is launched
         // with (`--acp`); that is the check the installed CLI can answer.
         p if is_acp_provider(p) => acp_provider(p).is_some_and(|row| help.to_lowercase().contains(row.probe_token)),
@@ -312,9 +323,13 @@ pub async fn discover_one(id: &str, resolved: Option<ResolvedCommand>, environme
         // A table provider runs the same ACP adapter as OpenCode, so it has the
         // same honest capabilities: sessions, turns, tools, approvals and the
         // models `session/new` reports. No resume, no usage.
+        // Pi (RPC mode) has sessions, resume by session id, cancel, steering and
+        // usage; it has no per-tool approval prompt (its own security page says
+        // it does not ask before every tool call), so `permissions` stays false.
         let supported = match key {
             "newSession" | "cancel" => true,
-            "resume" | "usage" => matches!(id, "claude" | "codex"),
+            "resume" => matches!(id, "claude" | "codex" | "pi"),
+            "usage" => matches!(id, "claude" | "codex" | "pi"),
             "permissions" => id == "codex" || is_acp_provider(id),
             _ => false,
         };
@@ -322,9 +337,30 @@ pub async fn discover_one(id: &str, resolved: Option<ResolvedCommand>, environme
     }
     Some(runtime)
 }
+/// Pi's own stored sign-ins: `auth.json` under `PI_CODING_AGENT_DIR` (default
+/// `~/.pi/agent`). Only which providers have an entry is read; no credential
+/// value is parsed, kept, returned or logged. Without the file the answer is
+/// unknown, never "signed out": Retinue's own Pi keys do not live here.
+fn pi_auth_status(environment: &[(String, String)]) -> SignIn {
+    let value = |key: &str| environment.iter().find(|(name, _)| name == key).map(|(_, value)| value.as_str());
+    let dir = value("PI_CODING_AGENT_DIR")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| value("USERPROFILE").or_else(|| value("HOME")).filter(|value| !value.is_empty()).map(|home| PathBuf::from(home).join(".pi").join("agent")));
+    let Some(dir) = dir else { return SignIn::new(AuthState::Unknown, BTreeMap::new(), None) };
+    let path = dir.join("auth.json");
+    let Ok(metadata) = std::fs::metadata(&path) else { return SignIn::new(AuthState::Unknown, BTreeMap::new(), None) };
+    if metadata.len() > MAX_CREDENTIAL_FILE_BYTES { return SignIn::new(AuthState::Unknown, BTreeMap::new(), None); }
+    let Ok(raw) = std::fs::read(&path) else { return SignIn::new(AuthState::Unknown, BTreeMap::new(), None) };
+    // `IgnoredAny` deserializes a whole value without materialising it.
+    let Ok(entries) = serde_json::from_slice::<BTreeMap<String, serde::de::IgnoredAny>>(&raw) else {
+        return SignIn::new(AuthState::Unknown, BTreeMap::new(), None);
+    };
+    if entries.is_empty() { SignIn::new(AuthState::Unauthenticated, BTreeMap::new(), None) } else { SignIn::new(AuthState::Authenticated, BTreeMap::new(), None) }
+}
 pub fn provider_display_name(provider: &str) -> &'static str {
     if let Some(row) = acp_provider(provider) { return row.display_name; }
-    match provider { "claude" => "Claude Code", "codex" => "Codex", "opencode" => "OpenCode", _ => "Coding agent" }
+    match provider { "claude" => "Claude Code", "codex" => "Codex", "opencode" => "OpenCode", PI_PROVIDER => PI_DISPLAY_NAME, _ => "Coding agent" }
 }
 /// What one provider's sign-in probe learned: its state, its gateway rows, a
 /// fixed failure text, and the raw output the account read reuses.
@@ -344,6 +380,12 @@ impl SignIn {
 async fn auth_status(provider: &str, exe: &Path, args: &[String], environment: &[(String, String)]) -> SignIn {
     if provider == "opencode" {
         return opencode_auth_status(exe, args, environment).await;
+    }
+    // Pi keeps its own sign-ins in `auth.json`; reading which providers have an
+    // entry is a presence check that never builds a value, and it cannot see the
+    // keys Retinue holds for Pi (those live in the credential store, not here).
+    if provider == "pi" {
+        return pi_auth_status(environment);
     }
     let mut av = args.iter().map(String::as_str).collect::<Vec<_>>();
     match provider {
@@ -430,10 +472,11 @@ async fn opencode_auth_status_from_cli(exe: &Path, args: &[String]) -> SignIn {
     }
     SignIn::new(AuthState::Unknown, BTreeMap::new(), Some("Sign-in status could not be checked."))
 }
-/// The four environment variables the OpenCode data-dir rules honour, in the
-/// same shape the daemon's quota reader uses. Nothing else is read.
-fn opencode_environment() -> Vec<(String, String)> {
-    ["USERPROFILE", "HOME", "XDG_DATA_HOME", "OPENCODE_DB"]
+/// The environment variables discovery's CLI-free checks honour: OpenCode's
+/// data-dir rules and Pi's config directory. In the same shape the daemon's
+/// quota reader uses. Nothing else is read.
+fn discovery_environment() -> Vec<(String, String)> {
+    ["USERPROFILE", "HOME", "XDG_DATA_HOME", "OPENCODE_DB", "PI_CODING_AGENT_DIR"]
         .into_iter()
         .filter_map(|name| env::var_os(name).map(|value| (name.to_owned(), value.to_string_lossy().into_owned())))
         .collect()

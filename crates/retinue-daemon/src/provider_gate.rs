@@ -89,6 +89,26 @@ pub(crate) fn apply_defaults(db: &Storage) -> Result<(), retinue_storage::Storag
     Ok(())
 }
 
+/// A provider added after [`apply_defaults`] ran starts off the same way, with a
+/// marker of its own so the switch is written once and never over a bot or a
+/// conversation the owner already has on it. Pi is the first (16 November 2026).
+pub(crate) fn apply_new_provider_defaults(db: &Storage) -> Result<(), retinue_storage::StorageError> {
+    const MARKER: &str = "migration.providerTogglesApplied.pi";
+    let settings = db.settings()?;
+    if settings.get(MARKER).is_some() {
+        return Ok(());
+    }
+    if !used_providers(db).iter().any(|used| used == "pi") {
+        let mut disabled = raw_disabled(db);
+        if !disabled.iter().any(|id| id == "pi") {
+            disabled.push("pi".to_owned());
+            let _ = db.set_setting("runtimes.disabled", &json!(disabled));
+        }
+    }
+    db.set_setting(MARKER, &json!(true))?;
+    Ok(())
+}
+
 /// The providers an employee or a conversation already runs on. A bot names a
 /// runtime; the runtime row names its provider. A conversation records its
 /// provider itself.
@@ -138,7 +158,6 @@ pub(crate) async fn list(st: &AppState) -> Value {
         // copy of it was switched off by its runtime id.
         let every_copy_off = found && own.iter().all(|runtime| runtime["disabled"] == true);
         let enabled = !disabled.iter().any(|id| id == provider) && !every_copy_off;
-        let row = retinue_runtime::acp_provider(provider);
         rows.push(json!({
             "provider": provider,
             "displayName": retinue_runtime::provider_display_name(provider),
@@ -150,8 +169,10 @@ pub(crate) async fn list(st: &AppState) -> Value {
             "version": own.iter().find_map(|runtime| runtime["version"].as_str()),
             "authState": own.iter().find_map(|runtime| runtime["authState"].as_str()),
             "status": own.iter().find_map(|runtime| runtime["status"].as_str()),
-            "installHint": row.map(|row| row.install_hint),
-            "signInCommand": row.map(|row| row.sign_in_command),
+            // A provider is not always a table row: Pi is its own runtime, and
+            // its install hint lives beside the rows in `retinue-runtime`.
+            "installHint": retinue_runtime::install_hint(provider),
+            "signInCommand": retinue_runtime::sign_in_command(provider),
         }));
     }
     json!({ "providers": rows })

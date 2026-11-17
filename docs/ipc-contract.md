@@ -653,6 +653,34 @@ The call **waits** for the owner for up to 50 seconds (the team bridge's limit i
 - The bot can read the file, and what it does with the value is up to it.
 
 
+## Section D: connectors (16 November 2026)
+
+An owner-added MCP server the **daemon** calls over Streamable HTTP (`initialize`, `tools/list`, `tools/call`), so a bot reaches Notion, Linear, GitHub and the like without ever holding their token. Contract: `docs/plans/nod-adoption-plan.md` section D. Code: `crates/retinue-daemon/src/connectors.rs` and `crates/retinue-storage/src/connectors.rs`.
+
+Every `connector.*` method is `tiers.json` class `never`; `connector.changed` is `drop`. The token lives in Credential Manager under `Retinue/connector/<id>`, is written before the row exists and deleted with it, and **no RPC returns it**.
+
+**Outbound rules.** HTTPS only; plain `http://` only for a loopback host (a server on this PC); no sign-in in the address and no fragment; DNS pinned to the address that was resolved and validated; a cross-origin redirect is not followed (the token never moves origin); request and answer are capped (4 MiB); every result and error is masked for the connector's own token in its plain, URL-encoded and base64 forms, plus the usual credential shapes.
+
+**Types.**
+
+- `Connector {id, name, url, auth: 'none'|'token'|'oauth', enabled, status: 'ok'|'error'|'unchecked', detail: string|null, toolCount: number|null, unattended: 'off'|'readOnly', lastCheckedAt: string|null}` (`oauth` is reserved for wave 3).
+- `ConnectorTool {name, title: string|null, description, readOnly: boolean|null, rule: 'ask'|'allow'|'deny'}`. `readOnly` is the server's `readOnlyHint`; unknown stays `null`. The input schema has `pattern` and `patternProperties` removed and is capped.
+- `CatalogueEntry {id, name, url, docsUrl, auth: 'token'|'oauth', tokenHint}`.
+
+**Methods.**
+
+- `connector.list {}` gives `{connectors, catalogue}`; the catalogue is a short static table of official hosted servers (GitHub, Linear, Notion, Sentry, Stripe, Supabase).
+- `connector.add {name, url, token?}` gives `{connector}` and runs a check. A check that fails is the row's `status: 'error'` and `detail`, not an error from the call.
+- `connector.update {id, name?, token?, enabled?, unattended?}` gives `{connector}`. `token: ""` clears it (auth becomes `none`). `unattended` is `off` or `readOnly`.
+- `connector.remove {id, confirm: true}` gives `{removed}`, and deletes the token and every tool rule.
+- `connector.test {id}` gives `{ok, detail, toolCount}` and records the result on the row.
+- `connector.tools {id}` gives `{tools: ConnectorTool[]}`, from the last check; an empty cache is filled by a check.
+- `connector.tool.rule {id, tool, rule}` gives `{ok, tool, rule}`. No row means `ask`.
+
+**Bot tools (team bridge).** `connector_search {query}` returns matching tools, grouped by connector, with descriptions and schemas (at most 20 per connector); `connector_call {connector, tool, arguments}` runs one. The prompt carries one line per enabled connector, not its schemas. A call shows the usual approval card titled `<connector>: <tool>` unless the tool's rule is `allow`; `deny` refuses without a card. The card waits up to 50 seconds; "Always allow" writes `allow` for that tool. An unattended run (automation, unattended task, or a delegated child whose chain holds one) may call only a tool the server marks read-only, and only while the connector's `unattended` is `readOnly`; it never asks. Full access is not a bypass for any of this.
+
+**Event.** `connector.changed` carries the connector row (or `{id, removed: true}`).
+
 ## Phase 5: accounts (31 October 2026)
 
 **Who is signed in.** Every `runtime.list` row gains `account: {label, plan, source} | null`: who the provider's CLI says is signed in, read only from that CLI's own output during runtime discovery, with a 10-second limit that kills the process. `label` is an email or account name (`null` when the CLI does not say), `plan` is the plan name (`null` when it does not say), and `source` is fixed text naming the command: `claude auth status`, `codex app-server account/read`, or `opencode auth list`. A failed, timed-out or unrecognised answer is `account: null`, and a row saved before this field reads as `null`. No token or credential file is opened for it: the usage-bar exception in `AGENTS.md` does not cover this field.
@@ -845,4 +873,26 @@ The owner can bring conversations written by Claude Code, Codex or OpenCode on t
 **What an import writes.** One `sessions` row (`provider` = the source agent, `state = 'completed'`, `provider_session_id` = the source's own id, `project_path` = the recorded folder, `resumable` when that id was kept), one `turns` row per user message, `messages` for user and assistant text, and `tool_calls` rows with `kind = "tool"`, a title such as `Bash: npm test -- invoice` and a bounded `detail.summary`. `data.import` holds `{source, importedAt, messageCount, sha256, conversationId, sourcePath, canResumeWith, truncated}`. `updated_at` is the import time (so the new conversations are at the top of the inbox) and each message keeps its own time. The ledger row is `(source, conversation_id) → sha256, session_id`; the write and the check share one transaction.
 
 **Read-only.** An imported conversation is refused for every prompt (`session.prompt`, and `session.queue.add` before it queues) with `imported_read_only` (`403`) unless **both**: the bot assigned to it is on the same agent as the source (`runtime_id`'s provider), and the source file is still at `data.import.sourcePath` with `provider_session_id` set. So the honest label is "Continue in <agent>" in that one case and "Imported — read only" otherwise; "Give this to a bot" starts a new conversation, not a provider resume.
+
+## Section C: Pi as a coding agent, and the keys Retinue holds for it (16 November 2026)
+
+Owner amendment of 16 November 2026 (`AGENTS.md`) and the contract in `docs/plans/vault-channels-pi.md` section C. Pi is `@earendil-works/pi-coding-agent` (MIT, 1.5.2 on 16 November 2026), started as `pi --mode rpc`: JSONL commands on stdin, one `response` per command, and session events on stdout (`docs/rpc.md`, `docs/rpc-commands.md`, `docs/json.md` in that package). Code: `crates/retinue-adapter-pi/` (the adapter and `protocol.rs`), `crates/retinue-daemon/src/pi.rs` (the keys), `crates/retinue-runtime/src/providers.rs` (the provider row).
+
+**The runtime.** `provider: "pi"`, `protocolFamily: "pi_rpc"`, discovered on `PATH` like every other provider (`pi --version` for the label; `pi --help` must advertise `--mode` and `rpc`). It is an optional provider: off until the owner turns it on, like the ACP table rows. Capabilities: `newSession`, `resume`, `cancel`, `usage` - and **not** `permissions`, because Pi has no per-tool approval prompt (its `docs/security.md`: "it does not ask for approval before every tool call"), so no approval card is offered.
+
+**One child per conversation.** `pi --mode rpc --session-id <id> --no-approve`, where `<id>` is Retinue's own session id made safe for Pi's rule (letters, numbers, `.`, `_`, `-`; it must start and end with a letter or number). A resume passes the same id back, so it is the same Pi session; a resume that finds no history answers `ResumeRejected`, and the daemon starts a fresh session and says the context is gone. `--no-approve` is deliberate: a project folder's `.pi/settings.json` and `.pi/extensions` are code, and non-interactive Pi cannot ask whether to load them. The bot's instructions are written to a private file in the temporary folder and passed as `--append-system-prompt <file>`; because Pi reads them when it starts, a changed text is reported as not applied (`ExecApplied` with `applied: false`) instead of being silently dropped. The file is deleted when the conversation closes.
+
+**Turns.** `prompt` is answered at once (`data.disposition`); the turn ends on `agent_settled`, the one record that means Pi will not continue on its own - `agent_end` is not the end, because a retry can follow it. Text and thinking arrive as `message_update` deltas, the finished message arrives as `message_end`, and each `tool_execution_start/update/end` becomes one tool row. Steering uses `steer`; a turn id Pi no longer runs answers `stale`, so the caller queues the text rather than losing it. Model and effort changes go over the same live process (`set_model`, `set_thinking_level`), which is why `model_switch` is `keepsSession`.
+
+**Usage.** Per-response buckets from `message_update.usage` are summed over the turn; the context window comes from `get_session_stats.contextUsage`. A bucket Pi did not report stays `null`, and the reported price is Pi's own USD estimate with `costIsCumulative: false`. No price is invented.
+
+**Methods** (all `tiers.json` class `never`; no `pi.*` event exists):
+
+- `pi.providers {}` gives `{installed, version, providers: [{id, name, keyEnv, hasKey, models, docsUrl}]}`. `installed` is whether `pi` resolves on `PATH` (cached five minutes) and `version` is its `--version` label. `keyEnv` is the variable Pi reads that key from; `hasKey` is whether one is stored, never the value; `models` is how many models the cached Pi catalogue lists for that provider, or `null` when it has not been read (never `0` for unknown). `docsUrl` is Pi's own provider page.
+- `pi.key.set {provider, key}` gives `{ok: true}`; `pi.key.delete {provider}` gives `{ok: true}`. The key is 1 to 2,048 characters with no control characters and is written to `Retinue/pi/<provider>` in Credential Manager. A second key for a provider that shares the same variable (OpenCode Zen and Go, Moonshot global and China, the Qwen pairs) is `conflict`: one variable serves both, so the second key would silently replace the first.
+- `pi.key.test {provider}` gives `{ok, detail}`. It runs `pi auth check --provider <id> --json` with that key in the child's environment and reads the exit status only (0 ready, 1 not ready, 2 invalid). Pi's output is never parsed or forwarded, and `detail` is one fixed sentence.
+
+**Where a key may go.** `pi::add_keys_to_environment` runs from `exec_options_for_session` for a conversation whose provider is `pi`, and nowhere else, so a Claude Code, Codex or OpenCode child never carries one. A key exists in a `Zeroizing` string, in that one child's environment, and in Credential Manager: not in SQLite, an event, a log, a backup, a diagnostics bundle, a prompt, a reply or a tool result.
+
+**Not covered yet.** Pi 1.5.2 has no per-run MCP configuration flag, so the Retinue team bridge is not attached to a Pi child: a Pi bot works alone, without the team tools, the skills tools or `ask_user`. Pi needs Node 22.19 or newer; where it is absent the runtime row is `error` and `provider.list` carries the install hint.
 

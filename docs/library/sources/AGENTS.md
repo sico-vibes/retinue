@@ -2,6 +2,8 @@
 
 **Every agent, whatever the model: before working in this repository, read `.claude/skills/retinue-development/SKILL.md` and the reference it points to for your task. Before you report a task done, update that skill with anything the task taught (a fix and its root cause, a changed design rule, a new pattern, a changed tool or gate), as its "Keep this skill current" section describes. If your sandbox is read-only, put the proposed update in your report.**
 
+**Today's rules, each with the file and the test that enforces it: [`docs/reference/invariants.md`](docs/reference/invariants.md).** The amendments below are the history of how they got that way. Read the invariants page for what is true now; read the amendment it points to when you need the reason.
+
 # Amendment (14 November 2026): browsers and computer control
 
 Owner decision of 14 November 2026 ("Approve as drafted", live session; drafted by Grey in `docs/research/owner-requests-2026-11-14.md`, section 4). Bots may use a browser, drive the linked cloud computer, and — only after the owner turns it on — control the owner's own Windows computer. This amends the "never remote", "no copied provider authentication" and loopback rules for this path only, and adds one egress path that the threat model must now carry.

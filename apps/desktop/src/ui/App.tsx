@@ -155,6 +155,7 @@ import { SafeMarkdown, SafeMarkdownInline } from './SafeMarkdown'
 import { MediaPreview, isPreviewablePath, setMediaScope } from './MediaPreview'
 import { DocumentPane, useDocumentPanelSlot } from './DocumentPane'
 import { useOpenDocument } from './documentStore'
+import { VaultUseRequests } from './VaultPage'
 import { setActivityProvider } from './liveOutput'
 import { TerminalDock } from './TerminalDock'
 import { NeedsYouBell } from './NeedsYou'
@@ -3348,6 +3349,7 @@ ${fileReferenceText(sentFile)}` : typed
       {diffViewer && <DiffViewer path={diffViewer.path} content={diffViewer.content} onClose={() => setDiffViewer(null)} />}
       {projectSearchOpen && !companion && <ProjectSearchDialog target={fileSearchTarget} canPreview={!!selectedSession && !isDraftSession(selectedSession)} onClose={() => setProjectSearchOpen(false)} onMention={insertReference} />}
       <SecretRequests active={connection === 'connected'} />
+      {!companion && <VaultUseRequests active={connection === 'connected'} />}
       {viewedMachine && viewedMachineBot && !companion && <MachineConversation machine={viewedMachine} bot={viewedMachineBot} selfId={machineSelfId} onClose={() => setMachineView(null)} onMoved={(sessionId) => { setMachineView(null); setMovedHere(sessionId); void refresh(); void reloadMachines() }} />}
       {changesFor && selectedSession?.id === changesFor.sessionId && !companion && <ChangesView sessionId={changesFor.sessionId} initialPath={changesFor.path} botName={activeSelectedAgent?.name ?? 'The employee'} onClose={() => setChangesFor(null)} onSendComments={(text) => sendReviewComments(changesFor.sessionId, text)} onCreatePr={(repository) => { setChangesFor(null); setPullRequestFor({ sessionId: changesFor.sessionId, repository }) }} />}
       {pullRequestFor && selectedSession?.id === pullRequestFor.sessionId && <PullRequestDialog sessionId={pullRequestFor.sessionId} onCreated={() => void refresh()} repository={pullRequestFor.repository} botName={activeSelectedAgent?.name ?? 'The employee'} busy={['working', 'starting', 'waiting_permission', 'cancelling'].includes(selectedSession.state ?? '')} onSend={() => requestPullRequest(pullRequestFor.sessionId, pullRequestFor.repository)} onClose={() => setPullRequestFor(null)} />}

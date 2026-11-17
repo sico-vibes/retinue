@@ -1,0 +1,36 @@
+/* Settings > Vault (16 November 2026). Flat rows like Secrets; no status colour unless something happened. */
+.vault-add { position: relative; }
+.vault-add .secondary-button { display: inline-flex; align-items: center; gap: 5px; }
+.vault-add-menu { position: absolute; z-index: 5; top: calc(100% + 4px); right: 0; min-width: 150px; padding: 4px; display: grid; gap: 1px; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-overlay); box-shadow: var(--shadow-pop); }
+.vault-add-menu button { padding: 7px 10px; display: flex; align-items: center; gap: 8px; color: var(--text-1); border: 0; border-radius: var(--radius-sm); background: transparent; box-shadow: none; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
+.vault-add-menu button:hover, .vault-add-menu button:focus-visible { outline: none; background: var(--surface-selected); }
+.vault-add-menu svg { color: var(--text-3); }
+
+.vault-search { margin: 0; padding: 8px 12px; display: flex; align-items: center; gap: 8px; color: var(--text-3); }
+.vault-search .text-input { flex: 1; }
+
+.vault-row { min-height: 52px; padding: 8px 12px; display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--line); }
+.vault-search + .vault-row, .settings-card > .vault-row:first-child { border-top: 0; }
+.vault-row-icon { width: 30px; height: 30px; flex: 0 0 auto; display: grid; place-items: center; color: var(--text-2); border-radius: var(--radius-sm); background: var(--surface-selected); }
+.vault-row-used { flex: 0 0 auto; color: var(--text-3); font-size: var(--fs-2xs); white-space: nowrap; }
+.vault-row-actions { flex: 0 0 auto; display: flex; gap: 2px; }
+.vault-row .account-row-copy small { white-space: nowrap; }
+.vault-revealed { margin-top: 4px; display: inline-flex; align-items: center; gap: 4px; }
+.vault-revealed code { max-width: 260px; padding: 2px 6px; overflow: hidden; color: var(--text-1); border-radius: 5px; background: var(--line); font: var(--fs-xs) var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.vault-revealed .icon-button { width: 22px; height: 22px; }
+.vault-problem { margin: 0; padding: 8px 12px; }
+
+.vault-activity-row { padding: 8px 12px; display: flex; align-items: baseline; gap: 12px; color: var(--text-2); border-top: 1px solid var(--line); font-size: var(--fs-xs); }
+.settings-card > .vault-activity-row:first-child { border-top: 0; }
+.vault-activity-row span { flex: 1; min-width: 0; }
+.vault-activity-row time { flex: 0 0 auto; color: var(--text-3); font-size: var(--fs-2xs); }
+.vault-activity-row.action-denied span, .vault-activity-row.action-uncertain span { color: var(--text-1); }
+
+.blob-dialog.vault-editor { width: min(480px, calc(100% - 32px)); max-height: calc(100vh - 48px); overflow: auto; }
+.vault-editor-pair { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 10px; }
+.vault-note-input { min-height: 96px; resize: vertical; font: inherit; }
+.blob-dialog.vault-use { width: min(460px, calc(100% - 32px)); }
+.vault-use-item { padding: 10px 12px; display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); }
+@media (max-width: 720px) { .vault-row-used { display: none; } }
+/* Above tour hints and other overlays: the request is waiting with a deadline. */
+.sheet-backdrop.vault-use-backdrop { z-index: 140; }

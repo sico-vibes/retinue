@@ -642,6 +642,9 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   if (method === 'model.custom.list') return { models: fixtureCustomModels.filter((item) => item.provider === params.provider) } as T
   if (method === 'model.custom.save') { const model = { id: `preview-model-${fixtureCustomModels.length + 1}`, provider: String(params.provider), modelId: String(params.modelId), label: String(params.label), efforts: params.efforts as string[] }; fixtureCustomModels = [...fixtureCustomModels, model]; return { model } as T }
   if (method === 'model.custom.delete') { fixtureCustomModels = fixtureCustomModels.filter((item) => item.id !== params.id); return { ok: true } as T }
+  // Preview-only vault, chat apps and Pi (docs/plans/vault-channels-pi.md). Values are never kept here either.
+  if (method.startsWith('vault.') || method.startsWith('channel.') || method.startsWith('pi.')) return previewVaultChannelsPi(method, params) as T
+  if (method.startsWith('connector.')) return previewConnectorsRpc(method, params) as T
   if (method === 'secret.list') return { secrets: fixtureSecrets } as T
   if (method === 'secret.set') { fixtureSecrets = [...fixtureSecrets.filter((item) => item.name !== params.name), { name: String(params.name), updatedAt: new Date().toISOString(), usedBy: [] }]; return { ok: true } as T }
   if (method === 'secret.delete') { fixtureSecrets = fixtureSecrets.filter((item) => item.name !== params.name); return { ok: true } as T }
@@ -2139,3 +2142,130 @@ export async function terminalClose(_id: string): Promise<void> {}
 export async function terminalList(): Promise<TerminalInfo[]> { return [] }
 export async function listenForTerminalOutput(_handler: (output: TerminalOutput) => void): Promise<Unlisten> { return noop }
 export async function listenForTerminalExit(_handler: (exit: TerminalExit) => void): Promise<Unlisten> { return noop }
+
+// ---- Preview-only vault, chat apps and Pi (16 November 2026). Shapes follow docs/plans/vault-channels-pi.md.
+type PreviewVaultItem = { id: string; kind: 'login' | 'card' | 'apiKey' | 'note'; title: string; origin: string | null; username: string | null; holder: string | null; brand: string | null; last4: string | null; expiry: string | null; service: string | null; hasTotp: boolean; createdAt: string; updatedAt: string; lastUsedAt: string | null; useCount: number }
+const previewVaultBase = { origin: null, username: null, holder: null, brand: null, last4: null, expiry: null, service: null, hasTotp: false, createdAt: minutesAgo(3000), updatedAt: minutesAgo(3000), lastUsedAt: null, useCount: 0 }
+let previewVault: PreviewVaultItem[] = flags().get('vault') === 'empty' ? [] : [
+  { ...previewVaultBase, id: 'v1', kind: 'login', title: 'GitHub', origin: 'https://github.com', username: 'owner@example.com', hasTotp: true, lastUsedAt: minutesAgo(42), useCount: 6 },
+  { ...previewVaultBase, id: 'v2', kind: 'card', title: 'Personal Visa', holder: 'A. Owner', brand: 'Visa', last4: '4242', expiry: '08/28' },
+  { ...previewVaultBase, id: 'v3', kind: 'apiKey', title: 'OpenAI', service: 'OpenAI platform', lastUsedAt: minutesAgo(60 * 26), useCount: 2 },
+  { ...previewVaultBase, id: 'v4', kind: 'note', title: 'Wi-Fi at the office' },
+]
+let previewVaultActivity = [
+  { id: 'a1', at: minutesAgo(42), itemId: 'v1', itemTitle: 'GitHub', action: 'fill', where: 'browser', origin: 'https://github.com', bot: 'Ada', sessionId: null },
+  { id: 'a2', at: minutesAgo(300), itemId: 'v3', itemTitle: 'OpenAI', action: 'denied', where: 'cloud', origin: null, bot: 'Grey', sessionId: null },
+  { id: 'a3', at: minutesAgo(3000), itemId: 'v2', itemTitle: 'Personal Visa', action: 'create', where: 'desktop', origin: null, bot: null, sessionId: null },
+]
+let previewVaultUses = flags().get('vault') === 'request' ? [{ requestId: 'r1', sessionId: 'session-codex', bot: 'Ada', itemId: 'v1', itemTitle: 'GitHub', kind: 'login', field: 'password', surface: 'browser', origin: 'https://github.com', expiresAt: new Date(Date.now() + 50_000).toISOString() }] : []
+const previewChannelOff = (kind: string): Record<string, unknown> => ({ kind, status: 'off', detail: null, account: null, peer: null, approvals: true, sessionId: null, lastMessageAt: null, qrDataUrl: null, pairing: null, candidate: null })
+let previewChannels: Array<Record<string, unknown>> = [
+  flags().get('channels') === 'connected' ? { ...previewChannelOff('telegram'), status: 'connected', account: '@retinue_ceo_bot', peer: { name: 'Owner', handle: '@owner' }, sessionId: 'session-codex', lastMessageAt: minutesAgo(5) } : previewChannelOff('telegram'),
+  previewChannelOff('whatsapp-web'),
+  previewChannelOff('whatsapp-cloud'),
+]
+const previewPiKeys = new Set<string>(['anthropic'])
+function previewQr() {
+  let rects = ''
+  for (let y = 0; y < 21; y += 1) for (let x = 0; x < 21; x += 1) {
+    const corner = (x < 7 && y < 7) || (x > 13 && y < 7) || (x < 7 && y > 13)
+    const cx = x > 13 ? x - 14 : x, cy = y > 13 ? y - 14 : y
+    const on = corner ? (cx === 0 || cx === 6 || cy === 0 || cy === 6 || (cx > 1 && cx < 5 && cy > 1 && cy < 5)) : (x * 7 + y * 13 + x * y) % 3 === 0
+    if (on) rects += `<rect x="${x}" y="${y}" width="1" height="1"/>`
+  }
+  return `data:image/svg+xml;base64,${btoa(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" shape-rendering="crispEdges">${rects}</svg>`)}`
+}
+function previewVaultChannelsPi(method: string, params: Record<string, unknown>): unknown {
+  const now = new Date().toISOString()
+  const log = (action: string, item: { id: string; title: string } | null) => { previewVaultActivity = [{ id: `a${Date.now()}`, at: now, itemId: item?.id ?? '', itemTitle: item?.title ?? '', action, where: 'desktop', origin: null, bot: null, sessionId: null }, ...previewVaultActivity] }
+  const secrets = (params.secrets ?? {}) as Record<string, string>
+  switch (method) {
+    case 'vault.list': return { items: previewVault }
+    case 'vault.activity': return { rows: previewVaultActivity.slice(0, Number(params.limit ?? 50)) }
+    case 'vault.create': {
+      const digits = String(secrets.number ?? '').replace(/\D/g, '')
+      const item: PreviewVaultItem = { ...previewVaultBase, id: `v${Date.now()}`, kind: params.kind as PreviewVaultItem['kind'], title: String(params.title), origin: (params.origin as string) ?? null, username: (params.username as string) ?? null, holder: (params.holder as string) ?? null, expiry: (params.expiry as string) ?? null, service: (params.service as string) ?? null, brand: digits ? (digits.startsWith('4') ? 'Visa' : digits.startsWith('5') ? 'Mastercard' : 'Card') : null, last4: digits ? digits.slice(-4) : null, hasTotp: !!secrets.totp, createdAt: now, updatedAt: now }
+      previewVault = [...previewVault, item]; log('create', item); return { item }
+    }
+    case 'vault.update': {
+      let item: PreviewVaultItem | undefined
+      previewVault = previewVault.map((row) => row.id === params.id ? (item = { ...row, ...Object.fromEntries(Object.entries(params).filter(([key]) => key !== 'id' && key !== 'secrets')), hasTotp: row.hasTotp || !!secrets.totp, updatedAt: now } as PreviewVaultItem) : row)
+      if (item) log('update', item)
+      return { item }
+    }
+    case 'vault.delete': { const item = previewVault.find((row) => row.id === params.id); previewVault = previewVault.filter((row) => row.id !== params.id); if (item) log('delete', item); return { deleted: true } }
+    case 'vault.reveal': { const item = previewVault.find((row) => row.id === params.id); if (item) log('reveal', item); return { value: params.field === 'number' ? '4242 4242 4242 4242' : params.field === 'cvc' ? '123' : 'preview-only-value' } }
+    case 'vault.totp': return { code: '492 817', expiresInSecs: 21 }
+    case 'vault.use.list': return { requests: previewVaultUses }
+    case 'vault.use.answer': previewVaultUses = previewVaultUses.filter((row) => row.requestId !== params.requestId); return { ok: true }
+    case 'channel.list': return { channels: previewChannels }
+    case 'channel.telegram.connect': {
+      if (!/^\d+:[\w-]{10,}$/.test(String(params.botToken))) throw new Error('That doesn’t look like a Telegram bot token. It looks like 123456789:AA…')
+      const pairing = { link: 'https://t.me/retinue_ceo_bot?start=K7Q2-MX9P', code: 'K7Q2-MX9P', expiresAt: new Date(Date.now() + 600_000).toISOString() }
+      previewChannels = previewChannels.map((row) => row.kind === 'telegram' ? { ...row, status: 'pairing', account: '@retinue_ceo_bot', pairing } : row)
+      window.setTimeout(() => {
+        previewChannels = previewChannels.map((row) => row.kind === 'telegram' && row.status === 'pairing' ? { ...row, candidate: { name: 'Owner', handle: '@owner', at: new Date().toISOString() } } : row)
+        notifyFixtureDaemon('channel.pairing.candidate', { kind: 'telegram' })
+      }, 2500)
+      return { channel: previewChannels[0], pairing }
+    }
+    case 'channel.whatsappWeb.start': previewChannels = previewChannels.map((row) => row.kind === 'whatsapp-web' ? { ...row, status: 'pairing', qrDataUrl: previewQr() } : row); return { channel: previewChannels[1] }
+    case 'channel.whatsappCloud.connect': previewChannels = previewChannels.map((row) => row.kind === 'whatsapp-cloud' ? { ...row, status: 'connecting', account: '+44 •••• 1234', detail: 'Waiting for Meta to call the webhook.' } : row); return { channel: previewChannels[2], webhook: { url: 'https://vps.example.net/retinue/whatsapp', verifyToken: 'rtn-7f3a9c' } }
+    case 'channel.pairing.answer': previewChannels = previewChannels.map((row) => {
+      if (row.kind !== params.kind) return row
+      const candidate = row.candidate as { name: string; handle: string | null } | null
+      return params.approve ? { ...row, status: 'connected', peer: candidate ? { name: candidate.name, handle: candidate.handle } : null, candidate: null, pairing: null, sessionId: 'session-codex' } : { ...row, candidate: null }
+    }); return { ok: true }
+    case 'channel.update': previewChannels = previewChannels.map((row) => row.kind === params.kind ? { ...row, approvals: params.approvals ?? row.approvals } : row); return { ok: true }
+    case 'channel.disconnect': previewChannels = previewChannels.map((row) => row.kind === params.kind ? previewChannelOff(String(params.kind)) : row); return { ok: true }
+    case 'channel.test': return { ok: true }
+    case 'pi.providers': return flags().get('pi') === 'missing' ? { installed: false, version: null, providers: [] } : { installed: true, version: '1.5.2', providers: [
+      { id: 'anthropic', name: 'Anthropic', keyEnv: 'ANTHROPIC_API_KEY', hasKey: previewPiKeys.has('anthropic'), models: 9, docsUrl: 'https://console.anthropic.com/settings/keys' },
+      { id: 'openai', name: 'OpenAI', keyEnv: 'OPENAI_API_KEY', hasKey: previewPiKeys.has('openai'), models: 14, docsUrl: 'https://platform.openai.com/api-keys' },
+      { id: 'google', name: 'Google Gemini', keyEnv: 'GEMINI_API_KEY', hasKey: previewPiKeys.has('google'), models: 7, docsUrl: 'https://aistudio.google.com/apikey' },
+      { id: 'openrouter', name: 'OpenRouter', keyEnv: 'OPENROUTER_API_KEY', hasKey: previewPiKeys.has('openrouter'), models: null, docsUrl: 'https://openrouter.ai/keys' },
+    ] }
+    case 'pi.key.set': previewPiKeys.add(String(params.provider)); return { ok: true }
+    case 'pi.key.delete': previewPiKeys.delete(String(params.provider)); return { ok: true }
+    case 'pi.key.test': return { ok: true, detail: 'The key works. 9 models available.' }
+    default: throw new Error(`${method} is not in the preview`)
+  }
+}
+
+// ---- Preview-only connectors (docs/plans/nod-adoption-plan.md, D). Addresses here are placeholders, not checked.
+type PreviewConnector = { id: string; name: string; url: string; auth: 'none' | 'token' | 'oauth'; enabled: boolean; status: 'ok' | 'error' | 'unchecked'; detail: string | null; toolCount: number | null; unattended: 'off' | 'readOnly'; lastCheckedAt: string | null }
+let previewConnectors: PreviewConnector[] = flags().get('connectors') === 'empty' ? [] : [
+  { id: 'c1', name: 'Linear', url: 'https://mcp.linear.app/mcp', auth: 'token', enabled: true, status: 'ok', detail: null, toolCount: 4, unattended: 'readOnly', lastCheckedAt: minutesAgo(12) },
+  { id: 'c2', name: 'Internal wiki', url: 'https://wiki.example.com/mcp', auth: 'token', enabled: true, status: 'error', detail: 'The server refused the token (401).', toolCount: null, unattended: 'off', lastCheckedAt: minutesAgo(90) },
+]
+const previewConnectorTools: Record<string, Array<{ name: string; title: string | null; description: string; readOnly: boolean | null; rule: 'ask' | 'allow' | 'deny' }>> = {
+  c1: [
+    { name: 'list_issues', title: 'List issues', description: 'Find issues by team, state or text.', readOnly: true, rule: 'allow' },
+    { name: 'get_issue', title: 'Get issue', description: 'Read one issue with its comments.', readOnly: true, rule: 'allow' },
+    { name: 'create_issue', title: 'Create issue', description: 'Open a new issue in a team.', readOnly: false, rule: 'ask' },
+    { name: 'delete_issue', title: 'Delete issue', description: 'Delete an issue permanently.', readOnly: false, rule: 'deny' },
+  ],
+}
+const previewCatalogue = [
+  { id: 'github', name: 'GitHub', url: 'https://api.githubcopilot.com/mcp/', docsUrl: 'https://github.com/settings/tokens', auth: 'token', tokenHint: 'Use a fine-grained personal access token.' },
+  { id: 'linear', name: 'Linear', url: 'https://mcp.linear.app/mcp', docsUrl: 'https://linear.app/settings/api', auth: 'token', tokenHint: 'Create a personal API key in Linear.' },
+  { id: 'notion', name: 'Notion', url: 'https://mcp.notion.com/mcp', docsUrl: 'https://www.notion.so/profile/integrations', auth: 'token', tokenHint: 'Create an internal integration and copy its secret.' },
+  { id: 'sentry', name: 'Sentry', url: 'https://mcp.sentry.dev/mcp', docsUrl: 'https://sentry.io/settings/account/api/auth-tokens/', auth: 'token', tokenHint: 'Create a user auth token.' },
+]
+function previewConnectorsRpc(method: string, params: Record<string, unknown>): unknown {
+  switch (method) {
+    case 'connector.list': return { connectors: previewConnectors, catalogue: previewCatalogue }
+    case 'connector.add': {
+      const connector: PreviewConnector = { id: `c${Date.now()}`, name: String(params.name), url: String(params.url), auth: params.token ? 'token' : 'none', enabled: true, status: 'ok', detail: null, toolCount: 3, unattended: 'off', lastCheckedAt: new Date().toISOString() }
+      previewConnectors = [...previewConnectors, connector]
+      previewConnectorTools[connector.id] = [{ name: 'search', title: 'Search', description: 'Search this app.', readOnly: true, rule: 'ask' }, { name: 'read', title: 'Read', description: 'Read one item.', readOnly: true, rule: 'ask' }, { name: 'write', title: 'Write', description: 'Change one item.', readOnly: false, rule: 'ask' }]
+      return { connector }
+    }
+    case 'connector.update': previewConnectors = previewConnectors.map((row) => row.id === params.id ? { ...row, ...Object.fromEntries(Object.entries(params).filter(([key]) => key !== 'id' && key !== 'token')) } as PreviewConnector : row); return { connector: previewConnectors.find((row) => row.id === params.id) }
+    case 'connector.remove': previewConnectors = previewConnectors.filter((row) => row.id !== params.id); return { ok: true }
+    case 'connector.test': previewConnectors = previewConnectors.map((row) => row.id === params.id ? { ...row, lastCheckedAt: new Date().toISOString() } : row); return { ok: true, detail: null, toolCount: previewConnectors.find((row) => row.id === params.id)?.toolCount ?? null }
+    case 'connector.tools': return { tools: previewConnectorTools[String(params.id)] ?? [] }
+    case 'connector.tool.rule': { const list = previewConnectorTools[String(params.id)] ?? []; previewConnectorTools[String(params.id)] = list.map((tool) => tool.name === params.tool ? { ...tool, rule: params.rule as 'ask' | 'allow' | 'deny' } : tool); return { ok: true } }
+    default: throw new Error(`${method} is not in the preview`)
+  }
+}

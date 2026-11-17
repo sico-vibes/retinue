@@ -159,6 +159,9 @@ fn is_websocket_upgrade(headers: &HeaderMap) -> bool {
 }
 
 fn forbidden_origin() -> Response {
+    // A refused Remote request is recorded, so a phone that cannot get in leaves
+    // a trace in the diagnostics bundle rather than only in the device's copy.
+    crate::diagnostics::record_failure("remote.request.refused", "forbidden_origin");
     (
         StatusCode::FORBIDDEN,
         Json(remote_error("", "forbidden_origin", "This request did not come from this computer's Retinue Remote address.")),

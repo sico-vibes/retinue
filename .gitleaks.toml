@@ -1,0 +1,84 @@
+# Secret scanning for Retinue: `gitleaks` with its default rules, plus the
+# exceptions this repository needs.
+#
+# Run it with:
+#   gitleaks dir --config .gitleaks.toml --redact --no-banner --verbose .
+#   gitleaks git --config .gitleaks.toml --redact --no-banner --log-opts=<range> .
+#
+# CI runs both (`.github/workflows/ci.yml`, the `hygiene` job) and the pre-commit
+# hook runs the staged files. `scripts/check-secret-config.mjs` proves that every
+# exception below still detects a planted secret beside it, so an exception
+# cannot quietly become a hole.
+#
+# Rules of the house:
+# - The default rules stay on (`useDefault`). A provider's own key format
+#   (`ghp_`, `sk-ant-`, `AKIA`, a private key block) is never allowlisted: a
+#   path may excuse the *keyword and entropy* rule, never a known key format.
+# - Every exception names a reason. Dates are when it was added.
+
+title = "Retinue secret scanning"
+
+[extend]
+useDefault = true
+
+# --- Test and fixture material -------------------------------------------
+# Recorded provider transcripts and fixtures hold ids and synthetic values that
+# the keyword and entropy rule reads as keys. Only that rule is excused, so a
+# real provider key in the same file still fails the scan.
+
+[[allowlists]]
+description = "Recorded Claude Code transcripts: API message ids, not credentials. Only generic-api-key is excused (2026-11-16)."
+targetRules = ["generic-api-key"]
+paths = ['''^crates/retinue-adapter-claude/tests/live/fixtures/''']
+
+[[allowlists]]
+description = "The redaction and issue-report tests carry deliberately fake keys, which is the point of them. Only generic-api-key is excused (2026-11-16)."
+targetRules = ["generic-api-key"]
+paths = [
+  '''^crates/retinue-daemon/src/phase1b_tests\.rs$''',
+  '''^crates/retinue-daemon/src/secrets_tests\.rs$''',
+]
+
+[[allowlists]]
+description = "The preview fixtures draw a masked command and a masked tool result; the fake token is the demonstration. Only generic-api-key and curl-auth-header are excused (2026-11-16)."
+targetRules = ["generic-api-key", "curl-auth-header"]
+paths = ['''^apps/desktop/src/preview/''']
+
+# --- Exact lines, in files that must keep catching everything else --------
+# A whole-file exception in `diagnostics.rs` or `remote/push.rs` would stop the
+# scan from seeing a real key there, so these name the exact line instead.
+
+[[allowlists]]
+description = "The redaction test's own fake key line (2026-11-16)."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^crates/retinue-daemon/src/diagnostics\.rs$''']
+regexTarget = "line"
+regexes = ['''let line = "request failed session=abc-123 token=''']
+
+[[allowlists]]
+description = "RFC 8292 section 2.4's published example push token, used as a test vector (2026-11-16)."
+targetRules = ["jwt"]
+condition = "AND"
+paths = ['''^crates/retinue-daemon/src/remote/push\.rs$''']
+regexTarget = "line"
+regexes = ['''RFC8292_JWT''',
+]
+
+# --- History and generated documentation ---------------------------------
+# Dated reports quote example keys from other products. Provider key formats
+# still fail here, which is what matters for a leaked credential.
+
+[[allowlists]]
+description = "Dated history reports and audits quote example keys from the products they study (2026-11-16)."
+targetRules = ["generic-api-key"]
+paths = [
+  '''^docs/history/''',
+  '''^docs/library/sources/docs/history/''',
+  '''^docs/library/audits/''',
+]
+
+[[allowlists]]
+description = "The generated documentation viewer embeds every page as one JSON string, so it repeats whatever the pages above may hold (2026-11-16)."
+targetRules = ["generic-api-key"]
+paths = ['''^docs/DOCUMENTATION\.html$''']

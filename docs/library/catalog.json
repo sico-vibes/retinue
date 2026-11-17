@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "ae08a7d",
+  "revision": "540314f",
   "documentCount": 404,
   "assets": [
     {
@@ -3089,7 +3089,7 @@
       "title": "Retinue collaboration instructions",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "fc51b7829fb3f4ef920389eaee50144e24629eabf4f1466c685d9887a0f46384",
+      "sha256": "c0d734e5b0bd946a46bfd22e78f2e7a1b4fd267f8e6ec041c2324341b0a1d5d1",
       "headings": [
         {
           "id": "resume-1-october-2026-evening-superseded-by-delegation-pipeline-above",
@@ -3119,7 +3119,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "f30dd53d2d255926cb74d31c51784e0bdb515d2b6a1f156720427756dc1102d8",
+      "sha256": "4c2fabf214d200bc141929d18e77bf6959683aced37e60a3e8d6f2507c04271a",
       "headings": [
         {
           "id": "update-commands",
@@ -3364,7 +3364,7 @@
       "title": "Retinue documentation",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "c5f79eda844eb8c52e330f218359baf1e96d7de26b244a5f656926628d38ab75",
+      "sha256": "91435a36a7ab55c83decee8fc5d839dc359ffff002ef4e94cdd039785a9ce60e",
       "headings": [
         {
           "id": "start-here",
@@ -20584,7 +20584,7 @@
       "title": "Remote mode: threat model",
       "section": "Remote specifications",
       "status": "Remote specification",
-      "sha256": "00ced8dfe94d854d2020228d9436c2b79665241e4b94f43013ae9fa35b1eda63",
+      "sha256": "0bc97a9f2bf9ecc2a538fb10048ef52f3415bbab8300da762d7e1b9e6f940312",
       "headings": [
         {
           "id": "1-the-core-fact",

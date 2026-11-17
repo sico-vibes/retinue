@@ -1176,9 +1176,49 @@ async fn call_tool(st: &AppState, session_id: &str, name: &str, args: &Value) ->
     }
 }
 
+/// The vault's fill on the linked computer (16 November 2026): the value is
+/// typed at the focused field, under the same gates as `computer_type`, and the
+/// text never appears in a reply, a note or a log. A failure of the typing
+/// command itself is `uncertain`, because part of the text may have arrived.
+pub(crate) async fn type_at_focus(st: &AppState, session_id: &str, text: &str) -> Result<(), crate::vault::FillRefusal> {
+    use crate::vault::FillRefusal;
+    let Some(link) = st.db.computer_link().ok().flatten() else { return Err(FillRefusal::Refused(NOT_LINKED.into())) };
+    if !link.enabled {
+        return Err(FillRefusal::Refused(SWITCHED_OFF.into()));
+    }
+    let session = st.db.session_detail(session_id).ok();
+    if nobody_is_watching(st, session.as_ref()) {
+        return Err(FillRefusal::Refused(UNATTENDED.into()));
+    }
+    if woken_by_a_teammate(session.as_ref()) {
+        return Err(FillRefusal::Refused(TEAM_REPLY.into()));
+    }
+    if full_access(st, session.as_ref()) {
+        return Err(FillRefusal::Refused(FULL_ACCESS.into()));
+    }
+    let count = text.chars().count();
+    if count == 0 || text.contains('\0') {
+        return Err(FillRefusal::Refused("That saved value cannot be typed on the computer.".into()));
+    }
+    if count > TYPE_MAX {
+        return Err(FillRefusal::Refused(format!("That saved value is longer than the computer types in one go ({TYPE_MAX} characters). Save a shorter value, or use the browser.")));
+    }
+    let harbor = Harbor { address: link.address.clone(), token: token_of(&link).map_err(|error| FillRefusal::Refused(error.1.message))? };
+    let probe = probe_for_tool(&harbor).await.map_err(FillRefusal::Refused)?;
+    let display = probe.display.clone().unwrap_or_default();
+    let encoded = base64::engine::general_purpose::STANDARD.encode(text.as_bytes());
+    let script = format!("# retinue:type\nexport DISPLAY={display}\nprintf '%s' '{encoded}' | base64 -d | xdotool type --clearmodifiers --delay 12 --file -\n");
+    match run_script(&harbor, &script, ACTION_TIMEOUT).await {
+        Ok(_) => {
+            crate::team::note(st, session_id, &format!("Typed {count} characters in the bot computer."), json!({"kind":"computer_action","action":"type"})).await;
+            Ok(())
+        }
+        Err(text) => Err(FillRefusal::Uncertain(text)),
+    }
+}
+
 /// The action an input tool is recorded as.
-fn action_class(name: &str) -> &'static str {
-    match name {
+fn action_class(name: &str) -> &'static str {    match name {
         "computer_screenshot" => "screenshot",
         "computer_click" => "click",
         "computer_move" => "move",

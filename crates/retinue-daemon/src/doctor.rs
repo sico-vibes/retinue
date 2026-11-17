@@ -309,7 +309,11 @@ mod tests {
     }
 
     #[test]
-    fn database_and_hook_rows_are_one_line_and_actionable() {        assert_eq!(human_size(900), "900 bytes");
+    fn database_and_hook_rows_are_one_line_and_actionable() {
+        // The installed app sets RETINUE_HOOK_BRIDGE to its own bridge, which this
+        // test then found where a test binary has none (lessons.md, 2026-11-13).
+        let _env = crate::test_env::TestEnv::new("doctor");
+        assert_eq!(human_size(900), "900 bytes");
         assert_eq!(human_size(2048), "2 KB");
         assert_eq!(human_size(5 * 1024 * 1024), "5 MB");
         assert_eq!(one_line("a\n b  c", 20), "a b c");
