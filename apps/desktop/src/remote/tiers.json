@@ -1535,6 +1535,13 @@
       "params": null
     },
     {
+      "method": "task.checkBack",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the desktop owner (or the bot inside its own task run) plans a check-back.",
+      "params": null
+    },
+    {
       "method": "agent.purge",
       "class": "never",
       "minTier": null,

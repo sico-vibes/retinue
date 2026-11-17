@@ -12,6 +12,7 @@
 use crate::{derr, AppState, DispatchError};
 use axum::http::StatusCode;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
@@ -160,6 +161,24 @@ pub(crate) async fn locate(project_path: &str) -> Result<Located, &'static str> 
     let (changes, truncated) = status_changes(&root).await?;
     if truncated { return Err("The repository's changes could not be read."); }
     Ok(Located { root, unborn, changes })
+}
+
+/// A content-free fingerprint for "the project cannot have changed": the HEAD
+/// commit, when the working tree has no tracked changes. A tree with tracked
+/// changes has no fingerprint, so an in-progress edit is never skipped, and
+/// untracked files are ignored so a build folder does not defeat it. `None`
+/// whenever the folder is not a readable repository, and the caller must then
+/// run rather than skip.
+pub(crate) async fn fingerprint(project_path: &str) -> Option<String> {
+    let located = locate(project_path).await.ok()?;
+    if located.unborn || located.changes.iter().any(|change| !change.untracked) { return None; }
+    let head = run_git(&located.root, &["rev-parse", "HEAD"], TOPLEVEL_MAX_BYTES).await;
+    if !head.ok { return None; }
+    let head = text(&head.stdout).trim().to_owned();
+    if head.is_empty() { return None; }
+    let mut hasher = Sha256::new();
+    hasher.update(head.as_bytes());
+    Some(format!("{:x}", hasher.finalize()))
 }
 
 /// Every changed path and untracked file in the repository, with whether the list was cut at

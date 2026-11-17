@@ -12,7 +12,7 @@
 
 use crate::{derr, new_session, session_prompt_for_automation, AppState, DispatchError};
 use axum::http::StatusCode;
-use chrono::{DateTime, Duration, SecondsFormat, Utc};
+use chrono::{DateTime, Datelike, Duration, SecondsFormat, Timelike, Utc};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Mutex as StdMutex;
@@ -30,6 +30,12 @@ const RETRY_DELAYS_SECS: [i64; 3] = [60, 300, 900];
 const MAX_CONSECUTIVE_FAILURES: i64 = 4;
 /// Scheduler cadence.
 const TICK_SECS: u64 = 10;
+/// The late note counts skipped occurrences up to this many, then says "100 or more".
+const LATE_SKIP_CAP: u32 = 100;
+/// Priced runs a monthly projection averages.
+const SPEND_SAMPLE_RUNS: usize = 20;
+/// Occurrences counted in the next 30 days before a schedule is "too frequent to project".
+const MONTH_RUN_CAP: i64 = 1000;
 
 /// In-memory busy tracking: when an automation first became due while the host
 /// was busy, so the 15-minute deferral can be measured per automation.
@@ -100,6 +106,120 @@ fn parse(value: &str) -> Option<DateTime<Utc>> {
     DateTime::parse_from_rfc3339(value).ok().map(|parsed| parsed.with_timezone(&Utc))
 }
 
+/// A short local wall-clock label ("17 November, 15:12") from the RFC3339 label
+/// the cron module produces in the schedule's own zone.
+fn short_local(label: &str) -> String {
+    const MONTHS: [&str; 12] = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    let Ok(parsed) = DateTime::parse_from_rfc3339(label) else { return label.to_owned() };
+    let month = MONTHS[(parsed.month0() as usize).min(11)];
+    format!("{} {}, {:02}:{:02}", parsed.day(), month, parsed.hour(), parsed.minute())
+}
+
+/// "6 hours 12 minutes", for the late note.
+fn human_span(seconds: i64) -> String {
+    let minutes = (seconds / 60).max(1);
+    let days = minutes / (24 * 60);
+    let hours = (minutes % (24 * 60)) / 60;
+    let mins = minutes % 60;
+    let plural = |count: i64, one: &str, many: &str| if count == 1 { format!("{count} {one}") } else { format!("{count} {many}") };
+    let mut parts = Vec::new();
+    if days > 0 { parts.push(plural(days, "day", "days")); }
+    if hours > 0 { parts.push(plural(hours, "hour", "hours")); }
+    if mins > 0 && days == 0 { parts.push(plural(mins, "minute", "minutes")); }
+    if parts.is_empty() { parts.push("less than a minute".to_owned()); }
+    parts.join(" ")
+}
+
+/// How many later occurrences fell between the due time and now, capped at
+/// `LATE_SKIP_CAP`. A `once` schedule has no later runs.
+fn skipped_occurrences(schedule: &retinue_storage::cron::ParsedSchedule, due: DateTime<Utc>, now: DateTime<Utc>) -> u32 {
+    if schedule.kind == "once" { return 0; }
+    let mut cursor = due;
+    let mut count = 0u32;
+    while count < LATE_SKIP_CAP {
+        let Ok(Some(next)) = retinue_storage::cron::next_run_at(schedule, cursor) else { break };
+        let Some(at) = parse(&next) else { break };
+        if at > now { break; }
+        cursor = at;
+        count += 1;
+    }
+    count
+}
+
+/// Idea 4.1: when a scheduled run starts late, it is told so and told what it
+/// missed. Information only; it grants nothing, and a Run now is never late.
+fn late_note(schedule: &retinue_storage::cron::ParsedSchedule, scheduled_for: &str, now: DateTime<Utc>) -> Option<String> {
+    let due = parse(scheduled_for)?;
+    let late = (now - due).num_seconds();
+    if late <= LATE_THRESHOLD_SECS { return None; }
+    let due_local = short_local(&retinue_storage::cron::local_label(schedule, due));
+    let start_local = short_local(&retinue_storage::cron::local_label(schedule, now));
+    let skipped = skipped_occurrences(schedule, due, now);
+    let mut note = format!(
+        "This run was due at {due_local} and started at {start_local}, {} late.",
+        human_span(late)
+    );
+    if skipped == 0 {
+        note.push_str(" No later run was skipped.");
+    } else if skipped >= LATE_SKIP_CAP {
+        note.push_str(" 100 or more later runs were skipped; catch up only on what still matters now.");
+    } else {
+        note.push_str(&format!(" {skipped} later run(s) were skipped; catch up only on what still matters now."));
+    }
+    Some(note)
+}
+
+/// Occurrences in the next 30 days, or `None` when the schedule has none or
+/// would need more than `MONTH_RUN_CAP` steps to count.
+fn occurrences_in_30_days(schedule: &retinue_storage::cron::ParsedSchedule) -> Option<i64> {
+    if schedule.kind == "once" { return None; }
+    let mut cursor = now_utc();
+    let end = cursor + Duration::days(30);
+    let mut count = 0i64;
+    while count < MONTH_RUN_CAP {
+        let next = retinue_storage::cron::next_run_at(schedule, cursor).ok().flatten()?;
+        let at = parse(&next)?;
+        if at > end { return Some(count); }
+        cursor = at;
+        count += 1;
+    }
+    None
+}
+
+/// Idea 4.2: the automation as the schedules screen reads it, with the monthly
+/// projection from the costs providers reported. Unknown stays null, never zero.
+pub(crate) fn with_spend(st: &AppState, automation: Value) -> Value {
+    let mut automation = automation;
+    let Some(id) = automation["id"].as_str().map(str::to_owned) else { return automation };
+    let recent = st.db.automation_costs_recent(&id, SPEND_SAMPLE_RUNS).unwrap_or(Value::Null);
+    let priced = recent["pricedRuns"].as_i64().unwrap_or(0);
+    let total = recent["total"].as_str().and_then(retinue_usage::major_units);
+    let currency = recent["currency"].as_str().map(str::to_owned);
+    let schedule = retinue_storage::cron::parse_schedule(&automation["schedule"], None).ok();
+    let (basis, month_runs, projection) = match (priced, total, schedule.as_ref()) {
+        (_, _, None) => ("no_priced_runs", None, None),
+        (0, _, _) => ("no_priced_runs", None, None),
+        (_, Some(_), Some(schedule)) if schedule.kind == "once" => ("one_off", None, None),
+        (priced, Some(total), Some(schedule)) => match occurrences_in_30_days(schedule) {
+            Some(month_runs) if month_runs > 0 => {
+                let projection = retinue_usage::major_units_ratio(total, i128::from(month_runs), i128::from(priced))
+                    .map(retinue_usage::major_units_decimal);
+                ("recent_runs", Some(month_runs), projection)
+            }
+            _ => ("no_upcoming_runs", None, None),
+        },
+        _ => ("no_priced_runs", None, None),
+    };
+    automation["spend"] = json!({
+        "currency": currency,
+        "projection": projection,
+        "basis": basis,
+        "sampledRuns": priced,
+        "monthRuns": month_runs,
+    });
+    automation
+}
+
 /// Map storage validation and lookups onto the wire error codes.
 fn automation_error(error: retinue_storage::StorageError) -> DispatchError {
     use retinue_storage::StorageError::*;
@@ -112,7 +232,7 @@ fn automation_error(error: retinue_storage::StorageError) -> DispatchError {
 }
 
 pub(crate) async fn emit_changed(st: &AppState, automation: &Value) {
-    let automation = crate::webhooks::with_block(st, automation.clone());
+    let automation = with_spend(st, crate::webhooks::with_block(st, automation.clone()));
     st.emit("automation.changed", json!({"automation": automation})).await;
 }
 
@@ -189,6 +309,17 @@ async fn start_run_with(st: &AppState, automation: &Value, scheduled_for: &str, 
     if let Some(body) = body {
         prompt = crate::webhooks::prompt_with_body(&prompt, body);
     }
+    // Idea 4.1: a scheduled run that starts after its due time is told the
+    // truth, as the last lines of its prompt. A Run now is not late, so it
+    // never sees this.
+    if advance {
+        if let Ok(schedule) = retinue_storage::cron::parse_schedule(&automation["schedule"], None) {
+            if let Some(note) = late_note(&schedule, scheduled_for, now_utc()) {
+                prompt.push_str("\n\n");
+                prompt.push_str(&note);
+            }
+        }
+    }
     let mode = run_mode(automation["approvalMode"].as_str());
     let session_mode = automation["sessionMode"].as_str().unwrap_or("new");
     let agent = st.db.agent_get(&agent_id).map_err(automation_error)?;
@@ -262,14 +393,46 @@ async fn start_run_with(st: &AppState, automation: &Value, scheduled_for: &str, 
     Ok(run)
 }
 
+/// Fixed sentences per run cause, used only in the "could not finish" notice.
+fn failure_sentence(reason: Option<&str>) -> &'static str {
+    match reason {
+        Some("error_after_changes") => "it stopped after changing things, so it was not retried",
+        Some("timeout_after_changes") => "it ran past its time limit after changing things, so it was not retried",
+        Some("timeout") => "it ran past its time limit",
+        Some("session_error") => "a conversation could not be opened for it",
+        Some("prompt_error") => "its first message could not be sent",
+        _ => "the provider reported an error",
+    }
+}
+
+/// Idea 4.4: put a "couldn't finish" notice in the run's own conversation. Only
+/// called when nothing will retry the run, and it carries the automation's name
+/// and a fixed sentence, never the prompt, a path or tool output.
+async fn notice_could_not_finish(st: &AppState, automation: &Value, run: &Value) {
+    let (Some(session_id), Some(name)) = (run["sessionId"].as_str(), automation["name"].as_str()) else { return };
+    let reason = failure_sentence(run["reason"].as_str());
+    let text = format!("“{name}” could not finish: {reason}. Open its run history to run it again.");
+    let meta = json!({"kind":"automation_failed","automationId":automation["id"],"runId":run["id"]});
+    if let Ok(message) = st.db.append_message_with_data(session_id, "", "notice", &text, &meta) {
+        if !message.is_null() {
+            st.emit("message.completed", json!({"sessionId":session_id,"messageId":message["id"],"role":"notice","message":message})).await;
+            if let Ok(summary) = st.db.session_event_summary(session_id) {
+                st.emit("session.changed", summary).await;
+            }
+        }
+    }
+}
+
 /// Account a failure against its automation: below the threshold a run that only
 /// read things retries after 1, 5 and 15 minutes; on the fourth failure the
 /// automation disables and pauses visibly. A run that `acted` (edited files or
 /// ran commands) is not retried: it keeps its next scheduled occurrence and the
-/// owner decides whether to retry it now.
+/// owner decides whether to retry it now. Only a run that will not be retried
+/// leaves a "couldn't finish" notice in its own conversation.
 async fn account_failure(st: &AppState, automation: &Value, run: &Value, acted: bool) {
     let id = automation["id"].as_str().unwrap_or("");
     let failures = automation["consecutiveFailures"].as_i64().unwrap_or(0) + 1;
+    let will_retry = failures < MAX_CONSECUTIVE_FAILURES && !acted;
     let updated = if failures >= MAX_CONSECUTIVE_FAILURES {
         st.db.automation_finish_failure(id, failures, None, true)
     } else if acted {
@@ -283,6 +446,9 @@ async fn account_failure(st: &AppState, automation: &Value, run: &Value, acted: 
     };
     if let Ok(updated) = updated {
         emit_changed(st, &updated).await;
+    }
+    if !will_retry {
+        notice_could_not_finish(st, automation, run).await;
     }
     emit_run_finished(st, automation, run).await;
 }
@@ -311,6 +477,18 @@ pub async fn after_turn(st: &AppState, session_id: &str, outcome: &str) {
                 };
                 if let Ok(updated) = st.db.automation_finish_success(automation_id, next.as_deref(), disable) {
                     emit_changed(st, &updated).await;
+                }
+                // Idea 4.5: remember what the folder looked like after a
+                // successful run, so the next due run can skip when it is the same.
+                if automation["skipUnchanged"] == true {
+                    if let Some(path) = session["projectPath"].as_str().filter(|path| !path.is_empty()).map(str::to_owned) {
+                        let (st, automation_id) = (st.clone(), automation_id.to_owned());
+                        tokio::spawn(async move {
+                            if let Some(fingerprint) = crate::repository::fingerprint(&path).await {
+                                let _ = st.db.automation_set_fingerprint(&automation_id, Some(&fingerprint));
+                            }
+                        });
+                    }
                 }
                 emit_run_changed(st, &run).await;
                 emit_run_finished(st, &automation, &run).await;
@@ -374,9 +552,57 @@ fn run_acted(st: &AppState, run_id: &str, session_id: &str) -> bool {
     st.db.session_acted_since(session_id, &started).unwrap_or(true)
 }
 
-/// One scheduler pass: watchdog, then due automations.
+/// Idea 4.6: stop a running run whose provider-reported cost has reached the
+/// amount the owner set, and ask them with a notice in the run's conversation.
+/// This is a check-in, never a budget: the provider blocks nothing, the amount
+/// is not enforced against the owner's other work, and the schedule is left on.
+async fn spend_checkin(st: &AppState) {
+    for run in st.db.automation_runs_running().unwrap_or_default() {
+        let run_id = run["id"].as_str().unwrap_or("");
+        let automation_id = run["automationId"].as_str().unwrap_or("");
+        let Ok(automation) = st.db.automation_get(automation_id) else { continue };
+        let Some(check) = automation["spendCheckUsd"].as_str() else { continue };
+        if !st.db.automation_run_cost_at_least(run_id, check).unwrap_or(false) { continue }
+        let Ok(Some(finished)) = st.db.automation_run_finish(run_id, "cancelled", Some("spend_check")) else { continue };
+        let task_copy = finished["sessionId"].as_str().map(str::to_owned);
+        if let Some(session_id) = task_copy.as_deref() {
+            let _ = st.db.update_session_state(session_id, "cancelling");
+            let active = st.sessions.lock().await.get(session_id).cloned();
+            if let Some(active) = active {
+                let _ = active.adapter.cancel(&active.handle).await;
+            }
+            let cost = st.db.automation_run_cost(run_id).unwrap_or(Value::Null);
+            let amount = cost["amount"].as_str().unwrap_or("0");
+            let name = automation["name"].as_str().unwrap_or("This schedule");
+            let text = format!(
+                "“{name}” stopped at a spend check-in: this run has cost ${amount} so far, at or past the ${check} you set. This is a check-in, not a budget: the provider did not block anything. Run it again when you are ready."
+            );
+            let meta = json!({"kind":"automation_spend","automationId":automation["id"],"runId":run_id});
+            if let Ok(message) = st.db.append_message_with_data(session_id, "", "notice", &text, &meta) {
+                if !message.is_null() {
+                    st.emit("message.completed", json!({"sessionId":session_id,"messageId":message["id"],"role":"notice","message":message})).await;
+                    if let Ok(summary) = st.db.session_event_summary(session_id) {
+                        st.emit("session.changed", summary).await;
+                    }
+                }
+            }
+        }
+        emit_run_changed(st, &finished).await;
+        emit_run_finished(st, &automation, &finished).await;
+    }
+}
+
+/// Idea 4.5: the fingerprint of the folder a run will work in. `None` whenever it
+/// cannot be read, and the caller must then run: a read failure never skips work.
+async fn project_fingerprint(st: &AppState, agent: &Value) -> Option<String> {
+    let folder = crate::team::workspace_for(st, agent);
+    crate::repository::fingerprint(&folder.to_string_lossy()).await
+}
+
+/// One scheduler pass: watchdog, the spend check-ins, then due automations.
 pub async fn sweep(st: &AppState) {
     watchdog(st).await;
+    spend_checkin(st).await;
     let settings = st.db.settings().unwrap_or(Value::Null);
     if settings["automations.paused"] == true {
         return;
@@ -405,6 +631,20 @@ pub async fn sweep(st: &AppState) {
             continue;
         }
         st.automations.clear(&id);
+        // Idea 4.5: skip when the project cannot have changed. Opt-in per
+        // automation, only when the folder is readable, and never for a Run now
+        // (which does not come through the sweep).
+        if automation["skipUnchanged"] == true {
+            let agent = st.db.agent_get(automation["agentId"].as_str().unwrap_or("")).unwrap_or(Value::Null);
+            let expected = automation["lastFingerprint"].as_str().map(str::to_owned);
+            if let Some(current) = project_fingerprint(st, &agent).await {
+                if expected.as_deref() == Some(current.as_str()) {
+                    let _ = advance_next(st, &automation).await;
+                    record_skipped(st, &automation, "unchanged", &scheduled_for).await;
+                    continue;
+                }
+            }
+        }
         let scheduled = if scheduled_for.is_empty() { fmt(now_utc()) } else { scheduled_for };
         let _ = start_run(st, &automation, &scheduled, true).await;
     }
@@ -499,34 +739,42 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         "automation.create" => {
             let automation = st.db.automation_create(p).map_err(automation_error)?;
             emit_changed(st, &automation).await;
-            Ok(json!({"automation": crate::webhooks::with_block(st, automation)}))
+            Ok(json!({"automation": with_spend(st, crate::webhooks::with_block(st, automation))}))
         }
         "automation.list" => {
             let automation_list = st.db.automation_list(p["agentId"].as_str()).map_err(automation_error)?;
-            Ok(json!({"automations": automation_list.into_iter().map(|item| crate::webhooks::with_block(st, item)).collect::<Vec<_>>()}))
+            Ok(json!({"automations": automation_list.into_iter().map(|item| with_spend(st, crate::webhooks::with_block(st, item))).collect::<Vec<_>>()}))
         }
         "automation.get" => {
             let id = p["id"].as_str().filter(|value| !value.is_empty()).ok_or_else(|| derr("invalid_argument", "id is required", StatusCode::BAD_REQUEST))?;
-            Ok(json!({"automation": crate::webhooks::with_block(st, st.db.automation_get(id).map_err(automation_error)?)}))
+            Ok(json!({"automation": with_spend(st, crate::webhooks::with_block(st, st.db.automation_get(id).map_err(automation_error)?))}))
         }
         "automation.update" => {
             let id = p["id"].as_str().filter(|value| !value.is_empty()).ok_or_else(|| derr("invalid_argument", "id is required", StatusCode::BAD_REQUEST))?;
             let automation = st.db.automation_update(id, p).map_err(automation_error)?;
             emit_changed(st, &automation).await;
-            Ok(json!({"automation": crate::webhooks::with_block(st, automation)}))
+            let definition_changed = automation["definitionChanged"] == true;
+            Ok(json!({
+                "automation": with_spend(st, crate::webhooks::with_block(st, automation)),
+                "definitionChanged": definition_changed,
+            }))
         }
         "automation.pause" => {
             let id = p["id"].as_str().filter(|value| !value.is_empty()).ok_or_else(|| derr("invalid_argument", "id is required", StatusCode::BAD_REQUEST))?;
             let automation = st.db.automation_pause(id).map_err(automation_error)?;
             st.automations.forget(id);
             emit_changed(st, &automation).await;
-            Ok(json!({"automation": crate::webhooks::with_block(st, automation)}))
+            Ok(json!({"automation": with_spend(st, crate::webhooks::with_block(st, automation))}))
         }
         "automation.resume" => {
             let id = p["id"].as_str().filter(|value| !value.is_empty()).ok_or_else(|| derr("invalid_argument", "id is required", StatusCode::BAD_REQUEST))?;
-            let automation = st.db.automation_resume(id).map_err(automation_error)?;
+            let message_id = match p.get("messageId") {
+                None | Some(Value::Null) => None,
+                Some(value) => Some(value.as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "messageId must be a message id", StatusCode::BAD_REQUEST))?),
+            };
+            let automation = st.db.automation_resume(id, message_id).map_err(automation_error)?;
             emit_changed(st, &automation).await;
-            Ok(json!({"automation": crate::webhooks::with_block(st, automation)}))
+            Ok(json!({"automation": with_spend(st, crate::webhooks::with_block(st, automation))}))
         }
         "automation.delete" => {
             let id = p["id"].as_str().filter(|value| !value.is_empty()).ok_or_else(|| derr("invalid_argument", "id is required", StatusCode::BAD_REQUEST))?;
@@ -579,6 +827,8 @@ pub async fn schedule_task_tool(st: &AppState, session_id: &str, args: &Value) -
         "enabled": false,
         "createdBy": "agent",
         "pauseReason": "needs_approval",
+        // Idea 4.7: the id of the owner's message the bot acted on, never its text.
+        "sourceMessageId": st.db.session_latest_user_message_id(session_id).ok().flatten(),
     });
     let automation = st.db.automation_create(&input).map_err(|error| error.to_string())?;
     emit_changed(st, &automation).await;
@@ -606,4 +856,60 @@ pub async fn list_my_schedules_tool(st: &AppState, session_id: &str) -> Result<S
         )
     }).collect::<Vec<_>>();
     Ok(format!("Your scheduled tasks (none run until the user approves them):\n{}", lines.join("\n")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn utc(text: &str) -> DateTime<Utc> {
+        DateTime::parse_from_rfc3339(text).unwrap().with_timezone(&Utc)
+    }
+
+    fn daily() -> retinue_storage::cron::ParsedSchedule {
+        retinue_storage::cron::parse_schedule(&json!({"kind":"cron","cron":"0 9 * * *","timezone":"UTC"}), None).unwrap()
+    }
+
+    #[test]
+    fn a_late_run_is_told_how_late_and_what_it_missed() {
+        let note = late_note(&daily(), "2026-11-16T09:00:00.000Z", utc("2026-11-18T15:12:00Z")).expect("late");
+        assert!(note.contains("due at 16 November, 09:00"), "{note}");
+        assert!(note.contains("started at 18 November, 15:12"), "{note}");
+        assert!(note.contains("2 days 6 hours 12 minutes late"), "{note}");
+        assert!(note.contains("2 later run(s) were skipped"), "{note}");
+    }
+
+    #[test]
+    fn a_run_within_the_threshold_gets_no_note() {
+        assert!(late_note(&daily(), "2026-11-18T11:12:00.000Z", utc("2026-11-18T11:12:30Z")).is_none());
+        assert!(late_note(&daily(), "2026-11-18T11:12:00.000Z", utc("2026-11-18T11:14:00Z")).is_some(), "past the threshold");
+    }
+
+    #[test]
+    fn a_once_schedule_is_late_but_misses_nothing() {
+        let once = retinue_storage::cron::parse_schedule(&json!({"kind":"once","at":"2026-11-18T09:00:00.000Z","timezone":"UTC"}), None).unwrap();
+        let note = late_note(&once, "2026-11-18T09:00:00.000Z", utc("2026-11-18T12:00:00Z")).expect("late");
+        assert!(note.contains("No later run was skipped"), "{note}");
+    }
+
+    #[test]
+    fn the_month_projection_counts_occurrences_and_gives_up_when_too_frequent() {
+        let counted = occurrences_in_30_days(&daily());
+        assert!(matches!(counted, Some(29) | Some(30)), "a daily schedule has 29 or 30 occurrences in 30 days: {counted:?}");
+        let every_minute = retinue_storage::cron::parse_schedule(&json!({"kind":"cron","cron":"* * * * *","timezone":"UTC"}), None).unwrap();
+        assert_eq!(occurrences_in_30_days(&every_minute), None, "more than the cap is not projected");
+        let never = retinue_storage::cron::parse_schedule(&json!({"kind":"cron","cron":"0 0 30 2 *","timezone":"UTC"}), None).unwrap();
+        assert_eq!(occurrences_in_30_days(&never), None);
+        let once = retinue_storage::cron::parse_schedule(&json!({"kind":"once","at":"2026-12-01T09:00:00.000Z","timezone":"UTC"}), None).unwrap();
+        assert_eq!(occurrences_in_30_days(&once), None);
+    }
+
+    #[test]
+    fn a_span_reads_as_words_not_numbers() {
+        assert_eq!(human_span(90), "1 minute");
+        assert_eq!(human_span(3600), "1 hour");
+        assert_eq!(human_span(3660), "1 hour 1 minute");
+        assert_eq!(human_span(90_000), "1 day 1 hour");
+        assert_eq!(human_span(0), "less than a minute");
+    }
 }
