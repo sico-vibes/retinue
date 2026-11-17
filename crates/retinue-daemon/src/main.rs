@@ -14373,7 +14373,7 @@ mod phase2a_tests {
     include!("computer_tests.rs");
 
     // Wave 2: the reach statement and the paused-model rail (17 November 2026).
-    include!("wave2_tests.rs");
+    include!("safety_tests.rs");
 
     // The browser on that computer (14 November 2026).
     include!("browser_tests.rs");
