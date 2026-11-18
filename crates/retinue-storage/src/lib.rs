@@ -837,31 +837,53 @@ fn ensure_read_indexes(c: &Connection) -> Result<(), StorageError> {
 /// `ensure_*` functions, so it runs on every open without a `user_version`
 /// bump. `skills` is the one pool every bot shares; `skill_agent_settings`
 /// holds the per-bot opt-out (`enabled = 0`) rows.
+///
+/// Wave 3 adds what a skill a bot wrote for itself needs: the `agent` source,
+/// the review state (`pending` is private to the bot that learned it until the
+/// owner approves it), who learned it, whether the owner has edited it since
+/// (which locks the bot out), and when a bot last loaded it (least-recently-used
+/// eviction). SQLite bakes a CHECK into the table definition, so an older
+/// database is rebuilt with its rows copied verbatim, like `proposals`.
 fn ensure_skills_schema(c: &Connection) -> Result<(), StorageError> {
-    c.execute_batch(
-        "CREATE TABLE IF NOT EXISTS skills(
-            name TEXT PRIMARY KEY NOT NULL CHECK(name GLOB '[a-z0-9]*'),
+    const SKILL_COLUMNS_DDL: &str = "name TEXT PRIMARY KEY NOT NULL CHECK(name GLOB '[a-z0-9]*'),
             description TEXT NOT NULL,
-            source TEXT NOT NULL CHECK(source IN ('claude','codex','opencode','folder','backup')),
+            source TEXT NOT NULL CHECK(source IN ('claude','codex','opencode','folder','backup','agent')),
             source_path TEXT,
             content_sha256 TEXT NOT NULL,
             enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
             file_count INTEGER NOT NULL,
             total_bytes INTEGER NOT NULL,
             imported_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL
-        );
+            updated_at TEXT NOT NULL,
+            review_state TEXT NOT NULL DEFAULT 'approved' CHECK(review_state IN ('approved','pending')),
+            learned_by TEXT,
+            owner_edited INTEGER NOT NULL DEFAULT 0 CHECK(owner_edited IN (0,1)),
+            used_at TEXT";
+    c.execute_batch(&format!(
+        "CREATE TABLE IF NOT EXISTS skills({SKILL_COLUMNS_DDL});
         CREATE TABLE IF NOT EXISTS skill_agent_settings(
             skill_name TEXT NOT NULL,
             agent_id TEXT NOT NULL,
             enabled INTEGER NOT NULL CHECK(enabled IN (0,1)),
             PRIMARY KEY(skill_name, agent_id)
-        );",
-    )?;
+        );"
+    ))?;
+    let ddl: String = c.query_row("SELECT sql FROM sqlite_master WHERE type='table' AND name='skills'", [], |r| r.get(0))?;
+    if !ddl.contains("'agent'") {
+        c.execute_batch(&format!(
+            "BEGIN IMMEDIATE;
+             ALTER TABLE skills RENAME TO skills_pre_agent;
+             CREATE TABLE skills({SKILL_COLUMNS_DDL});
+             INSERT INTO skills(name,description,source,source_path,content_sha256,enabled,file_count,total_bytes,imported_at,updated_at)
+                 SELECT name,description,source,source_path,content_sha256,enabled,file_count,total_bytes,imported_at,updated_at FROM skills_pre_agent;
+             DROP TABLE skills_pre_agent;
+             COMMIT;"
+        ))?;
+    }
     Ok(())
 }
 
-const SKILL_COLUMNS: &str = "name,description,source,source_path,content_sha256,enabled,file_count,total_bytes,imported_at,updated_at";
+const SKILL_COLUMNS: &str = "name,description,source,source_path,content_sha256,enabled,file_count,total_bytes,imported_at,updated_at,review_state,learned_by,owner_edited,used_at";
 
 /// Remote mode (FIX29 WP6b) schema: paired devices and the host-side activity
 /// log. Additive and idempotent like the other `ensure_*` functions, so it runs
@@ -1698,6 +1720,11 @@ fn skill_dto_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Value> {
         "totalBytes": row.get::<_, i64>(7)?,
         "importedAt": row.get::<_, String>(8)?,
         "updatedAt": row.get::<_, String>(9)?,
+        "reviewState": row.get::<_, String>(10)?,
+        "learnedBy": row.get::<_, Option<String>>(11)?,
+        "learnedByName": Value::Null,
+        "ownerEdited": row.get::<_, bool>(12)?,
+        "usedAt": row.get::<_, Option<String>>(13)?,
         "disabledFor": [],
     }))
 }
@@ -1710,6 +1737,29 @@ fn skill_disabled_pairs(c: &Connection) -> Result<Vec<(String, String)>, Storage
     Ok(rows)
 }
 
+/// Bot names by id, so a learned skill can say which bot learned it without the
+/// window holding the whole team.
+fn agent_names(c: &Connection) -> Result<std::collections::HashMap<String, String>, StorageError> {
+    let mut statement = c.prepare("SELECT id,name FROM agents")?;
+    let rows = statement.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?.collect::<Result<Vec<_>, _>>()?;
+    Ok(rows.into_iter().collect())
+}
+
+/// Fills `learnedByName` on the rows that name a bot. A bot that has since been
+/// deleted leaves `null`, never a stale name.
+fn fill_learned_names(c: &Connection, rows: &mut [Value]) -> Result<(), StorageError> {
+    if !rows.iter().any(|row| row["learnedBy"].is_string()) {
+        return Ok(());
+    }
+    let names = agent_names(c)?;
+    for row in rows.iter_mut() {
+        if let Some(id) = row["learnedBy"].as_str() {
+            row["learnedByName"] = json!(names.get(id));
+        }
+    }
+    Ok(())
+}
+
 fn skill_rows(c: &Connection) -> Result<Vec<Value>, StorageError> {
     let mut statement = c.prepare(&format!("SELECT {SKILL_COLUMNS} FROM skills ORDER BY name"))?;
     let mut rows = statement.query_map([], skill_dto_from_row)?.collect::<Result<Vec<_>, _>>()?;
@@ -1719,6 +1769,7 @@ fn skill_rows(c: &Connection) -> Result<Vec<Value>, StorageError> {
         let list = disabled.iter().filter(|(skill, _)| *skill == name).map(|(_, agent)| json!(agent)).collect::<Vec<_>>();
         row["disabledFor"] = json!(list);
     }
+    fill_learned_names(c, &mut rows)?;
     Ok(rows)
 }
 
@@ -3803,6 +3854,9 @@ impl Storage {
         tx.execute("DELETE FROM memory_fts WHERE record_id IN (SELECT id FROM memory_records WHERE scope='blob' AND scope_id=?1)", [id])?;
         tx.execute("DELETE FROM memory_records WHERE scope='blob' AND scope_id=?1", [id])?;
         tx.execute("DELETE FROM skill_agent_settings WHERE agent_id=?1", [id])?;
+        // Wave 3: a purged bot's learned skills go with it. Their folders are
+        // removed by the daemon, which holds the data folder.
+        tx.execute("DELETE FROM skills WHERE source='agent' AND learned_by=?1", [id])?;
         tx.execute("DELETE FROM proposals WHERE agent_id=?1", [id])?;
         tx.execute("DELETE FROM app_events WHERE event_type='agent.changed' AND json_extract(payload,'$.agentId')=?1", [id])?;
         // Phase 9: a purged bot leaves every project's team.
@@ -7929,7 +7983,9 @@ impl Storage {
         let mut row = c.query_row(&format!("SELECT {SKILL_COLUMNS} FROM skills WHERE name=?1"), [name], skill_dto_from_row).optional()?.ok_or(StorageError::AgentNotFound)?;
         let disabled = skill_disabled_pairs(&c)?;
         row["disabledFor"] = json!(disabled.into_iter().filter(|(skill, _)| skill == name).map(|(_, agent)| agent).collect::<Vec<_>>());
-        Ok(row)
+        let mut rows = vec![row];
+        fill_learned_names(&c, &mut rows)?;
+        Ok(rows.remove(0))
     }
     pub fn skills_upsert(&self, input: &Value) -> Result<Value, StorageError> {
         let name = input["name"].as_str().map(str::trim).filter(|value| !value.is_empty()).ok_or(StorageError::InvalidAgent)?;
@@ -7944,10 +8000,14 @@ impl Storage {
         let now = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
         let mut c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        // A restore never turns a skill a bot learned into an imported one: the
+        // row keeps its review state, its bot and the owner's edit lock.
         tx.execute(
             "INSERT INTO skills(name,description,source,source_path,content_sha256,enabled,file_count,total_bytes,imported_at,updated_at) \
              VALUES(?1,?2,?3,?4,?5,1,?6,?7,?8,?8) \
-             ON CONFLICT(name) DO UPDATE SET description=excluded.description,source=excluded.source,source_path=excluded.source_path,\
+             ON CONFLICT(name) DO UPDATE SET description=excluded.description,\
+             source=CASE WHEN skills.source='agent' THEN skills.source ELSE excluded.source END,\
+             source_path=excluded.source_path,\
              content_sha256=excluded.content_sha256,file_count=excluded.file_count,total_bytes=excluded.total_bytes,updated_at=excluded.updated_at",
             params![name, description, source, source_path, content_sha256, file_count, total_bytes, now],
         )?;
@@ -7995,6 +8055,164 @@ impl Storage {
         let disabled = skill_disabled_pairs(&c)?;
         row["disabledFor"] = json!(disabled.into_iter().filter(|(skill, _)| skill == name).map(|(_, agent)| agent).collect::<Vec<_>>());
         Ok(row)
+    }
+
+    // ── Learned skills (wave 3): a bot's own procedure, held for the owner ─
+    //
+    // A learned skill is an ordinary pool row with `source = 'agent'`. What is
+    // new is the review state: `pending` is private to the bot that learned it
+    // until the owner approves it, and once the owner edits one the bot may no
+    // longer patch it. The files live under `<data>/skills/<name>` beside every
+    // other skill, so loading, backup and the per-bot opt-out are unchanged.
+
+    /// Saves a bot's draft, or replaces the text of a draft it saved before.
+    /// The row becomes `pending` again, because its text changed.
+    pub fn skills_learned_upsert(&self, input: &Value) -> Result<Value, StorageError> {
+        let name = input["name"].as_str().map(str::trim).filter(|value| !value.is_empty()).ok_or(StorageError::InvalidAgent)?;
+        if !valid_skill_name(name) { return Err(StorageError::InvalidAgent); }
+        let learned_by = input["learnedBy"].as_str().map(str::trim).filter(|value| !value.is_empty()).ok_or(StorageError::InvalidAgent)?;
+        let description = input["description"].as_str().ok_or(StorageError::InvalidAgent)?;
+        let content_sha256 = input["contentSha256"].as_str().map(str::trim).filter(|value| !value.is_empty()).ok_or(StorageError::InvalidAgent)?;
+        let file_count = input["fileCount"].as_i64().filter(|value| *value >= 0).ok_or(StorageError::InvalidAgent)?;
+        let total_bytes = input["totalBytes"].as_i64().filter(|value| *value >= 0).ok_or(StorageError::InvalidAgent)?;
+        let now = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+        let mut c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if !tx.query_row("SELECT EXISTS(SELECT 1 FROM agents WHERE id=?1)", [learned_by], |r| r.get::<_, bool>(0))? {
+            return Err(StorageError::InvalidAgent);
+        }
+        // An existing row decides: someone else's skill is a conflict, a
+        // skill the owner edited is theirs alone.
+        let existing = tx
+            .query_row("SELECT source,learned_by,owner_edited FROM skills WHERE name=?1", [name], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, Option<String>>(1)?, row.get::<_, bool>(2)?))
+            })
+            .optional()?;
+        if let Some((source, owner, edited)) = existing {
+            if source != "agent" || owner.as_deref() != Some(learned_by) || edited {
+                return Err(StorageError::AgentConflict);
+            }
+            tx.execute(
+                "UPDATE skills SET description=?2,content_sha256=?3,file_count=?4,total_bytes=?5,review_state='pending',updated_at=?6 WHERE name=?1",
+                params![name, description, content_sha256, file_count, total_bytes, now],
+            )?;
+        } else {
+            tx.execute(
+                "INSERT INTO skills(name,description,source,source_path,content_sha256,enabled,file_count,total_bytes,imported_at,updated_at,review_state,learned_by,owner_edited,used_at) \
+                 VALUES(?1,?2,'agent',NULL,?3,1,?4,?5,?6,?6,'pending',?7,0,NULL)",
+                params![name, description, content_sha256, file_count, total_bytes, now, learned_by],
+            )?;
+        }
+        let row = tx.query_row(&format!("SELECT {SKILL_COLUMNS} FROM skills WHERE name=?1"), [name], skill_dto_from_row)?;
+        tx.commit()?;
+        let mut rows = vec![row];
+        fill_learned_names(&c, &mut rows)?;
+        Ok(rows.remove(0))
+    }
+
+    /// Every learned skill, newest change first, optionally for one bot.
+    pub fn skills_learned_list(&self, agent_id: Option<&str>) -> Result<Vec<Value>, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let agent = agent_id.map(str::trim).filter(|value| !value.is_empty());
+        let mut statement = c.prepare(&format!(
+            "SELECT {SKILL_COLUMNS} FROM skills WHERE source='agent' AND (?1 IS NULL OR learned_by=?1) ORDER BY updated_at DESC, name"
+        ))?;
+        let mut rows = statement.query_map([agent], skill_dto_from_row)?.collect::<Result<Vec<_>, _>>()?;
+        let disabled = skill_disabled_pairs(&c)?;
+        for row in rows.iter_mut() {
+            let name = row["name"].as_str().unwrap_or("").to_owned();
+            let list = disabled.iter().filter(|(skill, _)| *skill == name).map(|(_, agent)| json!(agent)).collect::<Vec<_>>();
+            row["disabledFor"] = json!(list);
+        }
+        fill_learned_names(&c, &mut rows)?;
+        Ok(rows)
+    }
+
+    /// The owner's approval: the skill joins the pool every bot may use.
+    pub fn skills_learned_approve(&self, name: &str) -> Result<Value, StorageError> {
+        let now = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+        self.skills_learned_update(
+            name,
+            "UPDATE skills SET review_state='approved',updated_at=?2 WHERE name=?1",
+            &[&now as &dyn rusqlite::ToSql],
+        )
+    }
+
+    /// The owner's edit: the text is theirs now, so the bot may no longer patch
+    /// it, and an edited skill counts as approved.
+    pub fn skills_learned_owner_edit(&self, name: &str, description: &str, content_sha256: &str, total_bytes: i64) -> Result<Value, StorageError> {
+        let now = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+        self.skills_learned_update(
+            name,
+            "UPDATE skills SET description=?2,content_sha256=?3,total_bytes=?4,review_state='approved',owner_edited=1,updated_at=?5 WHERE name=?1",
+            &[&description as &dyn rusqlite::ToSql, &content_sha256, &total_bytes, &now],
+        )
+    }
+
+    /// One learned row after an update, with the guards both owner writes need.
+    fn skills_learned_update(&self, name: &str, sql: &str, tail: &[&dyn rusqlite::ToSql]) -> Result<Value, StorageError> {
+        let mut c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let source = tx.query_row("SELECT source FROM skills WHERE name=?1", [name], |row| row.get::<_, String>(0)).optional()?;
+        match source.as_deref() {
+            None => return Err(StorageError::AgentNotFound),
+            Some("agent") => {}
+            Some(_) => return Err(StorageError::AgentConflict),
+        }
+        let mut values: Vec<&dyn rusqlite::ToSql> = vec![&name];
+        values.extend_from_slice(tail);
+        tx.execute(sql, values.as_slice())?;
+        let row = tx.query_row(&format!("SELECT {SKILL_COLUMNS} FROM skills WHERE name=?1"), [name], skill_dto_from_row)?;
+        tx.commit()?;
+        let mut rows = vec![row];
+        fill_learned_names(&c, &mut rows)?;
+        Ok(rows.remove(0))
+    }
+
+    /// Forgets a learned skill: the row and its per-bot rows. The caller removes
+    /// the folder.
+    pub fn skills_learned_forget(&self, name: &str) -> Result<(), StorageError> {
+        let mut c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let tx = c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let source = tx.query_row("SELECT source FROM skills WHERE name=?1", [name], |row| row.get::<_, String>(0)).optional()?;
+        match source.as_deref() {
+            None => return Err(StorageError::AgentNotFound),
+            Some("agent") => {}
+            Some(_) => return Err(StorageError::AgentConflict),
+        }
+        tx.execute("DELETE FROM skill_agent_settings WHERE skill_name=?1", [name])?;
+        tx.execute("DELETE FROM skills WHERE name=?1", [name])?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Records that a bot loaded a learned skill. Best effort: the caller
+    /// ignores a failure, because a missing timestamp must never fail a load.
+    pub fn skills_learned_touch(&self, name: &str) -> Result<(), StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let now = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+        c.execute("UPDATE skills SET used_at=?2 WHERE name=?1 AND source='agent'", params![name, now])?;
+        Ok(())
+    }
+
+    /// What a save by this bot would have to evict to stay under `cap` rows:
+    /// least recently used first, and never a skill the owner edited.
+    /// `AgentConflict` when the cap is reached and nothing may be evicted.
+    pub fn skills_learned_evictions(&self, learned_by: &str, cap: usize) -> Result<Vec<String>, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let count: i64 = c.query_row("SELECT COUNT(*) FROM skills WHERE source='agent' AND learned_by=?1", [learned_by], |row| row.get(0))?;
+        let over = count + 1 - cap as i64;
+        if over <= 0 {
+            return Ok(Vec::new());
+        }
+        let mut statement = c.prepare(
+            "SELECT name FROM skills WHERE source='agent' AND learned_by=?1 AND owner_edited=0 ORDER BY COALESCE(used_at, updated_at) ASC, name LIMIT ?2",
+        )?;
+        let names = statement.query_map(params![learned_by, over], |row| row.get::<_, String>(0))?.collect::<Result<Vec<_>, _>>()?;
+        if names.len() as i64 != over {
+            return Err(StorageError::AgentConflict);
+        }
+        Ok(names)
     }
 
     /// FIX31: restore bots, memory, automations and settings in one
@@ -10438,6 +10656,78 @@ mod tests {
         assert_eq!(after[0]["sessionId"], "search-b");
         // Like-pattern characters in the query are escaped, not wildcards.
         assert!(db.search_messages("%").unwrap().is_empty());
+    }
+
+    /// Wave 3: a skill a bot learned carries its review state, its bot and the
+    /// owner's edit lock, and a database from before wave 3 is rebuilt with its
+    /// rows intact so the `agent` source is accepted.
+    #[test]
+    fn learned_skills_round_trip_and_an_older_pool_is_rebuilt() {
+        let db = Storage::open_in_memory().unwrap();
+        db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"})).unwrap();
+        let bot = db.agent_create(&json!({"name":"Learner","runtimeId":"rt-test"})).unwrap().0;
+        let bot_id = bot["id"].as_str().unwrap().to_owned();
+        let other = db.agent_create(&json!({"name":"Reader","runtimeId":"rt-test"})).unwrap().0["id"].as_str().unwrap().to_owned();
+        let saved = db
+            .skills_learned_upsert(&json!({"name":"release-gates","description":"How to check a release.","contentSha256":"a".repeat(64),"fileCount":1,"totalBytes":10,"learnedBy":bot_id}))
+            .unwrap();
+        assert_eq!(saved["source"], "agent");
+        assert_eq!(saved["reviewState"], "pending");
+        assert_eq!(saved["learnedBy"], bot_id.as_str());
+        assert_eq!(saved["learnedByName"], "Learner");
+        assert_eq!(saved["ownerEdited"], false);
+        // The same bot may replace its own draft; the row goes back to pending.
+        db.skills_learned_approve("release-gates").unwrap();
+        let again = db
+            .skills_learned_upsert(&json!({"name":"release-gates","description":"How to check a release.","contentSha256":"b".repeat(64),"fileCount":1,"totalBytes":10,"learnedBy":bot_id}))
+            .unwrap();
+        assert_eq!(again["reviewState"], "pending", "a changed text needs the owner's eye again");
+        // Another bot, an owner edit and an imported row are all conflicts.
+        assert!(db.skills_learned_upsert(&json!({"name":"release-gates","description":"Mine.","contentSha256":"c".repeat(64),"fileCount":1,"totalBytes":1,"learnedBy":other})).is_err());
+        db.skills_learned_owner_edit("release-gates", "The owner's words.", &"d".repeat(64), 12).unwrap();
+        let edited = db.skills_get("release-gates").unwrap();
+        assert_eq!((edited["ownerEdited"].clone(), edited["reviewState"].clone()), (json!(true), json!("approved")));
+        assert!(db.skills_learned_upsert(&json!({"name":"release-gates","description":"Mine now.","contentSha256":"e".repeat(64),"fileCount":1,"totalBytes":1,"learnedBy":bot_id})).is_err());
+        // Only learned rows appear in the queue, and only for their bot.
+        db.skills_upsert(&json!({"name":"imported","description":"Imported.","source":"folder","contentSha256":"f".repeat(64),"fileCount":1,"totalBytes":4})).unwrap();
+        assert_eq!(db.skills_learned_list(None).unwrap().len(), 1);
+        assert_eq!(db.skills_learned_list(Some(&other)).unwrap().len(), 0);
+        assert_eq!(db.skills_learned_list(Some(&bot_id)).unwrap().len(), 1);
+        assert!(db.skills_learned_approve("imported").is_err(), "an imported skill has no review state to approve");
+        // The cap counts this bot's rows and never evicts an owner-edited one.
+        assert!(db.skills_learned_evictions(&bot_id, 40).unwrap().is_empty());
+        assert!(db.skills_learned_evictions(&bot_id, 1).is_err(), "nothing is evictable when the one row is owner-edited");
+        db.skills_learned_touch("release-gates").unwrap();
+        assert!(db.skills_get("release-gates").unwrap()["usedAt"].is_string());
+        db.skills_learned_forget("release-gates").unwrap();
+        assert!(db.skills_get("release-gates").is_err());
+        assert!(db.skills_learned_forget("imported").is_err(), "only a learned skill can be forgotten this way");
+
+        // An older pool table, without the `agent` source, is rebuilt and keeps
+        // its rows.
+        let conn = rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch(
+            "CREATE TABLE skills(
+                name TEXT PRIMARY KEY NOT NULL CHECK(name GLOB '[a-z0-9]*'),
+                description TEXT NOT NULL,
+                source TEXT NOT NULL CHECK(source IN ('claude','codex','opencode','folder','backup')),
+                source_path TEXT,
+                content_sha256 TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0,1)),
+                file_count INTEGER NOT NULL,
+                total_bytes INTEGER NOT NULL,
+                imported_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            INSERT INTO skills VALUES('legacy','A legacy skill.','folder',NULL,'a',1,1,10,'2026-11-01T00:00:00.000Z','2026-11-01T00:00:00.000Z');",
+        ).unwrap();
+        ensure_skills_schema(&conn).unwrap();
+        let kept: String = conn.query_row("SELECT description FROM skills WHERE name='legacy'", [], |row| row.get(0)).unwrap();
+        assert_eq!(kept, "A legacy skill.", "the rebuild keeps every row");
+        let review: String = conn.query_row("SELECT review_state FROM skills WHERE name='legacy'", [], |row| row.get(0)).unwrap();
+        assert_eq!(review, "approved", "an older row is an approved skill, not a pending one");
+        conn.execute("INSERT INTO skills(name,description,source,content_sha256,file_count,total_bytes,imported_at,updated_at) VALUES('learned','Learned.','agent','b',1,1,'x','x')", []).unwrap();
+        assert!(conn.execute("INSERT INTO skills(name,description,source,content_sha256,file_count,total_bytes,imported_at,updated_at) VALUES('bogus','Bogus.','bogus','c',1,1,'x','x')", []).is_err(), "the CHECK still refuses an unknown source");
     }
 
     #[test]

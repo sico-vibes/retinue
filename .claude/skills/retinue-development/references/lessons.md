@@ -2,6 +2,21 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-17 · Storage · Adding a value to a CHECK list rebuilds the table, and a storage unit test needs its runtime
+
+- **Symptom 1:** a new `source` value (`agent`) for learned skills could not be inserted: `CHECK constraint failed`.
+- **Cause:** SQLite bakes a table's `CHECK(...)` into its definition, so `CREATE TABLE IF NOT EXISTS` never widens it. Same trap as `proposals`' `kind` list (`ensure_proposal_schema`).
+- **Fix:** `ensure_skills_schema` reads `sqlite_master` for the table and, when the DDL lacks `'agent'`, renames it aside, creates the new table, copies every old column and drops the old one — in one `BEGIN IMMEDIATE … COMMIT` batch. `crates/retinue-storage/src/lib.rs`; pinned by `learned_skills_round_trip_and_an_older_pool_is_rebuilt`, which builds an old table by hand and proves the rows survive with `review_state='approved'`.
+- **Symptom 2:** a new storage unit test panicked on `db.agent_create(...)` with `AgentNotFound`, though the same call works in a daemon test.
+- **Cause:** the daemon's `state()` test helper upserts `rt-test` first; a bare `Storage::open_in_memory()` has no runtimes, and `agent_create` rejects an unknown `runtimeId`.
+- **Fix:** `db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"}))` before the first `agent_create` in any storage-only test.
+
+## 2026-11-17 · Daemon · A tool that must know whether the owner started the turn
+
+- **Symptom:** `save_skill` had to refuse a turn started by a teammate's brief, and `owner_started` was a field on `TurnDriver`, which exists only inside the turn's own task.
+- **Cause:** the prompt origin (`PromptOrigin`) is matched where the turn is reserved and then dropped; nothing shared records it. The session's link covers automations and tasks but not a teammate's message.
+- **Fix:** `skills::note_turn_origin(session_id, turn_id, owner_started)` writes one in-memory entry where the turn is registered, and `owner_started_now` reads it back plus `st.active_turns`, so a stale entry from an earlier turn can never authorise the current one. `owner_started_origin(origin)` in `main.rs` is the one expression both callers use. Reuse this shape for any future tool that must refuse unattended or teammate-started work.
+
 ## 2026-11-17 · Daemon · A new RPC that nothing could call
 
 - **Symptom:** the remote-tiers parity test said `task.checkBack` was a stale row: "the dispatch no longer has" it.
@@ -27,9 +42,9 @@ Newest first. One entry per lesson: date, area, symptom, root cause with evidenc
 - **Fix:** run the suite once, read every binary's result, then retry only the refused binaries (`-p <crate> --test <name>`, or touch its source so it relinks with a new hash). A stale `Fresh` crate in a shared target can also hide your sources (`cannot find function` for a function that exists); `touch` the crate roots to rebuild them.
 ## 2026-11-17 · Build · A shared `CARGO_TARGET_DIR` between worktrees runs another lane's test binary
 
-- **Symptom:** `cargo test -p retinue-storage` reported 169 passing, then `-- --list` did not contain tests that had just been written in this worktree; one run also failed with `cannot find function major_units in crate retinue_usage` for a function that exists in this worktree's source.
+- **Symptom:** `cargo test -p retinue-storage` reported 169 passing, then `-- --list` did not contain tests that had just been written in this worktree; one run also failed with `cannot find function major_units in crate retinue_usage` for a function that exists in this worktree's source. A second shape, seen 2026-11-17: `cargo check -p retinue-daemon --tests` fails with `no method named skills_learned_upsert found for struct Arc<retinue_storage::Storage>` and `the size for values of type str cannot be known` for the methods' return type, while `cargo clippy --all-targets` on the same tree passed minutes earlier — the target held another lane's `retinue-storage` rlib.
 - **Cause:** this PC's Smart App Control blocks freshly built build scripts (os error 4551), so lanes point `CARGO_TARGET_DIR` at the main checkout's warm `target`. When two lanes build the same package there, one lane's artifacts and test executable can satisfy the other lane's invocation, because the package units share the target but not the source.
-- **Fix (for now):** after any build in a shared target, confirm the test binary is yours with `cargo test -p <crate> -- --list | Select-String <new test name>` before trusting a green result. A private target works only if it is seeded from a working one; cargo's build-script fingerprints use paths relative to the target, so copying `target\debug` to a private directory should avoid re-running blocked build scripts (untested at the time of writing).
+- **Fix (for now):** after any build in a shared target, confirm the test binary is yours with `cargo test -p <crate> -- --list | Select-String <new test name>` before trusting a green result. A private target works only if it is seeded from a working one; cargo's build-script fingerprints use paths relative to the target, so copying `target\debug` to a private directory should avoid re-running blocked build scripts (untested at the time of writing). **When a method you just added reads as missing, `touch` the crate's `src/lib.rs` (or the file you edited) and rerun**: cargo then rebuilds that crate from this worktree's source and the error disappears.
 - **Do not** claim tests passed from a shared target without that check; say which tests were seen running.
 
 ## 2026-11-17 · Git · Partial staging with `git apply --cached --unidiff-zero` misplaces insertions

@@ -84,6 +84,7 @@ mod proposals;
 mod knowledge;
 mod skill_library;
 mod skills;
+mod suggestions;
 mod commands;
 // Wave 12, part F: the Doctor's read-only checks and their safe fixes.
 mod doctor;
@@ -1202,7 +1203,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "memory.list" | "memory.get" | "memory.create" | "memory.update" | "memory.approve" | "memory.delete" | "memory.restore" => memory::rpc(st, method, &p).await,
         // Section D: connectors. Desktop only, `never` remote.
         "connector.list" | "connector.add" | "connector.update" | "connector.remove" | "connector.test" | "connector.tools" | "connector.tool.rule" => connectors::rpc(st, method, &p).await,
-        "skills.list" | "skills.get" | "skills.forAgent" | "skills.scan" | "skills.import" | "skills.delete" | "skills.toggle" => skills::rpc(st, method, &p).await,
+        "skills.list" | "skills.get" | "skills.forAgent" | "skills.scan" | "skills.import" | "skills.delete" | "skills.toggle" | "skills.learned.list" | "skills.learned.approve" | "skills.learned.edit" | "skills.learned.forget" => skills::rpc(st, method, &p).await,
         "backup.export" | "backup.preview" | "backup.import" => backup::rpc(st, method, &p).await,
         // Section C: Pi's providers and the keys Retinue holds for it. Desktop
         // only: a key never crosses to a device, and no method returns one.
@@ -1246,6 +1247,9 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "reach.statement" => reach::rpc(st, &p).await,
         "project.clone" | "project.clone.cancel" | "project.clone.list" | "project.discover" => project_clone::rpc(st, method, &p).await,
         "project.files.search" | "project.content.search" => project_search::rpc(st, method, &p).await,
+        // Wave 3: three first tasks read from the project's own folder. Desktop
+        // only, because the reply names the host path.
+        "project.suggestions" => suggestions::rpc(st, &p).await,
         "project.icon.set" | "project.favicon" => project_icon::rpc(st, method, &p).await,
         "exec.snapshot.get" => {
             let id=p["snapshotId"].as_str().filter(|s|!s.is_empty()).ok_or_else(||derr("invalid_argument","snapshotId is required",StatusCode::BAD_REQUEST))?;
@@ -1416,6 +1420,9 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             let ids = st.db.agent_purge_sessions(id).map_err(agent_error)?;
             let mut guards = Vec::new();
             for sid in &ids { guards.push(gate_for_session(st, sid).await.lock_owned().await); }
+            // Wave 3: the folders of this bot's learned skills, named before its
+            // rows go with it.
+            let learned = st.db.skills_learned_list(Some(id)).map(|rows| rows.iter().filter_map(|row| row["name"].as_str().map(str::to_owned)).collect::<Vec<_>>()).unwrap_or_default();
             let (deleted, events) = st.db.agent_purge(id).map_err(|error| match error {
                 retinue_storage::StorageError::SessionActive => derr("conflict", "Stop all of this bot's conversations and side-conversations before deleting it.", StatusCode::CONFLICT),
                 other => agent_error(other),
@@ -1431,6 +1438,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
                 st.emit("session.deleted", json!({"sessionId":sid})).await;
             }
             drop(guards);
+            skills::forget_folders(st, &learned);
             Ok(json!({"deleted":true,"sessionIds":deleted}))
         }
         "agent.reorder" => { let rt=p["runtimeId"].as_str().ok_or_else(||derr("invalid_argument","runtimeId is required",StatusCode::BAD_REQUEST))?;let ids=p["agentIds"].as_array().filter(|a|a.iter().all(Value::is_string)).ok_or_else(||derr("invalid_argument","agentIds must be an array of strings",StatusCode::BAD_REQUEST))?.iter().map(|v|v.as_str().unwrap().to_owned()).collect::<Vec<_>>();let (agents,events)=st.db.agent_reorder(rt,&ids).map_err(agent_error)?;st.broadcast_persisted(events);Ok(json!({"agents":agents})) }
@@ -4420,6 +4428,13 @@ struct TurnDriver {
     owner_started: bool,
 }
 
+/// Whether this origin is the owner themselves: their own message, a queued one,
+/// their answer to a question, a chat-channel message, or the Retinue MCP. A
+/// teammate's brief, a scheduled run and a task run are not.
+fn owner_started_origin(origin: PromptOrigin) -> bool {
+    matches!(origin, PromptOrigin::User | PromptOrigin::Queue | PromptOrigin::QuestionAnswer | PromptOrigin::Mcp | PromptOrigin::Channel)
+}
+
 /// Phase A of a send: everything that can reject it, then reserve the turn and
 /// return at once. Provider activation (which can take seconds) is done by the
 /// spawned driver, so a first send after a restart lands immediately and the
@@ -4735,7 +4750,10 @@ async fn session_prompt_impl(st: &AppState, p: Value, origin: PromptOrigin) -> R
     // A send means this conversation is no longer just "warmed".
     st.warm_lru.lock().await.retain(|id| id != &sid);
     let state = st.clone();
-    let driver = TurnDriver { sid: sid.clone(), turn: turn.clone(), text, attachments, reply_snapshot, references, command_directive, annotation_block, exec_options, provider, desired_instruction_hash, owner_started: matches!(origin, PromptOrigin::User | PromptOrigin::Queue | PromptOrigin::QuestionAnswer | PromptOrigin::Mcp) };
+    let driver = TurnDriver { sid: sid.clone(), turn: turn.clone(), text, attachments, reply_snapshot, references, command_directive, annotation_block, exec_options, provider, desired_instruction_hash, owner_started: owner_started_origin(origin) };
+    // Wave 3: a tool call during this turn can tell whether the owner asked for
+    // it, which is what lets `save_skill` refuse work nobody requested.
+    skills::note_turn_origin(&sid, &turn, owner_started_origin(origin));
     tokio::spawn(async move { run_turn(state, driver).await; });
     Ok(json!({"turnId":turn,"accepted":true,"state":next_state}))
 }
@@ -14587,6 +14605,7 @@ mod phase2a_tests {
     // Wave 2, agent experience: the "now" line, memory recall, a plan that
     // outlives a turn, the docs tools and earlier-message search.
     include!("wave2_tests.rs");
+include!("wave3_tests.rs");
 
     #[tokio::test]
     async fn team_update_project_move_does_not_archive() {
