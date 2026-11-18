@@ -379,7 +379,7 @@ pub(crate) fn sessions_from(agents: &Value, sessions: &Value) -> Vec<Value> {
                 .iter()
                 .filter_map(|session| {
                     let agent_id = session["agentId"].as_str();
-                    Some(json!({
+                    let mut row = json!({
                         "id": session["id"].as_str()?,
                         "title": session["title"],
                         "agentId": agent_id,
@@ -388,7 +388,14 @@ pub(crate) fn sessions_from(agents: &Value, sessions: &Value) -> Vec<Value> {
                         "state": session["state"],
                         "updatedAt": session["updatedAt"],
                         "archived": session["archived"].as_bool().unwrap_or(false),
-                    }))
+                    });
+                    // 18 November 2026: where a conversation was started from, when
+                    // a paired device started it (the live lane's `link.startedFrom`).
+                    // Copied as it is, three keys: a device id, a kind and a name.
+                    if let Some(mark) = session["link"]["startedFrom"].as_object() {
+                        row["startedFrom"] = Value::Object(mark.clone());
+                    }
+                    Some(row)
                 })
                 .collect()
         })

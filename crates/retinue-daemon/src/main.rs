@@ -115,6 +115,9 @@ mod machine_client;
 mod machines;
 // Step 1: one live socket per online machine link.
 mod machine_stream;
+// 18 November 2026: the Retinue MCP's tools for the linked machines (diagnose and
+// test the laptop, the home PC, the VPS and the phone without the window).
+mod machine_mcp;
 mod handoff;
 // 17 November 2026: a project started on this machine by one of the owner's paired devices, confined
 // to the one folder the owner set here. Distinct from `workspace.rs`, which reports where a

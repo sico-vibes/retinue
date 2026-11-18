@@ -2,6 +2,13 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-18 · Daemon · A test cannot stub the far machine's adapter after its gateway is up
+
+- **Symptom:** `machine_mcp_tests.rs` replaced the far `AppState`'s codex adapter and then started a turn through the link; the far turn ended in `error` with the generic "The turn could not be completed." — the stub was never used.
+- **Cause:** `remote/native.rs` `bind_listeners` builds `web::WebState { daemon: st.clone(), … }`, and `AppState` holds its fields in `Arc`s, so the gateway serves a *clone* of the struct. Writing `host.st.adapters = …` afterwards changes only the test's copy; the daemon kept the real `CodexAdapter` and failed to spawn `unused-test-runtime` (`AdapterError::Process` → failure class `other` → the fallback sentence). `st.runtimes` and `st.sessions` are shared `Arc`s, which is why the approval tests could still stub them.
+- **Fix:** install the stub before `host_on` / `remote::enable` binds the listener — `machine_mcp_tests.rs` `live_link_with_stub_agent` does `local(…)` → `stub_far_agent(&mut st)` → `host_on(st, dir)`.
+- **Also:** a finished far turn leaves that machine's session in `completed`, not `idle` (`main.rs` sets `"completed"` when the turn ends), so a `wait_on_machine` reply says `state: "completed"`; `external::is_busy_state` does not list it, so the wait returns at once.
+
 ## 2026-11-17 · Storage · Adding a value to a CHECK list rebuilds the table, and a storage unit test needs its runtime
 
 - **Symptom 1:** a new `source` value (`agent`) for learned skills could not be inserted: `CHECK constraint failed`.
