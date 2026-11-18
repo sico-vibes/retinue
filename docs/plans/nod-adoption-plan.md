@@ -47,6 +47,9 @@ type CatalogueEntry = { id: string; name: string; url: string; docsUrl: string; 
 - Wave 2 started on 17 November 2026 in worktrees `-7` (automations), `-8` (agent experience) and `-9` (safety and providers). Each lane's contract and report is in `docs/reports/wave2-<lane>.md`.
 - Wave 2 is merged on the same branch, with its screens: the schedule card's cost line and projection, run costs, "skip when nothing changed" and the spend check-in in the editor; "Checking back" on tasks; the bot's own "now" line; a kept plan marked "From an earlier turn"; message search scoped to the open conversation; a "What it can reach" card and the scratch folder in the conversation rail; price and unattended-pause cues in the model menu; the Doctor's Safety area.
 - **Not done in wave 2** (lane 9's list): building the coding agents' environment instead of inheriting it; the grant clock (nothing runs locally yet); learning and masking a value typed during Take control (needs the vault's per-conversation set, now merged); capability rows in the provider table; a per-lane model choice for automations (needs an owner decision: same model or a named cheaper one); "your own model server" through a CLI's config. A spend check-in ends a run as `cancelled` with reason `spend_check`, not a new state.
+- Waves 1 and 2 are on `main` (`b7c3a32`).
+- Wave 3 started on 17 November 2026 in five Ada lanes: `-10` learned skills and first-run suggestions, `-11` release safety, `-12` MCP OAuth, `-13` prompts, `-14` behavioural evals. Each lane's contract and report is in `docs/reports/wave3-<lane>.md`.
+- **Owner decisions on report 09 (17 November 2026):** wrap only results from outside Retinue (browser, cloud computer, connectors, other MCP servers) as data; put the context blocks before the owner's words behind a setting that is off by default for one release; a trusted `.retinue.json` is instructions; build the behavioural evals, small (five scenarios, one model, three repeats) and run only on request, never in CI. Settled without asking, as the report leaned: no per-turn prompt version, and the CEO keeps asking before hiring (a choice, not a permission).
 
 ## Wave 2
 
@@ -63,4 +66,5 @@ type CatalogueEntry = { id: string; name: string; url: string; docsUrl: string; 
 | Learned skills | Skills a bot writes, through a review queue and the memory write rails; first-run suggestions grounded in the project | 08, ideas 1 and 5 |
 | Release safety | Split CI by path with required checks and a nightly run; prove the update round trip and gate release on green CI; bound what a conversation read returns; later, a fingerprinted behaviour suite | 07, ideas 4, 7, 8, 9 |
 | MCP OAuth | Discovery, dynamic client registration, PKCE, loopback callback, refresh and revoke; store state beyond the 2,048-byte cap | 03, idea 2 |
-| Prompts | Edits to our system prompts and tool descriptions | 09 (in progress) |
+| Prompts | Edits to our system prompts and tool descriptions | 09, ideas 1 to 9 |
+| Evals | Five behavioural scenarios, on request only, with their own caps | 09, idea 10 |

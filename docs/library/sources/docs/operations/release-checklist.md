@@ -2,7 +2,18 @@
 
 > **What this is:** The checklist for each Retinue release: gates, publishing, digests, clean-up and open release items.
 > **Status:** current
-> **Last updated:** 2026-11-03
+> **Last updated:** 2026-11-17
+
+**Two refusals added on 17 November 2026 (wave 3, `docs/plans/nod-adoption-plan.md`, release safety).**
+The **Release build** workflow now starts with a `require-ci` job: it refuses to build unless
+`.github/workflows/ci.yml` has a successful run whose newest run on that exact commit concluded
+success, so there is no way to build a release from a red commit (re-run CI first; a dispatch on a
+commit CI never ran is refused too). And `scripts/release-windows.ps1` reads the `latest.json` it
+just wrote back through `scripts/update-round-trip.mjs`, the same field rules the installed build's
+updater applies, and refuses a version that is not newer than the one `channel-beta` currently
+offers (it asks `gh` for the published manifest; a dry run checks the shape only). What only CI can
+prove: that the `require-ci` job's `gh api` query matches this repository's workflow ids, and that a
+green nightly run keeps the split jobs honest.
 
 Updated 14 November 2026. `v0.2.0-beta.4` is published and is the newest versioned GitHub release. Beta.32 introduced the new updater key; It is signed for the updater with a **new key** (the beta.6 key was not on this machine; owner decision 18 October), and the rolling `channel-beta` manifest now offers 0.2.0-beta.4. Installs older than beta.32 carry the old public key and must install beta.32 by hand; from beta.32 on, the app downloads updates itself. No clean-machine install has been recorded. Status values are `done`, `needs user`, or `blocked`.
 

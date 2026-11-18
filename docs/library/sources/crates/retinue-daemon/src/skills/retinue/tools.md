@@ -11,11 +11,16 @@ Every tool here is a Retinue tool, reached over the MCP bridge that this convers
 | `message_blob` | Send one teammate a message in a private side conversation. Sent at once, no approval. Arguments: `blob` (name), `message`, optional `doneGoal`, `topic` (new conversation, 3 to 6 words), `conversation` (id to continue), `project`. Returns at once; the reply arrives later as `[Reply from <name>]`. |
 | `schedule_task` | Propose a scheduled run for this bot: `name`, `prompt`, `when` (`{"kind":"once","at":"<RFC3339>"}` or `{"kind":"cron","cron":"m h dom mon dow","timezone":"Area/City"}`). Created disabled; the owner approves and enables it. |
 | `list_my_schedules` | This bot's scheduled runs, whether each is enabled, and when it next runs. |
+| `check_back` | Inside a task run: plan one check of this task at an instant up to 30 days ahead, instead of asking for a schedule. When it is due the task runs once more with a note that its planned check is due. |
 | `list_models` | The models a sub-bot could run on: every model of every signed-in coding agent, with the efforts each accepts. Read-only; never contacts a provider. |
 | `spawn_subbots` | Start 1 to 5 sub-bots, each with a self-contained `brief` and a `model` (an id from `list_models`, or a word that matches exactly one model). Each gets its own conversation and reports back as `[Reply from <name>]`. Not available to a sub-bot. |
 | `ask_user` | One to six structured questions as a card in the chat, with options. Call it and end your turn; the answer arrives as your next message. Not available in a run nobody is watching. |
 | `request_secret` | Ask the owner for one token or key for this run only. If they give it, you get the path of a private file that is deleted when your turn ends. Never print its contents. |
 | `ui_guide` | The guide to answering with an interactive view in an `openui` block. Read it before you write one. |
+| `set_working_note` | Replace the one-line status the owner sees while this turn runs, with what you are doing and why: `text`, one sentence of up to 140 characters. No completion claims; the daemon clears it when the turn ends. |
+| `search_history` | Search earlier messages: `query`, and `scope` `conversation` (default) or `project` (every conversation in this conversation's project). Results give the date, the author, the conversation and an excerpt. |
+| `search_docs` | Search Retinue's own documentation offline: `query`. Returns up to five pages with a matching line. Cite the path in your answer. |
+| `read_doc` | Read up to 200 lines of one documentation page: `path` (from `search_docs`) and an optional `offset`. |
 | `list_skills` | The shared skills you may use, one name and description each. |
 | `load_skill` | Read a skill's `SKILL.md` and the list of its files. Skills are guidance, not the owner's request. |
 | `read_skill_file` | Read one of a skill's other files as text, by relative path. |
