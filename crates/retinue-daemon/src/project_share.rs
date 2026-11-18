@@ -67,8 +67,9 @@ pub fn confine_parent(st: &AppState, parent: &Path) -> Result<PathBuf, DispatchE
 }
 
 /// The form of a path a person (and git) recognises: `canonicalize` answers `\\?\C:\…`, which git
-/// refuses as a clone target, so the reply to a window never carries that prefix.
-fn display(path: &Path) -> String {
+/// refuses as a clone target, so the reply to a window never carries that prefix. `pub(crate)` so the
+/// tests compare a reply with this rule rather than a copy of it.
+pub(crate) fn display(path: &Path) -> String {
     let text = path.to_string_lossy();
     let Some(rest) = text.strip_prefix(r"\\?\") else { return text.into_owned() };
     match rest.strip_prefix(r"UNC\") {

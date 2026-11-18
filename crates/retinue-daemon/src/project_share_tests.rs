@@ -58,7 +58,9 @@ async fn browsing_lists_names_and_kinds_inside_the_folder_only() {
 
     // The base folder itself: its two children by name and kind, no contents and no sizes.
     let listed = dispatch(&st, "project.browse", json!({})).await.unwrap();
-    assert_eq!(listed["path"], json!(std::fs::canonicalize(&base).unwrap().to_string_lossy()));
+    // The reply names the folder as a person and git do: no `\\?\` prefix anywhere in it.
+    assert_eq!(listed["path"], json!(crate::project_share::display(&std::fs::canonicalize(&base).unwrap())));
+    assert!(!listed.to_string().contains(r"\\?\"), "no reply carries the verbatim prefix: {listed}");
     assert_eq!(listed["parent"], Value::Null, "the base folder has no parent to go to");
     assert_eq!(listed["entries"], json!([{"name":"notes.txt","kind":"file"},{"name":"work","kind":"folder"}]));
     assert!(!listed.to_string().contains("contents that must never be listed"), "no file contents cross");
@@ -69,7 +71,7 @@ async fn browsing_lists_names_and_kinds_inside_the_folder_only() {
     let child = std::path::Path::new(&inside).join("work");
     let listed = dispatch(&st, "project.browse", json!({"path": child})).await.unwrap();
     assert_eq!(listed["entries"], json!([{"name":"nested","kind":"folder"},{"name":"secret.txt","kind":"file"}]));
-    assert_eq!(listed["parent"], json!(std::fs::canonicalize(&base).unwrap().to_string_lossy()));
+    assert_eq!(listed["parent"], json!(crate::project_share::display(&std::fs::canonicalize(&base).unwrap())));
 
     // `..`, a path beside the base, a relative path and a file are all refused, with the same
     // sentence where the path is the problem.
@@ -164,8 +166,10 @@ async fn a_device_clone_is_confined_and_reports_its_progress_and_a_failure() {
     let refused = dispatch(&st, "project.clone", json!({"url":url,"parent":outside,"confirm":true,"deviceCall":true})).await.unwrap_err();
     assert_eq!(refused.1.code, "forbidden_remote");
     assert!(!outside.join("source").exists());
-    // The desktop (no stamp) may still clone into any folder of its choosing, switch on or off.
-    let desktop = dispatch(&st, "project.clone", json!({"url":url,"parent":outside,"confirm":true})).await.unwrap();
+    // The desktop (no stamp) may still clone into any folder of its choosing, switch on or off. It
+    // names the folder: a local path is only ever a test's repository, and `suggested_name` reads a
+    // URL's last segment, so a Windows path would not make a folder name.
+    let desktop = dispatch(&st, "project.clone", json!({"url":url,"parent":outside,"confirm":true,"name":"desktop"})).await.unwrap();
     let desktop_job = desktop["job"]["id"].as_str().unwrap().to_string();
 
     let started = dispatch(&st, "project.clone", json!({"url":url,"parent":base,"confirm":true,"name":"mine","deviceCall":true})).await.unwrap();
@@ -273,12 +277,16 @@ async fn a_link_browses_and_adds_a_project_inside_the_folder_only() {
     let refused = dispatch(&me, "machine.project.browse", json!({"machineId": other_id, "path": std::env::temp_dir()})).await.unwrap_err();
     assert_eq!(refused.1.code, "forbidden_remote");
     assert_eq!(refused.1.message, "That folder is outside the folder this computer shares with other machines.");
-    // One activity line per action, naming the method and nothing else.
+    // One activity line per action, naming the method and nothing else. The list is newest first, so
+    // the create is the first of the two.
     let activity = crate::remote::rpc(&other.st, "remote.activity.list", &json!({})).await.unwrap();
     let entries = activity["entries"].as_array().unwrap();
-    let line = entries.iter().find(|entry| entry["kind"] == "workspace").expect("an activity line for the browse");
-    assert!(line["summary"].as_str().unwrap().contains("project.browse"), "{line}");
-    assert!(!line.to_string().contains(&inside), "the line names no folder: {line}");
+    let lines: Vec<&Value> = entries.iter().filter(|entry| entry["kind"] == "workspace").collect();
+    assert_eq!(lines.len(), 2, "one line per action: {activity}");
+    for method in ["project.browse", "project.createFromFolder"] {
+        let line = lines.iter().find(|line| line["summary"].as_str().unwrap().contains(method)).unwrap_or_else(|| panic!("no line for {method}: {activity}"));
+        assert!(!line.to_string().contains(&inside), "the line names no folder: {line}");
+    }
     let _ = std::fs::remove_dir_all(&base);
     let _ = std::fs::remove_dir_all(my_dir);
 }
