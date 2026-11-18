@@ -1003,6 +1003,41 @@
       "params": null
     },
     {
+      "method": "skills.learned.list",
+      "class": "never",
+      "minTier": null,
+      "why": "The review queue for skills bots wrote is a desktop decision; approving one makes an instruction every bot follows.",
+      "params": null
+    },
+    {
+      "method": "skills.learned.approve",
+      "class": "never",
+      "minTier": null,
+      "why": "Approving a learned skill lets every bot follow its text, so it stays on the desktop.",
+      "params": null
+    },
+    {
+      "method": "skills.learned.edit",
+      "class": "never",
+      "minTier": null,
+      "why": "A paired device must not write skill text that other bots then follow.",
+      "params": null
+    },
+    {
+      "method": "skills.learned.forget",
+      "class": "never",
+      "minTier": null,
+      "why": "Forgetting a learned skill is destructive and irreversible, so it stays on the desktop.",
+      "params": null
+    },
+    {
+      "method": "project.suggestions",
+      "class": "never",
+      "minTier": null,
+      "why": "The reply names the host's project folder, which never crosses to a device.",
+      "params": null
+    },
+    {
       "method": "daemon.shutdown",
       "class": "never",
       "minTier": null,
@@ -2043,7 +2078,8 @@
     "import.completed": "drop",
     "channel.updated": "drop",
     "channel.qr": "drop",
-    "channel.pairing.candidate": "drop"
+    "channel.pairing.candidate": "drop",
+    "skills.learned.changed": "drop"
   },
   "settingsAllowlist": [
     "appearance.style",

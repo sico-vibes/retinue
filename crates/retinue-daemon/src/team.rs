@@ -622,9 +622,10 @@ pub fn attach(st: &AppState, session_id: &str, agent_id: Option<&str>, link: &Va
 /// write rails restrict them to blob scope.
 fn tools(is_automation: bool, memory_enabled: bool, ask_user: bool, is_manager: bool, subbots: bool, noun: &str, _nouns: &str) -> Value {
     let memory = if memory_enabled { crate::memory::tool_schemas() } else { Vec::new() };
-    // The shared skills pool is read-only, so every bot gets it, including
-    // automation runs (the index is what tells a bot the pool exists).
-    let skill_tools = crate::skills::tool_schemas();
+    // The shared skills pool is read-only for everyone; wave 3 adds the two
+    // tools that save a skill a bot wrote, and an automation run never gets
+    // them (the dispatch refuses them there as well).
+    let skill_tools = crate::skills::tool_schemas(true);
     let ui_guide = json!({"name":"ui_guide","description":"The guide to answering with an interactive view in an ```openui block: the components, their syntax and examples. Read it before you write one.","inputSchema":{"type":"object","properties":{},"additionalProperties":false}});
     let working_note = crate::working_note::tool_schema();
     // Wave 2 (nod idea 6): the docs tools are read-only and offline, so every
@@ -632,7 +633,7 @@ fn tools(is_automation: bool, memory_enabled: bool, ask_user: bool, is_manager: 
     let docs_tools = crate::docs_search::tool_schemas();
     if is_automation {
         let mut list = memory;
-        list.extend(skill_tools);
+        list.extend(crate::skills::tool_schemas(false));
         // Section D: an unattended run may still search connectors, and may call
         // only a tool the connector marks read-only (enforced in `connectors`).
         list.extend(crate::connectors::tool_schemas());
@@ -787,6 +788,11 @@ pub async fn mcp_rpc(st: &AppState, session_id: &str, method: &str, params: &Val
                 "list_skills" => crate::skills::tool_list(st, session_id).await,
                 "load_skill" => crate::skills::tool_load(st, session_id, args).await,
                 "read_skill_file" => crate::skills::tool_read_file(st, session_id, args).await,
+                // Wave 3: a skill the bot writes for itself, held for the
+                // owner's review. Reachable only in an attended conversation
+                // and only from a turn the owner started (see `skills`).
+                "save_skill" => crate::skills::tool_save(st, session_id, args).await,
+                "patch_skill" => crate::skills::tool_patch(st, session_id, args).await,
                 "connector_search" => crate::connectors::search_tool(st, session_id, args).await,
                 "connector_call" => crate::connectors::call_tool(st, session_id, args).await,
                 _ => Err(format!("Unknown tool {name}.")),
