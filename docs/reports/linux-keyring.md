@@ -22,13 +22,14 @@ Read first: `docs/reports/multi-device-linux.md` (the file store and the seam), 
 | A locked keyring | Files, and one `info` line in the log at startup. Nothing ever calls `unlock`, so no unit is left waiting on a prompt. |
 | A host with no session bus | Files, silently, with no retry loop: `zbus::Connection::session()` fails at once, and every keyring call runs on its own thread with a **2-second** cap (`store::keyring::WAIT`). |
 | Migration | Each stored value (internal names such as `vault/<id>/password`, `connector/<id>` and `pi/<provider>` included) is written to the keyring, read back and compared, and only then is its file deleted. A value that does not move keeps that run on the files, so it never becomes invisible. A failed copy leaves the file and the next start tries again. |
-| Logging | One `info` line when a locked keyring is found, one when values moved, one `warn` when a value did not move. Names are never logged, values never. |
+| Logging | `secrets.rs` writes no log at all: a test asserts the module's source contains no logging call, so no name or value can reach a line. `store::startup()` returns a content-free summary — backend name, migrated count, reason word (`keyring`, `moved`, `not-moved`, `locked`, `absent`) — and `main.rs` writes the one line: `debug` for which store, `info` for moved or locked, `warn` when a value did not move. No name and no value is in it. |
 | Remote reach | Unchanged. No `secret.*` method became reachable, and `vault.*` stays `never`. |
 
 ## 1.1 The rule as code
 
 - `store::choose(found: Keyring, migration: &Migration) -> Choice` — `Keyring` is `Unlocked`, `Locked` or `Absent`; `Choice` is `Files` or `Keyring`.
 - `store::migrate(from: &dyn Backend, to: &dyn Backend) -> Migration` — `{moved, kept, failed}`, names only.
+- `secrets::Startup` is `(&'static str, usize, &'static str)`: backend name, moved count, reason word. `secrets::set_data_folder` returns `Option<Startup>`; `main.rs`'s `note_secret_store` is the only place that logs it.
 - `Backend` is the four-method trait both stores implement; `entries()` returns the internal names `secret.list` hides, which is why the file store gained `all_in` beside `list_in`.
 
 ## 1.2 What a Linux desktop or host now does, by state
@@ -52,7 +53,7 @@ Everything below ran in this worktree on the owner's PC on 18 November 2026, wit
 | Gate | Result |
 |---|---|
 | `cargo check -p retinue-daemon --all-targets` | **passed**, no warnings (2m 21s). The Windows build never compiles the keyring module (`cfg(not(windows))`). |
-| `cargo clippy -p retinue-daemon --all-targets -- -D warnings` | **passed** (1m 44s), which also typechecks the new pure-function tests. |
+| `cargo clippy -p retinue-daemon --all-targets -- -D warnings` | **passed** (1m 44s; re-run after the log fix: 2m 21s), which also typechecks the new pure-function tests. |
 | `node scripts/check-format.mjs` | **passed** (1508 files). |
 | `node scripts/check-architecture.mjs` | **passed**. No new allowlist row is needed: the keyring talks D-Bus, not HTTP, so the `daemon-network` rule does not apply. |
 | `cargo test -p retinue-daemon --bin retinued --no-run` | linked `retinued-bb4d7e650180a8d1.exe` (6m 15s). |
@@ -61,14 +62,15 @@ Everything below ran in this worktree on the owner's PC on 18 November 2026, wit
 | `doctor::tests::` (4) | **4 passed**, including `doctor_run_returns_the_documented_shape_and_names_no_secret` with the new row. |
 | `console_status_reports_…` | **1 passed** (reads `backend_name()`). |
 | `there_is_no_way_to_read_a_value_back` | **1 passed** (the listing, after the `all_in`/`list_in` split). |
-| `fix39_p12_tests::every_log_call_site_is_a_fixed_message` | **1 passed**, run from `crates/retinue-daemon` (it reads sources relative to the crate folder): the three new log lines use fixed wording with none of the words the scan forbids. |
-| Linux build | **not possible on this PC** (cross-target build scripts are refused by Smart App Control, and `rusqlite`/`ring` need a cross C toolchain). **The `linux` CI job is the proof**, as `references/verification.md` says. |
+| `fix39_p12_tests::every_log_call_site_is_a_fixed_message` | **1 passed**, run from `crates/retinue-daemon` (it reads sources relative to the crate folder): the new line in `main.rs` uses fixed wording with none of the words the scan forbids. |
+| `phase2a_tests::a_value_never_reaches_storage_events_or_logs` | **1 passed**, after the fix below; this is the test CI caught. |
+| Linux build | **not possible on this PC** (cross-target build scripts are refused by Smart App Control, and `rusqlite`/`ring` need a cross C toolchain). **The `linux` CI job is the proof**, as `references/verification.md` says — and on 18 November it compiled the keyring module (branch `ci/linux-keyring`, merged with main `79d9ae1`), finding exactly one failure, the log rule below. |
 | `npm run docs:build` | **not run**: this worktree has no `node_modules`. The CI `docs` job runs `npm run docs:check`, so the Director must run `npm run docs:build` for the four changed pages (`linux-host.md`, `THREAT_MODEL.md`, `invariants.md`, the notices) and the new report to refresh the library. |
 
 ## 2.1 What is left unverified, plainly
 
-1. **The keyring module has never been compiled.** It is `cfg(not(windows))`, so neither `cargo check` nor clippy on this PC sees it. It was written against `secret-service` 5.2.0's own source in the local registry (the blocking `connect`/`get_default_collection`/`create_item`/`search_items`/`get_all_items`/`get_secret`/`get_attributes`/`get_modified`/`delete` signatures were read, not guessed). A throwaway probe crate at `C:\tmp\keyring-probe` was written to typecheck it on Windows; it stopped at `getrandom 0.4.3`'s build script (SAC, os 4551), before reaching the module. **The first real compile is the `linux` CI job.**
-2. **No real keyring has been exercised.** The Linux-only test (`keyring::tests::the_real_keyring_holds_a_value_when_this_computer_has_one`) skips unless a session bus and an unlocked collection are present; a CI runner has neither, so it will report "skipping". On a desktop it writes, reads, lists and deletes an item named `keyring-test-<uuid>`.
+1. **The keyring module compiles on Linux (CI, `ci/linux-keyring`), and was never compiled on this PC.** It is `cfg(not(windows))`, so neither `cargo check` nor clippy here sees it; it was written against `secret-service` 5.2.0's own source in the local registry (the blocking `connect`/`get_default_collection`/`create_item`/`search_items`/`get_all_items`/`get_secret`/`get_attributes`/`get_modified`/`delete` signatures were read, not guessed), and the Linux job is what proved it builds.
+2. **No real keyring has been exercised.** The Linux-only test (`keyring::tests::the_real_keyring_holds_a_value_when_this_computer_has_one`) skips silently unless a session bus and an unlocked collection are present, because the module may log nothing (it checks the source text); a CI runner has neither. On a desktop it writes, reads, lists and deletes an item named `keyring-test-<uuid>`.
 3. **A real GNOME keyring's attribute search and label** are unproven. The code sets `application=retinue`, `name=<name>` and the label `Retinue: <name>`, and finds items by the two attributes through the default collection's `search_items`.
 4. **The 2-second cap** is a wall-clock wait on the calling thread; a D-Bus call that outlives it leaves its worker thread to finish on its own. It was chosen so a unit with no session bus never waits, not measured against a hung keyring.
 5. **A host that has migrated and then starts with a locked keyring** uses the files, which are now empty, so a bot whose secret points at a keyring item fails with "missing from the credential store" rather than "the store is unavailable". That follows the owner's rule for a locked keyring (files, never a prompt); the guide's troubleshooting table tells the owner to unlock and restart. Worth a sentence in the UI copy if a real desktop hits it.
@@ -98,8 +100,14 @@ Newest last.
 
 - **The keyring module.** Blocking client on a worker thread (the crate warns that its blocking API must not run in a runtime context), 2-second `recv_timeout` on every call, `is_locked` only — never `unlock` — and `create_item(..., replace: true, "text/plain")`. Values are held in `Zeroizing` between the caller and the crate.
 
-- **Choosing once, at startup.** `secrets::set_data_folder` (already the one startup hook) now calls `store::startup()` off Windows: probe, migrate, choose, log, and store the choice in a `OnceLock`. Before startup, and in test builds, the choice is `Files`.
+- **Choosing once, at startup.** `secrets::set_data_folder` (already the one startup hook) now calls `store::startup()` off Windows: probe, migrate, choose and store the choice in a `OnceLock`, returning a content-free summary. Before startup, and in test builds, the choice is `Files`.
 
 - **The Doctor.** One `safety` row naming the store in words. The Doctor's own test forbids `token`, `password` and `api_key` in a detail, so the row names "system keyring" and "owner-only files" rather than the raw backend string; `console.status` and `retinued status` carry the raw name.
 
 - **Gates run** (details in section 2): check, clippy, format, architecture, the test binary built, and 16 targeted tests passed (the five new rule/migration tests, the four file-store tests, four Doctor tests, the console status read, the listing test, and the log-site scan). The copy to `C:\tmp` was refused by Smart App Control while the binary in `deps\` ran; that is the known behaviour, not a test failure.
+
+- **CI found one failure, and it was mine (18 November 2026, later).** `phase2a_tests::a_value_never_reaches_storage_events_or_logs` panicked at `secrets_tests.rs:135`: the test reads `secrets.rs`'s source and asserts it contains no `tracing::`, `println!` or `dbg!` at all. My migration and locked-keyring lines broke that rule, and it is the stronger of the two: a module that cannot log cannot leak a name or a value into a line.
+
+  Fix, as the Director asked: `store::startup()` no longer logs. It returns `secrets::Startup`, a three-part tuple — backend name, moved count, one fixed reason word (`keyring`, `moved`, `not-moved`, `locked`, `absent`) — and `secrets::set_data_folder` hands it to `main.rs`, where the new `note_secret_store` writes the one line (`debug` naming the store, `info` for moved or locked, `warn` when a value did not move, silence on a host with no bus). The Linux-only keyring test's "skipping" note became a comment for the same reason. A tuple rather than a struct on purpose: a struct constructed only in `cfg(not(windows))` code would be "never constructed" in every Windows build, including the test target, and `-D warnings` would refuse it.
+
+  Verified: `cargo check` and `cargo clippy -p retinue-daemon --all-targets -- -D warnings` clean (2m 09s, 2m 21s; the daemon's fresh build script was refused once and an allowed copy of `retinue-daemon-fc7088a66d5c5f88`'s two exes from `backend-work-from-the-owner-assigned` unblocked it, per `references/verification.md`). Test binary relinked (`retinued-8b1395adcdc29356.exe`, 8m 04s), ran from `C:\tmp` after the relink: `a_value_never_reaches_storage_events_or_logs` **passed**, `secrets::store::` 9 passed, `every_log_call_site_is_a_fixed_message` passed, `doctor::tests::` 4 passed, the console status read and the listing test passed.

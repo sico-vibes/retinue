@@ -6329,6 +6329,21 @@ async fn start_ws(
     }
     ws.on_upgrade(move |s| ws_client(s, st)).into_response()
 }
+/// One line at startup about where stored values live (18 November 2026). The
+/// store returns a backend name, a count and a reason word and logs nothing
+/// itself, so no name and no value has a path into this line.
+fn note_secret_store(started: secrets::Startup) {
+    let (backend, moved, reason) = started;
+    tracing::debug!("Retinue's stored values live in {}.", backend);
+    match reason {
+        "moved" => tracing::info!("Retinue moved {moved} stored values into the system keyring."),
+        "keyring" => tracing::info!("Retinue keeps stored values in the system keyring."),
+        "not-moved" => tracing::warn!("Retinue could not move every stored value into the keyring, so this run keeps using the owner-only files."),
+        "locked" => tracing::info!("Retinue's keyring is locked, so stored values stay in the owner-only files."),
+        _ => {}
+    }
+}
+
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     use std::time::Duration;
     // Only shell-launched daemons opt in. Hold the Windows process handle,
@@ -6501,7 +6516,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
     *st.team.address.lock().unwrap() = Some(addr.to_string());
-    if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); secrets::set_data_folder(dir); computer::sweep_endpoints(dir); browser::sweep_endpoints(dir); owner_computer::sweep_endpoints(dir); }
+    if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); if let Some(started) = secrets::set_data_folder(dir) { note_secret_store(started); } computer::sweep_endpoints(dir); browser::sweep_endpoints(dir); owner_computer::sweep_endpoints(dir); }
     *st.team.data_dir.lock().unwrap() = data_dir;
     // Wave 2: the data folder is the owner's alone, and the two folders this wave
     // keeps its disposables in are swept of old files.

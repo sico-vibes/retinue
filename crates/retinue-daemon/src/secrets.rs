@@ -110,17 +110,28 @@ pub(crate) fn with_refs_all(st: &AppState, agents: Value) -> Value {
     }
 }
 
+/// What the store chose at startup, for the one line the daemon logs: a
+/// backend name (`secret-service` / `files`), how many values moved into the
+/// keyring, and a fixed reason word (`keyring`, `moved`, `not-moved`,
+/// `locked`, `absent`). A name and a count only, never a value.
+pub(crate) type Startup = (&'static str, usize, &'static str);
+
 /// Tells the file store where the data folder is and, off Windows, chooses the
-/// store for this run (18 November 2026). On Windows Credential Manager needs
-/// neither, so this is a no-op there.
-pub(crate) fn set_data_folder(dir: &std::path::Path) {
+/// store for this run (18 November 2026), returning the content-free summary the
+/// caller logs. This module itself never logs: a value must have no path into a
+/// log line, so the caller writes it from the summary alone.
+pub(crate) fn set_data_folder(dir: &std::path::Path) -> Option<Startup> {
     #[cfg(any(not(windows), test))]
     store::files::set_data_folder(dir);
     #[cfg(all(windows, not(test)))]
     let _ = dir;
-    #[cfg(all(not(windows), not(test)))]
-    store::startup();
+    startup()
 }
+
+#[cfg(all(not(windows), not(test)))]
+fn startup() -> Option<Startup> { Some(store::startup()) }
+#[cfg(any(windows, test))]
+fn startup() -> Option<Startup> { None }
 
 /// Reads a bot's referenced secrets into the spawn environment. A missing one
 /// is an error naming the secret and never a value.
@@ -395,11 +406,11 @@ pub(crate) mod store {
             use super::*;
 
             /// Talks to this computer's real keyring, and skips it when there is
-            /// none: a CI runner has no session bus, and says so without failing.
+            /// none: a CI runner has no session bus. This file writes no output
+            /// at all (`secrets_tests` checks the source), so the skip is silent.
             #[test]
             fn the_real_keyring_holds_a_value_when_this_computer_has_one() {
                 if probe() != Keyring::Unlocked {
-                    eprintln!("no unlocked Secret Service on this computer; skipping");
                     return;
                 }
                 let name = format!("keyring-test-{}", Uuid::new_v4());
@@ -424,26 +435,26 @@ pub(crate) mod store {
         pub(super) fn selected() -> Choice { *SELECTED.get().unwrap_or(&Choice::Files) }
 
         /// Chooses the store for this run (18 November 2026), before any call
-        /// can read or write a value. The keyring is used only when it is
-        /// running and unlocked and every value the files held moved into it;
-        /// anything else stays on the files, which is what a host with no
-        /// session bus does silently and with no delay.
-        pub(super) fn startup() {
+        /// can read or write a value, and returns a summary the daemon logs: the
+        /// keyring is used only when it is running and unlocked and every value
+        /// the files held moved into it; anything else stays on the files, which
+        /// is what a host with no session bus does silently and with no delay.
+        pub(super) fn startup() -> Startup {
             let found = keyring::probe();
             let migration = match found {
                 Keyring::Unlocked => migrate(&FilesBackend, &KeyringBackend),
                 _ => Migration::default(),
             };
-            if found == Keyring::Locked {
-                tracing::info!("Retinue's keyring is locked, so stored values stay in the owner-only files.");
-            }
-            if !migration.moved.is_empty() {
-                tracing::info!("Retinue moved stored values into the system keyring.");
-            }
-            if found == Keyring::Unlocked && (migration.failed || !migration.kept.is_empty()) {
-                tracing::warn!("Retinue could not move every stored value into the keyring, so this run keeps using the owner-only files.");
-            }
-            let _ = SELECTED.set(choose(found, &migration));
+            let choice = choose(found, &migration);
+            let reason = match choice {
+                Choice::Keyring if migration.moved.is_empty() => "keyring",
+                Choice::Keyring => "moved",
+                Choice::Files if found == Keyring::Locked => "locked",
+                Choice::Files if found == Keyring::Unlocked => "not-moved",
+                Choice::Files => "absent",
+            };
+            let _ = SELECTED.set(choice);
+            (chosen_name(), migration.moved.len(), reason)
         }
 
         fn folder() -> Result<std::path::PathBuf, String> {
@@ -495,7 +506,7 @@ pub(crate) mod store {
 
     /// Chooses the store for this run, once, after the data folder is known.
     #[cfg(all(not(windows), not(test)))]
-    pub(crate) fn startup() { backend::startup(); }
+    pub(crate) fn startup() -> Startup { backend::startup() }
 
     #[cfg(any(windows, test))]
     fn chosen_name() -> &'static str { if cfg!(windows) { "windows-credential-manager" } else { "files" } }
