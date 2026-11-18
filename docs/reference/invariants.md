@@ -1,7 +1,7 @@
 # Invariants
 
 > **What this is:** the rules that are true of Retinue today, one line each, with the file that enforces each one and the test that pins it. `AGENTS.md` holds the history and the dated amendments; this page holds the current truth, so a newcomer does not have to read amendments in order to know what is safe to change.
-> **Status:** current, 16 November 2026 (first version, from `docs/plans/nod-adoption-plan.md`, idea 3). **Update it in the same change as any rule or test below.** A rule whose test is deleted, renamed or skipped must be re-pointed here, or it is no longer enforced.
+> **Status:** current, 17 November 2026 (first version, from `docs/plans/nod-adoption-plan.md`, idea 3). **Update it in the same change as any rule or test below.** A rule whose test is deleted, renamed or skipped must be re-pointed here, or it is no longer enforced.
 > **Reading "untested":** the rule is real and reviewed by hand. It is a to-do for whoever touches that area next, not permission to break it.
 
 ## Safety and privacy
@@ -14,6 +14,7 @@
 | A secret never reaches a commit. | `.gitleaks.toml`, the `hygiene` CI job, the opt-in pre-commit hook (`scripts/pre-commit.mjs`) | `scripts/check-secret-config.mjs` (proves every exception still detects a planted secret beside it) |
 | Remote devices see only what `apps/desktop/src/remote/tiers.json` allows, and the table is one policy read by Rust and TypeScript. | `crates/retinue-daemon/src/remote/policy.rs` (`TIERS_JSON`), `apps/desktop/src/remote/remoteTiers.ts` | `apps/desktop/src/remote/remoteTiers.parity.test.ts`, `policy.rs::goldens_authorize` / `goldens_results` / `goldens_snapshots` / `goldens_events` |
 | Every `owner_*` and `computer_*` method is `never` remote, every event of theirs is `drop`, and the owner's own computer additionally needs the setting, an approval card and an attended conversation. | `remote/tiers.json`, `crates/retinue-daemon/src/owner_computer.rs` | `policy.rs` goldens; `computer_view_refuses_a_wrong_expired_or_unlinked_ticket_without_forwarding` |
+| A paired phone may work on the machines its host is linked to, at the lower of its tier and the link's tier, and never pair, link, rename or remove one, move a conversation or manage another machine's devices. The `linked` class is granted to `phone`, `tablet` and `browser` devices only, the gateway stamps the caller's tier (a client's own value is replaced), and the far gateway decides. | `remote/tiers.json` (class `linked`), `remote/policy.rs` (`linked_kinds`, `linked_is_work`, `CALLER_TIER`), `remote/web.rs`, `machines.rs` (`require_tier`), `docs/remote/THREAT_MODEL.md` §16.1 | `machine_phone_tests.rs` (both ceilings, the kind refusal, the stamp, the reduced list, the activity line, the relay), `policy.rs::a_linked_method_is_for_a_phone_and_quiet_hours_spare_its_reads`, `policy.rs::a_linked_event_never_reaches_another_machine`, the four `linked-*` cases in `fixtures/policy-goldens.json` |
 | Prompts reach a coding agent through stdin or its own protocol, never as shell command text or a large `argv` string. | `crates/retinue-adapter-*` | adapter tests per crate; **no single test states the rule** |
 
 ## The daemon owns the decisions

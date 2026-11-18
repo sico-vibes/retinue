@@ -263,6 +263,26 @@ A machine link is one Retinue daemon acting as a paired device of another, throu
 
 **What this doesn't cover.** A link at `operator` can pull any eligible conversation's text from that machine, and push its task branch to that machine's `origin`. That's what the owner approves when choosing that tier. Reading another machine's conversations is the same trust as reading them from a phone: paired machines are the owner's own. The review owed before a non-beta release (sections 8, 11 and 13) now covers this section too.
 
+### 16.1 The phone through its host (17 November 2026)
+
+The owner's decision of 17 November 2026: a phone pairs with **one** host and may watch, start and steer work on the machines that host is linked to. It may never pair, link, rename or remove machines, move a conversation, or manage another machine's devices. The `linked` class in `apps/desktop/src/remote/tiers.json` grants the eight methods; everything else in `machine.*` stays `never`.
+
+| Risk | What stops it |
+|---|---|
+| A phone reaching every machine its host is linked to | It reaches only what the host's own link reaches, and only at the lower of the phone's tier and the link's tier, checked by one helper in `machines.rs` before any request. The far gateway still decides, in its own words. |
+| A stolen phone turning one host into reach into four machines | One pairing, one cookie, one revocation: revoking the phone at its host ends all of it at once, and removing a link on the host ends that machine. The phone can never add, rename or remove a link. |
+| One link driving another, forming a mesh by accident | The kind check is the daemon's: a `machine`-kind or `computer`-kind device calling a `linked` method is refused `forbidden_remote`, the mirror of `handoff.*` refusing a phone. |
+| A phone lifting its own ceiling | The tier is stamped into the call by the gateway and always overwritten, so a client's own `remoteTier` parameter is discarded. A test proves it in both directions. |
+| An approval answered two hops away without the far machine agreeing | `machine.permission.reply` needs `operator` on the phone **and** on the link, and the far machine's own approvals-from-remote switch. It refuses `approvals_disabled` in its own words, and this host cannot know that switch, so it never guesses. |
+| A phone prompting a machine during the host's quiet hours | Quiet hours refuse the `linked` methods that drive work (`machine.start`, `.prompt`, `.steer`, `.cancel`, `.permission.reply`), in both languages' policy; reading the machines and their conversations still passes, as a read does. |
+| A phone learning a machine's address or certificate fingerprint | `machine.list` for a paired device drops `url`, `fingerprint`, `auth` and `pairedAt`. The desktop still reads them. Nothing names a host path, and the far gateway's redaction applies to every read. |
+| An event relay carrying content, or reaching another machine | `machine.session.changed` holds `{machineId, sessionId, revision}` and nothing else. Its policy is `linked`: the host sends it to a phone, tablet or browser socket and to nothing else, so a link's daemon never receives another link's changes. |
+| A relayed event being acted on by the wrong device | It carries no title, text, tool name or path, so the only use is a re-read, which the far gateway redacts as for any device. |
+| A prompt through a link leaving no trace at the host | Every phone call that starts, drives or stops work on another machine writes one content-free line in the host's activity list: the device's name, the method, and "prompt" or "approval". |
+
+**What this doesn't cover.** The phone holds reach into every machine its host has linked for as long as it is paired. The host must be awake: when it is asleep, the phone sees nothing of the other machines, and says so rather than showing them as offline. A machine's name and its bots' names are visible to the phone at `viewer`, as they already are at the desktop.
+
+
 ## 17. Phone push (31 October 2026)
 
 Push goes through the phone maker's push service (FCM, Mozilla, WNS, Apple), so a third party carries the notification envelope. It is off by default, and turning it on is the owner's confirmed choice at the computer (`remote.push.set` with `confirm: true`).

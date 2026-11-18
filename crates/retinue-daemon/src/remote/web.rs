@@ -820,6 +820,20 @@ async fn rpc_post(State(state): State<WebState>, headers: HeaderMap, body: Bytes
         audit(&state.daemon, Some(&device.id), "denied", &format!("{} was refused {method}.", device.name)).await;
         return denial(&id, RemoteFailure::new(StatusCode::FORBIDDEN, "forbidden_remote", "Only a linked Retinue machine can move a conversation."));
     }
+    // Working on the machines this host is linked to is for the owner's own screens;
+    // another machine or the linked computer is refused, so one link never drives another.
+    let linked = policy::rule_for(&method).map(|rule| rule.class) == Some(policy::MethodClass::Linked);
+    if linked && !policy::linked_kinds(&device.kind) {
+        audit(&state.daemon, Some(&device.id), "denied", &format!("{} was refused {method}.", device.name)).await;
+        return denial(
+            &id,
+            RemoteFailure::new(
+                StatusCode::FORBIDDEN,
+                "forbidden_remote",
+                "Only a paired phone, tablet or browser can do this through its host.",
+            ),
+        );
+    }
     if let Some(reason) = attachment_rule(&method, &params) {
         audit(
             &state.daemon,
@@ -837,6 +851,21 @@ async fn rpc_post(State(state): State<WebState>, headers: HeaderMap, body: Bytes
     // gateway puts the device's own id in the request; a phone cannot choose it,
     // and anything it sends under `deviceId` is replaced here.
     let mut params = params;
+    // A phone's reach into another machine never exceeds its own tier here. The
+    // gateway stamps that tier — a client's own value is always replaced — and
+    // `machines` then works at the lower of it and the link's own tier.
+    if linked {
+        match params.as_object_mut() {
+            Some(object) => {
+                object.insert(policy::CALLER_TIER.to_string(), Value::String(device.tier.as_str().to_string()));
+            }
+            None => {
+                let mut object = serde_json::Map::new();
+                object.insert(policy::CALLER_TIER.to_string(), Value::String(device.tier.as_str().to_string()));
+                params = Value::Object(object);
+            }
+        }
+    }
     if method.starts_with("push.") {
         match params.as_object_mut() {
             Some(object) => {
@@ -869,6 +898,13 @@ fn audit_kind(method: &str) -> Option<&'static str> {
         Some(policy::MethodClass::Chat) => Some("prompt"),
         Some(policy::MethodClass::Approve) => Some("approval"),
         Some(policy::MethodClass::Handoff) => Some("handoff"),
+        // A phone prompting, steering or stopping work on another machine appears in
+        // this host's activity list, in the same two words the rest of the list uses.
+        Some(policy::MethodClass::Linked) => match method {
+            "machine.permission.reply" => Some("approval"),
+            "machine.start" | "machine.prompt" | "machine.steer" | "machine.cancel" => Some("prompt"),
+            _ => None,
+        },
         _ => None,
     }
 }
@@ -930,7 +966,7 @@ async fn events_loop(mut socket: WebSocket, state: WebState, device: DeviceAuth,
             if sequence <= after {
                 continue;
             }
-            if let Some(redacted) = policy::redact_event(&event) {
+            if let Some(redacted) = policy::redact_event_for(&event, &device.kind) {
                 if !send_json(&mut socket, redacted).await {
                     return;
                 }
@@ -957,7 +993,7 @@ async fn events_loop(mut socket: WebSocket, state: WebState, device: DeviceAuth,
             item = live.recv() => match item {
                 Ok(event) if event.sequence > after => {
                     let value = serde_json::to_value(&event).unwrap_or(Value::Null);
-                    if let Some(redacted) = policy::redact_event(&value) {
+                    if let Some(redacted) = policy::redact_event_for(&value, &device.kind) {
                         if !send_json(&mut socket, redacted).await {
                             break;
                         }

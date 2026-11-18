@@ -115,6 +115,8 @@ mod machines;
 mod handoff;
 #[cfg(test)]
 mod machines_tests;
+#[cfg(test)]
+mod machine_phone_tests;
 // Phase 5: secrets in the credential store and one-use secret requests.
 mod secrets;
 // Section D: connectors, owner-added MCP servers the daemon calls.
@@ -2084,6 +2086,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         | "machine.refresh"
         | "machine.conversations"
         | "machine.conversation"
+        | "machine.sessions"
         | "machine.start"
         | "machine.prompt"
         | "machine.steer"

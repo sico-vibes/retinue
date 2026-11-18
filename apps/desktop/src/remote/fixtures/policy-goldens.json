@@ -118,6 +118,76 @@
       }
     },
     {
+      "name": "linked-read-allowed-quiet-hours",
+      "call": {
+        "tier": "viewer",
+        "approvalsFromRemote": false,
+        "method": "machine.list",
+        "params": {},
+        "quietHours": true
+      },
+      "expect": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "linked-work-requires-chat",
+      "call": {
+        "tier": "viewer",
+        "approvalsFromRemote": false,
+        "method": "machine.prompt",
+        "params": {
+          "machineId": "m",
+          "sessionId": "s",
+          "text": "hi"
+        },
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "tier_required",
+        "reason": "a viewer device cannot call machine.prompt"
+      }
+    },
+    {
+      "name": "linked-work-quiet-hours-denied",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "machine.steer",
+        "params": {
+          "machineId": "m",
+          "sessionId": "s",
+          "text": "hi"
+        },
+        "quietHours": true
+      },
+      "expect": {
+        "allowed": false,
+        "code": "quiet_hours",
+        "reason": "quiet hours are on; this host only allows reading right now"
+      }
+    },
+    {
+      "name": "linked-approval-requires-operator",
+      "call": {
+        "tier": "chat",
+        "approvalsFromRemote": false,
+        "method": "machine.permission.reply",
+        "params": {
+          "machineId": "m",
+          "permissionId": "p",
+          "choice": "allow"
+        },
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "tier_required",
+        "reason": "a chat device cannot call machine.permission.reply"
+      }
+    },
+    {
       "name": "approve-tier-denied-viewer",
       "call": {
         "tier": "viewer",

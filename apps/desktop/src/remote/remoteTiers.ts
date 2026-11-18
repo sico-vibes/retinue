@@ -25,7 +25,20 @@
 import { tierAtLeast, type RemoteTier } from './remoteContract'
 import tiersData from './tiers.json'
 
-export type MethodClass = 'read' | 'chat' | 'approve' | 'handoff' | 'never'
+export type MethodClass = 'read' | 'chat' | 'approve' | 'handoff' | 'linked' | 'never'
+
+/**
+ * The `linked` methods that start or drive work on another machine, so the host's
+ * quiet hours apply to them as they do to any chat or approval call (17 November
+ * 2026). Reading the machines and their conversations passes, as a read does.
+ */
+export const LINKED_WORK_METHODS: ReadonlySet<string> = new Set([
+  'machine.start',
+  'machine.prompt',
+  'machine.steer',
+  'machine.cancel',
+  'machine.permission.reply',
+])
 
 /** The wire code a gateway raises when `authorizeRemoteCall` denies a call. */
 export type DenialCode = 'forbidden_remote' | 'tier_required' | 'approvals_disabled' | 'quiet_hours' | 'invalid_params'
@@ -126,7 +139,7 @@ interface PolicyData {
 
 const POLICY: PolicyData = tiersData as PolicyData
 
-const METHOD_CLASSES: readonly string[] = ['read', 'chat', 'approve', 'handoff', 'never']
+const METHOD_CLASSES: readonly string[] = ['read', 'chat', 'approve', 'handoff', 'linked', 'never']
 const TIER_NAMES: readonly string[] = ['viewer', 'chat', 'operator']
 
 /** The params checks, by the id `tiers.json` uses. */
@@ -211,6 +224,10 @@ export function authorizeRemoteCall(input: RemoteCall): RemoteCallDecision {
   if (!rule) return { allowed: false, code: 'forbidden_remote', reason: 'not on the remote allowlist' }
   if (rule.class === 'never') return { allowed: false, code: 'forbidden_remote', reason: rule.why }
   if (input.quietHours && (rule.class === 'chat' || rule.class === 'approve' || rule.class === 'handoff')) {
+    return { allowed: false, code: 'quiet_hours', reason: 'quiet hours are on; this host only allows reading right now' }
+  }
+  // A `linked` method that starts or drives work on another machine is work here too.
+  if (input.quietHours && rule.class === 'linked' && LINKED_WORK_METHODS.has(input.method)) {
     return { allowed: false, code: 'quiet_hours', reason: 'quiet hours are on; this host only allows reading right now' }
   }
   if (rule.class === 'approve') {
@@ -489,15 +506,22 @@ export function redactResultForRemote(method: string, result: unknown, options: 
       // What a sub-bot is doing is a tool's title, and that can hold a command or a path.
       return dropKeys(redactNode(result, [], options), ['doingNow', 'error'])
     default:
-      return ruleFor(method)?.class === 'read' ? redactNode(result, [], options) : result
+      // A `linked` method is what a phone reads of another machine, so it is walked
+      // by the field watcher exactly as a read is.
+      return ruleFor(method)?.class === 'read' || ruleFor(method)?.class === 'linked' ? redactNode(result, [], options) : result
   }
 }
 
 // ---------------------------------------------------------------------------
 // Event redaction
 
-/** Whether a daemon event type may cross to a device, or must be dropped. */
-export type EventPolicy = 'allow' | 'drop'
+/**
+ * Whether a daemon event type may cross to a device, or must be dropped.
+ * `linked` crosses to a phone, tablet or browser only: the host refuses it to
+ * another machine or the linked computer, where a client is never that (17
+ * November 2026).
+ */
+export type EventPolicy = 'allow' | 'drop' | 'linked'
 
 /**
  * Every event type the daemon can emit, classified. `allow` is the reviewed
@@ -511,7 +535,9 @@ export const EVENT_POLICY: Readonly<Record<string, EventPolicy>> = loadEventPoli
 function loadEventPolicy(data: PolicyData): Record<string, EventPolicy> {
   const policy: Record<string, EventPolicy> = {}
   for (const [type, value] of Object.entries(data.events)) {
-    if (value !== 'allow' && value !== 'drop') throw new Error(`tiers.json: event ${type} has unknown policy ${value}`)
+    if (value !== 'allow' && value !== 'drop' && value !== 'linked') {
+      throw new Error(`tiers.json: event ${type} has unknown policy ${value}`)
+    }
     policy[type] = value
   }
   return policy
@@ -571,11 +597,17 @@ function redactEventPayload(type: string, payload: unknown): unknown {
  * through the agent policy; every allowed type is still walked for sensitive
  * keys. Anything not on EVENT_POLICY returns `null` (for example
  * `tool.changed`, `hook.observed`, `exec.options.*`, `settings.changed`).
+ *
+ * A `linked` type is one the host sends to a phone, tablet or browser only. This
+ * client is only ever one of those, and it cannot see the kind of the device it
+ * runs as, so it accepts them; the host refuses them to anything else.
  */
 export function redactEventForRemote(event: unknown): unknown | null {
   const envelope = ownKeys(event)
   if (!envelope) return null
   const type = envelope.type
-  if (typeof type !== 'string' || EVENT_POLICY[type] !== 'allow') return null
+  if (typeof type !== 'string') return null
+  const policy = EVENT_POLICY[type]
+  if (policy !== 'allow' && policy !== 'linked') return null
   return { ...envelope, payload: redactEventPayload(type, envelope.payload) }
 }
