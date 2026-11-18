@@ -1499,3 +1499,6 @@ async fn starting_on_the_other_machine_names_it_and_the_next_read_shows_it() {
 }
 
 include!("handoff_tests.rs");
+
+// 17 November 2026: a project started on this machine by one of the owner's paired devices.
+include!("project_share_tests.rs");

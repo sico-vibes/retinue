@@ -548,10 +548,15 @@ fn far_params(p: &Value) -> Value {
 /// message before a request is made.
 async fn call_through(st: &AppState, p: &Value, method: &str, needed: &str, action: &str) -> Result<Value, DispatchError> {
     let machine = id_param(p, "machineId")?;
+    call_checked(st, machine, method, far_params(p), needed, action).await
+}
+
+/// The same, with the far parameters this machine builds itself (a pass-through whose names differ).
+async fn call_checked(st: &AppState, machine: &str, method: &str, params: Value, needed: &str, action: &str) -> Result<Value, DispatchError> {
     let link = link_or_missing(st, machine)?;
     require_online(&link)?;
     require_tier(&link, needed, action)?;
-    client::rpc(st, machine, method, far_params(p)).await.map_err(|error| failure(st, machine, error))
+    client::rpc(st, machine, method, params).await.map_err(|error| failure(st, machine, error))
 }
 
 /// A call that changes the other machine. The next read here shows it: the 20 s
@@ -948,6 +953,17 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         }
         "machine.permission.reply" => write_through(st, p, "permission.reply", "operator", "Answering an approval").await,
         "machine.projects" => call_through(st, p, "project.list", "viewer", "Listing the projects").await,
+        // 17 November 2026: a project started on the other machine, inside the folder its owner set
+        // for other machines. Each is a thin pass-through; the far side confines and refuses, and its
+        // own sentence is what the window shows.
+        "machine.project.browse" => call_through(st, p, "project.browse", "operator", "Browsing its folders").await,
+        "machine.project.create" => write_through(st, p, "project.createFromFolder", "operator", "Adding a project").await,
+        "machine.project.clone" => write_through(st, p, "project.clone", "operator", "Cloning a repository").await,
+        "machine.clone.status" => {
+            let machine = id_param(p, "machineId")?;
+            let job = id_param(p, "jobId")?;
+            call_checked(st, machine, "project.clone.status", json!({"id": job}), "operator", "Reading the clone's progress").await
+        }
         _ => Err(derr("not_found", "unknown machine method", StatusCode::NOT_FOUND)),
     }
 }

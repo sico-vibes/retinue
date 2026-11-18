@@ -69,6 +69,9 @@ pub enum MethodClass {
     /// Moving a conversation to another machine: operator, and only a `machine` device
     /// (the gateway checks the kind; `authorize` sees the tier).
     Handoff,
+    /// Starting a project on the host (17 November 2026): operator, and the handler refuses unless the
+    /// host's owner turned the switch on. It writes, so quiet hours refuse it like `chat`.
+    Workspace,
     Never,
 }
 
@@ -210,6 +213,7 @@ fn load_policy() -> Result<Policy, String> {
             "chat" => MethodClass::Chat,
             "approve" => MethodClass::Approve,
             "handoff" => MethodClass::Handoff,
+            "workspace" => MethodClass::Workspace,
             "never" => MethodClass::Never,
             other => return Err(format!("tiers.json: {} has unknown class {other}", row.method)),
         };
@@ -302,7 +306,7 @@ pub fn authorize(call: &RemoteCall) -> Decision {
             reason: rule.why.clone(),
         };
     }
-    if call.quiet_hours && matches!(rule.class, MethodClass::Chat | MethodClass::Approve | MethodClass::Handoff) {
+    if call.quiet_hours && matches!(rule.class, MethodClass::Chat | MethodClass::Approve | MethodClass::Handoff | MethodClass::Workspace) {
         return Decision::Denied {
             code: DenialCode::QuietHours,
             reason: "quiet hours are on; this host only allows reading right now".to_string(),
@@ -791,7 +795,7 @@ mod tests {
                     };
                     assert_eq!(rule.min_tier, Some(expected), "{}", rule.method)
                 }
-                MethodClass::Approve | MethodClass::Handoff => assert_eq!(rule.min_tier, Some(Tier::Operator), "{}", rule.method),
+                MethodClass::Approve | MethodClass::Handoff | MethodClass::Workspace => assert_eq!(rule.min_tier, Some(Tier::Operator), "{}", rule.method),
                 MethodClass::Never => assert_eq!(rule.min_tier, None, "{}", rule.method),
             }
         }

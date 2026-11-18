@@ -170,6 +170,9 @@ fn exportable_setting(key: &str, value: &Value) -> bool {
         || lower == "companion.positions"
         // A machine's folder path is the owner's own machine, so it is set again on another one.
         || lower == "projects.folder"
+        // 17 November 2026: the switch that lets this machine's owner accept projects from their own
+        // paired devices, and the folder they may use, belong to this machine alone.
+        || lower.starts_with("projects.devices.")
     {
         return false;
     }

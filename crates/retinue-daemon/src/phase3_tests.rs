@@ -218,15 +218,16 @@ fn p3_dir(label: &str) -> PathBuf {
 }
 
 /// A local repository a test may clone from, installed for as long as the guard lives. The rule for
-/// real calls (network addresses only) stands; this is the one test-only allowance.
-struct LocalRepo {
-    path: PathBuf,
+/// real calls (network addresses only) stands; this is the one test-only allowance. Visible to the
+/// workspace tests (17 November 2026), which prove a device's clone starts and fails the same way.
+pub(crate) struct LocalRepo {
+    pub(crate) path: PathBuf,
     _guard: tokio::sync::MutexGuard<'static, ()>,
 }
 
 impl LocalRepo {
     /// A repository with one commit, at `<temp>/source`.
-    async fn real(label: &str) -> Option<Self> {
+    pub(crate) async fn real(label: &str) -> Option<Self> {
         let guard = crate::project_clone::CLONE_TEST_LOCK.lock().await;
         let path = p3_dir(&format!("{label}-source"));
         let git = |args: &[&str]| std::process::Command::new("git").current_dir(&path).args(args).output().map(|output| output.status.success()).unwrap_or(false);
@@ -239,7 +240,7 @@ impl LocalRepo {
     }
 
     /// A path that is allowed through the URL check but holds no repository: git cannot clone it.
-    async fn missing(label: &str) -> Self {
+    pub(crate) async fn missing(label: &str) -> Self {
         let guard = crate::project_clone::CLONE_TEST_LOCK.lock().await;
         let path = std::env::temp_dir().join(format!("retinue-p3-{label}-not-a-repo-{}", Uuid::new_v4()));
         std::fs::create_dir_all(&path).unwrap();

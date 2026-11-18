@@ -25,7 +25,7 @@
 import { tierAtLeast, type RemoteTier } from './remoteContract'
 import tiersData from './tiers.json'
 
-export type MethodClass = 'read' | 'chat' | 'approve' | 'handoff' | 'never'
+export type MethodClass = 'read' | 'chat' | 'approve' | 'handoff' | 'workspace' | 'never'
 
 /** The wire code a gateway raises when `authorizeRemoteCall` denies a call. */
 export type DenialCode = 'forbidden_remote' | 'tier_required' | 'approvals_disabled' | 'quiet_hours' | 'invalid_params'
@@ -126,7 +126,7 @@ interface PolicyData {
 
 const POLICY: PolicyData = tiersData as PolicyData
 
-const METHOD_CLASSES: readonly string[] = ['read', 'chat', 'approve', 'handoff', 'never']
+const METHOD_CLASSES: readonly string[] = ['read', 'chat', 'approve', 'handoff', 'workspace', 'never']
 const TIER_NAMES: readonly string[] = ['viewer', 'chat', 'operator']
 
 /** The params checks, by the id `tiers.json` uses. */
@@ -189,9 +189,9 @@ export interface RemoteCall {
   method: string
   params?: unknown
   /**
-   * When the host's quiet hours are active, every `chat`, `approve` and `handoff`
-   * method is denied; `read` methods still pass. This is a hard read-only override
-   * applied before dispatch.
+   * When the host's quiet hours are active, every `chat`, `approve`, `handoff` and
+   * `workspace` method is denied; `read` methods still pass. This is a hard
+   * read-only override applied before dispatch.
    */
   quietHours?: boolean
 }
@@ -210,7 +210,7 @@ export function authorizeRemoteCall(input: RemoteCall): RemoteCallDecision {
   const rule = ruleFor(input.method)
   if (!rule) return { allowed: false, code: 'forbidden_remote', reason: 'not on the remote allowlist' }
   if (rule.class === 'never') return { allowed: false, code: 'forbidden_remote', reason: rule.why }
-  if (input.quietHours && (rule.class === 'chat' || rule.class === 'approve' || rule.class === 'handoff')) {
+  if (input.quietHours && (rule.class === 'chat' || rule.class === 'approve' || rule.class === 'handoff' || rule.class === 'workspace')) {
     return { allowed: false, code: 'quiet_hours', reason: 'quiet hours are on; this host only allows reading right now' }
   }
   if (rule.class === 'approve') {

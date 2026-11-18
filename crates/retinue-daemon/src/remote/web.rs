@@ -845,6 +845,17 @@ async fn rpc_post(State(state): State<WebState>, headers: HeaderMap, body: Bytes
             None => params = json!({"deviceId": device.id}),
         }
     }
+    // 17 November 2026: a project action from a device is confined to the folder the host's owner
+    // set for other machines. The gateway says so, and replaces anything the device sent under the
+    // same name, so a device cannot claim to be the desktop and clone outside that folder.
+    if method.starts_with("project.") {
+        match params.as_object_mut() {
+            Some(object) => {
+                object.insert("deviceCall".to_string(), Value::Bool(true));
+            }
+            None => params = json!({"deviceCall": true}),
+        }
+    }
     match dispatch(&state.daemon, &method, params).await {
         Ok(result) => {
             if let Some(kind) = audit_kind(&method) {
@@ -869,6 +880,8 @@ fn audit_kind(method: &str) -> Option<&'static str> {
         Some(policy::MethodClass::Chat) => Some("prompt"),
         Some(policy::MethodClass::Approve) => Some("approval"),
         Some(policy::MethodClass::Handoff) => Some("handoff"),
+        // 17 November 2026: one activity line per project action a device takes on this machine.
+        Some(policy::MethodClass::Workspace) => Some("workspace"),
         _ => None,
     }
 }

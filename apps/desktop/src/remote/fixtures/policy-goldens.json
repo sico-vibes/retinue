@@ -761,6 +761,90 @@
         "code": "forbidden_remote",
         "reason": "Only the owner at the desktop answers a secret request."
       }
+    },
+    {
+      "name": "workspace-operator-allowed",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "project.browse",
+        "params": {},
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "workspace-chat-denied",
+      "call": {
+        "tier": "chat",
+        "approvalsFromRemote": false,
+        "method": "project.createFromFolder",
+        "params": {
+          "path": "C:\\Projects\\repo"
+        },
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "tier_required",
+        "reason": "a chat device cannot call project.createFromFolder"
+      }
+    },
+    {
+      "name": "workspace-quiet-hours-denied",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "project.clone",
+        "params": {
+          "url": "https://example.com/x.git",
+          "parent": "C:\\Projects",
+          "confirm": true
+        },
+        "quietHours": true
+      },
+      "expect": {
+        "allowed": false,
+        "code": "quiet_hours",
+        "reason": "quiet hours are on; this host only allows reading right now"
+      }
+    },
+    {
+      "name": "workspace-status-allowed",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "project.clone.status",
+        "params": {
+          "id": "job"
+        },
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "machine-project-clone-stays-on-the-desktop",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": true,
+        "method": "machine.project.clone",
+        "params": {
+          "machineId": "m",
+          "url": "https://example.com/x.git",
+          "parent": "C:\\Projects",
+          "confirm": true
+        },
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "forbidden_remote",
+        "reason": "Cloning on a linked machine writes a folder there and may use that machine's git sign-in; only the desktop's own link may ask."
+      }
     }
   ],
   "results": [

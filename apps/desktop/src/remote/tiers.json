@@ -1319,9 +1319,30 @@
     },
     {
       "method": "project.clone",
-      "class": "never",
-      "minTier": null,
-      "why": "Cloning writes a folder on the host and may use the host's git sign-in.",
+      "class": "workspace",
+      "minTier": "operator",
+      "why": "Cloning writes a folder on the host and may use the host's git sign-in. A paired device may only do it inside the folder the host's owner set for other machines, and only while that switch is on.",
+      "params": null
+    },
+    {
+      "method": "project.clone.status",
+      "class": "workspace",
+      "minTier": "operator",
+      "why": "One clone's progress on the host. The state is a word, the detail is one line, and the folder it names is inside the folder the host shares with other machines.",
+      "params": null
+    },
+    {
+      "method": "project.browse",
+      "class": "workspace",
+      "minTier": "operator",
+      "why": "It lists folders under the one base folder the host's owner set: names and kinds only, never outside that folder, and only while the owner's switch is on.",
+      "params": null
+    },
+    {
+      "method": "project.createFromFolder",
+      "class": "workspace",
+      "minTier": "operator",
+      "why": "It registers a folder on the host as a project. The folder must sit inside the one the host's owner set, and the switch must be on there.",
       "params": null
     },
     {
@@ -1812,6 +1833,34 @@
       "class": "never",
       "minTier": null,
       "why": "Listing a linked machine's projects is the desktop's own link; a paired phone must not read another machine through this one.",
+      "params": null
+    },
+    {
+      "method": "machine.project.browse",
+      "class": "never",
+      "minTier": null,
+      "why": "Browsing a linked machine's folders is the desktop's own link, and a paired phone must not reach another machine's disk through this one.",
+      "params": null
+    },
+    {
+      "method": "machine.project.create",
+      "class": "never",
+      "minTier": null,
+      "why": "Adding a project on a linked machine writes a folder there; only the desktop's own link may ask, and only inside the folder that machine's owner set.",
+      "params": null
+    },
+    {
+      "method": "machine.project.clone",
+      "class": "never",
+      "minTier": null,
+      "why": "Cloning on a linked machine writes a folder there and may use that machine's git sign-in; only the desktop's own link may ask.",
+      "params": null
+    },
+    {
+      "method": "machine.clone.status",
+      "class": "never",
+      "minTier": null,
+      "why": "A clone's progress on a linked machine is the desktop's own link; a paired phone must not read another machine's disk through this one.",
       "params": null
     },
     {

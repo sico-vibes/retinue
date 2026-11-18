@@ -112,6 +112,7 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
             let list: Vec<Value> = jobs().lock().map(|jobs| jobs.iter().map(Job::to_json).collect()).unwrap_or_default();
             Ok(json!({"jobs": list}))
         }
+        "project.clone.status" => status(st, p),
         "project.discover" => discover(st, p).await,
         _ => Err(derr("not_found", "unknown project method", StatusCode::NOT_FOUND)),
     }
@@ -172,6 +173,10 @@ async fn start(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
     if let Some(reason) = refuse_url(url, allow_local) { return Err(invalid(&reason)); }
     let parent = p["parent"].as_str().map(PathBuf::from).filter(|parent| parent.is_absolute() && parent.is_dir())
         .ok_or_else(|| invalid("Choose an existing folder to clone into."))?;
+    // A paired device may only clone into the folder this machine's owner set for other machines
+    // (`project_share.rs`). The gateway stamps `deviceCall` on a device's call and a device cannot clear
+    // it, so the desktop's own clone keeps reaching any folder it is given.
+    let parent = if crate::project_share::is_device_call(p) { crate::project_share::confine_parent(st, &parent)? } else { parent };
     let name = match p["name"].as_str().map(str::trim).filter(|name| !name.is_empty()) {
         Some(name) => name.to_owned(),
         None => suggested_name(url),
@@ -196,6 +201,25 @@ fn cancel(p: &Value) -> Result<Value, DispatchError> {
     update(id, |job| job.cancelled = true);
     if let Some(pid) = found.pid { kill_tree(Some(pid)); }
     Ok(json!({"job": job(id).map(|job| job.to_json()).unwrap_or_else(|| found.to_json())}))
+}
+
+/// One clone's progress, for a paired device that may not list this machine's jobs. The reply holds the
+/// folder the device itself asked for, the state and the one-line detail; the project is reduced to an
+/// id and a name, because a project row carries a setup script and the shared settings' state and
+/// neither may cross to a device.
+fn status(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+    crate::project_share::base_folder(st)?;
+    let id = p["id"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| invalid("Choose a clone to read."))?;
+    let Some(found) = job(id) else { return Err(derr("not_found", "That clone is not running.", StatusCode::NOT_FOUND)) };
+    let project = if found.project.is_null() { Value::Null } else { json!({"id": found.project["id"].clone(), "name": found.project["name"].clone()}) };
+    Ok(json!({"job": {
+        "id": found.id,
+        "url": found.url,
+        "target": found.target.to_string_lossy(),
+        "state": found.state,
+        "detail": found.detail,
+        "project": project,
+    }}))
 }
 
 /// One clone: git, then either a registered project or a removed folder.
