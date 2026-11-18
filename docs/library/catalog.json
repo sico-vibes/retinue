@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "540314f",
-  "documentCount": 404,
+  "revision": "be9d799",
+  "documentCount": 443,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -1686,6 +1686,386 @@
       ]
     },
     {
+      "id": "project/research/n8n-nod/02-llm-providers",
+      "source": "docs/research/n8n-nod/02-llm-providers.md",
+      "title": "02 — How nod supports so many LLM providers",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "81a00e1a65b603ef104c62d35ccab49b64a421029f41fa4e34c3dc6347a4c702",
+      "headings": [
+        {
+          "id": "summary",
+          "text": "Summary",
+          "level": 2
+        },
+        {
+          "id": "how-nod-does-it",
+          "text": "How nod does it",
+          "level": 2
+        },
+        {
+          "id": "the-design-in-three-layers",
+          "text": "The design, in three layers",
+          "level": 3
+        },
+        {
+          "id": "main-files",
+          "text": "Main files",
+          "level": 3
+        },
+        {
+          "id": "the-data-flow-of-one-turn",
+          "text": "The data flow of one turn",
+          "level": 3
+        },
+        {
+          "id": "how-a-provider-is-added",
+          "text": "How a provider is added",
+          "level": 3
+        },
+        {
+          "id": "models-and-their-limits",
+          "text": "Models and their limits",
+          "level": 3
+        },
+        {
+          "id": "keys-and-sign-ins",
+          "text": "Keys and sign-ins",
+          "level": 3
+        },
+        {
+          "id": "streaming-tool-calls-images-effort",
+          "text": "Streaming, tool calls, images, effort",
+          "level": 3
+        },
+        {
+          "id": "usage-and-cost",
+          "text": "Usage and cost",
+          "level": 3
+        },
+        {
+          "id": "how-retinue-does-it-now",
+          "text": "How Retinue does it now",
+          "level": 2
+        },
+        {
+          "id": "the-shape-adapters-around-clis-not-a-model-client",
+          "text": "The shape: adapters around CLIs, not a model client",
+          "level": 3
+        },
+        {
+          "id": "the-provider-table",
+          "text": "The provider table",
+          "level": 3
+        },
+        {
+          "id": "catalogues",
+          "text": "Catalogues",
+          "level": 3
+        },
+        {
+          "id": "effort-and-settings-evidence",
+          "text": "Effort and settings evidence",
+          "level": 3
+        },
+        {
+          "id": "accounts-secrets-and-the-absent-key",
+          "text": "Accounts, secrets, and the absent key",
+          "level": 3
+        },
+        {
+          "id": "usage-and-cost-1",
+          "text": "Usage and cost",
+          "level": 3
+        },
+        {
+          "id": "what-this-means-for-more-providers",
+          "text": "What this means for \"more providers\"",
+          "level": 3
+        },
+        {
+          "id": "what-they-do-better",
+          "text": "What they do better",
+          "level": 2
+        },
+        {
+          "id": "what-we-do-better",
+          "text": "What we do better",
+          "level": 2
+        },
+        {
+          "id": "ideas-we-could-adopt",
+          "text": "Ideas we could adopt",
+          "level": 2
+        },
+        {
+          "id": "1-put-the-capability-claims-inside-the-acp-provider-row-s",
+          "text": "1. Put the capability claims inside the ACP provider row — S",
+          "level": 3
+        },
+        {
+          "id": "2-a-per-model-failure-ledger-that-pauses-only-unattended-work-m",
+          "text": "2. A per-model failure ledger that pauses only unattended work — M",
+          "level": 3
+        },
+        {
+          "id": "3-capability-and-price-cues-in-the-model-menu-s",
+          "text": "3. Capability and price cues in the model menu — S",
+          "level": 3
+        },
+        {
+          "id": "4-a-lightesteffort-helper-and-a-per-lane-model-choice-m-to-l",
+          "text": "4. A lightest_effort helper and a per-lane model choice — M to L",
+          "level": 3
+        },
+        {
+          "id": "5-your-own-model-server-wired-into-a-cli-rather-than-into-retinue-m",
+          "text": "5. \"Your own model server\", wired into a CLI rather than into Retinue — M",
+          "level": 3
+        },
+        {
+          "id": "6-adopt-nothing-else-from-their-provider-layer-no-effort",
+          "text": "6. Adopt nothing else from their provider layer — no effort",
+          "level": 3
+        },
+        {
+          "id": "open-questions-for-the-owner",
+          "text": "Open questions for the owner",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/n8n-nod/04-vault",
+      "source": "docs/research/n8n-nod/04-vault.md",
+      "title": "04 — The vault: cards, passwords and other secrets",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "9d291e9964eb6a479b35ba3e2f8c20d65bb6e2fdfb5beb46390cf8565dc8e036",
+      "headings": [
+        {
+          "id": "summary",
+          "text": "Summary",
+          "level": 2
+        },
+        {
+          "id": "how-nod-does-it",
+          "text": "How nod does it",
+          "level": 2
+        },
+        {
+          "id": "the-pieces",
+          "text": "The pieces",
+          "level": 3
+        },
+        {
+          "id": "where-the-key-comes-from",
+          "text": "Where the key comes from",
+          "level": 3
+        },
+        {
+          "id": "what-is-encrypted-and-how-it-is-bound",
+          "text": "What is encrypted, and how it is bound",
+          "level": 3
+        },
+        {
+          "id": "data-flow-a-secret-reaching-a-page",
+          "text": "Data flow: a secret reaching a page",
+          "level": 3
+        },
+        {
+          "id": "what-the-model-receives",
+          "text": "What the model receives",
+          "level": 3
+        },
+        {
+          "id": "consent-per-use",
+          "text": "Consent per use",
+          "level": 3
+        },
+        {
+          "id": "autofill-saved-sessions-payments",
+          "text": "Autofill, saved sessions, payments",
+          "level": 3
+        },
+        {
+          "id": "sync-and-backup",
+          "text": "Sync and backup",
+          "level": 3
+        },
+        {
+          "id": "audit",
+          "text": "Audit",
+          "level": 3
+        },
+        {
+          "id": "weaknesses-i-found-in-their-design",
+          "text": "Weaknesses I found in their design",
+          "level": 3
+        },
+        {
+          "id": "how-retinue-does-it-now",
+          "text": "How Retinue does it now",
+          "level": 2
+        },
+        {
+          "id": "1-bot-secrets-windows-credential-manager",
+          "text": "1. Bot secrets: Windows Credential Manager",
+          "level": 3
+        },
+        {
+          "id": "2-one-use-secret-requests-the-model-does-see-the-value",
+          "text": "2. One-use secret requests: the model does see the value",
+          "level": 3
+        },
+        {
+          "id": "3-browser-and-computer-sign-in-a-keyword-pause",
+          "text": "3. Browser and computer sign-in: a keyword pause",
+          "level": 3
+        },
+        {
+          "id": "4-tokens-and-hashes-around-the-daemon",
+          "text": "4. Tokens and hashes around the daemon",
+          "level": 3
+        },
+        {
+          "id": "5-what-leaves-and-what-is-recorded",
+          "text": "5. What leaves, and what is recorded",
+          "level": 3
+        },
+        {
+          "id": "weaknesses-on-our-side",
+          "text": "Weaknesses on our side",
+          "level": 3
+        },
+        {
+          "id": "what-they-do-better-and-what-we-do-better",
+          "text": "What they do better, and what we do better",
+          "level": 2
+        },
+        {
+          "id": "ideas-we-could-adopt",
+          "text": "Ideas we could adopt",
+          "level": 2
+        },
+        {
+          "id": "1-stop-the-snapshot-echoing-field-values-and-redact-known-secrets-recommended-first",
+          "text": "1. Stop the snapshot echoing field values, and redact known secrets (recommended first)",
+          "level": 3
+        },
+        {
+          "id": "2-a-content-free-use-ledger-for-secrets",
+          "text": "2. A content-free use ledger for secrets",
+          "level": 3
+        },
+        {
+          "id": "3-a-one-use-claim-with-an-uncertain-outcome-for-anything-with-a-side-effect",
+          "text": "3. A one-use claim with an uncertain outcome, for anything with a side effect",
+          "level": 3
+        },
+        {
+          "id": "4-fill-a-website-field-from-the-daemon-so-the-model-never-holds-the-value",
+          "text": "4. Fill a website field from the daemon, so the model never holds the value",
+          "level": 3
+        },
+        {
+          "id": "5-bind-a-sign-in-approval-to-the-exact-origin-and-item-once-per-task",
+          "text": "5. Bind a sign-in approval to the exact origin and item, once per task",
+          "level": 3
+        },
+        {
+          "id": "6-learn-a-value-the-owner-types-during-take-control-and-mask-it",
+          "text": "6. Learn a value the owner types during Take control, and mask it",
+          "level": 3
+        },
+        {
+          "id": "where-i-would-stop",
+          "text": "Where I would stop",
+          "level": 3
+        },
+        {
+          "id": "open-questions-for-the-owner",
+          "text": "Open questions for the owner",
+          "level": 2
+        },
+        {
+          "id": "evidence",
+          "text": "Evidence",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/multi-device/03-design-and-order",
+      "source": "docs/research/multi-device/03-design-and-order.md",
+      "title": "A design for many-machine Retinue, what to reuse, the build order, and open questions",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "dae471e42f55a796feff871719c8ac9facc9783534d87043b03bb7d6b0bf7229",
+      "headings": [
+        {
+          "id": "piece-1-a-live-link-so-another-machines-sessions-move-as-they-happen-r1",
+          "text": "Piece 1 — A live link, so another machine's sessions move as they happen (R1)",
+          "level": 2
+        },
+        {
+          "id": "piece-2-one-list-of-every-conversation-with-the-machine-on-it-r1-r3",
+          "text": "Piece 2 — One list of every conversation, with the machine on it (R1, R3)",
+          "level": 2
+        },
+        {
+          "id": "piece-3-where-it-came-from-r3",
+          "text": "Piece 3 — \"Where it came from\" (R3)",
+          "level": 2
+        },
+        {
+          "id": "piece-4-answer-an-approval-from-the-machine-in-hand-r2",
+          "text": "Piece 4 — Answer an approval from the machine in hand (R2)",
+          "level": 2
+        },
+        {
+          "id": "piece-5-the-phone-sees-and-drives-the-machines-its-host-is-linked-to-r1-r2",
+          "text": "Piece 5 — The phone sees and drives the machines its host is linked to (R1, R2)",
+          "level": 2
+        },
+        {
+          "id": "piece-6-start-a-project-on-another-machine-r4",
+          "text": "Piece 6 — Start a project on another machine (R4)",
+          "level": 2
+        },
+        {
+          "id": "piece-7-manage-the-other-machines-from-here-r5",
+          "text": "Piece 7 — Manage the other machines from here (R5)",
+          "level": 2
+        },
+        {
+          "id": "piece-8-a-daemon-on-the-vps-r6",
+          "text": "Piece 8 — A daemon on the VPS (R6)",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/multi-device/04-linux-headless",
+      "source": "docs/research/multi-device/04-linux-headless.md",
+      "title": "A headless Linux retinued: what T3 does, what Retinue needs, and the VPS",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "4cd655599e78ecb53fefaed7dd83e491fb8f67a2876b1fbdbd9de35afdc509e8",
+      "headings": [
+        {
+          "id": "31-the-numbers-verified",
+          "text": "3.1 The numbers, verified",
+          "level": 2
+        },
+        {
+          "id": "32-the-inventory-by-area",
+          "text": "3.2 The inventory, by area",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/research/accounts-and-openbot-2026-11",
       "source": "docs/research/accounts-and-openbot-2026-11.md",
       "title": "Accounts, sign-in, and how OpenBot runs coding bots",
@@ -2511,6 +2891,121 @@
       ]
     },
     {
+      "id": "project/reference/invariants",
+      "source": "docs/reference/invariants.md",
+      "title": "Invariants",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "cfad687618fdda02c6581cafff1db674f614040b009ec492c5c4323785669ea4",
+      "headings": [
+        {
+          "id": "safety-and-privacy",
+          "text": "Safety and privacy",
+          "level": 2
+        },
+        {
+          "id": "the-daemon-owns-the-decisions",
+          "text": "The daemon owns the decisions",
+          "level": 2
+        },
+        {
+          "id": "boundaries-between-the-layers",
+          "text": "Boundaries between the layers",
+          "level": 2
+        },
+        {
+          "id": "releases-and-the-size-of-a-read",
+          "text": "Releases and the size of a read",
+          "level": 2
+        },
+        {
+          "id": "tests-and-the-tree",
+          "text": "Tests and the tree",
+          "level": 2
+        },
+        {
+          "id": "how-to-add-a-rule-here",
+          "text": "How to add a rule here",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/multi-device-linux",
+      "source": "docs/reports/multi-device-linux.md",
+      "title": "Lane report: a headless Linux retinued, and console pairing (piece 8 of 03-design-and-order.md)",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "9afa471ce745ab04def8bef85029e10c946eeb4421357dbc80a5974453066654",
+      "headings": [
+        {
+          "id": "11-the-one-reply-field-that-changes-meaning",
+          "text": "1.1 The one reply field that changes meaning",
+          "level": 2
+        },
+        {
+          "id": "12-what-the-vps-looks-like-to-the-window-once-it-is-up",
+          "text": "1.2 What the VPS looks like to the window once it is up",
+          "level": 2
+        },
+        {
+          "id": "21-the-console-methods-loopback-console-token-class-never",
+          "text": "2.1 The console.* methods (loopback, console token, class never)",
+          "level": 3
+        },
+        {
+          "id": "22-retinued-command-line",
+          "text": "2.2 retinued command line",
+          "level": 3
+        },
+        {
+          "id": "31-every-cfgwindows-site-in-the-daemon-what-happens-on-linux",
+          "text": "3.1 Every cfg(windows) site in the daemon: what happens on Linux",
+          "level": 2
+        },
+        {
+          "id": "had-a-linux-path-already-read-unchanged",
+          "text": "Had a Linux path already (read, unchanged)",
+          "level": 3
+        },
+        {
+          "id": "refused-with-a-plain-sentence-or-not-offered-at-all",
+          "text": "Refused with a plain sentence, or not offered at all",
+          "level": 3
+        },
+        {
+          "id": "added-in-this-lane",
+          "text": "Added in this lane",
+          "level": 3
+        },
+        {
+          "id": "known-not-done-named-rather-than-hidden",
+          "text": "Known, not done (named rather than hidden)",
+          "level": 3
+        },
+        {
+          "id": "tests",
+          "text": "Tests",
+          "level": 2
+        },
+        {
+          "id": "what-is-left-unverified-plainly",
+          "text": "What is left unverified, plainly",
+          "level": 2
+        },
+        {
+          "id": "resumed-18-november-2026",
+          "text": "Resumed (18 November 2026)",
+          "level": 3
+        },
+        {
+          "id": "owner-and-director-decisions-this-lane-owes",
+          "text": "Owner and Director decisions this lane owes",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/guides/live-checks",
       "source": "docs/guides/live-checks.md",
       "title": "Live CLI checks (Phase 2b entry gate)",
@@ -2750,6 +3245,336 @@
       ]
     },
     {
+      "id": "project/research/multi-device/01-t3-vs-retinue",
+      "source": "docs/research/multi-device/01-t3-vs-retinue.md",
+      "title": "Multi-device Retinue: what T3 Code does, where Retinue stands, and a way to the owner's bar",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "4126ad35f378d1e305cdf84762c35822cbcb96a99ae3799fb5276b4b462c79d6",
+      "headings": [
+        {
+          "id": "the-six-requirements-as-testable-statements",
+          "text": "The six requirements, as testable statements",
+          "level": 2
+        },
+        {
+          "id": "files",
+          "text": "Files",
+          "level": 2
+        },
+        {
+          "id": "how-to-read-the-evidence",
+          "text": "How to read the evidence",
+          "level": 2
+        },
+        {
+          "id": "11-the-topology-one-server-per-machine-no-hub-every-app-a-client",
+          "text": "1.1 The topology: one server per machine, no hub, every app a client",
+          "level": 2
+        },
+        {
+          "id": "12-how-devices-find-and-trust-each-other",
+          "text": "1.2 How devices find and trust each other",
+          "level": 2
+        },
+        {
+          "id": "13-how-sessions-and-their-live-events-reach-every-device-r1",
+          "text": "1.3 How sessions and their live events reach every device (R1)",
+          "level": 2
+        },
+        {
+          "id": "14-how-where-it-runs-and-where-it-came-from-are-modelled-r3",
+          "text": "1.4 How \"where it runs\" and \"where it came from\" are modelled (R3)",
+          "level": 2
+        },
+        {
+          "id": "15-starting-a-project-or-a-session-on-a-remote-device-r4",
+          "text": "1.5 Starting a project or a session on a remote device (R4)",
+          "level": 2
+        },
+        {
+          "id": "16-continue-on-another-device-r2",
+          "text": "1.6 \"Continue on another device\" (R2)",
+          "level": 2
+        },
+        {
+          "id": "17-what-happens-when-a-device-or-machine-is-offline",
+          "text": "1.7 What happens when a device or machine is offline",
+          "level": 2
+        },
+        {
+          "id": "18-t3s-own-costs-and-weak-points-stated-plainly",
+          "text": "1.8 T3's own costs and weak points, stated plainly",
+          "level": 2
+        },
+        {
+          "id": "19-what-changed-since-the-two-earlier-studies",
+          "text": "1.9 What changed since the two earlier studies",
+          "level": 2
+        },
+        {
+          "id": "110-t3-scored-against-the-six-requirements",
+          "text": "1.10 T3 scored against the six requirements",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/multi-device-live",
+      "source": "docs/reports/multi-device-live.md",
+      "title": "Multi-device, step 1: a live link, the machine's conversations, \"started from\"",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "f00acc9d8c217475d3bae9990cadfeee6eb0c06ec1edc9d60bcd41a30f80bffc",
+      "headings": [
+        {
+          "id": "contract-stable",
+          "text": "Contract (stable)",
+          "level": 2
+        },
+        {
+          "id": "1-machinestreamstatus-is-this-link-live",
+          "text": "1. machine.stream.status — is this link live?",
+          "level": 3
+        },
+        {
+          "id": "2-machinesessions-the-other-machines-conversations-from-memory",
+          "text": "2. machine.sessions — the other machines' conversations, from memory",
+          "level": 3
+        },
+        {
+          "id": "3-the-link-row-gains-two-fields-machinelist-machineinfo-of-a-link-machinepair-job-rows",
+          "text": "3. The link row gains two fields (machine.list, machine.info of a link, machine.pair.* job rows)",
+          "level": 3
+        },
+        {
+          "id": "4-machineinfo-gains-platform",
+          "text": "4. machine.info gains platform",
+          "level": 3
+        },
+        {
+          "id": "5-event-machinesessionchanged-local-content-free",
+          "text": "5. Event machine.session.changed — local, content-free",
+          "level": 3
+        },
+        {
+          "id": "6-event-machinechanged-gains-live",
+          "text": "6. Event machine.changed gains live",
+          "level": 3
+        },
+        {
+          "id": "7-session-rows-gain-linkstartedfrom",
+          "text": "7. Session rows gain link.startedFrom",
+          "level": 3
+        },
+        {
+          "id": "8-the-pairing-request-reports-the-real-os",
+          "text": "8. The pairing request reports the real OS",
+          "level": 3
+        },
+        {
+          "id": "9-the-work-log-a-machine-device-reads-it-a-phone-does-not-18-november-2026",
+          "text": "9. The work log: a machine device reads it, a phone does not (18 November 2026)",
+          "level": 3
+        },
+        {
+          "id": "10-machinepermissions-and-the-far-read-behind-it-18-november-2026",
+          "text": "10. machine.permissions and the far read behind it (18 November 2026)",
+          "level": 3
+        },
+        {
+          "id": "running-log",
+          "text": "Running log",
+          "level": 2
+        },
+        {
+          "id": "2026-11-18-resumed-and-the-whole-lane-runs-green",
+          "text": "2026-11-18 — Resumed, and the whole lane runs green",
+          "level": 3
+        },
+        {
+          "id": "2026-11-18-paused-owner-paused-all-work",
+          "text": "2026-11-18 — PAUSED (owner paused all work)",
+          "level": 3
+        },
+        {
+          "id": "2026-11-17-report-written",
+          "text": "2026-11-17 — report written",
+          "level": 3
+        },
+        {
+          "id": "2026-11-17-the-gateways-event-socket-takes-a-machine-kind-device-confirmed",
+          "text": "2026-11-17 — the gateway's event socket takes a machine-kind device (confirmed)",
+          "level": 3
+        },
+        {
+          "id": "2026-11-17-pieces-1-2-3-built",
+          "text": "2026-11-17 — pieces 1, 2, 3 built",
+          "level": 3
+        },
+        {
+          "id": "2026-11-17-what-was-run-and-what-it-showed",
+          "text": "2026-11-17 — what was run, and what it showed",
+          "level": 3
+        },
+        {
+          "id": "what-is-deliberately-not-done",
+          "text": "What is deliberately not done",
+          "level": 2
+        },
+        {
+          "id": "notes-for-the-director",
+          "text": "Notes for the Director",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/multi-device-phone",
+      "source": "docs/reports/multi-device-phone.md",
+      "title": "Multi-device, step 4: the phone works through its host's machine links",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "dbe7238b80aa5f1ac42b0a1112c26a0e84107abe1f88362e14330eee758d1695",
+      "headings": [
+        {
+          "id": "the-rule-this-implements",
+          "text": "The rule this implements",
+          "level": 2
+        },
+        {
+          "id": "contract-stable",
+          "text": "Contract (stable)",
+          "level": 2
+        },
+        {
+          "id": "0-the-linked-class-and-who-it-is-for",
+          "text": "0. The linked class, and who it is for",
+          "level": 3
+        },
+        {
+          "id": "1-machinelist-the-hosts-links-for-a-phone",
+          "text": "1. machine.list — the host's links, for a phone",
+          "level": 3
+        },
+        {
+          "id": "2-machinesessions-the-links-conversations",
+          "text": "2. machine.sessions — the links' conversations",
+          "level": 3
+        },
+        {
+          "id": "3-machineconversation-one-conversation-on-a-linked-machine",
+          "text": "3. machine.conversation — one conversation on a linked machine",
+          "level": 3
+        },
+        {
+          "id": "4-machinestart-start-a-conversation-there",
+          "text": "4. machine.start — start a conversation there",
+          "level": 3
+        },
+        {
+          "id": "5-to-7-machineprompt-machinesteer-machinecancel",
+          "text": "5 to 7. machine.prompt, machine.steer, machine.cancel",
+          "level": 3
+        },
+        {
+          "id": "8-machinepermissionreply-answer-an-approval-raised-there",
+          "text": "8. machine.permission.reply — answer an approval raised there",
+          "level": 3
+        },
+        {
+          "id": "9-event-machinesessionchanged-reachable-by-a-phone",
+          "text": "9. Event machine.session.changed — reachable by a phone",
+          "level": 3
+        },
+        {
+          "id": "10-the-refusal-sentences-a-phone-shows-unchanged",
+          "text": "10. The refusal sentences a phone shows, unchanged",
+          "level": 3
+        },
+        {
+          "id": "11-what-the-phone-does-not-learn",
+          "text": "11. What the phone does not learn",
+          "level": 3
+        },
+        {
+          "id": "changes",
+          "text": "Changes",
+          "level": 2
+        },
+        {
+          "id": "running-log",
+          "text": "Running log",
+          "level": 2
+        },
+        {
+          "id": "2026-11-17-report-written",
+          "text": "2026-11-17 — report written",
+          "level": 3
+        },
+        {
+          "id": "2026-11-17-the-class-the-kind-check-and-the-two-ceilings-are-in",
+          "text": "2026-11-17 — the class, the kind check and the two ceilings are in",
+          "level": 3
+        },
+        {
+          "id": "2026-11-18-done-and-what-was-run",
+          "text": "2026-11-18 — done, and what was run",
+          "level": 3
+        },
+        {
+          "id": "open-at-merge",
+          "text": "Open at merge",
+          "level": 2
+        },
+        {
+          "id": "verification",
+          "text": "Verification",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/multi-device/00-director-map",
+      "source": "docs/research/multi-device/00-director-map.md",
+      "title": "Multi-device: the Director's first map (17 November 2026)",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "d362199a378838416176ad3476aeadd2f8df50761ba6d3a6fec9da8132f0c14d",
+      "headings": [
+        {
+          "id": "the-owners-bar",
+          "text": "The owner's bar",
+          "level": 2
+        },
+        {
+          "id": "how-t3-does-it-from-its-docs-code-not-yet-traced",
+          "text": "How T3 does it (from its docs; code not yet traced)",
+          "level": 2
+        },
+        {
+          "id": "what-makes-t3-feel-reliable-docsinternalsconnection-runtimemd",
+          "text": "What makes T3 feel reliable (docs/internals/connection-runtime.md)",
+          "level": 3
+        },
+        {
+          "id": "retinue-today",
+          "text": "Retinue today",
+          "level": 2
+        },
+        {
+          "id": "rules-that-stand-in-the-way-the-owner-decides",
+          "text": "Rules that stand in the way (the owner decides)",
+          "level": 2
+        },
+        {
+          "id": "first-guess-at-the-build-order-to-check-against-grey",
+          "text": "First guess at the build order (to check against Grey)",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/guides/native-smoke",
       "source": "docs/guides/native-smoke.md",
       "title": "Native smoke tooling",
@@ -2757,6 +3582,1006 @@
       "status": "Project reference",
       "sha256": "44d70cfe7bb18dbc18a5e594f6ddf05791c65669db31045c991c7d64c71b7df7",
       "headings": []
+    },
+    {
+      "id": "project/research/n8n-nod/06-automations",
+      "source": "docs/research/n8n-nod/06-automations.md",
+      "title": "nod (n8n labs): automations and unattended work, against Retinue's automations and task board",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "d863d016e41165825b905facd3dcfa5efd159282c76b25f5f2cf97507c87871e",
+      "headings": [
+        {
+          "id": "summary",
+          "text": "Summary",
+          "level": 2
+        },
+        {
+          "id": "1-how-nod-does-it",
+          "text": "1. How nod does it",
+          "level": 2
+        },
+        {
+          "id": "11-the-three-kinds-of-unattended-work",
+          "text": "1.1 The three kinds of unattended work",
+          "level": 3
+        },
+        {
+          "id": "12-main-files",
+          "text": "1.2 Main files",
+          "level": 3
+        },
+        {
+          "id": "13-data-flow-of-one-scheduled-run",
+          "text": "1.3 Data flow of one scheduled run",
+          "level": 3
+        },
+        {
+          "id": "14-limits",
+          "text": "1.4 Limits",
+          "level": 3
+        },
+        {
+          "id": "15-reporting",
+          "text": "1.5 Reporting",
+          "level": 3
+        },
+        {
+          "id": "16-safety-when-nobody-is-watching",
+          "text": "1.6 Safety when nobody is watching",
+          "level": 3
+        },
+        {
+          "id": "2-how-retinue-does-it-now",
+          "text": "2. How Retinue does it now",
+          "level": 2
+        },
+        {
+          "id": "21-what-an-automation-is",
+          "text": "2.1 What an automation is",
+          "level": 3
+        },
+        {
+          "id": "22-storage-and-starting",
+          "text": "2.2 Storage and starting",
+          "level": 3
+        },
+        {
+          "id": "23-the-limits-that-exist",
+          "text": "2.3 The limits that exist",
+          "level": 3
+        },
+        {
+          "id": "24-the-unattended-rails",
+          "text": "2.4 The unattended rails",
+          "level": 3
+        },
+        {
+          "id": "25-triggers-other-than-time",
+          "text": "2.5 Triggers other than time",
+          "level": 3
+        },
+        {
+          "id": "26-reporting-and-one-documentation-drift",
+          "text": "2.6 Reporting, and one documentation drift",
+          "level": 3
+        },
+        {
+          "id": "3-what-each-side-does-better",
+          "text": "3. What each side does better",
+          "level": 2
+        },
+        {
+          "id": "4-ideas-we-could-adopt-ranked",
+          "text": "4. Ideas we could adopt, ranked",
+          "level": 2
+        },
+        {
+          "id": "41-tell-the-run-it-is-late-and-how-much-it-missed-small",
+          "text": "4.1 Tell the run it is late, and how much it missed (small)",
+          "level": 3
+        },
+        {
+          "id": "42-show-what-unattended-work-cost-and-what-it-is-likely-to-cost-medium",
+          "text": "4.2 Show what unattended work cost, and what it is likely to cost (medium)",
+          "level": 3
+        },
+        {
+          "id": "43-a-task-that-can-check-back-without-becoming-a-schedule-medium",
+          "text": "4.3 A task that can check back without becoming a schedule (medium)",
+          "level": 3
+        },
+        {
+          "id": "44-write-a-couldnt-finish-message-into-the-runs-conversation-small",
+          "text": "4.4 Write a \"couldn't finish\" message into the run's conversation (small)",
+          "level": 3
+        },
+        {
+          "id": "45-skip-a-run-when-the-project-cannot-have-changed-medium",
+          "text": "4.5 Skip a run when the project cannot have changed (medium)",
+          "level": 3
+        },
+        {
+          "id": "46-a-spend-check-in-for-unattended-runs-large-needs-the-owner",
+          "text": "4.6 A spend check-in for unattended runs (large — needs the owner)",
+          "level": 3
+        },
+        {
+          "id": "47-record-who-authorised-a-schedule-and-re-check-it-on-change-medium",
+          "text": "4.7 Record who authorised a schedule, and re-check it on change (medium)",
+          "level": 3
+        },
+        {
+          "id": "48-what-we-should-not-copy",
+          "text": "4.8 What we should not copy",
+          "level": 3
+        },
+        {
+          "id": "5-open-questions-for-the-owner",
+          "text": "5. Open questions for the owner",
+          "level": 2
+        },
+        {
+          "id": "6-what-this-report-did-not-establish",
+          "text": "6. What this report did not establish",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/n8n-nod/05-messaging",
+      "source": "docs/research/n8n-nod/05-messaging.md",
+      "title": "nod (n8n labs): Telegram and WhatsApp channels, against Retinue Remote",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "bdb951e2bf0b390eed2223ad1cbcbd1f587e3c14a8667b5a84c05bdcab52a7b4",
+      "headings": [
+        {
+          "id": "summary",
+          "text": "Summary",
+          "level": 2
+        },
+        {
+          "id": "1-how-nod-does-it",
+          "text": "1. How nod does it",
+          "level": 2
+        },
+        {
+          "id": "11-which-apis",
+          "text": "1.1 Which APIs",
+          "level": 3
+        },
+        {
+          "id": "12-main-files",
+          "text": "1.2 Main files",
+          "level": 3
+        },
+        {
+          "id": "13-data-flow",
+          "text": "1.3 Data flow",
+          "level": 3
+        },
+        {
+          "id": "14-who-may-talk-to-the-bot",
+          "text": "1.4 Who may talk to the bot",
+          "level": 3
+        },
+        {
+          "id": "15-pairing",
+          "text": "1.5 Pairing",
+          "level": 3
+        },
+        {
+          "id": "16-approvals-and-attachments",
+          "text": "1.6 Approvals and attachments",
+          "level": 3
+        },
+        {
+          "id": "17-the-stranger-problem-in-their-own-words",
+          "text": "1.7 The stranger problem, in their own words",
+          "level": 3
+        },
+        {
+          "id": "2-how-retinue-does-it-now",
+          "text": "2. How Retinue does it now",
+          "level": 2
+        },
+        {
+          "id": "3-what-each-side-does-better",
+          "text": "3. What each side does better",
+          "level": 2
+        },
+        {
+          "id": "4-ideas-we-could-adopt",
+          "text": "4. Ideas we could adopt",
+          "level": 2
+        },
+        {
+          "id": "41-a-chat-channel-as-a-new-paired-device-kind-pull-only-telegram-first",
+          "text": "4.1 A chat channel as a new paired-device kind, pull-only (Telegram first)",
+          "level": 3
+        },
+        {
+          "id": "42-sanitised-outbound-replies-and-private-steps-sent-to-the-app",
+          "text": "4.2 Sanitised outbound replies, and private steps sent to the app",
+          "level": 3
+        },
+        {
+          "id": "43-pairing-code-in-chat-candidate-card-on-the-desktop-exact-hash-compare",
+          "text": "4.3 Pairing: code in chat, candidate card on the desktop, exact-hash compare",
+          "level": 3
+        },
+        {
+          "id": "44-approvals-from-chat-exact-words-or-inline-buttons-never-a-model",
+          "text": "4.4 Approvals from chat: exact words or inline buttons, never a model",
+          "level": 3
+        },
+        {
+          "id": "45-idempotent-inbound-ledger-keyed-by-the-providers-message-id",
+          "text": "4.5 Idempotent inbound ledger keyed by the provider's message id",
+          "level": 3
+        },
+        {
+          "id": "46-typing-and-one-edited-progress-line",
+          "text": "4.6 Typing and one edited progress line",
+          "level": 3
+        },
+        {
+          "id": "47-whatsapp-cloud-api-only-if-ever-not-whatsapp-web",
+          "text": "4.7 WhatsApp: Cloud API only, if ever; not WhatsApp Web",
+          "level": 3
+        },
+        {
+          "id": "48-what-we-should-not-copy",
+          "text": "4.8 What we should not copy",
+          "level": 3
+        },
+        {
+          "id": "5-open-questions-for-the-owner",
+          "text": "5. Open questions for the owner",
+          "level": 2
+        },
+        {
+          "id": "6-what-this-report-did-not-establish",
+          "text": "6. What this report did not establish",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/n8n-nod/08-agent-experience",
+      "source": "docs/research/n8n-nod/08-agent-experience.md",
+      "title": "nod's agent and user experience, against Retinue's",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "4de5877bef851737e1d74b1d9082b6d7955af2c2dbcb0dad745cb53315123b12",
+      "headings": [
+        {
+          "id": "summary",
+          "text": "Summary",
+          "level": 2
+        },
+        {
+          "id": "1-how-nod-does-it",
+          "text": "1. How nod does it",
+          "level": 2
+        },
+        {
+          "id": "the-shape-in-one-line",
+          "text": "The shape in one line",
+          "level": 3
+        },
+        {
+          "id": "the-agent-loop",
+          "text": "The agent loop",
+          "level": 3
+        },
+        {
+          "id": "the-prompt-three-layers-cache-aware",
+          "text": "The prompt: three layers, cache-aware",
+          "level": 3
+        },
+        {
+          "id": "compaction-and-the-context-budget",
+          "text": "Compaction and the context budget",
+          "level": 3
+        },
+        {
+          "id": "memory-one-document-sources-and-a-recall-pass",
+          "text": "Memory: one document, sources, and a recall pass",
+          "level": 3
+        },
+        {
+          "id": "skills-a-guide-library-and-skills-the-agent-writes",
+          "text": "Skills: a guide library, and skills the agent writes",
+          "level": 3
+        },
+        {
+          "id": "parallel-work-tasks-and-subagents",
+          "text": "Parallel work: tasks and subagents",
+          "level": 3
+        },
+        {
+          "id": "how-progress-plans-and-tool-steps-are-shown",
+          "text": "How progress, plans and tool steps are shown",
+          "level": 3
+        },
+        {
+          "id": "onboarding-and-first-run",
+          "text": "Onboarding and first run",
+          "level": 3
+        },
+        {
+          "id": "settings-and-ui-patterns",
+          "text": "Settings and UI patterns",
+          "level": 3
+        },
+        {
+          "id": "2-how-retinue-does-it-now",
+          "text": "2. How Retinue does it now",
+          "level": 2
+        },
+        {
+          "id": "3-what-they-do-better-and-what-we-do-better",
+          "text": "3. What they do better, and what we do better",
+          "level": 2
+        },
+        {
+          "id": "4-ideas-we-could-adopt-ranked",
+          "text": "4. Ideas we could adopt, ranked",
+          "level": 2
+        },
+        {
+          "id": "1-learned-skills-with-an-owner-review-gate-medium",
+          "text": "1. Learned skills, with an owner review gate — Medium",
+          "level": 3
+        },
+        {
+          "id": "2-a-now-line-the-bot-writes-small",
+          "text": "2. A \"now\" line the bot writes — Small",
+          "level": 3
+        },
+        {
+          "id": "3-recall-memory-before-a-turn-without-a-model-call-small-medium",
+          "text": "3. Recall memory before a turn, without a model call — Small-medium",
+          "level": 3
+        },
+        {
+          "id": "4-a-plan-that-outlives-one-turn-medium",
+          "text": "4. A plan that outlives one turn — Medium",
+          "level": 3
+        },
+        {
+          "id": "5-first-run-suggestions-grounded-in-the-chosen-project-medium",
+          "text": "5. First-run suggestions grounded in the chosen project — Medium",
+          "level": 3
+        },
+        {
+          "id": "6-a-docs-search-tool-for-bots-small-medium",
+          "text": "6. A docs search tool for bots — Small-medium",
+          "level": 3
+        },
+        {
+          "id": "7-search-earlier-messages-for-the-owner-and-the-bot-medium",
+          "text": "7. Search earlier messages, for the owner and the bot — Medium",
+          "level": 3
+        },
+        {
+          "id": "worth-considering-later-not-ranked",
+          "text": "Worth considering later, not ranked",
+          "level": 3
+        },
+        {
+          "id": "5-open-questions-for-the-owner",
+          "text": "5. Open questions for the owner",
+          "level": 2
+        },
+        {
+          "id": "6-what-i-verified-and-what-i-assumed",
+          "text": "6. What I verified, and what I assumed",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/n8n-nod/07-architecture",
+      "source": "docs/research/n8n-nod/07-architecture.md",
+      "title": "nod's architecture and engineering, against Retinue's daemon, storage, gates and releases",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "75b0164912513a35a1416abe83bb86da36ee3b33a813f229d0b52aeba8b279d0",
+      "headings": [
+        {
+          "id": "summary",
+          "text": "Summary",
+          "level": 2
+        },
+        {
+          "id": "licence-and-copying",
+          "text": "Licence and copying",
+          "level": 2
+        },
+        {
+          "id": "how-nod-does-it",
+          "text": "How nod does it",
+          "level": 2
+        },
+        {
+          "id": "the-shape",
+          "text": "The shape",
+          "level": 3
+        },
+        {
+          "id": "server-and-agent-loop",
+          "text": "Server and agent loop",
+          "level": 3
+        },
+        {
+          "id": "storage-and-migrations",
+          "text": "Storage and migrations",
+          "level": 3
+        },
+        {
+          "id": "events-between-server-and-ui",
+          "text": "Events between server and UI",
+          "level": 3
+        },
+        {
+          "id": "errors-and-retries",
+          "text": "Errors and retries",
+          "level": 3
+        },
+        {
+          "id": "logging-and-diagnostics",
+          "text": "Logging and diagnostics",
+          "level": 3
+        },
+        {
+          "id": "configuration",
+          "text": "Configuration",
+          "level": 3
+        },
+        {
+          "id": "testing",
+          "text": "Testing",
+          "level": 3
+        },
+        {
+          "id": "ci-release-and-code-quality",
+          "text": "CI, release and code quality",
+          "level": 3
+        },
+        {
+          "id": "how-retinue-does-it-now",
+          "text": "How Retinue does it now",
+          "level": 2
+        },
+        {
+          "id": "what-they-do-better-and-what-we-do-better",
+          "text": "What they do better, and what we do better",
+          "level": 2
+        },
+        {
+          "id": "ideas-we-could-adopt-ranked",
+          "text": "Ideas we could adopt, ranked",
+          "level": 2
+        },
+        {
+          "id": "1-a-secret-scan-and-a-format-check-in-ci-and-in-the-hook-small-effort-low-risk",
+          "text": "1. A secret scan and a format check, in CI and in the hook — small effort, low risk",
+          "level": 3
+        },
+        {
+          "id": "2-an-import-boundary-check-for-the-daemon-and-the-ui-small-effort-low-risk-best-value-per-hour",
+          "text": "2. An import-boundary check for the daemon and the UI — small effort, low risk, best value per hour",
+          "level": 3
+        },
+        {
+          "id": "3-one-current-invariants-page-each-rule-naming-its-test-small-effort-low-risk",
+          "text": "3. One current invariants page, each rule naming its test — small effort, low risk",
+          "level": 3
+        },
+        {
+          "id": "4-ci-split-the-one-job-select-checks-by-path-require-them-and-run-nightly-medium-effort-medium-risk",
+          "text": "4. CI: split the one job, select checks by path, require them, and run nightly — medium effort, medium risk",
+          "level": 3
+        },
+        {
+          "id": "5-make-a-test-see-only-what-it-created-small-effort-low-risk",
+          "text": "5. Make a test see only what it created — small effort, low risk",
+          "level": 3
+        },
+        {
+          "id": "6-one-failure-sink-so-tests-can-assert-that-failures-are-reported-small-effort-low-risk",
+          "text": "6. One failure sink, so tests can assert that failures are reported — small effort, low risk",
+          "level": 3
+        },
+        {
+          "id": "7-prove-the-update-round-trip-and-gate-the-release-on-green-ci-medium-to-large-effort-medium-risk-highest-blast-radius",
+          "text": "7. Prove the update round trip, and gate the release on green CI — medium to large effort, medium risk, highest blast radius",
+          "level": 3
+        },
+        {
+          "id": "8-bound-what-a-conversation-read-returns-medium-effort-medium-risk",
+          "text": "8. Bound what a conversation read returns — medium effort, medium risk",
+          "level": 3
+        },
+        {
+          "id": "9-a-small-fingerprinted-behaviour-suite-large-effort-low-risk-later",
+          "text": "9. A small, fingerprinted behaviour suite — large effort, low risk, later",
+          "level": 3
+        },
+        {
+          "id": "what-not-to-adopt",
+          "text": "What not to adopt",
+          "level": 2
+        },
+        {
+          "id": "open-questions-for-the-owner",
+          "text": "Open questions for the owner",
+          "level": 2
+        },
+        {
+          "id": "what-i-verified-and-what-i-assumed",
+          "text": "What I verified and what I assumed",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/n8n-nod/03-connectors",
+      "source": "docs/research/n8n-nod/03-connectors.md",
+      "title": "Nod's connectors, compared with Retinue's MCP handling",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "955372e51fcb4a1f4575648b9a878d11f840dea45de875d811121ceb4cde333d",
+      "headings": [
+        {
+          "id": "summary",
+          "text": "Summary",
+          "level": 2
+        },
+        {
+          "id": "1-what-the-licence-allows",
+          "text": "1. What the licence allows",
+          "level": 2
+        },
+        {
+          "id": "2-how-nod-does-it",
+          "text": "2. How nod does it",
+          "level": 2
+        },
+        {
+          "id": "21-the-four-ways-in",
+          "text": "2.1 The four ways in",
+          "level": 3
+        },
+        {
+          "id": "22-the-design-one-port-three-providers",
+          "text": "2.2 The design: one port, three providers",
+          "level": 3
+        },
+        {
+          "id": "23-how-a-connector-is-defined",
+          "text": "2.3 How a connector is defined",
+          "level": 3
+        },
+        {
+          "id": "24-discovery",
+          "text": "2.4 Discovery",
+          "level": 3
+        },
+        {
+          "id": "25-install-and-authorise",
+          "text": "2.5 Install and authorise",
+          "level": 3
+        },
+        {
+          "id": "26-how-the-agent-calls-and-chooses",
+          "text": "2.6 How the agent calls and chooses",
+          "level": 3
+        },
+        {
+          "id": "27-data-flow-of-one-gmail-read",
+          "text": "2.7 Data flow of one Gmail read",
+          "level": 3
+        },
+        {
+          "id": "28-numbers",
+          "text": "2.8 Numbers",
+          "level": 3
+        },
+        {
+          "id": "3-how-retinue-does-it-now",
+          "text": "3. How Retinue does it now",
+          "level": 2
+        },
+        {
+          "id": "4-what-each-side-does-better",
+          "text": "4. What each side does better",
+          "level": 2
+        },
+        {
+          "id": "5-ideas-we-could-adopt",
+          "text": "5. Ideas we could adopt",
+          "level": 2
+        },
+        {
+          "id": "1-owner-added-mcp-servers-called-by-the-daemon-recommended-first-step",
+          "text": "1. Owner-added MCP servers, called by the daemon (recommended first step)",
+          "level": 3
+        },
+        {
+          "id": "2-mcp-oauth-as-a-later-step",
+          "text": "2. MCP OAuth, as a later step",
+          "level": 3
+        },
+        {
+          "id": "3-a-short-built-in-catalogue",
+          "text": "3. A short built-in catalogue",
+          "level": 3
+        },
+        {
+          "id": "4-one-meta-tool-plus-schema-search",
+          "text": "4. One meta-tool plus schema search",
+          "level": 3
+        },
+        {
+          "id": "5-per-tool-allow-rules-and-a-readwrite-split",
+          "text": "5. Per-tool allow rules and a read/write split",
+          "level": 3
+        },
+        {
+          "id": "6-to-7-safety-kit-and-redaction",
+          "text": "6 to 7. Safety kit and redaction",
+          "level": 3
+        },
+        {
+          "id": "8-to-10-what-not-to-adopt-yet",
+          "text": "8 to 10. What not to adopt yet",
+          "level": 3
+        },
+        {
+          "id": "6-which-approach-gives-retinue-many-connectors-fastest-within-our-rules",
+          "text": "6. Which approach gives Retinue many connectors fastest, within our rules",
+          "level": 2
+        },
+        {
+          "id": "7-open-questions-for-the-owner",
+          "text": "7. Open questions for the owner",
+          "level": 2
+        },
+        {
+          "id": "8-evidence",
+          "text": "8. Evidence",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/n8n-nod/01-sandbox",
+      "source": "docs/research/n8n-nod/01-sandbox.md",
+      "title": "nod's sandbox on the user's computer, against Retinue's worktrees, approvals and linked computers",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "51778000ec46adef2dcdc2d9d853653aa22c93f72395f739c3eaa61fa434f54e",
+      "headings": [
+        {
+          "id": "summary",
+          "text": "Summary",
+          "level": 2
+        },
+        {
+          "id": "licence",
+          "text": "Licence",
+          "level": 2
+        },
+        {
+          "id": "how-nod-does-it",
+          "text": "How nod does it",
+          "level": 2
+        },
+        {
+          "id": "the-shape-in-one-line",
+          "text": "The shape, in one line",
+          "level": 3
+        },
+        {
+          "id": "isolation-stack",
+          "text": "Isolation stack",
+          "level": 3
+        },
+        {
+          "id": "what-runs-inside",
+          "text": "What runs inside",
+          "level": 3
+        },
+        {
+          "id": "data-flow-of-one-command",
+          "text": "Data flow of one command",
+          "level": 3
+        },
+        {
+          "id": "what-it-can-reach",
+          "text": "What it can reach",
+          "level": 3
+        },
+        {
+          "id": "consent",
+          "text": "Consent",
+          "level": 3
+        },
+        {
+          "id": "install-and-start",
+          "text": "Install and start",
+          "level": 3
+        },
+        {
+          "id": "cleanup",
+          "text": "Cleanup",
+          "level": 3
+        },
+        {
+          "id": "main-files",
+          "text": "Main files",
+          "level": 3
+        },
+        {
+          "id": "how-retinue-does-it-now",
+          "text": "How Retinue does it now",
+          "level": 2
+        },
+        {
+          "id": "what-they-do-better",
+          "text": "What they do better",
+          "level": 2
+        },
+        {
+          "id": "what-we-do-better",
+          "text": "What we do better",
+          "level": 2
+        },
+        {
+          "id": "ideas-we-could-adopt",
+          "text": "Ideas we could adopt",
+          "level": 2
+        },
+        {
+          "id": "1-say-plainly-what-a-bot-can-reach-today-small-low-risk",
+          "text": "1. Say plainly what a bot can reach today (small, low risk)",
+          "level": 3
+        },
+        {
+          "id": "2-construct-the-cli-environment-instead-of-inheriting-it-small-medium-risk",
+          "text": "2. Construct the CLI environment instead of inheriting it (small, medium risk)",
+          "level": 3
+        },
+        {
+          "id": "3-adopt-the-uncertainty-protocol-for-the-tools-that-may-have-acted-medium-low-medium-risk",
+          "text": "3. Adopt the uncertainty protocol for the tools that may have acted (medium, low-medium risk)",
+          "level": 3
+        },
+        {
+          "id": "4-extend-the-existing-acl-hardening-to-the-data-folder-small-low-risk",
+          "text": "4. Extend the existing ACL hardening to the data folder (small, low risk)",
+          "level": 3
+        },
+        {
+          "id": "5-cap-output-with-head-and-tail-and-keep-the-full-text-small-low-medium-risk",
+          "text": "5. Cap output with head and tail, and keep the full text (small, low-medium risk)",
+          "level": 3
+        },
+        {
+          "id": "6-use-the-grant-clock-for-any-future-local-execution-tool-medium-medium-risk",
+          "text": "6. Use the grant clock for any future local-execution tool (medium, medium risk)",
+          "level": 3
+        },
+        {
+          "id": "7-a-per-conversation-scratch-folder-for-disposable-work-small-low-risk",
+          "text": "7. A per-conversation scratch folder for disposable work (small, low risk)",
+          "level": 3
+        },
+        {
+          "id": "8-do-not-copy-their-sandbox-architecture-large-effort-high-risk",
+          "text": "8. Do not copy their sandbox architecture (large effort, high risk)",
+          "level": 3
+        },
+        {
+          "id": "ranked-shortlist",
+          "text": "Ranked shortlist",
+          "level": 3
+        },
+        {
+          "id": "what-i-verified-and-what-i-assumed",
+          "text": "What I verified, and what I assumed",
+          "level": 2
+        },
+        {
+          "id": "open-questions-for-the-owner",
+          "text": "Open questions for the owner",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/n8n-nod/09-system-prompt",
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "title": "nod's system prompt and instructions to the model, against everything Retinue sends a bot",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "417e3719573e6d299e94cdb031174d58bb09187b760ad31bf596b98ae653b59f",
+      "headings": [
+        {
+          "id": "summary",
+          "text": "Summary",
+          "level": 2
+        },
+        {
+          "id": "1-how-nod-does-it",
+          "text": "1. How nod does it",
+          "level": 2
+        },
+        {
+          "id": "the-three-layers",
+          "text": "The three layers",
+          "level": 3
+        },
+        {
+          "id": "what-the-static-prompt-says-paragraph-by-paragraph",
+          "text": "What the static prompt says, paragraph by paragraph",
+          "level": 3
+        },
+        {
+          "id": "shared-rule-constants",
+          "text": "Shared rule constants",
+          "level": 3
+        },
+        {
+          "id": "mode-specific-prompts-replace-the-base-prompt",
+          "text": "Mode-specific prompts replace the base prompt",
+          "level": 3
+        },
+        {
+          "id": "the-turn-instruction",
+          "text": "The turn instruction",
+          "level": 3
+        },
+        {
+          "id": "tool-descriptions-carry-policy",
+          "text": "Tool descriptions carry policy",
+          "level": 3
+        },
+        {
+          "id": "data-is-wrapped-always",
+          "text": "Data is wrapped, always",
+          "level": 3
+        },
+        {
+          "id": "channel-rules",
+          "text": "Channel rules",
+          "level": 3
+        },
+        {
+          "id": "memory-and-skills-injection",
+          "text": "Memory and skills injection",
+          "level": 3
+        },
+        {
+          "id": "how-it-is-versioned",
+          "text": "How it is versioned",
+          "level": 3
+        },
+        {
+          "id": "lengths",
+          "text": "Lengths",
+          "level": 3
+        },
+        {
+          "id": "2-how-retinue-does-it-now",
+          "text": "2. How Retinue does it now",
+          "level": 2
+        },
+        {
+          "id": "what-we-send",
+          "text": "What we send",
+          "level": 3
+        },
+        {
+          "id": "sizes",
+          "text": "Sizes",
+          "level": 3
+        },
+        {
+          "id": "versioning-and-tests",
+          "text": "Versioning and tests",
+          "level": 3
+        },
+        {
+          "id": "3-what-they-do-better-and-what-we-do-better",
+          "text": "3. What they do better, and what we do better",
+          "level": 2
+        },
+        {
+          "id": "what-they-do-better",
+          "text": "What they do better",
+          "level": 3
+        },
+        {
+          "id": "what-we-do-better",
+          "text": "What we do better",
+          "level": 3
+        },
+        {
+          "id": "4-ideas-we-could-adopt-ranked-by-likely-effect-on-bot-quality",
+          "text": "4. Ideas we could adopt, ranked by likely effect on bot quality",
+          "level": 2
+        },
+        {
+          "id": "1-a-trust-and-evidence-paragraph-at-the-top-of-small-high-effect",
+          "text": "1. A trust and evidence paragraph at the top of <retinue_team> — small, high effect",
+          "level": 3
+        },
+        {
+          "id": "2-an-unknown-result-is-never-a-pass-small-high-effect",
+          "text": "2. An unknown result is never a pass — small, high effect",
+          "level": 3
+        },
+        {
+          "id": "3-wrap-external-tool-results-as-data-medium-effort-high-effect",
+          "text": "3. Wrap external tool results as data — medium effort, high effect",
+          "level": 3
+        },
+        {
+          "id": "4-say-plainly-that-the-app-asks-for-permission-small-medium-high-effect",
+          "text": "4. Say plainly that the app asks for permission — small, medium-high effect",
+          "level": 3
+        },
+        {
+          "id": "5-give-the-askuser-tool-description-its-when-small-medium-effect",
+          "text": "5. Give the ask_user tool description its \"when\" — small, medium effect",
+          "level": 3
+        },
+        {
+          "id": "6-move-the-context-blocks-before-the-users-words-and-keep-the-instruction-last-small-medium-effect",
+          "text": "6. Move the context blocks before the user's words, and keep the instruction last — small, medium effect",
+          "level": 3
+        },
+        {
+          "id": "7-a-variant-for-helper-sub-bots-small-medium-medium-effect",
+          "text": "7. A variant for helper sub-bots — small-medium, medium effect",
+          "level": 3
+        },
+        {
+          "id": "8-one-source-for-the-brief-lines-small-low-medium-effect",
+          "text": "8. One source for the brief lines — small, low-medium effect",
+          "level": 3
+        },
+        {
+          "id": "9-a-prefix-stability-test-and-a-prompt-layer-page-in-the-docs-small-low-effect-today",
+          "text": "9. A prefix-stability test, and a prompt-layer page in the docs — small, low effect today",
+          "level": 3
+        },
+        {
+          "id": "10-behavioural-evals-for-a-handful-of-prompt-behaviours-large-highest-long-term-effect",
+          "text": "10. Behavioural evals for a handful of prompt behaviours — large, highest long-term effect",
+          "level": 3
+        },
+        {
+          "id": "worth-considering-later",
+          "text": "Worth considering later",
+          "level": 3
+        },
+        {
+          "id": "5-open-questions-for-the-owner",
+          "text": "5. Open questions for the owner",
+          "level": 2
+        },
+        {
+          "id": "6-what-i-verified-and-what-i-assumed",
+          "text": "6. What I verified, and what I assumed",
+          "level": 2
+        }
+      ]
     },
     {
       "id": "repository/crates/retinue-daemon/src/openui_guide",
@@ -3019,6 +4844,191 @@
       ]
     },
     {
+      "id": "project/reports/multi-device-projects",
+      "source": "docs/reports/multi-device-projects.md",
+      "title": "Piece 6: starting a project on another machine (report and contract)",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "b86ea54f254bc14855827edad30475c4705013d3f5bc040e15fa4df5783cb21a",
+      "headings": [
+        {
+          "id": "1-what-the-owner-asked-for-and-what-this-lane-builds",
+          "text": "1. What the owner asked for, and what this lane builds",
+          "level": 2
+        },
+        {
+          "id": "2-settings-desktop-only",
+          "text": "2. Settings (desktop only)",
+          "level": 2
+        },
+        {
+          "id": "3-far-side-the-methods-a-paired-device-calls-through-the-hosts-gateway",
+          "text": "3. Far side: the methods a paired device calls through the host's gateway",
+          "level": 2
+        },
+        {
+          "id": "31-projectbrowse-path-string",
+          "text": "3.1 project.browse — { path?: string }",
+          "level": 3
+        },
+        {
+          "id": "32-projectcreatefromfolder-path-string-name-string",
+          "text": "3.2 project.createFromFolder — { path: string, name?: string }",
+          "level": 3
+        },
+        {
+          "id": "33-projectclone-url-parent-name-confirm-true-existing-method-now-reachable",
+          "text": "3.3 project.clone — { url, parent, name?, confirm: true } (existing method, now reachable)",
+          "level": 3
+        },
+        {
+          "id": "34-projectclonestatus-id-string",
+          "text": "3.4 project.clone.status — { id: string }",
+          "level": 3
+        },
+        {
+          "id": "35-the-new-class-and-the-rows",
+          "text": "3.5 The new class, and the rows",
+          "level": 3
+        },
+        {
+          "id": "4-near-side-the-desktops-own-link-machine",
+          "text": "4. Near side: the desktop's own link, machine.*",
+          "level": 2
+        },
+        {
+          "id": "5-events",
+          "text": "5. Events",
+          "level": 2
+        },
+        {
+          "id": "6-bot-tools",
+          "text": "6. Bot tools",
+          "level": 2
+        },
+        {
+          "id": "7-who-else-is-affected",
+          "text": "7. Who else is affected",
+          "level": 2
+        },
+        {
+          "id": "8-running-log",
+          "text": "8. Running log",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/multi-device-manage",
+      "source": "docs/reports/multi-device-manage.md",
+      "title": "Piece 7: a linked machine manages another machine's devices",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "1d6e863149b78c4371e085c782c5d90888a26064584d3cace214625a373c0e5b",
+      "headings": [
+        {
+          "id": "contract-stable",
+          "text": "Contract (stable)",
+          "level": 2
+        },
+        {
+          "id": "1-the-far-side-manage-class-machine-devices-only",
+          "text": "1. The far side: manage class, machine devices only",
+          "level": 3
+        },
+        {
+          "id": "2-remotestatus-unchanged-object",
+          "text": "2. remote.status — unchanged object",
+          "level": 3
+        },
+        {
+          "id": "3-remotedeviceslist-the-rows-the-owners-own-window-sees",
+          "text": "3. remote.devices.list — the rows the owner's own window sees",
+          "level": 3
+        },
+        {
+          "id": "4-remotedevicesupdate-rename-or-change-a-tier",
+          "text": "4. remote.devices.update — rename or change a tier",
+          "level": 3
+        },
+        {
+          "id": "5-remotedevicesrevoke",
+          "text": "5. remote.devices.revoke",
+          "level": 3
+        },
+        {
+          "id": "6-remotepairpending-new-read",
+          "text": "6. remote.pair.pending — new read",
+          "level": 3
+        },
+        {
+          "id": "7-remotepairconfirm",
+          "text": "7. remote.pair.confirm",
+          "level": 3
+        },
+        {
+          "id": "8-remoteactivitylist",
+          "text": "8. remote.activity.list",
+          "level": 3
+        },
+        {
+          "id": "9-the-near-side-seven-pass-throughs-machinesrs",
+          "text": "9. The near side: seven pass-throughs (machines.rs)",
+          "level": 3
+        },
+        {
+          "id": "10-events",
+          "text": "10. Events",
+          "level": 3
+        },
+        {
+          "id": "11-bot-tools",
+          "text": "11. Bot tools",
+          "level": 3
+        },
+        {
+          "id": "running-log",
+          "text": "Running log",
+          "level": 2
+        },
+        {
+          "id": "2026-11-17-start",
+          "text": "2026-11-17, start",
+          "level": 3
+        },
+        {
+          "id": "2026-11-17-far-side-written",
+          "text": "2026-11-17, far side written",
+          "level": 3
+        },
+        {
+          "id": "2026-11-17-near-side-written",
+          "text": "2026-11-17, near side written",
+          "level": 3
+        },
+        {
+          "id": "2026-11-17-checks-so-far",
+          "text": "2026-11-17, checks so far",
+          "level": 3
+        },
+        {
+          "id": "2026-11-17-the-tests-run",
+          "text": "2026-11-17, the tests, run",
+          "level": 3
+        },
+        {
+          "id": "2026-11-17-what-is-finished",
+          "text": "2026-11-17, what is finished",
+          "level": 3
+        },
+        {
+          "id": "files-touched",
+          "text": "Files touched",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "repository/PRIVACY",
       "source": "PRIVACY.md",
       "title": "Privacy",
@@ -3084,12 +5094,42 @@
       ]
     },
     {
+      "id": "repository/evals/README",
+      "source": "evals/README.md",
+      "title": "Retinue behavioural evals",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "04beb45a6a7c0e4e266ad0a174661d89a909a051e3d78a0d947c64ca1f64689e",
+      "headings": [
+        {
+          "id": "run-it",
+          "text": "Run it",
+          "level": 2
+        },
+        {
+          "id": "caps",
+          "text": "Caps",
+          "level": 2
+        },
+        {
+          "id": "the-five-scenarios",
+          "text": "The five scenarios",
+          "level": 2
+        },
+        {
+          "id": "add-a-scenario",
+          "text": "Add a scenario",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "repository/AGENTS",
       "source": "AGENTS.md",
       "title": "Retinue collaboration instructions",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "c0d734e5b0bd946a46bfd22e78f2e7a1b4fd267f8e6ec041c2324341b0a1d5d1",
+      "sha256": "042162ffb736f957bbc8f4726151a51f6c9c3d11a1c5ceb5e0ef3610ccd6c44a",
       "headings": [
         {
           "id": "resume-1-october-2026-evening-superseded-by-delegation-pipeline-above",
@@ -3119,7 +5159,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "4c2fabf214d200bc141929d18e77bf6959683aced37e60a3e8d6f2507c04271a",
+      "sha256": "285c4df413036d15f69b001beb5e9c8b6fa6234733063ba1bfa6d221093eb07c",
       "headings": [
         {
           "id": "update-commands",
@@ -3227,6 +5267,11 @@
           "level": 3
         },
         {
+          "id": "projects-from-the-owners-devices-17-november-2026",
+          "text": "Projects from the owner's devices (17 November 2026)",
+          "level": 3
+        },
+        {
           "id": "phase-4-projects-31-october-2026",
           "text": "Phase 4: projects (31 October 2026)",
           "level": 3
@@ -3312,6 +5357,11 @@
           "level": 3
         },
         {
+          "id": "section-d-connectors-16-november-2026",
+          "text": "Section D: connectors (16 November 2026)",
+          "level": 2
+        },
+        {
           "id": "phase-5-accounts-31-october-2026",
           "text": "Phase 5: accounts (31 October 2026)",
           "level": 2
@@ -3354,6 +5404,21 @@
         {
           "id": "phase-10-importing-conversations-from-other-coding-agents-14-november-2026",
           "text": "Phase 10: importing conversations from other coding agents (14 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "section-c-pi-as-a-coding-agent-and-the-keys-retinue-holds-for-it-16-november-2026",
+          "text": "Section C: Pi as a coding agent, and the keys Retinue holds for it (16 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "wave-2-agent-experience-17-november-2026",
+          "text": "Wave 2: agent experience (17 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "wave-3-learned-skills-and-first-run-suggestions-17-november-2026",
+          "text": "Wave 3: learned skills and first-run suggestions (17 November 2026)",
           "level": 2
         }
       ]
@@ -3714,6 +5779,56 @@
       ]
     },
     {
+      "id": "project/research/multi-device/02-retinue-today",
+      "source": "docs/research/multi-device/02-retinue-today.md",
+      "title": "Retinue today, and the gap to the owner's bar",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "826c11258f32ed7957687b589105602710ae96b64963daee74c967c88b918813",
+      "headings": [
+        {
+          "id": "21-what-exists",
+          "text": "2.1 What exists",
+          "level": 2
+        },
+        {
+          "id": "22-r1-all-four-devices-see-the-same-sessions-live",
+          "text": "2.2 R1: all four devices see the same sessions, live",
+          "level": 2
+        },
+        {
+          "id": "23-r2-carry-on-any-session-from-any-device",
+          "text": "2.3 R2: carry on any session from any device",
+          "level": 2
+        },
+        {
+          "id": "24-r3-where-it-runs-and-where-it-came-from",
+          "text": "2.4 R3: where it runs and where it came from",
+          "level": 2
+        },
+        {
+          "id": "25-r4-start-new-projects-on-another-device",
+          "text": "2.5 R4: start new projects on another device",
+          "level": 2
+        },
+        {
+          "id": "26-r5-manage-everything-about-the-other-devices-from-the-device-in-hand",
+          "text": "2.6 R5: manage everything about the other devices from the device in hand",
+          "level": 2
+        },
+        {
+          "id": "27-r6-easy-robust-and-reliable",
+          "text": "2.7 R6: easy, robust and reliable",
+          "level": 2
+        },
+        {
+          "id": "28-the-gap-in-one-paragraph",
+          "text": "2.8 The gap in one paragraph",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "repository/apps/website/README",
       "source": "apps/website/README.md",
       "title": "Retinue website",
@@ -3759,7 +5874,7 @@
       "title": "Retinue, from the inside",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "fd3d82e1593978a2066ee99d98e8979aae22755eff434f37d830362f8ca5cdfe",
+      "sha256": "6e1dc5b7fa5b83125fdf7eaa7ff7e00e3dc3bc53b951ff3f0d1dd5a8c0747096",
       "headings": [
         {
           "id": "name-retinue-description-how-retinue-works-from-the-inside-the-words-employees-projects-conversations-the-ceo-which-tool-does-what-and-who-may-call-it-how-conversation-ids-work-and-the-rules-every-bot-follows-read-it-before-you-delegate-hire-schedule-or-open-work-in-another-project",
@@ -3925,6 +6040,126 @@
           "id": "status-delta-and-gate-decisions",
           "text": "Status delta and gate decisions",
           "level": 3
+        }
+      ]
+    },
+    {
+      "id": "project/research/synara-2026-11",
+      "source": "docs/research/synara-2026-11.md",
+      "title": "Synara, read against Retinue",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "798de5a287443414e61c9eaba263c1829aa577d7260b61219ac13b0a38c5de52",
+      "headings": [
+        {
+          "id": "summary",
+          "text": "Summary",
+          "level": 2
+        },
+        {
+          "id": "1-sources-and-what-each-is-worth",
+          "text": "1. Sources, and what each is worth",
+          "level": 2
+        },
+        {
+          "id": "2-what-i-checked-in-their-source-and-what-remains-a-claim",
+          "text": "2. What I checked in their source, and what remains a claim",
+          "level": 2
+        },
+        {
+          "id": "3-item-by-item-what-retinue-has-today",
+          "text": "3. Item by item: what Retinue has today",
+          "level": 2
+        },
+        {
+          "id": "planning",
+          "text": "Planning",
+          "level": 3
+        },
+        {
+          "id": "many-agents",
+          "text": "Many agents",
+          "level": 3
+        },
+        {
+          "id": "agents-that-do-more",
+          "text": "Agents that do more",
+          "level": 3
+        },
+        {
+          "id": "code-and-review",
+          "text": "Code and review",
+          "level": 3
+        },
+        {
+          "id": "small-things",
+          "text": "Small things",
+          "level": 3
+        },
+        {
+          "id": "the-t3-shared-list-briefly",
+          "text": "The T3-shared list, briefly",
+          "level": 3
+        },
+        {
+          "id": "in-progress-in-synara",
+          "text": "In progress in Synara",
+          "level": 3
+        },
+        {
+          "id": "4-what-we-lack-ranked",
+          "text": "4. What we lack, ranked",
+          "level": 2
+        },
+        {
+          "id": "the-first-three-in-a-little-more-detail",
+          "text": "The first three, in a little more detail",
+          "level": 3
+        },
+        {
+          "id": "5-ux-ideas-worth-borrowing-without-their-art",
+          "text": "5. UX ideas worth borrowing, without their art",
+          "level": 2
+        },
+        {
+          "id": "6-the-owners-question-pause-a-running-task-resume-it-later",
+          "text": "6. The owner's question: pause a running task, resume it later",
+          "level": 2
+        },
+        {
+          "id": "what-synara-does",
+          "text": "What Synara does",
+          "level": 3
+        },
+        {
+          "id": "what-t3-code-has",
+          "text": "What T3 Code has",
+          "level": 3
+        },
+        {
+          "id": "what-retinue-has",
+          "text": "What Retinue has",
+          "level": 3
+        },
+        {
+          "id": "what-to-learn-and-what-to-build",
+          "text": "What to learn, and what to build",
+          "level": 3
+        },
+        {
+          "id": "7-licence-and-attribution-if-we-ever-adapt-code",
+          "text": "7. Licence and attribution, if we ever adapt code",
+          "level": 2
+        },
+        {
+          "id": "8-what-i-could-not-verify",
+          "text": "8. What I could not verify",
+          "level": 2
+        },
+        {
+          "id": "sources-with-the-dates-i-used-them",
+          "text": "Sources, with the dates I used them",
+          "level": 2
         }
       ]
     },
@@ -4304,12 +6539,132 @@
       ]
     },
     {
+      "id": "project/reference/prompt-layers",
+      "source": "docs/reference/prompt-layers.md",
+      "title": "The prompt layers",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "9831685ad5d91ba2f1dcb58535cdecca8b7717d8201567aa009010edd32d0794",
+      "headings": [
+        {
+          "id": "the-layers",
+          "text": "The layers",
+          "level": 2
+        },
+        {
+          "id": "the-per-turn-blocks-and-their-caps",
+          "text": "The per-turn blocks and their caps",
+          "level": 2
+        },
+        {
+          "id": "the-order-and-the-one-setting-that-changes-it",
+          "text": "The order, and the one setting that changes it",
+          "level": 2
+        },
+        {
+          "id": "what-the-instructions-promise",
+          "text": "What the instructions promise",
+          "level": 2
+        },
+        {
+          "id": "tests-that-pin-this-page",
+          "text": "Tests that pin this page",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/multi-device-mcp",
+      "source": "docs/reports/multi-device-mcp.md",
+      "title": "The Retinue MCP on the linked machines: diagnose and test multi-device from outside the window",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "1b161402dadedae12b16dfb3861a3ae54dc0c97417fc216e776267bcc4123846",
+      "headings": [
+        {
+          "id": "what-this-adds-in-one-paragraph",
+          "text": "What this adds, in one paragraph",
+          "level": 2
+        },
+        {
+          "id": "rules-this-lane-implements-each-with-a-test",
+          "text": "Rules this lane implements, each with a test",
+          "level": 2
+        },
+        {
+          "id": "contract",
+          "text": "Contract",
+          "level": 2
+        },
+        {
+          "id": "1-listmachines-viewer-no-arguments",
+          "text": "1. list_machines — Viewer, no arguments",
+          "level": 3
+        },
+        {
+          "id": "2-machineconversations-viewer-machineid",
+          "text": "2. machine_conversations — Viewer, { machineId }",
+          "level": 3
+        },
+        {
+          "id": "3-readmachineconversation-viewer-machineid-sessionid-beforemessageid-limit",
+          "text": "3. read_machine_conversation — Viewer, { machineId, sessionId, beforeMessageId?, limit? }",
+          "level": 3
+        },
+        {
+          "id": "4-chat-startonmachine-messageonmachine-steeronmachine-stoponmachine",
+          "text": "4. Chat: start_on_machine, message_on_machine, steer_on_machine, stop_on_machine",
+          "level": 3
+        },
+        {
+          "id": "5-waitonmachine-viewer-machineid-sessionid-timeoutsecs",
+          "text": "5. wait_on_machine — Viewer, { machineId, sessionId, timeoutSecs? }",
+          "level": 3
+        },
+        {
+          "id": "6-machineapprovals-viewer-machineid-sessionid-answermachineapproval-operator-machineid-permissionid-choice",
+          "text": "6. machine_approvals — Viewer, { machineId, sessionId? }; answer_machine_approval — Operator, { machineId, permissionId, choice }",
+          "level": 3
+        },
+        {
+          "id": "7-machinefolders-viewer-machineid-path-machineaddproject-operator-machineid-path-name-machineclone-operator-machineid-url-folder-name-machineclonestatus-viewer-machineid-jobid",
+          "text": "7. machine_folders — Viewer, { machineId, path? }; machine_add_project — Operator, { machineId, path, name? }; machine_clone — Operator, { machineId, url, folder?, name? }; machine_clone_status — Viewer, { machineId, jobId }",
+          "level": 3
+        },
+        {
+          "id": "8-machinedevices-operator-machineid-machineremotestatus-operator-machineid",
+          "text": "8. machine_devices — Operator, { machineId }; machine_remote_status — Operator, { machineId }",
+          "level": 3
+        },
+        {
+          "id": "9-diagnosemachines-viewer-no-arguments",
+          "text": "9. diagnose_machines — Viewer, no arguments",
+          "level": 3
+        },
+        {
+          "id": "changes",
+          "text": "Changes",
+          "level": 2
+        },
+        {
+          "id": "running-log",
+          "text": "Running log",
+          "level": 2
+        },
+        {
+          "id": "2026-11-18-report-written-then-built",
+          "text": "2026-11-18 — report written, then built",
+          "level": 3
+        }
+      ]
+    },
+    {
       "id": "repository/crates/retinue-daemon/src/skills/retinue/tools",
       "source": "crates/retinue-daemon/src/skills/retinue/tools.md",
       "title": "Tools, by who may call them",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "dc4ad694f7b45d010de0a33a0dee341bc6f49914ab18dcd669ebabdff5518a48",
+      "sha256": "db20786883303f4c259b388a07b05bedbd223ed221d15f09c89a9b5c980164c8",
       "headings": [
         {
           "id": "every-bot",
@@ -4334,6 +6689,641 @@
         {
           "id": "what-no-bot-has",
           "text": "What no bot has",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/wave2-agent",
+      "source": "docs/reports/wave2-agent.md",
+      "title": "Wave 2, agent experience: backend report",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "2d827c9fe99d5fba1c346111b9fb9380d1686161094df6de5c3109c6702d6049",
+      "headings": [
+        {
+          "id": "what-this-lane-adds",
+          "text": "What this lane adds",
+          "level": 2
+        },
+        {
+          "id": "1-the-now-line-idea-2",
+          "text": "1. The \"now\" line (idea 2)",
+          "level": 2
+        },
+        {
+          "id": "bot-tool-setworkingnote",
+          "text": "Bot tool: set_working_note",
+          "level": 3
+        },
+        {
+          "id": "event-sessionnote",
+          "text": "Event: session.note",
+          "level": 3
+        },
+        {
+          "id": "2-memory-recall-before-a-turn-idea-3",
+          "text": "2. Memory recall before a turn (idea 3)",
+          "level": 2
+        },
+        {
+          "id": "3-a-plan-that-outlives-one-turn-idea-4",
+          "text": "3. A plan that outlives one turn (idea 4)",
+          "level": 2
+        },
+        {
+          "id": "stored-shape",
+          "text": "Stored shape",
+          "level": 3
+        },
+        {
+          "id": "session-row-gains-plan",
+          "text": "Session row gains plan",
+          "level": 3
+        },
+        {
+          "id": "event-sessionplan-unchanged-shape",
+          "text": "Event: session.plan (unchanged shape)",
+          "level": 3
+        },
+        {
+          "id": "prompt-block",
+          "text": "Prompt block: <retinue_plan>",
+          "level": 3
+        },
+        {
+          "id": "4-a-docs-search-tool-for-bots-idea-6",
+          "text": "4. A docs search tool for bots (idea 6)",
+          "level": 2
+        },
+        {
+          "id": "searchdocs",
+          "text": "search_docs",
+          "level": 3
+        },
+        {
+          "id": "readdoc",
+          "text": "read_doc",
+          "level": 3
+        },
+        {
+          "id": "5-search-earlier-messages-idea-7",
+          "text": "5. Search earlier messages (idea 7)",
+          "level": 2
+        },
+        {
+          "id": "rpc-searchmessages-extended-existing-name-and-reply-shape",
+          "text": "RPC: search.messages (extended, existing name and reply shape)",
+          "level": 3
+        },
+        {
+          "id": "bot-tool-searchhistory",
+          "text": "Bot tool: search_history",
+          "level": 3
+        },
+        {
+          "id": "6-remote-policy-rows",
+          "text": "6. Remote policy rows",
+          "level": 2
+        },
+        {
+          "id": "7-hooks-into-shared-files-kept-small-for-merging",
+          "text": "7. Hooks into shared files (kept small for merging)",
+          "level": 2
+        },
+        {
+          "id": "log",
+          "text": "Log",
+          "level": 2
+        },
+        {
+          "id": "what-is-done-and-where",
+          "text": "What is done, and where",
+          "level": 2
+        },
+        {
+          "id": "what-i-verified",
+          "text": "What I verified",
+          "level": 2
+        },
+        {
+          "id": "not-run-here-and-why",
+          "text": "Not run here, and why",
+          "level": 2
+        },
+        {
+          "id": "open-for-the-director",
+          "text": "Open, for the Director",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/wave2-automations",
+      "source": "docs/reports/wave2-automations.md",
+      "title": "Wave 2, automations lane: contract for the screens",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "189e45233f9d01c3a8c1df5be889f054fdd2e8130c0a765f5b514448cd33552e",
+      "headings": [
+        {
+          "id": "what-changes-for-the-ui",
+          "text": "What changes for the UI",
+          "level": 2
+        },
+        {
+          "id": "automation-dto",
+          "text": "Automation DTO",
+          "level": 2
+        },
+        {
+          "id": "new-request-parameters-all-optional-existing-callers-are-unchanged",
+          "text": "New request parameters (all optional; existing callers are unchanged)",
+          "level": 3
+        },
+        {
+          "id": "run-dto",
+          "text": "Run DTO",
+          "level": 2
+        },
+        {
+          "id": "events",
+          "text": "Events",
+          "level": 2
+        },
+        {
+          "id": "transcript-notices",
+          "text": "Transcript notices",
+          "level": 2
+        },
+        {
+          "id": "idea-41-the-late-note-inside-the-runs-prompt-not-the-ui",
+          "text": "Idea 4.1: the late note (inside the run's prompt, not the UI)",
+          "level": 2
+        },
+        {
+          "id": "idea-43-task-check-back",
+          "text": "Idea 4.3: task check-back",
+          "level": 2
+        },
+        {
+          "id": "data-shape-changes-and-who-else-is-affected",
+          "text": "Data shape changes, and who else is affected",
+          "level": 2
+        },
+        {
+          "id": "running-log",
+          "text": "Running log",
+          "level": 2
+        },
+        {
+          "id": "done-not-done-and-where",
+          "text": "Done, not done, and where",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/wave2-safety",
+      "source": "docs/reports/wave2-safety.md",
+      "title": "Wave 2, safety and providers (worktree -9)",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "1d3221bc3835386f8c262fa3edb7f1e327ceacc604feb11c76479e70c31802a2",
+      "headings": [
+        {
+          "id": "contract-stable",
+          "text": "Contract (stable)",
+          "level": 2
+        },
+        {
+          "id": "1-reachstatement-what-a-bot-can-reach-in-plain-words",
+          "text": "1. reach.statement — what a bot can reach, in plain words",
+          "level": 3
+        },
+        {
+          "id": "2-sessionworkspace-gains-scratchfolder-additive",
+          "text": "2. session.workspace gains scratchFolder (additive)",
+          "level": 3
+        },
+        {
+          "id": "3-runtimemodels-rows-gain-price-and-health-additive",
+          "text": "3. runtime.models rows gain price and health (additive)",
+          "level": 3
+        },
+        {
+          "id": "4-computerexec-tool-reply-gains-three-fields-and-keeps-head-and-tail",
+          "text": "4. computer_exec tool reply gains three fields, and keeps head and tail",
+          "level": 3
+        },
+        {
+          "id": "5-may-have-acted-a-lost-answer-is-never-success-and-never-nothing-happened",
+          "text": "5. \"May have acted\": a lost answer is never success and never \"nothing happened\"",
+          "level": 3
+        },
+        {
+          "id": "6-a-paused-model-refuses-unattended-work-only",
+          "text": "6. A paused model refuses unattended work only",
+          "level": 3
+        },
+        {
+          "id": "7-data-folder-acl-as-a-doctor-row",
+          "text": "7. Data folder ACL, as a Doctor row",
+          "level": 3
+        },
+        {
+          "id": "changes",
+          "text": "Changes",
+          "level": 2
+        },
+        {
+          "id": "log",
+          "text": "Log",
+          "level": 2
+        },
+        {
+          "id": "verified",
+          "text": "Verified",
+          "level": 2
+        },
+        {
+          "id": "a-bug-my-own-tests-caught-worth-knowing",
+          "text": "A bug my own tests caught, worth knowing",
+          "level": 2
+        },
+        {
+          "id": "not-done-and-why",
+          "text": "Not done, and why",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/wave3-evals",
+      "source": "docs/reports/wave3-evals.md",
+      "title": "Wave 3, behavioural evals for prompt behaviours (worktree -14)",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "2bb5a824663dd918fcc7f61a06e03e427dade1a00d56a07196ee7b1b27619e00",
+      "headings": [
+        {
+          "id": "contract-stable",
+          "text": "Contract (stable)",
+          "level": 2
+        },
+        {
+          "id": "0-no-rpc-no-event-no-bot-tool",
+          "text": "0. No RPC, no event, no bot tool",
+          "level": 3
+        },
+        {
+          "id": "1-how-the-owner-starts-it",
+          "text": "1. How the owner starts it",
+          "level": 3
+        },
+        {
+          "id": "2-results-one-local-file-and-one-short-summary",
+          "text": "2. Results: one local file and one short summary",
+          "level": 3
+        },
+        {
+          "id": "3-caps",
+          "text": "3. Caps",
+          "level": 3
+        },
+        {
+          "id": "4-the-five-scenarios",
+          "text": "4. The five scenarios",
+          "level": 3
+        },
+        {
+          "id": "running-log",
+          "text": "Running log",
+          "level": 2
+        },
+        {
+          "id": "what-is-done",
+          "text": "What is done",
+          "level": 2
+        },
+        {
+          "id": "what-is-not-done-and-what-is-unverified",
+          "text": "What is not done, and what is unverified",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/wave3-prompts",
+      "source": "docs/reports/wave3-prompts.md",
+      "title": "Wave 3, lane \"Prompts\": the contract the Director builds from",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "5a4c8e55c2de914c5f7eb9c6aacfd6682ef184b2d2a70dc86dd5fec146e1d3d8",
+      "headings": [
+        {
+          "id": "what-this-lane-changes-for-the-ui",
+          "text": "What this lane changes for the UI",
+          "level": 2
+        },
+        {
+          "id": "new-setting-promptscontextfirst",
+          "text": "New setting: prompts.contextFirst",
+          "level": 3
+        },
+        {
+          "id": "changed-bot-tool-description-askuser",
+          "text": "Changed bot tool description: ask_user",
+          "level": 3
+        },
+        {
+          "id": "prompt-text-that-changes-no-interface-change",
+          "text": "Prompt text that changes (no interface change)",
+          "level": 3
+        },
+        {
+          "id": "not-changed-deliberately",
+          "text": "Not changed, deliberately",
+          "level": 3
+        },
+        {
+          "id": "prompt-passages-before-and-after",
+          "text": "Prompt passages, before and after",
+          "level": 2
+        },
+        {
+          "id": "1-the-trust-evidence-and-permission-block-ideas-1-and-4-new",
+          "text": "1. The trust, evidence and permission block (ideas 1 and 4) — new",
+          "level": 3
+        },
+        {
+          "id": "2-retinuejson-in-the-project-section-owners-question-4",
+          "text": "2. .retinue.json in the project section (owner's question 4)",
+          "level": 3
+        },
+        {
+          "id": "3-pass-on-a-side-conversation-idea-2",
+          "text": "3. (pass) on a side conversation (idea 2)",
+          "level": 3
+        },
+        {
+          "id": "4-pass-on-a-scheduled-run-idea-2",
+          "text": "4. (pass) on a scheduled run (idea 2)",
+          "level": 3
+        },
+        {
+          "id": "5-the-brief-sentence-idea-8",
+          "text": "5. The brief sentence (idea 8)",
+          "level": 3
+        },
+        {
+          "id": "6-a-helper-sub-bot-idea-7",
+          "text": "6. A helper sub-bot (idea 7)",
+          "level": 3
+        },
+        {
+          "id": "7-the-per-turn-order-idea-6",
+          "text": "7. The per-turn order (idea 6)",
+          "level": 3
+        },
+        {
+          "id": "8-outside-results-idea-3-new",
+          "text": "8. Outside results (idea 3) — new",
+          "level": 3
+        },
+        {
+          "id": "running-log",
+          "text": "Running log",
+          "level": 2
+        },
+        {
+          "id": "verification-what-i-ran-and-what-i-could-not",
+          "text": "Verification: what I ran, and what I could not",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/wave3-skills",
+      "source": "docs/reports/wave3-skills.md",
+      "title": "Wave 3, learned skills and first-run suggestions: backend report",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "47b9c0a1118529f4801f12bdf1f85bec97eb33d83540dda5ce4687af9ba6140f",
+      "headings": [
+        {
+          "id": "what-this-lane-adds",
+          "text": "What this lane adds",
+          "level": 2
+        },
+        {
+          "id": "1-learned-skills-idea-1",
+          "text": "1. Learned skills (idea 1)",
+          "level": 2
+        },
+        {
+          "id": "the-row",
+          "text": "The row",
+          "level": 3
+        },
+        {
+          "id": "bot-tools-team-bridge-mcptoolscall",
+          "text": "Bot tools (team bridge, mcp.tools.call)",
+          "level": 3
+        },
+        {
+          "id": "rpcs-for-the-review-queue",
+          "text": "RPCs for the review queue",
+          "level": 3
+        },
+        {
+          "id": "event",
+          "text": "Event",
+          "level": 3
+        },
+        {
+          "id": "rails-summarised-who-may-do-what",
+          "text": "Rails, summarised (who may do what)",
+          "level": 3
+        },
+        {
+          "id": "2-first-run-suggestions-idea-5",
+          "text": "2. First-run suggestions (idea 5)",
+          "level": 2
+        },
+        {
+          "id": "what-is-read",
+          "text": "What is read",
+          "level": 3
+        },
+        {
+          "id": "how-the-three-are-chosen",
+          "text": "How the three are chosen",
+          "level": 3
+        },
+        {
+          "id": "rules",
+          "text": "Rules",
+          "level": 3
+        },
+        {
+          "id": "3-remote-policy-rows",
+          "text": "3. Remote policy rows",
+          "level": 2
+        },
+        {
+          "id": "4-hooks-into-shared-files-kept-small-for-merging",
+          "text": "4. Hooks into shared files (kept small for merging)",
+          "level": 2
+        },
+        {
+          "id": "log",
+          "text": "Log",
+          "level": 2
+        },
+        {
+          "id": "what-is-done-and-where",
+          "text": "What is done, and where",
+          "level": 2
+        },
+        {
+          "id": "what-i-verified",
+          "text": "What I verified",
+          "level": 2
+        },
+        {
+          "id": "not-run-here-and-why",
+          "text": "Not run here, and why",
+          "level": 2
+        },
+        {
+          "id": "open-for-the-director",
+          "text": "Open, for the Director",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/wave3-oauth",
+      "source": "docs/reports/wave3-oauth.md",
+      "title": "Wave 3, MCP OAuth lane: contract for the screens",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "e05e3622b0ee1346e4f05beae32d39f7e53e2bb37befa7cf231885c984a58a78",
+      "headings": [
+        {
+          "id": "what-changes-for-the-ui",
+          "text": "What changes for the UI",
+          "level": 2
+        },
+        {
+          "id": "types",
+          "text": "Types",
+          "level": 2
+        },
+        {
+          "id": "rpcs",
+          "text": "RPCs",
+          "level": 2
+        },
+        {
+          "id": "connectoradd-extended-optional-field",
+          "text": "connector.add (extended, optional field)",
+          "level": 3
+        },
+        {
+          "id": "connectoroauthstart",
+          "text": "connector.oauth.start",
+          "level": 3
+        },
+        {
+          "id": "connectoroauthstatus",
+          "text": "connector.oauth.status",
+          "level": 3
+        },
+        {
+          "id": "connectoroauthcancel",
+          "text": "connector.oauth.cancel",
+          "level": 3
+        },
+        {
+          "id": "connectorupdate-behaviour-change-same-shape",
+          "text": "connector.update (behaviour change, same shape)",
+          "level": 3
+        },
+        {
+          "id": "connectorremove-behaviour-change-same-shape",
+          "text": "connector.remove (behaviour change, same shape)",
+          "level": 3
+        },
+        {
+          "id": "event",
+          "text": "Event",
+          "level": 2
+        },
+        {
+          "id": "remote",
+          "text": "Remote",
+          "level": 2
+        },
+        {
+          "id": "how-the-sign-in-works-for-the-copy-not-for-the-screen",
+          "text": "How the sign-in works (for the copy, not for the screen)",
+          "level": 2
+        },
+        {
+          "id": "storage-so-nobody-has-to-guess",
+          "text": "Storage (so nobody has to guess)",
+          "level": 2
+        },
+        {
+          "id": "running-log",
+          "text": "Running log",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/wave3-release",
+      "source": "docs/reports/wave3-release.md",
+      "title": "Wave 3, release safety (worktree -11)",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "833a3621e483424f1797f60f54c5cb5d413061dc5f053966b095695c5b1c624c",
+      "headings": [
+        {
+          "id": "contract",
+          "text": "Contract",
+          "level": 2
+        },
+        {
+          "id": "1-ci-split-by-path-a-required-checks-job-and-a-nightly-run-idea-4",
+          "text": "1. CI split by path, a required checks job, and a nightly run (idea 4)",
+          "level": 3
+        },
+        {
+          "id": "2-update-round-trip-and-the-release-gate-idea-7",
+          "text": "2. Update round trip and the release gate (idea 7)",
+          "level": 3
+        },
+        {
+          "id": "3-bounded-conversation-reads-idea-8",
+          "text": "3. Bounded conversation reads (idea 8)",
+          "level": 3
+        },
+        {
+          "id": "running-log",
+          "text": "Running log",
+          "level": 2
+        },
+        {
+          "id": "not-done-and-what-is-left-for-the-director",
+          "text": "Not done, and what is left for the Director",
+          "level": 2
+        },
+        {
+          "id": "files",
+          "text": "Files",
           "level": 2
         }
       ]
@@ -4853,6 +7843,26 @@
       ]
     },
     {
+      "id": "project/operations/evals",
+      "source": "docs/operations/evals.md",
+      "title": "Behavioural evals",
+      "section": "Operations",
+      "status": "Operations",
+      "sha256": "3aae861f2b76bf424ab32c715c2245b1ec13991e5a52389ac9b0aa54c6fa51a6",
+      "headings": [
+        {
+          "id": "run-it",
+          "text": "Run it",
+          "level": 2
+        },
+        {
+          "id": "what-is-verified-and-what-is-not",
+          "text": "What is verified and what is not",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/operations/code-signing",
       "source": "docs/operations/code-signing.md",
       "title": "Code signing (SignPath Foundation)",
@@ -5068,7 +8078,7 @@
       "title": "Release checklist",
       "section": "Operations",
       "status": "Operations",
-      "sha256": "c52af0bf878c7b68f844fd73916d8b60479c5149f7280f0d0a2cff63670a63da",
+      "sha256": "b0a5966993906c906f2758518c5bb388b748aad0f500abab90fef587c0d6608e",
       "headings": [
         {
           "id": "release-command",
@@ -5128,6 +8138,61 @@
         {
           "id": "about-page",
           "text": "About page",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/operations/linux-host",
+      "source": "docs/operations/linux-host.md",
+      "title": "Retinue on a Linux host: install, start, update, stop",
+      "section": "Operations",
+      "status": "Operations",
+      "sha256": "f4949b2cbd7582641ec016992705bc8a58be6482ad5ee116b5f1187af6144def",
+      "headings": [
+        {
+          "id": "1-what-you-need-on-the-host",
+          "text": "1. What you need on the host",
+          "level": 2
+        },
+        {
+          "id": "2-build-and-install",
+          "text": "2. Build and install",
+          "level": 2
+        },
+        {
+          "id": "3-where-everything-lives",
+          "text": "3. Where everything lives",
+          "level": 2
+        },
+        {
+          "id": "4-turn-the-gateway-on",
+          "text": "4. Turn the gateway on",
+          "level": 2
+        },
+        {
+          "id": "5-pair-a-device-the-laptop-a-phone",
+          "text": "5. Pair a device (the laptop, a phone)",
+          "level": 2
+        },
+        {
+          "id": "6-update",
+          "text": "6. Update",
+          "level": 2
+        },
+        {
+          "id": "7-stop-restart-remove",
+          "text": "7. Stop, restart, remove",
+          "level": 2
+        },
+        {
+          "id": "8-what-is-not-available-on-a-linux-host",
+          "text": "8. What is not available on a Linux host",
+          "level": 2
+        },
+        {
+          "id": "9-when-something-is-wrong",
+          "text": "9. When something is wrong",
           "level": 2
         }
       ]
@@ -5403,6 +8468,36 @@
       ]
     },
     {
+      "id": "project/operations/whatsapp-web-decision",
+      "source": "docs/operations/whatsapp-web-decision.md",
+      "title": "WhatsApp Web: why this build refuses it",
+      "section": "Operations",
+      "status": "Operations",
+      "sha256": "30a5b58896e4c323a043c7183d4eafdb7d7c7e6f22c9f69259c89927f96f81db",
+      "headings": [
+        {
+          "id": "what-a-whatsapp-web-channel-needs",
+          "text": "What a WhatsApp Web channel needs",
+          "level": 2
+        },
+        {
+          "id": "why-neither-is-in-this-build",
+          "text": "Why neither is in this build",
+          "level": 2
+        },
+        {
+          "id": "what-was-built-instead",
+          "text": "What was built instead",
+          "level": 2
+        },
+        {
+          "id": "what-a-later-lane-must-do-first",
+          "text": "What a later lane must do first",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/legal/third-party-notices",
       "source": "docs/legal/third-party-notices.md",
       "title": "Third-party notices",
@@ -5518,6 +8613,46 @@
         {
           "id": "state-vocabulary",
           "text": "State vocabulary",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/plans/nod-adoption-plan",
+      "source": "docs/plans/nod-adoption-plan.md",
+      "title": "Adopting what we learned from nod",
+      "section": "Plans & briefs",
+      "status": "Plan",
+      "sha256": "4e385dec1e64ea3bb64a4903fe06a74bccf11ae74149d12ef43fad49ddb47f0a",
+      "headings": [
+        {
+          "id": "wave-1-running",
+          "text": "Wave 1 (running)",
+          "level": 2
+        },
+        {
+          "id": "d-connectors-contract",
+          "text": "D. Connectors contract",
+          "level": 3
+        },
+        {
+          "id": "e-engineering-hygiene-07",
+          "text": "E. Engineering hygiene (07)",
+          "level": 3
+        },
+        {
+          "id": "status-17-november-2026",
+          "text": "Status, 17 November 2026",
+          "level": 2
+        },
+        {
+          "id": "wave-2",
+          "text": "Wave 2",
+          "level": 2
+        },
+        {
+          "id": "wave-3",
+          "text": "Wave 3",
           "level": 2
         }
       ]
@@ -5943,6 +9078,71 @@
         {
           "id": "deliverable-on-approval",
           "text": "Deliverable on approval",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/plans/multi-device-plan",
+      "source": "docs/plans/multi-device-plan.md",
+      "title": "Retinue on many machines",
+      "section": "Plans & briefs",
+      "status": "Plan",
+      "sha256": "6e7af6104500fd5f6acfc8f6da7a9410737b26366e50beb52802da35ba38e61a",
+      "headings": [
+        {
+          "id": "owner-decisions-17-november-2026",
+          "text": "Owner decisions (17 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "lanes",
+          "text": "Lanes",
+          "level": 2
+        },
+        {
+          "id": "screens-director",
+          "text": "Screens (Director)",
+          "level": 2
+        },
+        {
+          "id": "diagnose-and-test-through-the-retinue-mcp-owner-17-november-2026",
+          "text": "Diagnose and test through the Retinue MCP (owner, 17 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "done-means",
+          "text": "Done means",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/plans/vault-channels-pi",
+      "source": "docs/plans/vault-channels-pi.md",
+      "title": "Vault, chat channels and Pi: the contracts",
+      "section": "Plans & briefs",
+      "status": "Plan",
+      "sha256": "25bd43cdf5e0f178a80b68a0821f4f124325cc8ae97c16cae60ff097844ffc54",
+      "headings": [
+        {
+          "id": "a-vault",
+          "text": "A. Vault",
+          "level": 2
+        },
+        {
+          "id": "b-chat-channels-telegram-whatsapp-to-the-ceo",
+          "text": "B. Chat channels (Telegram, WhatsApp) to the CEO",
+          "level": 2
+        },
+        {
+          "id": "c-pi",
+          "text": "C. Pi",
+          "level": 2
+        },
+        {
+          "id": "every-lane",
+          "text": "Every lane",
           "level": 2
         }
       ]
@@ -20304,6 +23504,36 @@
       ]
     },
     {
+      "id": "project/releases/0.2.0-beta.5",
+      "source": "docs/releases/0.2.0-beta.5.md",
+      "title": "Retinue 0.2.0-beta.5",
+      "section": "Release notes",
+      "status": "Release note",
+      "sha256": "4a37fe22b265047ed8a6eb1fd373d29f6d9c890ebd97e15c038e6f3a18b18e8d",
+      "headings": [
+        {
+          "id": "new",
+          "text": "New",
+          "level": 2
+        },
+        {
+          "id": "changed",
+          "text": "Changed",
+          "level": 2
+        },
+        {
+          "id": "for-the-curious",
+          "text": "For the curious",
+          "level": 2
+        },
+        {
+          "id": "installation",
+          "text": "Installation",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/remote/AGENTS_AMENDMENT_DRAFT",
       "source": "docs/remote/AGENTS_AMENDMENT_DRAFT.md",
       "title": "Draft amendment for AGENTS.md: Remote mode (for owner approval)",
@@ -20584,7 +23814,7 @@
       "title": "Remote mode: threat model",
       "section": "Remote specifications",
       "status": "Remote specification",
-      "sha256": "0bc97a9f2bf9ecc2a538fb10048ef52f3415bbab8300da762d7e1b9e6f940312",
+      "sha256": "f8c0bb51ef268b6fbe8393c519af7f73fe156123ade6b3577df8a25baf4fb695",
       "headings": [
         {
           "id": "1-the-core-fact",
@@ -20682,6 +23912,21 @@
           "level": 2
         },
         {
+          "id": "a-headless-linux-host-17-november-2026-multi-device-piece-8",
+          "text": "A headless Linux host (17 November 2026, multi-device piece 8)",
+          "level": 3
+        },
+        {
+          "id": "a-machine-manages-another-machines-devices-17-november-2026",
+          "text": "A machine manages another machine's devices (17 November 2026)",
+          "level": 3
+        },
+        {
+          "id": "161-the-phone-through-its-host-17-november-2026",
+          "text": "16.1 The phone through its host (17 November 2026)",
+          "level": 3
+        },
+        {
           "id": "17-phone-push-31-october-2026",
           "text": "17. Phone push (31 October 2026)",
           "level": 2
@@ -20694,6 +23939,31 @@
         {
           "id": "19-browsers-and-computer-control-14-november-2026",
           "text": "19. Browsers and computer control (14 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "20-pi-with-keys-held-by-retinue-16-november-2026",
+          "text": "20. Pi, with keys held by Retinue (16 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "21-chat-channels-to-the-ceo-telegram-and-whatsapp-16-november-2026",
+          "text": "21. Chat channels to the CEO: Telegram and WhatsApp (16 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "22-learned-skills-and-first-run-suggestions-17-november-2026",
+          "text": "22. Learned skills and first-run suggestions (17 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "23-mcp-connectors-and-their-oauth-sign-in-17-november-2026",
+          "text": "23. MCP connectors and their OAuth sign-in (17 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "24-projects-on-another-machine-from-the-owners-devices-17-november-2026",
+          "text": "24. Projects on another machine, from the owner's devices (17 November 2026)",
           "level": 2
         }
       ]
@@ -20799,7 +24069,7 @@
       "title": "Retinue remote protocol (v1)",
       "section": "Remote specifications",
       "status": "Remote specification",
-      "sha256": "27cb786530a03a5727a12cdb61214971225f8e97d5ed1df458ac8dd843a139ff",
+      "sha256": "2985adf7b491008e8106b6c079d06a78df76b2dad992fe7025b4b905e977324d",
       "headings": [
         {
           "id": "1-scope-and-non-goals",
@@ -21931,5 +25201,192 @@
       ]
     }
   ],
-  "unresolvedLinks": []
+  "unresolvedLinks": [
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L574-L578",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-adapter-claude/src/lib.rs#L220",
+      "target": "docs/research/n8n-nod/crates/retinue-adapter-claude/src/lib.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L481-L563",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/main.rs#L4785-L4793",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/main.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/knowledge.rs#L346-L376",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/knowledge.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/knowledge.rs#L517-L532",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/knowledge.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/memory.rs#L399-L437",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/memory.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/skills.rs#L1029-L1090",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/skills.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L1229-L1252",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/main.rs#L4047",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/main.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L613-L659",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/external.rs#L386-L457",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/external.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L579-L605",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L444-L469",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/main.rs#L4666-L4667",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/main.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/knowledge.rs#L464-L551",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/knowledge.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/main.rs#L4764-L4781",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/main.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L509",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/mcp_bridge.rs#L301-L306",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/mcp_bridge.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L545-L548",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L28",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L520",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L485-L487",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L462-L469",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L485",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L539",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L547",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/questions.rs",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/questions.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/main.rs#L4786",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/main.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L28",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    },
+    {
+      "source": "docs/research/n8n-nod/09-system-prompt.md",
+      "href": "crates/retinue-daemon/src/team.rs#L520",
+      "target": "docs/research/n8n-nod/crates/retinue-daemon/src/team.rs",
+      "kind": "missing"
+    }
+  ]
 }

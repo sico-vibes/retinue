@@ -1,7 +1,9 @@
 //! Claude Code's documented print/stream-json mode, never interactive TUI scraping.
 use async_trait::async_trait;
 use retinue_agent_core::*;
-use retinue_process::{prepare_command, prepare_std_command, ProcessTree, StdinWriter};
+use retinue_process::{prepare_command, ProcessTree, StdinWriter};
+#[cfg(windows)]
+use retinue_process::prepare_std_command;
 use chrono::{Duration, Utc};
 use serde_json::{json, Value};
 use std::{

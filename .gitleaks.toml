@@ -40,6 +40,15 @@ paths = [
 ]
 
 [[allowlists]]
+description = "The vault, chat-channel, Pi and connector tests store and refuse deliberately fake keys (sk-fixture-..., tok_live_123456, 0123456789abcdef) to prove they are never echoed. Only generic-api-key is excused (2026-11-18)."
+targetRules = ["generic-api-key"]
+paths = [
+  '''^crates/retinue-daemon/src/pi_tests\.rs$''',
+  '''^crates/retinue-daemon/src/channels_tests\.rs$''',
+  '''^crates/retinue-daemon/src/connectors_oauth_tests\.rs$''',
+]
+
+[[allowlists]]
 description = "The preview fixtures draw a masked command and a masked tool result; the fake token is the demonstration. Only generic-api-key and curl-auth-header are excused (2026-11-16)."
 targetRules = ["generic-api-key", "curl-auth-header"]
 paths = ['''^apps/desktop/src/preview/''']
