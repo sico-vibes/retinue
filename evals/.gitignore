@@ -1,0 +1,4 @@
+# Results of local runs, and the stop file. Both are per-machine and never
+# committed: a result names a model and a time, and the stop file is a switch.
+results/
+.stop

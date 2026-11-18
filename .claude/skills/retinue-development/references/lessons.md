@@ -2,6 +2,12 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-17 · Evals · A runner outside `scripts/` is outside every gate, and brings its own caps
+
+- **Where:** `evals/` at the repository root (wave 3, idea 10 of report 09): a plain Node runner for five prompt-behaviour evals, no dependencies, no crate, no CI step. `npm test` is the desktop suite and `test:scripts` globs only `scripts/**`, so nothing there runs a workflow, which is what a run that spends the owner's usage needs; the harness's own tests are explicit (`npm run evals:selftest`).
+- **Two things to get right in a runner like this:** do not trust the runtime's timer (a scripted runtime that never answered hung the suite until the suite raced every attempt with its own limit), and check the worst failure first (the judge tested "did it mention the failure" before "did it claim a pass", so a false pass was reported as a silent one; the evidence sentence is the only thing the owner reads).
+- **Never keep reply text:** one outcome, one fixed evidence sentence and a character count per attempt, so a log, a report or a screen can carry a result without carrying a message. Pin it with a marker string in the tests.
+
 ## 2026-11-17 · Daemon · A new RPC that nothing could call
 
 - **Symptom:** the remote-tiers parity test said `task.checkBack` was a stale row: "the dispatch no longer has" it.

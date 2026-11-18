@@ -42,6 +42,7 @@
 |---|---|---|
 | A test sees only what it created: its own data folder, and the daemon's environment variables removed for its length and restored after. | `crates/retinue-daemon/src/test_env.rs` (`TestEnv`) | `test_env.rs::the_environment_is_quiet_while_the_folder_lives_and_comes_back_after`, `a_state_writes_into_the_tests_own_folder` |
 | Formatting mistakes a reviewer cannot see (a BOM, a stray NUL, trailing whitespace, mixed line endings, bytes that are not UTF-8) fail the build. | `scripts/check-format.mjs` | `scripts/check-format.test.mjs` |
+| A run that spends the owner's usage starts only when the owner starts it: never in CI, a schedule or the app, with its own caps (a limit per attempt, one at a time, a total limit, a stop file) and never a permission bypass. | `evals/run.mjs`, `evals/lib/caps.mjs`, `evals/lib/suite.mjs` | `evals/test/evals.test.mjs` (`CI and absurd repeats are refused`, `a real run without --yes stops before spending`, `the stop file ends the run and the rest is skipped`, `the total cap ends the run without calling the model`, `a bypass flag is refused in every form`) |
 | Lanes never commit; the Director reviews every diff, runs every gate and commits. | process, not code | **untested by design** (`.claude/skills/retinue-development/references/pipeline.md`) |
 | A test is never weakened or deleted to make a build pass. | process, not code | **untested by design** (golden rule 8 in the skill) |
 
