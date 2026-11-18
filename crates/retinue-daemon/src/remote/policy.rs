@@ -76,7 +76,30 @@ pub enum MethodClass {
     /// Starting a project on the host (17 November 2026): operator, and the handler refuses unless the
     /// host's owner turned the switch on. It writes, so quiet hours refuse it like `chat`.
     Workspace,
+    /// Working on the machines this host is linked to, from the device in hand: only a
+    /// phone, tablet or browser may call one, never another machine (17 November 2026).
+    Linked,
     Never,
+}
+
+/// The device kinds a `linked` method is for: the owner's own screens. A `machine`
+/// (another daemon) or the `computer` is refused, so one link can never drive another.
+pub fn linked_kinds(kind: &str) -> bool {
+    matches!(kind, "phone" | "tablet" | "browser")
+}
+
+/// The private parameter the gateway uses to tell the daemon which tier the calling
+/// device has, for a `linked` method. The gateway always sets it, so a client's own
+/// value is replaced; it never reaches the other machine, and the window never sends it.
+pub const CALLER_TIER: &str = "remoteTier";
+
+/// Whether one of the `linked` methods does work rather than reading, so the host's
+/// quiet hours apply to it as they do to any chat or approval call.
+pub fn linked_is_work(method: &str) -> bool {
+    matches!(
+        method,
+        "machine.start" | "machine.prompt" | "machine.steer" | "machine.cancel" | "machine.permission.reply"
+    )
 }
 
 /// One row of the method table.
@@ -179,6 +202,9 @@ impl Default for SessionLimits {
 pub enum EventPolicy {
     Allow,
     Drop,
+    /// Crosses to a phone, tablet or browser only: anything another machine or the
+    /// linked computer could act on from it is refused them.
+    Linked,
 }
 
 // ---------------------------------------------------------------------------
@@ -242,6 +268,7 @@ fn load_policy() -> Result<Policy, String> {
             "handoff" => MethodClass::Handoff,
             "manage" => MethodClass::Manage,
             "workspace" => MethodClass::Workspace,
+            "linked" => MethodClass::Linked,
             "never" => MethodClass::Never,
             other => return Err(format!("tiers.json: {} has unknown class {other}", row.method)),
         };
@@ -273,6 +300,7 @@ fn load_policy() -> Result<Policy, String> {
         let policy = match policy.as_str() {
             "allow" => EventPolicy::Allow,
             "drop" => EventPolicy::Drop,
+            "linked" => EventPolicy::Linked,
             other => return Err(format!("tiers.json: event {event_type} has unknown policy {other}")),
         };
         events.insert(event_type, policy);
@@ -336,6 +364,13 @@ pub fn authorize(call: &RemoteCall) -> Decision {
         };
     }
     if call.quiet_hours && matches!(rule.class, MethodClass::Chat | MethodClass::Approve | MethodClass::Handoff | MethodClass::Workspace) {
+        return Decision::Denied {
+            code: DenialCode::QuietHours,
+            reason: "quiet hours are on; this host only allows reading right now".to_string(),
+        };
+    }
+    // A linked method that starts or drives work on another machine is work here too.
+    if call.quiet_hours && rule.class == MethodClass::Linked && linked_is_work(&call.method) {
         return Decision::Denied {
             code: DenialCode::QuietHours,
             reason: "quiet hours are on; this host only allows reading right now".to_string(),
@@ -666,10 +701,11 @@ pub fn redact_result_with(method: &str, result: &Value, options: &RedactOptions,
         "settings.get" => return redact_settings(result),
         // What a sub-bot is doing is a tool's title, and that can hold a command or a path.
         "subbot.list" => drop_keys(&redact_node(result, &mut Vec::new(), options), &["doingNow", "error"]),
-        // Any other method whose class is `read` still goes through the field
-        // watcher, so a read never passes raw.
+        // Any other method whose class is `read` (or a `linked` one, which is what a
+        // phone reads of another machine) still goes through the field watcher, so a
+        // read never passes raw.
         _ => match rule_for(method) {
-            Some(rule) if rule.class == MethodClass::Read => redact_node(result, &mut Vec::new(), options),
+            Some(rule) if matches!(rule.class, MethodClass::Read | MethodClass::Linked) => redact_node(result, &mut Vec::new(), options),
             _ => return result.clone(),
         },
     };
@@ -733,11 +769,29 @@ fn window_session(mut session: Value, limits: SessionLimits) -> Value {
 
 /// The event as a remote device may see it, or `None` when it must not be sent.
 pub fn redact_event(event: &Value) -> Option<Value> {
-    let envelope = event.as_object()?;
-    let event_type = envelope.get("type")?.as_str()?;
+    let event_type = event.get("type")?.as_str()?;
     if policy().events.get(event_type) != Some(&EventPolicy::Allow) {
         return None;
     }
+    redact_envelope(event)
+}
+
+/// The event as one device of `kind` may see it, or `None` when it must not be sent.
+/// `allow` crosses to every device; `linked` only to a phone, tablet or browser, so a
+/// machine link never receives what another link's changes would let it act on.
+pub fn redact_event_for(event: &Value, kind: &str) -> Option<Value> {
+    let event_type = event.get("type")?.as_str()?;
+    match policy().events.get(event_type)? {
+        EventPolicy::Allow => redact_event(event),
+        EventPolicy::Linked if linked_kinds(kind) => redact_envelope(event),
+        _ => None,
+    }
+}
+
+/// The payload work every sent event gets, once its type has been allowed.
+fn redact_envelope(event: &Value) -> Option<Value> {
+    let envelope = event.as_object()?;
+    let event_type = envelope.get("type")?.as_str()?;
     let mut out = envelope.clone();
     // A missing payload stays missing: the TypeScript module yields
     // `payload: undefined`, which its JSON serialization drops.
@@ -889,12 +943,22 @@ mod tests {
                     assert_eq!(rule.min_tier, Some(expected), "{}", rule.method)
                 }
                 MethodClass::Approve | MethodClass::Handoff | MethodClass::Manage | MethodClass::Workspace => assert_eq!(rule.min_tier, Some(Tier::Operator), "{}", rule.method),
+                // A `linked` row is what a phone reads or drives on this host's links:
+                // reading needs a viewer, work needs chat, and an approval needs operator.
+                MethodClass::Linked => {
+                    let expected = match rule.method.as_str() {
+                        "machine.start" | "machine.prompt" | "machine.steer" | "machine.cancel" => Tier::Chat,
+                        "machine.permission.reply" => Tier::Operator,
+                        _ => Tier::Viewer,
+                    };
+                    assert_eq!(rule.min_tier, Some(expected), "{}", rule.method)
+                }
                 MethodClass::Never => assert_eq!(rule.min_tier, None, "{}", rule.method),
             }
         }
-        // Every event is classified as allow or drop.
+        // Every event is classified as allow, drop or a phone-only linked event.
         for (event_type, classified) in &loaded.events {
-            assert!(matches!(classified, EventPolicy::Allow | EventPolicy::Drop), "event {event_type}");
+            assert!(matches!(classified, EventPolicy::Allow | EventPolicy::Drop | EventPolicy::Linked), "event {event_type}");
         }
     }
 
@@ -936,10 +1000,72 @@ mod tests {
         );
     }
 
+    /// The `linked` class is the phone's reach through its host: the kinds it is for,
+    /// and the quiet hours that spare a read but not work (17 November 2026).
+    #[test]
+    fn a_linked_method_is_for_a_phone_and_quiet_hours_spare_its_reads() {
+        assert!(linked_kinds("phone") && linked_kinds("tablet") && linked_kinds("browser"));
+        assert!(!linked_kinds("machine") && !linked_kinds("computer") && !linked_kinds(""));
+        let call = |method: &str, tier: Tier, quiet_hours: bool| RemoteCall {
+            tier,
+            approvals_from_remote: false,
+            method: method.to_string(),
+            params: Value::Null,
+            quiet_hours,
+        };
+        assert_eq!(authorize(&call("machine.list", Tier::Viewer, true)), Decision::Allowed);
+        assert_eq!(authorize(&call("machine.sessions", Tier::Viewer, true)), Decision::Allowed);
+        assert_eq!(
+            authorize(&call("machine.prompt", Tier::Chat, true)),
+            Decision::Denied {
+                code: DenialCode::QuietHours,
+                reason: "quiet hours are on; this host only allows reading right now".to_string(),
+            }
+        );
+        assert_eq!(authorize(&call("machine.prompt", Tier::Chat, false)), Decision::Allowed);
+        assert_eq!(
+            authorize(&call("machine.prompt", Tier::Viewer, false)),
+            Decision::Denied {
+                code: DenialCode::TierRequired,
+                reason: "a viewer device cannot call machine.prompt".to_string(),
+            }
+        );
+        // An approval is the far machine's own switch as well; the policy only asks for operator.
+        assert_eq!(authorize(&call("machine.permission.reply", Tier::Operator, false)), Decision::Allowed);
+        assert_eq!(
+            authorize(&call("machine.permission.reply", Tier::Chat, false)),
+            Decision::Denied {
+                code: DenialCode::TierRequired,
+                reason: "a chat device cannot call machine.permission.reply".to_string(),
+            }
+        );
+    }
+
+    /// An event the policy marks `linked` reaches the owner's own screens and nothing
+    /// else; an `allow` event still reaches every device.
+    #[test]
+    fn a_linked_event_never_reaches_another_machine() {
+        let relay = json!({"sequence": 7, "type": "machine.session.changed",
+            "payload": {"machineId": "m1", "sessionId": "s1", "revision": 7}});
+        for kind in ["phone", "tablet", "browser"] {
+            assert_eq!(redact_event_for(&relay, kind), Some(relay.clone()), "{kind}");
+        }
+        for kind in ["machine", "computer", ""] {
+            assert_eq!(redact_event_for(&relay, kind), None, "{kind}");
+        }
+        let changed = json!({"sequence": 8, "type": "session.changed", "payload": {"sessionId": "s1"}});
+        for kind in ["phone", "tablet", "browser", "machine", "computer"] {
+            assert!(redact_event_for(&changed, kind).is_some(), "{kind}");
+        }
+        let dropped = json!({"sequence": 9, "type": "tool.changed", "payload": {"sessionId": "s1"}});
+        assert_eq!(redact_event_for(&dropped, "phone"), None);
+        // The plain reader keeps its meaning: only `allow` crosses.
+        assert_eq!(redact_event(&relay), None);
+    }
+
     /// Redaction never touches the value it is given.
     #[test]
-    fn redaction_does_not_mutate_its_input() {
-        let snapshot = json!({
+    fn redaction_does_not_mutate_its_input() {        let snapshot = json!({
             "sequence": 42,
             "agents": [{ "id": "a_1", "instructions": "Do the thing.", "customEnv": { "LANG": "en_US.UTF-8" }, "customArgs": ["--x"] }],
             "sessions": [{ "id": "s_1", "projectPath": "C:\\Users\\sam\\repos\\retinue\\apps\\desktop", "providerSessionId": "t" }],

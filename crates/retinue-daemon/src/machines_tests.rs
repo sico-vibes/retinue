@@ -40,7 +40,7 @@ fn temp(tag: &str) -> PathBuf {
 }
 
 /// A state with its own data folder and short clocks. This is "this machine".
-fn local(tag: &str) -> (AppState, PathBuf) {
+pub(crate) fn local(tag: &str) -> (AppState, PathBuf) {
     let (st, _events) = crate::phase2a_tests::state();
     let dir = temp(tag);
     *st.team.data_dir.lock().unwrap() = Some(dir.clone());
@@ -228,22 +228,22 @@ fn fingerprint_of(der: &[u8]) -> String {
 /// to leave the connection hanging.
 type Responder = dyn Fn(&str) -> Option<String> + Send + Sync;
 
-struct RawServer {
+pub(crate) struct RawServer {
     port: u16,
     requests: Arc<Mutex<Vec<String>>>,
     cert: TestCert,
 }
 
 impl RawServer {
-    fn url(&self) -> String {
+    pub(crate) fn url(&self) -> String {
         format!("https://127.0.0.1:{}", self.port)
     }
 
-    fn fingerprint(&self) -> String {
+    pub(crate) fn fingerprint(&self) -> String {
         fingerprint_of(&self.cert.der)
     }
 
-    fn seen(&self) -> Vec<String> {
+    pub(crate) fn seen(&self) -> Vec<String> {
         self.requests.lock().unwrap().clone()
     }
 }
@@ -259,7 +259,7 @@ fn http(status: &str, headers: &[&str], body: &str) -> String {
     text
 }
 
-async fn raw_server(respond: impl Fn(&str) -> Option<String> + Send + Sync + 'static) -> RawServer {
+pub(crate) async fn raw_server(respond: impl Fn(&str) -> Option<String> + Send + Sync + 'static) -> RawServer {
     let cert = test_cert();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -1241,16 +1241,16 @@ async fn a_lowered_tier_reaches_the_link() {
 // ---------------------------------------------------------------------------
 // Working on the other machine
 
-const FAR_ID: &str = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
-const FAR_TOKEN: &str = "far-machine-token-0123456789";
+pub(crate) const FAR_ID: &str = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+pub(crate) const FAR_TOKEN: &str = "far-machine-token-0123456789";
 
-fn ok_body(result: Value) -> String {
+pub(crate) fn ok_body(result: Value) -> String {
     json!({"ok": true, "id": "reply", "result": result}).to_string()
 }
 
 /// A gateway that answers the reads this machine makes after a write as the far side would, and
 /// hands every other call to `rpc`.
-fn far_gateway<R>(rpc: R) -> impl Fn(&str) -> Option<String> + Send + Sync
+pub(crate) fn far_gateway<R>(rpc: R) -> impl Fn(&str) -> Option<String> + Send + Sync
 where
     R: Fn(&str, &Value) -> String + Send + Sync + 'static,
 {
@@ -1287,7 +1287,7 @@ where
 
 /// A link straight into the table: pairing is covered elsewhere, and these tests are about what is
 /// sent and refused.
-async fn linked_to(st: &AppState, server: &RawServer, tier: &str) {
+pub(crate) async fn linked_to(st: &AppState, server: &RawServer, tier: &str) {
     st.db
         .machine_link_upsert(&json!({
             "id": FAR_ID, "name": "Far", "url": server.url(), "auth": "password", "fingerprint": server.fingerprint(),
@@ -1298,7 +1298,7 @@ async fn linked_to(st: &AppState, server: &RawServer, tier: &str) {
 }
 
 /// The `(method, params)` pairs a gateway was sent, in order, after the first `skip`.
-fn rpc_calls(server: &RawServer, skip: usize) -> Vec<(String, Value)> {
+pub(crate) fn rpc_calls(server: &RawServer, skip: usize) -> Vec<(String, Value)> {
     server
         .seen()
         .iter()
@@ -1310,7 +1310,7 @@ fn rpc_calls(server: &RawServer, skip: usize) -> Vec<(String, Value)> {
 }
 
 /// The far side a call went to, as `calls[skip]`.
-fn sent(server: &RawServer, skip: usize) -> (String, Value) {
+pub(crate) fn sent(server: &RawServer, skip: usize) -> (String, Value) {
     rpc_calls(server, skip).into_iter().next().unwrap_or_else(|| panic!("nothing was sent after call {skip}"))
 }
 

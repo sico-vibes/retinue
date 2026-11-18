@@ -12,6 +12,7 @@
 
 use crate::machine_client::{self as client, ClientError, Trust};
 use crate::remote::pairing::{DEVICE_COOKIE, PAIR_COOKIE};
+use crate::remote::policy;
 use crate::{derr, AppState, DispatchError};
 use axum::http::StatusCode;
 use reqwest::Method;
@@ -250,9 +251,26 @@ fn row_by_id(st: &AppState, id: &str) -> Option<Value> {
     Some(row_of(st, &link))
 }
 
-fn list_value(st: &AppState) -> Result<Value, DispatchError> {
+/// The row a paired device may see: the same link without the far machine's own
+/// address, its certificate fingerprint or how this computer signed in to it. A
+/// phone has no use for any of them, and its screen only needs to pick a machine.
+fn row_for_device(row: Value) -> Value {
+    match row {
+        Value::Object(mut fields) => {
+            for key in ["url", "fingerprint", "auth", "pairedAt"] {
+                fields.remove(key);
+            }
+            Value::Object(fields)
+        }
+        other => other,
+    }
+}
+
+fn list_value(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+    let device = p[policy::CALLER_TIER].as_str().is_some();
     let links = st.db.machine_links().map_err(internal)?;
-    Ok(json!({"machines": links.iter().map(|link| row_of(st, link)).collect::<Vec<_>>()}))
+    let rows: Vec<Value> = links.iter().map(|link| row_of(st, link)).map(|row| if device { row_for_device(row) } else { row }).collect();
+    Ok(json!({"machines": rows}))
 }
 
 fn link_or_missing(st: &AppState, id: &str) -> Result<Value, DispatchError> {
@@ -528,25 +546,50 @@ fn require_online(link: &Value) -> Result<(), DispatchError> {
 /// The one tier check: `needed` is the far side's own class for the method, so a
 /// refusal here is the one its gateway would give, only sooner and without a
 /// request. The gateway stays the authority.
-fn require_tier(link: &Value, needed: &str, action: &str) -> Result<(), DispatchError> {
+///
+/// A call that came through the gateway carries the caller's own tier
+/// ([`policy::CALLER_TIER`]), and then the call works at the lower of that and the
+/// link's tier: a paired phone never gets more on another machine than it has here.
+fn require_tier(p: &Value, link: &Value, needed: &str, action: &str) -> Result<(), DispatchError> {
     let tier = link["tier"].as_str().unwrap_or("viewer");
-    if tier_rank(tier) >= tier_rank(needed) {
+    let caller = p[policy::CALLER_TIER].as_str();
+    let effective = match caller {
+        Some(caller) if tier_rank(caller) < tier_rank(tier) => caller,
+        _ => tier,
+    };
+    if tier_rank(effective) >= tier_rank(needed) {
         return Ok(());
     }
     let name = link_name(link);
-    let message = format!(
-        "{action} on {name} needs {} there, and this computer is linked as {}. Change this computer's tier in {name}'s Remote settings.",
-        tier_label(needed),
-        tier_label(tier)
-    );
+    let message = match caller {
+        Some(caller) => format!(
+            "{action} on {name} needs {} there. This device is {} and this computer is linked as {}, so it works as {}. Change the tier in {name}'s Remote settings.",
+            tier_label(needed),
+            tier_label(caller),
+            tier_label(tier),
+            tier_label(effective)
+        ),
+        None => format!(
+            "{action} on {name} needs {} there, and this computer is linked as {}. Change this computer's tier in {name}'s Remote settings.",
+            tier_label(needed),
+            tier_label(tier)
+        ),
+    };
     Err(derr("tier_required", &message, StatusCode::FORBIDDEN))
 }
 
 /// The far side's own parameters: everything the caller sent except the machine
-/// it is meant for. The gateway validates them exactly as it does a phone's.
+/// it is meant for, and the gateway's own tier stamp. The gateway validates them
+/// exactly as it does a phone's.
 fn far_params(p: &Value) -> Value {
     match p.as_object() {
-        Some(fields) => Value::Object(fields.iter().filter(|(key, _)| key.as_str() != "machineId").map(|(key, value)| (key.clone(), value.clone())).collect()),
+        Some(fields) => Value::Object(
+            fields
+                .iter()
+                .filter(|(key, _)| key.as_str() != "machineId" && key.as_str() != policy::CALLER_TIER)
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+        ),
         None => Value::Object(Default::default()),
     }
 }
@@ -555,14 +598,15 @@ fn far_params(p: &Value) -> Value {
 /// message before a request is made.
 async fn call_through(st: &AppState, p: &Value, method: &str, needed: &str, action: &str) -> Result<Value, DispatchError> {
     let machine = id_param(p, "machineId")?;
-    call_checked(st, machine, method, far_params(p), needed, action).await
+    call_checked(st, p, machine, method, far_params(p), needed, action).await
 }
 
 /// The same, with the far parameters this machine builds itself (a pass-through whose names differ).
-async fn call_checked(st: &AppState, machine: &str, method: &str, params: Value, needed: &str, action: &str) -> Result<Value, DispatchError> {
+/// `p` is the caller's own request, read only for the tier a phone was stamped with.
+async fn call_checked(st: &AppState, p: &Value, machine: &str, method: &str, params: Value, needed: &str, action: &str) -> Result<Value, DispatchError> {
     let link = link_or_missing(st, machine)?;
     require_online(&link)?;
-    require_tier(&link, needed, action)?;
+    require_tier(p, &link, needed, action)?;
     client::rpc(st, machine, method, params).await.map_err(|error| failure(st, machine, error))
 }
 
@@ -913,7 +957,7 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         "machine.pair.begin" => pair_begin(st, p).await,
         "machine.pair.cancel" => pair_cancel(st, p),
         "machine.pair.list" => Ok(pair_list(st)),
-        "machine.list" => list_value(st),
+        "machine.list" => list_value(st, p),
         "machine.rename" => rename(st, p),
         "machine.remove" => remove(st, p).await,
         "machine.refresh" => {
@@ -983,7 +1027,7 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         "machine.clone.status" => {
             let machine = id_param(p, "machineId")?;
             let job = id_param(p, "jobId")?;
-            call_checked(st, machine, "project.clone.status", json!({"id": job}), "operator", "Reading the clone's progress").await
+            call_checked(st, p, machine, "project.clone.status", json!({"id": job}), "operator", "Reading the clone's progress").await
         }
         _ => Err(derr("not_found", "unknown machine method", StatusCode::NOT_FOUND)),
     }

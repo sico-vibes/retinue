@@ -215,4 +215,11 @@ describe('remote event policy parity with the daemon', () => {
       'usage.updated',
     ])
   })
+
+  // 17 November 2026: the phone works through its host's links. The relay is ids only,
+  // and the host refuses it to another machine, so it is never on the `allow` list.
+  it('sends the phone-only events to nothing but a phone', () => {
+    const linked = Object.entries(EVENT_POLICY).filter(([, policy]) => policy === 'linked').map(([type]) => type).sort()
+    expect(linked).toEqual(['machine.session.changed'])
+  })
 })

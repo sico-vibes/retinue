@@ -1860,42 +1860,63 @@
       "method": "machine.*",
       "class": "never",
       "minTier": null,
-      "why": "Machine links are the owner's, set up at the computer. A paired device must not link, rename or remove machines, or read another machine through this one.",
+      "why": "Machine links are the owner's, set up at the computer. A paired device must not link, rename or remove machines; what it may do through its host's links is granted method by method as `linked`, and anything not granted here stays refused.",
+      "params": null
+    },
+    {
+      "method": "machine.list",
+      "class": "linked",
+      "minTier": "viewer",
+      "why": "A phone works through its host: it sees the names, states and bots of the machines that host is linked to, so it can pick one. It never sees a machine's address, certificate fingerprint or how that link signed in.",
+      "params": null
+    },
+    {
+      "method": "machine.sessions",
+      "class": "linked",
+      "minTier": "viewer",
+      "why": "The conversations of the machines this host is linked to, so a paired phone can show what is running there; it holds ids, titles and states, and nothing is read from the other machine for it.",
+      "params": null
+    },
+    {
+      "method": "machine.conversation",
+      "class": "linked",
+      "minTier": "viewer",
+      "why": "One conversation on a linked machine, read through this host's link; the other machine's gateway redacts it exactly as it would for a phone paired there.",
       "params": null
     },
     {
       "method": "machine.start",
-      "class": "never",
-      "minTier": null,
-      "why": "Starting a conversation on a linked machine is the desktop's own link, made over its gateway; a paired phone must not drive it.",
+      "class": "linked",
+      "minTier": "chat",
+      "why": "A phone may start a conversation on a machine its host is linked to, at the lower of the phone's tier and the link's tier; the other machine's gateway decides. Only a phone, tablet or browser may ask, never another machine.",
       "params": null
     },
     {
       "method": "machine.prompt",
-      "class": "never",
-      "minTier": null,
-      "why": "Sending a message through a linked machine's gateway is the desktop's own link; a paired phone must not drive it.",
+      "class": "linked",
+      "minTier": "chat",
+      "why": "A phone may send a message into a conversation on a machine its host is linked to, at the lower of the two tiers; it carries text only, never an attachment, and the other gateway decides.",
       "params": null
     },
     {
       "method": "machine.steer",
-      "class": "never",
-      "minTier": null,
-      "why": "Steering a turn through a linked machine's gateway is the desktop's own link; a paired phone must not drive it.",
+      "class": "linked",
+      "minTier": "chat",
+      "why": "A phone may steer a running turn on a machine its host is linked to, at the lower of the two tiers; the other gateway decides.",
       "params": null
     },
     {
       "method": "machine.cancel",
-      "class": "never",
-      "minTier": null,
-      "why": "Stopping a turn through a linked machine's gateway is the desktop's own link; a paired phone must not drive it.",
+      "class": "linked",
+      "minTier": "chat",
+      "why": "A phone may stop a turn on a machine its host is linked to, at the lower of the two tiers; the other gateway decides.",
       "params": null
     },
     {
       "method": "machine.permission.reply",
-      "class": "never",
-      "minTier": null,
-      "why": "Answering an approval through a linked machine's gateway would let a phone approve on a third machine; only the desktop may.",
+      "class": "linked",
+      "minTier": "operator",
+      "why": "Answering an approval raised on a machine this host is linked to needs an operator phone, an operator link, and that machine's own approvals-from-remote switch; it decides, and refuses in its own words.",
       "params": null
     },
     {
@@ -2104,6 +2125,7 @@
     "replay.gap": "allow",
     "runtime.models.changed": "allow",
     "machine.changed": "drop",
+    "machine.session.changed": "linked",
     "computer.changed": "drop",
     "browser.changed": "drop",
     "owner_computer.grant": "drop",
