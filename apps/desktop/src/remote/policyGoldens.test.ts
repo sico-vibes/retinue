@@ -15,6 +15,7 @@ import {
   redactResultForRemote,
   redactSnapshotForRemote,
   type RedactOptions,
+  type SessionLimits,
   type RemoteCall,
   type RemoteCallDecision,
 } from './remoteTiers'
@@ -30,6 +31,7 @@ interface ResultCase {
   name: string
   method: string
   options: RedactOptions
+  limits?: SessionLimits
   input: unknown
   expect: unknown
 }
@@ -82,7 +84,7 @@ describe('goldens: authorizeRemoteCall', () => {
 describe('goldens: redactResultForRemote', () => {
   for (const testCase of goldens.results) {
     it(testCase.name, () => {
-      expect(redactResultForRemote(testCase.method, testCase.input, testCase.options)).toEqual(testCase.expect)
+      expect(redactResultForRemote(testCase.method, testCase.input, testCase.options, testCase.limits)).toEqual(testCase.expect)
     })
   }
 })

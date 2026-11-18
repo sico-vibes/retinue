@@ -2,6 +2,28 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-17 · Gates · An `include!`d test file cannot open with `//!`
+
+- **Symptom:** after adding `crates/retinue-daemon/src/wave3_tests.rs` and `include!("wave3_tests.rs")`, the daemon test target failed with nine `E0753` errors ("the inner doc comment doesn't annotate this function") pointing at the module's items.
+- **Cause:** `//!` is only allowed at the start of a *module*; `include!` splices the file into the middle of `mod tests`, so the header documented the wrong item. `wave2_tests.rs` writes its header with plain `//`.
+- **Fix:** use `//` for the header of any file brought in with `include!` (all `*_tests.rs` beside `main.rs`).
+- **Also:** `use super::*;` at the top of such a file is redundant — `mod tests` already has it — and `-D warnings` would reject it as an unused import.
+
+## 2026-11-17 · Gates · A workflow file is tested as text, and CRLF breaks every `^…$` anchor
+
+- **Symptom:** a new test that reads `.github/workflows/*.yml` and matches `^  build:$` reported "release.yml has only 1 jobs" for a file that plainly has them.
+- **Cause:** the workflows are stored with CRLF. In JavaScript, `$` in multiline mode does not match before `\r`, so every line-anchored pattern missed. The new `ci.yml` (written with LF) matched, which made it look like a test bug only in one file.
+- **Fix:** read workflow text through a helper that does `.replaceAll('\r\n', '\n')` first (`scripts/ci-scope.test.mjs` `lines()`). Apply the same to any test that anchors on lines of a repository file whose endings are not yours.
+- **Parsing YAML locally:** there is no YAML package in the tree (the `hygiene` job deliberately runs without `npm ci`). To prove a workflow parses, `npm install yaml@2 --no-save` in a scratch folder outside the repository and parse from there; keep the dependency out of `package.json`, and pin the rest with dependency-free structural tests (no tabs, every job has `runs-on`, every `needs` names a real job, every `scripts/…` named exists).
+- **What a lane cannot prove:** that GitHub accepts the file, that the path selection matches what the runner computes, and that a required check blocks a merge. Say so in the report.
+
+## 2026-11-17 · Daemon · A bounded read needs a cursor on both sides, and the redactor is where a phone's window belongs
+
+- `read_conversation` (Retinue MCP) and `session.get` (a phone) now return a page rather than a whole conversation (wave 3, idea 8). The bot tool's reply changed from an array to an object (`messages`, `count`, `totalCount`, `truncated`, `firstId`, `lastId`, `bytes`, `capBytes`) — check every caller.
+- The phone's window lives in `remote/policy.rs` `window_session`, not in `session.get`'s dispatch arm: dispatch has no idea whether the caller is a device, and the desktop still needs the whole conversation. Paging (`beforeMessageId`) *is* in dispatch, because it narrows what is read before redaction.
+- The cuts are per list (messages, turns, tools, files) and the message text is capped separately; each adds its own `…Truncated` marker and the message window adds `messagesCursor`. The limits are `limits` in `apps/desktop/src/remote/tiers.json`, read by both languages, and a golden case can carry its own small `limits` so one fixture can show a cut.
+- A paged read returns empty `turns`/`tools`/`files` with their markers already true; the windowing must never take a marker away, only ever add one.
+
 ## 2026-11-17 · Daemon · A new RPC that nothing could call
 
 - **Symptom:** the remote-tiers parity test said `task.checkBack` was a stale row: "the dispatch no longer has" it.

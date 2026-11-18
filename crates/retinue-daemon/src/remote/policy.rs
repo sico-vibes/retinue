@@ -147,6 +147,26 @@ pub struct RedactOptions {
     pub include_tool_output: bool,
 }
 
+/// How much of one conversation a device may receive in one read (wave 3,
+/// `docs/plans/nod-adoption-plan.md`, idea 8). The numbers live in `tiers.json`
+/// so the TypeScript mirror reads the same ones; a fixture may pass its own
+/// small set, which is how the shared goldens exercise the cuts.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionLimits {
+    pub session_messages: usize,
+    pub session_message_chars: usize,
+    pub session_turns: usize,
+    pub session_tools: usize,
+    pub session_files: usize,
+}
+
+impl Default for SessionLimits {
+    fn default() -> Self {
+        Self { session_messages: 200, session_message_chars: 8_000, session_turns: 40, session_tools: 100, session_files: 100 }
+    }
+}
+
 /// Whether an event type may cross to a device, or must be dropped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EventPolicy {
@@ -166,6 +186,8 @@ struct RawTiers {
     settings_allowlist: Vec<String>,
     #[serde(rename = "sensitiveKeyPattern")]
     sensitive_key_pattern: String,
+    #[serde(default)]
+    limits: SessionLimits,
 }
 
 #[derive(Deserialize)]
@@ -184,6 +206,7 @@ struct Policy {
     events: BTreeMap<String, EventPolicy>,
     settings_allowlist: Vec<String>,
     sensitive_key: Regex,
+    limits: SessionLimits,
 }
 
 /// Parse and validate `tiers.json`. A failure here is a data bug that the test
@@ -251,6 +274,7 @@ fn load_policy() -> Result<Policy, String> {
         events,
         settings_allowlist: raw.settings_allowlist,
         sensitive_key,
+        limits: raw.limits,
     })
 }
 
@@ -607,10 +631,21 @@ pub fn redact_snapshot(snapshot: &Value, options: &RedactOptions) -> Value {
 /// Redact one RPC result for a remote device, by method. Same routing as
 /// `redactResultForRemote` in TypeScript.
 pub fn redact_result(method: &str, result: &Value, options: &RedactOptions) -> Value {
-    match method {
+    redact_result_with(method, result, options, session_limits())
+}
+
+/// The limits `tiers.json` holds, which are also what the TypeScript mirror uses.
+pub fn session_limits() -> SessionLimits {
+    policy().limits
+}
+
+/// Redact one result with limits of the caller's choosing; a test passes a small
+/// set so one shared golden can show the cut.
+pub fn redact_result_with(method: &str, result: &Value, options: &RedactOptions, limits: SessionLimits) -> Value {
+    let redacted = match method {
         "app.snapshot" => redact_snapshot(result, options),
-        "session.get"
-        | "session.list"
+        "session.get" => redact_node(result, &mut Vec::new(), options),
+        "session.list"
         | "agent.get"
         | "agent.list"
         | "runtime.list"
@@ -618,17 +653,70 @@ pub fn redact_result(method: &str, result: &Value, options: &RedactOptions) -> V
         | "search.messages"
         | "automation.get" => redact_node(result, &mut Vec::new(), options),
         // Memory records are the person's own text to review; they are kept.
-        "memory.get" | "memory.list" => result.clone(),
-        "settings.get" => redact_settings(result),
+        "memory.get" | "memory.list" => return result.clone(),
+        "settings.get" => return redact_settings(result),
         // What a sub-bot is doing is a tool's title, and that can hold a command or a path.
         "subbot.list" => drop_keys(&redact_node(result, &mut Vec::new(), options), &["doingNow", "error"]),
         // Any other method whose class is `read` still goes through the field
         // watcher, so a read never passes raw.
         _ => match rule_for(method) {
             Some(rule) if rule.class == MethodClass::Read => redact_node(result, &mut Vec::new(), options),
-            _ => result.clone(),
+            _ => return result.clone(),
         },
+    };
+    if method == "session.get" {
+        return window_session(redacted, limits);
     }
+    redacted
+}
+
+/// The newest part of one conversation, and markers saying what is missing.
+///
+/// A device gets a bounded read, never the whole thing: the newest messages
+/// (each message's text capped), the newest turns, tools and file rows, with
+/// `…Truncated` and `messagesCursor` telling it there is more and where to
+/// resume (the phone passes the cursor back as `beforeMessageId`).
+fn window_session(mut session: Value, limits: SessionLimits) -> Value {
+    let Some(object) = session.as_object_mut() else { return session };
+    if let Some(messages) = object.get_mut("messages").and_then(Value::as_array_mut) {
+        for message in messages.iter_mut() {
+            if let Some(map) = message.as_object_mut() {
+                if let Some(Value::String(text)) = map.get_mut("content") {
+                    if text.chars().count() > limits.session_message_chars {
+                        let trimmed: String = text.chars().take(limits.session_message_chars).collect();
+                        *text = trimmed;
+                        map.insert("contentTruncated".to_string(), json!(true));
+                    }
+                }
+            }
+        }
+        let overflow = messages.len().saturating_sub(limits.session_messages);
+        if overflow > 0 {
+            messages.drain(..overflow);
+            let cursor = messages.first().and_then(|message| message.get("id")).cloned().unwrap_or(Value::Null);
+            object.insert("messagesTruncated".to_string(), json!(true));
+            object.insert("messagesCursor".to_string(), cursor);
+        }
+    }
+    for (key, limit, marker) in [
+        ("turns", limits.session_turns, "turnsTruncated"),
+        ("tools", limits.session_tools, "toolsTruncated"),
+        ("files", limits.session_files, "filesTruncated"),
+    ] {
+        // A page a device asked for already says so in the daemon's own reply;
+        // only ever add a marker, never take one away.
+        if object.get(marker) == Some(&json!(true)) {
+            continue;
+        }
+        if let Some(rows) = object.get_mut(key).and_then(Value::as_array_mut) {
+            let overflow = rows.len().saturating_sub(limit);
+            if overflow > 0 {
+                rows.drain(..overflow);
+                object.insert(marker.to_string(), json!(true));
+            }
+        }
+    }
+    session
 }
 
 // ---------------------------------------------------------------------------
@@ -876,7 +964,13 @@ mod tests {
             let method = case["method"].as_str().unwrap_or_else(|| panic!("case {name}: no method"));
             let options: RedactOptions = serde_json::from_value(case["options"].clone())
                 .unwrap_or_else(|e| panic!("case {name}: options do not parse: {e}"));
-            let got = redact_result(method, &case["input"], &options);
+            // A case may carry its own small limits, so one shared golden can
+            // show a cut without a 200-message fixture.
+            let limits: SessionLimits = match case.get("limits") {
+                Some(value) => serde_json::from_value(value.clone()).unwrap_or_else(|e| panic!("case {name}: limits do not parse: {e}")),
+                None => session_limits(),
+            };
+            let got = redact_result_with(method, &case["input"], &options, limits);
             assert_eq!(&got, &case["expect"], "case {name}");
         }
     }
