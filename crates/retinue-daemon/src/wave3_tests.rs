@@ -210,9 +210,11 @@ async fn automation_runs_get_the_read_tools_only_and_cannot_save() {
         assert!(!names.contains(&write.to_owned()), "an automation run is never offered {write}: {names:?}");
     }
     // Even a hand-written call is refused, and the owner's turn does not help.
-    let refused = call_tool(&st, auto, "save_skill", saved_skill("auto-skill", "Learned on a schedule.", "Body.")).await;
-    assert_eq!(refused["isError"], true, "{refused}");
-    assert!(reply_text(&refused).contains("Automation runs cannot use team or scheduling tools"), "{refused}");
+    // It is refused at the RPC, before the tool arm: a name the automation
+    // allowlist does not carry never reaches the tool at all.
+    let refused = team::mcp_rpc(&st, auto, "mcp.tools.call", &json!({"name":"save_skill","arguments":saved_skill("auto-skill", "Learned on a schedule.", "Body.")})).await.unwrap_err();
+    assert_eq!(refused.1.code, "forbidden", "{refused:?}");
+    assert!(refused.1.message.contains("Automation runs cannot use team or scheduling tools"), "{refused:?}");
     assert!(st.db.skills_get("auto-skill").is_err());
     // An attended bot is offered both write tools.
     let human = memory_agent(&st, "Attended");
@@ -256,7 +258,12 @@ async fn the_cap_evicts_the_least_recently_used_and_owner_edits_stop_the_evictio
     assert!(st.db.skills_get("kept-0").is_ok() && st.db.skills_get("kept-39").is_ok(), "the used rows stay");
     assert!(st.db.skills_get("one-more").is_ok());
     assert!(!data.join("skills").join("kept-1").exists(), "an evicted skill leaves no folder");
-    assert_eq!(next_event(&mut events, "skills.learned.changed").await.payload["action"], "evicted");
+    // The eviction is announced before the save, so the window can drop the row
+    // and add the new one in the order they happened.
+    let evicted = next_event(&mut events, "skills.learned.changed").await;
+    assert_eq!(evicted.payload["action"], "evicted");
+    assert_eq!(evicted.payload["name"], "kept-1");
+    assert_eq!(next_event(&mut events, "skills.learned.changed").await.payload["action"], "saved");
 
     // With every remaining row owner-edited, the cap is a refusal, not a loss.
     let rows = st.db.skills_learned_list(Some(&writer)).unwrap();
