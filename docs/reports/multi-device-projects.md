@@ -242,5 +242,58 @@ window.
 - **17 November 2026, not verified at all.** A real phone and a real second machine (two daemons over
   Native on loopback stand in for the second, and that is what the link tests do), the Director's Settings
   screen and dialog, and `project.clone.status` polling from a window.
+- **18 November 2026, PAUSED by the owner before the fixed tests ran.** The Director ran the whole daemon
+  suite on `int/wave3` (1,291 passed, 9 failed) and three of the failures were this lane's. All three are
+  fixed in uncommitted edits to `project_share.rs` and `project_share_tests.rs`; **none of them has been
+  run yet**. The test binary was linked after the edits (`cargo test -p retinue-daemon --bin retinued
+  --no-run` → exit 0, "Finished test profile", 8m 25s, `...\debug\deps\retinued-efbea7b8d3b15610.exe`).
+  For each failure, code or test:
+  1. `browsing_lists_names_and_kinds_inside_the_folder_only` — **the test was wrong, twice.** The reply
+     already strips the verbatim prefix (`display`), so `assert_eq!(listed["path"], canonicalize(&base))`
+     compared a stripped string with a `\\?\C:\…` one. Both expectations (lines 61 and 72) now use
+     `project_share::display(&canonicalize(…))`, and a new assertion says no reply carries `\\?\`. `display`
+     became `pub(crate)` so the test compares with the real rule; no behaviour changed.
+  2. `a_link_browses_and_adds_a_project_inside_the_folder_only` — **the test was wrong.** The activity list
+     is newest first, so the first `workspace` line was `project.createFromFolder`, and the test asserted
+     it was the browse. It now requires exactly two lines, one per method, and that neither names the
+     folder. (Stronger than before, not weaker.)
+  3. `a_device_clone_is_confined_and_reports_its_progress_and_a_failure` — **the test was wrong.** The
+     desktop clone passed no `name`; `suggested_name` reads a URL's last segment (splitting on `/` and
+     `:`), so a Windows path suggested `\tmp\retinue-p3-…`, which `scaffold::valid_folder_name` refuses.
+     A local path can only be a clone URL in a test, so production never sees this; the test now passes
+     `"name": "desktop"`. `suggested_name` is left as it is, because it is written for URLs.
+  **Resume steps, in order:** `$env:CARGO_TARGET_DIR` = the shared target, `$env:TEMP`/`$env:TMP` =
+  `C:\tmp`, `$env:RUST_MIN_STACK` = `33554432`; run `cargo test -p retinue-daemon --bin retinued --no-run`,
+  copy the printed `retinued-*.exe` to `C:\tmp\ada.exe` at once, `C:\tmp\ada.exe --list` to check the three
+  names are there, then from `crates\retinue-daemon` run `C:\tmp\ada.exe machines_tests::` (or the three
+  names with `--exact --nocapture`), then the whole `machines_tests` module, then
+  `cargo clippy -p retinue-daemon --all-targets -- -D warnings`, `npm run check:format` and
+  `npm run check:architecture`. If the daemon's build script is refused (os error 4551), copy
+  `build-script-build.exe` and `build_script_build-67d4b82b0fad1b27.exe` from
+  `...\backend-work-from-the-owner-assigned-3\target\debug\build\retinue-daemon-67d4b82b0fad1b27\` over the
+  same files in the shared target's folder of that name, deleting the refused ones first. **Not started:**
+  nothing. `git status` shows only these two files.
+- **18 November 2026, RESUMED and finished.** The three fixes above were run and pass.
+  - `cargo test -p retinue-daemon --bin retinued --no-run`: exit 0. The printed binary
+    (`...\debug\deps\retinued-efbea7b8d3b15610.exe`, 82,182,144 bytes) was copied to `C:\tmp\ada.exe` at
+    once, and `--list` held all nine of this lane's tests. The build script needed no copying this time.
+  - Run alone with `--exact`, all three now pass: `a_device_clone_is_confined_and_reports_its_progress_and_a_failure`
+    (3.63 s), `a_link_browses_and_adds_a_project_inside_the_folder_only` (3.03 s),
+    `browsing_lists_names_and_kinds_inside_the_folder_only` (0.83 s). The module's own unit test,
+    `project_share::tests::a_path_inside_the_base_is_the_only_one_accepted`, passes too.
+  - The whole `machines_tests` module (79 tests) was run twice and produced **one failure twice and one
+    once, both in other lanes' tests, both passing alone**: `one_offline_machine_does_not_hold_up_another`
+    (`machines_tests.rs:909`, the flake `references/verification.md` records under full-suite
+    concurrency; it passes alone in 2.89 s) and `take_over_moves_the_conversation_and_the_code`
+    (`handoff_tests.rs:604`, `copy.starts_with(m.root.join("taker-retinue"))`), which then passed alone
+    four times (one with the owner's own `TEMP`, three more with `TEMP=C:\tmp`). This lane touches no file
+    those tests use; both are worth the Director's eye, and neither blocks this lane.
+  - `cargo clippy -p retinue-daemon --all-targets -- -D warnings`: exit 0, no warnings.
+  - `npm run check:format`: passed, 1,482 files. `npm run check:architecture`: passed.
+  - Nothing temporary remains: `build.rs` and `skill_library.rs` are untouched, `C:\tmp\ada.exe` is the
+    copied test binary the recipe asks for and sits outside the tree. `git status` shows this report and
+    the two source files, uncommitted.
+
+
 
 
