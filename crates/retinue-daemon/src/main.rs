@@ -119,6 +119,8 @@ mod machines_tests;
 mod secrets;
 // Section D: connectors, owner-added MCP servers the daemon calls.
 mod connectors;
+// Section D, wave 3: MCP OAuth for a connector (discovery, DCR, PKCE, loopback callback).
+mod connectors_oauth;
 // Section C (16 November 2026): Pi's providers and the keys Retinue holds for it.
 mod pi;
 
@@ -1202,6 +1204,9 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "memory.list" | "memory.get" | "memory.create" | "memory.update" | "memory.approve" | "memory.delete" | "memory.restore" => memory::rpc(st, method, &p).await,
         // Section D: connectors. Desktop only, `never` remote.
         "connector.list" | "connector.add" | "connector.update" | "connector.remove" | "connector.test" | "connector.tools" | "connector.tool.rule" => connectors::rpc(st, method, &p).await,
+        // Section D, wave 3: the browser sign-in for an OAuth connector. The
+        // consent page is a credential grant, so it is desktop only too.
+        "connector.oauth.start" | "connector.oauth.status" | "connector.oauth.cancel" => connectors_oauth::rpc(st, method, &p).await,
         "skills.list" | "skills.get" | "skills.forAgent" | "skills.scan" | "skills.import" | "skills.delete" | "skills.toggle" => skills::rpc(st, method, &p).await,
         "backup.export" | "backup.preview" | "backup.import" => backup::rpc(st, method, &p).await,
         // Section C: Pi's providers and the keys Retinue holds for it. Desktop
@@ -14495,6 +14500,8 @@ mod phase2a_tests {
 
     // Section D: connectors, the daemon's MCP client and its approval cards.
     include!("connectors_tests.rs");
+    // Section D, wave 3: the browser sign-in for an OAuth connector.
+    include!("connectors_oauth_tests.rs");
 
     #[tokio::test]
     async fn new_sessions_carry_project_id() {

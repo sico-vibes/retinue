@@ -492,6 +492,27 @@
       "params": null
     },
     {
+      "method": "connector.oauth.start",
+      "class": "never",
+      "minTier": null,
+      "why": "The browser sign-in opens the owner's browser on the host and grants the connector's token; only the desktop can start it.",
+      "params": null
+    },
+    {
+      "method": "connector.oauth.status",
+      "class": "never",
+      "minTier": null,
+      "why": "A connector's sign-in state stays with the desktop that owns the token.",
+      "params": null
+    },
+    {
+      "method": "connector.oauth.cancel",
+      "class": "never",
+      "minTier": null,
+      "why": "Stopping a sign-in is a desktop action on the host's own callback listener.",
+      "params": null
+    },
+    {
       "method": "computer.status",
       "class": "never",
       "minTier": null,
@@ -1964,6 +1985,7 @@
   ],
   "events": {
     "connector.changed": "drop",
+    "connector.oauth.changed": "drop",
     "message.delta": "allow",
     "message.completed": "allow",
     "session.changed": "allow",

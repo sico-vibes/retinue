@@ -662,27 +662,30 @@ An owner-added MCP server the **daemon** calls over Streamable HTTP (`initialize
 
 Every `connector.*` method is `tiers.json` class `never`; `connector.changed` is `drop`. The token lives in Credential Manager under `Retinue/connector/<id>`, is written before the row exists and deleted with it, and **no RPC returns it**.
 
+**OAuth (wave 3, 17 November 2026).** A connector whose `auth` is `oauth` is signed in from the desktop: `connector.oauth.start` discovers the service (RFC 9728 protected-resource metadata, then RFC 8414 authorization-server metadata), registers a client when the service offers dynamic registration (RFC 7591), opens the owner's own browser at a PKCE (S256) request with a random `state`, and waits for the callback on `http://127.0.0.1:<ephemeral>/callback` — loopback only, one use, five minutes, the `state` compared, then the listener is closed. `connector.oauth.status` reports `idle`, `pending`, `authorized` or `error`; `connector.oauth.cancel` stops a waiting flow. The tokens are one JSON bundle in Credential Manager at the same `connector/<id>` address, split into `connector/<id>.1` … when they exceed the 2,048-byte cap and joined on read; an access token is refreshed within 60 seconds of expiry, and removing the connector revokes it (RFC 7009) before deleting it. `connector.oauth.*` is `never` remote and `connector.oauth.changed` is `drop`. Nothing logs or returns a code, a token or a URL that carries a query. Contract for the screens: `docs/reports/wave3-oauth.md`.
+
 **Outbound rules.** HTTPS only; plain `http://` only for a loopback host (a server on this PC); no sign-in in the address and no fragment; DNS pinned to the address that was resolved and validated; a cross-origin redirect is not followed (the token never moves origin); request and answer are capped (4 MiB); every result and error is masked for the connector's own token in its plain, URL-encoded and base64 forms, plus the usual credential shapes.
 
 **Types.**
 
-- `Connector {id, name, url, auth: 'none'|'token'|'oauth', enabled, status: 'ok'|'error'|'unchecked', detail: string|null, toolCount: number|null, unattended: 'off'|'readOnly', lastCheckedAt: string|null}` (`oauth` is reserved for wave 3).
+- `Connector {id, name, url, auth: 'none'|'token'|'oauth', enabled, status: 'ok'|'error'|'unchecked', detail: string|null, toolCount: number|null, unattended: 'off'|'readOnly', lastCheckedAt: string|null}`.
 - `ConnectorTool {name, title: string|null, description, readOnly: boolean|null, rule: 'ask'|'allow'|'deny'}`. `readOnly` is the server's `readOnlyHint`; unknown stays `null`. The input schema has `pattern` and `patternProperties` removed and is capped.
 - `CatalogueEntry {id, name, url, docsUrl, auth: 'token'|'oauth', tokenHint}`.
 
 **Methods.**
 
 - `connector.list {}` gives `{connectors, catalogue}`; the catalogue is a short static table of official hosted servers (GitHub, Linear, Notion, Sentry, Stripe, Supabase).
-- `connector.add {name, url, token?}` gives `{connector}` and runs a check. A check that fails is the row's `status: 'error'` and `detail`, not an error from the call.
-- `connector.update {id, name?, token?, enabled?, unattended?}` gives `{connector}`. `token: ""` clears it (auth becomes `none`). `unattended` is `off` or `readOnly`.
+- `connector.add {name, url, token?, auth?}` gives `{connector}` and runs a check. `auth` is `none`, `token` or `oauth`; when it is absent a `token` means `token`, otherwise `none`. An `oauth` row is created `unchecked` with "Sign in to use this connector." and no network check. A check that fails is the row's `status: 'error'` and `detail`, not an error from the call.
+- `connector.update {id, name?, token?, enabled?, unattended?}` gives `{connector}`. `token: ""` clears it (auth becomes `none`, and an OAuth sign-in is revoked and deleted first). `unattended` is `off` or `readOnly`.
 - `connector.remove {id, confirm: true}` gives `{removed}`, and deletes the token and every tool rule.
 - `connector.test {id}` gives `{ok, detail, toolCount}` and records the result on the row.
 - `connector.tools {id}` gives `{tools: ConnectorTool[]}`, from the last check; an empty cache is filled by a check.
 - `connector.tool.rule {id, tool, rule}` gives `{ok, tool, rule}`. No row means `ask`.
+- `connector.oauth.start {id}` gives `{status: 'pending', authorizationUrl, expiresAt}` after opening the browser; `connector.oauth.status {id}` gives `{id, auth, status, detail, expiresAt}` (status `idle`, `pending`, `authorized` or `error`); `connector.oauth.cancel {id}` gives `{cancelled}`.
 
 **Bot tools (team bridge).** `connector_search {query}` returns matching tools, grouped by connector, with descriptions and schemas (at most 20 per connector); `connector_call {connector, tool, arguments}` runs one. The prompt carries one line per enabled connector, not its schemas. A call shows the usual approval card titled `<connector>: <tool>` unless the tool's rule is `allow`; `deny` refuses without a card. The card waits up to 50 seconds; "Always allow" writes `allow` for that tool. An unattended run (automation, unattended task, or a delegated child whose chain holds one) may call only a tool the server marks read-only, and only while the connector's `unattended` is `readOnly`; it never asks. Full access is not a bypass for any of this.
 
-**Event.** `connector.changed` carries the connector row (or `{id, removed: true}`).
+**Event.** `connector.changed` carries the connector row (or `{id, removed: true}`). `connector.oauth.changed` carries the same object as `connector.oauth.status`.
 
 ## Phase 5: accounts (31 October 2026)
 
