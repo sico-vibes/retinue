@@ -216,12 +216,13 @@ impl Storage {
         Ok(())
     }
 
-    /// The ledger, newest first, for one item or for everything, capped.
+    /// The ledger, newest first, for one item or for everything, capped. Two rows in the same
+    /// millisecond keep the order they were written (`rowid`), never the order of their random ids.
     pub fn vault_activity(&self, item_id: Option<&str>, limit: u32) -> Result<Vec<Value>, StorageError> {
         let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         let mut q = c.prepare(
             "SELECT id,at,item_id,item_title,action,where_,origin,bot,session_id FROM vault_activity
-             WHERE (?1 IS NULL OR item_id=?1) ORDER BY at DESC, id DESC LIMIT ?2",
+             WHERE (?1 IS NULL OR item_id=?1) ORDER BY at DESC, rowid DESC LIMIT ?2",
         )?;
         let rows = q.query_map(params![item_id, i64::from(limit)], activity_from_row)?.collect::<Result<Vec<_>, _>>()?;
         Ok(rows)
