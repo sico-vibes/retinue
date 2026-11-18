@@ -122,10 +122,17 @@ async fn the_console_refuses_denies_and_cancels_with_the_window_s_own_sentences(
     assert_eq!(status, 200, "{body}");
     assert_eq!(body["result"]["approved"], json!(false));
     assert_eq!(st.db.remote_devices().unwrap().len(), 0, "a refusal stores nothing");
-    // Cancelling with no code open is answered honestly rather than failing.
+    // Cancelling after a decision is what the window's own `remote.pair.cancel`
+    // answers (the offer object is still there, so it says it cancelled), and the
+    // console does not invent a third answer. "Nothing to cancel" is a state with
+    // no offer at all, below.
     let (status, body) = console_post(&st, Some(&token), "console.pair.cancel", json!({})).await;
     assert_eq!(status, 200);
-    assert_eq!(body["result"]["cancelled"], json!(false));
+    assert_eq!(body["result"]["cancelled"], json!(true), "the decided offer is thrown away the same way the window does it");
+    let (fresh, fresh_token) = console_state();
+    let (status, body) = console_post(&fresh, Some(&fresh_token), "console.pair.cancel", json!({})).await;
+    assert_eq!(status, 200);
+    assert_eq!(body["result"]["cancelled"], json!(false), "with no offer at all there is nothing to cancel");
     // Pairing a code needs Remote on, and the sentence is the window's.
     let (status, body) = console_post(&st, Some(&token), "console.pair.begin", json!({})).await;
     assert_eq!(status, 409);
