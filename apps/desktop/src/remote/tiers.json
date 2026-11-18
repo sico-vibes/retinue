@@ -492,6 +492,34 @@
       "params": null
     },
     {
+      "method": "connector.oauth.start",
+      "class": "never",
+      "minTier": null,
+      "why": "The browser sign-in opens the owner's browser on the host and grants the connector's token; only the desktop can start it.",
+      "params": null
+    },
+    {
+      "method": "connector.oauth.status",
+      "class": "never",
+      "minTier": null,
+      "why": "A connector's sign-in state stays with the desktop that owns the token.",
+      "params": null
+    },
+    {
+      "method": "connector.oauth.cancel",
+      "class": "never",
+      "minTier": null,
+      "why": "Stopping a sign-in is a desktop action on the host's own callback listener.",
+      "params": null
+    },
+    {
+      "method": "console.*",
+      "class": "never",
+      "minTier": null,
+      "why": "The console is a headless host's own terminal, reached over its loopback API with a token only such a host writes; no paired device may turn Remote on or approve a pairing.",
+      "params": null
+    },
+    {
       "method": "computer.status",
       "class": "never",
       "minTier": null,
@@ -714,6 +742,13 @@
       "minTier": "operator",
       "why": "Answers a pending approval; only when the host allows approvals from remote.",
       "params": "permissionReply"
+    },
+    {
+      "method": "permission.pending",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "The cards waiting for the owner, so a linked machine's window can answer them; the card's own provider payload, project rules and match keys never leave the host. A phone already reads the same cards through app.snapshot.",
+      "params": null
     },
     {
       "method": "proposal.decide",
@@ -1000,6 +1035,41 @@
       "class": "never",
       "minTier": null,
       "why": "A remote device must not change which shared skills are on.",
+      "params": null
+    },
+    {
+      "method": "skills.learned.list",
+      "class": "never",
+      "minTier": null,
+      "why": "The review queue for skills bots wrote is a desktop decision; approving one makes an instruction every bot follows.",
+      "params": null
+    },
+    {
+      "method": "skills.learned.approve",
+      "class": "never",
+      "minTier": null,
+      "why": "Approving a learned skill lets every bot follow its text, so it stays on the desktop.",
+      "params": null
+    },
+    {
+      "method": "skills.learned.edit",
+      "class": "never",
+      "minTier": null,
+      "why": "A paired device must not write skill text that other bots then follow.",
+      "params": null
+    },
+    {
+      "method": "skills.learned.forget",
+      "class": "never",
+      "minTier": null,
+      "why": "Forgetting a learned skill is destructive and irreversible, so it stays on the desktop.",
+      "params": null
+    },
+    {
+      "method": "project.suggestions",
+      "class": "never",
+      "minTier": null,
+      "why": "The reply names the host's project folder, which never crosses to a device.",
       "params": null
     },
     {
@@ -1319,9 +1389,30 @@
     },
     {
       "method": "project.clone",
-      "class": "never",
-      "minTier": null,
-      "why": "Cloning writes a folder on the host and may use the host's git sign-in.",
+      "class": "workspace",
+      "minTier": "operator",
+      "why": "Cloning writes a folder on the host and may use the host's git sign-in. A paired device may only do it inside the folder the host's owner set for other machines, and only while that switch is on.",
+      "params": null
+    },
+    {
+      "method": "project.clone.status",
+      "class": "workspace",
+      "minTier": "operator",
+      "why": "One clone's progress on the host. The state is a word, the detail is one line, and the folder it names is inside the folder the host shares with other machines.",
+      "params": null
+    },
+    {
+      "method": "project.browse",
+      "class": "workspace",
+      "minTier": "operator",
+      "why": "It lists folders under the one base folder the host's owner set: names and kinds only, never outside that folder, and only while the owner's switch is on.",
+      "params": null
+    },
+    {
+      "method": "project.createFromFolder",
+      "class": "workspace",
+      "minTier": "operator",
+      "why": "It registers a folder on the host as a project. The folder must sit inside the one the host's owner set, and the switch must be on there.",
       "params": null
     },
     {
@@ -1417,9 +1508,9 @@
     },
     {
       "method": "remote.status",
-      "class": "never",
-      "minTier": null,
-      "why": "The remote controls are for the owner at the computer, never for a paired device.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "A linked Retinue machine at operator may read another machine's Remote status, at the owner's decision of 17 November 2026 (AGENTS.md); a phone or browser is refused by the gateway whatever its tier.",
       "params": null
     },
     {
@@ -1452,30 +1543,37 @@
     },
     {
       "method": "remote.pair.confirm",
-      "class": "never",
-      "minTier": null,
-      "why": "Approving a device with a tier is the owner's decision at the computer.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "A linked machine at operator may approve a waiting device with a tier (17 November 2026), but never a machine and never its own request; the owner at the computer keeps the same power, and quiet hours do not stop either.",
+      "params": null
+    },
+    {
+      "method": "remote.pair.pending",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "The one waiting pairing request, so a linked machine can approve it without walking to the other computer. It is a read, and it is only ever answered for a machine at operator.",
       "params": null
     },
     {
       "method": "remote.devices.list",
-      "class": "never",
-      "minTier": null,
-      "why": "The paired-device list is for the owner at the computer, not for a device.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "A linked machine at operator may see what is paired to another machine (17 November 2026); the row carries names, kinds, tiers and times, and the owner's own account label.",
       "params": null
     },
     {
       "method": "remote.devices.update",
-      "class": "never",
-      "minTier": null,
-      "why": "A paired device must not rename another device or raise its own tier.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "A linked machine at operator may rename a device on another machine or change its tier, never its own row, and the other machine's activity list names the machine that did it.",
       "params": null
     },
     {
       "method": "remote.devices.revoke",
-      "class": "never",
-      "minTier": null,
-      "why": "A paired device must not remove another device's pairing.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "A linked machine at operator may cut a lost phone off at another machine, never its own row, and the other machine's activity list names the machine that did it.",
       "params": null
     },
     {
@@ -1508,9 +1606,9 @@
     },
     {
       "method": "remote.activity.list",
-      "class": "never",
-      "minTier": null,
-      "why": "The activity list is the owner's audit view at the computer.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "The content-free activity list of another machine, so a linked machine's screen can show what happened there (17 November 2026). Every line is a fixed sentence with a device name; no message text ever appears in it.",
       "params": null
     },
     {
@@ -1769,42 +1867,70 @@
       "method": "machine.*",
       "class": "never",
       "minTier": null,
-      "why": "Machine links are the owner's, set up at the computer. A paired device must not link, rename or remove machines, or read another machine through this one.",
+      "why": "Machine links are the owner's, set up at the computer. A paired device must not link, rename or remove machines; what it may do through its host's links is granted method by method as `linked`, and anything not granted here stays refused.",
+      "params": null
+    },
+    {
+      "method": "machine.list",
+      "class": "linked",
+      "minTier": "viewer",
+      "why": "A phone works through its host: it sees the names, states and bots of the machines that host is linked to, so it can pick one. It never sees a machine's address, certificate fingerprint or how that link signed in.",
+      "params": null
+    },
+    {
+      "method": "machine.sessions",
+      "class": "linked",
+      "minTier": "viewer",
+      "why": "The conversations of the machines this host is linked to, so a paired phone can show what is running there; it holds ids, titles and states, and nothing is read from the other machine for it.",
+      "params": null
+    },
+    {
+      "method": "machine.permissions",
+      "class": "linked",
+      "minTier": "viewer",
+      "why": "The approvals waiting in a conversation on a machine this host is linked to, so a paired phone can show the card; the other machine's gateway redacts each card as it would for its own phone. Answering one is machine.permission.reply, at operator.",
+      "params": null
+    },
+    {
+      "method": "machine.conversation",
+      "class": "linked",
+      "minTier": "viewer",
+      "why": "One conversation on a linked machine, read through this host's link; the other machine's gateway redacts it exactly as it would for a phone paired there.",
       "params": null
     },
     {
       "method": "machine.start",
-      "class": "never",
-      "minTier": null,
-      "why": "Starting a conversation on a linked machine is the desktop's own link, made over its gateway; a paired phone must not drive it.",
+      "class": "linked",
+      "minTier": "chat",
+      "why": "A phone may start a conversation on a machine its host is linked to, at the lower of the phone's tier and the link's tier; the other machine's gateway decides. Only a phone, tablet or browser may ask, never another machine.",
       "params": null
     },
     {
       "method": "machine.prompt",
-      "class": "never",
-      "minTier": null,
-      "why": "Sending a message through a linked machine's gateway is the desktop's own link; a paired phone must not drive it.",
+      "class": "linked",
+      "minTier": "chat",
+      "why": "A phone may send a message into a conversation on a machine its host is linked to, at the lower of the two tiers; it carries text only, never an attachment, and the other gateway decides.",
       "params": null
     },
     {
       "method": "machine.steer",
-      "class": "never",
-      "minTier": null,
-      "why": "Steering a turn through a linked machine's gateway is the desktop's own link; a paired phone must not drive it.",
+      "class": "linked",
+      "minTier": "chat",
+      "why": "A phone may steer a running turn on a machine its host is linked to, at the lower of the two tiers; the other gateway decides.",
       "params": null
     },
     {
       "method": "machine.cancel",
-      "class": "never",
-      "minTier": null,
-      "why": "Stopping a turn through a linked machine's gateway is the desktop's own link; a paired phone must not drive it.",
+      "class": "linked",
+      "minTier": "chat",
+      "why": "A phone may stop a turn on a machine its host is linked to, at the lower of the two tiers; the other gateway decides.",
       "params": null
     },
     {
       "method": "machine.permission.reply",
-      "class": "never",
-      "minTier": null,
-      "why": "Answering an approval through a linked machine's gateway would let a phone approve on a third machine; only the desktop may.",
+      "class": "linked",
+      "minTier": "operator",
+      "why": "Answering an approval raised on a machine this host is linked to needs an operator phone, an operator link, and that machine's own approvals-from-remote switch; it decides, and refuses in its own words.",
       "params": null
     },
     {
@@ -1812,6 +1938,34 @@
       "class": "never",
       "minTier": null,
       "why": "Listing a linked machine's projects is the desktop's own link; a paired phone must not read another machine through this one.",
+      "params": null
+    },
+    {
+      "method": "machine.project.browse",
+      "class": "never",
+      "minTier": null,
+      "why": "Browsing a linked machine's folders is the desktop's own link, and a paired phone must not reach another machine's disk through this one.",
+      "params": null
+    },
+    {
+      "method": "machine.project.create",
+      "class": "never",
+      "minTier": null,
+      "why": "Adding a project on a linked machine writes a folder there; only the desktop's own link may ask, and only inside the folder that machine's owner set.",
+      "params": null
+    },
+    {
+      "method": "machine.project.clone",
+      "class": "never",
+      "minTier": null,
+      "why": "Cloning on a linked machine writes a folder there and may use that machine's git sign-in; only the desktop's own link may ask.",
+      "params": null
+    },
+    {
+      "method": "machine.clone.status",
+      "class": "never",
+      "minTier": null,
+      "why": "A clone's progress on a linked machine is the desktop's own link; a paired phone must not read another machine's disk through this one.",
       "params": null
     },
     {
@@ -1964,6 +2118,7 @@
   ],
   "events": {
     "connector.changed": "drop",
+    "connector.oauth.changed": "drop",
     "message.delta": "allow",
     "message.completed": "allow",
     "session.changed": "allow",
@@ -1984,6 +2139,7 @@
     "replay.gap": "allow",
     "runtime.models.changed": "allow",
     "machine.changed": "drop",
+    "machine.session.changed": "linked",
     "computer.changed": "drop",
     "browser.changed": "drop",
     "owner_computer.grant": "drop",
@@ -2043,7 +2199,8 @@
     "import.completed": "drop",
     "channel.updated": "drop",
     "channel.qr": "drop",
-    "channel.pairing.candidate": "drop"
+    "channel.pairing.candidate": "drop",
+    "skills.learned.changed": "drop"
   },
   "settingsAllowlist": [
     "appearance.style",
@@ -2059,5 +2216,12 @@
     "permissions.default_mode",
     "experimental.memory"
   ],
-  "sensitiveKeyPattern": "token|secret|password|credential|capability|api[-_]?key|private[-_]?key|authorization|bearer|cookie"
+  "sensitiveKeyPattern": "token|secret|password|credential|capability|api[-_]?key|private[-_]?key|authorization|bearer|cookie",
+  "limits": {
+    "sessionMessages": 200,
+    "sessionMessageChars": 8000,
+    "sessionTurns": 40,
+    "sessionTools": 100,
+    "sessionFiles": 100
+  }
 }

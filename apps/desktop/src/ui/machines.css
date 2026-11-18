@@ -113,3 +113,43 @@
 .bot-command small { color: var(--text-3); font-size: var(--fs-2xs); }
 .bot-command.failed small { color: var(--danger-ink); }
 .team-subgroup-head { padding: 8px 12px 2px; color: var(--text-3); font-size: var(--fs-2xs); }
+/* Live links (17 November 2026): freshness, OS icon, actions, and an offline machine's last known rows. */
+.machine-group-state.online.live { box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-success) 22%, transparent); }
+.machine-group .team-group-title { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.machine-group .team-group-title svg { flex: none; color: var(--text-3); }
+.machine-group-fresh { margin-left: auto; color: var(--text-3); font-size: var(--fs-2xs); white-space: nowrap; }
+.machine-group-actions { display: inline-flex; gap: 2px; }
+.machine-group.offline .team-group-rows { opacity: .55; }
+.machine-view-list li.offline button { opacity: .6; }
+.machine-step { display: flex; align-items: baseline; gap: 6px; margin: 2px 0; color: var(--text-3); font-size: var(--fs-xs); }
+.machine-step code { overflow: hidden; max-width: 100%; color: var(--text-2); text-overflow: ellipsis; white-space: nowrap; }
+.machine-step[data-state="failed"] { color: var(--danger-ink); }
+.machine-approval { display: grid; gap: 8px; margin: 8px 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md, 12px); background: var(--surface-raised); }
+.machine-approval-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.machine-live-mark { display: inline-flex; align-items: center; gap: 4px; color: var(--text-3); font-size: var(--fs-2xs); }
+.machine-live-mark i { width: 6px; height: 6px; border-radius: 50%; background: var(--text-3); }
+.machine-live-mark.live i { background: var(--status-success); }
+/* New project on another machine, and managing its devices (17 November 2026). */
+.machine-remote { width: min(560px, calc(100vw - 32px)); }
+.machine-remote-body { display: grid; gap: 10px; }
+.machine-remote-tabs { display: flex; gap: 6px; }
+.machine-remote-tabs button { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--text-3); font-size: var(--fs-xs); cursor: pointer; }
+.machine-remote-tabs button.active { border-color: var(--accent); color: var(--text-1); }
+.machine-browse { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-md, 12px); }
+.machine-browse-path { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.machine-browse-path code { overflow: hidden; min-width: 0; color: var(--text-2); font-size: var(--fs-xs); text-overflow: ellipsis; white-space: nowrap; }
+.machine-browse-list { display: grid; max-height: 220px; margin: 0; padding: 0; overflow: auto; list-style: none; }
+.machine-browse-list li { display: flex; align-items: center; gap: 6px; padding: 3px 4px; font-size: var(--fs-sm); }
+.machine-browse-list button { display: flex; align-items: center; gap: 6px; width: 100%; padding: 3px 4px; border: 0; border-radius: 6px; background: transparent; color: var(--text-1); text-align: left; cursor: pointer; }
+.machine-browse-list button:hover { background: var(--surface-hover, var(--surface-raised)); }
+.machine-clone { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--fs-sm); }
+.machine-clone.failed { color: var(--danger-ink); }
+.machine-remote-done { display: flex; align-items: center; gap: 8px; margin: 0; }
+.machine-remote-bots { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.machine-remote-h { margin: 6px 0 0; color: var(--text-2); font-size: var(--fs-sm); font-weight: 500; }
+.machine-manage-status { display: flex; align-items: flex-start; gap: 8px; margin: 0; color: var(--text-2); font-size: var(--fs-sm); }
+.machine-devices, .machine-activity { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.machine-devices li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.machine-device-copy { display: grid; flex: 1; min-width: 0; }
+.machine-device-copy small, .machine-activity small { color: var(--text-3); font-size: var(--fs-2xs); }
+.machine-activity li { display: grid; grid-template-columns: auto 1fr; gap: 8px; font-size: var(--fs-xs); }

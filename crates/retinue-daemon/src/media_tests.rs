@@ -456,7 +456,7 @@ async fn generated_image_message_carries_no_path() {
     let seen = drain(&mut rx).await;
     let (_, payload) = seen.iter().find(|(kind, _)| kind == "message.completed").expect("the notice was emitted");
     let envelope = json!({"type":"message.completed","payload":payload});
-    let redacted = crate::remote::policy::redact_event(&envelope).expect("a notice crosses to a device");
+    let redacted = crate::remote::policy::redact_event(&envelope, &crate::remote::policy::RedactOptions::default()).expect("a notice crosses to a device");
     let text = serde_json::to_string(&redacted).unwrap();
     assert!(!text.contains("hidden-folder"), "no folder crosses");
     assert!(!text.contains(&dir.to_string_lossy().into_owned()), "no path crosses");

@@ -118,6 +118,76 @@
       }
     },
     {
+      "name": "linked-read-allowed-quiet-hours",
+      "call": {
+        "tier": "viewer",
+        "approvalsFromRemote": false,
+        "method": "machine.list",
+        "params": {},
+        "quietHours": true
+      },
+      "expect": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "linked-work-requires-chat",
+      "call": {
+        "tier": "viewer",
+        "approvalsFromRemote": false,
+        "method": "machine.prompt",
+        "params": {
+          "machineId": "m",
+          "sessionId": "s",
+          "text": "hi"
+        },
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "tier_required",
+        "reason": "a viewer device cannot call machine.prompt"
+      }
+    },
+    {
+      "name": "linked-work-quiet-hours-denied",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "machine.steer",
+        "params": {
+          "machineId": "m",
+          "sessionId": "s",
+          "text": "hi"
+        },
+        "quietHours": true
+      },
+      "expect": {
+        "allowed": false,
+        "code": "quiet_hours",
+        "reason": "quiet hours are on; this host only allows reading right now"
+      }
+    },
+    {
+      "name": "linked-approval-requires-operator",
+      "call": {
+        "tier": "chat",
+        "approvalsFromRemote": false,
+        "method": "machine.permission.reply",
+        "params": {
+          "machineId": "m",
+          "permissionId": "p",
+          "choice": "allow"
+        },
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "tier_required",
+        "reason": "a chat device cannot call machine.permission.reply"
+      }
+    },
+    {
       "name": "approve-tier-denied-viewer",
       "call": {
         "tier": "viewer",
@@ -761,6 +831,148 @@
         "code": "forbidden_remote",
         "reason": "Only the owner at the desktop answers a secret request."
       }
+    },
+    {
+      "name": "manage-needs-operator",
+      "call": {
+        "tier": "chat",
+        "approvalsFromRemote": false,
+        "method": "remote.devices.list",
+        "params": {},
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "tier_required",
+        "reason": "a chat device cannot call remote.devices.list"
+      }
+    },
+    {
+      "name": "manage-allowed-at-operator",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "remote.devices.list",
+        "params": {},
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "manage-quiet-hours-passes",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "remote.devices.revoke",
+        "params": {
+          "deviceId": "dev-1"
+        },
+        "quietHours": true
+      },
+      "expect": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "manage-never-still-never",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": true,
+        "method": "remote.enable",
+        "params": {},
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "forbidden_remote",
+        "reason": "A paired device must not turn the host's remote access on."
+      }
+    },
+    {
+      "name": "workspace-operator-allowed",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "project.browse",
+        "params": {},
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "workspace-chat-denied",
+      "call": {
+        "tier": "chat",
+        "approvalsFromRemote": false,
+        "method": "project.createFromFolder",
+        "params": {
+          "path": "C:\\Projects\\repo"
+        },
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "tier_required",
+        "reason": "a chat device cannot call project.createFromFolder"
+      }
+    },
+    {
+      "name": "workspace-quiet-hours-denied",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "project.clone",
+        "params": {
+          "url": "https://example.com/x.git",
+          "parent": "C:\\Projects",
+          "confirm": true
+        },
+        "quietHours": true
+      },
+      "expect": {
+        "allowed": false,
+        "code": "quiet_hours",
+        "reason": "quiet hours are on; this host only allows reading right now"
+      }
+    },
+    {
+      "name": "workspace-status-allowed",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "project.clone.status",
+        "params": {
+          "id": "job"
+        },
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "machine-project-clone-stays-on-the-desktop",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": true,
+        "method": "machine.project.clone",
+        "params": {
+          "machineId": "m",
+          "url": "https://example.com/x.git",
+          "parent": "C:\\Projects",
+          "confirm": true
+        },
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "forbidden_remote",
+        "reason": "Cloning on a linked machine writes a folder there and may use that machine's git sign-in; only the desktop's own link may ask."
+      }
     }
   ],
   "results": [
@@ -1386,6 +1598,332 @@
             "id": "rt_2",
             "provider": "opencode",
             "account": null
+          }
+        ]
+      }
+    },
+    {
+      "name": "session-get-windowed",
+      "method": "session.get",
+      "options": {},
+      "limits": {
+        "sessionMessages": 2,
+        "sessionMessageChars": 6,
+        "sessionTurns": 1,
+        "sessionTools": 1,
+        "sessionFiles": 1
+      },
+      "input": {
+        "id": "s_1",
+        "title": "Long one",
+        "providerSessionId": "thread_1",
+        "messages": [
+          {
+            "id": "m1",
+            "role": "user",
+            "content": "first message"
+          },
+          {
+            "id": "m2",
+            "role": "assistant",
+            "content": "second message"
+          },
+          {
+            "id": "m3",
+            "role": "user",
+            "content": "third message"
+          },
+          {
+            "id": "m4",
+            "role": "assistant",
+            "content": "fourth message"
+          }
+        ],
+        "turns": [
+          {
+            "id": "t1",
+            "state": "done"
+          },
+          {
+            "id": "t2",
+            "state": "done"
+          }
+        ],
+        "tools": [
+          {
+            "id": "x1",
+            "title": "Bash: ls",
+            "state": "done"
+          },
+          {
+            "id": "x2",
+            "title": "Read",
+            "state": "done"
+          }
+        ],
+        "files": [
+          {
+            "id": "f1",
+            "path": "C:/repo/src/a.ts"
+          }
+        ]
+      },
+      "expect": {
+        "id": "s_1",
+        "title": "Long one",
+        "messages": [
+          {
+            "id": "m3",
+            "role": "user",
+            "content": "third ",
+            "contentTruncated": true
+          },
+          {
+            "id": "m4",
+            "role": "assistant",
+            "content": "fourth",
+            "contentTruncated": true
+          }
+        ],
+        "turns": [
+          {
+            "id": "t2",
+            "state": "done"
+          }
+        ],
+        "tools": [
+          {
+            "id": "x2",
+            "title": "Tool",
+            "state": "done"
+          }
+        ],
+        "files": [
+          {
+            "id": "f1",
+            "path": "src/a.ts"
+          }
+        ],
+        "messagesTruncated": true,
+        "messagesCursor": "m3",
+        "turnsTruncated": true,
+        "toolsTruncated": true
+      }
+    },
+    {
+      "name": "session-get-paged-keeps-its-markers",
+      "method": "session.get",
+      "options": {},
+      "limits": {
+        "sessionMessages": 2,
+        "sessionMessageChars": 6,
+        "sessionTurns": 1,
+        "sessionTools": 1,
+        "sessionFiles": 1
+      },
+      "input": {
+        "id": "s_2",
+        "messages": [
+          {
+            "id": "m1",
+            "role": "user",
+            "content": "early"
+          }
+        ],
+        "turns": [],
+        "turnsTruncated": true,
+        "tools": [],
+        "toolsTruncated": true,
+        "files": [],
+        "filesTruncated": true
+      },
+      "expect": {
+        "id": "s_2",
+        "messages": [
+          {
+            "id": "m1",
+            "role": "user",
+            "content": "early"
+          }
+        ],
+        "turns": [],
+        "turnsTruncated": true,
+        "tools": [],
+        "toolsTruncated": true,
+        "files": [],
+        "filesTruncated": true
+      }
+    },
+    {
+      "name": "machine-session-get-tools-kept",
+      "method": "session.get",
+      "options": {
+        "deviceKind": "machine"
+      },
+      "input": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "cargo test --all",
+                "detail": {
+                  "command": "cargo test --all"
+                },
+                "status": "ok"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "cargo test --all",
+                "detail": {
+                  "command": "cargo test --all"
+                },
+                "status": "ok"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "phone-session-get-tools-generic",
+      "method": "session.get",
+      "options": {},
+      "input": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "cargo test --all",
+                "detail": {
+                  "command": "cargo test --all"
+                },
+                "status": "ok"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "Tool",
+                "status": "ok"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "machine-session-get-tool-detail-value-paths-reduced",
+      "method": "session.get",
+      "options": {
+        "deviceKind": "machine"
+      },
+      "input": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "Read the file",
+                "detail": {
+                  "command": "cat C:\\Users\\Owner\\private-folder\\project\\src\\lib.rs",
+                  "path": "C:\\Users\\Owner\\private-folder\\project\\src\\lib.rs"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "Read the file",
+                "detail": {
+                  "command": "cat C:\\Users\\Owner\\private-folder\\project\\src\\lib.rs",
+                  "path": "src/lib.rs"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "machine-session-get-still-drops-secrets",
+      "method": "session.get",
+      "options": {
+        "deviceKind": "machine"
+      },
+      "input": {
+        "id": "s_1",
+        "apiKey": "sk-live-not-a-key",
+        "customEnv": {
+          "TOKEN": "abc"
+        },
+        "overrides": {
+          "setupScript": "curl evil"
+        },
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "Read src/lib.rs",
+                "detail": {
+                  "file_path": "C:\\work\\app\\src\\lib.rs",
+                  "token": "abc"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "id": "s_1",
+        "customEnv": {},
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "Read src/lib.rs",
+                "detail": {
+                  "file_path": "src/lib.rs"
+                }
+              }
+            ]
           }
         ]
       }
@@ -2276,6 +2814,97 @@
         }
       },
       "expect": null
+    },
+    {
+      "name": "machine-session-changed-tools-kept",
+      "options": {
+        "deviceKind": "machine"
+      },
+      "input": {
+        "v": 1,
+        "type": "session.changed",
+        "payload": {
+          "id": "s_1",
+          "turns": [
+            {
+              "id": "turn_1",
+              "tools": [
+                {
+                  "id": "t_1",
+                  "title": "npm test",
+                  "detail": {
+                    "command": "npm test"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expect": {
+        "v": 1,
+        "type": "session.changed",
+        "payload": {
+          "id": "s_1",
+          "turns": [
+            {
+              "id": "turn_1",
+              "tools": [
+                {
+                  "id": "t_1",
+                  "title": "npm test",
+                  "detail": {
+                    "command": "npm test"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "phone-session-changed-tools-generic",
+      "options": {},
+      "input": {
+        "v": 1,
+        "type": "session.changed",
+        "payload": {
+          "id": "s_1",
+          "turns": [
+            {
+              "id": "turn_1",
+              "tools": [
+                {
+                  "id": "t_1",
+                  "title": "npm test",
+                  "detail": {
+                    "command": "npm test"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expect": {
+        "v": 1,
+        "type": "session.changed",
+        "payload": {
+          "id": "s_1",
+          "turns": [
+            {
+              "id": "turn_1",
+              "tools": [
+                {
+                  "id": "t_1",
+                  "title": "Tool"
+                }
+              ]
+            }
+          ]
+        }
+      }
     }
   ]
 }

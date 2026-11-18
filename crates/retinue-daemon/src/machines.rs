@@ -12,6 +12,7 @@
 
 use crate::machine_client::{self as client, ClientError, Trust};
 use crate::remote::pairing::{DEVICE_COOKIE, PAIR_COOKIE};
+use crate::remote::policy;
 use crate::{derr, AppState, DispatchError};
 use axum::http::StatusCode;
 use reqwest::Method;
@@ -63,7 +64,11 @@ impl Default for Timing {
 #[derive(Clone, Default, PartialEq)]
 struct Snapshot {
     version: Option<String>,
+    /// The far machine's OS family, from its `machine.info`.
+    kind: Option<String>,
     bots: Vec<Value>,
+    /// The far machine's conversations, as `machine.sessions` lists them.
+    sessions: Vec<Value>,
     detail: Option<String>,
 }
 
@@ -93,6 +98,8 @@ pub struct Machines {
     timing: Mutex<Timing>,
     /// Handoff leases and take-over jobs (Phase 4, Round 2). Memory only.
     pub(crate) handoff: crate::handoff::Handoffs,
+    /// Step 1: the live socket to each online link.
+    pub(crate) streams: crate::machine_stream::Streams,
 }
 
 impl Default for Machines {
@@ -106,12 +113,13 @@ impl Default for Machines {
             wake: Notify::new(),
             timing: Mutex::new(Timing::default()),
             handoff: crate::handoff::Handoffs::default(),
+            streams: crate::machine_stream::Streams::default(),
         }
     }
 }
 
 impl Machines {
-    fn timing(&self) -> Timing {
+    pub(crate) fn timing(&self) -> Timing {
         *self.timing.lock().unwrap()
     }
 
@@ -171,12 +179,26 @@ fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// The word the other machine's approval dialog shows for this one. The pairing
+/// request used to say `windows` whatever the build was for.
+pub(crate) fn platform_label() -> &'static str {
+    match std::env::consts::OS {
+        "windows" => "Windows",
+        "linux" => "Linux",
+        "macos" => "macOS",
+        other => other,
+    }
+}
+
 fn self_value(st: &AppState) -> Value {
     json!({"id": machine_id(st), "name": machine_name(st), "version": version()})
 }
 
 fn info_value(st: &AppState) -> Value {
-    json!({"machineId": machine_id(st), "name": machine_name(st), "version": version(), "handoffVersion": HANDOFF_VERSION})
+    // `platform` is the OS family, the same word `std::env::consts::OS` gives,
+    // so a link can show a laptop or server icon without guessing. A build for
+    // another target reports that target's own word.
+    json!({"machineId": machine_id(st), "name": machine_name(st), "version": version(), "handoffVersion": HANDOFF_VERSION, "platform": std::env::consts::OS})
 }
 
 fn self_rename(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
@@ -234,6 +256,8 @@ fn row_of(st: &AppState, link: &Value) -> Value {
         "state": link["state"],
         "detail": snapshot.detail,
         "version": snapshot.version,
+        "kind": snapshot.kind,
+        "live": crate::machine_stream::live(st, id),
         "bots": snapshot.bots,
     })
 }
@@ -243,9 +267,26 @@ fn row_by_id(st: &AppState, id: &str) -> Option<Value> {
     Some(row_of(st, &link))
 }
 
-fn list_value(st: &AppState) -> Result<Value, DispatchError> {
+/// The row a paired device may see: the same link without the far machine's own
+/// address, its certificate fingerprint or how this computer signed in to it. A
+/// phone has no use for any of them, and its screen only needs to pick a machine.
+fn row_for_device(row: Value) -> Value {
+    match row {
+        Value::Object(mut fields) => {
+            for key in ["url", "fingerprint", "auth", "pairedAt"] {
+                fields.remove(key);
+            }
+            Value::Object(fields)
+        }
+        other => other,
+    }
+}
+
+fn list_value(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+    let device = p[policy::CALLER_TIER].as_str().is_some();
     let links = st.db.machine_links().map_err(internal)?;
-    Ok(json!({"machines": links.iter().map(|link| row_of(st, link)).collect::<Vec<_>>()}))
+    let rows: Vec<Value> = links.iter().map(|link| row_of(st, link)).map(|row| if device { row_for_device(row) } else { row }).collect();
+    Ok(json!({"machines": rows}))
 }
 
 fn link_or_missing(st: &AppState, id: &str) -> Result<Value, DispatchError> {
@@ -317,6 +358,74 @@ pub(crate) fn bots_from(agents: &Value, sessions: &Value) -> Vec<Value> {
 // ---------------------------------------------------------------------------
 // Reading one machine
 
+/// The other machine's conversations, one row each. Only ids, titles and words:
+/// the transcript is read through the gateway, which redacts it, when the window
+/// opens the conversation. A hidden bot's name is left out, as its bot row is.
+pub(crate) fn sessions_from(agents: &Value, sessions: &Value) -> Vec<Value> {
+    let names: HashMap<&str, Value> = agents["agents"]
+        .as_array()
+        .map(|agents| {
+            agents
+                .iter()
+                .filter(|agent| !agent["hidden"].as_bool().unwrap_or(false))
+                .filter_map(|agent| Some((agent["id"].as_str()?, agent["name"].clone())))
+                .collect()
+        })
+        .unwrap_or_default();
+    sessions["sessions"]
+        .as_array()
+        .map(|sessions| {
+            sessions
+                .iter()
+                .filter_map(|session| {
+                    let agent_id = session["agentId"].as_str();
+                    let mut row = json!({
+                        "id": session["id"].as_str()?,
+                        "title": session["title"],
+                        "agentId": agent_id,
+                        "agentName": agent_id.and_then(|id| names.get(id).cloned()),
+                        "projectName": session["projectName"],
+                        "state": session["state"],
+                        "updatedAt": session["updatedAt"],
+                        "archived": session["archived"].as_bool().unwrap_or(false),
+                    });
+                    // 18 November 2026: where a conversation was started from, when
+                    // a paired device started it (the live lane's `link.startedFrom`).
+                    // Copied as it is, three keys: a device id, a kind and a name.
+                    if let Some(mark) = session["link"]["startedFrom"].as_object() {
+                        row["startedFrom"] = Value::Object(mark.clone());
+                    }
+                    Some(row)
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `machine.sessions`: the rows the 20-second read already holds, for one link
+/// or for every link. No outbound call: a machine that is away shows what its
+/// last read gave, and `machine.list` says whether that is current.
+fn sessions_value(st: &AppState, only: Option<&str>) -> Result<Value, DispatchError> {
+    let links = match only {
+        Some(id) => vec![link_or_missing(st, id)?],
+        None => st.db.machine_links().map_err(internal)?,
+    };
+    let snapshots = st.machines.snapshots.lock().unwrap();
+    let mut rows = Vec::new();
+    for link in &links {
+        let Some(id) = link["id"].as_str() else { continue };
+        let Some(snapshot) = snapshots.get(id) else { continue };
+        for session in &snapshot.sessions {
+            let mut row = session.clone();
+            row["machineId"] = json!(id);
+            row["machineName"] = link["name"].clone();
+            row["kind"] = json!(snapshot.kind);
+            rows.push(row);
+        }
+    }
+    Ok(json!({"sessions": rows}))
+}
+
 fn unreachable_detail(name: &str) -> String {
     format!("{name} can't be reached right now.")
 }
@@ -354,7 +463,13 @@ pub async fn refresh_one(st: &AppState, id: &str) -> Option<Value> {
     let mut previous = st.machines.snapshots.lock().unwrap().get(id).cloned().unwrap_or_default();
     let (state, snapshot) = match read {
         Ok((Ok(info), Ok(agents), Ok(sessions))) if info["machineId"].as_str() == Some(id) => {
-            let seen = Snapshot { version: info["version"].as_str().map(str::to_string), bots: bots_from(&agents, &sessions), detail: None };
+            let seen = Snapshot {
+                version: info["version"].as_str().map(str::to_string),
+                kind: info["platform"].as_str().map(str::to_string),
+                bots: bots_from(&agents, &sessions),
+                sessions: sessions_from(&agents, &sessions),
+                detail: None,
+            };
             ("online", seen)
         }
         Ok((Ok(info), Ok(_), Ok(_))) if info["machineId"].as_str() != Some(id) => {
@@ -376,11 +491,17 @@ pub async fn refresh_one(st: &AppState, id: &str) -> Option<Value> {
     }
     st.machines.snapshots.lock().unwrap().insert(id.to_string(), snapshot);
     let after = row_by_id(st, id)?;
-    let shown = |row: &Value| json!([row["state"], row["detail"], row["version"], row["bots"], row["tier"]]);
+    // `live` is not compared here: the socket announces its own flips, so a read
+    // never fires because a connection opened or closed between two polls.
+    let shown = |row: &Value| json!([row["state"], row["detail"], row["version"], row["kind"], row["bots"], row["tier"]]);
     if shown(&before) != shown(&after) {
         // Nothing about the other machine's bots goes into an event, because
         // events are stored: the window reloads `machine.list` when it sees this.
-        st.emit("machine.changed", json!({"machineId": id, "state": after["state"]})).await;
+        st.emit("machine.changed", json!({"machineId": id, "state": after["state"], "live": after["live"]})).await;
+    }
+    // A link that just came online is followed now rather than at the next sweep.
+    if after["state"] == "online" && before["state"] != "online" {
+        crate::machine_stream::wake(st);
     }
     Some(after)
 }
@@ -402,6 +523,9 @@ pub(crate) async fn refresh_all(st: &AppState) {
 /// Starts the background loop when there is a link and none is running. The
 /// loop ends by itself once the last link is gone.
 pub fn ensure_loop(st: &AppState) {
+    // The live sockets have their own supervisor; it starts and stops with the
+    // links the same way, and is asked for here so one call covers both.
+    crate::machine_stream::ensure(st);
     if st.db.machine_link_count().unwrap_or(0) == 0 || st.machines.looping.swap(true, Ordering::SeqCst) {
         return;
     }
@@ -436,7 +560,6 @@ pub async fn start_at_boot(st: &AppState) {
     machine_id(st);
     ensure_loop(st);
 }
-
 // ---------------------------------------------------------------------------
 // Reads that go straight through
 
@@ -521,25 +644,50 @@ fn require_online(link: &Value) -> Result<(), DispatchError> {
 /// The one tier check: `needed` is the far side's own class for the method, so a
 /// refusal here is the one its gateway would give, only sooner and without a
 /// request. The gateway stays the authority.
-fn require_tier(link: &Value, needed: &str, action: &str) -> Result<(), DispatchError> {
+///
+/// A call that came through the gateway carries the caller's own tier
+/// ([`policy::CALLER_TIER`]), and then the call works at the lower of that and the
+/// link's tier: a paired phone never gets more on another machine than it has here.
+fn require_tier(p: &Value, link: &Value, needed: &str, action: &str) -> Result<(), DispatchError> {
     let tier = link["tier"].as_str().unwrap_or("viewer");
-    if tier_rank(tier) >= tier_rank(needed) {
+    let caller = p[policy::CALLER_TIER].as_str();
+    let effective = match caller {
+        Some(caller) if tier_rank(caller) < tier_rank(tier) => caller,
+        _ => tier,
+    };
+    if tier_rank(effective) >= tier_rank(needed) {
         return Ok(());
     }
     let name = link_name(link);
-    let message = format!(
-        "{action} on {name} needs {} there, and this computer is linked as {}. Change this computer's tier in {name}'s Remote settings.",
-        tier_label(needed),
-        tier_label(tier)
-    );
+    let message = match caller {
+        Some(caller) => format!(
+            "{action} on {name} needs {} there. This device is {} and this computer is linked as {}, so it works as {}. Change the tier in {name}'s Remote settings.",
+            tier_label(needed),
+            tier_label(caller),
+            tier_label(tier),
+            tier_label(effective)
+        ),
+        None => format!(
+            "{action} on {name} needs {} there, and this computer is linked as {}. Change this computer's tier in {name}'s Remote settings.",
+            tier_label(needed),
+            tier_label(tier)
+        ),
+    };
     Err(derr("tier_required", &message, StatusCode::FORBIDDEN))
 }
 
 /// The far side's own parameters: everything the caller sent except the machine
-/// it is meant for. The gateway validates them exactly as it does a phone's.
+/// it is meant for, and the gateway's own tier stamp. The gateway validates them
+/// exactly as it does a phone's.
 fn far_params(p: &Value) -> Value {
     match p.as_object() {
-        Some(fields) => Value::Object(fields.iter().filter(|(key, _)| key.as_str() != "machineId").map(|(key, value)| (key.clone(), value.clone())).collect()),
+        Some(fields) => Value::Object(
+            fields
+                .iter()
+                .filter(|(key, _)| key.as_str() != "machineId" && key.as_str() != policy::CALLER_TIER)
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+        ),
         None => Value::Object(Default::default()),
     }
 }
@@ -548,10 +696,16 @@ fn far_params(p: &Value) -> Value {
 /// message before a request is made.
 async fn call_through(st: &AppState, p: &Value, method: &str, needed: &str, action: &str) -> Result<Value, DispatchError> {
     let machine = id_param(p, "machineId")?;
+    call_checked(st, p, machine, method, far_params(p), needed, action).await
+}
+
+/// The same, with the far parameters this machine builds itself (a pass-through whose names differ).
+/// `p` is the caller's own request, read only for the tier a phone was stamped with.
+async fn call_checked(st: &AppState, p: &Value, machine: &str, method: &str, params: Value, needed: &str, action: &str) -> Result<Value, DispatchError> {
     let link = link_or_missing(st, machine)?;
     require_online(&link)?;
-    require_tier(&link, needed, action)?;
-    client::rpc(st, machine, method, far_params(p)).await.map_err(|error| failure(st, machine, error))
+    require_tier(p, &link, needed, action)?;
+    client::rpc(st, machine, method, params).await.map_err(|error| failure(st, machine, error))
 }
 
 /// A call that changes the other machine. The next read here shows it: the 20 s
@@ -568,7 +722,9 @@ async fn write_through(st: &AppState, p: &Value, method: &str, needed: &str, act
 /// [`refuse_if_moved`] for a call that goes to `machine_id`: a conversation this
 /// machine recorded as moved to the very machine being asked is that machine's
 /// to run, so only a move elsewhere, or a live lease, refuses.
-fn refuse_if_moved_elsewhere(st: &AppState, session_id: &str, machine_id: &str) -> Result<(), DispatchError> {
+// Raised from `private` to `pub(crate)` for the live stream: it decides
+// whether a far machine's event concerns a conversation this machine gave away.
+pub(crate) fn refuse_if_moved_elsewhere(st: &AppState, session_id: &str, machine_id: &str) -> Result<(), DispatchError> {
     let Ok(mut row) = st.db.session_brief(session_id) else { return Ok(()) };
     if row["link"]["movedTo"]["machineId"].as_str() == Some(machine_id) {
         row["link"]["movedTo"] = Value::Null;
@@ -723,7 +879,7 @@ async fn pair_flow(st: &AppState, origin: &str, proof: Proof, cancel: &AtomicBoo
             if !probed.trusted {
                 return Err(failed("That machine now asks for its password. Start again."));
             }
-            (Trust::WebPki, "code", None, "/api/pair", json!({"code": code.as_str(), "name": machine_name(st), "kind": "machine", "platform": "windows"}))
+            (Trust::WebPki, "code", None, "/api/pair", json!({"code": code.as_str(), "name": machine_name(st), "kind": "machine", "platform": platform_label()}))
         }
         Proof::Password { username, password, fingerprint } => {
             let same = probed.fingerprint.is_some_and(|seen| subtle::ConstantTimeEq::ct_eq(seen.as_slice(), fingerprint.as_slice()).into());
@@ -735,7 +891,7 @@ async fn pair_flow(st: &AppState, origin: &str, proof: Proof, cancel: &AtomicBoo
                 "password",
                 Some(client::format_fingerprint(fingerprint)),
                 "/api/login",
-                json!({"username": username, "password": password.as_str(), "name": machine_name(st), "kind": "machine", "platform": "windows"}),
+                json!({"username": username, "password": password.as_str(), "name": machine_name(st), "kind": "machine", "platform": platform_label()}),
             )
         }
     };
@@ -833,6 +989,9 @@ async fn pair_flow(st: &AppState, origin: &str, proof: Proof, cancel: &AtomicBoo
     st.machines.snapshots.lock().unwrap().remove(&other_id);
     ensure_loop(st);
     st.machines.wake.notify_one();
+    // The socket to the new link opens now, not at the next sweep.
+    crate::machine_stream::ensure(st);
+    crate::machine_stream::wake(st);
     Ok(row_of(st, &link))
 }
 
@@ -885,6 +1044,7 @@ async fn remove(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
     client::delete_token(st, id).await;
     let removed = st.db.machine_link_delete(id).map_err(internal)?;
     st.machines.snapshots.lock().unwrap().remove(id);
+    crate::machine_stream::forget(st, id);
     st.machines.wake.notify_one();
     Ok(json!({"removed": removed, "signedOut": signed_out}))
 }
@@ -901,13 +1061,27 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         "machine.pair.begin" => pair_begin(st, p).await,
         "machine.pair.cancel" => pair_cancel(st, p),
         "machine.pair.list" => Ok(pair_list(st)),
-        "machine.list" => list_value(st),
+        "machine.list" => list_value(st, p),
         "machine.rename" => rename(st, p),
         "machine.remove" => remove(st, p).await,
         "machine.refresh" => {
             let id = id_param(p, "id")?;
             link_or_missing(st, id)?;
+            // The owner asked: try the live socket again now, if it is waiting.
+            crate::machine_stream::wake(st);
             refresh_one(st, id).await.ok_or_else(|| derr("not_found", "That machine isn't linked.", StatusCode::NOT_FOUND))
+        }
+        // Step 1, piece 2: the other machines' conversations, from memory.
+        "machine.sessions" => sessions_value(st, p["machineId"].as_str().filter(|id| !id.is_empty())),
+        // Step 1, piece B: the other machine's pending approval cards. A thin
+        // pass-through of its own `permission.pending` at viewer; the far gateway
+        // redacts the answer exactly as it does for `app.snapshot`.
+        "machine.permissions" => call_through(st, p, "permission.pending", "viewer", "Reading the pending approvals").await,
+        // Step 1, piece 1: is this link live, and how far has its socket got?
+        "machine.stream.status" => {
+            let id = id_param(p, "machineId")?;
+            link_or_missing(st, id)?;
+            Ok(crate::machine_stream::status(st, id))
         }
         "machine.conversations" => {
             let machine = id_param(p, "machineId")?;
@@ -948,6 +1122,31 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         }
         "machine.permission.reply" => write_through(st, p, "permission.reply", "operator", "Answering an approval").await,
         "machine.projects" => call_through(st, p, "project.list", "viewer", "Listing the projects").await,
+        // Managing the other machine's Remote settings and devices (17 November
+        // amendment): device kind `machine` at operator, which its gateway checks
+        // again. Nothing here can start work, and none of it is remote from here.
+        "machine.remote.status" => call_through(st, p, "remote.status", "operator", "Reading Remote").await,
+        "machine.devices.list" => call_through(st, p, "remote.devices.list", "operator", "Listing the paired devices").await,
+        "machine.devices.update" => {
+            write_through(st, p, "remote.devices.update", "operator", "Changing a device").await
+        }
+        "machine.devices.revoke" => {
+            write_through(st, p, "remote.devices.revoke", "operator", "Removing a device").await
+        }
+        "machine.pair.pending" => call_through(st, p, "remote.pair.pending", "operator", "Reading the waiting request").await,
+        "machine.pair.confirm" => write_through(st, p, "remote.pair.confirm", "operator", "Approving a device").await,
+        "machine.activity" => call_through(st, p, "remote.activity.list", "operator", "Reading the activity list").await,
+        // 17 November 2026: a project started on the other machine, inside the folder its owner set
+        // for other machines. Each is a thin pass-through; the far side confines and refuses, and its
+        // own sentence is what the window shows.
+        "machine.project.browse" => call_through(st, p, "project.browse", "operator", "Browsing its folders").await,
+        "machine.project.create" => write_through(st, p, "project.createFromFolder", "operator", "Adding a project").await,
+        "machine.project.clone" => write_through(st, p, "project.clone", "operator", "Cloning a repository").await,
+        "machine.clone.status" => {
+            let machine = id_param(p, "machineId")?;
+            let job = id_param(p, "jobId")?;
+            call_checked(st, p, machine, "project.clone.status", json!({"id": job}), "operator", "Reading the clone's progress").await
+        }
         _ => Err(derr("not_found", "unknown machine method", StatusCode::NOT_FOUND)),
     }
 }

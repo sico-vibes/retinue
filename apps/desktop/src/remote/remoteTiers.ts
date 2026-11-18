@@ -25,7 +25,27 @@
 import { tierAtLeast, type RemoteTier } from './remoteContract'
 import tiersData from './tiers.json'
 
-export type MethodClass = 'read' | 'chat' | 'approve' | 'handoff' | 'never'
+export type MethodClass = 'read' | 'chat' | 'approve' | 'handoff' | 'manage' | 'workspace' | 'linked' | 'never'
+
+// `manage` is the 17 November 2026 amendment: a linked Retinue machine at
+// operator may read and manage another machine's Remote settings and devices,
+// and a phone or browser never may (the gateway checks the device kind; this
+// table cannot see it). `handoff` works the same way.
+// `workspace` (17 November 2026): a paired device may start a project inside the folder the
+// host's owner set for other devices, while that switch is on; the handler checks both.
+
+/**
+ * The `linked` methods that start or drive work on another machine, so the host's
+ * quiet hours apply to them as they do to any chat or approval call (17 November
+ * 2026). Reading the machines and their conversations passes, as a read does.
+ */
+export const LINKED_WORK_METHODS: ReadonlySet<string> = new Set([
+  'machine.start',
+  'machine.prompt',
+  'machine.steer',
+  'machine.cancel',
+  'machine.permission.reply',
+])
 
 /** The wire code a gateway raises when `authorizeRemoteCall` denies a call. */
 export type DenialCode = 'forbidden_remote' | 'tier_required' | 'approvals_disabled' | 'quiet_hours' | 'invalid_params'
@@ -126,7 +146,7 @@ interface PolicyData {
 
 const POLICY: PolicyData = tiersData as PolicyData
 
-const METHOD_CLASSES: readonly string[] = ['read', 'chat', 'approve', 'handoff', 'never']
+const METHOD_CLASSES: readonly string[] = ['read', 'chat', 'approve', 'handoff', 'manage', 'workspace', 'linked', 'never']
 const TIER_NAMES: readonly string[] = ['viewer', 'chat', 'operator']
 
 /** The params checks, by the id `tiers.json` uses. */
@@ -189,9 +209,10 @@ export interface RemoteCall {
   method: string
   params?: unknown
   /**
-   * When the host's quiet hours are active, every `chat`, `approve` and `handoff`
-   * method is denied; `read` methods still pass. This is a hard read-only override
-   * applied before dispatch.
+   * When the host's quiet hours are active, every `chat`, `approve`, `handoff` and
+   * `workspace` method is denied; `read` methods still pass. This is a hard
+   * read-only override applied before dispatch. `manage` passes too: it starts no
+   * work, and cutting a lost phone off must not have to wait for the morning.
    */
   quietHours?: boolean
 }
@@ -210,7 +231,11 @@ export function authorizeRemoteCall(input: RemoteCall): RemoteCallDecision {
   const rule = ruleFor(input.method)
   if (!rule) return { allowed: false, code: 'forbidden_remote', reason: 'not on the remote allowlist' }
   if (rule.class === 'never') return { allowed: false, code: 'forbidden_remote', reason: rule.why }
-  if (input.quietHours && (rule.class === 'chat' || rule.class === 'approve' || rule.class === 'handoff')) {
+  if (input.quietHours && (rule.class === 'chat' || rule.class === 'approve' || rule.class === 'handoff' || rule.class === 'workspace')) {
+    return { allowed: false, code: 'quiet_hours', reason: 'quiet hours are on; this host only allows reading right now' }
+  }
+  // A `linked` method that starts or drives work on another machine is work here too.
+  if (input.quietHours && rule.class === 'linked' && LINKED_WORK_METHODS.has(input.method)) {
     return { allowed: false, code: 'quiet_hours', reason: 'quiet hours are on; this host only allows reading right now' }
   }
   if (rule.class === 'approve') {
@@ -258,6 +283,7 @@ export function renderTierTableMarkdown(): string {
 // | messages[].attachments[].path                    | file name only                                                 |
 // | tools[]/turns[]/files[] detail                   | removed by default; `includeToolOutput` restores tool detail   |
 // | tools[].title                                     | replaced with a generic title by default; restored with tool output |
+// | a `machine`-kind device's tool title and detail   | kept (owner decision, 17 Nov 2026): another owned desktop reads the work log; a whole-string path inside the detail is still cut to two segments |
 // | providerSessionId                                | removed                                                        |
 // | overrides (a project's setup script and mode)   | removed                                                        |
 // | worktree (assignments, session links)            | removed                                                        |
@@ -271,6 +297,25 @@ export function renderTierTableMarkdown(): string {
 export interface RedactOptions {
   /** Restore tool `detail` only (never turn or file detail). Default false. */
   includeToolOutput?: boolean
+  /**
+   * The kind of device asking: `machine`, `phone`, `tablet`, `browser` or
+   * `computer`. A machine link is another Retinue desktop on the owner's own
+   * link, so it reads a tool's title, command and output (owner decision,
+   * 17 November 2026, `AGENTS.md`). Every other kind, and an absent one, keeps
+   * phone strength. Sensitive keys, environment values, thinking and the
+   * settings allowlist are the same for both.
+   */
+  deviceKind?: string
+}
+
+/** Whether this device reads at machine strength: the work log, secrets dropped. */
+function machineStrength(options: RedactOptions): boolean {
+  return options.deviceKind === 'machine'
+}
+
+/** Whether a tool row's own title and detail survive at all. */
+function keepsToolRows(options: RedactOptions): boolean {
+  return options.includeToolOutput === true || machineStrength(options)
 }
 
 /** Keys whose values are never sent to a device. The pattern comes from `tiers.json`. */
@@ -423,10 +468,15 @@ function redactNode(value: unknown, path: readonly string[], options: RedactOpti
           out[key] = typeof entry === 'string' ? reducedPath(entry) : redactNode(entry, childPath, options)
           continue
         case 'toolDetail':
-          if (options.includeToolOutput) out[key] = redactNode(entry, childPath, options)
+          // A machine link reads the work log; a value that is a host path inside
+          // it is still cut to its last two segments, the permission-card rule.
+          if (keepsToolRows(options)) {
+            const kept = redactNode(entry, childPath, options)
+            out[key] = machineStrength(options) ? reduceAbsolutePaths(kept) : kept
+          }
           continue
         case 'toolTitle':
-          out[key] = options.includeToolOutput || typeof entry !== 'string' ? redactNode(entry, childPath, options) : GENERIC_TOOL_TITLE
+          out[key] = keepsToolRows(options) || typeof entry !== 'string' ? redactNode(entry, childPath, options) : GENERIC_TOOL_TITLE
           continue
         default:
           out[key] = redactNode(entry, childPath, options)
@@ -455,19 +505,98 @@ function redactAgentForRemote(agent: unknown, options: RedactOptions): unknown {
 }
 
 /**
+ * How much of one conversation a device may receive in one read (wave 3,
+ * `docs/plans/nod-adoption-plan.md`, idea 8). The numbers are `limits` in
+ * `tiers.json`, which the Rust gateway reads too, so the two ports cut in the
+ * same place.
+ */
+export interface SessionLimits {
+  sessionMessages: number
+  sessionMessageChars: number
+  sessionTurns: number
+  sessionTools: number
+  sessionFiles: number
+}
+
+/** What a conversation read returns when nothing narrows it. */
+export const DEFAULT_SESSION_LIMITS: SessionLimits = {
+  sessionMessages: 200,
+  sessionMessageChars: 8000,
+  sessionTurns: 40,
+  sessionTools: 100,
+  sessionFiles: 100,
+}
+
+/**
+ * The newest part of one conversation, with markers saying what is missing:
+ * `messagesTruncated` and `messagesCursor` for the phone to read back with
+ * `beforeMessageId`, and one `…Truncated` per list that was cut. The input is
+ * never mutated.
+ */
+export function windowSessionForRemote(session: unknown, limits: SessionLimits = DEFAULT_SESSION_LIMITS): unknown {
+  const source = ownKeys(session)
+  if (!source) return session
+  const out: Record<string, unknown> = { ...source }
+  const messages = Array.isArray(source.messages) ? (source.messages as Record<string, unknown>[]) : null
+  if (messages) {
+    const kept = messages.slice()
+    for (const message of kept) {
+      if (typeof message.content !== 'string') continue
+      // Characters, not bytes, and never inside a surrogate pair.
+      const characters = Array.from(message.content)
+      if (characters.length > limits.sessionMessageChars) {
+        outMessageCut(kept, message, characters.slice(0, limits.sessionMessageChars).join(''))
+      }
+    }
+    const overflow = kept.length - limits.sessionMessages
+    if (overflow > 0) {
+      kept.splice(0, overflow)
+      out.messagesTruncated = true
+      out.messagesCursor = kept.length ? kept[0].id ?? null : null
+    }
+    out.messages = kept
+  }
+  for (const [key, limit, marker] of [
+    ['turns', limits.sessionTurns, 'turnsTruncated'],
+    ['tools', limits.sessionTools, 'toolsTruncated'],
+    ['files', limits.sessionFiles, 'filesTruncated'],
+  ] as const) {
+    // A page the device asked for already says so; only ever add a marker.
+    if (out[marker] === true) continue
+    const rows = Array.isArray(source[key]) ? (source[key] as unknown[]) : null
+    if (!rows) continue
+    const overflow = rows.length - limit
+    if (overflow > 0) {
+      out[key] = rows.slice(overflow)
+      out[marker] = true
+    }
+  }
+  return out
+}
+
+function outMessageCut(kept: Record<string, unknown>[], original: Record<string, unknown>, text: string): void {
+  const index = kept.indexOf(original)
+  if (index === -1) return
+  kept[index] = { ...original, content: text, contentTruncated: true }
+}
+
+/**
  * Redact one RPC result for a remote device, by method. `app.snapshot` gets the
  * full snapshot policy; `session.get`/`session.list`, `agent.get`/`agent.list`,
  * `runtime.list`, `runtime.profile.list`, `search.messages` and `automation.get`
- * (prompt kept, paths trimmed) go through the same field watcher; `memory.get`
- * and `memory.list` are kept; `settings.get` is reduced to the allowlist. Any
- * other method whose class is `read` still goes through the field watcher, so a
- * read never passes raw; every other method's result is returned unchanged.
+ * (prompt kept, paths trimmed) go through the same field watcher; a `session.get`
+ * is then cut to the newest part of the conversation ([windowSessionForRemote]);
+ * `memory.get` and `memory.list` are kept; `settings.get` is reduced to the
+ * allowlist. Any other method whose class is `read` still goes through the field
+ * watcher, so a read never passes raw; every other method's result is returned
+ * unchanged.
  */
-export function redactResultForRemote(method: string, result: unknown, options: RedactOptions = {}): unknown {
+export function redactResultForRemote(method: string, result: unknown, options: RedactOptions = {}, limits: SessionLimits = DEFAULT_SESSION_LIMITS): unknown {
   switch (method) {
     case 'app.snapshot':
       return redactSnapshotForRemote(result, options)
     case 'session.get':
+      return windowSessionForRemote(redactNode(result, [], options), limits)
     case 'session.list':
       return redactNode(result, [], options)
     case 'agent.get':
@@ -489,15 +618,22 @@ export function redactResultForRemote(method: string, result: unknown, options: 
       // What a sub-bot is doing is a tool's title, and that can hold a command or a path.
       return dropKeys(redactNode(result, [], options), ['doingNow', 'error'])
     default:
-      return ruleFor(method)?.class === 'read' ? redactNode(result, [], options) : result
+      // A `linked` method is what a phone reads of another machine, so it is walked
+      // by the field watcher exactly as a read is.
+      return ruleFor(method)?.class === 'read' || ruleFor(method)?.class === 'linked' ? redactNode(result, [], options) : result
   }
 }
 
 // ---------------------------------------------------------------------------
 // Event redaction
 
-/** Whether a daemon event type may cross to a device, or must be dropped. */
-export type EventPolicy = 'allow' | 'drop'
+/**
+ * Whether a daemon event type may cross to a device, or must be dropped.
+ * `linked` crosses to a phone, tablet or browser only: the host refuses it to
+ * another machine or the linked computer, where a client is never that (17
+ * November 2026).
+ */
+export type EventPolicy = 'allow' | 'drop' | 'linked'
 
 /**
  * Every event type the daemon can emit, classified. `allow` is the reviewed
@@ -511,7 +647,9 @@ export const EVENT_POLICY: Readonly<Record<string, EventPolicy>> = loadEventPoli
 function loadEventPolicy(data: PolicyData): Record<string, EventPolicy> {
   const policy: Record<string, EventPolicy> = {}
   for (const [type, value] of Object.entries(data.events)) {
-    if (value !== 'allow' && value !== 'drop') throw new Error(`tiers.json: event ${type} has unknown policy ${value}`)
+    if (value !== 'allow' && value !== 'drop' && value !== 'linked') {
+      throw new Error(`tiers.json: event ${type} has unknown policy ${value}`)
+    }
     policy[type] = value
   }
   return policy
@@ -548,18 +686,18 @@ function trimMessageField(value: unknown, max: number): unknown {
   return { ...value as Record<string, unknown>, message: source.message.slice(0, max) }
 }
 
-function redactEventPayload(type: string, payload: unknown): unknown {
+function redactEventPayload(type: string, payload: unknown, options: RedactOptions): unknown {
   switch (type) {
     case 'message.completed':
-      return dropKeys(redactNode(payload, ['payload'], {}), ['raw', 'providerPayload'])
+      return dropKeys(redactNode(payload, ['payload'], options), ['raw', 'providerPayload'])
     case 'turn.error':
-      return reduceAbsolutePaths(trimMessageField(redactNode(payload, ['payload'], {}), 200))
+      return reduceAbsolutePaths(trimMessageField(redactNode(payload, ['payload'], options), 200))
     case 'permission.requested':
-      return reduceAbsolutePaths(redactNode(payload, ['payload'], {}))
+      return reduceAbsolutePaths(redactNode(payload, ['payload'], options))
     case 'agent.changed':
-      return redactAgentForRemote(payload, {})
+      return redactAgentForRemote(payload, options)
     default:
-      return redactNode(payload, ['payload'], {})
+      return redactNode(payload, ['payload'], options)
   }
 }
 
@@ -571,11 +709,17 @@ function redactEventPayload(type: string, payload: unknown): unknown {
  * through the agent policy; every allowed type is still walked for sensitive
  * keys. Anything not on EVENT_POLICY returns `null` (for example
  * `tool.changed`, `hook.observed`, `exec.options.*`, `settings.changed`).
+ *
+ * A `linked` type is one the host sends to a phone, tablet or browser only. This
+ * client is only ever one of those, and it cannot see the kind of the device it
+ * runs as, so it accepts them; the host refuses them to anything else.
  */
-export function redactEventForRemote(event: unknown): unknown | null {
+export function redactEventForRemote(event: unknown, options: RedactOptions = {}): unknown | null {
   const envelope = ownKeys(event)
   if (!envelope) return null
   const type = envelope.type
-  if (typeof type !== 'string' || EVENT_POLICY[type] !== 'allow') return null
-  return { ...envelope, payload: redactEventPayload(type, envelope.payload) }
+  if (typeof type !== 'string') return null
+  const policy = EVENT_POLICY[type]
+  if (policy !== 'allow' && policy !== 'linked') return null
+  return { ...envelope, payload: redactEventPayload(type, envelope.payload, options) }
 }

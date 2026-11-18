@@ -51,3 +51,11 @@
 
 /* ── One highlight per field: the rule wins over any older ring on a text field. ── */
 input:not([type="checkbox"], [type="radio"], [type="range"]):focus-visible, textarea:focus-visible { box-shadow: none !important; }
+/* Ideas to start with, read from the project's folder (wave 3, 17 November 2026). */
+.project-suggestions { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; width: min(640px, 100%); margin: 14px auto 0; padding: 0; list-style: none; }
+.project-suggestion { display: flex; align-items: flex-start; gap: 8px; width: 100%; height: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-md, 12px); background: var(--surface-raised); color: var(--text-1); text-align: left; cursor: pointer; }
+.project-suggestion:hover { border-color: var(--accent); }
+.project-suggestion svg { flex: none; margin-top: 2px; color: var(--text-3); }
+.project-suggestion span { display: grid; gap: 2px; min-width: 0; }
+.project-suggestion strong { font-size: var(--fs-sm); font-weight: 500; }
+.project-suggestion small { overflow: hidden; color: var(--text-3); font-size: var(--fs-2xs); text-overflow: ellipsis; white-space: nowrap; }

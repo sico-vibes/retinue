@@ -266,7 +266,7 @@ async fn external_send_message_marks_the_origin() {
     }
     // The origin travels in the conversation as the UI reads it, and the MCP shows it as well.
     let (_, read) = tool(st, "read_conversation", json!({"sessionId": session})).await;
-    assert!(read.as_array().unwrap().iter().any(|item| item["role"] == "user" && item["origin"]["kind"] == "mcp"), "{read}");
+    assert!(read["messages"].as_array().unwrap().iter().any(|item| item["role"] == "user" && item["origin"]["kind"] == "mcp"), "{read}");
     // Nothing else can claim the mark: the user path drops it.
     assert!(crate::sanitize_prompt_meta(&json!({"kind": "mcp", "client": "x"}), crate::PromptOrigin::User).is_none());
     assert_eq!(crate::sanitize_prompt_meta(&json!({"kind": "mcp", "client": "x"}), crate::PromptOrigin::Mcp), Some(json!({"origin": {"kind": "mcp", "client": "x"}})));
@@ -371,9 +371,76 @@ async fn failed_turn_shows_its_error_in_wait_for_turn_read_conversation_and_turn
     let (_, metrics) = tool(st, "turn_metrics", json!({"sessionId": session})).await;
     assert_eq!(metrics[0]["error"], waited["error"], "{metrics}");
     let (_, conversation) = tool(st, "read_conversation", json!({"sessionId": session})).await;
-    let notice = conversation.as_array().unwrap().iter().find(|item| item["role"] == "error").unwrap_or_else(|| panic!("an error item in {conversation}"));
+    let notice = conversation["messages"].as_array().unwrap().iter().find(|item| item["role"] == "error").unwrap_or_else(|| panic!("an error item in {conversation}"));
     assert!(notice["text"].as_str().unwrap().contains(waited["error"]["message"].as_str().unwrap()), "{notice}");
     assert_eq!(notice["kind"], "error");
+    let _ = std::fs::remove_dir_all(&c.dir);
+}
+
+/// Wave 3, idea 8: a conversation read is a page with a cursor, never the whole
+/// conversation, and the MCP path is the one clients actually use.
+#[tokio::test]
+async fn read_conversation_returns_a_bounded_page_with_cursors() {
+    let c = fixture("viewer", false).await;
+    let st = &c.st;
+    st.db.create_session("page-session", "ext-rt", "codex", ".", "Long one").unwrap();
+    st.db.create_turn("page-turn", "page-session").unwrap();
+    // Long enough that a small limit must cut it, short enough to be quick.
+    for index in 0..12 {
+        st.db.append_message("page-session", "page-turn", "user", &format!("message {index}")).unwrap();
+    }
+    let ids: Vec<String> = st.db.session_detail("page-session").unwrap()["messages"].as_array().unwrap().iter().map(|message| message["id"].as_str().unwrap().to_owned()).collect();
+    assert_eq!(ids.len(), 12);
+
+    // The newest page, cut to the limit.
+    let (error, newest) = tool(st, "read_conversation", json!({"sessionId": "page-session", "limit": 5})).await;
+    assert!(!error, "{newest}");
+    assert_eq!(newest["count"], 5, "{newest}");
+    assert_eq!(newest["totalCount"], 12);
+    assert_eq!(newest["truncated"], true, "older messages exist and are not in the page");
+    assert_eq!(newest["lastId"], json!(ids[11]));
+    assert_eq!(newest["messages"].as_array().unwrap().last().unwrap()["text"], "message 11");
+
+    // Walking back with firstId reaches the start, one page at a time.
+    let mut read = 5;
+    let mut cursor = newest["firstId"].as_str().unwrap().to_owned();
+    let mut pages = 0;
+    while read < ids.len() {
+        let (error, older) = tool(st, "read_conversation", json!({"sessionId": "page-session", "limit": 5, "beforeMessageId": cursor})).await;
+        assert!(!error, "{older}");
+        pages += 1;
+        assert!(pages <= 4, "paging back did not end: {older}");
+        let count = older["count"].as_u64().unwrap() as usize;
+        assert!(count > 0, "a page before the first message is empty: {older}");
+        read += count;
+        cursor = older["firstId"].as_str().unwrap().to_owned();
+    }
+    assert_eq!(read, 12, "every message is reachable by paging back");
+
+    // Walking forward with lastId is the other direction.
+    let (_, after) = tool(st, "read_conversation", json!({"sessionId": "page-session", "afterMessageId": ids[2], "limit": 3})).await;
+    assert_eq!(after["count"], 3, "{after}");
+    assert_eq!(after["firstId"], json!(ids[3]));
+    assert_eq!(after["truncated"], true);
+
+    // A page that would be too large comes back cut, with the marker and a cursor.
+    for _ in 0..6 {
+        st.db.append_message("page-session", "page-turn", "user", &"x".repeat(40_000)).unwrap();
+    }
+    let (_, big) = tool(st, "read_conversation", json!({"sessionId": "page-session", "limit": 200})).await;
+    let bytes = big["bytes"].as_u64().unwrap() as usize;
+    assert!(bytes <= 128 * 1024, "the page fits the cap: {bytes}");
+    assert_eq!(big["truncated"], true, "{big}");
+    assert!(big["firstId"].as_str().is_some(), "a cursor to read further: {big}");
+    assert!(big["lastId"].as_str().is_some_and(|id| !id.is_empty()), "the newest message is always kept: {big}");
+    assert!(big["count"].as_u64().unwrap() >= 1, "{big}");
+
+    // A cursor that is not in the conversation, and both cursors at once, are refused.
+    let (error, refused) = tool(st, "read_conversation", json!({"sessionId": "page-session", "afterMessageId": "nope"})).await;
+    assert!(error, "{refused}");
+    assert!(refused.as_str().unwrap_or_default().contains("afterMessageId"), "{refused}");
+    let (error, both) = tool(st, "read_conversation", json!({"sessionId": "page-session", "afterMessageId": ids[1], "beforeMessageId": ids[4]})).await;
+    assert!(error, "{both}");
     let _ = std::fs::remove_dir_all(&c.dir);
 }
 
@@ -650,7 +717,10 @@ async fn the_mcp_has_no_way_to_set_project_overrides() {
     let listed = route(st, "ext.tools.list", &json!({})).await.unwrap().to_string();
     assert!(!listed.contains("setupScript") && !listed.contains("overrides"), "no tool names them");
     let names = tool_names(st).await;
-    assert!(!names.iter().any(|name| name.contains("project") && name != "list_projects"), "{names:?}");
+    // `machine_add_project` (18 November 2026) registers a folder on a linked machine and forwards
+    // only `path` and `name`; the far `project.createFromFolder` takes no overrides, and the schema
+    // check above proves no tool offers them. Any other project tool is still refused here.
+    assert!(!names.iter().any(|name| name.contains("project") && !matches!(name.as_str(), "list_projects" | "machine_add_project")), "{names:?}");
     for name in ["update_project", "project.update", "propose_project"] {
         let (error, _) = tool(st, name, json!({"project": "x", "overrides": {"setupScript": "echo hi"}})).await;
         assert!(error, "{name} is not a tool");

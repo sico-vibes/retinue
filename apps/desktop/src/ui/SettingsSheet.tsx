@@ -199,6 +199,8 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
   const [defaultMode, setDefaultMode] = useState<ApprovalMode>('ask')
   const [confirmFullDefault, setConfirmFullDefault] = useState(false)
   const [readSignIns, setReadSignIns] = useState(false)
+  // Wave 3 (17 November 2026): the context blocks before the owner's words, off for one release to compare.
+  const [contextFirst, setContextFirst] = useState(false)
   const [sendShortcut, setSendShortcut] = useState<SendShortcut>('enter')
   const [bindings, setBindings] = useState<ShortcutBindings>({})
   const [openRuntimes, setOpenRuntimes] = useState<Record<string, boolean>>({})
@@ -232,6 +234,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
       setSendShortcut(normalizeSendShortcut(settings['composer.sendShortcut']))
       setBindings(normalizeBindings(settings['shortcuts.bindings']))
       setReadSignIns(settings['usage.readCliSignIns'] === true)
+      setContextFirst(settings['prompts.contextFirst'] === true)
       setDisabledRuntimes(Array.isArray(settings['runtimes.disabled']) ? (settings['runtimes.disabled'] as unknown[]).filter((item): item is string => typeof item === 'string') : [])
       if (typeof settings['companion.openAtStartup'] === 'boolean') setCompanionOpenAtStartup(settings['companion.openAtStartup'])
       if (typeof settings.closeToTray === 'boolean') setCloseToTrayValue(settings.closeToTray)
@@ -637,6 +640,9 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
           </>}
 
           {!loading && page === 'Chat' && <>
+            <SettingsGroup title="What a bot reads first">
+              <SettingsRow label="Context before your message" hint="Sends the conversation's context and the bot's notes before your message instead of after it, so your words come last. Off uses the order Retinue has always used. It's off by default for one release while the two orders are compared.">{pageSwitch('Context before your message', contextFirst, 'prompts.contextFirst', setContextFirst)}</SettingsRow>
+            </SettingsGroup>
             <SettingsGroup title="Sending">
               <SettingsRow label="Send a message with" hint={`The other Enter keys add a new line. ${oppositeKeys(sendShortcut)} sends the other way while an employee is working.`}>
                 <Select ariaLabel="Send a message with" variant="muted" value={sendShortcut} disabled={saving} onChange={(value) => { const next = normalizeSendShortcut(value); void saveSetting('composer.sendShortcut', next).then((failure) => { if (!failure) { setSendShortcut(next); onSendShortcutChange?.(next) } }) }} options={SEND_SHORTCUTS.map((item) => ({ value: item.value, label: item.label }))} />

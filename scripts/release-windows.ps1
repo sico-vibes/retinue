@@ -401,6 +401,41 @@ try {
     $manifestItem = Get-Item -LiteralPath $manifestPath
     if ($manifestItem.Length -lt 2) { throw 'latest.json was not written.' }
 
+    # The round trip (wave 3, `docs/plans/nod-adoption-plan.md`, release safety):
+    # read the manifest back the way an installed build's updater does, and
+    # refuse a version that is not newer than the one `channel-beta` already
+    # offers. An install cannot update to a version it already has, so a
+    # manifest that offers one is a release nobody would receive.
+    $roundTrip = Join-Path $repoRoot 'scripts\update-round-trip.mjs'
+    $publishedDir = Join-Path $workDirectory 'published'
+    New-Item -ItemType Directory -Force -Path $publishedDir | Out-Null
+    $publishedVersion = $null
+    if ($DryRun) {
+        Write-WarningLine 'The published channel manifest was not downloaded in a dry run, so the new version was checked for shape only.'
+    } else {
+        $savedPreference = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        & gh release download channel-beta --repo $Repo --pattern latest.json --dir $publishedDir --clobber 1>$null 2>$null
+        $downloaded = ($LASTEXITCODE -eq 0)
+        $ErrorActionPreference = $savedPreference
+        if ($downloaded -and (Test-Path -LiteralPath (Join-Path $publishedDir 'latest.json'))) {
+            $publishedVersion = (Get-Content -LiteralPath (Join-Path $publishedDir 'latest.json') -Raw | ConvertFrom-Json).version
+        } elseif ($downloaded) {
+            Write-WarningLine 'channel-beta has no latest.json yet, so there is no published version to compare with.'
+        } else {
+            Write-WarningLine 'The channel-beta manifest could not be read; the new version was checked for shape only.'
+        }
+    }
+    if ($publishedVersion) {
+        & node $roundTrip --manifest $manifestPath --installed $publishedVersion
+        if ($LASTEXITCODE -ne 0) {
+            throw "latest.json does not offer a version newer than the published $publishedVersion. Bump the version before releasing."
+        }
+    } else {
+        & node $roundTrip --manifest $manifestPath
+        if ($LASTEXITCODE -ne 0) { throw 'latest.json does not read back as a manifest an installed build would accept.' }
+    }
+
     $createArgs = @(
         'release', 'create', $tag,
         $bundle.Installer.FullName,

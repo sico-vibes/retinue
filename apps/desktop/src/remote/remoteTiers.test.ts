@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   authorizeRemoteCall,
   EVENT_POLICY,
+  LINKED_WORK_METHODS,
   METHOD_RULES,
   redactEventForRemote,
   redactResultForRemote,
@@ -19,8 +20,12 @@ describe('remote method rules', () => {
       if (rule.class === 'read') expect(rule.minTier, rule.method).toBe('viewer')
       // A push subscription is the calling device's own row, and a view-only phone needs one too.
       else if (rule.class === 'chat') expect(rule.minTier, rule.method).toBe(rule.method === 'push.subscribe' || rule.method === 'push.unsubscribe' ? 'viewer' : 'chat')
-      else if (rule.class === 'approve' || rule.class === 'handoff') expect(rule.minTier, rule.method).toBe('operator')
-      else expect(rule.minTier, rule.method).toBeNull()
+      else if (rule.class === 'approve' || rule.class === 'handoff' || rule.class === 'manage' || rule.class === 'workspace') expect(rule.minTier, rule.method).toBe('operator')
+      // A phone's reach through its host: reading at viewer, work at chat, an approval at operator.
+      else if (rule.class === 'linked') {
+        const expected = rule.method === 'machine.permission.reply' ? 'operator' : LINKED_WORK_METHODS.has(rule.method) ? 'chat' : 'viewer'
+        expect(rule.minTier, rule.method).toBe(expected)
+      } else expect(rule.minTier, rule.method).toBeNull()
       expect(rule.why.trim().length, rule.method).toBeGreaterThan(0)
     }
   })
@@ -471,9 +476,9 @@ describe('redactEventForRemote', () => {
     }
   })
 
-  it('classifies every EVENT_POLICY entry as allow or drop', () => {
+  it('classifies every EVENT_POLICY entry as allow, drop or phone-only', () => {
     for (const [type, policy] of Object.entries(EVENT_POLICY)) {
-      expect(['allow', 'drop'], type).toContain(policy)
+      expect(['allow', 'drop', 'linked'], type).toContain(policy)
     }
   })
 })

@@ -19,6 +19,7 @@ import type { RemoteConnectionStatus, RemoteMe } from './remoteTransport'
 import { codeFromHash, createPreviewDeviceApi, describeThisDevice, errorCode, previewDeviceOptionsFromUrl, type RemoteDeviceApi } from './deviceApi'
 import { applyUpdate, onUpdateReady } from './serviceWorker'
 import { PushCard } from './PushCard'
+import { MachinePicker, PhoneMachine, usePhoneMachines } from './PhoneMachines'
 
 type Screen = 'checking' | 'connect' | 'waiting' | 'bots' | 'chat' | 'device'
 const TIER_WORD: Record<RemoteTier, string> = { viewer: 'View only', chat: 'Chat', operator: 'Chat and approve' }
@@ -267,6 +268,11 @@ export function RemoteApp({ device: deviceProp, pollMs = PAIR_POLL_MS }: { devic
   }, [listed, loaded])
   const openAgent = (id: string) => { setAgentId(id); setConversationId(null); setListOpen(false); setScreen('chat') }
   const preApproval = screen === 'checking' || screen === 'connect' || screen === 'waiting'
+  // The machines this host is linked to (17 November 2026); null is this host itself.
+  const { machines: linked } = usePhoneMachines(online && !preApproval)
+  const [machineId, setMachineId] = useState<string | null>(null)
+  const pickedMachine = machineId ? linked.find((item) => item.id === machineId) ?? null : null
+  const onAnotherMachine = !!pickedMachine && (screen === 'bots' || screen === 'chat')
 
   return <div className="rm-stage" data-layout={layout}>
     <div className="rm-phone" data-screen={screen}>
@@ -294,7 +300,9 @@ export function RemoteApp({ device: deviceProp, pollMs = PAIR_POLL_MS }: { devic
         </header>
         {!online && <p className="rm-connection" role="status">{connection === 'offline' ? `Offline. Retinue will reconnect to ${hostName} when the network is back.` : `Reconnecting to ${hostName}…`}</p>}
         {me?.quietHoursActive && <p className="rm-connection quiet" role="status">Quiet hours: this device can read but not send.</p>}
-        <div className={wide ? 'rm-workspace' : 'rm-content'}>
+        {(screen === 'bots' || screen === 'chat') && <MachinePicker hostName={hostName} machines={linked} current={pickedMachine?.id ?? null} onPick={(id) => { setMachineId(id); setScreen('bots') }} />}
+        {onAnotherMachine && pickedMachine && <div className="rm-content"><PhoneMachine key={pickedMachine.id} machine={pickedMachine} hostName={hostName} tier={tier} online={online} quiet={me?.quietHoursActive === true} /></div>}
+        {!onAnotherMachine && <div className={wide ? 'rm-workspace' : 'rm-content'}>
         {(wide || screen === 'bots') && <aside className="rm-roster" aria-label={nouns}>
           {wide && <>
             <div className="rm-roster-top"><strong>{hostName}</strong><button type="button" className="rm-text-button" onClick={() => setScreen(screen === 'device' ? activeAgent ? 'chat' : 'bots' : 'device')}>This device</button></div>
@@ -309,7 +317,7 @@ export function RemoteApp({ device: deviceProp, pollMs = PAIR_POLL_MS }: { devic
             canApprove={tier === 'operator' && me?.approvalsFromRemote === true} quiet={me?.quietHoursActive === true} agents={agents} />}
           {screen === 'device' && me && <DeviceScreen me={me} noun={noun} onLogout={() => void logout()} layoutOverride={override} onLayoutChange={changeOverride} />}
         </main>
-        </div>
+        </div>}
         {!wide && <nav className="rm-tabs" aria-label="Sections">
           <button type="button" className={screen === 'bots' || screen === 'chat' ? 'on' : ''} onClick={() => setScreen('bots')}><Monitor size={19} aria-hidden="true" /><span>{nouns.charAt(0).toUpperCase() + nouns.slice(1)}</span>{waiting.length > 0 && <i className="rm-badge" aria-label={`${waiting.length} need you`}>{waiting.length}</i>}</button>
           <button type="button" className={screen === 'device' ? 'on' : ''} onClick={() => setScreen('device')}><Smartphone size={19} aria-hidden="true" /><span>This device</span></button>
@@ -461,7 +469,22 @@ function ChatScreen({ agent, session, permissions, hostName, online, tier, canAp
   const [problem, setProblem] = useState<string | null>(null)
   const logRef = useRef<HTMLDivElement>(null)
   const canSend = online && tier !== 'viewer' && !quiet && !!session
-  const messages = (session?.messages ?? []).filter((message) => (message.role === 'user' || message.role === 'assistant') && String(message.content ?? '').trim())
+  // The host sends a long conversation's newest window only (wave 3); earlier pages load on request.
+  const [older, setOlder] = useState<{ messages: NonNullable<Session['messages']>; cursor: string | null; more: boolean } | null>(null)
+  const [loadingOlder, setLoadingOlder] = useState(false)
+  const windowCursor = typeof session?.messagesCursor === 'string' ? session.messagesCursor : null
+  const cursor = older ? older.cursor : windowCursor
+  const hasEarlier = older ? older.more : session?.messagesTruncated === true && !!windowCursor
+  const loadEarlier = async () => {
+    if (!session || !cursor || loadingOlder) return
+    setLoadingOlder(true)
+    try {
+      const page = await rpc<Session>('session.get', { sessionId: session.id, beforeMessageId: cursor })
+      const rows = Array.isArray(page?.messages) ? page.messages : []
+      setOlder((current) => ({ messages: [...rows, ...(current?.messages ?? [])], cursor: typeof page?.messagesCursor === 'string' ? page.messagesCursor : null, more: page?.messagesTruncated === true && typeof page?.messagesCursor === 'string' }))
+    } catch { setProblem('Earlier messages could not be loaded.') } finally { setLoadingOlder(false) }
+  }
+  const messages = [...(older?.messages ?? []), ...(session?.messages ?? [])].filter((message) => (message.role === 'user' || message.role === 'assistant') && String(message.content ?? '').trim())
   // A sent message shows at once and gives way to the copy the computer saved.
   const saved = new Set(messages.filter((message) => message.role === 'user').map((message) => String(message.content).trim()))
   const local = sent.filter((message) => !saved.has(message.text))
@@ -484,7 +507,8 @@ function ChatScreen({ agent, session, permissions, hostName, online, tier, canAp
   return <section className="rm-chat">
     <div className="rm-log" ref={logRef} role="log" aria-live="polite" aria-label={`Conversation with ${agent.name}`}>
       {messages.length === 0 && local.length === 0 && <p className="rm-empty">Nothing here yet. Say hello to {agent.name}.</p>}
-      {messages.slice(-30).map((message) => <p key={message.id} className={`rm-msg ${message.role}`}>{plain(String(message.content))}</p>)}
+      {hasEarlier && <button type="button" className="rm-earlier" disabled={loadingOlder || !online} onClick={() => void loadEarlier()}>{loadingOlder ? 'Loading…' : 'Earlier messages'}</button>}
+      {(older ? messages : messages.slice(-30)).map((message) => <p key={message.id} className={`rm-msg ${message.role}`}>{plain(String(message.content))}{message.contentTruncated === true && <span className="rm-cut"> … The rest is on {hostName}.</span>}</p>)}
       {local.map((message) => <p key={message.id} className="rm-msg user pending">{message.text}</p>)}
     </div>
     {pending && (canApprove

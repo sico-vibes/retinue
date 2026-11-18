@@ -1,6 +1,6 @@
 // Phase 4: other machines, as the daemon reports them. The window never talks to another
 // machine: the daemon holds the link and its token, and this only reads what it's told.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Agent, Project } from '../types'
 import { listenForDaemonEvents, rpc } from '../tauri'
 
@@ -34,6 +34,25 @@ export type Machine = {
   detail: string | null
   version: string | null
   bots: MachineBot[]
+  /** The far machine's OS family ("windows", "linux", "macos"), or null before the first read or on an older build. */
+  kind: string | null
+  /** A live event socket to that machine is open right now (17 November 2026); otherwise its rows refresh every 20 s. */
+  live: boolean
+}
+
+/** One of another machine's conversations, as `machine.sessions` holds it in memory (kept while the machine is offline). */
+export type MachineSessionRow = {
+  machineId: string
+  machineName: string
+  kind: string | null
+  id: string
+  title: string | null
+  agentId: string | null
+  agentName: string | null
+  projectName: string | null
+  state: string | null
+  updatedAt: string | null
+  archived: boolean
 }
 
 export type MachineProbe = { origin: string; reachable: boolean; isRetinue: boolean; auth: 'code' | 'password'; fingerprint: string | null; trusted: boolean }
@@ -97,8 +116,64 @@ export function normalizeMachines(raw: unknown): Machine[] {
       detail: text(item.detail),
       version: text(item.version),
       bots: Array.isArray(item.bots) ? item.bots.flatMap((bot) => normalizeBot(bot) ?? []) : [],
+      kind: text(item.kind),
+      live: item.live === true,
     }]
   })
+}
+
+/** `machine.sessions` rows, complete or left out. */
+export function normalizeMachineSessions(raw: unknown): MachineSessionRow[] {
+  const rows = raw && typeof raw === 'object' ? (raw as { sessions?: unknown }).sessions : null
+  if (!Array.isArray(rows)) return []
+  return rows.flatMap((row): MachineSessionRow[] => {
+    const item = row && typeof row === 'object' ? row as Record<string, unknown> : null
+    const id = text(item?.id)
+    const machineId = text(item?.machineId)
+    if (!item || !id || !machineId) return []
+    return [{ machineId, machineName: text(item.machineName) ?? 'Another machine', kind: text(item.kind), id, title: text(item.title), agentId: text(item.agentId), agentName: text(item.agentName), projectName: text(item.projectName), state: text(item.state), updatedAt: text(item.updatedAt), archived: item.archived === true }]
+  })
+}
+
+/** How fresh another machine's rows are, in words. */
+export function machineFreshness(machine: Pick<Machine, 'state' | 'live'>): string {
+  if (machine.state === 'revoked') return 'Needs pairing again'
+  if (machine.state !== 'online') return 'Offline'
+  return machine.live ? 'Live' : 'Every 20 s'
+}
+
+/** A word for the far machine's OS, for an icon's label. */
+export function machineKindWord(kind: string | null): string | null {
+  if (kind === 'windows') return 'Windows'
+  if (kind === 'linux') return 'Linux'
+  if (kind === 'macos') return 'macOS'
+  return kind ? kind : null
+}
+
+/**
+ * Calls `onChange` for each live change on another machine (`machine.session.changed`, content-free:
+ * ids and a revision only). A revision at or below one already seen for that conversation is ignored.
+ */
+export function useMachineSessionChanges(active: boolean, onChange: (change: { machineId: string; sessionId: string; revision: number }) => void): void {
+  const handler = useRef(onChange)
+  handler.current = onChange
+  useEffect(() => {
+    if (!active) return
+    const seen = new Map<string, number>()
+    let unlisten: (() => void) | null = null
+    let live = true
+    void listenForDaemonEvents((event) => {
+      if (event.type !== 'machine.session.changed') return
+      const payload = (event.payload ?? {}) as { machineId?: unknown; sessionId?: unknown; revision?: unknown }
+      if (typeof payload.machineId !== 'string' || typeof payload.sessionId !== 'string') return
+      const revision = typeof payload.revision === 'number' ? payload.revision : 0
+      const key = `${payload.machineId}/${payload.sessionId}`
+      if (revision && (seen.get(key) ?? 0) >= revision) return
+      if (revision) seen.set(key, revision)
+      handler.current({ machineId: payload.machineId, sessionId: payload.sessionId, revision })
+    }).then((stop) => { if (live) unlisten = stop; else stop() }).catch(() => undefined)
+    return () => { live = false; unlisten?.() }
+  }, [active])
 }
 
 /** Why this address can't be used, or null. The daemon checks again. */

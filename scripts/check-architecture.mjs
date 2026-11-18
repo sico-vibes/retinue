@@ -64,6 +64,11 @@ const HTTP_CRATES = ['reqwest', 'hyper', 'ureq', 'tungstenite', 'tokio-tungsteni
 export const ALLOWLIST = [
   {
     rule: 'daemon-network',
+    path: 'crates/retinue-daemon/src/console.rs',
+    reason: "the console client's call to its own daemon on loopback, with the console token a headless start writes (17 November 2026)",
+  },
+  {
+    rule: 'daemon-network',
     path: 'crates/retinue-daemon/src/channels.rs',
     reason: "Telegram's Bot API and Meta's WhatsApp Cloud API, the chat channels to the CEO (owner decision, 16 November 2026)",
   },
@@ -71,6 +76,11 @@ export const ALLOWLIST = [
     rule: 'daemon-network',
     path: 'crates/retinue-daemon/src/connectors.rs',
     reason: 'the MCP client for servers the owner added: HTTPS only, DNS pinned to the checked address, no cross-origin redirect',
+  },
+  {
+    rule: 'daemon-network',
+    path: 'crates/retinue-daemon/src/connectors_oauth.rs',
+    reason: 'OAuth discovery, dynamic registration and the token endpoint for an owner-added connector, under the same HTTPS-only, pinned-DNS rules as connectors.rs',
   },
   {
     rule: 'daemon-network',

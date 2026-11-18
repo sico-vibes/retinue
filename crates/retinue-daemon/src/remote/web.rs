@@ -432,6 +432,10 @@ async fn pair_post(State(state): State<WebState>, headers: HeaderMap, body: Byte
         );
     };
     let login = headers.get("tailscale-user-login").and_then(|value| value.to_str().ok()).map(str::to_owned);
+    // A machine link may not approve its own request, so the asking device is
+    // kept with the request when it already holds a valid cookie. A device that
+    // is pairing normally has none, so this is `None` on the ordinary path.
+    let asked_by = authenticate(&state, &headers, false).await.ok().map(|device| device.id);
     let result = {
         let mut pairing = state.remote.pairing.lock().unwrap();
         pairing.submit(
@@ -440,6 +444,7 @@ async fn pair_post(State(state): State<WebState>, headers: HeaderMap, body: Byte
             input["kind"].as_str().unwrap_or(""),
             input["platform"].as_str().unwrap_or(""),
             login,
+            asked_by,
             Utc::now(),
         )
     };
@@ -820,6 +825,31 @@ async fn rpc_post(State(state): State<WebState>, headers: HeaderMap, body: Bytes
         audit(&state.daemon, Some(&device.id), "denied", &format!("{} was refused {method}.", device.name)).await;
         return denial(&id, RemoteFailure::new(StatusCode::FORBIDDEN, "forbidden_remote", "Only a linked Retinue machine can move a conversation."));
     }
+    // Managing another computer's devices is the 17 November amendment, and it
+    // is a `machine` device at `operator` only. The kind and the two per-row
+    // rules (never its own row, never approving a machine or itself) can only be
+    // judged here, because this is where the gateway knows who is calling.
+    let manage = policy::rule_for(&method).is_some_and(|rule| rule.class == policy::MethodClass::Manage);
+    if manage {
+        if let Some(reason) = manage_refusal(&state, &device, &method, &params) {
+            audit(&state.daemon, Some(&device.id), "denied", &format!("{} was refused {method}.", device.name)).await;
+            return denial(&id, RemoteFailure::new(StatusCode::FORBIDDEN, "forbidden_remote", &reason));
+        }
+    }
+    // Working on the machines this host is linked to is for the owner's own screens;
+    // another machine or the linked computer is refused, so one link never drives another.
+    let linked = policy::rule_for(&method).map(|rule| rule.class) == Some(policy::MethodClass::Linked);
+    if linked && !policy::linked_kinds(&device.kind) {
+        audit(&state.daemon, Some(&device.id), "denied", &format!("{} was refused {method}.", device.name)).await;
+        return denial(
+            &id,
+            RemoteFailure::new(
+                StatusCode::FORBIDDEN,
+                "forbidden_remote",
+                "Only a paired phone, tablet or browser can do this through its host.",
+            ),
+        );
+    }
     if let Some(reason) = attachment_rule(&method, &params) {
         audit(
             &state.daemon,
@@ -837,6 +867,33 @@ async fn rpc_post(State(state): State<WebState>, headers: HeaderMap, body: Bytes
     // gateway puts the device's own id in the request; a phone cannot choose it,
     // and anything it sends under `deviceId` is replaced here.
     let mut params = params;
+    if manage {
+        // The other computer writes one activity line naming the machine that
+        // did it, so the gateway supplies the caller's own name and id here, for
+        // the same reason: a value the caller sent under this key is replaced.
+        let actor = json!({ "deviceId": device.id, "name": device.name });
+        match params.as_object_mut() {
+            Some(object) => {
+                object.insert(super::ACTOR_KEY.to_string(), actor);
+            }
+            None => params = json!({ super::ACTOR_KEY: actor }),
+        }
+    }
+    // A phone's reach into another machine never exceeds its own tier here. The
+    // gateway stamps that tier — a client's own value is always replaced — and
+    // `machines` then works at the lower of it and the link's own tier.
+    if linked {
+        match params.as_object_mut() {
+            Some(object) => {
+                object.insert(policy::CALLER_TIER.to_string(), Value::String(device.tier.as_str().to_string()));
+            }
+            None => {
+                let mut object = serde_json::Map::new();
+                object.insert(policy::CALLER_TIER.to_string(), Value::String(device.tier.as_str().to_string()));
+                params = Value::Object(object);
+            }
+        }
+    }
     if method.starts_with("push.") {
         match params.as_object_mut() {
             Some(object) => {
@@ -845,8 +902,25 @@ async fn rpc_post(State(state): State<WebState>, headers: HeaderMap, body: Bytes
             None => params = json!({"deviceId": device.id}),
         }
     }
+    // 17 November 2026: a project action from a device is confined to the folder the host's owner
+    // set for other machines. The gateway says so, and replaces anything the device sent under the
+    // same name, so a device cannot claim to be the desktop and clone outside that folder.
+    if method.starts_with("project.") {
+        match params.as_object_mut() {
+            Some(object) => {
+                object.insert("deviceCall".to_string(), Value::Bool(true));
+            }
+            None => params = json!({"deviceCall": true}),
+        }
+    }
     match dispatch(&state.daemon, &method, params).await {
         Ok(result) => {
+            // Step 1, piece 3: a conversation created through this gateway records
+            // where it was started from. Ids and a name only, the same idea as
+            // `link.movedTo`; a conversation started here keeps no such mark.
+            if method == "agent.conversation.create" {
+                stamp_started_from(&state.daemon, &device, &result);
+            }
             if let Some(kind) = audit_kind(&method) {
                 audit(
                     &state.daemon,
@@ -856,21 +930,73 @@ async fn rpc_post(State(state): State<WebState>, headers: HeaderMap, body: Bytes
                 )
                 .await;
             }
-            let redacted = policy::redact_result(&method, &result, &RedactOptions::default());
+            let redacted = policy::redact_result(&method, &result, &RedactOptions::for_kind(&device.kind));
             json_response(StatusCode::OK, remote_ok(&id, redacted))
         }
         Err((status, error)) => json_response(status, remote_error(&id, &error.code, &error.message)),
     }
 }
 
+/// Step 1, piece 3: where a conversation created through the gateway was started
+/// from. The device's own row is the only source: `machineName` is the name the
+/// caller paired with, which for a machine link is the machine's name. Nothing
+/// here is text from the conversation, and an unknown session is not an error.
+fn stamp_started_from(daemon: &AppState, device: &DeviceAuth, result: &Value) {
+    let Some(session) = result["session"]["id"].as_str().filter(|id| !id.is_empty()) else { return };
+    let started_from = json!({"deviceId": device.id, "deviceKind": device.kind, "machineName": device.name});
+    let _ = daemon.db.set_session_started_from(session, &started_from);
+}
+
 /// The audit kind for a method that changes something, if any.
-fn audit_kind(method: &str) -> Option<&'static str> {
-    match policy::rule_for(method).map(|rule| rule.class) {
+fn audit_kind(method: &str) -> Option<&'static str> {    match policy::rule_for(method).map(|rule| rule.class) {
         Some(policy::MethodClass::Chat) => Some("prompt"),
         Some(policy::MethodClass::Approve) => Some("approval"),
         Some(policy::MethodClass::Handoff) => Some("handoff"),
+        // A `manage` call writes its own line naming the machine that made it,
+        // in the handler that knows the target (see `super::actor_of`).
+        Some(policy::MethodClass::Manage) => None,
+        // 17 November 2026: one activity line per project action a device takes on this machine.
+        Some(policy::MethodClass::Workspace) => Some("workspace"),
+        // A phone prompting, steering or stopping work on another machine appears in
+        // this host's activity list, in the same two words the rest of the list uses.
+        Some(policy::MethodClass::Linked) => match method {
+            "machine.permission.reply" => Some("approval"),
+            "machine.start" | "machine.prompt" | "machine.steer" | "machine.cancel" => Some("prompt"),
+            _ => None,
+        },
         _ => None,
     }
+}
+
+/// What the gateway refuses about a `manage` call that the tier table cannot
+/// express: the device kind, and the three rows a machine link must never touch.
+/// Returns the sentence to send; `None` allows the call through to `dispatch`.
+fn manage_refusal(state: &WebState, device: &DeviceAuth, method: &str, params: &Value) -> Option<String> {
+    if device.kind != "machine" {
+        return Some("Only a linked Retinue machine can manage another machine's devices.".to_string());
+    }
+    if matches!(method, "remote.devices.update" | "remote.devices.revoke")
+        && params["deviceId"].as_str() == Some(device.id.as_str())
+    {
+        return Some("A machine link can't change or remove its own pairing.".to_string());
+    }
+    if method == "remote.pair.confirm" {
+        let pairing_id = params["pairingId"].as_str().unwrap_or_default();
+        let waiting = state.remote.pairing.lock().unwrap().waiting_identity();
+        if let Some((waiting_id, kind, asked_by)) = waiting {
+            // Only the request that is actually waiting can be the caller's own;
+            // any other id is the daemon's own "no pending request" to answer.
+            if waiting_id == pairing_id {
+                if kind == "machine" {
+                    return Some("A machine link can't approve another machine. Only the owner at that computer can.".to_string());
+                }
+                if asked_by.as_deref() == Some(device.id.as_str()) {
+                    return Some("A machine link can't approve its own pairing request.".to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------
@@ -917,6 +1043,8 @@ async fn events_loop(mut socket: WebSocket, state: WebState, device: DeviceAuth,
         return;
     };
     let mut after = cursor["afterSequence"].as_u64().unwrap_or(0);
+    // What this device may read of a tool row follows its kind: a machine link
+    // sees the work log, a phone sees the word `Tool`.
 
     loop {
         let batch = state.daemon.db.replay_events(after, REPLAY_BATCH).unwrap_or_default();
@@ -930,7 +1058,7 @@ async fn events_loop(mut socket: WebSocket, state: WebState, device: DeviceAuth,
             if sequence <= after {
                 continue;
             }
-            if let Some(redacted) = policy::redact_event(&event) {
+            if let Some(redacted) = policy::redact_event_for(&event, &device.kind) {
                 if !send_json(&mut socket, redacted).await {
                     return;
                 }
@@ -957,7 +1085,7 @@ async fn events_loop(mut socket: WebSocket, state: WebState, device: DeviceAuth,
             item = live.recv() => match item {
                 Ok(event) if event.sequence > after => {
                     let value = serde_json::to_value(&event).unwrap_or(Value::Null);
-                    if let Some(redacted) = policy::redact_event(&value) {
+                    if let Some(redacted) = policy::redact_event_for(&value, &device.kind) {
                         if !send_json(&mut socket, redacted).await {
                             break;
                         }

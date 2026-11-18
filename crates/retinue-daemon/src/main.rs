@@ -84,6 +84,7 @@ mod proposals;
 mod knowledge;
 mod skill_library;
 mod skills;
+mod suggestions;
 mod commands;
 // Wave 12, part F: the Doctor's read-only checks and their safe fixes.
 mod doctor;
@@ -112,13 +113,26 @@ mod pull_request;
 mod remote;
 mod machine_client;
 mod machines;
+// Step 1: one live socket per online machine link.
+mod machine_stream;
+// 18 November 2026: the Retinue MCP's tools for the linked machines (diagnose and
+// test the laptop, the home PC, the VPS and the phone without the window).
+mod machine_mcp;
 mod handoff;
+// 17 November 2026: a project started on this machine by one of the owner's paired devices, confined
+// to the one folder the owner set here. Distinct from `workspace.rs`, which reports where a
+// conversation works.
+mod project_share;
 #[cfg(test)]
 mod machines_tests;
+#[cfg(test)]
+mod machine_phone_tests;
 // Phase 5: secrets in the credential store and one-use secret requests.
 mod secrets;
 // Section D: connectors, owner-added MCP servers the daemon calls.
 mod connectors;
+// Section D, wave 3: MCP OAuth for a connector (discovery, DCR, PKCE, loopback callback).
+mod connectors_oauth;
 // Section C (16 November 2026): Pi's providers and the keys Retinue holds for it.
 mod pi;
 
@@ -142,6 +156,10 @@ mod working_note;
 mod plan;
 /// Wave 2 (nod idea 6): the documentation library, searchable offline by bots.
 mod docs_search;
+/// 17 November 2026 (multi-device piece 8): where this host keeps Retinue's data.
+mod paths;
+/// 17 November 2026 (multi-device piece 8): the console of a host with no window.
+mod console;
 
 use quota::{normalize_codex_quota, PollFailure, PollOutcome, QuotaPollGate, QUOTA_POLL_INTERVAL, QUOTA_REQUEST_TIMEOUT};
 
@@ -207,6 +225,9 @@ struct AppState {
     /// 16 November 2026: the chat channels to the CEO. Memory only: the status,
     /// the paired sender and the conversation are in `Storage`.
     channels: Arc<channels::Channels>,
+    /// 17 November 2026: the console token of a host started without a desktop
+    /// shell, so a VPS can be paired and turned on from its own terminal.
+    console: Arc<console::Console>,
 }
 #[derive(Clone)]
 struct Adapters {
@@ -580,6 +601,20 @@ async fn main_rpc(
         return match result {
             Ok(v) => (StatusCode::OK, Json(RpcResponse { v: PROTOCOL_VERSION, id, ok: true, result: Some(v), error: None })),
             Err((status, e)) => (status, Json(RpcResponse { v: PROTOCOL_VERSION, id, ok: false, result: None, error: Some(e) })),
+        };
+    }
+    // 17 November 2026 (multi-device piece 8): the console of a host with no
+    // window. Its token is its own — never the daemon capability — and it opens
+    // only the `console.*` methods, which are a headless host's own decisions.
+    if req.method.starts_with("console.") {
+        let bearer = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).unwrap_or("");
+        if !st.console.accepts(bearer) {
+            return (StatusCode::UNAUTHORIZED, Json(error(req.id, "unauthorized", "missing or invalid console token")));
+        }
+        let id = req.id.clone();
+        return match console::route(&st, &req.method, &req.params).await {
+            Ok(v) => (StatusCode::OK, Json(RpcResponse { v: PROTOCOL_VERSION, id, ok: true, result: Some(v), error: None })),
+            Err(e) => (e.0, Json(RpcResponse { v: PROTOCOL_VERSION, id, ok: false, result: None, error: Some(e.1) })),
         };
     }
     if !auth(&headers, &st.token) {
@@ -1202,7 +1237,10 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "memory.list" | "memory.get" | "memory.create" | "memory.update" | "memory.approve" | "memory.delete" | "memory.restore" => memory::rpc(st, method, &p).await,
         // Section D: connectors. Desktop only, `never` remote.
         "connector.list" | "connector.add" | "connector.update" | "connector.remove" | "connector.test" | "connector.tools" | "connector.tool.rule" => connectors::rpc(st, method, &p).await,
-        "skills.list" | "skills.get" | "skills.forAgent" | "skills.scan" | "skills.import" | "skills.delete" | "skills.toggle" => skills::rpc(st, method, &p).await,
+        // Section D, wave 3: the browser sign-in for an OAuth connector. The
+        // consent page is a credential grant, so it is desktop only too.
+        "connector.oauth.start" | "connector.oauth.status" | "connector.oauth.cancel" => connectors_oauth::rpc(st, method, &p).await,
+        "skills.list" | "skills.get" | "skills.forAgent" | "skills.scan" | "skills.import" | "skills.delete" | "skills.toggle" | "skills.learned.list" | "skills.learned.approve" | "skills.learned.edit" | "skills.learned.forget" => skills::rpc(st, method, &p).await,
         "backup.export" | "backup.preview" | "backup.import" => backup::rpc(st, method, &p).await,
         // Section C: Pi's providers and the keys Retinue holds for it. Desktop
         // only: a key never crosses to a device, and no method returns one.
@@ -1244,8 +1282,12 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         // Wave 2: what a bot can reach, in plain words, for a conversation or a
         // bot. Desktop only, because the answer names the owner's own folder.
         "reach.statement" => reach::rpc(st, &p).await,
-        "project.clone" | "project.clone.cancel" | "project.clone.list" | "project.discover" => project_clone::rpc(st, method, &p).await,
+        "project.clone" | "project.clone.cancel" | "project.clone.list" | "project.clone.status" | "project.discover" => project_clone::rpc(st, method, &p).await,
+        "project.browse" | "project.createFromFolder" => project_share::rpc(st, method, &p).await,
         "project.files.search" | "project.content.search" => project_search::rpc(st, method, &p).await,
+        // Wave 3: three first tasks read from the project's own folder. Desktop
+        // only, because the reply names the host path.
+        "project.suggestions" => suggestions::rpc(st, &p).await,
         "project.icon.set" | "project.favicon" => project_icon::rpc(st, method, &p).await,
         "exec.snapshot.get" => {
             let id=p["snapshotId"].as_str().filter(|s|!s.is_empty()).ok_or_else(||derr("invalid_argument","snapshotId is required",StatusCode::BAD_REQUEST))?;
@@ -1416,6 +1458,9 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             let ids = st.db.agent_purge_sessions(id).map_err(agent_error)?;
             let mut guards = Vec::new();
             for sid in &ids { guards.push(gate_for_session(st, sid).await.lock_owned().await); }
+            // Wave 3: the folders of this bot's learned skills, named before its
+            // rows go with it.
+            let learned = st.db.skills_learned_list(Some(id)).map(|rows| rows.iter().filter_map(|row| row["name"].as_str().map(str::to_owned)).collect::<Vec<_>>()).unwrap_or_default();
             let (deleted, events) = st.db.agent_purge(id).map_err(|error| match error {
                 retinue_storage::StorageError::SessionActive => derr("conflict", "Stop all of this bot's conversations and side-conversations before deleting it.", StatusCode::CONFLICT),
                 other => agent_error(other),
@@ -1431,6 +1476,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
                 st.emit("session.deleted", json!({"sessionId":sid})).await;
             }
             drop(guards);
+            skills::forget_folders(st, &learned);
             Ok(json!({"deleted":true,"sessionIds":deleted}))
         }
         "agent.reorder" => { let rt=p["runtimeId"].as_str().ok_or_else(||derr("invalid_argument","runtimeId is required",StatusCode::BAD_REQUEST))?;let ids=p["agentIds"].as_array().filter(|a|a.iter().all(Value::is_string)).ok_or_else(||derr("invalid_argument","agentIds must be an array of strings",StatusCode::BAD_REQUEST))?.iter().map(|v|v.as_str().unwrap().to_owned()).collect::<Vec<_>>();let (agents,events)=st.db.agent_reorder(rt,&ids).map_err(agent_error)?;st.broadcast_persisted(events);Ok(json!({"agents":agents})) }
@@ -1701,11 +1747,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             }
             Ok(json!({"deleted":true}))
         }
-        "session.get" => st
-            .db
-            .session_detail(p["sessionId"].as_str().unwrap_or(""))
-            .map(|mut row| { shared_settings::effective_session_modes(st, std::slice::from_mut(&mut row)); row })
-            .map_err(|e| derr("not_found", &e.to_string(), StatusCode::NOT_FOUND)),
+        "session.get" => session_get(st, &p),
         "session.environment" => session_environment(st,&p).await,
         // FIX45: the actual working tree against HEAD, read-only. The folder
         // comes from the conversation, never from the caller.
@@ -1750,6 +1792,15 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "session.cancel" => cancel_session_turn(st, p["sessionId"].as_str().unwrap_or("")).await,
         "session.close" => close_session(st, p["sessionId"].as_str().unwrap_or("")).await,
         "session.warm" => session_warm(st, p).await,
+        // Step 1, piece B: the cards waiting for the owner, read by a linked
+        // machine so its own window can answer them. The fields are exactly the
+        // ones `app.snapshot`'s `permissions` carries; the provider payload and
+        // the rule match key stay on the host.
+        "permission.pending" => {
+            let session = p["sessionId"].as_str().filter(|id| !id.is_empty()).unwrap_or("");
+            let cards = st.db.permissions_pending(session).map_err(|error| derr("internal", &error.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+            Ok(json!({"permissions": cards}))
+        }
         "permission.reply" => {
             let id = p["permissionId"].as_str().unwrap_or("");
             let choice = p["choice"].as_str().unwrap_or("");
@@ -1810,7 +1861,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
                 let _ = st.db.finish_permission_reply(id, true);
                 let _ = st.db.update_session_state(&session_id, "working");
                 if let Ok(summary) = st.db.session_event_summary(&session_id) { st.emit("session.changed", summary).await; }
-                st.emit("permission.resolved", json!({"permissionId":id,"choice":choice})).await;
+                st.emit("permission.resolved", json!({"permissionId":id,"sessionId":session_id,"choice":choice})).await;
                 crate::tasks::permission_resolved(st, &session_id).await;
                 return answer;
             }
@@ -1825,7 +1876,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
                 let _ = st.db.finish_permission_reply(id, true);
                 let _ = st.db.update_session_state(&session_id, "working");
                 if let Ok(summary) = st.db.session_event_summary(&session_id) { st.emit("session.changed", summary).await; }
-                st.emit("permission.resolved", json!({"permissionId":id,"choice":choice})).await;
+                st.emit("permission.resolved", json!({"permissionId":id,"sessionId":session_id,"choice":choice})).await;
                 crate::tasks::permission_resolved(st, &session_id).await;
                 return answer;
             }
@@ -1894,7 +1945,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             if matches!(choice.to_ascii_lowercase().as_str(), "deny" | "reject" | "no") {
                 if let Some(turn_id) = st.active_turns.lock().await.get(&session_id).cloned() { st.denied_turns.lock().await.insert(turn_id); }
             }
-            st.emit("permission.resolved", json!({"permissionId":id,"choice":choice})).await;
+            st.emit("permission.resolved", json!({"permissionId":id,"sessionId":session_id,"choice":choice})).await;
             if is_question { crate::delegations::question_resolved(st, &session_id, id, if choice == "answer" { "answered" } else { "dismissed" }).await; }
             crate::tasks::permission_resolved(st, &session_id).await;
             let mut result = json!({"resolved":true});
@@ -2017,7 +2068,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             }
             let value = validate_setting(k, &p["value"])?;
             if k == "permissions.default_mode" && value == "bypass" && p["confirm"] != true { return Err(derr("invalid_argument", "Confirm making Full access the default first.", StatusCode::BAD_REQUEST)); }
-            let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k=="composer.sendShortcut"||k=="shortcuts.bindings"||k=="experimental.ownerComputer"||k=="ownerComputer.denyList";
+            let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k==project_share::SETTING_ENABLED||k==project_share::SETTING_FOLDER||k=="composer.sendShortcut"||k=="shortcuts.bindings"||k=="experimental.ownerComputer"||k=="ownerComputer.denyList"||k=="prompts.contextFirst";
             let events=st.db.set_setting(k, &value).map_err(|e| {
                 derr(
                     if validation_key{"invalid_argument"}else{"internal"},
@@ -2060,6 +2111,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         | "remote.native.firewall.remove"
         | "remote.pair.begin"
         | "remote.pair.cancel"
+        | "remote.pair.pending"
         | "remote.pair.confirm"
         | "remote.devices.list"
         | "remote.devices.update"
@@ -2084,12 +2136,26 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         | "machine.refresh"
         | "machine.conversations"
         | "machine.conversation"
+        | "machine.sessions"
+        | "machine.stream.status"
+        | "machine.permissions"
         | "machine.start"
         | "machine.prompt"
         | "machine.steer"
         | "machine.cancel"
         | "machine.permission.reply"
-        | "machine.projects" => machines::rpc(st, method, &p).await,
+        | "machine.projects"
+        | "machine.remote.status"
+        | "machine.devices.list"
+        | "machine.devices.update"
+        | "machine.devices.revoke"
+        | "machine.pair.pending"
+        | "machine.pair.confirm"
+        | "machine.activity"
+        | "machine.project.browse"
+        | "machine.project.create"
+        | "machine.project.clone"
+        | "machine.clone.status" => machines::rpc(st, method, &p).await,
         "machine.takeOver.preview"
         | "machine.takeOver"
         | "machine.takeOver.list"
@@ -2138,9 +2204,20 @@ fn validate_setting(k: &str, value: &Value) -> Result<Value, DispatchError> {
     if k == "projects.folder" && !value.as_str().is_some_and(|path| path.is_empty() || (path.len() <= 1_024 && std::path::Path::new(path).is_absolute() && !path.contains('\0'))) {
         return Err(derr("invalid_argument", "projects.folder must be empty or an absolute folder path", StatusCode::BAD_REQUEST));
     }
+    // 17 November 2026: projects on this machine, started from one of the owner's paired devices. The
+    // switch is off unless the owner turned it on, and the base folder is a folder on this machine,
+    // so neither travels in a backup.
+    if k == project_share::SETTING_ENABLED && !value.is_boolean() { return Err(derr("invalid_argument", "projects.devices.enabled requires a JSON boolean", StatusCode::BAD_REQUEST)); }
+    if k == project_share::SETTING_FOLDER && !value.as_str().is_some_and(|path| path.is_empty() || (path.len() <= 1_024 && std::path::Path::new(path).is_absolute() && !path.contains('\0'))) {
+        return Err(derr("invalid_argument", "projects.devices.folder must be empty or an absolute folder path", StatusCode::BAD_REQUEST));
+    }
     if k == "claude.enableWorkflows" && !value.is_boolean() { return Err(derr("invalid_argument", "claude.enableWorkflows requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "permissions.default_mode" && !value.as_str().is_some_and(|v| ["ask", "auto", "accept_edits", "bypass"].contains(&v)) { return Err(derr("invalid_argument", "permissions.default_mode must be ask, auto, accept_edits or bypass", StatusCode::BAD_REQUEST)); }
     if k == "automations.paused" && !value.is_boolean() { return Err(derr("invalid_argument", "automations.paused requires a JSON boolean", StatusCode::BAD_REQUEST)); }
+    // 17 November 2026 (report 09, idea 6): context blocks before the owner's
+    // words. Desktop only (not in `tiers.json`'s `settingsAllowlist`), off by
+    // default, and travelling in a backup like any other preference.
+    if k == "prompts.contextFirst" && !value.is_boolean() { return Err(derr("invalid_argument", "prompts.contextFirst requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "delegation.paused" && !value.is_boolean() { return Err(derr("invalid_argument", "delegation.paused requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "companion.focusMode" && !value.is_boolean() { return Err(derr("invalid_argument", "companion.focusMode requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "companion.positions" && !valid_companion_positions(value) { return Err(derr("invalid_argument", "companion.positions must map at most 8 display names to {x,y} numbers", StatusCode::BAD_REQUEST)); }
@@ -2968,6 +3045,34 @@ fn recognized_cli_version(provider: &str, version: &str) -> bool {
         p if retinue_runtime::acp_provider(p).is_some() => true,
         _ => false,
     }
+}
+
+/// `session.get`: a conversation, its turns, messages, tools and file rows.
+///
+/// An optional `beforeMessageId` turns it into the page before that message
+/// (wave 3, `docs/plans/nod-adoption-plan.md`, idea 8): the messages before the
+/// cursor, and no turns, tools or files, which belong to the newest page. The
+/// phone passes the `messagesCursor` a truncated read gives it. The desktop
+/// never sends the cursor, so its read is unchanged.
+fn session_get(st:&AppState,p:&Value)->Result<Value,DispatchError>{
+    let id=p["sessionId"].as_str().unwrap_or("");
+    let mut row=st.db.session_detail(id).map_err(|e|derr("not_found",&e.to_string(),StatusCode::NOT_FOUND))?;
+    let cursor=p["beforeMessageId"].as_str().filter(|cursor|!cursor.is_empty());
+    if let Some(cursor)=cursor{
+        if cursor.chars().count()>128{return Err(derr("invalid_argument","beforeMessageId is not a message id",StatusCode::BAD_REQUEST))}
+        let messages=row["messages"].as_array_mut().ok_or_else(||derr("not_found","session not found",StatusCode::NOT_FOUND))?;
+        let at=messages.iter().position(|message|message["id"].as_str()==Some(cursor)).ok_or_else(||derr("invalid_argument","beforeMessageId is not in this conversation",StatusCode::BAD_REQUEST))?;
+        messages.truncate(at);
+        // Older history is its messages; the working detail stays on the newest page.
+        row["turns"]=json!([]);
+        row["turnsTruncated"]=json!(true);
+        row["tools"]=json!([]);
+        row["toolsTruncated"]=json!(true);
+        row["files"]=json!([]);
+        row["filesTruncated"]=json!(true);
+    }
+    shared_settings::effective_session_modes(st, std::slice::from_mut(&mut row));
+    Ok(row)
 }
 
 /// `session.environment`: where a conversation works. The project folder, its
@@ -4420,6 +4525,13 @@ struct TurnDriver {
     owner_started: bool,
 }
 
+/// Whether this origin is the owner themselves: their own message, a queued one,
+/// their answer to a question, a chat-channel message, or the Retinue MCP. A
+/// teammate's brief, a scheduled run and a task run are not.
+fn owner_started_origin(origin: PromptOrigin) -> bool {
+    matches!(origin, PromptOrigin::User | PromptOrigin::Queue | PromptOrigin::QuestionAnswer | PromptOrigin::Mcp | PromptOrigin::Channel)
+}
+
 /// Phase A of a send: everything that can reject it, then reserve the turn and
 /// return at once. Provider activation (which can take seconds) is done by the
 /// spawned driver, so a first send after a restart lands immediately and the
@@ -4735,7 +4847,10 @@ async fn session_prompt_impl(st: &AppState, p: Value, origin: PromptOrigin) -> R
     // A send means this conversation is no longer just "warmed".
     st.warm_lru.lock().await.retain(|id| id != &sid);
     let state = st.clone();
-    let driver = TurnDriver { sid: sid.clone(), turn: turn.clone(), text, attachments, reply_snapshot, references, command_directive, annotation_block, exec_options, provider, desired_instruction_hash, owner_started: matches!(origin, PromptOrigin::User | PromptOrigin::Queue | PromptOrigin::QuestionAnswer | PromptOrigin::Mcp) };
+    let driver = TurnDriver { sid: sid.clone(), turn: turn.clone(), text, attachments, reply_snapshot, references, command_directive, annotation_block, exec_options, provider, desired_instruction_hash, owner_started: owner_started_origin(origin) };
+    // Wave 3: a tool call during this turn can tell whether the owner asked for
+    // it, which is what lets `save_skill` refuse work nobody requested.
+    skills::note_turn_origin(&sid, &turn, owner_started_origin(origin));
     tokio::spawn(async move { run_turn(state, driver).await; });
     Ok(json!({"turnId":turn,"accepted":true,"state":next_state}))
 }
@@ -4885,6 +5000,10 @@ async fn run_turn(state: AppState, driver: TurnDriver) {
         st.emit("session.changed", working).await;
     }
     let prompt_text = {
+        // 17 November 2026 (report 09, idea 6): whether this turn's context blocks
+        // come before the owner's words, with the instruction last. Off is the
+        // order used until now, so the setting is the only way to compare them.
+        let context_first = st.db.settings().ok().is_some_and(|settings| settings["prompts.contextFirst"] == true);
         // The memory catalog is a per-turn prompt suffix, not an instruction, so
         // saving a memory never changes the instruction hash or forces a new
         // provider thread.
@@ -4912,17 +5031,35 @@ async fn run_turn(state: AppState, driver: TurnDriver) {
         let reference_context = references.as_ref().map(|(extra, _)| extra.as_str()).unwrap_or("");
         let reply_context = reply_snapshot.as_ref().map(reply_prompt_context).unwrap_or_default();
         let command_context = command_directive.as_deref().unwrap_or("");
-        format!(
-            "{setup_failure}{annotation_block}{text}{handover}{recap}{manager}{memory}{recall}{skills}{plan}{reference_context}{reply_context}{command}",
-            handover = handover_context.as_deref().unwrap_or(""),
-            recap = recap_context.as_deref().unwrap_or(""),
-            manager = manager_context.as_deref().unwrap_or(""),
-            memory = memory_context.as_deref().unwrap_or(""),
-            recall = recall_context.as_deref().unwrap_or(""),
-            skills = skills_context.as_deref().unwrap_or(""),
-            plan = plan_context.as_deref().unwrap_or(""),
-            command = command_context
-        )
+        // 17 November 2026 (report 09, idea 6; owner decision, question 3): the
+        // context-first order is behind a setting, off by default for this
+        // release, so the two orders can be compared. Off is what every prompt
+        // sent before now looked like.
+        if context_first {
+            format!(
+                "{setup_failure}{handover}{recap}{manager}{memory}{recall}{skills}{plan}{reference_context}{reply_context}{command}{annotation_block}{text}",
+                handover = handover_context.as_deref().unwrap_or(""),
+                recap = recap_context.as_deref().unwrap_or(""),
+                manager = manager_context.as_deref().unwrap_or(""),
+                memory = memory_context.as_deref().unwrap_or(""),
+                recall = recall_context.as_deref().unwrap_or(""),
+                skills = skills_context.as_deref().unwrap_or(""),
+                plan = plan_context.as_deref().unwrap_or(""),
+                command = command_context
+            )
+        } else {
+            format!(
+                "{setup_failure}{annotation_block}{text}{handover}{recap}{manager}{memory}{recall}{skills}{plan}{reference_context}{reply_context}{command}",
+                handover = handover_context.as_deref().unwrap_or(""),
+                recap = recap_context.as_deref().unwrap_or(""),
+                manager = manager_context.as_deref().unwrap_or(""),
+                memory = memory_context.as_deref().unwrap_or(""),
+                recall = recall_context.as_deref().unwrap_or(""),
+                skills = skills_context.as_deref().unwrap_or(""),
+                plan = plan_context.as_deref().unwrap_or(""),
+                command = command_context
+            )
+        }
     };
     if let Err(e) = active.adapter.prompt(&active.handle, PromptRequest { attachments, turn_id: turn.clone(), text: prompt_text, exec_options }).await {
         if matches!(e, retinue_agent_core::AdapterError::TurnErrorReported(_)) {
@@ -5809,7 +5946,7 @@ async fn forward_events_with_timeouts(
                             if reply_result.is_ok() {
                                 let _=st.db.finish_permission_policy_reply(&id,true,&resolved_by,&choice);
                                 st.emit("permission.auto_resolved",json!({"permissionId":id,"sessionId":sid,"turnId":turn_id,"agentId":session["agentId"],"mode":mode,"decision":choice,"category":category,"ruleId":rule_id,"summary":summary.chars().take(160).collect::<String>()})).await;
-                                st.emit("permission.resolved",json!({"permissionId":id,"choice":choice})).await;
+                                st.emit("permission.resolved",json!({"permissionId":id,"sessionId":sid,"choice":choice})).await;
                                 continue;
                             } else { let _=st.db.finish_permission_policy_reply(&id,false,&resolved_by,&choice); }
                         } else { let _=st.db.finish_permission_policy_reply(&id,false,&resolved_by,&choice); }
@@ -5836,7 +5973,7 @@ async fn forward_events_with_timeouts(
                                     let _=st.db.finish_permission_policy_reply(&id,true,"policy:automation",&choice);
                                     let category=retinue_agent_core::classify_permission(&kind,&normalized,&PathBuf::from(session["projectPath"].as_str().unwrap_or(""))).category.to_owned();
                                     st.emit("permission.auto_denied",json!({"permissionId":id,"sessionId":sid,"automationId":session["link"]["automationId"],"runId":session["link"]["runId"],"category":category,"summary":summary.chars().take(160).collect::<String>()})).await;
-                                    st.emit("permission.resolved",json!({"permissionId":id,"choice":choice})).await;
+                                    st.emit("permission.resolved",json!({"permissionId":id,"sessionId":sid,"choice":choice})).await;
                                     continue;
                                 } else { let _=st.db.finish_permission_policy_reply(&id,false,"policy:automation",&choice); }
                             } else { let _=st.db.finish_permission_policy_reply(&id,false,"policy:automation",&choice); }
@@ -6235,14 +6372,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Keep the sender alive when launched without a shell; that path must not
     // interpret a dropped oneshot sender as a parent exit.
     let _standalone_parent_sender = parent_sender;
-    let db_path = std::env::var_os("RETINUE_DB_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let local = std::env::var_os("LOCALAPPDATA")
-                .map(PathBuf::from)
-                .unwrap_or_else(std::env::temp_dir);
-            local.join("Retinue/retinue.db")
-        });
+    // 17 November 2026: the default now follows the host's own rule (XDG on
+    // Unix), so a systemd-started daemon does not write to the temp folder.
+    let db_path = paths::database();
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent)?
     }
@@ -6306,6 +6438,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         browser: Arc::new(browser::Browser::default()),
         owner_computer: Arc::new(owner_computer::OwnerComputer::default()),
         channels: Arc::new(channels::Channels::default()),
+        console: Arc::new(console::Console::default()),
     };
     // A send right after boot must not fail with "runtime is not installed":
     // show the saved roster until discovery replaces it. `validate_spawn_target`
@@ -6345,7 +6478,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // card that still looked answerable does not outlive the process that could
     // act on it.
     for card in &closed_cards {
-        st.emit("permission.resolved", json!({"permissionId":card["id"],"choice":"expired","status":"expired","reason":"daemon_restarted"})).await;
+        st.emit("permission.resolved", json!({"permissionId":card["id"],"sessionId":card["sessionId"],"choice":"expired","status":"expired","reason":"daemon_restarted"})).await;
     }
     let mut noted: HashSet<&str> = HashSet::new();
     for card in &closed_cards {
@@ -6368,11 +6501,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
     *st.team.address.lock().unwrap() = Some(addr.to_string());
-    if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); computer::sweep_endpoints(dir); browser::sweep_endpoints(dir); owner_computer::sweep_endpoints(dir); }
+    if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); secrets::set_data_folder(dir); computer::sweep_endpoints(dir); browser::sweep_endpoints(dir); owner_computer::sweep_endpoints(dir); }
     *st.team.data_dir.lock().unwrap() = data_dir;
     // Wave 2: the data folder is the owner's alone, and the two folders this wave
     // keeps its disposables in are swept of old files.
     sandbox::at_startup(&st);
+    // 17 November 2026: a host started without a desktop shell gets a console
+    // file, so its owner can pair it and turn Remote on from a terminal.
+    console::startup(&st);
     scratch::prune(&st);
     tool_output::prune(&st);
     stash::prune_restored(&st);
@@ -6443,6 +6579,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Remove Retinue's own UPnP mapping before the process exits, so no router
     // is left forwarding the port after Remote has stopped.
     remote::shutdown(&st).await;
+    console::shutdown(&st);
     let sessions = std::mem::take(&mut *st.sessions.lock().await);
     for (_, s) in sessions {
         let _ = s.adapter.close_session(&s.handle).await;
@@ -6464,6 +6601,19 @@ fn main() {
 }
 
 async fn daemon_main() {
+    // `retinued --version`: what the install guide asks first.
+    if matches!(std::env::args().nth(1).as_deref(), Some("--version") | Some("-V")) {
+        println!("retinued {} (protocol {})", env!("CARGO_PKG_VERSION"), PROTOCOL_VERSION);
+        return;
+    }
+    // 17 November 2026 (multi-device piece 8): the console of a headless host.
+    // `retinued pair …`, `retinued remote on|off`, `retinued status` talk to the
+    // daemon already running here, over its loopback API, with the console token
+    // a headless start writes (`console.rs`).
+    if matches!(std::env::args().nth(1).as_deref(), Some("pair") | Some("remote") | Some("status")) {
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        std::process::exit(console::run_cli(&args).await);
+    }
     if std::env::args().nth(1).as_deref() == Some("mcp-bridge") {
         mcp_bridge::run().await;
         return;
@@ -7497,6 +7647,63 @@ mod phase2a_tests {
         wait_for_messages(&st, &sid, |messages| messages.iter().any(|message| message["role"] == "assistant" && message["content"].as_str().map(sent_text).as_deref() == Some("handled: Explain this line"))).await;
     }
 
+    /// 17 November 2026 (report 09, idea 6; owner decision, question 3): moving
+    /// the context blocks before the owner's words is one setting, off by default,
+    /// so the two orders can be compared on real work.
+    #[tokio::test]
+    async fn the_context_first_prompt_order_is_a_setting_that_is_off_by_default() {
+        let (mut st, _) = state();
+        let runtime = json!({"id":"rt-test","provider":"codex","status":"online","executablePath":"unused-test-runtime","launchArgs":[]});
+        st.db.upsert_runtime(&runtime).unwrap();
+        *st.runtimes.write().await = vec![runtime];
+        let adapter = Arc::new(TeamAdapter::default());
+        st.adapters = Arc::new(Adapters { acp:Arc::new(AcpAdapter::default()), codex:adapter.clone(), claude:Arc::new(ClaudeAdapter::default()) });
+        st.db.set_setting("exec_gate.codex.instructions", &json!(true)).unwrap();
+        let agent = st.db.agent_create(&json!({"name":"Order bot","runtimeId":"rt-test"})).unwrap().0;
+        // A reply snapshot is the block that is certain to be on a turn: the owner
+        // replies to a message the bot already wrote.
+        let quoted = |sid: &str| {
+            let st = &st;
+            let sid = sid.to_owned();
+            async move {
+                let message = st.db.append_message_with_data(&sid, "", "assistant", "An earlier answer", &json!({})).unwrap();
+                json!({"sourceSessionId":sid,"messageId":message["id"]})
+            }
+        };
+        // One conversation, one prompt that replies to a message, and the text the
+        // provider was handed.
+        let ask = |what: &'static str| {
+            let st = &st;
+            let adapter = adapter.clone();
+            let agent = agent.clone();
+            async move {
+                let opened = dispatch(st, "agent.conversation", json!({"agentId":agent["id"]})).await.unwrap();
+                let sid = opened["session"]["id"].as_str().unwrap().to_owned();
+                let reply_to = quoted(&sid).await;
+                dispatch(st, "session.prompt", json!({"sessionId":sid,"text":what,"replyTo":reply_to})).await.unwrap();
+                tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                    loop {
+                        if let Some(text) = adapter.prompts.lock().unwrap().iter().find(|text| text.contains(what)).cloned() { break text; }
+                        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                    }
+                }).await.unwrap()
+            }
+        };
+        // Absent means off: the owner's words come first, and the blocks follow,
+        // exactly as every prompt was built before this setting existed.
+        let today = ask("First check").await;
+        assert!(today.starts_with("First check"), "{today}");
+        assert!(today.find("<retinue_reply_context>").unwrap() > today.find("First check").unwrap(), "the blocks follow the words: {today}");
+        // The owner turns on the other order.
+        assert_eq!(dispatch(&st, "settings.set", json!({"key":"prompts.contextFirst","value":true})).await.unwrap()["saved"], true);
+        assert_eq!(dispatch(&st, "settings.get", json!({})).await.unwrap()["prompts.contextFirst"], true);
+        assert_eq!(dispatch(&st, "settings.set", json!({"key":"prompts.contextFirst","value":"yes"})).await.unwrap_err().1.code, "invalid_argument");
+        // Context first, the instruction last.
+        let context_first = ask("Second check").await;
+        assert!(context_first.trim_end().ends_with("Second check"), "the owner's words are the last thing read: {context_first}");
+        assert!(context_first.find("<retinue_reply_context>").unwrap() < context_first.find("Second check").unwrap(), "{context_first}");
+    }
+
     #[tokio::test]
     async fn experimental_quit_finishes_deletion_instead_of_losing_the_window_timer() {
         let (st, _) = state();
@@ -7783,7 +7990,7 @@ mod phase2a_tests {
     /// a second state on the same file.
     pub(crate) fn state_with(db:Storage)->(AppState,broadcast::Receiver<EventEnvelope>){
         let db=Arc::new(db);db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"})).unwrap();let(events,rx)=broadcast::channel(64);
-        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default()),channels:Arc::new(channels::Channels::default())};(st,rx)
+        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default()),channels:Arc::new(channels::Channels::default()),console:Arc::new(console::Console::default())};(st,rx)
     }
     #[tokio::test]
     async fn bot_purge_is_confirmed_atomic_and_removes_both_sides_only() {
@@ -14495,6 +14702,8 @@ mod phase2a_tests {
 
     // Section D: connectors, the daemon's MCP client and its approval cards.
     include!("connectors_tests.rs");
+    // Section D, wave 3: the browser sign-in for an OAuth connector.
+    include!("connectors_oauth_tests.rs");
 
     #[tokio::test]
     async fn new_sessions_carry_project_id() {
@@ -14584,9 +14793,15 @@ mod phase2a_tests {
     // 16 November 2026: the chat channels to the CEO.
     include!("channels_tests.rs");
 
+    // 17 November 2026: the console of a host with no window (multi-device piece 8).
+    include!("console_tests.rs");
+
     // Wave 2, agent experience: the "now" line, memory recall, a plan that
     // outlives a turn, the docs tools and earlier-message search.
     include!("wave2_tests.rs");
+
+    // Wave 3: learned skills, first-task suggestions, and the bounded conversation read.
+    include!("wave3_tests.rs");
 
     #[tokio::test]
     async fn team_update_project_move_does_not_archive() {

@@ -15,6 +15,7 @@ import {
   redactResultForRemote,
   redactSnapshotForRemote,
   type RedactOptions,
+  type SessionLimits,
   type RemoteCall,
   type RemoteCallDecision,
 } from './remoteTiers'
@@ -30,6 +31,7 @@ interface ResultCase {
   name: string
   method: string
   options: RedactOptions
+  limits?: SessionLimits
   input: unknown
   expect: unknown
 }
@@ -43,6 +45,7 @@ interface SnapshotCase {
 
 interface EventCase {
   name: string
+  options?: RedactOptions
   input: unknown
   expect: unknown
 }
@@ -82,7 +85,7 @@ describe('goldens: authorizeRemoteCall', () => {
 describe('goldens: redactResultForRemote', () => {
   for (const testCase of goldens.results) {
     it(testCase.name, () => {
-      expect(redactResultForRemote(testCase.method, testCase.input, testCase.options)).toEqual(testCase.expect)
+      expect(redactResultForRemote(testCase.method, testCase.input, testCase.options, testCase.limits)).toEqual(testCase.expect)
     })
   }
 })
@@ -98,8 +101,9 @@ describe('goldens: redactSnapshotForRemote', () => {
 describe('goldens: redactEventForRemote', () => {
   for (const testCase of goldens.events) {
     it(testCase.name, () => {
-      if (testCase.expect === null) expect(redactEventForRemote(testCase.input)).toBeNull()
-      else expect(redactEventForRemote(testCase.input)).toEqual(testCase.expect)
+      const got = redactEventForRemote(testCase.input, testCase.options ?? {})
+      if (testCase.expect === null) expect(got).toBeNull()
+      else expect(got).toEqual(testCase.expect)
     })
   }
 })

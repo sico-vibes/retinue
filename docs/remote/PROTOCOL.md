@@ -577,10 +577,15 @@ gateway that must apply it does not exist yet.
    and `invalid_params` are produced by `authorizeRemoteCall` (and its Rust port); the gateway
    returns them unchanged.
 4. **Quiet hours** are a hard read-only override applied before dispatch: every `chat` and
-   `approve` method is refused, including cancel, archive, rename, queue and resume.
+   `approve` method is refused, including cancel, archive, rename, queue and resume, and so is
+   every `linked` method that drives work on another machine (`machine.start`, `.prompt`,
+   `.steer`, `.cancel` and `.permission.reply`). Reading the machines and their conversations
+   is a read and passes.
 5. **Events are allowlisted.** Only event types on the allowlist (`EVENT_POLICY`) leave the
    host, and each is scrubbed: no `raw` or provider payloads, no tool detail by default, paths
-   reduced. A new daemon event type fails the build until classified.
+   reduced. A new daemon event type fails the build until classified. A type marked `linked`
+   reaches a phone, tablet or browser only, never another machine: `machine.session.changed` is
+   the one such relay, and it carries ids and a revision.
 6. **Reads are redacted, not just the snapshot.** `session.get`, `session.list`, `agent.get`,
    `agent.list`, `runtime.list`, `runtime.profile.list`, `search.messages` and `settings.get`
    (an allowlist of keys) pass through `redactResultForRemote`.

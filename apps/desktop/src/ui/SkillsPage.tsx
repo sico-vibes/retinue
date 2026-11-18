@@ -4,7 +4,7 @@
 // or any folder, shows a skill read-only, and switches skills on or off.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, Eye, FolderOpen, RefreshCw, Trash2, X } from 'lucide-react'
-import { openProjectFolder, rpc } from '../tauri'
+import { listenForDaemonEvents, openProjectFolder, rpc } from '../tauri'
 import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
 import { ConfirmDialog } from './BlobPage'
 import { ProviderLogo } from './providerBrand'
@@ -23,7 +23,15 @@ export interface SkillRow {
   totalBytes?: number
   disabledFor?: string[]
   nativeFor?: string[]
+  /** Wave 3: a skill a bot wrote. `pending` is private to that bot until the owner approves it. */
+  reviewState?: 'approved' | 'pending'
+  learnedBy?: string | null
+  learnedByName?: string | null
+  ownerEdited?: boolean
 }
+
+/** One learned skill, as `skills.learned.list` returns it (no body: read it with `skills.get`). */
+export interface LearnedSkill { name: string; description: string; reviewState: 'pending' | 'approved'; learnedBy: string; learnedByName: string | null; ownerEdited: boolean; importedAt: string; updatedAt: string; usedAt: string | null; enabled: boolean }
 
 export interface SkillCandidate {
   source: string
@@ -35,7 +43,7 @@ export interface SkillCandidate {
 
 interface SkillDetail { name: string; description: string; body: string; files: Array<{ path: string; bytes: number }> }
 
-const SOURCE_LABELS: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode', folder: 'Folder', backup: 'Backup' }
+const SOURCE_LABELS: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode', folder: 'Folder', backup: 'Backup', agent: 'Learned' }
 const PROVIDER_SOURCES = new Set(['claude', 'codex', 'opencode'])
 
 export function sourceLabel(source: string): string {
@@ -91,14 +99,20 @@ export function SkillsPage({ connected }: { connected: boolean }) {
   const [picks, setPicks] = useState<Set<string>>(new Set())
   const [viewing, setViewing] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<SkillRow | null>(null)
+  const [pending, setPending] = useState<LearnedSkill[]>([])
+  const [editing, setEditing] = useState<LearnedSkill | null>(null)
+  const [forgetting, setForgetting] = useState<LearnedSkill | null>(null)
 
   const load = useCallback(async () => {
     try {
-      const [list, settings] = await Promise.all([
+      const [list, settings, learned] = await Promise.all([
         rpc<{ skills?: unknown[] }>('skills.list'),
         rpc<Record<string, unknown>>('settings.get').catch((): Record<string, unknown> => ({})),
+        // A daemon without learned skills answers not_found; the page simply shows none.
+        rpc<{ skills?: LearnedSkill[] }>('skills.learned.list', { reviewState: 'pending' }).catch(() => ({ skills: [] as LearnedSkill[] })),
       ])
       setSkills((Array.isArray(list.skills) ? list.skills : []).filter(isSkillRow))
+      setPending(Array.isArray(learned?.skills) ? learned.skills.filter((item) => item && typeof item.name === 'string') : [])
       const values: Record<string, unknown> = (settings as { settings?: Record<string, unknown> }).settings ?? settings
       setPoolOn(values['skills.enabled'] !== false)
       setProblem(null)
@@ -108,6 +122,14 @@ export function SkillsPage({ connected }: { connected: boolean }) {
     }
   }, [])
   useEffect(() => { if (connected) void load() }, [connected, load])
+  // A bot saving or patching a skill, and the owner's own decisions, update the page without polling.
+  useEffect(() => {
+    if (!connected) return
+    let stop: (() => void) | null = null
+    let live = true
+    void listenForDaemonEvents((event) => { if (event.type === 'skills.learned.changed') void load() }).then((unlisten) => { if (live) stop = unlisten; else unlisten() }).catch(() => undefined)
+    return () => { live = false; stop?.() }
+  }, [connected, load])
 
   const run = async (work: () => Promise<unknown>, failure: string) => {
     setBusy(true)
@@ -159,8 +181,9 @@ export function SkillsPage({ connected }: { connected: boolean }) {
     const native = (skill.nativeFor ?? []).map(sourceLabel)
     return <li key={skill.name} className={`skill-row${skill.enabled ? '' : ' off'}`}>
       <div className="skill-main">
-        <span className="skill-title"><strong>{skill.name}</strong><SourceBadge source={skill.source} /></span>
+        <span className="skill-title"><strong>{skill.name}</strong><SourceBadge source={skill.source} />{skill.source === 'agent' && skill.ownerEdited && <span className="skills-status changed">Edited by you</span>}</span>
         <p className="skill-description">{skill.description}</p>
+        {skill.source === 'agent' && <span className="skill-meta">Learned by {skill.learnedByName ?? `a ${noun}`}{skill.reviewState === 'pending' ? ', waiting for your review' : ''}</span>}
         {(meta || native.length > 0) && <span className="skill-meta">{meta}{native.length > 0 && <>{meta && ' · '}{native.join(' and ')} also {native.length === 1 ? 'loads' : 'load'} {native.length === 1 ? 'its' : 'their'} own copy</>}</span>}
       </div>
       <div className="skill-actions">
@@ -218,6 +241,25 @@ export function SkillsPage({ connected }: { connected: boolean }) {
       </div>}
     </section>
 
+    {pending.length > 0 && <section aria-label="Learned skills waiting for you" className="skills-learned">
+      <div className="skills-import-head">
+        <span className="skills-import-copy"><strong>Learned by your {nouns}, waiting for you</strong><small>Each one is used only by the {noun} that wrote it until you approve it. Then every {noun} can load it.</small></span>
+      </div>
+      <ul className="skills-list">{pending.map((skill) => <li key={skill.name} className="skill-row">
+        <div className="skill-main">
+          <span className="skill-title"><strong>{skill.name}</strong><SourceBadge source="agent" /></span>
+          <p className="skill-description">{skill.description}</p>
+          <span className="skill-meta">Learned by {skill.learnedByName ?? `a ${noun}`}{skill.updatedAt ? ` · ${new Date(skill.updatedAt).toLocaleDateString()}` : ''}</span>
+        </div>
+        <div className="skill-actions">
+          <button type="button" className="queue-icon" aria-label={`Read ${skill.name}`} title="Read" onClick={() => setViewing(skill.name)}><Eye size={14} /></button>
+          <button type="button" className="secondary-button small" disabled={busy} onClick={() => setEditing(skill)}>Edit</button>
+          <button type="button" className="secondary-button small" disabled={busy} onClick={() => setForgetting(skill)}>Forget</button>
+          <button type="button" className="primary-button small" disabled={busy || !connected} onClick={() => void run(() => rpc('skills.learned.approve', { name: skill.name }), 'That skill could not be approved.')}>Approve</button>
+        </div>
+      </li>)}</ul>
+    </section>}
+
     <section aria-label="Skills in the pool" className="skills-pool">
       <div className="memory-toolbar">
         <input className="memory-search" type="search" aria-label="Search skills" placeholder="Search skills" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -231,11 +273,54 @@ export function SkillsPage({ connected }: { connected: boolean }) {
     </section>
 
     {viewing && <SkillViewer name={viewing} onClose={() => setViewing(null)} />}
+    {editing && <LearnedSkillEditor skill={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void load() }} />}
+    {forgetting && <ConfirmDialog title={`Forget “${forgetting.name}”?`} body={`${forgetting.learnedByName ?? `The ${noun}`} wrote it. It is deleted for good and can't be brought back.`} confirmLabel="Forget" cancelLabel="Keep" tone="danger" onCancel={() => setForgetting(null)} onConfirm={async () => {
+      const target = forgetting
+      setForgetting(null)
+      await run(() => rpc('skills.learned.forget', { name: target.name, confirm: true }), 'That skill could not be forgotten.')
+    }} />}
     {deleting && <ConfirmDialog title={`Delete “${deleting.name}”?`} body={`${Nouns} will no longer see this skill. The original folder it came from is not touched.`} confirmLabel="Delete" cancelLabel="Keep" tone="danger" onCancel={() => setDeleting(null)} onConfirm={async () => {
       const target = deleting
       setDeleting(null)
       await run(() => rpc('skills.delete', { name: target.name }), 'That skill could not be deleted.')
     }} />}
+  </div>
+}
+
+/** Edit a learned skill before (or instead of) approving it. Saving approves it, and the bot can no longer change it. */
+function LearnedSkillEditor({ skill, onClose, onSaved }: { skill: LearnedSkill; onClose: () => void; onSaved: () => void }) {
+  const entered = useDialogEntered()
+  const { ref, close } = useDialogAccessibility(onClose)
+  const [description, setDescription] = useState(skill.description)
+  const [body, setBody] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    rpc<SkillDetail>('skills.get', { name: skill.name }).then((result) => { if (!cancelled) setBody(result.body) }).catch((reason) => { if (!cancelled) setProblem(messageOf(reason, 'This skill could not be read.')) })
+    return () => { cancelled = true }
+  }, [skill.name])
+  const save = async () => {
+    if (body === null) return
+    setSaving(true); setProblem(null)
+    try { await rpc('skills.learned.edit', { name: skill.name, description: description.trim(), body }); onSaved() }
+    catch (reason) { setProblem(messageOf(reason, 'That could not be saved.')) } finally { setSaving(false) }
+  }
+  return <div className={`sheet-backdrop blob-dialog-backdrop ${entered ? 'is-entered' : ''}`}>
+    <section ref={ref} className="blob-dialog skill-viewer" role="dialog" aria-modal="true" aria-labelledby="skill-editor-title" tabIndex={-1}>
+      <header className="skill-viewer-head">
+        <h2 id="skill-editor-title">Edit {skill.name}</h2>
+        <button type="button" className="queue-icon" aria-label="Close" onClick={close}><X size={15} /></button>
+      </header>
+      <label className="blob-field"><span>What it is for<small className={description.length > 200 ? 'over' : ''}>{description.length}/200</small></span><input data-dialog-initial-focus value={description} onChange={(event) => setDescription(event.target.value)} /></label>
+      <label className="blob-field"><span>Instructions</span>{body === null && !problem ? <Skeleton lines={6} /> : <textarea className="skill-editor-body" rows={14} value={body ?? ''} spellCheck={false} onChange={(event) => setBody(event.target.value)} />}</label>
+      <small className="skill-meta">Saving approves it. After you edit it, {skill.learnedByName ?? 'the bot'} can't change it any more. Secrets are refused.</small>
+      {problem && <p className="memory-problem" role="alert">{problem}</p>}
+      <div className="blob-dialog-actions">
+        <button type="button" className="secondary-button" onClick={close}>Cancel</button>
+        <button type="button" className="primary-button" disabled={saving || body === null || !description.trim() || description.length > 200} onClick={() => void save()}>{saving ? 'Saving…' : 'Save and approve'}</button>
+      </div>
+    </section>
   </div>
 }
 

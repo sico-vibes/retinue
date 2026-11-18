@@ -3,7 +3,7 @@
 // this machine there. A password is sent once and never kept.
 import { useEffect, useRef, useState } from 'react'
 import { CircleAlert, CircleCheck, Laptop, LoaderCircle, Pencil, RefreshCw, X } from 'lucide-react'
-import { rpc } from '../tauri'
+import { openProjectFolder, rpc } from '../tauri'
 import { ConfirmDialog } from './BlobPage'
 import { SettingsGroup, SettingsRow } from './SettingsParts'
 import { machineStateWord, machineUrlProblem, useMachines, type Machine, type MachineProbe, type PairJob } from './machines'
@@ -169,6 +169,47 @@ export function PairMachine({ onDone, onCancel }: { onDone: () => void; onCancel
   </form>
 }
 
+/**
+ * Whether the owner's other devices may start projects on this computer (17 November 2026): list folders
+ * under one base folder, add one as a project, or clone into it. Off until turned on; only this window
+ * can change it, and neither value travels in a backup.
+ */
+export function ProjectsFromDevices() {
+  const [enabled, setEnabled] = useState(false)
+  const [folder, setFolder] = useState('')
+  const [loaded, setLoaded] = useState(false)
+  const [problem, setProblem] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    void rpc<{ settings?: Record<string, unknown> } | Record<string, unknown>>('settings.get', {}).then((reply) => {
+      const settings = (reply && 'settings' in reply ? reply.settings : reply) as Record<string, unknown> | undefined
+      if (!live) return
+      setEnabled(settings?.['projects.devices.enabled'] === true)
+      const saved = settings?.['projects.devices.folder']
+      setFolder(typeof saved === 'string' ? saved : '')
+      setLoaded(true)
+    }).catch(() => { if (live) setLoaded(true) })
+    return () => { live = false }
+  }, [])
+  const save = async (key: string, value: unknown) => {
+    setProblem(null)
+    try { await rpc('settings.set', { key, value }); return true } catch (reason) { setProblem(messageOf(reason, 'That could not be saved.')); return false }
+  }
+  const choose = async () => {
+    const path = await openProjectFolder().catch(() => null)
+    if (path && await save('projects.devices.folder', path)) setFolder(path)
+  }
+  return <SettingsGroup title="Projects from your other devices">
+    <SettingsRow label="Let them start projects here" hint="Your other machines and your phone can add a folder inside the one below as a project, or clone a repository into it, with this computer's own git sign-in. Each one is written in Remote's activity list.">
+      <button type="button" className={`toggle ${enabled ? 'on' : ''}`} role="switch" aria-label="Let other devices start projects here" aria-checked={enabled} disabled={!loaded || (!enabled && !folder)} title={!enabled && !folder ? 'Choose the folder first' : undefined} onClick={() => void save('projects.devices.enabled', !enabled).then((ok) => { if (ok) setEnabled(!enabled) })}><i /></button>
+    </SettingsRow>
+    <SettingsRow label="Folder they may use" hint={folder ? 'They see only the folders inside it, by name.' : 'Nothing outside it is ever listed or used.'}>
+      <button type="button" className="secondary-button small" disabled={!loaded} onClick={() => void choose()} title={folder || undefined}>{folder ? folder.split(/[\\/]/).filter(Boolean).pop() : 'Choose a folder…'}</button>
+    </SettingsRow>
+    {problem && <p className="new-project-error" role="alert">{problem}</p>}
+  </SettingsGroup>
+}
+
 export function MachinesPage() {
   const { machines, loaded, reload } = useMachines()
   const nouns = useEntityNoun({ plural: true })
@@ -183,6 +224,7 @@ export function MachinesPage() {
   return <>
     <p className="settings-intro">See what the {nouns} on your other computers are doing, and take a conversation over.</p>
     <ThisMachine />
+    <ProjectsFromDevices />
     <SettingsGroup title="Other machines">
       {loaded && !machines.length && !pairing && <p className="settings-empty">No other machines yet.</p>}
       {machines.map((machine) => <MachineRow key={machine.id} machine={machine}

@@ -102,12 +102,19 @@ async fn gateway_with_static_files() -> Gateway {
 
 /// Seeds one paired device and returns `(device id, token)`.
 fn seed_device(st: &AppState, id: &str, tier: &str, login: Option<&str>) -> (String, String) {
+    seed_device_of_kind(st, id, "phone", tier, login)
+}
+
+/// The same, for a device of a chosen kind. `machine` is the one kind that may
+/// manage another machine's devices (17 November amendment), and it reads a
+/// different part of the work log than a `phone`.
+fn seed_device_of_kind(st: &AppState, id: &str, kind: &str, tier: &str, login: Option<&str>) -> (String, String) {
     let token = pairing::generate_token();
     let hash = pairing::hash_token(&token);
     let device = json!({
         "id": id,
-        "name": format!("{tier} device"),
-        "kind": "phone",
+        "name": format!("{tier} {kind}"),
+        "kind": kind,
         "platform": "iOS 19",
         "tier": tier,
         "login": login,
@@ -1129,18 +1136,240 @@ async fn pair_cancel_throws_the_live_offer_away() {
 }
 
 #[tokio::test]
-async fn the_tier_table_matches_the_gateway_every_remote_method_is_never() {
+async fn the_tier_table_matches_the_gateway_every_remote_method_is_never_but_seven() {
     // The gateway is reached only from the desktop; every `remote.*` method is
-    // `never` remote, so a device can never call one.
+    // `never` remote, so a device can never call one. The seven rows the owner
+    // opened on 17 November 2026 are `manage` instead, and the device kind check
+    // in the gateway is what keeps a phone out of them.
     for method in [
-        "remote.status", "remote.enable", "remote.disable", "remote.pair.begin", "remote.pair.cancel",
-        "remote.pair.confirm", "remote.devices.list", "remote.devices.update", "remote.devices.revoke",
-        "remote.security.get", "remote.security.set", "remote.activity.list",
+        "remote.enable", "remote.disable", "remote.pair.begin", "remote.pair.cancel",
+        "remote.security.get", "remote.security.set",
         "remote.method.set", "remote.native.account.set", "remote.native.cert.regenerate", "remote.native.port.set",
         "remote.native.upnp.set", "remote.native.externalIp.set", "remote.native.firewall.add", "remote.native.firewall.remove",
     ] {
         let rule = policy::rule_for(method).unwrap_or_else(|| panic!("no tier rule for {method}"));
         assert_eq!(rule.class, policy::MethodClass::Never, "{method}");
+    }
+    for method in [
+        "remote.status", "remote.devices.list", "remote.devices.update", "remote.devices.revoke",
+        "remote.pair.pending", "remote.pair.confirm", "remote.activity.list",
+    ] {
+        let rule = policy::rule_for(method).unwrap_or_else(|| panic!("no tier rule for {method}"));
+        assert_eq!(rule.class, policy::MethodClass::Manage, "{method}");
+        assert_eq!(rule.min_tier, Some(policy::Tier::Operator), "{method}");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// A machine manages another machine's devices (17 November 2026)
+
+/// The seven methods of the `manage` subset, with params that reach their
+/// handlers, so a refusal here is the gateway's own and never a missing id.
+const MANAGE_CALLS: [(&str, &str); 7] = [
+    ("remote.status", "{}"),
+    ("remote.devices.list", "{}"),
+    ("remote.devices.update", r#"{"deviceId": "dev-phone", "name": "Renamed"}"#),
+    ("remote.devices.revoke", r#"{"deviceId": "dev-phone"}"#),
+    ("remote.pair.pending", "{}"),
+    ("remote.pair.confirm", r#"{"pairingId": "no-such-request", "approve": false}"#),
+    ("remote.activity.list", r#"{"limit": 5}"#),
+];
+
+#[tokio::test]
+async fn a_phone_at_operator_cannot_reach_the_manage_subset() {
+    let gateway = gateway().await;
+    let (_phone, phone) = seed_device(&gateway.st, "dev-phone-operator", "operator", None);
+    // The same subset, for a browser: the kind check is on the device, not on the
+    // tier, so no tier of any other kind passes.
+    let (_browser, browser) = seed_device_of_kind(&gateway.st, "dev-browser", "browser", "operator", None);
+    for (method, params) in MANAGE_CALLS {
+        let params: Value = serde_json::from_str(params).unwrap();
+        for (token, kind) in [(&phone, "phone"), (&browser, "browser")] {
+            let (status, body) = gateway.rpc(token, method, params.clone()).await;
+            assert_eq!(status, StatusCode::FORBIDDEN, "{kind} {method}");
+            assert_eq!(body["error"]["code"], "forbidden_remote", "{kind} {method}");
+            assert_eq!(
+                body["error"]["message"],
+                "Only a linked Retinue machine can manage another machine's devices.",
+                "{kind} {method}"
+            );
+        }
+    }
+    // The refusals are in the host's own list, one line per call.
+    let entries = dispatch(&gateway.st, "remote.activity.list", json!({"limit": 100})).await.unwrap();
+    let denied = entries["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|entry| entry["summary"].as_str().unwrap_or_default().contains("was refused remote."))
+        .count();
+    assert_eq!(denied, MANAGE_CALLS.len() * 2, "{entries}");
+}
+
+#[tokio::test]
+async fn a_machine_manages_another_machines_devices_and_is_named_in_its_list() {
+    let gateway = gateway().await;
+    let (_machine, machine) = seed_device_of_kind(&gateway.st, "dev-laptop", "machine", "operator", None);
+    let (_phone, phone_token) = seed_device(&gateway.st, "dev-phone", "chat", None);
+
+    // The status the other computer sees, with nothing of this one's disk in it.
+    let (status, body) = gateway.rpc(&machine, "remote.status", json!({})).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["hostName"], json!(gateway.st.remote.host_name));
+    assert!(body["result"]["deviceCount"].as_u64().unwrap() >= 2, "{body}");
+
+    // The paired devices, and the machine's own row among them.
+    let (status, body) = gateway.rpc(&machine, "remote.devices.list", json!({})).await;
+    assert_eq!(status, StatusCode::OK);
+    let ids: Vec<&str> = body["result"]["devices"].as_array().unwrap().iter().filter_map(|row| row["id"].as_str()).collect();
+    assert!(ids.contains(&"dev-laptop") && ids.contains(&"dev-phone"), "{body}");
+
+    // Rename and re-tier the phone, and it is this machine's own list that says who did it.
+    let (status, body) = gateway.rpc(&machine, "remote.devices.update", json!({"deviceId": "dev-phone", "name": "Sam's phone", "tier": "operator"})).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["device"]["name"], "Sam's phone");
+    assert_eq!(body["result"]["device"]["tier"], "operator");
+    let (status, body) = gateway.rpc(&machine, "remote.activity.list", json!({"limit": 20})).await;
+    assert_eq!(status, StatusCode::OK);
+    let summaries: Vec<String> = body["result"]["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| entry["summary"].as_str().unwrap_or_default().to_string())
+        .collect();
+    assert!(
+        summaries.iter().any(|line| line == "operator machine changed Sam's phone's access from another machine."),
+        "{summaries:?}"
+    );
+
+    // Its own row is the one row it may not touch.
+    for (method, params) in [
+        ("remote.devices.update", json!({"deviceId": "dev-laptop", "tier": "operator"})),
+        ("remote.devices.revoke", json!({"deviceId": "dev-laptop"})),
+    ] {
+        let (status, body) = gateway.rpc(&machine, method, params).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{method} {body}");
+        assert_eq!(body["error"]["message"], "A machine link can't change or remove its own pairing.", "{method}");
+    }
+    // Revoking the phone twice: the second says it is gone, which proves the first worked.
+    let (status, body) = gateway.rpc(&machine, "remote.devices.revoke", json!({"deviceId": "dev-phone"})).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["result"]["revoked"], true);
+    let (_, body) = gateway.rpc(&machine, "remote.devices.list", json!({})).await;
+    assert!(!body["result"]["devices"].as_array().unwrap().iter().any(|row| row["id"] == "dev-phone"), "{body}");
+    let (_, body) = gateway.rpc(&machine, "remote.activity.list", json!({"limit": 20})).await;
+    assert!(
+        body["result"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["summary"] == "operator machine removed Sam's phone from another machine."),
+        "{body}"
+    );
+    // And the phone's token is dead at once.
+    let (status, _) = gateway.rpc(&phone_token, "daemon.health", json!({})).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn a_machine_reads_and_answers_a_waiting_request_but_never_its_own() {
+    let gateway = gateway().await;
+    let (_machine, machine) = seed_device_of_kind(&gateway.st, "dev-laptop", "machine", "operator", None);
+    // Nothing is waiting yet.
+    let (status, body) = gateway.rpc(&machine, "remote.pair.pending", json!({})).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["result"]["pending"], Value::Null);
+
+    // A phone asks with a code; the machine is the one that reads and approves it.
+    let begun = dispatch(&gateway.st, "remote.pair.begin", json!({})).await.unwrap();
+    let code = begun["code"].as_str().unwrap().to_string();
+    let asked = gateway
+        .client
+        .post(gateway.url("/api/pair"))
+        .header("Origin", &gateway.origin)
+        .json(&json!({"code": code, "name": "Sam's phone", "kind": "phone", "platform": "iOS 19"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(asked.status(), StatusCode::ACCEPTED);
+    let (status, body) = gateway.rpc(&machine, "remote.pair.pending", json!({})).await;
+    assert_eq!(status, StatusCode::OK);
+    let pairing_id = body["result"]["pending"]["pairingId"].as_str().expect("a waiting request").to_string();
+    assert_eq!(body["result"]["pending"]["name"], "Sam's phone");
+    assert_eq!(body["result"]["pending"]["kind"], "phone");
+    // Approving without a tier is the daemon's own refusal.
+    let (status, body) = gateway.rpc(&machine, "remote.pair.confirm", json!({"pairingId": pairing_id, "approve": true})).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+    let (status, body) = gateway.rpc(&machine, "remote.pair.confirm", json!({"pairingId": pairing_id, "approve": true, "tier": "chat"})).await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body["result"]["approved"], true);
+    assert_eq!(body["result"]["device"]["name"], "Sam's phone");
+    assert_eq!(body["result"]["device"]["tier"], "chat");
+    let (_, body) = gateway.rpc(&machine, "remote.activity.list", json!({"limit": 20})).await;
+    assert!(
+        body["result"]["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|entry| entry["summary"] == "operator machine approved Sam's phone from another machine."),
+        "{body}"
+    );
+
+    // A machine request is shown, and refused: only the owner at that computer approves one.
+    let begun = dispatch(&gateway.st, "remote.pair.begin", json!({})).await.unwrap();
+    let code = begun["code"].as_str().unwrap().to_string();
+    let asked = gateway
+        .client
+        .post(gateway.url("/api/pair"))
+        .header("Origin", &gateway.origin)
+        .json(&json!({"code": code, "name": "Another desktop", "kind": "machine", "platform": "windows"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(asked.status(), StatusCode::ACCEPTED);
+    let (_, body) = gateway.rpc(&machine, "remote.pair.pending", json!({})).await;
+    let pairing_id = body["result"]["pending"]["pairingId"].as_str().unwrap().to_string();
+    assert_eq!(body["result"]["pending"]["kind"], "machine");
+    let (status, body) = gateway.rpc(&machine, "remote.pair.confirm", json!({"pairingId": pairing_id, "approve": true, "tier": "chat"})).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    assert_eq!(body["error"]["message"], "A machine link can't approve another machine. Only the owner at that computer can.");
+    // It is still waiting, and the desktop's own approval still works.
+    let (_, body) = gateway.rpc(&machine, "remote.pair.pending", json!({})).await;
+    assert_eq!(body["result"]["pending"]["pairingId"], json!(pairing_id));
+    let approved = dispatch(&gateway.st, "remote.pair.confirm", json!({"pairingId": pairing_id, "approve": true, "tier": "viewer"})).await.unwrap();
+    assert_eq!(approved["approved"], true);
+
+    // A request from the caller itself: the machine asks with a code while holding
+    // its own cookie, and may not approve what it asked for.
+    let begun = dispatch(&gateway.st, "remote.pair.begin", json!({})).await.unwrap();
+    let code = begun["code"].as_str().unwrap().to_string();
+    let asked = gateway
+        .client
+        .post(gateway.url("/api/pair"))
+        .header("Origin", &gateway.origin)
+        .header("Cookie", format!("{DEVICE_COOKIE}={machine}"))
+        .json(&json!({"code": code, "name": "operator machine", "kind": "phone", "platform": "windows"}))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(asked.status(), StatusCode::ACCEPTED);
+    let (_, body) = gateway.rpc(&machine, "remote.pair.pending", json!({})).await;
+    let pairing_id = body["result"]["pending"]["pairingId"].as_str().unwrap().to_string();
+    let (status, body) = gateway.rpc(&machine, "remote.pair.confirm", json!({"pairingId": pairing_id, "approve": true, "tier": "viewer"})).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "{body}");
+    assert_eq!(body["error"]["message"], "A machine link can't approve its own pairing request.");
+}
+
+#[tokio::test]
+async fn the_manage_subset_still_needs_operator() {
+    let gateway = gateway().await;
+    let (_machine, machine) = seed_device_of_kind(&gateway.st, "dev-laptop", "machine", "chat", None);
+    for (method, params) in MANAGE_CALLS {
+        let params: Value = serde_json::from_str(params).unwrap();
+        let (status, body) = gateway.rpc(&machine, method, params).await;
+        assert_eq!(status, StatusCode::FORBIDDEN, "{method} {body}");
+        assert_eq!(body["error"]["code"], "tier_required", "{method}");
+        assert_eq!(body["error"]["message"], format!("a chat device cannot call {method}"), "{method}");
     }
 }
 
@@ -2366,4 +2595,119 @@ async fn deleting_an_automation_deletes_its_secret() {
     assert_eq!(crate::secrets::store::read(&crate::webhooks::secret_name(&id)).unwrap().as_deref().map(String::as_str), Some(secret.as_str()));
     crate::automations::rpc(&gateway.st, "automation.delete", &json!({"id": id})).await.unwrap();
     assert!(crate::secrets::store::read(&crate::webhooks::secret_name(&id)).unwrap().is_none(), "the secret outlived its automation");
+}
+
+// ---------------------------------------------------------------------------
+// Step 1, piece A and B: what a machine link reads, and the cards it answers
+
+/// One conversation with one finished tool row, as `session.get` shows it.
+fn conversation_with_a_tool(st: &AppState) -> String {
+    st.db.upsert_runtime(&json!({"id": "rt-tools", "provider": "codex"})).unwrap();
+    st.db.create_session("s-tools", "rt-tools", "codex", ".", "Tools").unwrap();
+    st.db.create_turn("t-tools", "s-tools").unwrap();
+    st.db
+        .upsert_tool_in_turn(
+            "s-tools",
+            Some("t-tools"),
+            "call",
+            "commandExecution",
+            "npm test",
+            "completed",
+            &json!({"command": "npm test", "output": "ok"}),
+            None,
+        )
+        .unwrap();
+    "s-tools".to_string()
+}
+
+#[tokio::test]
+async fn a_machine_device_reads_the_work_log_and_a_phone_does_not() {
+    let gateway = gateway().await;
+    let session = conversation_with_a_tool(&gateway.st);
+    let (_, phone) = seed_device_of_kind(&gateway.st, "phone-log", "phone", "viewer", None);
+    let (_, machine) = seed_device_of_kind(&gateway.st, "machine-log", "machine", "viewer", None);
+    let (status, as_phone) = gateway.rpc(&phone, "session.get", json!({"sessionId": session})).await;
+    assert_eq!(status, StatusCode::OK, "{as_phone}");
+    let (status, as_machine) = gateway.rpc(&machine, "session.get", json!({"sessionId": session})).await;
+    assert_eq!(status, StatusCode::OK, "{as_machine}");
+
+    let phone_tool = &as_phone["result"]["tools"][0];
+    assert_eq!(phone_tool["title"], "Tool", "a phone keeps the generic title");
+    assert!(phone_tool.get("detail").is_none(), "a phone gets no tool detail: {phone_tool}");
+    let machine_tool = &as_machine["result"]["tools"][0];
+    assert_eq!(machine_tool["title"], "npm test", "a machine link reads the title");
+    assert_eq!(machine_tool["detail"]["command"], "npm test");
+    assert_eq!(machine_tool["detail"]["output"], "ok");
+    // The machine still reads like a device everywhere else: no provider session id.
+    assert!(as_phone["result"].get("providerSessionId").is_none());
+    assert!(as_machine["result"].get("providerSessionId").is_none());
+}
+
+#[tokio::test]
+async fn the_event_socket_sends_the_work_log_to_a_machine_and_not_to_a_phone() {
+    let gateway = gateway().await;
+    let (_, phone) = seed_device_of_kind(&gateway.st, "phone-events", "phone", "viewer", None);
+    let (_, machine) = seed_device_of_kind(&gateway.st, "machine-events", "machine", "viewer", None);
+    let mut phone_socket = gateway.open_socket(&phone).await;
+    let mut machine_socket = gateway.open_socket(&machine).await;
+    let at = gateway.st.db.replay_events(0, 5_000).unwrap().last().and_then(|event| event["sequence"].as_u64()).unwrap_or(0);
+    let first = gateway.cursor(&mut phone_socket, at).await;
+    assert_eq!(first["type"], "events.replay.complete", "{first}");
+    let first = gateway.cursor(&mut machine_socket, at).await;
+    assert_eq!(first["type"], "events.replay.complete", "{first}");
+
+    gateway
+        .st
+        .emit(
+            "session.changed",
+            json!({"id": "s-tools", "tools": [{"id": "call", "title": "npm test", "detail": {"command": "npm test"}}]}),
+        )
+        .await;
+    let to_phone = next_frame(&mut phone_socket).await;
+    let to_machine = next_frame(&mut machine_socket).await;
+    assert_eq!(to_phone["payload"]["tools"][0]["title"], "Tool");
+    assert!(to_phone["payload"]["tools"][0].get("detail").is_none());
+    assert_eq!(to_machine["payload"]["tools"][0]["title"], "npm test");
+    assert_eq!(to_machine["payload"]["tools"][0]["detail"]["command"], "npm test");
+}
+
+#[tokio::test]
+async fn permission_pending_is_read_by_a_machine_and_by_a_phone() {
+    let gateway = gateway().await;
+    let session = conversation_with_a_tool(&gateway.st);
+    gateway
+        .st
+        .db
+        .insert_permission(
+            "card-1",
+            &session,
+            "req-1",
+            "Run the tests",
+            Some("npm test"),
+            &["allow".to_string(), "deny".to_string()],
+            &json!({"request": {"tool_name": "Bash", "input": {"command": "npm test"}}}),
+            &json!({"kind": "shell", "matchKey": "shell:npm test", "rememberable": false, "rememberLabel": null, "projectId": null, "projectName": null}),
+        )
+        .unwrap();
+    let (_, phone) = seed_device_of_kind(&gateway.st, "phone-cards", "phone", "viewer", None);
+    let (_, machine) = seed_device_of_kind(&gateway.st, "machine-cards", "machine", "viewer", None);
+    for (kind, token) in [("phone", &phone), ("machine", &machine)] {
+        let (status, body) = gateway.rpc(token, "permission.pending", json!({})).await;
+        assert_eq!(status, StatusCode::OK, "{kind}: {body}");
+        let card = &body["result"]["permissions"][0];
+        assert_eq!(card["id"], "card-1", "{kind}");
+        assert_eq!(card["sessionId"], session, "{kind}");
+        assert_eq!(card["kind"], "shell", "{kind}");
+        assert_eq!(card["title"], "Run the tests", "{kind}");
+        assert_eq!(card["detail"], "npm test", "{kind}");
+        assert_eq!(card["choices"], json!(["allow", "deny"]), "{kind}");
+        let text = body.to_string();
+        assert!(!text.contains("tool_name"), "{kind} received the provider payload");
+        assert!(!text.contains("matchKey"), "{kind} received the rule key");
+        // One conversation's cards, and none for a conversation with no cards.
+        let (_, only) = gateway.rpc(token, "permission.pending", json!({"sessionId": session})).await;
+        assert_eq!(only["result"]["permissions"].as_array().unwrap().len(), 1, "{kind}");
+        let (_, none) = gateway.rpc(token, "permission.pending", json!({"sessionId": "elsewhere"})).await;
+        assert!(none["result"]["permissions"].as_array().unwrap().is_empty(), "{kind}");
+    }
 }

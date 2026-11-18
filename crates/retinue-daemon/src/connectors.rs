@@ -67,9 +67,9 @@ fn catalogue() -> Value {
     json!([
         {"id":"github","name":"GitHub","url":"https://api.githubcopilot.com/mcp/","docsUrl":"https://docs.github.com/copilot/customizing-copilot/extending-copilot-chat-with-mcp","auth":"token","tokenHint":"Paste a fine-grained personal access token with read-only scopes."},
         {"id":"linear","name":"Linear","url":"https://mcp.linear.app/mcp","docsUrl":"https://linear.app/docs/mcp","auth":"token","tokenHint":"Paste a Linear personal API key."},
-        {"id":"notion","name":"Notion","url":"https://mcp.notion.com/mcp","docsUrl":"https://developers.notion.com/docs/mcp","auth":"oauth","tokenHint":"Notion uses OAuth, which Retinue does not support yet."},
-        {"id":"sentry","name":"Sentry","url":"https://mcp.sentry.dev/mcp","docsUrl":"https://docs.sentry.io/product/sentry-mcp/","auth":"oauth","tokenHint":"Sentry uses OAuth, which Retinue does not support yet."},
-        {"id":"stripe","name":"Stripe","url":"https://mcp.stripe.com","docsUrl":"https://docs.stripe.com/mcp","auth":"oauth","tokenHint":"Stripe uses OAuth, which Retinue does not support yet."},
+        {"id":"notion","name":"Notion","url":"https://mcp.notion.com/mcp","docsUrl":"https://developers.notion.com/docs/mcp","auth":"oauth","tokenHint":"Connect with your Notion account; the sign-in opens in your browser."},
+        {"id":"sentry","name":"Sentry","url":"https://mcp.sentry.dev/mcp","docsUrl":"https://docs.sentry.io/product/sentry-mcp/","auth":"oauth","tokenHint":"Connect with your Sentry account; the sign-in opens in your browser."},
+        {"id":"stripe","name":"Stripe","url":"https://mcp.stripe.com","docsUrl":"https://docs.stripe.com/mcp","auth":"oauth","tokenHint":"Connect with your Stripe account; the sign-in opens in your browser."},
         {"id":"supabase","name":"Supabase","url":"https://mcp.supabase.com/mcp","docsUrl":"https://supabase.com/docs/guides/getting-started/mcp","auth":"token","tokenHint":"Paste a Supabase personal access token, and add ?project_ref=<ref> to the address."}
     ])
 }
@@ -80,9 +80,9 @@ fn catalogue() -> Value {
 /// A parsed and checked connector address.
 #[derive(Debug)]
 pub(crate) struct Endpoint {
-    url: reqwest::Url,
-    host: String,
-    port: u16,
+    pub(crate) url: reqwest::Url,
+    pub(crate) host: String,
+    pub(crate) port: u16,
 }
 
 fn loopback_host(host: &str) -> bool {
@@ -116,7 +116,7 @@ pub(crate) fn parse_url(raw: &str) -> Result<Endpoint, String> {
 
 /// The address that was validated is the address the connection uses: the
 /// client resolves the host to this one IP and never looks it up again.
-async fn resolve(endpoint: &Endpoint) -> Result<std::net::SocketAddr, String> {
+pub(crate) async fn resolve(endpoint: &Endpoint) -> Result<std::net::SocketAddr, String> {
     if let Ok(ip) = endpoint.host.parse::<std::net::IpAddr>() {
         return Ok(std::net::SocketAddr::new(ip, endpoint.port));
     }
@@ -126,7 +126,7 @@ async fn resolve(endpoint: &Endpoint) -> Result<std::net::SocketAddr, String> {
     addresses.next().ok_or_else(|| format!("The address {} resolved to nothing.", endpoint.host))
 }
 
-fn build_client(endpoint: &Endpoint, address: std::net::SocketAddr) -> Result<reqwest::Client, String> {
+pub(crate) fn build_client(endpoint: &Endpoint, address: std::net::SocketAddr) -> Result<reqwest::Client, String> {
     let redirects = reqwest::redirect::Policy::custom(|attempt| {
         if attempt.previous().len() >= 5 {
             return attempt.error("The connector redirected too many times.");
@@ -505,7 +505,7 @@ fn secret_patterns() -> &'static (regex::Regex, regex::Regex, regex::Regex, rege
     })
 }
 
-fn percent_encode(value: &str, form: bool) -> String {
+pub(crate) fn percent_encode(value: &str, form: bool) -> String {
     let mut out = String::new();
     for byte in value.bytes() {
         if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
@@ -581,9 +581,17 @@ async fn announce(st: &AppState, id: &str) {
 async fn run_check(st: &AppState, id: &str) -> Result<Check, DispatchError> {
     let row = st.db.connector_get(id).map_err(storage_error)?.ok_or_else(|| derr("not_found", "That connector no longer exists.", StatusCode::NOT_FOUND))?;
     let url = row["url"].as_str().unwrap_or("").to_owned();
-    let token = match credential(id) {
+    let auth = row["auth"].as_str().unwrap_or("none").to_owned();
+    if auth == "oauth" && !crate::connectors_oauth::is_signed_in(id) {
+        let message = crate::connectors_oauth::SIGN_IN_NEEDED.to_owned();
+        st.db.connector_set_status(id, "unchecked", Some(&message), None).map_err(storage_error)?;
+        announce(st, id).await;
+        return Ok(Check { ok: false, detail: Some(message), tool_count: None });
+    }
+    let token = match bearer(st, id, Some(auth.as_str())).await {
         Ok(token) => token,
         Err(message) => {
+            let message = trim_to(&redact_text(&message, None), DETAIL_MAX);
             st.db.connector_set_status(id, "error", Some(&message), None).map_err(storage_error)?;
             announce(st, id).await;
             return Ok(Check { ok: false, detail: Some(message), tool_count: None });
@@ -625,6 +633,20 @@ pub(crate) fn credential(id: &str) -> Result<Option<String>, String> {
         Ok(Some(value)) => Ok(Some(value.as_str().to_owned())),
         Ok(None) => Ok(None),
         Err(_) => Err("The credential store is unavailable, so the token could not be read.".to_owned()),
+    }
+}
+
+/// The bearer a connector call sends: a pasted token, or an OAuth access token
+/// (refreshed first when it is close to expiry). A missing sign-in is a plain
+/// sentence, never a token.
+async fn bearer(st: &AppState, id: &str, auth: Option<&str>) -> Result<Option<String>, String> {
+    if auth == Some("oauth") {
+        match crate::connectors_oauth::access_token(st, id).await? {
+            Some(token) => Ok(Some(token)),
+            None => Err(crate::connectors_oauth::SIGN_IN_EXPIRED.to_owned()),
+        }
+    } else {
+        credential(id)
     }
 }
 
@@ -696,8 +718,23 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
             let name = name_of(p)?;
             let url = url_of(p)?;
             let token = token_of(p)?;
+            let requested = match p.get("auth") {
+                None | Some(Value::Null) => None,
+                Some(Value::String(text)) if matches!(text.as_str(), "none" | "token" | "oauth") => Some(text.as_str()),
+                Some(_) => return Err(invalid("auth must be \"none\", \"token\" or \"oauth\"")),
+            };
+            if requested == Some("oauth") && token.is_some() {
+                return Err(invalid("An OAuth connector is signed in from Retinue, so it takes no token."));
+            }
+            if requested == Some("token") && token.is_none() {
+                return Err(invalid("token is required when auth is \"token\""));
+            }
+            let auth = match requested {
+                Some(kind) => kind,
+                None if token.is_some() => "token",
+                None => "none",
+            };
             let id = Uuid::new_v4().to_string();
-            let auth = if token.is_some() { "token" } else { "none" };
             if let Some(token) = token.as_deref() {
                 crate::secrets::store::write(&credential_name(&id), token)
                     .map_err(|_| derr("unavailable", "The token could not be saved in the credential store.", StatusCode::SERVICE_UNAVAILABLE))?;
@@ -712,7 +749,8 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         }
         "connector.update" => {
             let id = id_of(p)?;
-            st.db.connector_get(&id).map_err(storage_error)?.ok_or_else(|| derr("not_found", "That connector no longer exists.", StatusCode::NOT_FOUND))?;
+            let previous = st.db.connector_get(&id).map_err(storage_error)?.ok_or_else(|| derr("not_found", "That connector no longer exists.", StatusCode::NOT_FOUND))?;
+            let was_oauth = previous["auth"].as_str() == Some("oauth");
             let name = match p.get("name") {
                 None | Some(Value::Null) => None,
                 Some(_) => Some(name_of(p)?),
@@ -724,6 +762,12 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
             let unattended = unattended_of(p.get("unattended"))?;
             let mut auth: Option<&str> = None;
             if p.get("token").is_some() {
+                // Switching between a pasted token and a browser sign-in ends
+                // the other one, and a sign-in is revoked before it is dropped.
+                if was_oauth {
+                    crate::connectors_oauth::revoke(&id).await;
+                    crate::connectors_oauth::delete_value(&id);
+                }
                 match token_of(p)? {
                     Some(token) => {
                         crate::secrets::store::write(&credential_name(&id), &token)
@@ -745,6 +789,10 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         "connector.remove" => {
             confirmed(p)?;
             let id = id_of(p)?;
+            if st.db.connector_get(&id).map_err(storage_error)?.is_some_and(|row| row["auth"].as_str() == Some("oauth")) {
+                crate::connectors_oauth::revoke(&id).await;
+                crate::connectors_oauth::delete_value(&id);
+            }
             let removed = st.db.connector_delete(&id).map_err(storage_error)?;
             let _ = crate::secrets::store::delete(&credential_name(&id));
             if removed {
@@ -955,7 +1003,11 @@ pub(crate) fn instructions(st: &AppState) -> Option<String> {
         let name = connector["name"].as_str().unwrap_or("Connector");
         let count = connector["toolCount"].as_i64().map(|count| count.to_string()).unwrap_or_else(|| "unknown".to_owned());
         let unattended = if connector["unattended"].as_str() == Some("readOnly") { ", unattended: read-only tools only" } else { "" };
-        lines.push(format!("- {name}: {count} tools{unattended}"));
+        let signed_in = match connector["auth"].as_str() {
+            Some("oauth") if !connector["id"].as_str().is_some_and(crate::connectors_oauth::is_signed_in) => ", not signed in yet",
+            _ => "",
+        };
+        lines.push(format!("- {name}: {count} tools{unattended}{signed_in}"));
     }
     Some(lines.join("\n"))
 }
@@ -1070,9 +1122,12 @@ pub async fn call_tool(st: &AppState, session_id: &str, args: &Value) -> Result<
     } else if rule != "allow" {
         ensure_allowed(st, session_id, &session, &connector, tool, info.as_ref(), &arguments).await?;
     }
-    let token = credential(&id)?;
+    let token = bearer(st, &id, connector["auth"].as_str()).await?;
     if connector["auth"].as_str() == Some("token") && token.is_none() {
         return Err(format!("The token for {name} is missing from the credential store. Add it again in Settings."));
+    }
+    if connector["auth"].as_str() == Some("oauth") && token.is_none() {
+        return Err(format!("The sign-in for {name} is missing. Connect it again in Settings."));
     }
     let url = connector["url"].as_str().unwrap_or("").to_owned();
     let outcome = async {

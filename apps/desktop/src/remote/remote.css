@@ -197,3 +197,18 @@ button, input, textarea { font: inherit; }
 [data-layout="wide"] .rm-log { padding: 24px; }
 /* Amber is a word, not a glowing box. */
 .rm-need { border: 0 !important; background: transparent !important; padding-inline: 4px !important; color: var(--status-working-text, var(--status-working)); }
+/* A long conversation arrives as its newest window (wave 3); earlier pages load on request. */
+.rm-earlier { align-self: center; margin: 4px auto 8px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: inherit; font-size: 13px; }
+.rm-cut { opacity: .65; font-style: italic; }
+/* The machines this host is linked to (17 November 2026). */
+.rm-machines { display: flex; gap: 6px; padding: 6px 12px; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.rm-machines button { display: inline-flex; flex: none; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: inherit; font-size: 13px; }
+.rm-machines button.on { border-color: var(--line-strong); background: var(--surface-selected); }
+.rm-machines button.off { opacity: .55; }
+.rm-live { width: 6px; height: 6px; border-radius: 50%; background: var(--status-success, #3fb950); }
+.rm-machine { display: grid; align-content: start; gap: 8px; padding: 10px 12px; }
+.rm-machine-head { display: flex; align-items: center; gap: 8px; padding: 6px 8px; }
+.rm-machine-head small { opacity: .65; }
+.rm-machine-note { margin: 0; font-size: 13px; opacity: .75; }
+.rm-machine-new { justify-self: start; display: inline-flex; align-items: center; gap: 5px; }
+.rm-convos button.off { opacity: .55; }

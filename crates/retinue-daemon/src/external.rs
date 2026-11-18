@@ -47,8 +47,10 @@ const MAX_WAIT_SECS: u64 = 600;
 const WAIT_STEP: Duration = Duration::from_millis(300);
 /// The longest message text one `send_message` or `steer` may carry.
 const MAX_TEXT_CHARS: usize = 100_000;
-/// The longest text of one message returned by `read_conversation`.
+/// The most text one message returned by `read_conversation` carries.
 const MAX_MESSAGE_CHARS: usize = 30_000;
+/// The most text one `command` or `output` of a far tool step carries.
+const TOOL_DETAIL_CHARS: usize = 4_000;
 
 // ---------------------------------------------------------------------------
 // State and levels
@@ -394,7 +396,7 @@ fn catalog() -> Vec<(Tier, Value)> {
         entry(Viewer, "ui_guide", "The guide to answering with an interactive view in an ```openui block: the components, their syntax and examples.", schema(json!({}), &[])),
         entry(Viewer, "list_presets", "The preset employees the owner can hire into a project: department, id, nickname, portrait, role, tags, description and whether each is already hired.", schema(json!({}), &[])),
         entry(Viewer, "list_conversations", "Conversations, newest first: id, bot, title, project, state, last update and its separate git copy when it has one.", schema(json!({"botId": id("Only this bot's conversations."), "projectId": id("Only conversations in this project (from list_projects)."), "limit": {"type": "integer", "minimum": 1, "maximum": 100, "description": "How many to return (default 20)."}}), &[])),
-        entry(Viewer, "read_conversation", "A conversation's messages: id, role, text, time and kind. Tool steps are one line each and images are paths only; a generated image names its mediaId and status instead. Without afterMessageId you get the latest messages; with it, the ones after that message.", schema(json!({"sessionId": id("The conversation."), "afterMessageId": id("Only messages after this one."), "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "How many to return (default 50)."}}), &["sessionId"])),
+        entry(Viewer, "read_conversation", "One page of a conversation's messages: id, role, text, time and kind. Tool steps are one line each and images are paths only; a generated image names its mediaId and status instead. Without a cursor you get the newest messages; afterMessageId gives the messages after that one and beforeMessageId the ones before it. The reply says whether it was truncated and which id to pass next, firstId going back and lastId going forward.", schema(json!({"sessionId": id("The conversation."), "afterMessageId": id("Only messages after this one."), "beforeMessageId": id("Only messages before this one. Use firstId from a truncated reply to read the page before it."), "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "How many to return (default 50)."}}), &["sessionId"])),
         entry(Viewer, "wait_for_turn", "Waits for the conversation's running turn to finish (up to timeoutSecs, 600 at most), then returns the reply and the turn's metrics, or the error when the turn failed. It returns early when an approval or a question is waiting.", schema(json!({"sessionId": id("The conversation."), "timeoutSecs": {"type": "integer", "minimum": 1, "maximum": 600, "description": "How long to wait (default 120)."}}), &["sessionId"])),
         entry(Viewer, "turn_metrics", "Per turn: start and end time, duration, tool calls, tokens when the coding agent reported them, the outcome, and the error (message and detail) of a failed turn. Unknown values are left out, never zero.", schema(json!({"sessionId": id("The conversation."), "last": {"type": "integer", "minimum": 1, "maximum": 50, "description": "How many turns (default 5)."}}), &["sessionId"])),
         entry(Viewer, "worktree_status", "For a conversation working in its own git copy: branch, base, files changed and commits ahead. Null when it has none.", schema(json!({"sessionId": id("The conversation.")}), &["sessionId"])),
@@ -403,6 +405,25 @@ fn catalog() -> Vec<(Tier, Value)> {
         entry(Chat, "fan_out", "Sends one message to several bots at once, each in its own new conversation, so the answers can be compared. Returns at once with a conversation per bot; use wait_for_turn on each for its reply.", schema(json!({"botIds": {"type": "array", "minItems": 2, "maxItems": 6, "items": {"type": "string"}, "description": "2 to 6 different bots."}, "text": id("The message, up to 100,000 characters."), "projectId": id("The project for every conversation, from list_projects. Without it each bot opens in its usual project."), "worktrees": {"type": "boolean", "description": "Give each conversation its own git worktree (the Operator level only; the default below it is false)."}}), &["botIds", "text"])),
         entry(Chat, "steer", "Sends extra guidance to the turn that is running now, without stopping it.", schema(json!({"sessionId": id("The conversation."), "text": id("The guidance.")}), &["sessionId", "text"])),
         entry(Chat, "stop_turn", "Stops the turn that is running in a conversation.", schema(json!({"sessionId": id("The conversation.")}), &["sessionId"])),
+        // 18 November 2026: the linked machines, so an outside session can diagnose
+        // and test the laptop, the home PC, the VPS and the phone without the window.
+        entry(Viewer, "list_machines", "The machines linked to this computer: name, state, OS, the live socket, the link's tier, its version and its bots, so you know what can be reached before asking.", schema(json!({}), &[])),
+        entry(Viewer, "machine_conversations", "One linked machine's conversations as this computer last read them, so you can pick one to read or message; stale is true when the machine is away and the rows are the last known.", schema(json!({"machineId": id("From list_machines.")}), &["machineId"])),
+        entry(Viewer, "read_machine_conversation", "One page of a conversation on a linked machine, with its messages and one line per tool step, as read_conversation reads one here.", schema(json!({"machineId": id("From list_machines."), "sessionId": id("From machine_conversations."), "beforeMessageId": id("Only messages before this one. Use firstId from a truncated reply to read the page before it."), "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "How many to return (default 50)."}}), &["machineId", "sessionId"])),
+        entry(Chat, "start_on_machine", "Starts a conversation with a bot on a linked machine and sends the first message, returning the conversation at once; use wait_on_machine for the reply.", schema(json!({"machineId": id("From list_machines."), "botId": id("A bot of that machine, from list_machines."), "text": id("The message, up to 100,000 characters."), "projectId": id("A project of that machine, from machine_conversations or its folders.")}), &["machineId", "botId", "text"])),
+        entry(Chat, "message_on_machine", "Sends a message to a conversation that runs on a linked machine, returning at once; use wait_on_machine for the reply.", schema(json!({"machineId": id("From list_machines."), "sessionId": id("From machine_conversations."), "text": id("The message, up to 100,000 characters.")}), &["machineId", "sessionId", "text"])),
+        entry(Chat, "steer_on_machine", "Sends extra guidance to the turn running now in a conversation on a linked machine, without stopping it.", schema(json!({"machineId": id("From list_machines."), "sessionId": id("From machine_conversations."), "text": id("The guidance.")}), &["machineId", "sessionId", "text"])),
+        entry(Chat, "stop_on_machine", "Stops the turn running in a conversation on a linked machine.", schema(json!({"machineId": id("From list_machines."), "sessionId": id("From machine_conversations.")}), &["machineId", "sessionId"])),
+        entry(Viewer, "wait_on_machine", "Waits for the far conversation's running turn to end (up to timeoutSecs, 600 at most) and returns the final reply and the state; it returns early when an approval is waiting there.", schema(json!({"machineId": id("From list_machines."), "sessionId": id("From machine_conversations."), "timeoutSecs": {"type": "integer", "minimum": 1, "maximum": 600, "description": "How long to wait (default 120)."}}), &["machineId", "sessionId"])),
+        entry(Viewer, "machine_approvals", "The approvals waiting on a linked machine, so you can see what it is blocked on; answer one with answer_machine_approval.", schema(json!({"machineId": id("From list_machines."), "sessionId": id("Only this conversation's cards.")}), &["machineId"])),
+        entry(Viewer, "machine_folders", "The folders and files a linked machine shares for new projects, one level at a time; browse it before naming a folder for machine_add_project or machine_clone.", schema(json!({"machineId": id("From list_machines."), "path": id("A folder from the last listing; without it the shared folder itself is listed.")}), &["machineId"])),
+        entry(Viewer, "machine_clone_status", "One clone's progress on a linked machine, by the jobId machine_clone returned.", schema(json!({"machineId": id("From list_machines."), "jobId": id("From machine_clone.")}), &["machineId", "jobId"])),
+        entry(Operator, "answer_machine_approval", "Allows once or denies one approval waiting on a linked machine.", schema(json!({"machineId": id("From list_machines."), "permissionId": id("From machine_approvals."), "choice": {"type": "string", "enum": ["allow_once", "deny"], "description": "allow_once allows this one request; deny refuses it."}}), &["machineId", "permissionId", "choice"])),
+        entry(Operator, "machine_add_project", "Registers a folder inside a linked machine's shared folder as a project there.", schema(json!({"machineId": id("From list_machines."), "path": id("A folder from machine_folders."), "name": id("The project's name; the folder's own name without it.")}), &["machineId", "path"])),
+        entry(Operator, "machine_clone", "Clones a repository into a linked machine's shared folder and returns the clone's job, which machine_clone_status follows.", schema(json!({"machineId": id("From list_machines."), "url": id("The repository's address."), "folder": id("The folder on that machine to clone into; its shared folder without it."), "name": id("The folder to make; the repository's name without it.")}), &["machineId", "url"])),
+        entry(Operator, "machine_devices", "The devices paired to a linked machine and the one waiting for approval, so you can report who can reach it.", schema(json!({"machineId": id("From list_machines.")}), &["machineId"])),
+        entry(Operator, "machine_remote_status", "A linked machine's Remote settings: whether Remote is on, the method, the port and how many devices are paired.", schema(json!({"machineId": id("From list_machines.")}), &["machineId"])),
+        entry(Viewer, "diagnose_machines", "One report per linked machine - reachability, the live socket, tier, version and OS, and what it refuses with the plain sentence - for diagnosing a link without the window.", schema(json!({}), &[])),
         entry(Operator, "create_bot", "Creates a bot. Use list_runtimes for the runtime and model; the bot works in projectPath. Its permission mode is ask unless you pass auto.", schema(json!({"name": id("The bot's name, up to 60 characters."), "runtimeId": id("From list_runtimes."), "model": id("A model id from list_runtimes."), "effort": id("An effort the model offers."), "projectPath": id("The folder the bot works in."), "role": id("A short role, up to 40 characters."), "approvalMode": {"type": "string", "enum": ["ask", "auto", "accept_edits"], "description": "How the bot asks before acting (default ask). accept_edits allows file edits and reads in the project and asks for everything else."}, "replyIcons": {"type": "boolean", "description": "Let the bot mark table cells, list items and status words with an emoji or a Lucide icon (default false)."}}), &["name", "runtimeId", "model", "projectPath"])),
         entry(Operator, "update_bot", "Changes a bot's settings. Pass only what changes. Use list_runtimes for runtimes, models and efforts. A locked bot can't be changed.", schema(json!({
             "botId": id("The bot, from list_bots."),
@@ -461,7 +482,9 @@ fn count_arg(args: &Value, key: &str, default: usize, max: usize) -> usize {
     args.get(key).and_then(Value::as_u64).map_or(default, |value| value as usize).clamp(1, max)
 }
 
-fn cap(text: &str, max: usize) -> String {
+/// The text cut to `max` characters, with a marker when it was. Shared with the
+/// linked machines' tools, so a reply is bounded the same way on both sides.
+pub(crate) fn cap(text: &str, max: usize) -> String {
     if text.chars().count() <= max { text.to_owned() } else { format!("{} … [cut]", text.chars().take(max).collect::<String>()) }
 }
 
@@ -492,6 +515,24 @@ async fn call_tool(st: &AppState, tier: Tier, name: &str, args: &Value) -> ToolR
         "create_bot" => create_bot(st, args).await,
         "update_bot" => update_bot(st, args).await,
         "answer_approval" => answer_approval(st, args).await,
+        // The linked machines (18 November 2026): thin wrappers in `machine_mcp.rs`.
+        "list_machines" => crate::machine_mcp::list_machines(st, args).await,
+        "machine_conversations" => crate::machine_mcp::machine_conversations(st, args).await,
+        "read_machine_conversation" => crate::machine_mcp::read_machine_conversation(st, args).await,
+        "start_on_machine" => crate::machine_mcp::start_on_machine(st, args).await,
+        "message_on_machine" => crate::machine_mcp::message_on_machine(st, args).await,
+        "steer_on_machine" => crate::machine_mcp::steer_on_machine(st, args).await,
+        "stop_on_machine" => crate::machine_mcp::stop_on_machine(st, args).await,
+        "wait_on_machine" => crate::machine_mcp::wait_on_machine(st, args).await,
+        "machine_approvals" => crate::machine_mcp::machine_approvals(st, args).await,
+        "answer_machine_approval" => crate::machine_mcp::answer_machine_approval(st, args).await,
+        "machine_folders" => crate::machine_mcp::machine_folders(st, args).await,
+        "machine_add_project" => crate::machine_mcp::machine_add_project(st, args).await,
+        "machine_clone" => crate::machine_mcp::machine_clone(st, args).await,
+        "machine_clone_status" => crate::machine_mcp::machine_clone_status(st, args).await,
+        "machine_devices" => crate::machine_mcp::machine_devices(st, args).await,
+        "machine_remote_status" => crate::machine_mcp::machine_remote_status(st, args).await,
+        "diagnose_machines" => crate::machine_mcp::diagnose_machines(st, args).await,
         _ => Err(format!("There is no tool called {name}.")),
     };
     record(st, name, bot).await;
@@ -516,7 +557,7 @@ fn bot_for(st: &AppState, args: &Value) -> Option<String> {
     text_arg(args, "name").map(|name| cap(name, 60))
 }
 
-fn is_busy_state(state: &str) -> bool {
+pub(crate) fn is_busy_state(state: &str) -> bool {
     matches!(state, "starting" | "working" | "waiting_permission" | "cancelling")
 }
 
@@ -674,7 +715,7 @@ fn stamp(value: &Value) -> Option<DateTime<Utc>> {
 }
 
 /// The error of a failed turn, as the app shows it: the plain message and the Details line.
-fn turn_error(turn: &Value) -> Option<Value> {
+pub(crate) fn turn_error(turn: &Value) -> Option<Value> {
     if turn["state"].as_str() != Some("error") { return None; }
     let message = match turn["failureClass"].as_str() {
         Some(class) => crate::failure_public_message(class).to_owned(),
@@ -688,14 +729,31 @@ fn turn_error(turn: &Value) -> Option<Value> {
 }
 
 /// A conversation as one list: its messages, with each tool step reduced to a line.
-fn conversation_items(detail: &Value) -> Vec<Value> {
+///
+/// `keep_tool_detail` keeps a tool row's own title and its `detail.command` and
+/// `detail.output` beside the line. It is set for a conversation read from a
+/// linked machine: the far gateway keeps those for a `machine` device, and the
+/// work log is the point of reading there. A conversation on this computer keeps
+/// the line only, as before.
+pub(crate) fn conversation_items(detail: &Value, keep_tool_detail: bool) -> Vec<Value> {
     let mut tools: Vec<(Option<DateTime<Utc>>, Value)> = detail["tools"].as_array().cloned().unwrap_or_default().iter().map(|tool| {
-        let title = tool["title"].as_str().unwrap_or("Tool");
-        let title = if retinue_security::contains_secret_marker(title) { "(hidden)".to_owned() } else { cap(title, 160) };
-        (stamp(&tool["startedAt"]), json!({
+        let raw_title = tool["title"].as_str().unwrap_or("Tool");
+        let title = if retinue_security::contains_secret_marker(raw_title) { "(hidden)".to_owned() } else { cap(raw_title, 160) };
+        let mut item = json!({
             "id": tool["id"], "role": "tool", "text": format!("{title} ({})", tool["state"].as_str().unwrap_or("done")),
             "createdAt": tool["startedAt"], "kind": "tool",
-        }))
+        });
+        if keep_tool_detail {
+            item["title"] = json!(title);
+            if let Some(field) = tool["detail"].as_object() {
+                for key in ["command", "output"] {
+                    if let Some(text) = field.get(key).and_then(Value::as_str).filter(|text| !text.is_empty()) {
+                        item[key] = json!(cap(text, TOOL_DETAIL_CHARS));
+                    }
+                }
+            }
+        }
+        (stamp(&tool["startedAt"]), item)
     }).collect();
     for turn in detail["turns"].as_array().cloned().unwrap_or_default() {
         let Some(error) = turn_error(&turn) else { continue };
@@ -732,19 +790,70 @@ fn conversation_items(detail: &Value) -> Vec<Value> {
     items
 }
 
+/// The most messages one `read_conversation` reply may hold.
+const READ_CONVERSATION_MAX_BYTES: usize = 128 * 1024;
+
+/// One page of a conversation's items, oldest first, with what the caller needs
+/// to read the rest (wave 3, `docs/plans/nod-adoption-plan.md`, idea 8).
+///
+/// `after` and `before` are message ids, never both. Without either, the page is
+/// the newest `limit` items; with `after`, the items after that message; with
+/// `before`, the newest `limit` items before it. The page is then cut to
+/// `max_bytes` of JSON, always keeping at least one item, so one huge message
+/// cannot make the reply unbounded.
+pub(crate) fn conversation_page(items: Vec<Value>, after: Option<&str>, before: Option<&str>, limit: usize, max_bytes: usize) -> Result<Value, String> {
+    let total = items.len();
+    let position = |id: &str| items.iter().position(|item| item["id"].as_str() == Some(id));
+    let (mut window, range): (Vec<Value>, usize) = match (after, before) {
+        (Some(_), Some(_)) => return Err("Give afterMessageId or beforeMessageId, not both.".to_owned()),
+        (Some(after), None) => {
+            let at = position(after).ok_or("afterMessageId is not in this conversation.")?;
+            (items.into_iter().skip(at + 1).take(limit).collect(), total - (at + 1))
+        }
+        (None, Some(before)) => {
+            let at = position(before).ok_or("beforeMessageId is not in this conversation.")?;
+            let mut page: Vec<Value> = items.into_iter().take(at).collect();
+            let keep = page.len().saturating_sub(limit);
+            (page.split_off(keep), at)
+        }
+        (None, None) => {
+            let keep = total.saturating_sub(limit);
+            (items.into_iter().skip(keep).collect(), total)
+        }
+    };
+    // The newest items that fit, never none: one huge message must still come
+    // back, or a caller could never read past it.
+    let mut bytes = 0usize;
+    let mut first_kept = window.len().saturating_sub(1);
+    for (index, item) in window.iter().enumerate().rev() {
+        let size = item.to_string().len();
+        if bytes + size > max_bytes && index + 1 < window.len() {
+            break;
+        }
+        bytes += size;
+        first_kept = index;
+    }
+    window.drain(..first_kept);
+    let first = window.first().and_then(|item| item["id"].as_str()).map(str::to_owned);
+    let last = window.last().and_then(|item| item["id"].as_str()).map(str::to_owned);
+    Ok(json!({
+        "messages": window,
+        "count": window.len(),
+        "totalCount": total,
+        "truncated": window.len() < range,
+        "firstId": first,
+        "lastId": last,
+        "bytes": bytes,
+        "capBytes": max_bytes,
+    }))
+}
+
 fn read_conversation(st: &AppState, args: &Value) -> ToolResult {
     let (id, _) = require_session(st, args)?;
     let limit = count_arg(args, "limit", 50, 200);
     let detail = st.db.session_detail(&id).map_err(|_| "That conversation was not found.".to_owned())?;
-    let items = conversation_items(&detail);
-    let page: Vec<Value> = match text_arg(args, "afterMessageId") {
-        Some(after) => {
-            let at = items.iter().position(|item| item["id"].as_str() == Some(after)).ok_or("afterMessageId is not in this conversation.")?;
-            items.into_iter().skip(at + 1).take(limit).collect()
-        }
-        None => { let skip = items.len().saturating_sub(limit); items.into_iter().skip(skip).collect() }
-    };
-    Ok(json!(page))
+    let items = conversation_items(&detail, false);
+    conversation_page(items, text_arg(args, "afterMessageId"), text_arg(args, "beforeMessageId"), limit, READ_CONVERSATION_MAX_BYTES)
 }
 
 /// The metrics of a conversation's last `last` turns, oldest first. Unknown values are left out.
@@ -844,7 +953,7 @@ fn list_approvals(st: &AppState) -> ToolResult {
 // ---------------------------------------------------------------------------
 // Chat tools
 
-fn valid_text(args: &Value) -> Result<String, String> {
+pub(crate) fn valid_text(args: &Value) -> Result<String, String> {
     let text = args.get("text").and_then(Value::as_str).unwrap_or("");
     if text.trim().is_empty() { return Err("text is required.".to_owned()); }
     if text.chars().count() > MAX_TEXT_CHARS { return Err(format!("text is longer than {MAX_TEXT_CHARS} characters.")); }

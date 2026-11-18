@@ -515,11 +515,26 @@ function fixtureMachines(): Array<Record<string, unknown>> {
   const wanted = flags().get('machines')
   if (!wanted) return []
   const online = wanted !== 'offline'
-  return [{ id: 'preview-laptop', name: 'Work laptop', url: 'https://work-laptop.example.ts.net', auth: 'code', fingerprint: null, tier: 'operator', pairedAt: new Date(Date.now() - 86_400_000).toISOString(), lastSeenAt: new Date(Date.now() - (online ? 20_000 : 7_200_000)).toISOString(), state: online ? 'online' : 'offline', detail: null, version: '0.1.0-beta.44', bots: [
+  // 17 November 2026: `kind` (OS) and `live` (an open event socket); `?machines=2` adds the Linux VPS.
+  const laptop = { id: 'preview-laptop', name: 'Work laptop', url: 'https://work-laptop.example.ts.net', auth: 'code', fingerprint: null, tier: 'operator', pairedAt: new Date(Date.now() - 86_400_000).toISOString(), lastSeenAt: new Date(Date.now() - (online ? 20_000 : 7_200_000)).toISOString(), state: online ? 'online' : 'offline', detail: null, version: '0.1.0-beta.44', kind: 'windows', live: online, bots: [
     { id: 'preview-rae', name: 'Rae', color: 'mint', role: 'Frontend', provider: 'claude', model: 'claude-sonnet-5-5', busy: online, activeSessionId: 'preview-remote-1', conversations: 2 },
     { id: 'preview-tom', name: 'Tom', color: 'sky', role: null, provider: 'codex', model: 'gpt-6-luna', busy: false, activeSessionId: null, conversations: 0 },
-  ] }]
+  ] }
+  const vps = { id: 'preview-vps', name: 'VPS', url: 'https://vps.example.ts.net', auth: 'code', fingerprint: null, tier: 'operator', pairedAt: new Date(Date.now() - 3_600_000).toISOString(), lastSeenAt: new Date(Date.now() - 5_000).toISOString(), state: 'online', detail: null, version: '0.2.0-beta.5', kind: 'linux', live: false, bots: [
+    { id: 'preview-ivy', name: 'Ivy', color: 'lilac', role: 'Backend', provider: 'opencode', model: null, busy: false, activeSessionId: null, conversations: 1 },
+  ] }
+  return wanted === '2' ? [laptop, vps] : [laptop]
 }
+// Another machine's shared folder for new projects, and its devices (17 November 2026).
+const fixtureRemoteBase = '/home/owner/projects'
+const fixtureRemoteTree: Record<string, string[]> = { '/home/owner/projects': ['korus', 'retinue', 'site'], '/home/owner/projects/korus': ['src', 'tests'], '/home/owner/projects/retinue': ['apps', 'crates', 'docs'], '/home/owner/projects/site': [] }
+let fixtureRemoteClone: { id: string; url: string; target: string; state: string; detail: string | null; project: { id: string; name: string } | null; polls: number } | null = null
+let fixtureRemoteDevices = [
+  { id: 'dev-phone', name: "Owner's phone", kind: 'phone', platform: 'iOS 19', tier: 'chat', login: null, pairedAt: new Date(Date.now() - 6 * 86_400_000).toISOString(), lastSeenAt: new Date(Date.now() - 600_000).toISOString(), online: false },
+  { id: 'dev-home', name: 'Home desktop', kind: 'machine', platform: 'Windows', tier: 'operator', login: null, pairedAt: new Date(Date.now() - 86_400_000).toISOString(), lastSeenAt: new Date().toISOString(), online: true },
+]
+let fixtureRemotePending: Record<string, unknown> | null = flags().has('pending-device') ? { pairingId: 'pair-1', name: 'Work tablet', kind: 'tablet', platform: 'Android 16', login: null, method: 'tailscale', expiresAt: new Date(Date.now() + 240_000).toISOString() } : null
+let fixtureRemoteApprovals = flags().has('remote-approval') ? [{ id: 'perm-remote-1', sessionId: 'preview-remote-1', kind: 'tool', title: 'Run a command', command: 'npm test -- invoice', choices: ['allow_once', 'deny'] }] : []
 let fixtureAbandoned = [
   { id: 'wt-1', repo: 'C:/work/site', path: 'C:/work/site-retinue/fix-the-header', branch: 'retinue/fix-the-header', reason: 'conversation_deleted', dirtyFiles: 0, commitsAhead: 0, lastActivityAt: '2026-10-20T10:00:00Z' },
   { id: 'wt-2', repo: 'C:/work/site', path: 'C:/work/site-retinue/try-a-new-rail', branch: 'retinue/try-a-new-rail', reason: 'conversation_deleted', dirtyFiles: 2, commitsAhead: 3, lastActivityAt: '2026-10-22T10:00:00Z' },
@@ -693,9 +708,54 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   if (method === 'machine.conversation' && String(params.sessionId).startsWith('preview-remote-new-')) {
     return { session: { id: params.sessionId, title: 'New conversation', state: 'idle', messages: fixtureMachineSent[String(params.sessionId)] ?? [] } } as T
   }
+  if (method === 'machine.sessions') {
+    const rows = fixtureMachines().flatMap((machine) => (machine.bots as Array<Record<string, unknown>>).flatMap((bot) => bot.id === 'preview-rae' ? [
+      { machineId: machine.id, machineName: machine.name, kind: machine.kind ?? null, id: 'preview-remote-1', title: 'Fix the invoice export', agentId: bot.id, agentName: bot.name, projectName: 'korus', state: 'working', updatedAt: new Date(Date.now() - 120_000).toISOString(), archived: false },
+      { machineId: machine.id, machineName: machine.name, kind: machine.kind ?? null, id: 'preview-remote-2', title: 'Tidy the settings page', agentId: bot.id, agentName: bot.name, projectName: 'korus', state: 'idle', updatedAt: new Date(Date.now() - 86_400_000).toISOString(), archived: false },
+    ] : []))
+    return { sessions: params.machineId ? rows.filter((row) => row.machineId === params.machineId) : rows } as T
+  }
+  if (method === 'machine.stream.status') return { connected: fixtureMachines().find((item) => item.id === params.machineId)?.live === true, lastSequence: 42 } as T
+  if (method === 'machine.permissions') return { permissions: fixtureRemoteApprovals.filter((card) => !params.sessionId || card.sessionId === params.sessionId) } as T
+  if (method === 'machine.permission.reply') { fixtureRemoteApprovals = fixtureRemoteApprovals.filter((card) => card.id !== params.permissionId); return { resolved: true } as T }
+  if (method === 'machine.project.browse') {
+    const path = String(params.path || fixtureRemoteBase)
+    if (!path.startsWith(fixtureRemoteBase)) throw new Error('That folder is outside the folder this computer shares with other machines.')
+    const names = fixtureRemoteTree[path] ?? []
+    return { base: fixtureRemoteBase, path, parent: path === fixtureRemoteBase ? null : path.slice(0, path.lastIndexOf('/')), entries: names.map((name) => ({ name, kind: 'folder' })), truncated: false } as T
+  }
+  if (method === 'machine.project.create') return { project: { id: `remote-project-${Date.now().toString(36)}`, name: String(params.name || String(params.path).split('/').pop()), path: params.path } } as T
+  if (method === 'machine.project.clone') {
+    const name = String(params.name || String(params.url).replace(/\.git$/, '').split('/').pop())
+    fixtureRemoteClone = { id: 'clone-remote-1', url: String(params.url), target: `${params.parent}/${name}`, state: 'running', detail: null, project: null, polls: 0 }
+    return { job: { ...fixtureRemoteClone } } as T
+  }
+  if (method === 'machine.clone.status') {
+    if (!fixtureRemoteClone) throw new Error('That clone is no longer listed.')
+    fixtureRemoteClone.polls += 1
+    if (fixtureRemoteClone.polls >= 2) { fixtureRemoteClone.state = 'done'; fixtureRemoteClone.project = { id: 'remote-project-clone', name: String(fixtureRemoteClone.target.split('/').pop()) } }
+    return { job: { ...fixtureRemoteClone } } as T
+  }
+  if (method === 'machine.remote.status') return { enabled: true, link: 'online', url: 'https://work-laptop.example.ts.net', method: 'tailscale', deviceCount: fixtureRemoteDevices.length, connectedCount: 1 } as T
+  if (method === 'machine.devices.list') return { devices: fixtureRemoteDevices } as T
+  if (method === 'machine.devices.update') { fixtureRemoteDevices = fixtureRemoteDevices.map((row) => row.id === params.deviceId ? { ...row, ...(params.tier ? { tier: String(params.tier) } : {}), ...(params.name ? { name: String(params.name) } : {}) } : row); return { device: fixtureRemoteDevices.find((row) => row.id === params.deviceId) } as T }
+  if (method === 'machine.devices.revoke') {
+    if (params.deviceId === 'dev-home') throw new Error("A machine link can't change or remove its own pairing.")
+    fixtureRemoteDevices = fixtureRemoteDevices.filter((row) => row.id !== params.deviceId); return { revoked: true } as T
+  }
+  if (method === 'machine.pair.pending') return { pending: fixtureRemotePending } as T
+  if (method === 'machine.pair.confirm') { fixtureRemotePending = null; return params.approve ? { approved: true, device: null } as T : { approved: false } as T }
+  if (method === 'machine.activity') return { entries: [
+    { id: 'a2', at: new Date(Date.now() - 600_000).toISOString(), deviceName: "Owner's phone", kind: 'prompt', summary: "Owner's phone sent a message to Rae." },
+    { id: 'a1', at: new Date(Date.now() - 3_600_000).toISOString(), deviceName: 'Home desktop', kind: 'connected', summary: 'Home desktop connected.' },
+  ] } as T
   if (method === 'machine.conversation') {
     const working = params.sessionId === 'preview-remote-1'
-    return { session: { id: params.sessionId, title: working ? 'Fix the invoice export' : 'Tidy the settings page', state: working ? 'working' : 'idle', messages: [
+    return { session: { id: params.sessionId, title: working ? 'Fix the invoice export' : 'Tidy the settings page', state: working ? (fixtureRemoteApprovals.length ? 'waiting_permission' : 'working') : 'idle', tools: working ? [
+      { id: 't1', title: 'Read', kind: 'read', state: 'completed', startedAt: new Date(Date.now() - 500_000).toISOString(), detail: { path: 'src/export/invoice.ts' } },
+      { id: 't2', title: 'Bash', kind: 'execute', state: 'completed', startedAt: new Date(Date.now() - 400_000).toISOString(), detail: { label: 'Ran npm test -- invoice' } },
+      { id: 't3', title: 'Edit', kind: 'edit', state: 'running', startedAt: new Date(Date.now() - 200_000).toISOString(), detail: { path: 'src/export/invoice.test.ts' } },
+    ] : [], messages: [
       { id: 'r1', role: 'user', content: working ? 'The invoice export drops the last row. Can you find out why?' : 'Group the settings by what they change.', createdAt: new Date(Date.now() - 600_000).toISOString() },
       { id: 'r2', role: 'assistant', content: working ? 'Found it. The loop stops one row early because `end` is exclusive.\n\nI\'m adding a test for it now.' : 'Done. They\'re grouped under **Account**, **Appearance** and **Behaviour**.', createdAt: new Date(Date.now() - 300_000).toISOString() },
       ...(fixtureMachineSent[String(params.sessionId)] ?? []),

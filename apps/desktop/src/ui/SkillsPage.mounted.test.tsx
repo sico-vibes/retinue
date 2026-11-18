@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const h = vi.hoisted(() => ({ rpc: vi.fn(), openProjectFolder: vi.fn(), previewBackupImport: vi.fn(), selectBackupImportPath: vi.fn() }))
 vi.mock('../tauri', () => ({
   rpc: h.rpc,
+  listenForDaemonEvents: vi.fn(async () => () => undefined),
   openProjectFolder: h.openProjectFolder,
   previewBackupImport: h.previewBackupImport,
   selectBackupImportPath: h.selectBackupImportPath,

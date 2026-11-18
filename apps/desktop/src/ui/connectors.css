@@ -27,3 +27,7 @@
 .connector-suggestion:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .connector-suggestion svg { color: var(--text-3); }
 @media (max-width: 760px) { .connector-form-grid { grid-template-columns: minmax(0, 1fr); } .connector-tool { flex-wrap: wrap; } }
+/* Browser sign-in (wave 3, 17 November 2026). */
+.connector-signin { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0 2px 30px; }
+.connector-signin .account-row-copy { flex: 1; min-width: 0; }
+.connector-signin[data-status="error"] strong { color: var(--danger-ink); }

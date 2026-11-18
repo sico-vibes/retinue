@@ -680,6 +680,26 @@ pub async fn shutdown(st: &AppState) {
     connectivity::disable(st).await;
 }
 
+/// The param the gateway adds to a `manage` call, naming the machine that made
+/// it. Only the gateway writes it, and only for device kind `machine`; the
+/// handlers below use it for the activity line in the host's own list.
+pub const ACTOR_KEY: &str = "actor";
+
+/// Who asked, as the gateway stamped it. A name only: the line it writes is the
+/// host's own record, and a device id there would mean nothing to the owner.
+pub struct Actor {
+    pub name: String,
+}
+
+/// The machine behind a `manage` call, or `None` for the owner's own window.
+pub fn actor_of(p: &Value) -> Option<Actor> {
+    let name = p.get(ACTOR_KEY)?.get("name")?.as_str()?.trim();
+    if name.is_empty() {
+        return None;
+    }
+    Some(Actor { name: name.chars().take(80).collect() })
+}
+
 /// Emits `remote.changed` with the fresh status.
 async fn emit_status(st: &AppState) {
     let status = st.remote.status_value(st);
@@ -1032,6 +1052,7 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         "remote.native.firewall.remove" => Ok(json!({"result": connectivity::remove_rule(st).await})),
         "remote.pair.begin" => pair_begin(st).await,
         "remote.pair.cancel" => pair_cancel(st).await,
+        "remote.pair.pending" => Ok(pair_pending(st)),
         "remote.pair.confirm" => pair_confirm(st, p).await,
         "remote.devices.list" => devices_list(st),
         "remote.devices.update" => devices_update(st, p).await,
@@ -1091,6 +1112,14 @@ async fn pair_cancel(st: &AppState) -> Result<Value, DispatchError> {
     Ok(json!({"cancelled": outcome.is_some()}))
 }
 
+/// `remote.pair.pending`: the one request nobody has decided yet, read by a
+/// linked machine's screen (17 November amendment). A machine device is never
+/// sent `remote.pairing.requested` — it is `drop` in `tiers.json` — so it asks.
+fn pair_pending(st: &AppState) -> Value {
+    let pending = st.remote.pairing.lock().unwrap().waiting();
+    json!({"pending": pending})
+}
+
 async fn pair_confirm(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
     let pairing_id = p["pairingId"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "pairingId is required", StatusCode::BAD_REQUEST))?;
     let approve = p["approve"].as_bool().ok_or_else(|| derr("invalid_argument", "approve must be a boolean", StatusCode::BAD_REQUEST))?;
@@ -1108,6 +1137,16 @@ async fn pair_confirm(st: &AppState, p: &Value) -> Result<Value, DispatchError> 
                 .ok_or_else(|| derr("invalid_argument", "tier must be viewer, chat or operator", StatusCode::BAD_REQUEST))?,
         ),
     };
+    // A decision made from another machine names itself in this machine's own
+    // activity list; the waiting request's name is read before it is decided.
+    let actor = actor_of(p);
+    let asked = {
+        let pairing = st.remote.pairing.lock().unwrap();
+        pairing
+            .pending(pairing_id, Utc::now())
+            .and_then(|pending| pending["name"].as_str().map(str::to_string))
+            .unwrap_or_else(|| "A device".to_string())
+    };
     let result = { st.remote.pairing.lock().unwrap().confirm(pairing_id, approve, tier, Utc::now()) };
     let approved = match result {
         Ok(approved) => approved,
@@ -1123,12 +1162,20 @@ async fn pair_confirm(st: &AppState, p: &Value) -> Result<Value, DispatchError> 
             let hash = pairing::hash_token(&token);
             let device_id = device["id"].as_str().unwrap_or_default().to_string();
             st.db.remote_device_create(&device, &hash).map_err(|_| derr("internal", "The device could not be saved.", StatusCode::INTERNAL_SERVER_ERROR))?;
-            audit(st, Some(&device_id), "paired", &format!("{} was paired.", device["name"].as_str().unwrap_or("A device"))).await;
+            let name = device["name"].as_str().unwrap_or("A device");
+            let summary = match &actor {
+                Some(actor) => format!("{} approved {name} from another machine.", actor.name),
+                None => format!("{name} was paired."),
+            };
+            audit(st, Some(&device_id), "paired", &summary).await;
             st.emit("remote.pairing.completed", json!({"pairingId": pairing_id, "outcome": "approved", "deviceId": device_id})).await;
             st.emit("remote.device.changed", json!({"action": "paired", "device": device})).await;
             Ok(json!({"approved": true, "device": st.db.remote_device_get(&device_id).ok().flatten().unwrap_or(Value::Null)}))
         }
         None => {
+            if let Some(actor) = &actor {
+                audit(st, None, "manage", &format!("{} refused {asked} from another machine.", actor.name)).await;
+            }
             st.emit("remote.pairing.completed", json!({"pairingId": pairing_id, "outcome": "rejected"})).await;
             Ok(json!({"approved": false}))
         }
@@ -1171,6 +1218,12 @@ async fn devices_update(st: &AppState, p: &Value) -> Result<Value, DispatchError
         .remote_device_update(device_id, name, tier)
         .map_err(|error| derr("invalid_argument", &error.to_string(), StatusCode::BAD_REQUEST))?
         .ok_or_else(|| derr("not_found", "Device not found.", StatusCode::NOT_FOUND))?;
+    // A change made from another machine leaves a line in this machine's own
+    // list naming that machine (17 November amendment).
+    if let Some(actor) = actor_of(p) {
+        let target = updated["name"].as_str().unwrap_or("A device");
+        audit(st, Some(device_id), "manage", &format!("{} changed {target}'s access from another machine.", actor.name)).await;
+    }
     st.emit("remote.device.changed", json!({"action": "updated", "device": updated.clone()})).await;
     Ok(json!({"device": updated}))
 }
@@ -1188,7 +1241,12 @@ async fn devices_revoke(st: &AppState, p: &Value) -> Result<Value, DispatchError
     st.remote.close_socket(device_id);
     // A revoked device keeps no way to be reached.
     let _ = st.db.remote_push_delete(device_id);
-    audit(st, Some(device_id), "revoked", &format!("{} was removed.", existing["name"].as_str().unwrap_or("A device"))).await;
+    let name = existing["name"].as_str().unwrap_or("A device");
+    let summary = match actor_of(p) {
+        Some(actor) => format!("{} removed {name} from another machine.", actor.name),
+        None => format!("{name} was removed."),
+    };
+    audit(st, Some(device_id), "revoked", &summary).await;
     st.emit("remote.device.changed", json!({"action": "revoked", "device": existing})).await;
     Ok(json!({"revoked": true}))
 }

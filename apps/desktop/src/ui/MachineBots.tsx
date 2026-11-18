@@ -1,20 +1,28 @@
 // Phase 4: another machine's bots in the sidebar, under that machine's name.
 import { useEffect, useRef } from 'react'
-import { Laptop } from 'lucide-react'
+import { FolderPlus, Laptop, Monitor, Server, Settings2 } from 'lucide-react'
 import type { Agent } from '../types'
 import { showMainWindow } from '../tauri'
 import { BlobCanvas } from '../blob/BlobCanvas'
 import { agentLook } from '../blob/look'
 import { agentColorHex } from './agentColor'
-import { canChat, machineStateWord, type Machine, type MachineBot } from './machines'
+import { canChat, machineFreshness, machineKindWord, machineStateWord, type Machine, type MachineBot } from './machines'
 import { useEntityNoun } from './vocabulary'
 import './machines.css'
 
 /** The look and colour a bot row needs, from what another machine sent. */
 const asAgent = (bot: MachineBot) => bot as unknown as Agent
 
-export function MachineBadge({ name }: { name: string }) {
-  return <span className="machine-badge" title={`Running on ${name}`}><Laptop size={10} aria-hidden="true" />{name}</span>
+/** The icon for another machine: a server for Linux, a screen for Windows, a laptop otherwise. */
+export function MachineKindIcon({ kind, size = 12 }: { kind: string | null | undefined; size?: number }) {
+  if (kind === 'linux') return <Server size={size} aria-hidden="true" />
+  if (kind === 'windows') return <Monitor size={size} aria-hidden="true" />
+  return <Laptop size={size} aria-hidden="true" />
+}
+
+export function MachineBadge({ name, kind }: { name: string; kind?: string | null }) {
+  const os = machineKindWord(kind ?? null)
+  return <span className="machine-badge" title={`Running on ${name}${os ? ` (${os})` : ''}`}><MachineKindIcon kind={kind} size={10} />{name}</span>
 }
 
 export function MachineBotRow({ machine, bot, selected, onOpen }: { machine: Machine; bot: MachineBot; selected: boolean; onOpen: () => void }) {
@@ -28,12 +36,17 @@ export function MachineBotRow({ machine, bot, selected, onOpen }: { machine: Mac
   </button>
 }
 
-export function MachineGroups({ machines, selected, onOpen }: { machines: readonly Machine[]; selected: { machineId: string; botId: string } | null; onOpen: (machine: Machine, bot: MachineBot) => void }) {
+export function MachineGroups({ machines, selected, onOpen, onNewProject, onManage }: { machines: readonly Machine[]; selected: { machineId: string; botId: string } | null; onOpen: (machine: Machine, bot: MachineBot) => void; onNewProject?: (machine: Machine) => void; onManage?: (machine: Machine) => void }) {
   const nouns = useEntityNoun({ plural: true })
-  return <>{machines.map((machine) => <section key={machine.id} className="team-group machine-group" aria-label={`${machine.name}, another machine`}>
+  return <>{machines.map((machine) => <section key={machine.id} className={`team-group machine-group${machine.state === 'online' ? '' : ' offline'}`} aria-label={`${machine.name}, another machine`}>
     <div className="team-group-head static">
-      <i className={`machine-group-state ${machine.state}`} title={machineStateWord(machine)} aria-hidden="true" />
-      <span className="team-group-title"><span>{machine.name}</span></span>
+      <i className={`machine-group-state ${machine.state}${machine.state === 'online' && machine.live ? ' live' : ''}`} title={machineStateWord(machine)} aria-hidden="true" />
+      <span className="team-group-title"><MachineKindIcon kind={machine.kind} /><span>{machine.name}</span></span>
+      <small className="machine-group-fresh" title={machine.live ? 'Changes arrive as they happen.' : machine.state === 'online' ? 'No live link right now; Retinue checks every 20 seconds.' : `Shown as it was when ${machine.name} was last reached.`}>{machineFreshness(machine)}</small>
+      {machine.state === 'online' && (onNewProject || onManage) && <span className="machine-group-actions">
+        {onNewProject && <button type="button" className="queue-icon" aria-label={`New project on ${machine.name}`} title={`New project on ${machine.name}`} onClick={() => onNewProject(machine)}><FolderPlus size={13} /></button>}
+        {onManage && <button type="button" className="queue-icon" aria-label={`Manage ${machine.name}`} title={`Manage ${machine.name}`} onClick={() => onManage(machine)}><Settings2 size={13} /></button>}
+      </span>}
     </div>
     {machine.state === 'revoked' && <p className="machine-group-note">{machine.name} removed this link. Pair again in Settings, Machines.</p>}
     {machine.state !== 'revoked' && !machine.bots.length && <p className="machine-group-note">{machine.state === 'online' ? `No ${nouns} there yet.` : `${machine.name} can't be reached.`}</p>}
