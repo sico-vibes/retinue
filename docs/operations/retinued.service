@@ -37,6 +37,9 @@ KillMode=mixed
 MemoryLow=512M
 OOMScoreAdjust=100
 ManagedOOMPreference=avoid
+# The database, its -wal and the log are this user's alone. The ready line no longer carries the
+# capability on a headless host, so nothing in them is a secret; they are still 0600.
+UMask=0077
 StandardOutput=append:%h/.local/share/retinue/retinued.log
 StandardError=append:%h/.local/share/retinue/retinued.log
 

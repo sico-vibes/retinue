@@ -429,7 +429,9 @@ async fn setup_script_runs_once_in_the_worktree_before_the_first_turn() {
 
 #[tokio::test]
 async fn setup_script_failure_does_not_stop_the_turn_and_tells_the_agent() {
-    let (st, adapter, project, agent, _main, worktree) = setup_state("echo ENOSPC while installing 1>&2 & exit /b 3").await;
+    // The same failure in each platform's own shell: an error on stderr, then a non-zero exit.
+    let script = if cfg!(windows) { "echo ENOSPC while installing 1>&2 & exit /b 3" } else { "echo ENOSPC while installing 1>&2; exit 3" };
+    let (st, adapter, project, agent, _main, worktree) = setup_state(script).await;
     let sid = open_with_worktree(&st, &agent, &project, &worktree).await;
     dispatch(&st, "session.prompt", json!({"sessionId":sid,"text":"Please start"})).await.unwrap();
     let messages = wait_for_messages(&st, &sid, |messages| messages.iter().any(|message| message["role"] == "assistant")).await;
@@ -447,7 +449,9 @@ async fn setup_script_failure_does_not_stop_the_turn_and_tells_the_agent() {
 
 #[tokio::test]
 async fn setup_script_timeout_is_reported_and_does_not_stop_the_turn() {
-    let (st, adapter, project, agent, _main, worktree) = setup_state("ping -n 30 127.0.0.1 > nul").await;
+    // A wait longer than the test's own limit, in each platform's own shell.
+    let script = if cfg!(windows) { "ping -n 30 127.0.0.1 > nul" } else { "sleep 30" };
+    let (st, adapter, project, agent, _main, worktree) = setup_state(script).await;
     project_setup::TEST_LIMIT_MS.store(400, std::sync::atomic::Ordering::SeqCst);
     let sid = open_with_worktree(&st, &agent, &project, &worktree).await;
     dispatch(&st, "session.prompt", json!({"sessionId":sid,"text":"Go"})).await.unwrap();
@@ -507,8 +511,10 @@ async fn backup_never_imports_project_overrides() {
 
 #[tokio::test]
 async fn stopping_a_turn_stops_its_setup_script() {
-    // The script starts a second shell that would write a file a few seconds later; stopping must kill that too.
-    let (st, adapter, project, agent, _main, worktree) = setup_state("cmd /c \"ping -n 6 127.0.0.1 > nul & echo late> late.txt\"").await;
+    // The script starts a second process that would write a file a few seconds later; stopping
+    // must kill that too. `sh` runs `sleep` as its own child, exactly as `cmd` runs `ping`.
+    let script = if cfg!(windows) { "cmd /c \"ping -n 6 127.0.0.1 > nul & echo late> late.txt\"" } else { "sleep 5; echo late > late.txt" };
+    let (st, adapter, project, agent, _main, worktree) = setup_state(script).await;
     let sid = open_with_worktree(&st, &agent, &project, &worktree).await;
     dispatch(&st, "session.prompt", json!({"sessionId":sid,"text":"Start"})).await.unwrap();
     for _ in 0..200 {

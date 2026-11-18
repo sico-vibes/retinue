@@ -209,13 +209,14 @@ mod tests {
         let base = std::fs::canonicalize(&base).unwrap();
         let inner = std::fs::canonicalize(&inner).unwrap();
         let sibling = std::fs::canonicalize(&sibling).unwrap();
+        let sep = std::path::MAIN_SEPARATOR;
         // Inside, at any depth, is accepted and comes back canonical.
         assert_eq!(confined(&base, &inner.to_string_lossy()).unwrap(), inner);
         // `..`, an absolute path beside the base, and a relative path are all refused with the same
         // sentence.
         for raw in [
-            format!("{}\\..", base.to_string_lossy()),
-            format!("{}\\..\\{}", inner.to_string_lossy(), sibling.file_name().unwrap().to_string_lossy()),
+            format!("{}{sep}..", base.to_string_lossy()),
+            format!("{}{sep}..{sep}{}", inner.to_string_lossy(), sibling.file_name().unwrap().to_string_lossy()),
             sibling.to_string_lossy().into_owned(),
             "work".to_string(),
             "".to_string(),

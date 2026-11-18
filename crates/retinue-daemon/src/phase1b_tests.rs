@@ -874,8 +874,10 @@ async fn issue_post_needs_confirm_and_redacts_again() {
     assert!(gh.calls().is_empty(), "nothing was sent for a refused call: {}", gh.calls());
     let posted = dispatch(&st, "diagnostics.issuePost", base).await.unwrap();
     assert_eq!(posted["url"], "https://github.com/sico-vibes/retinue/issues/7");
-    let calls = gh.calls();
-    assert!(calls.contains("issue create --repo sico-vibes/retinue --title \"Crash on start\" --body-file -"), "{calls}");
+    // The stub records its arguments: unquoted, the same words in the same order on both
+    // platforms (`cmd` keeps Windows' quotes, `sh` does not add them).
+    let calls = gh.calls().replace('"', "");
+    assert!(calls.contains("issue create --repo sico-vibes/retinue --title Crash on start --body-file -"), "{calls}");
     let sent = gh.stdin();
     assert!(sent.contains("It crashed."), "{sent}");
     assert!(!sent.contains("hunter2") && !sent.contains("abcdef0123456789abcdef"), "redacted again before it left: {sent}");

@@ -40,6 +40,12 @@ sudo loginctl enable-linger "$USER"
 
 Without it, the daemon starts when you log in and stops when you log out — which is not "the VPS hosts sessions".
 
+**On Arch, start the user manager once.** With linger enabled, `/run/user/<uid>` and the user manager may not exist until something starts them, and every `systemctl --user` command then answers "Failed to connect to user scope bus via local transport". This is one command, once (it comes back by itself at boot):
+
+```sh
+sudo systemctl start "user@$(id -u).service"
+```
+
 ## 3. Where everything lives
 
 | What | Where |
@@ -51,7 +57,7 @@ Without it, the daemon starts when you log in and stops when you log out — whi
 | Log file | `<data folder>/retinued.log`, plus `journalctl --user -u retinued` |
 | The unit | `~/.config/systemd/user/retinued.service` |
 
-An explicit `RETINUE_DB_PATH` overrides the database path, and the data folder is that file's parent.
+An explicit `RETINUE_DB_PATH` overrides the database path, and the data folder is that file's parent. The unit sets `UMask=0077`, so the database, its `-wal` and the log are `0600` and belong to the service's user alone.
 
 ## 4. Turn the gateway on
 
@@ -94,6 +100,14 @@ systemctl --user start retinued
 ```
 
 If the unit file changed: `systemctl --user daemon-reload` before starting.
+
+**Updating from 0.2.0-beta.5 or earlier:** that version printed the daemon capability in its first log line, so `~/.local/share/retinue/retinued.log` may hold a dead-but-real token at rest. Clear it once while the daemon is stopped:
+
+```sh
+: > ~/.local/share/retinue/retinued.log     # or: rm the file
+```
+
+This version prints no capability on a headless host, and the unit's `UMask=0077` keeps the new log and the database `0600`.
 
 **Honest cost:** a turn that is running when you stop the daemon is lost. The daemon restores its conversations and their state at the next start, and the conversation says the turn was interrupted; nothing else is lost. Update when nothing you care about is running.
 

@@ -45,8 +45,10 @@ const PROBE_TIMEOUT: Duration = Duration::from_millis(700);
 /// A listener's answer is reused this long, so a two-second scan is not a storm.
 const PROBE_TTL: Duration = Duration::from_secs(5);
 /// A stuck `netstat` must never hold a scan, or a request, open.
+#[cfg(windows)]
 const NETSTAT_TIMEOUT: Duration = Duration::from_secs(5);
 /// `netstat -ano` prints about 80 bytes a row; this is far above any real table.
+#[cfg(windows)]
 const NETSTAT_MAX_BYTES: usize = 4 * 1024 * 1024;
 /// A process tree is a few hops deep; the bound only stops a malformed table.
 const MAX_ANCESTRY: usize = 64;
