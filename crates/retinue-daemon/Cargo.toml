@@ -61,3 +61,10 @@ windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Secur
 [target.'cfg(unix)'.dependencies]
 # The host's own name for a Native certificate on a host with no `HOSTNAME`.
 gethostname = "1"
+
+# 18 November 2026 (owner decision): on a Linux desktop with a running Secret
+# Service keyring, values live there instead of in owner-only files. A pure-Rust
+# client over zbus on the session socket, so the Linux CI job needs no libdbus
+# headers; the `crypto-rust` half keeps OpenSSL out too. Windows never builds it.
+[target.'cfg(not(windows))'.dependencies]
+secret-service = { version = "=5.2.0", default-features = false, features = ["rt-async-io-crypto-rust"] }

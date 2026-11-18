@@ -94,6 +94,12 @@ Five pieces are adapted from [React Bits](https://github.com/DavidHDev/react-bit
 
 The licence permits use, copying and modification "as part of an application, website, or product", with this notice kept, and forbids selling, sublicensing or redistributing the components themselves. Its warranty disclaimer is the same as the MIT licence's below.
 
+## System keyring on Linux
+
+The Linux build uses [secret-service](https://github.com/hwchen/secret-service-rs) **5.2.0** (MIT OR Apache-2.0, pinned exactly in `crates/retinue-daemon/Cargo.toml`) to reach the freedesktop Secret Service (GNOME keyring, KWallet) over the user's session bus. It is a dependency of Linux and macOS builds only; the Windows build does not include it. It speaks D-Bus with [zbus](https://github.com/dbus2/zbus) 5.19.0 (MIT), which the desktop app already carries through Tauri, and its `crypto-rust` feature keeps OpenSSL out, so no `libdbus` headers or C libraries are needed to build it. No source file was copied into Retinue. The MIT licence text below applies; the Apache-2.0 half is at <https://www.apache.org/licenses/LICENSE-2.0>.
+
+The Linux build also uses [gethostname](https://codeberg.org/swsnr/gethostname.rs) **1.1.0** (Apache-2.0) to read the host's own name when `HOSTNAME` is not set, for a Native certificate. It is a dependency of Unix builds only. No source file was copied into Retinue; the licence is at <https://www.apache.org/licenses/LICENSE-2.0>.
+
 ## T3 Code
 
 The chat work log, checkpoint, terminal and rich-content designs were informed by reading [T3 Code](https://github.com/pingdotgg/t3code) (MIT, Copyright (c) 2026 T3 Tools Inc.), pinned at commit 220eb735. No T3 source file was copied; the implementations are written for Retinue. If code is ever copied, keep T3's copyright and permission notice with it.
