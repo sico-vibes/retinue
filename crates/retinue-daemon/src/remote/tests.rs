@@ -102,13 +102,19 @@ async fn gateway_with_static_files() -> Gateway {
 
 /// Seeds one paired device and returns `(device id, token)`.
 fn seed_device(st: &AppState, id: &str, tier: &str, login: Option<&str>) -> (String, String) {
+    seed_device_of_kind(st, id, "phone", tier, login)
+}
+
+/// The same, for a device of a chosen kind: `machine` reads a different part of
+/// the work log than a `phone`.
+fn seed_device_of_kind(st: &AppState, id: &str, kind: &str, tier: &str, login: Option<&str>) -> (String, String) {
     let token = pairing::generate_token();
     let hash = pairing::hash_token(&token);
     let device = json!({
         "id": id,
-        "name": format!("{tier} device"),
-        "kind": "phone",
-        "platform": "iOS 19",
+        "name": format!("{tier} {kind}"),
+        "kind": kind,
+        "platform": "test",
         "tier": tier,
         "login": login,
         "pairedAt": super::now_rfc3339(),
@@ -2366,4 +2372,119 @@ async fn deleting_an_automation_deletes_its_secret() {
     assert_eq!(crate::secrets::store::read(&crate::webhooks::secret_name(&id)).unwrap().as_deref().map(String::as_str), Some(secret.as_str()));
     crate::automations::rpc(&gateway.st, "automation.delete", &json!({"id": id})).await.unwrap();
     assert!(crate::secrets::store::read(&crate::webhooks::secret_name(&id)).unwrap().is_none(), "the secret outlived its automation");
+}
+
+// ---------------------------------------------------------------------------
+// Step 1, piece A and B: what a machine link reads, and the cards it answers
+
+/// One conversation with one finished tool row, as `session.get` shows it.
+fn conversation_with_a_tool(st: &AppState) -> String {
+    st.db.upsert_runtime(&json!({"id": "rt-tools", "provider": "codex"})).unwrap();
+    st.db.create_session("s-tools", "rt-tools", "codex", ".", "Tools").unwrap();
+    st.db.create_turn("t-tools", "s-tools").unwrap();
+    st.db
+        .upsert_tool_in_turn(
+            "s-tools",
+            Some("t-tools"),
+            "call",
+            "commandExecution",
+            "npm test",
+            "completed",
+            &json!({"command": "npm test", "output": "ok"}),
+            None,
+        )
+        .unwrap();
+    "s-tools".to_string()
+}
+
+#[tokio::test]
+async fn a_machine_device_reads_the_work_log_and_a_phone_does_not() {
+    let gateway = gateway().await;
+    let session = conversation_with_a_tool(&gateway.st);
+    let (_, phone) = seed_device_of_kind(&gateway.st, "phone-log", "phone", "viewer", None);
+    let (_, machine) = seed_device_of_kind(&gateway.st, "machine-log", "machine", "viewer", None);
+    let (status, as_phone) = gateway.rpc(&phone, "session.get", json!({"sessionId": session})).await;
+    assert_eq!(status, StatusCode::OK, "{as_phone}");
+    let (status, as_machine) = gateway.rpc(&machine, "session.get", json!({"sessionId": session})).await;
+    assert_eq!(status, StatusCode::OK, "{as_machine}");
+
+    let phone_tool = &as_phone["result"]["tools"][0];
+    assert_eq!(phone_tool["title"], "Tool", "a phone keeps the generic title");
+    assert!(phone_tool.get("detail").is_none(), "a phone gets no tool detail: {phone_tool}");
+    let machine_tool = &as_machine["result"]["tools"][0];
+    assert_eq!(machine_tool["title"], "npm test", "a machine link reads the title");
+    assert_eq!(machine_tool["detail"]["command"], "npm test");
+    assert_eq!(machine_tool["detail"]["output"], "ok");
+    // The machine still reads like a device everywhere else: no provider session id.
+    assert!(as_phone["result"].get("providerSessionId").is_none());
+    assert!(as_machine["result"].get("providerSessionId").is_none());
+}
+
+#[tokio::test]
+async fn the_event_socket_sends_the_work_log_to_a_machine_and_not_to_a_phone() {
+    let gateway = gateway().await;
+    let (_, phone) = seed_device_of_kind(&gateway.st, "phone-events", "phone", "viewer", None);
+    let (_, machine) = seed_device_of_kind(&gateway.st, "machine-events", "machine", "viewer", None);
+    let mut phone_socket = gateway.open_socket(&phone).await;
+    let mut machine_socket = gateway.open_socket(&machine).await;
+    let at = gateway.st.db.replay_events(0, 5_000).unwrap().last().and_then(|event| event["sequence"].as_u64()).unwrap_or(0);
+    let first = gateway.cursor(&mut phone_socket, at).await;
+    assert_eq!(first["type"], "events.replay.complete", "{first}");
+    let first = gateway.cursor(&mut machine_socket, at).await;
+    assert_eq!(first["type"], "events.replay.complete", "{first}");
+
+    gateway
+        .st
+        .emit(
+            "session.changed",
+            json!({"id": "s-tools", "tools": [{"id": "call", "title": "npm test", "detail": {"command": "npm test"}}]}),
+        )
+        .await;
+    let to_phone = next_frame(&mut phone_socket).await;
+    let to_machine = next_frame(&mut machine_socket).await;
+    assert_eq!(to_phone["payload"]["tools"][0]["title"], "Tool");
+    assert!(to_phone["payload"]["tools"][0].get("detail").is_none());
+    assert_eq!(to_machine["payload"]["tools"][0]["title"], "npm test");
+    assert_eq!(to_machine["payload"]["tools"][0]["detail"]["command"], "npm test");
+}
+
+#[tokio::test]
+async fn permission_pending_is_read_by_a_machine_and_by_a_phone() {
+    let gateway = gateway().await;
+    let session = conversation_with_a_tool(&gateway.st);
+    gateway
+        .st
+        .db
+        .insert_permission(
+            "card-1",
+            &session,
+            "req-1",
+            "Run the tests",
+            Some("npm test"),
+            &["allow".to_string(), "deny".to_string()],
+            &json!({"request": {"tool_name": "Bash", "input": {"command": "npm test"}}}),
+            &json!({"kind": "shell", "matchKey": "shell:npm test", "rememberable": false, "rememberLabel": null, "projectId": null, "projectName": null}),
+        )
+        .unwrap();
+    let (_, phone) = seed_device_of_kind(&gateway.st, "phone-cards", "phone", "viewer", None);
+    let (_, machine) = seed_device_of_kind(&gateway.st, "machine-cards", "machine", "viewer", None);
+    for (kind, token) in [("phone", &phone), ("machine", &machine)] {
+        let (status, body) = gateway.rpc(token, "permission.pending", json!({})).await;
+        assert_eq!(status, StatusCode::OK, "{kind}: {body}");
+        let card = &body["result"]["permissions"][0];
+        assert_eq!(card["id"], "card-1", "{kind}");
+        assert_eq!(card["sessionId"], session, "{kind}");
+        assert_eq!(card["kind"], "shell", "{kind}");
+        assert_eq!(card["title"], "Run the tests", "{kind}");
+        assert_eq!(card["detail"], "npm test", "{kind}");
+        assert_eq!(card["choices"], json!(["allow", "deny"]), "{kind}");
+        let text = body.to_string();
+        assert!(!text.contains("tool_name"), "{kind} received the provider payload");
+        assert!(!text.contains("matchKey"), "{kind} received the rule key");
+        // One conversation's cards, and none for a conversation with no cards.
+        let (_, only) = gateway.rpc(token, "permission.pending", json!({"sessionId": session})).await;
+        assert_eq!(only["result"]["permissions"].as_array().unwrap().len(), 1, "{kind}");
+        let (_, none) = gateway.rpc(token, "permission.pending", json!({"sessionId": "elsewhere"})).await;
+        assert!(none["result"]["permissions"].as_array().unwrap().is_empty(), "{kind}");
+    }
 }

@@ -1389,6 +1389,180 @@
           }
         ]
       }
+    },
+    {
+      "name": "machine-session-get-tools-kept",
+      "method": "session.get",
+      "options": {
+        "deviceKind": "machine"
+      },
+      "input": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "cargo test --all",
+                "detail": {
+                  "command": "cargo test --all"
+                },
+                "status": "ok"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "cargo test --all",
+                "detail": {
+                  "command": "cargo test --all"
+                },
+                "status": "ok"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "phone-session-get-tools-generic",
+      "method": "session.get",
+      "options": {},
+      "input": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "cargo test --all",
+                "detail": {
+                  "command": "cargo test --all"
+                },
+                "status": "ok"
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "Tool",
+                "status": "ok"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "machine-session-get-tool-detail-value-paths-reduced",
+      "method": "session.get",
+      "options": {
+        "deviceKind": "machine"
+      },
+      "input": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "Read the file",
+                "detail": {
+                  "command": "cat C:\\Users\\Owner\\private-folder\\project\\src\\lib.rs",
+                  "path": "C:\\Users\\Owner\\private-folder\\project\\src\\lib.rs"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "id": "s_1",
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "Read the file",
+                "detail": {
+                  "command": "cat C:\\Users\\Owner\\private-folder\\project\\src\\lib.rs",
+                  "path": "src/lib.rs"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "machine-session-get-still-drops-secrets",
+      "method": "session.get",
+      "options": {
+        "deviceKind": "machine"
+      },
+      "input": {
+        "id": "s_1",
+        "apiKey": "sk-live-not-a-key",
+        "customEnv": {
+          "TOKEN": "abc"
+        },
+        "overrides": {
+          "setupScript": "curl evil"
+        },
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "Read src/lib.rs",
+                "detail": {
+                  "file_path": "C:\\work\\app\\src\\lib.rs",
+                  "token": "abc"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "id": "s_1",
+        "customEnv": {},
+        "turns": [
+          {
+            "id": "turn_1",
+            "tools": [
+              {
+                "id": "t_1",
+                "title": "Read src/lib.rs",
+                "detail": {
+                  "file_path": "src/lib.rs"
+                }
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "snapshots": [
@@ -2276,6 +2450,97 @@
         }
       },
       "expect": null
+    },
+    {
+      "name": "machine-session-changed-tools-kept",
+      "options": {
+        "deviceKind": "machine"
+      },
+      "input": {
+        "v": 1,
+        "type": "session.changed",
+        "payload": {
+          "id": "s_1",
+          "turns": [
+            {
+              "id": "turn_1",
+              "tools": [
+                {
+                  "id": "t_1",
+                  "title": "npm test",
+                  "detail": {
+                    "command": "npm test"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expect": {
+        "v": 1,
+        "type": "session.changed",
+        "payload": {
+          "id": "s_1",
+          "turns": [
+            {
+              "id": "turn_1",
+              "tools": [
+                {
+                  "id": "t_1",
+                  "title": "npm test",
+                  "detail": {
+                    "command": "npm test"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "phone-session-changed-tools-generic",
+      "options": {},
+      "input": {
+        "v": 1,
+        "type": "session.changed",
+        "payload": {
+          "id": "s_1",
+          "turns": [
+            {
+              "id": "turn_1",
+              "tools": [
+                {
+                  "id": "t_1",
+                  "title": "npm test",
+                  "detail": {
+                    "command": "npm test"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "expect": {
+        "v": 1,
+        "type": "session.changed",
+        "payload": {
+          "id": "s_1",
+          "turns": [
+            {
+              "id": "turn_1",
+              "tools": [
+                {
+                  "id": "t_1",
+                  "title": "Tool"
+                }
+              ]
+            }
+          ]
+        }
+      }
     }
   ]
 }

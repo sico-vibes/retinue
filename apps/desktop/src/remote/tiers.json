@@ -716,6 +716,13 @@
       "params": "permissionReply"
     },
     {
+      "method": "permission.pending",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "The cards waiting for the owner, so a linked machine's window can answer them; the card's own provider payload, project rules and match keys never leave the host. A phone already reads the same cards through app.snapshot.",
+      "params": null
+    },
+    {
       "method": "proposal.decide",
       "class": "approve",
       "minTier": "operator",
@@ -1984,6 +1991,7 @@
     "replay.gap": "allow",
     "runtime.models.changed": "allow",
     "machine.changed": "drop",
+    "machine.session.changed": "drop",
     "computer.changed": "drop",
     "browser.changed": "drop",
     "owner_computer.grant": "drop",
