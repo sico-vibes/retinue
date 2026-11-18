@@ -190,7 +190,7 @@ impl ProcessTree {
             if result == 0 { return Ok(()); }
             let error = io::Error::last_os_error();
             if error.raw_os_error() == Some(3) { return Ok(()); }
-            return Err(error);
+            Err(error)
         }
         #[cfg(windows)]
         {

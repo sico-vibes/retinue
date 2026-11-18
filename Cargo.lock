@@ -4830,7 +4830,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "futures-util",
-  "gethostname",
+ "gethostname",
  "hkdf 0.12.4",
  "hmac 0.12.1",
  "if-addrs",
