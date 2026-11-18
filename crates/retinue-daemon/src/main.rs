@@ -6565,12 +6565,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(async move { repo_identity::sweep(&identity_state).await; });
     println!(
         "{}",
-        serde_json::to_string(&DaemonReady {
-            message_type: "retinued.ready".into(),
-            protocol_version: PROTOCOL_VERSION,
-            address: addr.to_string(),
-            capability: token
-        })?
+        ready_line(paths::headless(), &addr.to_string(), &token)
     );
     use std::io::Write;
     std::io::stdout().flush()?;
@@ -6598,6 +6593,29 @@ const WORKER_STACK_BYTES: usize = 8 * 1024 * 1024;
 fn main() {
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().thread_stack_size(WORKER_STACK_BYTES).build().expect("the async runtime could not start");
     runtime.block_on(daemon_main());
+}
+
+/// The one line a parent process reads from stdout. On a headless host that line goes wherever
+/// systemd sends stdout, and the shipped unit appends it to `retinued.log`: the capability must
+/// never reach a file or a log (`AGENTS.md`, `docs/remote/THREAT_MODEL.md` section 16), and nothing
+/// on such a host needs it, because the console (`console.rs`) has a token of its own. A daemon the
+/// desktop shell started still receives it, unchanged.
+fn ready_line(headless: bool, address: &str, capability: &str) -> String {
+    if headless {
+        return json!({
+            "type": "retinued.ready",
+            "protocolVersion": PROTOCOL_VERSION,
+            "address": address,
+        })
+        .to_string();
+    }
+    serde_json::to_string(&DaemonReady {
+        message_type: "retinued.ready".into(),
+        protocol_version: PROTOCOL_VERSION,
+        address: address.to_string(),
+        capability: capability.to_string(),
+    })
+    .expect("the ready line holds only strings and a number")
 }
 
 async fn daemon_main() {
@@ -6691,6 +6709,25 @@ mod import_tests;
 #[cfg(test)]
 mod phase2a_tests {
     use super::*;
+
+    /// 18 November 2026: the daemon's capability must never reach a file, and a headless host's
+    /// stdout is a systemd log file. The desktop shell still reads it.
+    #[test]
+    fn a_headless_host_keeps_the_capability_off_stdout() {
+        let desktop: Value = serde_json::from_str(&ready_line(false, "127.0.0.1:4040", "abc123")).unwrap();
+        assert_eq!(desktop["type"], "retinued.ready");
+        assert_eq!(desktop["protocolVersion"], PROTOCOL_VERSION);
+        assert_eq!(desktop["address"], "127.0.0.1:4040");
+        assert_eq!(desktop["capability"], "abc123", "the desktop shell still learns the capability");
+
+        let secret = "the-capability-that-must-not-be-logged";
+        let headless = ready_line(true, "127.0.0.1:4041", secret);
+        let parsed: Value = serde_json::from_str(&headless).unwrap();
+        assert_eq!(parsed["type"], "retinued.ready");
+        assert_eq!(parsed["address"], "127.0.0.1:4041");
+        assert!(parsed.get("capability").is_none(), "a headless host's log carries no capability: {headless}");
+        assert!(!headless.contains(secret), "not even the value: {headless}");
+    }
 
     #[test]
     fn completed_tool_state_preserves_provider_failures_without_exposing_raw_payloads() {
@@ -15026,14 +15063,19 @@ mod phase2a_tests {
         assert!(!st.outside.accepts(&st.token), "the daemon capability is not the hook token");
         assert_ne!(endpoint["token"].as_str(), Some(st.token.as_str()));
 
-        let event = |name: &str, extra: Value| { let mut value = json!({"session_id":"cli-1","hook_event_name":name,"cwd":"C:\\work\\site","prompt":"SECRET prompt text"}); for (key, item) in extra.as_object().unwrap() { value[key] = item.clone(); } value };
+        // The hook's working folder, in this platform's own shape: only its last part is kept.
+        let cwd = if cfg!(windows) { "C:\\work\\site" } else { "/work/site" };
+        let event = |name: &str, extra: Value| { let mut value = json!({"session_id":"cli-1","hook_event_name":name,"cwd":cwd,"prompt":"SECRET prompt text"}); for (key, item) in extra.as_object().unwrap() { value[key] = item.clone(); } value };
         outside::hook(&st, &event("SessionStart", json!({}))).await;
         outside::hook(&st, &event("PreToolUse", json!({"tool_name":"Bash","tool_input":{"command":"rm -rf secret"}}))).await;
         let listed = dispatch(&st, "outside.sessions", json!({})).await.unwrap();
         assert_eq!(listed["sessions"][0]["state"], "working");
         assert_eq!(listed["sessions"][0]["tool"], "Bash");
         assert_eq!(listed["sessions"][0]["folder"], "site", "only the folder name is kept");
-        assert!(!listed.to_string().contains("SECRET") && !listed.to_string().contains("rm -rf") && !listed.to_string().contains("work\\\\site"), "{listed}");
+        // The full path never appears, in the JSON escaping the reply uses.
+        let escaped = json!(cwd).to_string();
+        let escaped = &escaped[1..escaped.len() - 1];
+        assert!(!listed.to_string().contains("SECRET") && !listed.to_string().contains("rm -rf") && !listed.to_string().contains(escaped), "{listed}");
         outside::hook(&st, &event("Notification", json!({"message":"Claude needs your permission to use Bash"}))).await;
         assert_eq!(outside::list(&st)[0]["state"], "waiting");
         outside::hook(&st, &event("Stop", json!({}))).await;

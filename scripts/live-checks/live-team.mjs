@@ -19,7 +19,7 @@ const work = fs.mkdtempSync(path.join(os.tmpdir(), 'retinue-live-team-'))
 const project = path.join(work, 'project')
 fs.mkdirSync(project)
 
-const child = spawn(daemonExe, [], { env: { ...process.env, RETINUE_DB_PATH: path.join(work, 'live.db') }, stdio: ['ignore', 'pipe', 'ignore'] })
+const child = spawn(daemonExe, [], { env: { ...process.env, RETINUE_DB_PATH: path.join(work, 'live.db'), RETINUE_PARENT_PID: String(process.pid) }, stdio: ['ignore', 'pipe', 'ignore'] })
 const ready = await new Promise((resolve, reject) => {
   const lines = readline.createInterface({ input: child.stdout })
   const timer = setTimeout(() => reject(new Error('daemon did not start')), 60_000)

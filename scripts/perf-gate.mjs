@@ -90,7 +90,10 @@ function measureRun(database) {
   return new Promise((resolve, reject) => {
     const startedAt = process.hrtime.bigint()
     const child = spawn(daemonPath, [], {
-      env: { ...process.env, RETINUE_DB_PATH: database },
+      // The daemon is headless without a parent pid, and a headless daemon (18 November 2026)
+      // deliberately omits the capability from its ready line: this script reads that line as a
+      // shell would, so it names itself as the parent.
+      env: { ...process.env, RETINUE_DB_PATH: database, RETINUE_PARENT_PID: String(process.pid) },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     })

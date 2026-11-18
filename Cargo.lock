@@ -4653,6 +4653,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "futures-util",
+ "gethostname",
  "hkdf",
  "hmac",
  "if-addrs",

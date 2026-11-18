@@ -40,14 +40,26 @@ async fn the_server_is_not_offered_at_all_while_the_switch_is_off() {
     assert!(owner_computer::mcp_rpc(&st, "session-one", "mcp.owner.list", &json!({})).await.unwrap()["tools"].as_array().unwrap().is_empty());
 
     st.db.set_setting(owner_computer::SETTING, &json!(true)).unwrap();
-    let spec = owner_computer::mcp_server_for(&st, "session-one").expect("on means the tools exist");
-    assert_eq!(spec.name, "owner-computer");
-    assert!(spec.env.is_empty(), "no token in the environment");
-    assert_eq!(spec.args.first().map(String::as_str), Some("owner-server"));
-    let endpoint = std::path::PathBuf::from(spec.args.get(2).expect("an endpoint path"));
-    let written = std::fs::read_to_string(&endpoint).unwrap();
-    assert!(written.contains("\"address\":\"127.0.0.1:9\""), "{written}");
-    assert!(!written.contains("daemon-capability-sentinel"), "{written}");
+    // Off Windows there is no owner's computer to drive: the switch can be on and the tools are
+    // still refused, by design, rather than offered where they cannot work. Both branches are
+    // written with `cfg!` so a Windows check still typechecks the Linux answer.
+    if cfg!(windows) {
+        let spec = owner_computer::mcp_server_for(&st, "session-one").expect("on means the tools exist");
+        assert_eq!(spec.name, "owner-computer");
+        assert!(spec.env.is_empty(), "no token in the environment");
+        assert_eq!(spec.args.first().map(String::as_str), Some("owner-server"));
+        let endpoint = std::path::PathBuf::from(spec.args.get(2).expect("an endpoint path"));
+        let written = std::fs::read_to_string(&endpoint).unwrap();
+        assert!(written.contains("\"address\":\"127.0.0.1:9\""), "{written}");
+        assert!(!written.contains("daemon-capability-sentinel"), "{written}");
+    } else {
+        assert!(owner_computer::mcp_server_for(&st, "session-one").is_none(), "a host that is not Windows offers no owner computer");
+        assert!(owner_computer::mcp_rpc(&st, "session-one", "mcp.owner.list", &json!({})).await.unwrap()["tools"].as_array().unwrap().is_empty());
+        let call = owner_computer::mcp_rpc(&st, "session-one", "mcp.owner.call", &json!({"name":"owner_apps","arguments":{}})).await.unwrap();
+        assert_eq!(call["isError"], true);
+        assert_eq!(call["content"][0]["text"], "The owner's computer is a Windows computer. This host cannot control one.");
+        assert!(!dir.join("owner-computer").exists(), "no endpoint file is written for a host that cannot use one");
+    }
     let _ = std::fs::remove_dir_all(dir);
 }
 

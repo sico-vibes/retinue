@@ -93,6 +93,10 @@ pub struct Machines {
     jobs: Mutex<Vec<Job>>,
     cancels: Mutex<HashMap<String, Arc<AtomicBool>>>,
     snapshots: Mutex<HashMap<String, Snapshot>>,
+    /// One read of one machine at a time. Two readers that both saw the old row
+    /// would announce the same change twice, and a slower read could put its
+    /// older snapshot over a newer one.
+    refreshes: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
     looping: AtomicBool,
     wake: Notify,
     timing: Mutex<Timing>,
@@ -109,6 +113,7 @@ impl Default for Machines {
             jobs: Mutex::new(Vec::new()),
             cancels: Mutex::new(HashMap::new()),
             snapshots: Mutex::new(HashMap::new()),
+            refreshes: Mutex::new(HashMap::new()),
             looping: AtomicBool::new(false),
             wake: Notify::new(),
             timing: Mutex::new(Timing::default()),
@@ -435,6 +440,14 @@ fn unreachable_detail(name: &str) -> String {
 /// emits `machine.changed` when something the window shows changed. Returns the
 /// row, or `None` when the link is gone.
 pub async fn refresh_one(st: &AppState, id: &str) -> Option<Value> {
+    // The loop, a window and a socket's gap can all ask at once: the same read
+    // runs once at a time, so the second sees what the first wrote.
+    let gate = st.machines.refreshes.lock().unwrap().entry(id.to_string()).or_insert_with(|| Arc::new(tokio::sync::Mutex::new(()))).clone();
+    let _held = gate.lock().await;
+    refresh_one_locked(st, id).await
+}
+
+async fn refresh_one_locked(st: &AppState, id: &str) -> Option<Value> {
     let link = st.db.machine_link_get(id).ok().flatten()?;
     let name = link["name"].as_str().unwrap_or("That machine").to_string();
     let before = row_of(st, &link);
@@ -1044,6 +1057,7 @@ async fn remove(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
     client::delete_token(st, id).await;
     let removed = st.db.machine_link_delete(id).map_err(internal)?;
     st.machines.snapshots.lock().unwrap().remove(id);
+    st.machines.refreshes.lock().unwrap().remove(id);
     crate::machine_stream::forget(st, id);
     st.machines.wake.notify_one();
     Ok(json!({"removed": removed, "signedOut": signed_out}))

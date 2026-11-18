@@ -639,12 +639,29 @@ impl Default for RemoteState {
     }
 }
 
+/// The machine's own name: `COMPUTERNAME` on Windows, the system's host name on
+/// Unix (`HOSTNAME` as a fallback), then `HOSTNAME` on Windows, then a plain
+/// fallback. A Native certificate and a pairing request both carry it, so a host
+/// with a bare environment (a systemd unit sets no `HOSTNAME`) must still answer
+/// a real name rather than "This computer", which no `Host` header can match.
 pub(crate) fn host_name() -> String {
-    std::env::var("COMPUTERNAME")
-        .ok()
-        .filter(|name| !name.trim().is_empty())
-        .or_else(|| std::env::var("HOSTNAME").ok().filter(|name| !name.trim().is_empty()))
-        .unwrap_or_else(|| "This computer".to_string())
+    let named = |variable: &str| std::env::var(variable).ok().filter(|name| !name.trim().is_empty());
+    #[cfg(windows)]
+    if let Some(name) = named("COMPUTERNAME").or_else(|| named("HOSTNAME")) {
+        return name;
+    }
+    #[cfg(unix)]
+    {
+        if let Ok(name) = gethostname::gethostname().into_string() {
+            if !name.trim().is_empty() {
+                return name;
+            }
+        }
+        if let Some(name) = named("HOSTNAME") {
+            return name;
+        }
+    }
+    "This computer".to_string()
 }
 
 /// `remote.port`, defaulting to 48620. Zero means "any free port", which tests
@@ -910,9 +927,9 @@ pub async fn enable(st: &AppState) -> Result<Value, DispatchError> {
     let on_args = tailscale::serve_on_args(serve_port, addr.port());
     match tailscale::run_checked(cli.as_ref(), &on_args) {
         Ok(output) if output.success => {}
-        Ok(_) => {
+        Ok(output) => {
             stop_server(running).await;
-            let message = "Tailscale refused to publish the Retinue address.".to_string();
+            let message = tailscale::serve_refusal(&output);
             remote.set_link("error", Some(message.clone()));
             emit_status(st).await;
             return Err(derr("unsupported", &message, StatusCode::NOT_IMPLEMENTED));

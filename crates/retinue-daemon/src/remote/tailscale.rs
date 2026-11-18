@@ -476,6 +476,20 @@ pub fn serve_already_absent(output: &CliOutput) -> bool {
     text.contains("handler does not exist") || text.contains("no serve config")
 }
 
+/// The sentence for a refused `tailscale serve`. When Tailscale answers that the
+/// serve config is denied, the cause is that this account is not the device's
+/// operator, and the sentence names the one command that fixes it. A fixed
+/// sentence, never Tailscale's own output, which names the host, its paths and
+/// sometimes the exact argv (18 November 2026, the VPS install).
+pub fn serve_refusal(output: &CliOutput) -> String {
+    let text = format!("{}\n{}", output.stdout, output.stderr).to_ascii_lowercase();
+    if text.contains("access denied") && text.contains("serve config denied") {
+        "Tailscale refused to publish the Retinue address. Run `sudo tailscale set --operator=$USER` once, then try again.".to_string()
+    } else {
+        "Tailscale refused to publish the Retinue address.".to_string()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // The exact argv Retinue issues. Nothing else is ever run.
 
@@ -846,6 +860,24 @@ pub(crate) mod tests {
             stdout: String::new(),
             stderr: String::new(),
         }));
+    }
+
+    #[test]
+    fn a_serve_refusal_names_the_operator_fix_and_never_echoes_tailscale() {
+        // Tailscale 1.104's exact answer when the daemon's account is not the device's operator
+        // (the VPS install, 18 November 2026).
+        let denied = CliOutput {
+            success: false,
+            stdout: String::new(),
+            stderr: "sending serve config: Access denied: serve config denied\nUse 'sudo tailscale serve --bg --https=443 http://127.0.0.1:48620'.\nTo not require root, use 'sudo tailscale set --operator=$USER' once.\n".to_string(),
+        };
+        let sentence = serve_refusal(&denied);
+        assert!(sentence.starts_with("Tailscale refused to publish the Retinue address."), "{sentence}");
+        assert!(sentence.contains("sudo tailscale set --operator=$USER"), "{sentence}");
+        assert!(!sentence.contains("sending serve config") && !sentence.contains("--bg") && !sentence.contains("48620"), "Tailscale's own words never travel: {sentence}");
+        // Any other refusal keeps the plain sentence and still carries none of the output.
+        let other = CliOutput { success: false, stdout: String::new(), stderr: "error: something else went wrong".to_string() };
+        assert_eq!(serve_refusal(&other), "Tailscale refused to publish the Retinue address.");
     }
 
     #[test]

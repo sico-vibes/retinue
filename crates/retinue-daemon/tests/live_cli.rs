@@ -62,6 +62,8 @@ impl Daemon {
     async fn start(db: &Path) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_retinued"))
             .env("RETINUE_DB_PATH", db)
+            // A desktop shell passes its own pid; a headless daemon omits the capability.
+            .env("RETINUE_PARENT_PID", std::process::id().to_string())
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
