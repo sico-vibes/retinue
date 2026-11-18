@@ -435,6 +435,56 @@ pub async fn rpc_with_timeout(st: &AppState, machine_id: &str, method: &str, par
     result
 }
 
+// ---------------------------------------------------------------------------
+// The event socket (step 1, piece 1)
+
+/// A live socket to a far gateway's `/api/events`. Its own stream owns the TLS
+/// connection, so nothing else holds the client.
+pub type EventSocket = tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+/// The far gateway's event socket, opened with the same pinned trust and the
+/// same device cookie every call carries. The caller sends the cursor frame
+/// first (`{"v":1,"afterSequence":n}`, PROTOCOL §6) and owns the socket.
+pub async fn events_socket(st: &AppState, machine_id: &str, timeout: Duration) -> Result<EventSocket, ClientError> {
+    let link = st
+        .db
+        .machine_link_get(machine_id)
+        .ok()
+        .flatten()
+        .ok_or_else(|| ClientError::Invalid("That machine isn't linked.".to_string()))?;
+    let trust = trust_of(&link)?;
+    let token = read_token(st, machine_id).await.ok_or(ClientError::Revoked)?;
+    let result = events_socket_direct(&trust, link["url"].as_str().unwrap_or(""), &token, timeout).await;
+    if matches!(result, Err(ClientError::Revoked)) {
+        let _ = st.db.machine_link_set_state(machine_id, "revoked", false);
+    }
+    result
+}
+
+/// One handshake, with the credential given directly. The `Origin` is the
+/// link's own address, which is the one the gateway's WebSocket handshake
+/// requires; the cookie is the same device sign-in the RPC path uses.
+pub async fn events_socket_direct(trust: &Trust, origin: &str, token: &str, timeout: Duration) -> Result<EventSocket, ClientError> {
+    use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+    let origin = clean_origin(origin)?;
+    let unreadable = || ClientError::Invalid("That machine's address can't be opened.".to_string());
+    let websocket = format!("{}/api/events", origin.replacen("https://", "wss://", 1));
+    let mut request = websocket.as_str().into_client_request().map_err(|_| unreadable())?;
+    let headers = request.headers_mut();
+    let origin_header = reqwest::header::HeaderValue::from_str(&origin).map_err(|_| unreadable())?;
+    let cookie_header = reqwest::header::HeaderValue::from_str(&device_cookie(token)).map_err(|_| unreadable())?;
+    headers.insert(reqwest::header::ORIGIN, origin_header);
+    headers.insert(reqwest::header::COOKIE, cookie_header);
+    let connector = tokio_tungstenite::Connector::Rustls(Arc::new(tls_config(trust)));
+    match tokio::time::timeout(timeout, tokio_tungstenite::connect_async_tls_with_config(request, None, false, Some(connector))).await {
+        Ok(Ok((socket, _answer))) => Ok(socket),
+        // The gateway answers a deleted device with 401 and the signed-out ones
+        // with the same; both mean "pair again".
+        Ok(Err(tokio_tungstenite::tungstenite::Error::Http(answer))) if answer.status() == StatusCode::UNAUTHORIZED => Err(ClientError::Revoked),
+        _ => Err(ClientError::Unreachable),
+    }
+}
+
 /// This device's own tier on the other machine, from `GET /api/me`. The owner
 /// may change it there at any time.
 pub async fn device_tier(st: &AppState, machine_id: &str, timeout: Duration) -> Result<String, ClientError> {

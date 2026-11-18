@@ -744,6 +744,13 @@
       "params": "permissionReply"
     },
     {
+      "method": "permission.pending",
+      "class": "read",
+      "minTier": "viewer",
+      "why": "The cards waiting for the owner, so a linked machine's window can answer them; the card's own provider payload, project rules and match keys never leave the host. A phone already reads the same cards through app.snapshot.",
+      "params": null
+    },
+    {
       "method": "proposal.decide",
       "class": "approve",
       "minTier": "operator",
@@ -1875,6 +1882,13 @@
       "class": "linked",
       "minTier": "viewer",
       "why": "The conversations of the machines this host is linked to, so a paired phone can show what is running there; it holds ids, titles and states, and nothing is read from the other machine for it.",
+      "params": null
+    },
+    {
+      "method": "machine.permissions",
+      "class": "linked",
+      "minTier": "viewer",
+      "why": "The approvals waiting in a conversation on a machine this host is linked to, so a paired phone can show the card; the other machine's gateway redacts each card as it would for its own phone. Answering one is machine.permission.reply, at operator.",
       "params": null
     },
     {

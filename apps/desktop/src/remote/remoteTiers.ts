@@ -283,6 +283,7 @@ export function renderTierTableMarkdown(): string {
 // | messages[].attachments[].path                    | file name only                                                 |
 // | tools[]/turns[]/files[] detail                   | removed by default; `includeToolOutput` restores tool detail   |
 // | tools[].title                                     | replaced with a generic title by default; restored with tool output |
+// | a `machine`-kind device's tool title and detail   | kept (owner decision, 17 Nov 2026): another owned desktop reads the work log; a whole-string path inside the detail is still cut to two segments |
 // | providerSessionId                                | removed                                                        |
 // | overrides (a project's setup script and mode)   | removed                                                        |
 // | worktree (assignments, session links)            | removed                                                        |
@@ -296,6 +297,25 @@ export function renderTierTableMarkdown(): string {
 export interface RedactOptions {
   /** Restore tool `detail` only (never turn or file detail). Default false. */
   includeToolOutput?: boolean
+  /**
+   * The kind of device asking: `machine`, `phone`, `tablet`, `browser` or
+   * `computer`. A machine link is another Retinue desktop on the owner's own
+   * link, so it reads a tool's title, command and output (owner decision,
+   * 17 November 2026, `AGENTS.md`). Every other kind, and an absent one, keeps
+   * phone strength. Sensitive keys, environment values, thinking and the
+   * settings allowlist are the same for both.
+   */
+  deviceKind?: string
+}
+
+/** Whether this device reads at machine strength: the work log, secrets dropped. */
+function machineStrength(options: RedactOptions): boolean {
+  return options.deviceKind === 'machine'
+}
+
+/** Whether a tool row's own title and detail survive at all. */
+function keepsToolRows(options: RedactOptions): boolean {
+  return options.includeToolOutput === true || machineStrength(options)
 }
 
 /** Keys whose values are never sent to a device. The pattern comes from `tiers.json`. */
@@ -448,10 +468,15 @@ function redactNode(value: unknown, path: readonly string[], options: RedactOpti
           out[key] = typeof entry === 'string' ? reducedPath(entry) : redactNode(entry, childPath, options)
           continue
         case 'toolDetail':
-          if (options.includeToolOutput) out[key] = redactNode(entry, childPath, options)
+          // A machine link reads the work log; a value that is a host path inside
+          // it is still cut to its last two segments, the permission-card rule.
+          if (keepsToolRows(options)) {
+            const kept = redactNode(entry, childPath, options)
+            out[key] = machineStrength(options) ? reduceAbsolutePaths(kept) : kept
+          }
           continue
         case 'toolTitle':
-          out[key] = options.includeToolOutput || typeof entry !== 'string' ? redactNode(entry, childPath, options) : GENERIC_TOOL_TITLE
+          out[key] = keepsToolRows(options) || typeof entry !== 'string' ? redactNode(entry, childPath, options) : GENERIC_TOOL_TITLE
           continue
         default:
           out[key] = redactNode(entry, childPath, options)
@@ -661,18 +686,18 @@ function trimMessageField(value: unknown, max: number): unknown {
   return { ...value as Record<string, unknown>, message: source.message.slice(0, max) }
 }
 
-function redactEventPayload(type: string, payload: unknown): unknown {
+function redactEventPayload(type: string, payload: unknown, options: RedactOptions): unknown {
   switch (type) {
     case 'message.completed':
-      return dropKeys(redactNode(payload, ['payload'], {}), ['raw', 'providerPayload'])
+      return dropKeys(redactNode(payload, ['payload'], options), ['raw', 'providerPayload'])
     case 'turn.error':
-      return reduceAbsolutePaths(trimMessageField(redactNode(payload, ['payload'], {}), 200))
+      return reduceAbsolutePaths(trimMessageField(redactNode(payload, ['payload'], options), 200))
     case 'permission.requested':
-      return reduceAbsolutePaths(redactNode(payload, ['payload'], {}))
+      return reduceAbsolutePaths(redactNode(payload, ['payload'], options))
     case 'agent.changed':
-      return redactAgentForRemote(payload, {})
+      return redactAgentForRemote(payload, options)
     default:
-      return redactNode(payload, ['payload'], {})
+      return redactNode(payload, ['payload'], options)
   }
 }
 
@@ -689,12 +714,12 @@ function redactEventPayload(type: string, payload: unknown): unknown {
  * client is only ever one of those, and it cannot see the kind of the device it
  * runs as, so it accepts them; the host refuses them to anything else.
  */
-export function redactEventForRemote(event: unknown): unknown | null {
+export function redactEventForRemote(event: unknown, options: RedactOptions = {}): unknown | null {
   const envelope = ownKeys(event)
   if (!envelope) return null
   const type = envelope.type
   if (typeof type !== 'string') return null
   const policy = EVENT_POLICY[type]
   if (policy !== 'allow' && policy !== 'linked') return null
-  return { ...envelope, payload: redactEventPayload(type, envelope.payload) }
+  return { ...envelope, payload: redactEventPayload(type, envelope.payload, options) }
 }

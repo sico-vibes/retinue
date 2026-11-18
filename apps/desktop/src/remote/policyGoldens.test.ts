@@ -45,6 +45,7 @@ interface SnapshotCase {
 
 interface EventCase {
   name: string
+  options?: RedactOptions
   input: unknown
   expect: unknown
 }
@@ -100,8 +101,9 @@ describe('goldens: redactSnapshotForRemote', () => {
 describe('goldens: redactEventForRemote', () => {
   for (const testCase of goldens.events) {
     it(testCase.name, () => {
-      if (testCase.expect === null) expect(redactEventForRemote(testCase.input)).toBeNull()
-      else expect(redactEventForRemote(testCase.input)).toEqual(testCase.expect)
+      const got = redactEventForRemote(testCase.input, testCase.options ?? {})
+      if (testCase.expect === null) expect(got).toBeNull()
+      else expect(got).toEqual(testCase.expect)
     })
   }
 })

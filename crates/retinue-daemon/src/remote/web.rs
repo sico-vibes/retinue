@@ -915,6 +915,12 @@ async fn rpc_post(State(state): State<WebState>, headers: HeaderMap, body: Bytes
     }
     match dispatch(&state.daemon, &method, params).await {
         Ok(result) => {
+            // Step 1, piece 3: a conversation created through this gateway records
+            // where it was started from. Ids and a name only, the same idea as
+            // `link.movedTo`; a conversation started here keeps no such mark.
+            if method == "agent.conversation.create" {
+                stamp_started_from(&state.daemon, &device, &result);
+            }
             if let Some(kind) = audit_kind(&method) {
                 audit(
                     &state.daemon,
@@ -924,16 +930,25 @@ async fn rpc_post(State(state): State<WebState>, headers: HeaderMap, body: Bytes
                 )
                 .await;
             }
-            let redacted = policy::redact_result(&method, &result, &RedactOptions::default());
+            let redacted = policy::redact_result(&method, &result, &RedactOptions::for_kind(&device.kind));
             json_response(StatusCode::OK, remote_ok(&id, redacted))
         }
         Err((status, error)) => json_response(status, remote_error(&id, &error.code, &error.message)),
     }
 }
 
+/// Step 1, piece 3: where a conversation created through the gateway was started
+/// from. The device's own row is the only source: `machineName` is the name the
+/// caller paired with, which for a machine link is the machine's name. Nothing
+/// here is text from the conversation, and an unknown session is not an error.
+fn stamp_started_from(daemon: &AppState, device: &DeviceAuth, result: &Value) {
+    let Some(session) = result["session"]["id"].as_str().filter(|id| !id.is_empty()) else { return };
+    let started_from = json!({"deviceId": device.id, "deviceKind": device.kind, "machineName": device.name});
+    let _ = daemon.db.set_session_started_from(session, &started_from);
+}
+
 /// The audit kind for a method that changes something, if any.
-fn audit_kind(method: &str) -> Option<&'static str> {
-    match policy::rule_for(method).map(|rule| rule.class) {
+fn audit_kind(method: &str) -> Option<&'static str> {    match policy::rule_for(method).map(|rule| rule.class) {
         Some(policy::MethodClass::Chat) => Some("prompt"),
         Some(policy::MethodClass::Approve) => Some("approval"),
         Some(policy::MethodClass::Handoff) => Some("handoff"),
@@ -1028,6 +1043,9 @@ async fn events_loop(mut socket: WebSocket, state: WebState, device: DeviceAuth,
         return;
     };
     let mut after = cursor["afterSequence"].as_u64().unwrap_or(0);
+    // What this device may read of a tool row follows its kind: a machine link
+    // sees the work log, a phone sees the word `Tool`.
+    let redact = RedactOptions::for_kind(&device.kind);
 
     loop {
         let batch = state.daemon.db.replay_events(after, REPLAY_BATCH).unwrap_or_default();

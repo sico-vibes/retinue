@@ -573,7 +573,7 @@ mod tests {
     #[test]
     fn the_change_event_never_reaches_a_device() {
         let event = json!({"type": "preview.changed", "payload": {"sessionId": "s"}});
-        assert!(crate::remote::policy::redact_event(&event).is_none());
+        assert!(crate::remote::policy::redact_event(&event, &crate::remote::policy::RedactOptions::default()).is_none());
     }
 
     #[test]

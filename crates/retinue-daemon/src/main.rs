@@ -113,6 +113,8 @@ mod pull_request;
 mod remote;
 mod machine_client;
 mod machines;
+// Step 1: one live socket per online machine link.
+mod machine_stream;
 mod handoff;
 // 17 November 2026: a project started on this machine by one of the owner's paired devices, confined
 // to the one folder the owner set here. Distinct from `workspace.rs`, which reports where a
@@ -1787,6 +1789,15 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "session.cancel" => cancel_session_turn(st, p["sessionId"].as_str().unwrap_or("")).await,
         "session.close" => close_session(st, p["sessionId"].as_str().unwrap_or("")).await,
         "session.warm" => session_warm(st, p).await,
+        // Step 1, piece B: the cards waiting for the owner, read by a linked
+        // machine so its own window can answer them. The fields are exactly the
+        // ones `app.snapshot`'s `permissions` carries; the provider payload and
+        // the rule match key stay on the host.
+        "permission.pending" => {
+            let session = p["sessionId"].as_str().filter(|id| !id.is_empty()).unwrap_or("");
+            let cards = st.db.permissions_pending(session).map_err(|error| derr("internal", &error.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+            Ok(json!({"permissions": cards}))
+        }
         "permission.reply" => {
             let id = p["permissionId"].as_str().unwrap_or("");
             let choice = p["choice"].as_str().unwrap_or("");
@@ -1847,7 +1858,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
                 let _ = st.db.finish_permission_reply(id, true);
                 let _ = st.db.update_session_state(&session_id, "working");
                 if let Ok(summary) = st.db.session_event_summary(&session_id) { st.emit("session.changed", summary).await; }
-                st.emit("permission.resolved", json!({"permissionId":id,"choice":choice})).await;
+                st.emit("permission.resolved", json!({"permissionId":id,"sessionId":session_id,"choice":choice})).await;
                 crate::tasks::permission_resolved(st, &session_id).await;
                 return answer;
             }
@@ -1862,7 +1873,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
                 let _ = st.db.finish_permission_reply(id, true);
                 let _ = st.db.update_session_state(&session_id, "working");
                 if let Ok(summary) = st.db.session_event_summary(&session_id) { st.emit("session.changed", summary).await; }
-                st.emit("permission.resolved", json!({"permissionId":id,"choice":choice})).await;
+                st.emit("permission.resolved", json!({"permissionId":id,"sessionId":session_id,"choice":choice})).await;
                 crate::tasks::permission_resolved(st, &session_id).await;
                 return answer;
             }
@@ -1931,7 +1942,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             if matches!(choice.to_ascii_lowercase().as_str(), "deny" | "reject" | "no") {
                 if let Some(turn_id) = st.active_turns.lock().await.get(&session_id).cloned() { st.denied_turns.lock().await.insert(turn_id); }
             }
-            st.emit("permission.resolved", json!({"permissionId":id,"choice":choice})).await;
+            st.emit("permission.resolved", json!({"permissionId":id,"sessionId":session_id,"choice":choice})).await;
             if is_question { crate::delegations::question_resolved(st, &session_id, id, if choice == "answer" { "answered" } else { "dismissed" }).await; }
             crate::tasks::permission_resolved(st, &session_id).await;
             let mut result = json!({"resolved":true});
@@ -2123,6 +2134,8 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         | "machine.conversations"
         | "machine.conversation"
         | "machine.sessions"
+        | "machine.stream.status"
+        | "machine.permissions"
         | "machine.start"
         | "machine.prompt"
         | "machine.steer"
@@ -5930,7 +5943,7 @@ async fn forward_events_with_timeouts(
                             if reply_result.is_ok() {
                                 let _=st.db.finish_permission_policy_reply(&id,true,&resolved_by,&choice);
                                 st.emit("permission.auto_resolved",json!({"permissionId":id,"sessionId":sid,"turnId":turn_id,"agentId":session["agentId"],"mode":mode,"decision":choice,"category":category,"ruleId":rule_id,"summary":summary.chars().take(160).collect::<String>()})).await;
-                                st.emit("permission.resolved",json!({"permissionId":id,"choice":choice})).await;
+                                st.emit("permission.resolved",json!({"permissionId":id,"sessionId":sid,"choice":choice})).await;
                                 continue;
                             } else { let _=st.db.finish_permission_policy_reply(&id,false,&resolved_by,&choice); }
                         } else { let _=st.db.finish_permission_policy_reply(&id,false,&resolved_by,&choice); }
@@ -5957,7 +5970,7 @@ async fn forward_events_with_timeouts(
                                     let _=st.db.finish_permission_policy_reply(&id,true,"policy:automation",&choice);
                                     let category=retinue_agent_core::classify_permission(&kind,&normalized,&PathBuf::from(session["projectPath"].as_str().unwrap_or(""))).category.to_owned();
                                     st.emit("permission.auto_denied",json!({"permissionId":id,"sessionId":sid,"automationId":session["link"]["automationId"],"runId":session["link"]["runId"],"category":category,"summary":summary.chars().take(160).collect::<String>()})).await;
-                                    st.emit("permission.resolved",json!({"permissionId":id,"choice":choice})).await;
+                                    st.emit("permission.resolved",json!({"permissionId":id,"sessionId":sid,"choice":choice})).await;
                                     continue;
                                 } else { let _=st.db.finish_permission_policy_reply(&id,false,"policy:automation",&choice); }
                             } else { let _=st.db.finish_permission_policy_reply(&id,false,"policy:automation",&choice); }
@@ -6462,7 +6475,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // card that still looked answerable does not outlive the process that could
     // act on it.
     for card in &closed_cards {
-        st.emit("permission.resolved", json!({"permissionId":card["id"],"choice":"expired","status":"expired","reason":"daemon_restarted"})).await;
+        st.emit("permission.resolved", json!({"permissionId":card["id"],"sessionId":card["sessionId"],"choice":"expired","status":"expired","reason":"daemon_restarted"})).await;
     }
     let mut noted: HashSet<&str> = HashSet::new();
     for card in &closed_cards {

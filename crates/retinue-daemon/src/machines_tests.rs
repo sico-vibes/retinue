@@ -1053,6 +1053,53 @@ async fn reads_go_through_the_gateways_redaction() {
 }
 
 #[tokio::test]
+async fn the_other_machines_pending_approvals_are_read_through_the_link() {
+    let other = host("perm-host").await;
+    let bot = add_bot(&other.st, "Rae");
+    other.st.db.create_session_for_agent("s-perm", "rt-test", "codex", ".", "Waiting", Some(&bot)).unwrap();
+    other.st.db.update_session_state("s-perm", "waiting_permission").unwrap();
+    other
+        .st
+        .db
+        .insert_permission(
+            "card-1",
+            "s-perm",
+            "req-1",
+            "Run the tests",
+            Some("npm test"),
+            &["allow".to_string(), "deny".to_string()],
+            &json!({"request": {"tool_name": "Bash", "input": {"command": "npm test"}}}),
+            &json!({"kind": "shell", "matchKey": "shell:npm test", "rememberable": false, "rememberLabel": null, "projectId": null, "projectName": null}),
+        )
+        .unwrap();
+    let (me, dir) = local("perm-me");
+    link_native(&me, &other, "operator").await;
+    let other_id = host_id(&other);
+
+    let cards = dispatch(&me, "machine.permissions", json!({"machineId": other_id})).await.unwrap();
+    let card = &cards["permissions"][0];
+    assert_eq!(card["id"], "card-1");
+    assert_eq!(card["sessionId"], "s-perm");
+    assert_eq!(card["kind"], "shell");
+    assert_eq!(card["title"], "Run the tests");
+    assert_eq!(card["detail"], "npm test");
+    assert_eq!(card["choices"], json!(["allow", "deny"]));
+    let text = cards.to_string();
+    assert!(!text.contains("tool_name"), "the provider payload stayed on the host: {text}");
+    assert!(!text.contains("matchKey"), "the rule key stayed on the host: {text}");
+
+    // One conversation's cards.
+    let only = dispatch(&me, "machine.permissions", json!({"machineId": other_id, "sessionId": "s-perm"})).await.unwrap();
+    assert_eq!(only["permissions"].as_array().unwrap().len(), 1);
+    let none = dispatch(&me, "machine.permissions", json!({"machineId": other_id, "sessionId": "other"})).await.unwrap();
+    assert!(none["permissions"].as_array().unwrap().is_empty());
+    // The machine is named, and an unknown one is its own error.
+    assert_eq!(dispatch(&me, "machine.permissions", json!({})).await.unwrap_err().1.code, "invalid_argument");
+    assert_eq!(dispatch(&me, "machine.permissions", json!({"machineId": "nobody"})).await.unwrap_err().1.code, "not_found");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
 async fn a_change_emits_machine_changed() {
     let other = host("change-host").await;
     let (me, my_dir) = local("change-me");
@@ -1060,6 +1107,10 @@ async fn a_change_emits_machine_changed() {
     let other_id = host_id(&other);
     let count = |st: &AppState| st.db.replay_events(0, 5_000).unwrap().iter().filter(|event| event["type"] == "machine.changed").count();
     machines::refresh_one(&me, &other_id).await.unwrap();
+    // The socket announces the first connection once; wait for it so the reads
+    // below are the only source of events while they run.
+    wait_until("the socket to settle", || crate::machine_stream::live(&me, &other_id)).await;
+    wait_until("its one event", || count(&me) >= 2).await;
     let after_first = count(&me);
     assert!(after_first >= 1, "the first read is a change");
     machines::refresh_one(&me, &other_id).await.unwrap();
@@ -1068,7 +1119,7 @@ async fn a_change_emits_machine_changed() {
     machines::refresh_one(&me, &other_id).await.unwrap();
     assert_eq!(count(&me), after_first + 1);
     let event = crate::remote::events_last(&me, "machine.changed").await;
-    assert_eq!(event["payload"], json!({"machineId": other_id, "state": "online"}));
+    assert_eq!(event["payload"], json!({"machineId": other_id, "state": "online", "live": true}));
     let row = dispatch(&me, "machine.list", json!({})).await.unwrap();
     assert_eq!(row["machines"][0]["bots"][0]["name"], "Newcomer", "the window reloads the list");
     // Going away is a change too.
@@ -1181,7 +1232,10 @@ async fn machine_changed_holds_nothing_about_the_bots() {
     assert!(!changed.is_empty());
     for event in &changed {
         let keys: Vec<&str> = event["payload"].as_object().unwrap().keys().map(String::as_str).collect();
-        assert_eq!(keys, ["machineId", "state"], "{event}");
+        // Step 1 added `live`: an id, a state word and a boolean, still nothing
+        // about the other machine's bots.
+        assert_eq!(keys, ["live", "machineId", "state"], "{event}");
+        assert!(event["payload"]["live"].is_boolean(), "{event}");
     }
     let pair_events: Vec<&Value> = events.iter().filter(|event| event["type"] == "machine.pair.changed").collect();
     assert!(!pair_events.is_empty());
@@ -1665,6 +1719,230 @@ async fn starting_on_the_other_machine_names_it_and_the_next_read_shows_it() {
     let after = dispatch(&me, "machine.list", json!({})).await.unwrap();
     assert_eq!(after["machines"][0]["bots"][0]["conversations"], 1, "{after}");
     assert_eq!(after["machines"][0]["state"], "online");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+// ---------------------------------------------------------------------------
+// Step 1: the live socket, the machine's conversations, and where a
+// conversation was started from
+
+/// Short clocks, so a test does not wait 25 s for a probe or 60 s for a reset.
+fn stream_timing() -> crate::machine_stream::Timing {
+    crate::machine_stream::Timing {
+        idle_probe: Duration::from_millis(400),
+        probe_wait: Duration::from_millis(400),
+        healthy_after: Duration::from_millis(100),
+        backoff_base: Duration::from_millis(50),
+        backoff_cap: Duration::from_millis(400),
+        sweep_every: Duration::from_millis(50),
+    }
+}
+
+/// This machine's `machine.session.changed` records for one far conversation.
+fn changed_events(st: &AppState, session: &str) -> Vec<Value> {
+    st.db
+        .replay_events(0, 5_000)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|event| event["type"] == "machine.session.changed")
+        .filter(|event| event["payload"]["sessionId"] == json!(session))
+        .collect()
+}
+
+/// A host with one bot and one conversation, and this machine linked to it with
+/// the socket following. Returns `(other, bot, me, dir)`.
+async fn live_link(tag: &str, tier: &str) -> (Host, String, AppState, PathBuf) {
+    let other = host(tag).await;
+    let bot = add_bot(&other.st, "Rae");
+    other.st.db.create_session_for_agent("s-live", "rt-test", "codex", ".", "First light", Some(&bot)).unwrap();
+    other.st.db.update_session_state("s-live", "idle").unwrap();
+    let (me, dir) = local(&format!("{tag}-me"));
+    me.machines.streams.set_timing(stream_timing());
+    link_native(&me, &other, tier).await;
+    let other_id = host_id(&other);
+    machines::refresh_one(&me, &other_id).await.unwrap();
+    crate::machine_stream::ensure(&me);
+    wait_until("the live socket to open", || crate::machine_stream::live(&me, &other_id)).await;
+    (other, bot, me, dir)
+}
+
+#[tokio::test]
+async fn a_live_socket_reports_a_change_on_the_other_machine_as_ids_only() {
+    let (other, _bot, me, dir) = live_link("stream", "viewer").await;
+    let other_id = host_id(&other);
+    assert!(me.machines.streams.supervised(), "the supervisor is running");
+    let status = dispatch(&me, "machine.stream.status", json!({"machineId": other_id})).await.unwrap();
+    assert_eq!(status["connected"], true);
+    let before = status["lastSequence"].as_u64().unwrap();
+    assert_eq!(dispatch(&me, "machine.list", json!({})).await.unwrap()["machines"][0]["live"], true);
+    assert_eq!(dispatch(&me, "machine.stream.status", json!({})).await.unwrap_err().1.code, "invalid_argument");
+    assert_eq!(dispatch(&me, "machine.stream.status", json!({"machineId": "nobody"})).await.unwrap_err().1.code, "not_found");
+
+    // A change on the other machine, made through that machine's own API at a
+    // viewer link: the far gateway allows it, so the socket carries it.
+    dispatch(&other.st, "session.rename", json!({"sessionId": "s-live", "title": "Renamed far away"})).await.unwrap();
+    wait_until("the change to reach this machine", || !changed_events(&me, "s-live").is_empty()).await;
+    let events = changed_events(&me, "s-live");
+    assert_eq!(events.len(), 1, "{events:?}");
+    let payload = &events[0]["payload"];
+    assert_eq!(payload["machineId"], json!(other_id));
+    assert_eq!(payload["sessionId"], "s-live");
+    assert!(payload["revision"].as_u64().unwrap() > 0);
+    let text = payload.to_string();
+    assert!(!text.contains("Renamed"), "ids only, never content: {text}");
+    assert!(!text.contains("Rae"), "no bot name either: {text}");
+    assert!(
+        crate::machine_stream::status(&me, &other_id)["lastSequence"].as_u64().unwrap() > before,
+        "the cursor moved past the replayed log"
+    );
+    // The event is for this window only: a device never receives it.
+    let envelope = json!({"v": 1, "eventId": "e", "sequence": 5, "timestamp": "2026-11-17T00:00:00.000Z", "type": "machine.session.changed", "payload": payload});
+    assert!(crate::remote::policy::redact_event(&envelope, &crate::remote::policy::RedactOptions::default()).is_none(), "`drop` in tiers.json: no device sees it");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn a_dead_socket_comes_back_by_itself_and_nothing_is_reported_twice() {
+    let (other, _bot, me, dir) = live_link("stream-reconnect", "viewer").await;
+    let other_id = host_id(&other);
+    dispatch(&other.st, "session.rename", json!({"sessionId": "s-live", "title": "First shift"})).await.unwrap();
+    wait_until("the first change", || changed_events(&me, "s-live").len() == 1).await;
+    let first = changed_events(&me, "s-live")[0]["payload"]["revision"].as_u64().unwrap();
+
+    // The other machine goes away. The socket dies on its own: no frame, and no
+    // answer to the probe that follows.
+    crate::remote::disable(&other.st).await.unwrap();
+    wait_until("the socket to drop", || !crate::machine_stream::live(&me, &other_id)).await;
+    assert_eq!(dispatch(&me, "machine.stream.status", json!({"machineId": other_id})).await.unwrap()["connected"], false);
+
+    // It comes back at the same address, and the retry reconnects on its own.
+    other.st.db.set_setting("remote.native.port", &json!(other.port)).unwrap();
+    crate::remote::enable(&other.st).await.unwrap();
+    crate::machine_stream::wake(&me);
+    wait_until("the socket to come back", || crate::machine_stream::live(&me, &other_id)).await;
+    // The far side replays from the cursor it is given, so nothing already seen
+    // is reported again.
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(changed_events(&me, "s-live").len(), 1, "the replay was dropped: a sequence at or below the cursor");
+
+    dispatch(&other.st, "session.rename", json!({"sessionId": "s-live", "title": "Second shift"})).await.unwrap();
+    wait_until("the next change", || changed_events(&me, "s-live").len() == 2).await;
+    let second = changed_events(&me, "s-live")[1]["payload"]["revision"].as_u64().unwrap();
+    assert!(second > first, "each change has a higher revision: {first} then {second}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn a_conversation_that_moved_away_from_the_other_machine_is_not_reported_live() {
+    let (other, _bot, me, dir) = live_link("stream-moved", "viewer").await;
+    let other_id = host_id(&other);
+    // This machine recorded the conversation as moved to a third machine; the
+    // far machine keeps mentioning it.
+    let bot = add_bot(&me, "Local");
+    me.db.create_session_for_agent("s-live", "rt-test", "codex", ".", "Moved", Some(&bot)).unwrap();
+    me.db
+        .set_session_link("s-live", &json!({"movedTo": {"machineId": "someone-else", "name": "Desk"}}))
+        .unwrap();
+    dispatch(&other.st, "session.rename", json!({"sessionId": "s-live", "title": "Still busy there"})).await.unwrap();
+    // The socket carries it, and the cursor moves past it…
+    wait_until("the far sequence to arrive", || crate::machine_stream::status(&me, &other_id)["lastSequence"].as_u64().unwrap() > 0).await;
+    // …but no live row is announced for a conversation this machine gave away.
+    assert!(changed_events(&me, "s-live").is_empty(), "{:?}", changed_events(&me, "s-live"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn the_other_machines_conversations_are_listed_from_memory() {
+    let other = host("sessions-host").await;
+    let bot = add_bot(&other.st, "Rae");
+    other.st.db.create_session_for_agent("s-one", "rt-test", "codex", ".", "First", Some(&bot)).unwrap();
+    other.st.db.create_session_for_agent("s-two", "rt-test", "codex", ".", "Second", Some(&bot)).unwrap();
+    other.st.db.update_session_state("s-two", "working").unwrap();
+    let (me, dir) = local("sessions-me");
+    link_native(&me, &other, "viewer").await;
+    let other_id = host_id(&other);
+
+    // Before any read the list is empty rather than an error: it is memory.
+    assert!(dispatch(&me, "machine.sessions", json!({})).await.unwrap()["sessions"].as_array().unwrap().is_empty());
+    machines::refresh_one(&me, &other_id).await.unwrap();
+
+    let rows = dispatch(&me, "machine.sessions", json!({})).await.unwrap();
+    let rows = rows["sessions"].as_array().unwrap();
+    assert_eq!(rows.len(), 2, "{rows:?}");
+    let row = rows.iter().find(|row| row["id"] == "s-two").cloned().unwrap();
+    assert_eq!(row["machineId"], json!(other_id));
+    assert_eq!(row["machineName"], machines::machine_name(&other.st));
+    assert_eq!(row["kind"], std::env::consts::OS, "the far machine's OS family");
+    assert_eq!(row["title"], "Second");
+    assert_eq!(row["agentId"], json!(bot));
+    assert_eq!(row["agentName"], "Rae");
+    assert_eq!(row["state"], "working");
+    assert_eq!(row["archived"], false);
+    assert!(row["updatedAt"].is_string());
+    assert!(row.get("projectName").is_some(), "the key is always there, null when there is no project");
+    // One machine's rows, and the same read the machine's own list makes.
+    assert_eq!(dispatch(&me, "machine.sessions", json!({"machineId": other_id})).await.unwrap()["sessions"].as_array().unwrap().len(), 2);
+    assert_eq!(dispatch(&me, "machine.sessions", json!({"machineId": "nobody"})).await.unwrap_err().1.code, "not_found");
+    // The OS family also rides on the link row and comes from `machine.info`.
+    assert_eq!(dispatch(&me, "machine.list", json!({})).await.unwrap()["machines"][0]["kind"], std::env::consts::OS);
+    assert_eq!(dispatch(&other.st, "machine.info", json!({})).await.unwrap()["platform"], std::env::consts::OS);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn a_conversation_started_through_the_gateway_says_where_it_came_from() {
+    let other = host("started-host").await;
+    let runtime = json!({"id": "rt-test", "provider": "codex", "status": "online", "executablePath": "unused-test-runtime", "launchArgs": []});
+    other.st.db.upsert_runtime(&runtime).unwrap();
+    *other.st.runtimes.write().await = vec![runtime];
+    let bot = add_bot(&other.st, "Rae");
+    let (me, dir) = local("started-me");
+    link_native(&me, &other, "chat").await;
+
+    // The pairing request said what this machine runs on, not "windows".
+    let device = other
+        .st
+        .db
+        .remote_devices()
+        .unwrap()
+        .into_iter()
+        .find(|device| device["kind"] == "machine")
+        .expect("the machine is a paired device there");
+    assert_eq!(device["platform"], machines::platform_label());
+
+    let other_id = host_id(&other);
+    let started = dispatch(&me, "machine.start", json!({"machineId": other_id, "agentId": bot})).await.unwrap();
+    let session_id = started["sessionId"].as_str().unwrap().to_string();
+    let started_from = other.st.db.session_brief(&session_id).unwrap()["link"]["startedFrom"].clone();
+    assert_eq!(started_from["deviceId"], device["id"], "the device row that asked");
+    assert_eq!(started_from["deviceKind"], "machine");
+    assert_eq!(started_from["machineName"], machines::machine_name(&me));
+    // The mark is on the row this machine reads back through the gateway, and it
+    // carries nothing but an id, a kind and a name.
+    let read = dispatch(&me, "machine.conversation", json!({"machineId": other_id, "sessionId": session_id})).await.unwrap();
+    let read_back = read["session"]["link"]["startedFrom"].clone();
+    assert_eq!(read_back["machineName"], machines::machine_name(&me));
+    assert_eq!(read_back["deviceKind"], "machine");
+    assert_eq!(read_back.as_object().map(|fields| fields.len()), Some(3), "three keys and no more: {read_back}");
+    // A conversation started at the machine itself carries no such mark.
+    other.st.db.create_session_for_agent("s-own", "rt-test", "codex", ".", "Mine", Some(&bot)).unwrap();
+    let own = other.st.db.session_brief("s-own").unwrap();
+    assert!(own["link"].is_null() || own["link"]["startedFrom"].is_null(), "{own}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn an_older_machine_reports_no_os_family_and_still_links() {
+    // The far gateway answers `machine.info` without `platform`, as a daemon from
+    // before this change does.
+    let server = raw_server(far_gateway(|_, _| ok_body(json!({"ok": true})))).await;
+    let (me, dir) = local("older-me");
+    linked_to(&me, &server, "viewer").await;
+    let row = machines::refresh_one(&me, FAR_ID).await.unwrap();
+    assert_eq!(row["state"], "online");
+    assert!(row["kind"].is_null(), "no OS family is reported rather than one guessed");
+    let rows = dispatch(&me, "machine.sessions", json!({})).await.unwrap();
+    assert!(rows["sessions"].as_array().unwrap().is_empty(), "the far list is empty here");
     let _ = std::fs::remove_dir_all(dir);
 }
 

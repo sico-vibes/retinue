@@ -3151,6 +3151,32 @@ impl Storage {
         if changed == 0 { return Err(StorageError::AgentNotFound); }
         Ok(())
     }
+    /// Step 1, piece 3: where a conversation created through a gateway was started
+    /// from. Merged into `link` so a later move or handoff keeps it, and so a
+    /// `link` that is absent or null becomes the object it should be. Content-free:
+    /// ids and a name. One lock, one read, one write (see `lessons.md`, 2026-11-17).
+    pub fn set_session_started_from(&self, id: &str, started_from: &Value) -> Result<(), StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let existing = c
+            .query_row(
+                "SELECT json_extract(COALESCE(NULLIF(data,''),'{}'),'$.link') FROM sessions WHERE id=?1",
+                [id],
+                |row| row.get::<_, Option<String>>(0),
+            )
+            .optional()?;
+        let Some(existing) = existing else { return Err(StorageError::AgentNotFound) };
+        let mut link = existing
+            .as_deref()
+            .and_then(|text| serde_json::from_str::<Value>(text).ok())
+            .filter(Value::is_object)
+            .unwrap_or_else(|| json!({}));
+        link["startedFrom"] = started_from.clone();
+        c.execute(
+            "UPDATE sessions SET data=json_set(COALESCE(NULLIF(data,''),'{}'),'$.link',json(?2)) WHERE id=?1",
+            params![id, link.to_string()],
+        )?;
+        Ok(())
+    }
     /// FIX39 P10: repoint a conversation at another folder. Used when a task's
     /// separate worktree copy is merged or discarded, so a follow-up does not
     /// resume a session whose working folder no longer exists.
@@ -9432,6 +9458,23 @@ mod pricing_override_removal_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Step 1, piece 3: the mark joins link instead of replacing it, keeps a
+    /// side conversation's kind, and refuses a conversation that isn't there.
+    #[test]
+    fn a_started_from_mark_joins_the_link_and_keeps_it() {
+        let db = Storage::open_in_memory().unwrap();
+        db.create_session_for_agent("s1", "rt", "codex", ".", "One", None).unwrap();
+        db.set_session_started_from("s1", &json!({"deviceId":"d1","deviceKind":"machine","machineName":"Laptop"})).unwrap();
+        assert_eq!(db.session_brief("s1").unwrap()["link"]["startedFrom"]["machineName"], "Laptop");
+        db.set_session_link("s1", &json!({"kind":"side","startedFrom":{"deviceId":"d1","deviceKind":"machine","machineName":"Laptop"}})).unwrap();
+        db.set_session_started_from("s1", &json!({"deviceId":"d2","deviceKind":"phone","machineName":"Pixel"})).unwrap();
+        let link = db.session_brief("s1").unwrap()["link"].clone();
+        assert_eq!(link["kind"], "side", "the rest of the link is kept");
+        assert_eq!(link["startedFrom"]["deviceKind"], "phone");
+        assert_eq!(link["startedFrom"]["machineName"], "Pixel");
+        assert!(db.set_session_started_from("nope", &json!({})).is_err(), "an unknown conversation is an error");
+    }
+
     #[test]
     fn appearance_values_validate() {
         for style in ["haze", "stone"] { assert!(validate_setting_value("appearance.style", &json!(style)).is_ok()); }

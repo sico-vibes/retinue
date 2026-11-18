@@ -169,12 +169,39 @@ pub struct RemoteCall {
     pub quiet_hours: bool,
 }
 
-/// Redaction options. `include_tool_output` restores tool `detail` only.
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+/// Redaction options. `include_tool_output` restores tool `detail` only;
+/// `device_kind` decides how much of a tool row a device may read at all.
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RedactOptions {
     #[serde(default)]
     pub include_tool_output: bool,
+    /// The kind of device asking: `machine`, `phone`, `tablet`, `browser` or
+    /// `computer`. A machine link is another Retinue desktop on the owner's own
+    /// link, so it may read a tool's title, command and output (owner decision,
+    /// 17 November 2026, `AGENTS.md`). Every other kind, and an absent one,
+    /// keeps phone strength. Sensitive keys, environment values, thinking and
+    /// the settings allowlist are the same for both.
+    #[serde(default)]
+    pub device_kind: Option<String>,
+}
+
+impl RedactOptions {
+    /// The options for one calling device.
+    pub fn for_kind(kind: &str) -> Self {
+        Self { device_kind: Some(kind.to_string()), ..Self::default() }
+    }
+
+    /// Whether this device reads at machine strength: the whole work log,
+    /// still with secrets dropped.
+    fn machine(&self) -> bool {
+        self.device_kind.as_deref() == Some("machine")
+    }
+
+    /// Whether a tool row's own title and detail survive at all.
+    fn keeps_tool_rows(&self) -> bool {
+        self.include_tool_output || self.machine()
+    }
 }
 
 /// How much of one conversation a device may receive in one read (wave 3,
@@ -601,12 +628,16 @@ fn redact_node(value: &Value, path: &mut Vec<String>, options: &RedactOptions) -
                         out.insert(key.clone(), value);
                     }
                     FieldPolicy::ToolDetail => {
-                        if options.include_tool_output {
-                            out.insert(key.clone(), redact_node(entry, path, options));
+                        if options.keeps_tool_rows() {
+                            let kept = redact_node(entry, path, options);
+                            // A machine link reads the work log; a value that is a
+                            // host path inside it is still cut to its last two
+                            // segments, the rule a permission card already follows.
+                            out.insert(key.clone(), if options.machine() { reduce_absolute_paths(&kept) } else { kept });
                         }
                     }
                     FieldPolicy::ToolTitle => {
-                        if options.include_tool_output || !entry.is_string() {
+                        if options.keeps_tool_rows() || !entry.is_string() {
                             out.insert(key.clone(), redact_node(entry, path, options));
                         } else {
                             out.insert(key.clone(), Value::String(GENERIC_TOOL_TITLE.to_string()));
@@ -768,57 +799,60 @@ fn window_session(mut session: Value, limits: SessionLimits) -> Value {
 // Event redaction
 
 /// The event as a remote device may see it, or `None` when it must not be sent.
-pub fn redact_event(event: &Value) -> Option<Value> {
-    let event_type = event.get("type")?.as_str()?;
+/// `options` carries the calling device's kind, so a machine link reads a tool
+/// row where a phone reads the word `Tool`.
+pub fn redact_event(event: &Value, options: &RedactOptions) -> Option<Value> {
+    let envelope = event.as_object()?;
+    let event_type = envelope.get("type")?.as_str()?;
     if policy().events.get(event_type) != Some(&EventPolicy::Allow) {
         return None;
     }
-    redact_envelope(event)
+    redact_envelope(envelope, event_type, options)
 }
 
 /// The event as one device of `kind` may see it, or `None` when it must not be sent.
 /// `allow` crosses to every device; `linked` only to a phone, tablet or browser, so a
 /// machine link never receives what another link's changes would let it act on.
+/// The device's kind also decides how much of the work log a `machine` reads.
 pub fn redact_event_for(event: &Value, kind: &str) -> Option<Value> {
-    let event_type = event.get("type")?.as_str()?;
+    let options = RedactOptions::for_kind(kind);
+    let envelope = event.as_object()?;
+    let event_type = envelope.get("type")?.as_str()?;
     match policy().events.get(event_type)? {
-        EventPolicy::Allow => redact_event(event),
-        EventPolicy::Linked if linked_kinds(kind) => redact_envelope(event),
+        EventPolicy::Allow => redact_envelope(envelope, event_type, &options),
+        EventPolicy::Linked if linked_kinds(kind) => redact_envelope(envelope, event_type, &options),
         _ => None,
     }
 }
 
 /// The payload work every sent event gets, once its type has been allowed.
-fn redact_envelope(event: &Value) -> Option<Value> {
-    let envelope = event.as_object()?;
-    let event_type = envelope.get("type")?.as_str()?;
+fn redact_envelope(envelope: &serde_json::Map<String, Value>, event_type: &str, options: &RedactOptions) -> Option<Value> {
     let mut out = envelope.clone();
     // A missing payload stays missing: the TypeScript module yields
     // `payload: undefined`, which its JSON serialization drops.
     if let Some(payload) = envelope.get("payload") {
-        out.insert("payload".to_string(), redact_event_payload(event_type, payload));
+        out.insert("payload".to_string(), redact_event_payload(event_type, payload, options));
     }
     Some(Value::Object(out))
 }
 
-fn redact_event_payload(event_type: &str, payload: &Value) -> Value {
-    let options = RedactOptions::default();
+fn redact_event_payload(event_type: &str, payload: &Value, options: &RedactOptions) -> Value {
     let mut path = vec!["payload".to_string()];
     match event_type {
         "message.completed" => {
-            let redacted = redact_node(payload, &mut path, &options);
+            let redacted = redact_node(payload, &mut path, options);
             drop_keys(&redacted, &["raw", "providerPayload"])
         }
         "turn.error" => {
-            let redacted = redact_node(payload, &mut path, &options);
+            let redacted = redact_node(payload, &mut path, options);
             reduce_absolute_paths(&trim_message_field(redacted, 200))
         }
         "permission.requested" => {
-            let redacted = redact_node(payload, &mut path, &options);
+            let redacted = redact_node(payload, &mut path, options);
             reduce_absolute_paths(&redacted)
         }
-        "agent.changed" => redact_node(payload, &mut Vec::new(), &options),
-        _ => redact_node(payload, &mut path, &options),
+        "agent.changed" => redact_node(payload, &mut Vec::new(), options),
+        _ => redact_node(payload, &mut path, options),
     }
 }
 
@@ -1132,7 +1166,9 @@ mod tests {
         for case in cases {
             let name = case["name"].as_str().unwrap_or("?");
             let expected = &case["expect"];
-            match redact_event(&case["input"]) {
+            let options: RedactOptions = serde_json::from_value(case.get("options").cloned().unwrap_or_else(|| json!({})))
+                .unwrap_or_else(|e| panic!("case {name}: options do not parse: {e}"));
+            match redact_event(&case["input"], &options) {
                 Some(got) => {
                     assert!(!expected.is_null(), "case {name}: expected null, got a value");
                     assert_eq!(&got, expected, "case {name}");
@@ -1157,8 +1193,8 @@ mod tests {
         let got = redact_snapshot(&snapshot, &options);
         assert!(!got.to_string().contains("curl evil") && !got.to_string().contains("setupScript"));
         // The project events are not sent to a device at all, and an allowed event still drops the key.
-        assert!(redact_event(&json!({ "type": "project.changed", "payload": { "action": "updated", "project": { "id": "p_1", "overrides": overrides.clone() } } })).is_none());
-        let got = redact_event(&json!({ "type": "agent.changed", "payload": { "project": { "overrides": overrides } } })).unwrap();
+        assert!(redact_event(&json!({ "type": "project.changed", "payload": { "action": "updated", "project": { "id": "p_1", "overrides": overrides.clone() } } }), &RedactOptions::default()).is_none());
+        let got = redact_event(&json!({ "type": "agent.changed", "payload": { "project": { "overrides": overrides } } }), &RedactOptions::default()).unwrap();
         assert!(!got.to_string().contains("curl evil"));
         // The remote cannot write them either.
         assert!(rule_for("project.update").is_some_and(|rule| rule.class == MethodClass::Never));
