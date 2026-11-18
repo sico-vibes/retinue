@@ -377,7 +377,7 @@ Owner amendment of 16 November 2026 in `AGENTS.md` ("Pi, with keys held by Retin
 | P7 | A project folder loading its own Pi extensions or settings into a bot | Pi is started with `--no-approve`, because a non-interactive Pi cannot ask whether to trust a folder; `AGENTS.md` and `CLAUDE.md` still load as context | Context files are still untrusted input, as Pi's own security page says |
 | P8 | A Pi child acting beyond what the owner expects | Pi has no per-tool approval prompt, so Retinue does not claim any: the runtime row says `permissions: false` and no card is shown. Pi runs with the owner's OS permissions, like the other CLIs | The approval brake that exists for Claude Code, Codex and ACP agents does not exist for a Pi bot |
 
-## 20. Chat channels to the CEO: Telegram and WhatsApp (16 November 2026)
+## 21. Chat channels to the CEO: Telegram and WhatsApp (16 November 2026)
 
 Owner amendment of 16 November 2026 (`AGENTS.md`), contract in `docs/plans/vault-channels-pi.md` section B. A channel is a new **egress**: the owner's prompts and the CEO's replies pass through Telegram's or Meta's servers. Only one sender is ever paired, and only the CEO's channel conversation is reachable.
 
@@ -395,7 +395,7 @@ Owner amendment of 16 November 2026 (`AGENTS.md`), contract in `docs/plans/vault
 | H10 | A channel is used from a phone or another machine | Every `channel.*` method is `never` in `tiers.json`, and `channel.updated`, `channel.qr` and `channel.pairing.candidate` are dropped for remote devices | None expected |
 
 **What this doesn't cover.** The Telegram or Meta account itself (a compromised bot token is H4/H5, a compromised phone is H3), the platform's own retention, and message content the CEO chooses to repeat. WhatsApp Web is not built: no client here reaches WhatsApp Web, and the note in `docs/operations/` records what a future one would have to be.
-## 21. Learned skills and first-run suggestions (17 November 2026)
+## 22. Learned skills and first-run suggestions (17 November 2026)
 
 Plan `docs/plans/nod-adoption-plan.md` wave 3 (report 08, ideas 1 and 5), code `crates/retinue-daemon/src/skills.rs` and `suggestions.rs`, contract `docs/reports/wave3-skills.md`. This is the first time a bot can write text another bot will later follow.
 
@@ -407,7 +407,7 @@ Plan `docs/plans/nod-adoption-plan.md` wave 3 (report 08, ideas 1 and 5), code `
 | L4 | An unattended run teaches the whole team something | `save_skill` and `patch_skill` are absent from an automation or task run's tool list and refused by the dispatch; a teammate-woken turn is not owner-started, so it is refused too | None expected |
 | L5 | A paired device approves, edits or forgets a skill | `skills.learned.list`, `.approve`, `.edit` and `.forget` are class `never`; `skills.learned.changed` is `drop`. `skills.list` and `skills.get` keep the `viewer` read they already had, and a body crosses exactly as it did for an imported skill | A paired device can read an approved skill's body, as before |
 | L6 | Onboarding reads the owner's disk beyond the project | `project.suggestions` reads a fixed list of file names inside the project's canonical folder only, each capped at 64 KiB, with links and paths outside the folder refused; no model call, no event, nothing sent anywhere; the reply names the host folder, so the method is `never` remote | A project folder that points at a wider tree is the owner's own choice |
-## 21. MCP connectors and their OAuth sign-in (17 November 2026)
+## 23. MCP connectors and their OAuth sign-in (17 November 2026)
 
 Plan `docs/plans/nod-adoption-plan.md` section D (wave 1) and report `docs/research/n8n-nod/03-connectors.md` idea 2 (wave 3). A connector is a third-party MCP server the owner adds; a bot's tool call reaches it under the owner's own token, so X1 is the row wave 1 owed. The sign-in adds two things to this model: a consent page in the owner's own browser, and a listener on the host's loopback.
 
@@ -424,7 +424,7 @@ Plan `docs/plans/nod-adoption-plan.md` section D (wave 1) and report `docs/resea
 
 **What this doesn't cover.** The provider's own account security and consent screen, a grant the owner approves at the service and then revokes there while a call is in flight, and a service that silently ignores the revoke. WhatsApp-style third-party libraries are not involved here: the daemon speaks OAuth itself.
 
-## 21. Projects on another machine, from the owner's devices (17 November 2026)
+## 24. Projects on another machine, from the owner's devices (17 November 2026)
 
 Owner amendment of 17 November 2026 (`AGENTS.md`): a paired device may list folders under one base folder the host's owner sets, register a folder there as a project, and clone a URL into it. Contract: `docs/reports/multi-device-projects.md`. Code: `crates/retinue-daemon/src/project_share.rs`, `project_clone.rs`, `machines.rs`, `remote/web.rs`, rows in `apps/desktop/src/remote/tiers.json` (class `workspace`).
 

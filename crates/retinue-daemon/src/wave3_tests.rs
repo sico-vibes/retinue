@@ -379,6 +379,8 @@ async fn a_purged_bot_takes_its_learned_skills_with_it() {
     assert!(st.db.skills_get("leaving-notes").is_err(), "the row went with the bot");
     assert!(!data.join("skills").join("leaving-notes").exists(), "and so did its folder");
     let _ = std::fs::remove_dir_all(&data);
+}
+
 // Wave 3, release safety (`docs/plans/nod-adoption-plan.md`): the bounded
 // conversation read.
 //

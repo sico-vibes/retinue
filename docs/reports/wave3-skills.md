@@ -312,7 +312,7 @@ Fallbacks are used in order, so a project with no folder at all returns the firs
 | First-run suggestions | `crates/retinue-daemon/src/suggestions.rs` (whole file: `rpc` at `:46`, `read_inside` at `:90`, `readme_suggestion`, `script_suggestion` at `:149`, `commit_suggestion` at `:203`, `agents_suggestion`, the static fallbacks); `main.rs:87` (`mod suggestions`) and `:1252` (`project.suggestions`) |
 | Remote policy | `tiers.json`: four `skills.learned.*` rows and `project.suggestions` as `never`, `skills.learned.changed` as `drop` |
 | Tests | `crates/retinue-daemon/src/wave3_tests.rs` (eight tests, included at `main.rs:14608`; every RPC goes through `dispatch`, every tool through the team bridge), five unit tests in `skills.rs` (`a_learned_draft_is_bounded_and_tidied`, `the_placeholder_pass_replaces_people_addresses_and_numbers`, `cards_and_sign_in_links_are_refused`, `a_learned_name_is_two_to_sixty_four_lower_case_characters`, `only_the_running_owner_started_turn_may_write`), and the storage test `learned_skills_round_trip_and_an_older_pool_is_rebuilt` |
-| Documents | `docs/ipc-contract.md` ("Wave 3"), `docs/remote/THREAT_MODEL.md` section 21, this file; skill updated (`references/codebase-map.md` wave 3 entry, two `references/lessons.md` entries) |
+| Documents | `docs/ipc-contract.md` ("Wave 3"), `docs/remote/THREAT_MODEL.md` section 22, this file; skill updated (`references/codebase-map.md` wave 3 entry, two `references/lessons.md` entries) |
 
 ## What I verified
 

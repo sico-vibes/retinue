@@ -196,7 +196,7 @@ window.
   `RemoteActivityKind` gains `workspace`: the daemon writes that kind on every successful project action,
   and piece 7's activity list will show it.
 - **Backups and diagnostics.** Neither setting travels.
-- **The threat model.** Section 21 of `docs/remote/THREAT_MODEL.md` carries nine rows (W1–W9): a device
+- **The threat model.** Section 24 of `docs/remote/THREAT_MODEL.md` carries nine rows (W1–W9): a device
   browses the host's disk, a link reaches outside the base folder, a device makes the host clone a URL, a
   device claims to be the desktop, one device reads another's job, a project row carries a setup script, a
   folder path travels in a backup, quiet hours and tier, and a window driving a third machine through this
