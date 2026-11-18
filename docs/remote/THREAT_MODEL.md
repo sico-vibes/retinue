@@ -263,6 +263,20 @@ A machine link is one Retinue daemon acting as a paired device of another, throu
 
 **What this doesn't cover.** A link at `operator` can pull any eligible conversation's text from that machine, and push its task branch to that machine's `origin`. That's what the owner approves when choosing that tier. Reading another machine's conversations is the same trust as reading them from a phone: paired machines are the owner's own. The review owed before a non-beta release (sections 8, 11 and 13) now covers this section too.
 
+### A headless Linux host (17 November 2026, multi-device piece 8)
+
+The owner's VPS runs `retinued` under systemd with no window, with the gateway on and a console instead of Settings (`AGENTS.md`, 17 November, "Headless Linux daemon for the VPS"; `docs/research/multi-device/04-linux-headless.md`; `docs/operations/linux-host.md`).
+
+| Risk | What stops it |
+|---|---|
+| A Linux host's bot secrets, vault values, webhook secrets, a Harbor token or a Pi key sitting in the database, a backup, a log or a diagnostics bundle | Off Windows they live in owner-only files under `<data>/secrets`: folder `0700`, file `0600`, written through a private temp file and a rename, so no reader sees a half-written value. The store's names are hex-encoded, so no name can leave the folder. Nothing here reaches the database, an event, a backup or a log; `secret.list` returns names and timestamps only. Tests: `secret_files` in `crates/retinue-daemon/src/secrets.rs`. |
+| A local process running as the owner using the console file (`<data>/console.json`) to approve a device or turn Remote on | The file is user-only and exists only on a host started without a desktop shell; its token opens the `console.*` methods and **nothing else** — never `dispatch`, so never a conversation, a bot, a setting or a secret. It is not the daemon capability, which stays in memory. A device that steals it can do what someone already logged in as the owner can do from the host's terminal, which is the trust the host already carries. Tests: `console_tests.rs`. |
+| A pairing decision made with no window — the wrong device approved, or a code seen by someone else | The code is printed to the host's terminal only: never the log, the database, `console.json` or an event, and it expires as on the desktop. Approval still goes through `remote.pair.confirm`, so it keeps the tier choice, the one-use token, the `paired` line in that host's activity list, and the refusal sentences. `retinued pair list` shows name, kind, platform and sign-in method before the decision, and an expired or already-decided request is not offered. |
+| A Linux bot being offered the owner's-computer tools, which would fail inside a PowerShell script that is not there | `owner_computer::mcp_server_for` returns `None` off Windows, so the tools never appear, and a call that arrives anyway answers one sentence and lists nothing. |
+| A pairing request saying `platform: "windows"` for a Linux host, misleading the owner's own approval dialog | The field is `std::env::consts::OS` of the asking device. |
+
+**What this doesn't cover.** The daemon runs as the owner's own user, so it sees that user's git configuration, SSH keys and CLI sign-ins (open question 10 in `03-design-and-order.md`). A dedicated service account is the alternative and is not built. The Secret Service keyring path is not wired; on a Linux desktop there is no user for it yet.
+
 ## 17. Phone push (31 October 2026)
 
 Push goes through the phone maker's push service (FCM, Mozilla, WNS, Apple), so a third party carries the notification envelope. It is off by default, and turning it on is the owner's confirmed choice at the computer (`remote.push.set` with `confirm: true`).

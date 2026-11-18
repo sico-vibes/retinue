@@ -367,7 +367,7 @@ jobs:
   # (a failure, a cancellation, a missing result) fails this job too.
   checks:
     name: checks
-    needs: [scope, hygiene, types, uiTests, build, daemonTests, clippy, docs, perf]
+    needs: [scope, hygiene, types, uiTests, build, daemonTests, clippy, docs, perf, linux]
     if: always()
     runs-on: windows-latest
     timeout-minutes: 10
@@ -383,8 +383,10 @@ jobs:
             exit 1
           }
           $problems = @()
-          foreach ($name in 'hygiene', 'types', 'uiTests', 'build', 'daemonTests', 'clippy', 'docs', 'perf') {
-            $selected = $needs.scope.outputs.$name -eq 'true'
+          foreach ($name in 'hygiene', 'types', 'uiTests', 'build', 'daemonTests', 'clippy', 'docs', 'perf', 'linux') {
+            # The Linux daemon job runs whenever the Windows daemon tests do.
+            $output = if ($name -eq 'linux') { 'daemonTests' } else { $name }
+            $selected = $needs.scope.outputs.$output -eq 'true'
             $result = $needs.$name.result
             if ($selected -and $result -ne 'success') {
               $problems += "$name was selected and ended $result"
@@ -399,3 +401,44 @@ jobs:
             exit 1
           }
           Write-Host "Every selected check passed ($($needs.scope.outputs.reason))."
+  # 17 November 2026 (multi-device piece 8): the owner's VPS hosts sessions
+  # headless on Linux, and nothing proved that `retinued` builds or passes its
+  # tests there — this job does. It is the daemon crate and what it needs, not
+  # the whole workspace: the desktop crate is Windows-only and the speech crate
+  # downloads a large prebuilt engine that this host never runs.
+  linux:
+    needs: scope
+    if: needs.scope.outputs.daemonTests == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: '.'
+
+      # rusqlite is built with `bundled` and rustls with `ring`, so the runner
+      # needs a C compiler (and cmake, for ring's assembly) before a failure
+      # here says anything about the code.
+      - name: Build the C parts
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config cmake
+
+      - name: Check the daemon and every crate it needs
+        run: cargo check -p retinue-daemon --all-targets
+
+      - name: Daemon tests
+        # RUST_MIN_STACK comes from the workflow's env: some daemon tests
+        # overflow the default test-thread stack.
+        run: cargo test -p retinue-daemon --no-fail-fast
+
+      - name: The two platform-shaped crates
+        run: cargo test -p retinue-process
+
+      - name: Clippy
+        run: cargo clippy -p retinue-daemon --all-targets -- -D warnings
+
+      - name: The headless binary links
+        run: cargo build -p retinue-daemon --bin retinued

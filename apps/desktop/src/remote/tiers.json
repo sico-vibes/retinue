@@ -513,6 +513,13 @@
       "params": null
     },
     {
+      "method": "console.*",
+      "class": "never",
+      "minTier": null,
+      "why": "The console is a headless host's own terminal, reached over its loopback API with a token only such a host writes; no paired device may turn Remote on or approve a pairing.",
+      "params": null
+    },
+    {
       "method": "computer.status",
       "class": "never",
       "minTier": null,

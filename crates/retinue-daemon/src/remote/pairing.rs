@@ -278,9 +278,21 @@ impl PairingState {
         pairing_id
     }
 
-    /// The pending request for the desktop's approval dialog.
-    pub fn pending(&self, pairing_id: &str, _now: DateTime<Utc>) -> Option<Value> {
+    /// The request waiting for a decision, without an id to hand in: the console
+    /// has no list to click (`console.pair.pending`, `console.pair.confirm`). A
+    /// request that can no longer be approved is `None`, so a terminal is never
+    /// told about a decision that would only be refused.
+    pub fn live_pending(&self) -> Option<Value> {
         let offer = self.offer.as_ref()?;
+        let pending = offer.pending.as_ref()?;
+        if pending.outcome != Outcome::Pending || offer.cancelled || offer.burned || offer.expired_at(Utc::now()) {
+            return None;
+        }
+        self.pending(&offer.pairing_id, Utc::now())
+    }
+
+    /// The pending request for the desktop's approval dialog.
+    pub fn pending(&self, pairing_id: &str, _now: DateTime<Utc>) -> Option<Value> {        let offer = self.offer.as_ref()?;
         if offer.pairing_id != pairing_id {
             return None;
         }

@@ -946,6 +946,16 @@ pub async fn switch_off(st: &AppState) {
 // MCP calls from `retinued owner-server`, and the server a conversation gets
 
 pub async fn mcp_rpc(st: &AppState, session_id: &str, method: &str, params: &Value) -> Result<Value, DispatchError> {
+    // 17 November 2026 (headless Linux): there is no owner computer to drive off
+    // Windows, so the tools are empty and a call says so in one plain sentence
+    // rather than failing inside a PowerShell script that is not there.
+    if !cfg!(windows) {
+        return Ok(match method {
+            "mcp.owner.list" => json!({"tools": []}),
+            "mcp.owner.call" => json!({"content":[{"type":"text","text":"The owner's computer is a Windows computer. This host cannot control one."}],"isError":true}),
+            _ => return Err(derr("not_found", "unknown owner computer method", axum::http::StatusCode::NOT_FOUND)),
+        });
+    }
     match method {
         // The switch is read again on every list: a bridge a conversation started
         // before the owner turned it off must advertise nothing.
@@ -1012,6 +1022,11 @@ pub(crate) fn sweep_endpoints(data_dir: &Path) {
 /// file could not be written. The spec carries no token: the bridge reads the
 /// endpoint file, and every decision is made here.
 pub fn mcp_server_for(st: &AppState, session_id: &str) -> Option<McpServerSpec> {
+    // 17 November 2026: not offered on a host that has no Windows computer to
+    // drive, so a Linux bot never sees tools that cannot work.
+    if !cfg!(windows) {
+        return None;
+    }
     if !enabled(st) {
         return None;
     }
