@@ -19,7 +19,7 @@ describe('remote method rules', () => {
       if (rule.class === 'read') expect(rule.minTier, rule.method).toBe('viewer')
       // A push subscription is the calling device's own row, and a view-only phone needs one too.
       else if (rule.class === 'chat') expect(rule.minTier, rule.method).toBe(rule.method === 'push.subscribe' || rule.method === 'push.unsubscribe' ? 'viewer' : 'chat')
-      else if (rule.class === 'approve' || rule.class === 'handoff') expect(rule.minTier, rule.method).toBe('operator')
+      else if (rule.class === 'approve' || rule.class === 'handoff' || rule.class === 'manage') expect(rule.minTier, rule.method).toBe('operator')
       else expect(rule.minTier, rule.method).toBeNull()
       expect(rule.why.trim().length, rule.method).toBeGreaterThan(0)
     }

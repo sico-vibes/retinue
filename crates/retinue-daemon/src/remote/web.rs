@@ -432,6 +432,10 @@ async fn pair_post(State(state): State<WebState>, headers: HeaderMap, body: Byte
         );
     };
     let login = headers.get("tailscale-user-login").and_then(|value| value.to_str().ok()).map(str::to_owned);
+    // A machine link may not approve its own request, so the asking device is
+    // kept with the request when it already holds a valid cookie. A device that
+    // is pairing normally has none, so this is `None` on the ordinary path.
+    let asked_by = authenticate(&state, &headers, false).await.ok().map(|device| device.id);
     let result = {
         let mut pairing = state.remote.pairing.lock().unwrap();
         pairing.submit(
@@ -440,6 +444,7 @@ async fn pair_post(State(state): State<WebState>, headers: HeaderMap, body: Byte
             input["kind"].as_str().unwrap_or(""),
             input["platform"].as_str().unwrap_or(""),
             login,
+            asked_by,
             Utc::now(),
         )
     };
@@ -820,6 +825,17 @@ async fn rpc_post(State(state): State<WebState>, headers: HeaderMap, body: Bytes
         audit(&state.daemon, Some(&device.id), "denied", &format!("{} was refused {method}.", device.name)).await;
         return denial(&id, RemoteFailure::new(StatusCode::FORBIDDEN, "forbidden_remote", "Only a linked Retinue machine can move a conversation."));
     }
+    // Managing another computer's devices is the 17 November amendment, and it
+    // is a `machine` device at `operator` only. The kind and the two per-row
+    // rules (never its own row, never approving a machine or itself) can only be
+    // judged here, because this is where the gateway knows who is calling.
+    let manage = policy::rule_for(&method).is_some_and(|rule| rule.class == policy::MethodClass::Manage);
+    if manage {
+        if let Some(reason) = manage_refusal(&state, &device, &method, &params) {
+            audit(&state.daemon, Some(&device.id), "denied", &format!("{} was refused {method}.", device.name)).await;
+            return denial(&id, RemoteFailure::new(StatusCode::FORBIDDEN, "forbidden_remote", &reason));
+        }
+    }
     if let Some(reason) = attachment_rule(&method, &params) {
         audit(
             &state.daemon,
@@ -837,6 +853,18 @@ async fn rpc_post(State(state): State<WebState>, headers: HeaderMap, body: Bytes
     // gateway puts the device's own id in the request; a phone cannot choose it,
     // and anything it sends under `deviceId` is replaced here.
     let mut params = params;
+    if manage {
+        // The other computer writes one activity line naming the machine that
+        // did it, so the gateway supplies the caller's own name and id here, for
+        // the same reason: a value the caller sent under this key is replaced.
+        let actor = json!({ "deviceId": device.id, "name": device.name });
+        match params.as_object_mut() {
+            Some(object) => {
+                object.insert(super::ACTOR_KEY.to_string(), actor);
+            }
+            None => params = json!({ super::ACTOR_KEY: actor }),
+        }
+    }
     if method.starts_with("push.") {
         match params.as_object_mut() {
             Some(object) => {
@@ -869,8 +897,42 @@ fn audit_kind(method: &str) -> Option<&'static str> {
         Some(policy::MethodClass::Chat) => Some("prompt"),
         Some(policy::MethodClass::Approve) => Some("approval"),
         Some(policy::MethodClass::Handoff) => Some("handoff"),
+        // A `manage` call writes its own line naming the machine that made it,
+        // in the handler that knows the target (see `super::actor_of`).
+        Some(policy::MethodClass::Manage) => None,
         _ => None,
     }
+}
+
+/// What the gateway refuses about a `manage` call that the tier table cannot
+/// express: the device kind, and the three rows a machine link must never touch.
+/// Returns the sentence to send; `None` allows the call through to `dispatch`.
+fn manage_refusal(state: &WebState, device: &DeviceAuth, method: &str, params: &Value) -> Option<String> {
+    if device.kind != "machine" {
+        return Some("Only a linked Retinue machine can manage another machine's devices.".to_string());
+    }
+    if matches!(method, "remote.devices.update" | "remote.devices.revoke")
+        && params["deviceId"].as_str() == Some(device.id.as_str())
+    {
+        return Some("A machine link can't change or remove its own pairing.".to_string());
+    }
+    if method == "remote.pair.confirm" {
+        let pairing_id = params["pairingId"].as_str().unwrap_or_default();
+        let waiting = state.remote.pairing.lock().unwrap().waiting_identity();
+        if let Some((waiting_id, kind, asked_by)) = waiting {
+            // Only the request that is actually waiting can be the caller's own;
+            // any other id is the daemon's own "no pending request" to answer.
+            if waiting_id == pairing_id {
+                if kind == "machine" {
+                    return Some("A machine link can't approve another machine. Only the owner at that computer can.".to_string());
+                }
+                if asked_by.as_deref() == Some(device.id.as_str()) {
+                    return Some("A machine link can't approve its own pairing request.".to_string());
+                }
+            }
+        }
+    }
+    None
 }
 
 // ---------------------------------------------------------------------------

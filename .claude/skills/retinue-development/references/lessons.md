@@ -2,6 +2,15 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-17 · Remote · A class that depends on the device kind belongs to the gateway, not to the table
+
+- **What needed saying:** "a linked machine at `operator` may manage another machine's devices" (17 November amendment) has to be a `tiers.json` rule, but the policy cannot express it: `policy::authorize(&RemoteCall)` sees a tier, a method and params, never the device kind.
+- **Where each half lives:** the class (`manage` in `apps/desktop/src/remote/tiers.json`, `MethodClass::Manage` in `remote/policy.rs`) gives the tier and the quiet-hours answer; the gateway gives the kind. `remote/web.rs` `manage_refusal`, called from `rpc_post` before `dispatch`, refuses any kind but `machine` with one fixed sentence and applies the rules no row can carry: never the caller's own row (`remote.devices.update`/`.revoke`), never approving a request of kind `machine`, never approving the caller's own request. `handoff.*` already works this way with its own kind check a few lines above. **A new kind-dependent rule goes in `manage_refusal` (or beside it), never in the row alone.**
+- **Identity, not names:** "its own request" is only meaningful if the asking device was recorded when it asked. `POST /api/pair` reads the caller's valid device cookie and keeps that id in `Pending.device_id` (memory only, never in a reply; `pairing.rs`). Comparing names or platforms would be defeated by typing another name.
+- **The actor param:** the gateway stamps `actor {deviceId, name}` into a `manage` call's params (`ACTOR_KEY`, `remote/mod.rs` `actor_of`), so the far handler writes the activity line naming the machine (`<machine> removed <device> from another machine.`). The gateway replaces any value a caller sent under that key, like `push.*`'s `deviceId`; the near side never sends it.
+- **Parity:** a new `remote.*` method needs its `main.rs` dispatch arm in the same change as its row, or `remoteTiers.parity.test.ts` calls the row stale. `audit_kind` returns `None` for `manage` on purpose: the handler that knows the target writes the better line, so a manage call leaves exactly one line, not two.
+- **Tests:** `remote/tests.rs::a_phone_at_operator_cannot_reach_the_manage_subset`, `the_manage_subset_still_needs_operator`, `a_machine_manages_another_machines_devices_and_is_named_in_its_list`, `a_machine_reads_and_answers_a_waiting_request_but_never_its_own`; `machines_tests.rs::device_management_passes_through_to_the_far_gateway`, `managing_another_machine_needs_operator_on_the_link`, `a_linked_machine_manages_the_real_gateway_of_another_daemon`.
+
 ## 2026-11-17 · Daemon · A new RPC that nothing could call
 
 - **Symptom:** the remote-tiers parity test said `task.checkBack` was a stale row: "the dispatch no longer has" it.

@@ -69,6 +69,10 @@ pub enum MethodClass {
     /// Moving a conversation to another machine: operator, and only a `machine` device
     /// (the gateway checks the kind; `authorize` sees the tier).
     Handoff,
+    /// Managing another machine's Remote settings and devices (17 November
+    /// amendment): operator, and only a `machine` device, which the gateway
+    /// checks because this table cannot see a device's kind.
+    Manage,
     Never,
 }
 
@@ -210,6 +214,7 @@ fn load_policy() -> Result<Policy, String> {
             "chat" => MethodClass::Chat,
             "approve" => MethodClass::Approve,
             "handoff" => MethodClass::Handoff,
+            "manage" => MethodClass::Manage,
             "never" => MethodClass::Never,
             other => return Err(format!("tiers.json: {} has unknown class {other}", row.method)),
         };
@@ -791,7 +796,7 @@ mod tests {
                     };
                     assert_eq!(rule.min_tier, Some(expected), "{}", rule.method)
                 }
-                MethodClass::Approve | MethodClass::Handoff => assert_eq!(rule.min_tier, Some(Tier::Operator), "{}", rule.method),
+                MethodClass::Approve | MethodClass::Handoff | MethodClass::Manage => assert_eq!(rule.min_tier, Some(Tier::Operator), "{}", rule.method),
                 MethodClass::Never => assert_eq!(rule.min_tier, None, "{}", rule.method),
             }
         }

@@ -2060,6 +2060,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         | "remote.native.firewall.remove"
         | "remote.pair.begin"
         | "remote.pair.cancel"
+        | "remote.pair.pending"
         | "remote.pair.confirm"
         | "remote.devices.list"
         | "remote.devices.update"
@@ -2089,7 +2090,14 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         | "machine.steer"
         | "machine.cancel"
         | "machine.permission.reply"
-        | "machine.projects" => machines::rpc(st, method, &p).await,
+        | "machine.projects"
+        | "machine.remote.status"
+        | "machine.devices.list"
+        | "machine.devices.update"
+        | "machine.devices.revoke"
+        | "machine.pair.pending"
+        | "machine.pair.confirm"
+        | "machine.activity" => machines::rpc(st, method, &p).await,
         "machine.takeOver.preview"
         | "machine.takeOver"
         | "machine.takeOver.list"

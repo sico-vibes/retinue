@@ -132,6 +132,10 @@ pub struct Pending {
     /// How the request arrived: `tailscale` (a pairing code) or `native` (a
     /// password sign-in). The desktop approval dialog and the event carry it.
     pub method: String,
+    /// The device that asked, when it already held a valid cookie. A machine
+    /// link may not approve its own request (17 November amendment), so this is
+    /// an identity, not a name to compare. Memory only, never in a reply.
+    pub device_id: Option<String>,
 }
 
 /// The one live offer.
@@ -215,8 +219,11 @@ impl PairingState {
     }
 
     /// A device submits a code. `Ok(pairing_id)` locks the offer to it; `Err`
-    /// is always the same `pairing_invalid`.
-    pub fn submit(&mut self, code: &str, name: &str, kind: &str, platform: &str, login: Option<String>, now: DateTime<Utc>) -> Result<String, String> {
+    /// is always the same `pairing_invalid`. `device_id` is the caller's own
+    /// pairing when the request carried a valid cookie.
+    // Seven pieces of the request, exactly as `/api/pair` hands them over.
+    #[allow(clippy::too_many_arguments)]
+    pub fn submit(&mut self, code: &str, name: &str, kind: &str, platform: &str, login: Option<String>, device_id: Option<String>, now: DateTime<Utc>) -> Result<String, String> {
         let Some(offer) = self.offer.as_mut() else {
             return Err(PAIRING_INVALID_CODE.to_string());
         };
@@ -241,6 +248,7 @@ impl PairingState {
             token: None,
             device: None,
             method: "tailscale".to_string(),
+            device_id,
         });
         Ok(offer.pairing_id.clone())
     }
@@ -273,6 +281,9 @@ impl PairingState {
                 token: None,
                 device: None,
                 method: "native".to_string(),
+                // A Native sign-in is refused outright for a device that already
+                // holds a cookie (`login_post`), so the request is never its own.
+                device_id: None,
             }),
         });
         pairing_id
@@ -294,6 +305,31 @@ impl PairingState {
             "method": pending.method,
             "expiresAt": offer.expires_at.to_rfc3339(),
         }))
+    }
+
+    /// The one request nobody has decided yet, as a linked machine reads it
+    /// (`remote.pair.pending`). There is at most one, because there is one live
+    /// offer. An expired request is still shown until somebody decides it: the
+    /// refusal for a decision made too late names the reason better than an
+    /// empty answer does.
+    pub fn waiting(&self) -> Option<Value> {
+        let offer = self.offer.as_ref()?;
+        if offer.pending.as_ref().map(|pending| pending.outcome) != Some(Outcome::Pending) {
+            return None;
+        }
+        self.pending(&offer.pairing_id, Utc::now())
+    }
+
+    /// The live request's kind and the device that asked, for the two refusals
+    /// only a machine link needs (never approve a machine, never approve its own
+    /// request). `None` when nothing is waiting.
+    pub fn waiting_identity(&self) -> Option<(String, String, Option<String>)> {
+        let offer = self.offer.as_ref()?;
+        let pending = offer.pending.as_ref()?;
+        if pending.outcome != Outcome::Pending {
+            return None;
+        }
+        Some((offer.pairing_id.clone(), pending.kind.clone(), pending.device_id.clone()))
     }
 
     /// The owner decides. Approving mints the token and freezes the tier.
@@ -487,26 +523,49 @@ mod tests {
         let offer = state.begin(now());
         for attempt in 1..=MAX_WRONG_ATTEMPTS {
             let wrong = if offer.code == "AAAA-AAAA" { "BBBB-BBBB" } else { "AAAA-AAAA" };
-            assert_eq!(state.submit(wrong, "phone", "phone", "iOS", None, now()), Err(PAIRING_INVALID_CODE.to_string()));
+            assert_eq!(state.submit(wrong, "phone", "phone", "iOS", None, None, now()), Err(PAIRING_INVALID_CODE.to_string()));
             assert_eq!(state.offer().unwrap().attempts_left(), MAX_WRONG_ATTEMPTS - attempt);
         }
         assert!(state.offer().unwrap().burned);
         // Even the right code is refused once burned, and the answer is the same.
-        assert_eq!(state.submit(&offer.code, "phone", "phone", "iOS", None, now()), Err(PAIRING_INVALID_CODE.to_string()));
+        assert_eq!(state.submit(&offer.code, "phone", "phone", "iOS", None, None, now()), Err(PAIRING_INVALID_CODE.to_string()));
     }
 
     #[test]
     fn the_first_correct_code_locks_the_offer() {
         let mut state = PairingState::default();
         let offer = state.begin(now());
-        let pairing_id = state.submit(&offer.code, "Sam's phone", "phone", "iOS 19", Some("sam@example.com".into()), now()).unwrap();
+        let pairing_id = state.submit(&offer.code, "Sam's phone", "phone", "iOS 19", Some("sam@example.com".into()), Some("dev-1".into()), now()).unwrap();
         assert_eq!(pairing_id, offer.pairing_id);
         // A later correct code is refused too.
-        assert_eq!(state.submit(&offer.code, "attacker", "browser", "Chrome", None, now()), Err(PAIRING_INVALID_CODE.to_string()));
-        assert_eq!(state.submit("AAAA-AAAA", "attacker", "browser", "Chrome", None, now()), Err(PAIRING_INVALID_CODE.to_string()));
+        assert_eq!(state.submit(&offer.code, "attacker", "browser", "Chrome", None, None, now()), Err(PAIRING_INVALID_CODE.to_string()));
+        assert_eq!(state.submit("AAAA-AAAA", "attacker", "browser", "Chrome", None, None, now()), Err(PAIRING_INVALID_CODE.to_string()));
         let pending = state.pending(&offer.pairing_id, now()).unwrap();
         assert_eq!(pending["name"], "Sam's phone");
         assert_eq!(pending["login"], "sam@example.com");
+        // The asking device is kept beside the request, and never in the reply.
+        assert!(pending.get("deviceId").is_none(), "{pending}");
+        assert_eq!(state.waiting_identity().map(|(_, _, asked_by)| asked_by), Some(Some("dev-1".to_string())));
+    }
+
+    #[test]
+    fn the_waiting_request_is_read_without_its_identity() {
+        let mut state = PairingState::default();
+        assert!(state.waiting().is_none());
+        let offer = state.begin(now());
+        // A code the device never submitted is not a request.
+        assert!(state.waiting().is_none());
+        state.submit(&offer.code, "Sam's phone", "phone", "iOS 19", None, Some("dev-1".into()), now()).unwrap();
+        let waiting = state.waiting().unwrap();
+        assert_eq!(waiting["pairingId"], offer.pairing_id);
+        assert_eq!(waiting["name"], "Sam's phone");
+        assert_eq!(waiting["kind"], "phone");
+        assert_eq!(waiting["method"], "tailscale");
+        assert!(waiting["expiresAt"].is_string());
+        // Decided: nothing waits any more, and nothing is offered for approval.
+        state.confirm(&offer.pairing_id, false, None, now()).unwrap();
+        assert!(state.waiting().is_none());
+        assert!(state.waiting_identity().is_none());
     }
 
     #[test]
@@ -515,7 +574,7 @@ mod tests {
         let start = now();
         let offer = state.begin(start);
         let later = start + Duration::minutes(OFFER_TTL_MINUTES) + Duration::seconds(1);
-        assert_eq!(state.submit(&offer.code, "phone", "phone", "iOS", None, later), Err(PAIRING_INVALID_CODE.to_string()));
+        assert_eq!(state.submit(&offer.code, "phone", "phone", "iOS", None, None, later), Err(PAIRING_INVALID_CODE.to_string()));
     }
 
     #[test]
@@ -523,7 +582,7 @@ mod tests {
         let mut state = PairingState::default();
         let start = now();
         let offer = state.begin(start);
-        state.submit(&offer.code, "phone", "phone", "iOS", None, start).unwrap();
+        state.submit(&offer.code, "phone", "phone", "iOS", None, None, start).unwrap();
         let later = start + Duration::minutes(OFFER_TTL_MINUTES) + Duration::seconds(1);
         assert_eq!(state.poll(&offer.pairing_id, later), Poll::Expired);
     }
@@ -532,7 +591,7 @@ mod tests {
     fn approval_issues_a_token_at_the_chosen_tier() {
         let mut state = PairingState::default();
         let offer = state.begin(now());
-        let pairing_id = state.submit(&offer.code, "phone", "phone", "iOS", None, now()).unwrap();
+        let pairing_id = state.submit(&offer.code, "phone", "phone", "iOS", None, None, now()).unwrap();
         let approved = state.confirm(&pairing_id, true, Some(Tier::Chat), now()).unwrap().unwrap();
         assert_eq!(approved["device"]["tier"], "chat");
         let token = approved["token"].as_str().unwrap().to_string();
@@ -550,20 +609,20 @@ mod tests {
     fn rejection_burns_the_offer() {
         let mut state = PairingState::default();
         let offer = state.begin(now());
-        let pairing_id = state.submit(&offer.code, "phone", "phone", "iOS", None, now()).unwrap();
+        let pairing_id = state.submit(&offer.code, "phone", "phone", "iOS", None, None, now()).unwrap();
         assert!(state.confirm(&pairing_id, false, None, now()).unwrap().is_none());
         assert_eq!(state.poll(&pairing_id, now()), Poll::Rejected);
         assert!(state.offer().unwrap().pending.is_some());
         // The offer is not open for a new submission.
         assert!(!state.offer().unwrap().is_open());
-        assert_eq!(state.submit(&offer.code, "other", "phone", "iOS", None, now()), Err(PAIRING_INVALID_CODE.to_string()));
+        assert_eq!(state.submit(&offer.code, "other", "phone", "iOS", None, None, now()), Err(PAIRING_INVALID_CODE.to_string()));
     }
 
     #[test]
     fn approving_without_a_tier_is_refused() {
         let mut state = PairingState::default();
         let offer = state.begin(now());
-        let pairing_id = state.submit(&offer.code, "phone", "phone", "iOS", None, now()).unwrap();
+        let pairing_id = state.submit(&offer.code, "phone", "phone", "iOS", None, None, now()).unwrap();
         assert!(state.confirm(&pairing_id, true, None, now()).is_err());
         assert_eq!(state.poll(&pairing_id, now()), Poll::Pending);
     }
@@ -581,7 +640,7 @@ mod tests {
     fn cancel_reports_the_pending_request_as_cancelled() {
         let mut state = PairingState::default();
         let offer = state.begin(now());
-        let pairing_id = state.submit(&offer.code, "phone", "phone", "iOS", None, now()).unwrap();
+        let pairing_id = state.submit(&offer.code, "phone", "phone", "iOS", None, None, now()).unwrap();
         assert_eq!(state.cancel(now()), Some(Outcome::Cancelled));
         assert_eq!(state.poll(&pairing_id, now()), Poll::Expired);
     }
