@@ -4,7 +4,7 @@ Date 17 November 2026. Owner decision: `AGENTS.md`, "Amendment (17 November 2026
 
 This page is for the owner or the Director at the VPS's own terminal. It installs **`retinued`, the daemon**, as a systemd *user* unit, on the host itself — not inside Harbor's container (the container sleeps and its lifecycle belongs to Harbor; `04-linux-headless.md` section 7). The container keeps its job: it is the employee's Linux desktop and browser, which a conversation running on the host drives as a tool.
 
-What works on this host: conversations, bots, projects, worktrees, git, the Remote gateway (Tailscale or Native), machine links, the phone app over the gateway, and secrets in owner-only files. What does not: the desktop window, dictation, the owner's-computer tools, and the browser/computer tools except through the linked Harbor container. The full list is at the end.
+What works on this host: conversations, bots, projects, worktrees, git, the Remote gateway (Tailscale or Native), machine links, the phone app over the gateway, and secrets in the system keyring when one is running and unlocked (else in owner-only files). What does not: the desktop window, dictation, the owner's-computer tools, and the browser/computer tools except through the linked Harbor container. The full list is at the end.
 
 ## 1. What you need on the host
 
@@ -46,12 +46,18 @@ Without it, the daemon starts when you log in and stops when you log out — whi
 |---|---|
 | Data folder | `$XDG_DATA_HOME/retinue`, else `~/.local/share/retinue` |
 | Database | `<data folder>/retinue.db` (and its `-wal`) |
-| Secrets | `<data folder>/secrets/` — folder `0700`, one file per secret `0600`, written atomically. **Never** in the database, a backup, a diagnostics bundle or a log. |
+| Secrets | The system keyring when one is running and unlocked: one item per secret in the freedesktop Secret Service (GNOME keyring or KWallet), labelled `Retinue: <name>`, found by `application=retinue` and `name=<name>`. Otherwise the owner-only files `<data folder>/secrets/` — folder `0700`, one file per secret `0600`, written atomically. **Never** in the database, a backup, a diagnostics bundle or a log. |
 | Console token | `<data folder>/console.json` — `0600`, written at start, removed at a clean stop. It opens **only** the console commands, never the daemon's own capability. |
 | Log file | `<data folder>/retinued.log`, plus `journalctl --user -u retinued` |
 | The unit | `~/.config/systemd/user/retinued.service` |
 
 An explicit `RETINUE_DB_PATH` overrides the database path, and the data folder is that file's parent.
+
+**Where the secrets go, and what happens when that changes (18 November 2026).** At start the daemon looks for a Secret Service on the user's session bus — the GNOME keyring, or KWallet with its Secret Service plugin. If one answers and its default collection is unlocked, values live there; if it is locked, or nothing answers, they stay in the owner-only files and nothing prompts (a systemd unit has nobody to answer a prompt). The choice is made once, at start, and `retinued status` prints it (`secret-service` or `files`).
+
+When a host that was keeping files gains a keyring, the next start moves every value into it: each is written, read back to prove the copy, and only then is its file deleted. A value that does not move keeps that run on the files, so nothing becomes invisible. Removing the keyring's collection later does not bring the files back: a file was deleted only after its value was verified in the keyring.
+
+A headless VPS normally has no session bus at all. That is the expected state, not an error: the daemon uses the files without a prompt and without a delay.
 
 ## 4. Turn the gateway on
 
@@ -120,7 +126,7 @@ Removing the data folder (`~/.local/share/retinue`) deletes the database **and t
 | Preview ports ("which port is this") | The scan uses Windows' `netstat`; on Linux the preview panel shows no port list. |
 | "Show in folder" | Uses `xdg-open` on Linux, so it opens the folder if a graphical session is attached; a headless host has none. |
 | The Native firewall rule | The elevated Windows prompt has no Linux equivalent; the console answers `unsupported`. Add the rule yourself with `ufw`, and forward the port in your router. |
-| A Secret Service keyring | Not wired yet (see the report's open list). Headless Linux uses the owner-only files in `<data folder>/secrets`. |
+| A Secret Service keyring | Used when one is running and unlocked for this user (GNOME keyring, or KWallet's Secret Service plugin); otherwise the owner-only files in `<data folder>/secrets`. A headless host usually has none, which is expected. |
 
 ## 9. When something is wrong
 
@@ -130,5 +136,6 @@ Removing the data folder (`~/.local/share/retinue`) deletes the database **and t
 | `Turn Remote on before pairing a device.` | `retinued remote on --method tailscale`. |
 | `Tailscale is not installed on this computer.` | Install Tailscale (`curl -fsSL https://tailscale.com/install.sh | sh` is Tailscale's own installer), then `sudo systemctl start tailscaled` and `tailscale up`. |
 | A turn fails with "not installed" | The unit's `PATH` does not include the folder the CLI is in. Add it to the unit's `Environment=PATH=…` line and restart. |
+| `retinued status` says `files` although a keyring is running | The keyring is locked, or the unit's environment has no session bus. Unlock the keyring and restart the unit; `journalctl --user -u retinued` says once at start whether a locked keyring was found. Nothing moves on its own until the next start. |
 | Nothing survives a reboot | `sudo loginctl enable-linger "$USER"` (section 2). |
 | The phone page shows "not installed" | The built phone app is not on the host. Set `RETINUE_REMOTE_WEB_DIR` in the unit to a folder holding `npm run build:remote`'s output, then restart. |

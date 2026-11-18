@@ -2,6 +2,20 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-18 · Daemon · A store migration must list the names the public read hides
+
+- **Symptom:** with the Secret Service keyring wired in (`secrets.rs`), a migration built on the store's `list()` would have moved only `secret.*`-shaped names; `vault/<id>/password`, `connector/<id>` and `pi/<provider>` would have stayed in the files and become unreadable the moment the keyring was chosen.
+- **Cause:** both backends' `list` is deliberately filtered — `store::files::list_in` keeps only `valid_name` names (it mirrors Credential Manager, whose `list` does the same), and the keyring's `list` now does too. That is right for `secret.list` and wrong for anything that must enumerate storage.
+- **Fix:** `store::files::all_in` returns every name it wrote (internal names included), `name_of` no longer filters, and the `Backend::entries` method the migration uses is documented as the unfiltered one. Pinned by `every_value_moves_and_the_file_goes` (moves `vault/3f/password`) and the added `all_in` assertion in `names_with_slashes_and_dots_stay_inside_the_folder`.
+- **Avoid:** before writing anything that copies or enumerates a store, check whether its public listing filters; if it does, add a second, internal one rather than changing the public answer.
+
+## 2026-11-18 · Gates · Code under cfg(not(windows)) is compiled by no Windows gate, and the log scan forbids naming a "Secret Service"
+
+- **Symptom 1:** a Linux-only module in `secrets.rs` (the keyring) is invisible to `cargo check` and `cargo clippy --all-targets` on this PC: the cfg removes it before typechecking, so a compile error there would not show until CI. The throwaway probe crate under `C:\tmp` did not get far either — it stopped at `getrandom 0.4.3`'s fresh build script (SAC, os 4551), before reaching the module.
+- **Fix that substitutes for a compile:** read the dependency's own source from `%USERPROFILE%\.cargo\registry\src\index.crates.io-*\secret-service-5.2.0\src\blocking\` and check every signature and lifetime you call (`connect`, `get_default_collection`, `create_item`, `search_items`, `get_all_items`, `get_secret`, `get_attributes`, `get_modified`, `delete`). Write the report line "the Linux CI job is the proof" and say the module has never been compiled here.
+- **Symptom 2:** `fix39_p12_tests::every_log_call_site_is_a_fixed_message` failed a log line that mentioned the keyring's full name: the scan rejects `text`, `prompt`, `content`, `message`, `command`, `secret`, `token`, `cookie`, `password` and `credential` anywhere between `tracing::…!(`/`info!(` and the next `");`.
+- **Fix:** say "stored values", "the keyring" and "the owner-only files". Check any new log line with `cargo test -p retinue-daemon every_log_call_site` before pushing; it scans cfg'd-out modules too, because it reads the source text.
+
 ## 2026-11-18 · Daemon · A test cannot stub the far machine's adapter after its gateway is up
 
 - **Symptom:** `machine_mcp_tests.rs` replaced the far `AppState`'s codex adapter and then started a turn through the link; the far turn ended in `error` with the generic "The turn could not be completed." — the stub was never used.
