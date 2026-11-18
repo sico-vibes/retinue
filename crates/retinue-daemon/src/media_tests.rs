@@ -418,7 +418,7 @@ async fn preview_refuses_svg_a_symlink_and_a_mislabelled_file() {
     let target = dir.join("real.png");
     std::fs::write(&target, png_bytes()).unwrap();
     let link = dir.join("link.png");
-    let linked = std::os::windows::fs::symlink_file(&target, &link).is_ok();
+    let linked = crate::test_env::symlink_file(&target, &link);
     if linked {
         let link_id = ready_row(&st, "image-session", "call-link", &link);
         let link_reply = dispatch(&st, "media.preview", json!({"sessionId":"image-session","mediaId":link_id})).await.unwrap();

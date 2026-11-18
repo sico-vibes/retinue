@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "d96a738",
-  "documentCount": 435,
+  "revision": "be9d799",
+  "documentCount": 443,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -1996,6 +1996,76 @@
       ]
     },
     {
+      "id": "project/research/multi-device/03-design-and-order",
+      "source": "docs/research/multi-device/03-design-and-order.md",
+      "title": "A design for many-machine Retinue, what to reuse, the build order, and open questions",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "dae471e42f55a796feff871719c8ac9facc9783534d87043b03bb7d6b0bf7229",
+      "headings": [
+        {
+          "id": "piece-1-a-live-link-so-another-machines-sessions-move-as-they-happen-r1",
+          "text": "Piece 1 — A live link, so another machine's sessions move as they happen (R1)",
+          "level": 2
+        },
+        {
+          "id": "piece-2-one-list-of-every-conversation-with-the-machine-on-it-r1-r3",
+          "text": "Piece 2 — One list of every conversation, with the machine on it (R1, R3)",
+          "level": 2
+        },
+        {
+          "id": "piece-3-where-it-came-from-r3",
+          "text": "Piece 3 — \"Where it came from\" (R3)",
+          "level": 2
+        },
+        {
+          "id": "piece-4-answer-an-approval-from-the-machine-in-hand-r2",
+          "text": "Piece 4 — Answer an approval from the machine in hand (R2)",
+          "level": 2
+        },
+        {
+          "id": "piece-5-the-phone-sees-and-drives-the-machines-its-host-is-linked-to-r1-r2",
+          "text": "Piece 5 — The phone sees and drives the machines its host is linked to (R1, R2)",
+          "level": 2
+        },
+        {
+          "id": "piece-6-start-a-project-on-another-machine-r4",
+          "text": "Piece 6 — Start a project on another machine (R4)",
+          "level": 2
+        },
+        {
+          "id": "piece-7-manage-the-other-machines-from-here-r5",
+          "text": "Piece 7 — Manage the other machines from here (R5)",
+          "level": 2
+        },
+        {
+          "id": "piece-8-a-daemon-on-the-vps-r6",
+          "text": "Piece 8 — A daemon on the VPS (R6)",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/multi-device/04-linux-headless",
+      "source": "docs/research/multi-device/04-linux-headless.md",
+      "title": "A headless Linux retinued: what T3 does, what Retinue needs, and the VPS",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "4cd655599e78ecb53fefaed7dd83e491fb8f67a2876b1fbdbd9de35afdc509e8",
+      "headings": [
+        {
+          "id": "31-the-numbers-verified",
+          "text": "3.1 The numbers, verified",
+          "level": 2
+        },
+        {
+          "id": "32-the-inventory-by-area",
+          "text": "3.2 The inventory, by area",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/research/accounts-and-openbot-2026-11",
       "source": "docs/research/accounts-and-openbot-2026-11.md",
       "title": "Accounts, sign-in, and how OpenBot runs coding bots",
@@ -3175,6 +3245,81 @@
       ]
     },
     {
+      "id": "project/research/multi-device/01-t3-vs-retinue",
+      "source": "docs/research/multi-device/01-t3-vs-retinue.md",
+      "title": "Multi-device Retinue: what T3 Code does, where Retinue stands, and a way to the owner's bar",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "4126ad35f378d1e305cdf84762c35822cbcb96a99ae3799fb5276b4b462c79d6",
+      "headings": [
+        {
+          "id": "the-six-requirements-as-testable-statements",
+          "text": "The six requirements, as testable statements",
+          "level": 2
+        },
+        {
+          "id": "files",
+          "text": "Files",
+          "level": 2
+        },
+        {
+          "id": "how-to-read-the-evidence",
+          "text": "How to read the evidence",
+          "level": 2
+        },
+        {
+          "id": "11-the-topology-one-server-per-machine-no-hub-every-app-a-client",
+          "text": "1.1 The topology: one server per machine, no hub, every app a client",
+          "level": 2
+        },
+        {
+          "id": "12-how-devices-find-and-trust-each-other",
+          "text": "1.2 How devices find and trust each other",
+          "level": 2
+        },
+        {
+          "id": "13-how-sessions-and-their-live-events-reach-every-device-r1",
+          "text": "1.3 How sessions and their live events reach every device (R1)",
+          "level": 2
+        },
+        {
+          "id": "14-how-where-it-runs-and-where-it-came-from-are-modelled-r3",
+          "text": "1.4 How \"where it runs\" and \"where it came from\" are modelled (R3)",
+          "level": 2
+        },
+        {
+          "id": "15-starting-a-project-or-a-session-on-a-remote-device-r4",
+          "text": "1.5 Starting a project or a session on a remote device (R4)",
+          "level": 2
+        },
+        {
+          "id": "16-continue-on-another-device-r2",
+          "text": "1.6 \"Continue on another device\" (R2)",
+          "level": 2
+        },
+        {
+          "id": "17-what-happens-when-a-device-or-machine-is-offline",
+          "text": "1.7 What happens when a device or machine is offline",
+          "level": 2
+        },
+        {
+          "id": "18-t3s-own-costs-and-weak-points-stated-plainly",
+          "text": "1.8 T3's own costs and weak points, stated plainly",
+          "level": 2
+        },
+        {
+          "id": "19-what-changed-since-the-two-earlier-studies",
+          "text": "1.9 What changed since the two earlier studies",
+          "level": 2
+        },
+        {
+          "id": "110-t3-scored-against-the-six-requirements",
+          "text": "1.10 T3 scored against the six requirements",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/reports/multi-device-live",
       "source": "docs/reports/multi-device-live.md",
       "title": "Multi-device, step 1: a live link, the machine's conversations, \"started from\"",
@@ -3385,6 +3530,46 @@
         {
           "id": "verification",
           "text": "Verification",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/multi-device/00-director-map",
+      "source": "docs/research/multi-device/00-director-map.md",
+      "title": "Multi-device: the Director's first map (17 November 2026)",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "d362199a378838416176ad3476aeadd2f8df50761ba6d3a6fec9da8132f0c14d",
+      "headings": [
+        {
+          "id": "the-owners-bar",
+          "text": "The owner's bar",
+          "level": 2
+        },
+        {
+          "id": "how-t3-does-it-from-its-docs-code-not-yet-traced",
+          "text": "How T3 does it (from its docs; code not yet traced)",
+          "level": 2
+        },
+        {
+          "id": "what-makes-t3-feel-reliable-docsinternalsconnection-runtimemd",
+          "text": "What makes T3 feel reliable (docs/internals/connection-runtime.md)",
+          "level": 3
+        },
+        {
+          "id": "retinue-today",
+          "text": "Retinue today",
+          "level": 2
+        },
+        {
+          "id": "rules-that-stand-in-the-way-the-owner-decides",
+          "text": "Rules that stand in the way (the owner decides)",
+          "level": 2
+        },
+        {
+          "id": "first-guess-at-the-build-order-to-check-against-grey",
+          "text": "First guess at the build order (to check against Grey)",
           "level": 2
         }
       ]
@@ -5594,6 +5779,56 @@
       ]
     },
     {
+      "id": "project/research/multi-device/02-retinue-today",
+      "source": "docs/research/multi-device/02-retinue-today.md",
+      "title": "Retinue today, and the gap to the owner's bar",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "826c11258f32ed7957687b589105602710ae96b64963daee74c967c88b918813",
+      "headings": [
+        {
+          "id": "21-what-exists",
+          "text": "2.1 What exists",
+          "level": 2
+        },
+        {
+          "id": "22-r1-all-four-devices-see-the-same-sessions-live",
+          "text": "2.2 R1: all four devices see the same sessions, live",
+          "level": 2
+        },
+        {
+          "id": "23-r2-carry-on-any-session-from-any-device",
+          "text": "2.3 R2: carry on any session from any device",
+          "level": 2
+        },
+        {
+          "id": "24-r3-where-it-runs-and-where-it-came-from",
+          "text": "2.4 R3: where it runs and where it came from",
+          "level": 2
+        },
+        {
+          "id": "25-r4-start-new-projects-on-another-device",
+          "text": "2.5 R4: start new projects on another device",
+          "level": 2
+        },
+        {
+          "id": "26-r5-manage-everything-about-the-other-devices-from-the-device-in-hand",
+          "text": "2.6 R5: manage everything about the other devices from the device in hand",
+          "level": 2
+        },
+        {
+          "id": "27-r6-easy-robust-and-reliable",
+          "text": "2.7 R6: easy, robust and reliable",
+          "level": 2
+        },
+        {
+          "id": "28-the-gap-in-one-paragraph",
+          "text": "2.8 The gap in one paragraph",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "repository/apps/website/README",
       "source": "apps/website/README.md",
       "title": "Retinue website",
@@ -5805,6 +6040,126 @@
           "id": "status-delta-and-gate-decisions",
           "text": "Status delta and gate decisions",
           "level": 3
+        }
+      ]
+    },
+    {
+      "id": "project/research/synara-2026-11",
+      "source": "docs/research/synara-2026-11.md",
+      "title": "Synara, read against Retinue",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "798de5a287443414e61c9eaba263c1829aa577d7260b61219ac13b0a38c5de52",
+      "headings": [
+        {
+          "id": "summary",
+          "text": "Summary",
+          "level": 2
+        },
+        {
+          "id": "1-sources-and-what-each-is-worth",
+          "text": "1. Sources, and what each is worth",
+          "level": 2
+        },
+        {
+          "id": "2-what-i-checked-in-their-source-and-what-remains-a-claim",
+          "text": "2. What I checked in their source, and what remains a claim",
+          "level": 2
+        },
+        {
+          "id": "3-item-by-item-what-retinue-has-today",
+          "text": "3. Item by item: what Retinue has today",
+          "level": 2
+        },
+        {
+          "id": "planning",
+          "text": "Planning",
+          "level": 3
+        },
+        {
+          "id": "many-agents",
+          "text": "Many agents",
+          "level": 3
+        },
+        {
+          "id": "agents-that-do-more",
+          "text": "Agents that do more",
+          "level": 3
+        },
+        {
+          "id": "code-and-review",
+          "text": "Code and review",
+          "level": 3
+        },
+        {
+          "id": "small-things",
+          "text": "Small things",
+          "level": 3
+        },
+        {
+          "id": "the-t3-shared-list-briefly",
+          "text": "The T3-shared list, briefly",
+          "level": 3
+        },
+        {
+          "id": "in-progress-in-synara",
+          "text": "In progress in Synara",
+          "level": 3
+        },
+        {
+          "id": "4-what-we-lack-ranked",
+          "text": "4. What we lack, ranked",
+          "level": 2
+        },
+        {
+          "id": "the-first-three-in-a-little-more-detail",
+          "text": "The first three, in a little more detail",
+          "level": 3
+        },
+        {
+          "id": "5-ux-ideas-worth-borrowing-without-their-art",
+          "text": "5. UX ideas worth borrowing, without their art",
+          "level": 2
+        },
+        {
+          "id": "6-the-owners-question-pause-a-running-task-resume-it-later",
+          "text": "6. The owner's question: pause a running task, resume it later",
+          "level": 2
+        },
+        {
+          "id": "what-synara-does",
+          "text": "What Synara does",
+          "level": 3
+        },
+        {
+          "id": "what-t3-code-has",
+          "text": "What T3 Code has",
+          "level": 3
+        },
+        {
+          "id": "what-retinue-has",
+          "text": "What Retinue has",
+          "level": 3
+        },
+        {
+          "id": "what-to-learn-and-what-to-build",
+          "text": "What to learn, and what to build",
+          "level": 3
+        },
+        {
+          "id": "7-licence-and-attribution-if-we-ever-adapt-code",
+          "text": "7. Licence and attribution, if we ever adapt code",
+          "level": 2
+        },
+        {
+          "id": "8-what-i-could-not-verify",
+          "text": "8. What I could not verify",
+          "level": 2
+        },
+        {
+          "id": "sources-with-the-dates-i-used-them",
+          "text": "Sources, with the dates I used them",
+          "level": 2
         }
       ]
     },
@@ -8723,6 +9078,41 @@
         {
           "id": "deliverable-on-approval",
           "text": "Deliverable on approval",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/plans/multi-device-plan",
+      "source": "docs/plans/multi-device-plan.md",
+      "title": "Retinue on many machines",
+      "section": "Plans & briefs",
+      "status": "Plan",
+      "sha256": "6e7af6104500fd5f6acfc8f6da7a9410737b26366e50beb52802da35ba38e61a",
+      "headings": [
+        {
+          "id": "owner-decisions-17-november-2026",
+          "text": "Owner decisions (17 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "lanes",
+          "text": "Lanes",
+          "level": 2
+        },
+        {
+          "id": "screens-director",
+          "text": "Screens (Director)",
+          "level": 2
+        },
+        {
+          "id": "diagnose-and-test-through-the-retinue-mcp-owner-17-november-2026",
+          "text": "Diagnose and test through the Retinue MCP (owner, 17 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "done-means",
+          "text": "Done means",
           "level": 2
         }
       ]
@@ -23104,6 +23494,36 @@
         {
           "id": "changed",
           "text": "Changed",
+          "level": 2
+        },
+        {
+          "id": "installation",
+          "text": "Installation",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/releases/0.2.0-beta.5",
+      "source": "docs/releases/0.2.0-beta.5.md",
+      "title": "Retinue 0.2.0-beta.5",
+      "section": "Release notes",
+      "status": "Release note",
+      "sha256": "4a37fe22b265047ed8a6eb1fd373d29f6d9c890ebd97e15c038e6f3a18b18e8d",
+      "headings": [
+        {
+          "id": "new",
+          "text": "New",
+          "level": 2
+        },
+        {
+          "id": "changed",
+          "text": "Changed",
+          "level": 2
+        },
+        {
+          "id": "for-the-curious",
+          "text": "For the curious",
           "level": 2
         },
         {

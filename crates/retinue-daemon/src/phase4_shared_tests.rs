@@ -120,7 +120,7 @@ async fn a_symlink_or_large_file_is_refused() {
     let (linked, link_dir) = real_project(&st, "Linked");
     let target = link_dir.join("real.json");
     std::fs::write(&target, r#"{"version":1,"setupScript":"echo hi"}"#).unwrap();
-    if std::os::windows::fs::symlink_file(&target, link_dir.join(FILE)).is_ok() {
+    if crate::test_env::symlink_file(&target, link_dir.join(FILE)) {
         let got = shared_get(&st, &linked).await;
         assert_eq!((got["found"].clone(), got["valid"].clone()), (json!(true), json!(false)), "a link is not read");
         assert!(effective(&st, &linked)["setupScript"].is_null());
@@ -303,7 +303,7 @@ async fn write_never_follows_a_planted_temp_link() {
     std::fs::write(&outside, "keep me").unwrap();
     let planted = dir.join(".retinue.json.tmp");
     // Where the account may make a link, plant one at the temporary name.
-    if std::os::windows::fs::symlink_file(&outside, &planted).is_ok() {
+    if crate::test_env::symlink_file(&outside, &planted) {
         let wrote = dispatch(&st, "project.sharedSettings.write", json!({"projectId":id,"confirm":true})).await.unwrap();
         assert_eq!(wrote["state"], "trusted");
         assert_eq!(std::fs::read_to_string(&outside).unwrap(), "keep me", "the write never leaves the project folder");

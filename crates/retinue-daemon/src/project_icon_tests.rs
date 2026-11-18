@@ -118,12 +118,12 @@ async fn a_favicon_link_that_leaves_the_project_is_refused() {
     let outside = std::env::temp_dir().join(format!("retinue-icon-outside-{}.svg", Uuid::new_v4()));
     std::fs::write(&outside, "<svg>outside</svg>").unwrap();
     // Where the account may make a link, point the project's favicon at a file outside it.
-    if std::os::windows::fs::symlink_file(&outside, dir.join("favicon.svg")).is_ok() {
+    if crate::test_env::symlink_file(&outside, dir.join("favicon.svg")) {
         assert_eq!(dispatch(&st, "project.favicon", json!({"projectId":id})).await.unwrap(), json!({"found":false}), "a link resolving outside the folder is refused");
         // A link that stays inside the folder is read like any other file.
         std::fs::write(dir.join("real.svg"), "<svg>real</svg>").unwrap();
         std::fs::remove_file(dir.join("favicon.svg")).unwrap();
-        if std::os::windows::fs::symlink_file(dir.join("real.svg"), dir.join("icon.svg")).is_ok() {
+        if crate::test_env::symlink_file(dir.join("real.svg"), dir.join("icon.svg")) {
             let inside = dispatch(&st, "project.favicon", json!({"projectId":id})).await.unwrap();
             assert_eq!((inside["found"].clone(), inside["path"].clone()), (json!(true), json!("icon.svg")));
         }

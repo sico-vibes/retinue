@@ -78,6 +78,17 @@ fn restore(saved: Vec<(&'static str, Option<OsString>)>) {
     }
 }
 
+/// Makes a file symlink where the account may (Windows needs a privilege a test
+/// process may lack), so link tests run on Windows and on Linux alike. False when
+/// the link could not be made, and the caller skips that part.
+pub(crate) fn symlink_file(target: impl AsRef<std::path::Path>, link: impl AsRef<std::path::Path>) -> bool {
+    #[cfg(windows)]
+    let made = std::os::windows::fs::symlink_file(target, link);
+    #[cfg(not(windows))]
+    let made = std::os::unix::fs::symlink(target, link);
+    made.is_ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
