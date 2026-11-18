@@ -761,6 +761,62 @@
         "code": "forbidden_remote",
         "reason": "Only the owner at the desktop answers a secret request."
       }
+    },
+    {
+      "name": "manage-needs-operator",
+      "call": {
+        "tier": "chat",
+        "approvalsFromRemote": false,
+        "method": "remote.devices.list",
+        "params": {},
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "tier_required",
+        "reason": "a chat device cannot call remote.devices.list"
+      }
+    },
+    {
+      "name": "manage-allowed-at-operator",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "remote.devices.list",
+        "params": {},
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "manage-quiet-hours-passes",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": false,
+        "method": "remote.devices.revoke",
+        "params": { "deviceId": "dev-1" },
+        "quietHours": true
+      },
+      "expect": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "manage-never-still-never",
+      "call": {
+        "tier": "operator",
+        "approvalsFromRemote": true,
+        "method": "remote.enable",
+        "params": {},
+        "quietHours": false
+      },
+      "expect": {
+        "allowed": false,
+        "code": "forbidden_remote",
+        "reason": "A paired device must not turn the host's remote access on."
+      }
     }
   ],
   "results": [

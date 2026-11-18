@@ -276,6 +276,19 @@ The owner's VPS runs `retinued` under systemd with no window, with the gateway o
 | A pairing request saying `platform: "windows"` for a Linux host, misleading the owner's own approval dialog | The field is `std::env::consts::OS` of the asking device. |
 
 **What this doesn't cover.** The daemon runs as the owner's own user, so it sees that user's git configuration, SSH keys and CLI sign-ins (open question 10 in `03-design-and-order.md`). A dedicated service account is the alternative and is not built. The Secret Service keyring path is not wired; on a Linux desktop there is no user for it yet.
+### A machine manages another machine's devices (17 November 2026)
+
+The owner opened seven `remote.*` methods to a linked machine at operator, plus one new read (`remote.pair.pending`). They are `manage` in `tiers.json`; the gateway additionally refuses any device whose kind is not `machine`, whatever its tier. This is a deliberate exception to "every `remote.*` method" and to "approvals from remote are off by default", so each risk is recorded here. Piece 7 of `docs/research/multi-device/03-design-and-order.md`; the contract is `docs/reports/multi-device-manage.md`.
+
+| Risk | What stops it |
+|---|---|
+| A phone or browser at operator manages a machine's devices | The class alone never lets one through: `rpc_post` refuses every kind but `machine` with one fixed sentence, and writes a `denied` line in the host's list. Proven by `remote/tests.rs::a_phone_at_operator_cannot_reach_the_manage_subset` (phone and browser, every one of the seven) and `the_manage_subset_still_needs_operator`. |
+| A machine silently raises its own tier, or removes its own pairing before anyone notices | `remote.devices.update` and `remote.devices.revoke` are refused when the id is the caller's own, checked in the gateway against the device it authenticated, not against a body field. |
+| A machine approves another machine, or approves itself, and so makes a mesh or a duplicate identity | `remote.pair.confirm` refuses a waiting request whose kind is `machine`, and one whose asking device is the caller. The asking device is recorded with the request from its own cookie at `POST /api/pair` and never returned; nothing in the body can claim it. |
+| One machine quietly changes another's security posture | Every change writes one line in the changed machine's own activity list naming the machine that did it (`<machine> removed <device> from another machine.`), after the same change the desktop would make; the four reads write nothing. An owner reading either computer sees who did it. |
+| A machine reads more of another machine than the owner approved | `remote.status` is the same object the desktop's window gets, `remote.devices.list` the same rows, `remote.activity.list` the same content-free lines. No token, no credential, no host path, no message text, and never another machine's event stream. The device list carries the owner's own account label (`login`), which the owner already sees on both computers. |
+| Quiet hours used as a shield: a stolen phone waits until night to be revoked | `manage` is not refused during quiet hours on purpose. It starts no work, and cutting off a lost device must not wait for the morning. |
+| A machine's own window talks to the other machine directly | Unchanged: the window calls this daemon only. The seven near-side methods are `machine.*`, `never` remote, each needing operator on the link, and each a pass-through of the far side's own call with the far gateway still the authority. |
 
 ## 17. Phone push (31 October 2026)
 

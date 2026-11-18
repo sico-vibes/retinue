@@ -25,7 +25,12 @@
 import { tierAtLeast, type RemoteTier } from './remoteContract'
 import tiersData from './tiers.json'
 
-export type MethodClass = 'read' | 'chat' | 'approve' | 'handoff' | 'never'
+export type MethodClass = 'read' | 'chat' | 'approve' | 'handoff' | 'manage' | 'never'
+
+// `manage` is the 17 November 2026 amendment: a linked Retinue machine at
+// operator may read and manage another machine's Remote settings and devices,
+// and a phone or browser never may (the gateway checks the device kind; this
+// table cannot see it). `handoff` works the same way.
 
 /** The wire code a gateway raises when `authorizeRemoteCall` denies a call. */
 export type DenialCode = 'forbidden_remote' | 'tier_required' | 'approvals_disabled' | 'quiet_hours' | 'invalid_params'
@@ -126,7 +131,7 @@ interface PolicyData {
 
 const POLICY: PolicyData = tiersData as PolicyData
 
-const METHOD_CLASSES: readonly string[] = ['read', 'chat', 'approve', 'handoff', 'never']
+const METHOD_CLASSES: readonly string[] = ['read', 'chat', 'approve', 'handoff', 'manage', 'never']
 const TIER_NAMES: readonly string[] = ['viewer', 'chat', 'operator']
 
 /** The params checks, by the id `tiers.json` uses. */
@@ -191,7 +196,8 @@ export interface RemoteCall {
   /**
    * When the host's quiet hours are active, every `chat`, `approve` and `handoff`
    * method is denied; `read` methods still pass. This is a hard read-only override
-   * applied before dispatch.
+   * applied before dispatch. `manage` passes too: it starts no work, and cutting a
+   * lost phone off must not have to wait for the morning.
    */
   quietHours?: boolean
 }

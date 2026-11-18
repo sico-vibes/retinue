@@ -1480,9 +1480,9 @@
     },
     {
       "method": "remote.status",
-      "class": "never",
-      "minTier": null,
-      "why": "The remote controls are for the owner at the computer, never for a paired device.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "A linked Retinue machine at operator may read another machine's Remote status, at the owner's decision of 17 November 2026 (AGENTS.md); a phone or browser is refused by the gateway whatever its tier.",
       "params": null
     },
     {
@@ -1515,30 +1515,37 @@
     },
     {
       "method": "remote.pair.confirm",
-      "class": "never",
-      "minTier": null,
-      "why": "Approving a device with a tier is the owner's decision at the computer.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "A linked machine at operator may approve a waiting device with a tier (17 November 2026), but never a machine and never its own request; the owner at the computer keeps the same power, and quiet hours do not stop either.",
+      "params": null
+    },
+    {
+      "method": "remote.pair.pending",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "The one waiting pairing request, so a linked machine can approve it without walking to the other computer. It is a read, and it is only ever answered for a machine at operator.",
       "params": null
     },
     {
       "method": "remote.devices.list",
-      "class": "never",
-      "minTier": null,
-      "why": "The paired-device list is for the owner at the computer, not for a device.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "A linked machine at operator may see what is paired to another machine (17 November 2026); the row carries names, kinds, tiers and times, and the owner's own account label.",
       "params": null
     },
     {
       "method": "remote.devices.update",
-      "class": "never",
-      "minTier": null,
-      "why": "A paired device must not rename another device or raise its own tier.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "A linked machine at operator may rename a device on another machine or change its tier, never its own row, and the other machine's activity list names the machine that did it.",
       "params": null
     },
     {
       "method": "remote.devices.revoke",
-      "class": "never",
-      "minTier": null,
-      "why": "A paired device must not remove another device's pairing.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "A linked machine at operator may cut a lost phone off at another machine, never its own row, and the other machine's activity list names the machine that did it.",
       "params": null
     },
     {
@@ -1571,9 +1578,9 @@
     },
     {
       "method": "remote.activity.list",
-      "class": "never",
-      "minTier": null,
-      "why": "The activity list is the owner's audit view at the computer.",
+      "class": "manage",
+      "minTier": "operator",
+      "why": "The content-free activity list of another machine, so a linked machine's screen can show what happened there (17 November 2026). Every line is a fixed sentence with a device name; no message text ever appears in it.",
       "params": null
     },
     {

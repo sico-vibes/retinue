@@ -1254,12 +1254,21 @@ fn far_gateway<R>(rpc: R) -> impl Fn(&str) -> Option<String> + Send + Sync
 where
     R: Fn(&str, &Value) -> String + Send + Sync + 'static,
 {
+    far_gateway_at("chat", rpc)
+}
+
+/// The same, at the tier this link is really approved at: `refresh_one` reads the
+/// device's own tier after a write and lowers the link to it.
+fn far_gateway_at<R>(tier: &'static str, rpc: R) -> impl Fn(&str) -> Option<String> + Send + Sync
+where
+    R: Fn(&str, &Value) -> String + Send + Sync + 'static,
+{
     move |request: &str| {
         if is_ping(request) {
             return Some(http("200 OK", &[], PING));
         }
         if request.starts_with("GET /api/me ") {
-            return Some(http("200 OK", &[], r#"{"device":{"tier":"chat"}}"#));
+            return Some(http("200 OK", &[], &format!(r#"{{"device":{{"tier":"{tier}"}}}}"#)));
         }
         if !request.starts_with("POST /api/rpc ") {
             return Some(http("404 Not Found", &[], "{}"));
@@ -1360,6 +1369,167 @@ async fn the_new_calls_go_to_the_far_side_with_this_links_own_token() {
         assert!(!request.contains("machineId"), "a machine id reached the far side");
     }
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn device_management_passes_through_to_the_far_gateway() {
+    let server = raw_server(far_gateway_at("operator", |method, _| match method {
+        "remote.status" => ok_body(json!({"enabled": true, "method": "native", "deviceCount": 2})),
+        "remote.devices.list" => ok_body(json!({"devices": [{"id": "dev-1", "name": "Sam's phone", "kind": "phone", "tier": "chat"}]})),
+        "remote.devices.update" => ok_body(json!({"device": {"id": "dev-1", "name": "Renamed", "tier": "operator"}})),
+        "remote.devices.revoke" => ok_body(json!({"revoked": true})),
+        "remote.pair.pending" => ok_body(json!({"pending": null})),
+        "remote.pair.confirm" => ok_body(json!({"approved": true, "device": {"id": "dev-2", "name": "Sam's phone"}})),
+        "remote.activity.list" => ok_body(json!({"entries": [{"id": "1", "summary": "A device was paired."}]})),
+        _ => ok_body(json!({"ok": true})),
+    }))
+    .await;
+    let (me, dir) = local("manage-me");
+    linked_to(&me, &server, "operator").await;
+
+    // Each of the seven is the far side's own method, with this machine's extra
+    // id removed and nothing else added.
+    for (method, params, far, far_params) in [
+        ("machine.remote.status", json!({"machineId": FAR_ID}), "remote.status", json!({})),
+        ("machine.devices.list", json!({"machineId": FAR_ID}), "remote.devices.list", json!({})),
+        (
+            "machine.devices.update",
+            json!({"machineId": FAR_ID, "deviceId": "dev-1", "name": "Renamed", "tier": "operator"}),
+            "remote.devices.update",
+            json!({"deviceId": "dev-1", "name": "Renamed", "tier": "operator"}),
+        ),
+        (
+            "machine.devices.revoke",
+            json!({"machineId": FAR_ID, "deviceId": "dev-1"}),
+            "remote.devices.revoke",
+            json!({"deviceId": "dev-1"}),
+        ),
+        ("machine.pair.pending", json!({"machineId": FAR_ID}), "remote.pair.pending", json!({})),
+        (
+            "machine.pair.confirm",
+            json!({"machineId": FAR_ID, "pairingId": "p-1", "approve": true, "tier": "chat"}),
+            "remote.pair.confirm",
+            json!({"pairingId": "p-1", "approve": true, "tier": "chat"}),
+        ),
+        ("machine.activity", json!({"machineId": FAR_ID, "limit": 20}), "remote.activity.list", json!({"limit": 20})),
+    ] {
+        let before = rpc_calls(&server, 0).len();
+        let answer = dispatch(&me, method, params).await.unwrap_or_else(|error| panic!("{method}: {:?}", error.1));
+        assert_eq!(sent(&server, before), (far.to_string(), far_params), "{method}");
+        assert_ne!(answer, Value::Null, "{method}");
+    }
+    // A write is followed by a re-read of the link, so the row shows what just changed.
+    let methods: Vec<String> = rpc_calls(&server, 0).into_iter().map(|(method, _)| method).collect();
+    assert!(methods.iter().filter(|method| *method == "machine.info").count() >= 2, "{methods:?}");
+    // Nothing named a machine id or an actor on the way out.
+    for request in server.seen() {
+        assert!(!request.contains("machineId"), "a machine id reached the far side: {request}");
+        assert!(!request.contains("\"actor\""), "only the far gateway names the actor: {request}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn managing_another_machine_needs_operator_on_the_link() {
+    let server = raw_server(far_gateway(|_method, _| ok_body(json!({"ok": true})))).await;
+    let (me, dir) = local("manage-tier-me");
+    linked_to(&me, &server, "chat").await;
+    for (method, action) in [
+        ("machine.remote.status", "Reading Remote"),
+        ("machine.devices.list", "Listing the paired devices"),
+        ("machine.devices.update", "Changing a device"),
+        ("machine.devices.revoke", "Removing a device"),
+        ("machine.pair.pending", "Reading the waiting request"),
+        ("machine.pair.confirm", "Approving a device"),
+        ("machine.activity", "Reading the activity list"),
+    ] {
+        let refused = dispatch(&me, method, json!({"machineId": FAR_ID, "deviceId": "d", "pairingId": "p"})).await.unwrap_err();
+        assert_eq!(refused.1.code, "tier_required", "{method}");
+        assert_eq!(
+            refused.1.message,
+            format!("{action} on Far needs Operator there, and this computer is linked as Chat. Change this computer's tier in Far's Remote settings."),
+            "{method}"
+        );
+    }
+    assert!(rpc_calls(&server, 0).iter().all(|(method, _)| method != "remote.status"), "a refused call is never sent");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[tokio::test]
+async fn a_linked_machine_manages_the_real_gateway_of_another_daemon() {
+    let other = host("manage-host").await;
+    let (me, my_dir) = local("manage-real-me");
+    link_native(&me, &other, "operator").await;
+    let other_id = host_id(&other);
+
+    let status = dispatch(&me, "machine.remote.status", json!({"machineId": other_id})).await.unwrap();
+    assert_eq!(status["enabled"], true);
+    assert_eq!(status["method"], "native");
+    assert!(status.get("native").is_some(), "{status}");
+
+    // The far machine's own list names this computer's device.
+    let devices = dispatch(&me, "machine.devices.list", json!({"machineId": other_id})).await.unwrap();
+    let own = devices["devices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["kind"] == "machine")
+        .cloned()
+        .expect("the link's own device");
+    assert_eq!(own["tier"], "operator");
+    assert_eq!(own["name"], machines::machine_name(&me));
+
+    // Its own row is the one it may not touch, and the far gateway is the one saying so.
+    let own_id = own["id"].as_str().unwrap().to_string();
+    let refused = dispatch(&me, "machine.devices.update", json!({"machineId": other_id, "deviceId": own_id, "tier": "chat"})).await.unwrap_err();
+    assert_eq!(refused.1.code, "forbidden_remote");
+    assert_eq!(refused.1.message, "A machine link can't change or remove its own pairing.");
+
+    // Nothing is waiting, so nothing can be approved.
+    let waiting = dispatch(&me, "machine.pair.pending", json!({"machineId": other_id})).await.unwrap();
+    assert_eq!(waiting["pending"], Value::Null);
+
+    // A phone signing in on the far machine: this machine reads the waiting
+    // request and approves it, which the far machine's own list then records.
+    let asked = reqwest::Client::builder().danger_accept_invalid_certs(true).no_proxy().build().unwrap();
+    let reply = asked
+        .post(format!("{}/api/login", other.url()))
+        .header("Origin", other.url())
+        .json(&json!({"username": "owner", "password": PASSWORD, "name": "Sam's phone", "kind": "phone", "platform": "iOS 19"}))
+        .send()
+        .await
+        .expect("the far gateway answers");
+    assert_eq!(reply.status().as_u16(), 202, "the far gateway refused the sign-in");
+    let waiting = dispatch(&me, "machine.pair.pending", json!({"machineId": other_id})).await.unwrap();
+    assert_eq!(waiting["pending"]["name"], "Sam's phone");
+    assert_eq!(waiting["pending"]["kind"], "phone");
+    let pairing_id = waiting["pending"]["pairingId"].as_str().unwrap().to_string();
+    let approved = dispatch(&me, "machine.pair.confirm", json!({"machineId": other_id, "pairingId": pairing_id, "approve": true, "tier": "viewer"})).await.unwrap();
+    assert_eq!(approved["approved"], true);
+    assert_eq!(approved["device"]["name"], "Sam's phone");
+    assert_eq!(approved["device"]["tier"], "viewer");
+
+    // The line in the far machine's own list, naming this computer.
+    let activity = dispatch(&me, "machine.activity", json!({"machineId": other_id, "limit": 20})).await.unwrap();
+    let summaries: Vec<&str> = activity["entries"].as_array().unwrap().iter().filter_map(|entry| entry["summary"].as_str()).collect();
+    assert!(
+        summaries.contains(&&*format!("{} approved Sam's phone from another machine.", machines::machine_name(&me))),
+        "{summaries:?}"
+    );
+
+    // Revoke the phone from here, and it is gone there.
+    let phone_id = approved["device"]["id"].as_str().unwrap().to_string();
+    let revoked = dispatch(&me, "machine.devices.revoke", json!({"machineId": other_id, "deviceId": phone_id})).await.unwrap();
+    assert_eq!(revoked["revoked"], true);
+    let devices = dispatch(&me, "machine.devices.list", json!({"machineId": other_id})).await.unwrap();
+    assert!(!devices["devices"].as_array().unwrap().iter().any(|row| row["id"] == json!(phone_id)), "{devices}");
+    let activity = dispatch(&me, "machine.activity", json!({"machineId": other_id, "limit": 20})).await.unwrap();
+    let summaries: Vec<&str> = activity["entries"].as_array().unwrap().iter().filter_map(|entry| entry["summary"].as_str()).collect();
+    assert!(
+        summaries.contains(&&*format!("{} removed Sam's phone from another machine.", machines::machine_name(&me))),
+        "{summaries:?}"
+    );
+    let _ = std::fs::remove_dir_all(my_dir);
 }
 
 #[tokio::test]

@@ -955,6 +955,20 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
         }
         "machine.permission.reply" => write_through(st, p, "permission.reply", "operator", "Answering an approval").await,
         "machine.projects" => call_through(st, p, "project.list", "viewer", "Listing the projects").await,
+        // Managing the other machine's Remote settings and devices (17 November
+        // amendment): device kind `machine` at operator, which its gateway checks
+        // again. Nothing here can start work, and none of it is remote from here.
+        "machine.remote.status" => call_through(st, p, "remote.status", "operator", "Reading Remote").await,
+        "machine.devices.list" => call_through(st, p, "remote.devices.list", "operator", "Listing the paired devices").await,
+        "machine.devices.update" => {
+            write_through(st, p, "remote.devices.update", "operator", "Changing a device").await
+        }
+        "machine.devices.revoke" => {
+            write_through(st, p, "remote.devices.revoke", "operator", "Removing a device").await
+        }
+        "machine.pair.pending" => call_through(st, p, "remote.pair.pending", "operator", "Reading the waiting request").await,
+        "machine.pair.confirm" => write_through(st, p, "remote.pair.confirm", "operator", "Approving a device").await,
+        "machine.activity" => call_through(st, p, "remote.activity.list", "operator", "Reading the activity list").await,
         _ => Err(derr("not_found", "unknown machine method", StatusCode::NOT_FOUND)),
     }
 }
