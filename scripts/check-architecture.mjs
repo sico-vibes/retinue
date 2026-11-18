@@ -74,6 +74,11 @@ export const ALLOWLIST = [
   },
   {
     rule: 'daemon-network',
+    path: 'crates/retinue-daemon/src/connectors_oauth.rs',
+    reason: 'OAuth discovery, dynamic registration and the token endpoint for an owner-added connector, under the same HTTPS-only, pinned-DNS rules as connectors.rs',
+  },
+  {
+    rule: 'daemon-network',
     path: 'crates/retinue-daemon/src/browser.rs',
     reason: 'controls the browser Retinue started, on a loopback or linked address',
   },

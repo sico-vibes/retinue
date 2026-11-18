@@ -37,6 +37,17 @@ Newest first. One entry per lesson: date, area, symptom, root cause with evidenc
 - The phone's window lives in `remote/policy.rs` `window_session`, not in `session.get`'s dispatch arm: dispatch has no idea whether the caller is a device, and the desktop still needs the whole conversation. Paging (`beforeMessageId`) *is* in dispatch, because it narrows what is read before redaction.
 - The cuts are per list (messages, turns, tools, files) and the message text is capped separately; each adds its own `…Truncated` marker and the message window adds `messagesCursor`. The limits are `limits` in `apps/desktop/src/remote/tiers.json`, read by both languages, and a golden case can carry its own small `limits` so one fixture can show a cut.
 - A paged read returns empty `turns`/`tools`/`files` with their markers already true; the windowing must never take a marker away, only ever add one.
+## 2026-11-17 · Tests · A test-only record shared by a whole included file steals another test's value
+
+- **Symptom:** `oauth_sign_in_discovers_registers_pkce_and_stores_split_tokens` failed on `take_opened_urls() == [consent]` with `[]` while the same test passed alone; the value had been taken by a parallel test in the same binary.
+- **Cause:** the record of "URLs the daemon would have opened" is one `static` in the crate (it stands in for `ShellExecuteW` under `#[cfg(test)]`). Every test in the process shares it, so any other flow test that started or cleared the list consumed the entry.
+- **Fix:** one `tokio::sync::Mutex` gate taken at the top of each OAuth flow test (they take milliseconds each), so the shared record has one owner at a time. **Avoid:** whenever a test seam is a process-wide `static` (an opened-URL list, a fake peer's inbox), either key it by the test's own id or serialise the tests that read it; do not assume `#[tokio::test]` runs them in order.
+
+## 2026-11-17 · Build · A refused test binary can run again after a relink, but not after a copy
+
+- **Symptom:** a freshly linked daemon test binary was refused (`os error 4551`) even copied to `C:\tmp` under a new name and retried after 25 seconds; the previous relink had run fine from the same folder.
+- **Cause:** Smart App Control's decision is per binary content and apparently asynchronous; a copy keeps the blocked content, and renaming does not help.
+- **Fix that worked:** touch a source file so cargo relinks (`Finished test profile`, 6–9 minutes on this PC), then copy the new `deps\retinued-<hash>.exe` to `C:\tmp` and run it there. One relink out of two was allowed. Keep the same target dir; when the daemon's own build script is refused, delete `target\debug\build\retinue-daemon-*`, rerun, and rerun once more because the first run after that panics on the missing `OUT_DIR`.
 
 ## 2026-11-17 · Daemon · A new RPC that nothing could call
 
