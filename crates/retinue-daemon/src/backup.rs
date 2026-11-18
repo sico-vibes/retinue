@@ -42,7 +42,7 @@ const MAX_SKILL_TOTAL_BYTES: u64 = 50 * 1024 * 1024;
 
 /// The exact settings keys a backup may carry. `experimental.*` boolean flags
 /// are allowed in addition to this list (see `exportable_setting`).
-const SETTING_ALLOWLIST: [&str; 34] = [
+const SETTING_ALLOWLIST: [&str; 35] = [
     "appearance.style",
     "appearance.accent",
     "appearance.density",
@@ -78,6 +78,9 @@ const SETTING_ALLOWLIST: [&str; 34] = [
     // Shortcuts are appearance preferences and travel like the rest.
     "composer.sendShortcut",
     "shortcuts.bindings",
+    // 17 November 2026: how a turn's prompt is ordered. Desktop only, but it is an
+    // owner preference and travels in a backup like the rest.
+    "prompts.contextFirst",
 ];
 
 /// Previews awaiting `backup.import`. At most `PREVIEW_LIMIT`, each ten

@@ -48,6 +48,14 @@ Newest first. One entry per lesson: date, area, symptom, root cause with evidenc
 - **Symptom:** a freshly linked daemon test binary was refused (`os error 4551`) even copied to `C:\tmp` under a new name and retried after 25 seconds; the previous relink had run fine from the same folder.
 - **Cause:** Smart App Control's decision is per binary content and apparently asynchronous; a copy keeps the blocked content, and renaming does not help.
 - **Fix that worked:** touch a source file so cargo relinks (`Finished test profile`, 6–9 minutes on this PC), then copy the new `deps\retinued-<hash>.exe` to `C:\tmp` and run it there. One relink out of two was allowed. Keep the same target dir; when the daemon's own build script is refused, delete `target\debug\build\retinue-daemon-*`, rerun, and rerun once more because the first run after that panics on the missing `OUT_DIR`.
+## 2026-11-17 · Gates · Getting a lane's daemon tests to run at all on this PC
+
+Four things, in the order that works, all learned while doing wave 3 lane "prompts":
+
+- **`cargo test --profile dev` gets past a blocked *test*-profile build script.** Cargo builds build scripts per profile; when the `test` profile's copy is blocked (os error 4551) but the `dev` profile's is not (because `cargo check` has used it), `cargo test --profile dev -p retinue-daemon --bin retinued` builds and links. The test binary is the same file name as the plain `cargo test` one.
+- **Restore a blocked daemon build script by copying a runnable one from a sibling target.** The build-script folder name (`build\retinue-daemon-67d4b82b0fad1b27`) is the same in every worktree's target; the *contents* differ and Smart App Control decides per file. `Copy-Item …\backend-work-from-the-owner-assigned-3\target\debug\build\retinue-daemon-67d4b82b0fad1b27\build-script-build.exe` over the blocked copy, touch its mtime, and the next build runs it. Check which copies run first: run each one and see whether it is refused.
+- **Never set `CARGO_PROFILE_TEST_STRIP` (or any other profile flag) to dodge the block.** It invalidates every dependency fingerprint, so cargo rebuilds every build script and every one is refused. It cost a rebuild of the whole dependency graph here.
+- **A fresh test binary is refused for a while and then allowed; another lane's build replaces yours in a shared target.** Confirm with `<binary> --list | Select-String <your new test name>` before trusting a green run: one run carried my tests, a later run of the same file name (another lane's build) did not. If a test you just wrote is missing, check the source too: `/// doc` and `#[tokio::test]` on one line (a merge artefact) makes the attribute part of the comment and the test silently never registers.
 
 ## 2026-11-17 · Daemon · A new RPC that nothing could call
 

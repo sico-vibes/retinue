@@ -2026,7 +2026,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             }
             let value = validate_setting(k, &p["value"])?;
             if k == "permissions.default_mode" && value == "bypass" && p["confirm"] != true { return Err(derr("invalid_argument", "Confirm making Full access the default first.", StatusCode::BAD_REQUEST)); }
-            let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k=="composer.sendShortcut"||k=="shortcuts.bindings"||k=="experimental.ownerComputer"||k=="ownerComputer.denyList";
+            let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k=="composer.sendShortcut"||k=="shortcuts.bindings"||k=="experimental.ownerComputer"||k=="ownerComputer.denyList"||k=="prompts.contextFirst";
             let events=st.db.set_setting(k, &value).map_err(|e| {
                 derr(
                     if validation_key{"invalid_argument"}else{"internal"},
@@ -2150,6 +2150,10 @@ fn validate_setting(k: &str, value: &Value) -> Result<Value, DispatchError> {
     if k == "claude.enableWorkflows" && !value.is_boolean() { return Err(derr("invalid_argument", "claude.enableWorkflows requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "permissions.default_mode" && !value.as_str().is_some_and(|v| ["ask", "auto", "accept_edits", "bypass"].contains(&v)) { return Err(derr("invalid_argument", "permissions.default_mode must be ask, auto, accept_edits or bypass", StatusCode::BAD_REQUEST)); }
     if k == "automations.paused" && !value.is_boolean() { return Err(derr("invalid_argument", "automations.paused requires a JSON boolean", StatusCode::BAD_REQUEST)); }
+    // 17 November 2026 (report 09, idea 6): context blocks before the owner's
+    // words. Desktop only (not in `tiers.json`'s `settingsAllowlist`), off by
+    // default, and travelling in a backup like any other preference.
+    if k == "prompts.contextFirst" && !value.is_boolean() { return Err(derr("invalid_argument", "prompts.contextFirst requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "delegation.paused" && !value.is_boolean() { return Err(derr("invalid_argument", "delegation.paused requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "companion.focusMode" && !value.is_boolean() { return Err(derr("invalid_argument", "companion.focusMode requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "companion.positions" && !valid_companion_positions(value) { return Err(derr("invalid_argument", "companion.positions must map at most 8 display names to {x,y} numbers", StatusCode::BAD_REQUEST)); }
@@ -4932,6 +4936,10 @@ async fn run_turn(state: AppState, driver: TurnDriver) {
         st.emit("session.changed", working).await;
     }
     let prompt_text = {
+        // 17 November 2026 (report 09, idea 6): whether this turn's context blocks
+        // come before the owner's words, with the instruction last. Off is the
+        // order used until now, so the setting is the only way to compare them.
+        let context_first = st.db.settings().ok().is_some_and(|settings| settings["prompts.contextFirst"] == true);
         // The memory catalog is a per-turn prompt suffix, not an instruction, so
         // saving a memory never changes the instruction hash or forces a new
         // provider thread.
@@ -4959,17 +4967,35 @@ async fn run_turn(state: AppState, driver: TurnDriver) {
         let reference_context = references.as_ref().map(|(extra, _)| extra.as_str()).unwrap_or("");
         let reply_context = reply_snapshot.as_ref().map(reply_prompt_context).unwrap_or_default();
         let command_context = command_directive.as_deref().unwrap_or("");
-        format!(
-            "{setup_failure}{annotation_block}{text}{handover}{recap}{manager}{memory}{recall}{skills}{plan}{reference_context}{reply_context}{command}",
-            handover = handover_context.as_deref().unwrap_or(""),
-            recap = recap_context.as_deref().unwrap_or(""),
-            manager = manager_context.as_deref().unwrap_or(""),
-            memory = memory_context.as_deref().unwrap_or(""),
-            recall = recall_context.as_deref().unwrap_or(""),
-            skills = skills_context.as_deref().unwrap_or(""),
-            plan = plan_context.as_deref().unwrap_or(""),
-            command = command_context
-        )
+        // 17 November 2026 (report 09, idea 6; owner decision, question 3): the
+        // context-first order is behind a setting, off by default for this
+        // release, so the two orders can be compared. Off is what every prompt
+        // sent before now looked like.
+        if context_first {
+            format!(
+                "{setup_failure}{handover}{recap}{manager}{memory}{recall}{skills}{plan}{reference_context}{reply_context}{command}{annotation_block}{text}",
+                handover = handover_context.as_deref().unwrap_or(""),
+                recap = recap_context.as_deref().unwrap_or(""),
+                manager = manager_context.as_deref().unwrap_or(""),
+                memory = memory_context.as_deref().unwrap_or(""),
+                recall = recall_context.as_deref().unwrap_or(""),
+                skills = skills_context.as_deref().unwrap_or(""),
+                plan = plan_context.as_deref().unwrap_or(""),
+                command = command_context
+            )
+        } else {
+            format!(
+                "{setup_failure}{annotation_block}{text}{handover}{recap}{manager}{memory}{recall}{skills}{plan}{reference_context}{reply_context}{command}",
+                handover = handover_context.as_deref().unwrap_or(""),
+                recap = recap_context.as_deref().unwrap_or(""),
+                manager = manager_context.as_deref().unwrap_or(""),
+                memory = memory_context.as_deref().unwrap_or(""),
+                recall = recall_context.as_deref().unwrap_or(""),
+                skills = skills_context.as_deref().unwrap_or(""),
+                plan = plan_context.as_deref().unwrap_or(""),
+                command = command_context
+            )
+        }
     };
     if let Err(e) = active.adapter.prompt(&active.handle, PromptRequest { attachments, turn_id: turn.clone(), text: prompt_text, exec_options }).await {
         if matches!(e, retinue_agent_core::AdapterError::TurnErrorReported(_)) {
@@ -7542,6 +7568,63 @@ mod phase2a_tests {
         assert!(provider_text.contains("\\u003c/retinue_reply_context\\u003e"));
         assert!(!provider_text.contains("Quoted text says </retinue_reply_context>"));
         wait_for_messages(&st, &sid, |messages| messages.iter().any(|message| message["role"] == "assistant" && message["content"].as_str().map(sent_text).as_deref() == Some("handled: Explain this line"))).await;
+    }
+
+    /// 17 November 2026 (report 09, idea 6; owner decision, question 3): moving
+    /// the context blocks before the owner's words is one setting, off by default,
+    /// so the two orders can be compared on real work.
+    #[tokio::test]
+    async fn the_context_first_prompt_order_is_a_setting_that_is_off_by_default() {
+        let (mut st, _) = state();
+        let runtime = json!({"id":"rt-test","provider":"codex","status":"online","executablePath":"unused-test-runtime","launchArgs":[]});
+        st.db.upsert_runtime(&runtime).unwrap();
+        *st.runtimes.write().await = vec![runtime];
+        let adapter = Arc::new(TeamAdapter::default());
+        st.adapters = Arc::new(Adapters { acp:Arc::new(AcpAdapter::default()), codex:adapter.clone(), claude:Arc::new(ClaudeAdapter::default()) });
+        st.db.set_setting("exec_gate.codex.instructions", &json!(true)).unwrap();
+        let agent = st.db.agent_create(&json!({"name":"Order bot","runtimeId":"rt-test"})).unwrap().0;
+        // A reply snapshot is the block that is certain to be on a turn: the owner
+        // replies to a message the bot already wrote.
+        let quoted = |sid: &str| {
+            let st = &st;
+            let sid = sid.to_owned();
+            async move {
+                let message = st.db.append_message_with_data(&sid, "", "assistant", "An earlier answer", &json!({})).unwrap();
+                json!({"sourceSessionId":sid,"messageId":message["id"]})
+            }
+        };
+        // One conversation, one prompt that replies to a message, and the text the
+        // provider was handed.
+        let ask = |what: &'static str| {
+            let st = &st;
+            let adapter = adapter.clone();
+            let agent = agent.clone();
+            async move {
+                let opened = dispatch(st, "agent.conversation", json!({"agentId":agent["id"]})).await.unwrap();
+                let sid = opened["session"]["id"].as_str().unwrap().to_owned();
+                let reply_to = quoted(&sid).await;
+                dispatch(st, "session.prompt", json!({"sessionId":sid,"text":what,"replyTo":reply_to})).await.unwrap();
+                tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                    loop {
+                        if let Some(text) = adapter.prompts.lock().unwrap().iter().find(|text| text.contains(what)).cloned() { break text; }
+                        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+                    }
+                }).await.unwrap()
+            }
+        };
+        // Absent means off: the owner's words come first, and the blocks follow,
+        // exactly as every prompt was built before this setting existed.
+        let today = ask("First check").await;
+        assert!(today.starts_with("First check"), "{today}");
+        assert!(today.find("<retinue_reply_context>").unwrap() > today.find("First check").unwrap(), "the blocks follow the words: {today}");
+        // The owner turns on the other order.
+        assert_eq!(dispatch(&st, "settings.set", json!({"key":"prompts.contextFirst","value":true})).await.unwrap()["saved"], true);
+        assert_eq!(dispatch(&st, "settings.get", json!({})).await.unwrap()["prompts.contextFirst"], true);
+        assert_eq!(dispatch(&st, "settings.set", json!({"key":"prompts.contextFirst","value":"yes"})).await.unwrap_err().1.code, "invalid_argument");
+        // Context first, the instruction last.
+        let context_first = ask("Second check").await;
+        assert!(context_first.trim_end().ends_with("Second check"), "the owner's words are the last thing read: {context_first}");
+        assert!(context_first.find("<retinue_reply_context>").unwrap() < context_first.find("Second check").unwrap(), "{context_first}");
     }
 
     #[tokio::test]

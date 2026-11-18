@@ -16,6 +16,7 @@
 | Remote devices see only what `apps/desktop/src/remote/tiers.json` allows, and the table is one policy read by Rust and TypeScript. | `crates/retinue-daemon/src/remote/policy.rs` (`TIERS_JSON`), `apps/desktop/src/remote/remoteTiers.ts` | `apps/desktop/src/remote/remoteTiers.parity.test.ts`, `policy.rs::goldens_authorize` / `goldens_results` / `goldens_snapshots` / `goldens_events` |
 | Every `owner_*` and `computer_*` method is `never` remote, every event of theirs is `drop`, and the owner's own computer additionally needs the setting, an approval card and an attended conversation. | `remote/tiers.json`, `crates/retinue-daemon/src/owner_computer.rs` | `policy.rs` goldens; `computer_view_refuses_a_wrong_expired_or_unlinked_ticket_without_forwarding` |
 | Prompts reach a coding agent through stdin or its own protocol, never as shell command text or a large `argv` string. | `crates/retinue-adapter-*` | adapter tests per crate; **no single test states the rule** |
+| Content from outside Retinue — the browser, the linked computer, the owner's own computer, an owner-added connector — reaches a model wrapped as data, with any closing tag inside it defused. Retinue's own tool results are not wrapped. | `crates/retinue-daemon/src/mcp_bridge.rs` (`comes_from_outside`, `outside_result`, `neutralised`) | `mcp_bridge.rs::results_from_outside_retinue_are_wrapped_as_data_and_its_own_are_not`, `the_wrapper_defuses_every_closing_tag_and_keeps_other_text_whole` |
 
 ## The daemon owns the decisions
 

@@ -183,6 +183,17 @@ pub(crate) fn effective_overrides(_st: &AppState, project: &Value) -> Value {
     overrides
 }
 
+/// Whether the bytes of `<folder>/.retinue.json` are exactly the content the owner trusted. Only
+/// then are that file's `instructions` the owner's instructions rather than repository data: the
+/// prompt quotes them, so it has to say which they are (owner decision, 17 November 2026, report 09,
+/// question 4). Read-only, and it costs one stat through the same cache as the project row.
+pub(crate) fn instructions_approved(project: &Value, folder: &Path) -> bool {
+    match read(folder).hash {
+        Some(hash) => project["overrides"]["trustedSharedHash"].as_str() == Some(hash.as_str()),
+        None => false,
+    }
+}
+
 /// `project.list` rows gain the file's state and, from a trusted file, the bot it names. `agents` is
 /// the bot list the caller already loaded, so this adds one stat per project and no query.
 pub(crate) fn annotate(project: &mut Value, agents: &[Value]) {
