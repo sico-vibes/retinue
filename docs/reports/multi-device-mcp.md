@@ -201,4 +201,8 @@ Each passes through, unchanged, to the `machine.*` method the window uses:
 
 ### 2026-11-18 — report written, then built
 
-(see below)
+The lane's last turn ended before it re-ran its two fixed tests (both were the test's wrong guesses: the far machine's own refusal sentence, and a stub coding agent installed before the far gateway clones the daemon state). The Director verified on branch `int/wave3`, 18 November 2026:
+
+- `cargo clippy -p retinue-daemon -p retinue-storage --all-targets -- -D warnings`: clean.
+- The whole daemon suite: 1,322 passed, 2 failed. `machines_tests::a_device_clone_is_confined_and_reports_its_progress_and_a_failure` passes alone (timing under full-suite load). `external::tests::the_mcp_has_no_way_to_set_project_overrides` failed because its guard refused any tool named `*project*`; `machine_add_project` forwards only `path` and `name`, and the far `project.createFromFolder` takes no overrides, so the guard now names it as allowed and keeps every other check.
+- `external::` after that change: 31 passed. `machines_tests::` (which includes this lane's tests): 97 passed, the same two above.

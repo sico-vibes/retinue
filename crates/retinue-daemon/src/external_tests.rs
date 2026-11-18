@@ -717,7 +717,10 @@ async fn the_mcp_has_no_way_to_set_project_overrides() {
     let listed = route(st, "ext.tools.list", &json!({})).await.unwrap().to_string();
     assert!(!listed.contains("setupScript") && !listed.contains("overrides"), "no tool names them");
     let names = tool_names(st).await;
-    assert!(!names.iter().any(|name| name.contains("project") && name != "list_projects"), "{names:?}");
+    // `machine_add_project` (18 November 2026) registers a folder on a linked machine and forwards
+    // only `path` and `name`; the far `project.createFromFolder` takes no overrides, and the schema
+    // check above proves no tool offers them. Any other project tool is still refused here.
+    assert!(!names.iter().any(|name| name.contains("project") && !matches!(name.as_str(), "list_projects" | "machine_add_project")), "{names:?}");
     for name in ["update_project", "project.update", "propose_project"] {
         let (error, _) = tool(st, name, json!({"project": "x", "overrides": {"setupScript": "echo hi"}})).await;
         assert!(error, "{name} is not a tool");
