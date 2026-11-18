@@ -142,6 +142,10 @@ mod working_note;
 mod plan;
 /// Wave 2 (nod idea 6): the documentation library, searchable offline by bots.
 mod docs_search;
+/// 17 November 2026 (multi-device piece 8): where this host keeps Retinue's data.
+mod paths;
+/// 17 November 2026 (multi-device piece 8): the console of a host with no window.
+mod console;
 
 use quota::{normalize_codex_quota, PollFailure, PollOutcome, QuotaPollGate, QUOTA_POLL_INTERVAL, QUOTA_REQUEST_TIMEOUT};
 
@@ -207,6 +211,9 @@ struct AppState {
     /// 16 November 2026: the chat channels to the CEO. Memory only: the status,
     /// the paired sender and the conversation are in `Storage`.
     channels: Arc<channels::Channels>,
+    /// 17 November 2026: the console token of a host started without a desktop
+    /// shell, so a VPS can be paired and turned on from its own terminal.
+    console: Arc<console::Console>,
 }
 #[derive(Clone)]
 struct Adapters {
@@ -580,6 +587,20 @@ async fn main_rpc(
         return match result {
             Ok(v) => (StatusCode::OK, Json(RpcResponse { v: PROTOCOL_VERSION, id, ok: true, result: Some(v), error: None })),
             Err((status, e)) => (status, Json(RpcResponse { v: PROTOCOL_VERSION, id, ok: false, result: None, error: Some(e) })),
+        };
+    }
+    // 17 November 2026 (multi-device piece 8): the console of a host with no
+    // window. Its token is its own — never the daemon capability — and it opens
+    // only the `console.*` methods, which are a headless host's own decisions.
+    if req.method.starts_with("console.") {
+        let bearer = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok()).and_then(|v| v.strip_prefix("Bearer ")).unwrap_or("");
+        if !st.console.accepts(bearer) {
+            return (StatusCode::UNAUTHORIZED, Json(error(req.id, "unauthorized", "missing or invalid console token")));
+        }
+        let id = req.id.clone();
+        return match console::route(&st, &req.method, &req.params).await {
+            Ok(v) => (StatusCode::OK, Json(RpcResponse { v: PROTOCOL_VERSION, id, ok: true, result: Some(v), error: None })),
+            Err(e) => (e.0, Json(RpcResponse { v: PROTOCOL_VERSION, id, ok: false, result: None, error: Some(e.1) })),
         };
     }
     if !auth(&headers, &st.token) {
@@ -6235,14 +6256,9 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Keep the sender alive when launched without a shell; that path must not
     // interpret a dropped oneshot sender as a parent exit.
     let _standalone_parent_sender = parent_sender;
-    let db_path = std::env::var_os("RETINUE_DB_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            let local = std::env::var_os("LOCALAPPDATA")
-                .map(PathBuf::from)
-                .unwrap_or_else(std::env::temp_dir);
-            local.join("Retinue/retinue.db")
-        });
+    // 17 November 2026: the default now follows the host's own rule (XDG on
+    // Unix), so a systemd-started daemon does not write to the temp folder.
+    let db_path = paths::database();
     if let Some(parent) = db_path.parent() {
         std::fs::create_dir_all(parent)?
     }
@@ -6306,6 +6322,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         browser: Arc::new(browser::Browser::default()),
         owner_computer: Arc::new(owner_computer::OwnerComputer::default()),
         channels: Arc::new(channels::Channels::default()),
+        console: Arc::new(console::Console::default()),
     };
     // A send right after boot must not fail with "runtime is not installed":
     // show the saved roster until discovery replaces it. `validate_spawn_target`
@@ -6368,11 +6385,14 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     let listener = TcpListener::bind("127.0.0.1:0").await?;
     let addr = listener.local_addr()?;
     *st.team.address.lock().unwrap() = Some(addr.to_string());
-    if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); computer::sweep_endpoints(dir); browser::sweep_endpoints(dir); owner_computer::sweep_endpoints(dir); }
+    if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); secrets::set_data_folder(dir); computer::sweep_endpoints(dir); browser::sweep_endpoints(dir); owner_computer::sweep_endpoints(dir); }
     *st.team.data_dir.lock().unwrap() = data_dir;
     // Wave 2: the data folder is the owner's alone, and the two folders this wave
     // keeps its disposables in are swept of old files.
     sandbox::at_startup(&st);
+    // 17 November 2026: a host started without a desktop shell gets a console
+    // file, so its owner can pair it and turn Remote on from a terminal.
+    console::startup(&st);
     scratch::prune(&st);
     tool_output::prune(&st);
     stash::prune_restored(&st);
@@ -6443,6 +6463,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Remove Retinue's own UPnP mapping before the process exits, so no router
     // is left forwarding the port after Remote has stopped.
     remote::shutdown(&st).await;
+    console::shutdown(&st);
     let sessions = std::mem::take(&mut *st.sessions.lock().await);
     for (_, s) in sessions {
         let _ = s.adapter.close_session(&s.handle).await;
@@ -6464,6 +6485,19 @@ fn main() {
 }
 
 async fn daemon_main() {
+    // `retinued --version`: what the install guide asks first.
+    if matches!(std::env::args().nth(1).as_deref(), Some("--version") | Some("-V")) {
+        println!("retinued {} (protocol {})", env!("CARGO_PKG_VERSION"), PROTOCOL_VERSION);
+        return;
+    }
+    // 17 November 2026 (multi-device piece 8): the console of a headless host.
+    // `retinued pair …`, `retinued remote on|off`, `retinued status` talk to the
+    // daemon already running here, over its loopback API, with the console token
+    // a headless start writes (`console.rs`).
+    if matches!(std::env::args().nth(1).as_deref(), Some("pair") | Some("remote") | Some("status")) {
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        std::process::exit(console::run_cli(&args).await);
+    }
     if std::env::args().nth(1).as_deref() == Some("mcp-bridge") {
         mcp_bridge::run().await;
         return;
@@ -7783,7 +7817,7 @@ mod phase2a_tests {
     /// a second state on the same file.
     pub(crate) fn state_with(db:Storage)->(AppState,broadcast::Receiver<EventEnvelope>){
         let db=Arc::new(db);db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"})).unwrap();let(events,rx)=broadcast::channel(64);
-        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default()),channels:Arc::new(channels::Channels::default())};(st,rx)
+        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default()),channels:Arc::new(channels::Channels::default()),console:Arc::new(console::Console::default())};(st,rx)
     }
     #[tokio::test]
     async fn bot_purge_is_confirmed_atomic_and_removes_both_sides_only() {
@@ -14583,6 +14617,9 @@ mod phase2a_tests {
 
     // 16 November 2026: the chat channels to the CEO.
     include!("channels_tests.rs");
+
+    // 17 November 2026: the console of a host with no window (multi-device piece 8).
+    include!("console_tests.rs");
 
     // Wave 2, agent experience: the "now" line, memory recall, a plan that
     // outlives a turn, the docs tools and earlier-message search.

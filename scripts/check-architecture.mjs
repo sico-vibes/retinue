@@ -64,6 +64,11 @@ const HTTP_CRATES = ['reqwest', 'hyper', 'ureq', 'tungstenite', 'tokio-tungsteni
 export const ALLOWLIST = [
   {
     rule: 'daemon-network',
+    path: 'crates/retinue-daemon/src/console.rs',
+    reason: "the console client's call to its own daemon on loopback, with the console token a headless start writes (17 November 2026)",
+  },
+  {
+    rule: 'daemon-network',
     path: 'crates/retinue-daemon/src/channels.rs',
     reason: "Telegram's Bot API and Meta's WhatsApp Cloud API, the chat channels to the CEO (owner decision, 16 November 2026)",
   },

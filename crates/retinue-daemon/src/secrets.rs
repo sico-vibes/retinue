@@ -108,6 +108,15 @@ pub(crate) fn with_refs_all(st: &AppState, agents: Value) -> Value {
     }
 }
 
+/// Tells the file store where the data folder is. Off Windows the values live
+/// there; on Windows Credential Manager does not need it, so this is a no-op.
+pub(crate) fn set_data_folder(dir: &std::path::Path) {
+    #[cfg(any(not(windows), test))]
+    store::files::set_data_folder(dir);
+    #[cfg(all(windows, not(test)))]
+    let _ = dir;
+}
+
 /// Reads a bot's referenced secrets into the spawn environment. A missing one
 /// is an error naming the secret and never a value.
 pub(crate) fn add_to_environment(st: &AppState, agent_id: Option<&str>, env: &mut BTreeMap<String, String>) -> Result<(), DispatchError> {
@@ -154,14 +163,26 @@ pub(crate) mod store {
     }
     #[cfg(all(windows, not(test)))]
     use super::wincred as backend;
+    /// 17 November 2026 (multi-device piece 8, headless Linux): off Windows the
+    /// values are owner-only files under `<data>/secrets`, as T3 Code's server
+    /// does. The owner's rule (`AGENTS.md`, 17 November) allows this for Linux
+    /// only; it is never the database, a backup, a log or a diagnostics bundle.
+    ///
+    /// **Not wired yet:** a Linux *desktop* with a running Secret Service
+    /// keyring. There is no Linux desktop app to give it a user, so the seam is
+    /// named here rather than half-built; a headless host is the only Linux
+    /// shape that exists today, and it uses the files.
     #[cfg(all(not(windows), not(test)))]
     mod backend {
         use super::*;
-        const NO: &str = "The credential store is only available on Windows.";
-        pub fn write(_: &str, _: &[u8]) -> Result<(), String> { Err(NO.into()) }
-        pub fn read(_: &str) -> Result<Option<Zeroizing<String>>, String> { Err(NO.into()) }
-        pub fn delete(_: &str) -> Result<bool, String> { Err(NO.into()) }
-        pub fn list() -> Result<Vec<(String, String)>, String> { Err(NO.into()) }
+
+        fn folder() -> Result<std::path::PathBuf, String> {
+            super::files::folder().ok_or_else(|| "Retinue's data folder is not ready yet.".to_string())
+        }
+        pub fn write(name: &str, value: &[u8]) -> Result<(), String> { super::files::write_in(&folder()?, name, value) }
+        pub fn read(name: &str) -> Result<Option<Zeroizing<String>>, String> { super::files::read_in(&folder()?, name) }
+        pub fn delete(name: &str) -> Result<bool, String> { super::files::delete_in(&folder()?, name) }
+        pub fn list() -> Result<Vec<(String, String)>, String> { super::files::list_in(&folder()?) }
     }
 
     pub fn write(name: &str, value: &str) -> Result<(), String> { backend::write(name, value.as_bytes()) }
@@ -169,6 +190,245 @@ pub(crate) mod store {
     pub fn delete(name: &str) -> Result<bool, String> { backend::delete(name) }
     /// `(name, updatedAt)` for every Retinue secret.
     pub fn list() -> Result<Vec<(String, String)>, String> { backend::list() }
+    /// Which store the values live in, for `console.status` and the Doctor. A
+    /// name, never a value.
+    pub fn backend_name() -> &'static str {
+        if cfg!(windows) { "windows-credential-manager" } else { "files" }
+    }
+
+    // -----------------------------------------------------------------------
+    // The file store (any platform, so its tests run here and on Linux)
+
+    // On Windows this module is compiled for its tests only: the values live in
+    // Credential Manager there.
+    #[allow(dead_code)]
+    pub(crate) mod files {
+        use super::*;
+        use std::io::Write;
+        use std::path::{Path, PathBuf};
+
+        const FOLDER: &str = "secrets";
+        const SUFFIX: &str = ".secret";
+
+        /// The data folder the files live under, set once at startup. `None`
+        /// before the daemon knows it, which is an error rather than a guess.
+        static DATA: OnceLock<PathBuf> = OnceLock::new();
+
+        pub(crate) fn set_data_folder(dir: &Path) {
+            let _ = DATA.set(dir.to_path_buf());
+        }
+
+        pub(crate) fn folder() -> Option<PathBuf> {
+            DATA.get().map(|dir| dir.join(FOLDER))
+        }
+
+        /// A name is hex-encoded, so no name can leave the folder: `vault/<id>/
+        /// password` and `..` both become plain hex characters, and the mapping
+        /// is reversible for `list`.
+        fn file_name(name: &str) -> String {
+            let mut hex = String::with_capacity(name.len() * 2 + SUFFIX.len());
+            for byte in name.as_bytes() {
+                hex.push_str(&format!("{byte:02x}"));
+            }
+            hex.push_str(SUFFIX);
+            hex
+        }
+
+        fn name_of(file: &str) -> Option<String> {
+            let hex = file.strip_suffix(SUFFIX)?;
+            if hex.is_empty() || hex.len() % 2 != 0 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return None;
+            }
+            let bytes: Vec<u8> = (0..hex.len()).step_by(2).map(|at| u8::from_str_radix(&hex[at..at + 2], 16).ok()).collect::<Option<_>>()?;
+            let name = String::from_utf8(bytes).ok()?;
+            valid_name(&name).then_some(name)
+        }
+
+        /// Creates the folder, owner only. A failure is an error: a secret must
+        /// never be written into a folder others can read.
+        fn prepare(dir: &Path) -> Result<(), String> {
+            std::fs::create_dir_all(dir).map_err(|_| "The secrets folder could not be created.".to_string())?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+                    .map_err(|_| "The secrets folder could not be made owner only.".to_string())?;
+            }
+            Ok(())
+        }
+
+        /// Writes through a private temp file and renames it into place, so a
+        /// reader sees either the old value or the new one and never a partial
+        /// file (the shape of T3 Code's `ServerSecretStore.set`).
+        pub(crate) fn write_in(dir: &Path, name: &str, value: &[u8]) -> Result<(), String> {
+            validate(name)?;
+            prepare(dir)?;
+            let target = dir.join(file_name(name));
+            let temp = dir.join(format!("{}.{}.tmp", file_name(name), Uuid::new_v4()));
+            let written = (|| -> std::io::Result<()> {
+                let mut options = std::fs::OpenOptions::new();
+                options.write(true).create_new(true);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::OpenOptionsExt;
+                    options.mode(0o600);
+                }
+                let mut file = options.open(&temp)?;
+                file.write_all(value)?;
+                file.sync_all()?;
+                drop(file);
+                std::fs::rename(&temp, &target)?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600))?;
+                }
+                Ok(())
+            })();
+            if written.is_err() {
+                let _ = std::fs::remove_file(&temp);
+                return Err("The secret could not be saved.".to_string());
+            }
+            Ok(())
+        }
+
+        pub(crate) fn read_in(dir: &Path, name: &str) -> Result<Option<Zeroizing<String>>, String> {
+            validate(name)?;
+            let path = dir.join(file_name(name));
+            match std::fs::read(&path) {
+                Ok(bytes) => String::from_utf8(bytes).map(|text| Some(Zeroizing::new(text))).map_err(|_| "That secret does not hold text.".to_string()),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(_) => Err("The secret could not be read.".to_string()),
+            }
+        }
+
+        pub(crate) fn delete_in(dir: &Path, name: &str) -> Result<bool, String> {
+            validate(name)?;
+            match std::fs::remove_file(dir.join(file_name(name))) {
+                Ok(()) => Ok(true),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+                Err(_) => Err("The secret could not be deleted.".to_string()),
+            }
+        }
+
+        /// Off Windows the backend's `list` reports only names `secret.*` would
+        /// accept, exactly as Credential Manager's does (internal names such as
+        /// `vault/<id>/password` are stored but never listed).
+        pub(crate) fn list_in(dir: &Path) -> Result<Vec<(String, String)>, String> {
+            let entries = match std::fs::read_dir(dir) {
+                Ok(entries) => entries,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+                Err(_) => return Err("The stored secrets could not be listed.".to_string()),
+            };
+            let mut out = Vec::new();
+            for entry in entries.flatten() {
+                let Some(file) = entry.file_name().to_str().map(str::to_owned) else { continue };
+                let Some(name) = name_of(&file) else { continue };
+                if !valid_name(&name) { continue; }
+                let at = entry
+                    .metadata()
+                    .ok()
+                    .and_then(|meta| meta.modified().ok())
+                    .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+                    .and_then(|since| chrono::DateTime::<Utc>::from_timestamp(since.as_secs() as i64, 0))
+                    .map(|at| at.to_rfc3339_opts(SecondsFormat::Millis, true))
+                    .unwrap_or_default();
+                out.push((name, at));
+            }
+            out.sort();
+            Ok(out)
+        }
+
+        /// Any name this module writes: the internal callers use slashed names
+        /// (`vault/<id>/password`, `connector/<id>`) that `secret.*` itself would
+        /// refuse, so the store only rules out what could break a file.
+        fn validate(name: &str) -> Result<(), String> {
+            let ok = !name.is_empty() && name.len() <= 200 && !name.contains('\0');
+            if ok { Ok(()) } else { Err("That secret name is not valid.".to_string()) }
+        }
+
+        #[cfg(test)]
+        mod tests {
+            use super::*;
+
+            fn temp(name: &str) -> PathBuf {
+                let dir = std::env::temp_dir().join(format!("retinue-secret-files-{name}-{}", Uuid::new_v4()));
+                std::fs::create_dir_all(&dir).unwrap();
+                dir
+            }
+
+            #[test]
+            fn a_value_round_trips_and_a_missing_one_is_none() {
+                let dir = temp("roundtrip");
+                assert!(read_in(&dir, "GITHUB_TOKEN").unwrap().is_none());
+                write_in(&dir, "GITHUB_TOKEN", b"a-value").unwrap();
+                assert_eq!(read_in(&dir, "GITHUB_TOKEN").unwrap().unwrap().as_str(), "a-value");
+                write_in(&dir, "GITHUB_TOKEN", b"replaced").unwrap();
+                assert_eq!(read_in(&dir, "GITHUB_TOKEN").unwrap().unwrap().as_str(), "replaced", "a write replaces in place");
+                assert!(delete_in(&dir, "GITHUB_TOKEN").unwrap());
+                assert!(!delete_in(&dir, "GITHUB_TOKEN").unwrap(), "deleting twice is not an error");
+                let _ = std::fs::remove_dir_all(&dir);
+            }
+
+            #[test]
+            fn names_with_slashes_and_dots_stay_inside_the_folder() {
+                let dir = temp("names");
+                // The internal callers use names `secret.*` would refuse; they are
+                // stored, read and deleted, and never listed.
+                for name in ["vault/3f2a/password", "connector/abc", "..", "a.b-c_d"] {
+                    write_in(&dir, name, b"value").unwrap();
+                    assert_eq!(read_in(&dir, name).unwrap().unwrap().as_str(), "value");
+                }
+                let listed: Vec<String> = list_in(&dir).unwrap().into_iter().map(|(name, _)| name).collect();
+                assert_eq!(listed, vec!["a.b-c_d".to_string()], "only a name `secret.*` accepts is listed");
+                assert!(delete_in(&dir, "vault/3f2a/password").unwrap());
+                assert!(read_in(&dir, "vault/3f2a/password").unwrap().is_none());
+                let files: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().filter_map(|entry| entry.file_name().to_str().map(str::to_owned)).collect();
+                assert!(files.iter().all(|file| file.ends_with(SUFFIX)), "every file is a secret file: {files:?}");
+                assert_eq!(files.len(), 3, "the four names, one deleted, became four plain hex names");
+                assert!(files.iter().all(|file| !file.contains('/') && !file.contains('.')));
+                let _ = std::fs::remove_dir_all(&dir);
+            }
+
+            #[test]
+            fn a_write_leaves_no_temp_file_behind_and_refuses_an_unusable_name() {
+                let dir = temp("temp");
+                write_in(&dir, "one", b"value").unwrap();
+                let left: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().filter_map(|entry| entry.file_name().to_str().map(str::to_owned)).collect();
+                assert_eq!(left.len(), 1, "only the secret file remains: {left:?}");
+                assert!(write_in(&dir, "", b"value").is_err());
+                assert!(write_in(&dir, "with\0nul", b"value").is_err());
+                assert!(write_in(&dir, &"x".repeat(201), b"value").is_err());
+                assert!(read_in(&dir, "").is_err());
+                let _ = std::fs::remove_dir_all(&dir);
+            }
+
+            #[cfg(unix)]
+            #[test]
+            fn the_folder_is_0700_and_each_file_is_0600() {
+                use std::os::unix::fs::PermissionsExt;
+                let dir = temp("modes");
+                write_in(&dir, "one", b"value").unwrap();
+                let folder = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
+                assert_eq!(folder, 0o700);
+                let file = std::fs::metadata(dir.join(file_name("one"))).unwrap().permissions().mode() & 0o777;
+                assert_eq!(file, 0o600);
+                let _ = std::fs::remove_dir_all(&dir);
+            }
+
+            #[test]
+            fn listing_is_sorted_and_ignores_anything_it_did_not_write() {
+                let dir = temp("list");
+                write_in(&dir, "b", b"1").unwrap();
+                write_in(&dir, "a", b"1").unwrap();
+                std::fs::write(dir.join("stray.txt"), b"not ours").unwrap();
+                let listed = list_in(&dir).unwrap();
+                assert_eq!(listed.iter().map(|(name, _)| name.clone()).collect::<Vec<_>>(), vec!["a".to_string(), "b".to_string()]);
+                assert!(!listed[0].1.is_empty(), "an updated time is reported");
+                let _ = std::fs::remove_dir_all(&dir);
+            }
+        }
+    }
 }
 
 #[cfg(windows)]

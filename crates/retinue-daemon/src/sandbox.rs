@@ -137,8 +137,10 @@ pub(crate) fn doctor_checks(st: &AppState) -> Vec<Value> {
         })];
     }
     let (status, detail) = match folder_is_owner_only(&dir) {
-        Some(true) => ("ok", "Only your Windows account can read it, so a capability or an endpoint file in it stays yours.".to_owned()),
-        Some(false) => ("warn", "Other accounts on this computer may be able to read Retinue's data folder, which holds its capability and endpoint files. Restart Retinue to restrict it again.".to_owned()),
+        // 17 November 2026: platform-neutral, because a Linux host keeps its
+        // secrets in this folder too (owner-only files).
+        Some(true) => ("ok", "Only your account can read it, so a console file, an endpoint file or a secret in it stays yours.".to_owned()),
+        Some(false) => ("warn", "Other accounts on this computer may be able to read Retinue's data folder, which holds its console file, endpoint files and secrets. Restart Retinue to restrict it again.".to_owned()),
         None => ("warn", "Retinue could not read its own data folder's permissions, so it cannot say who can open it.".to_owned()),
     };
     vec![json!({

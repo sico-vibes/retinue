@@ -1,0 +1,44 @@
+# Retinue daemon on a Linux host (systemd user unit).
+#
+# Install: copy to ~/.config/systemd/user/retinued.service, then
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now retinued
+# The guide is docs/operations/linux-host.md. The daemon must also start when
+# nobody is logged in: `sudo loginctl enable-linger <user>`.
+
+[Unit]
+Description=Retinue daemon
+StartLimitIntervalSec=300
+StartLimitBurst=5
+# Tailscale is where a phone and another machine reach this host, and the agent
+# CLIs want a network. Neither target is promised by every distribution, so the
+# daemon keeps working (and retries) without them.
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# A user unit inherits no login shell and no PATH: name the folders the coding
+# agent CLIs are installed in, or every turn fails with "not installed".
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Say "headless" explicitly: the daemon then writes its console token so
+# `retinued pair` and `retinued remote on` work from a terminal.
+Environment=RETINUE_HEADLESS=1
+WorkingDirectory=%h
+ExecStartPre=/bin/mkdir -p %h/.local/share/retinue
+ExecStart=%h/.local/bin/retinued
+Restart=always
+RestartSec=5
+# The agent CLIs are this unit's children. `OOMPolicy=continue` keeps the daemon
+# running when the kernel kills one of them, which is the default's opposite.
+OOMPolicy=continue
+KillMode=mixed
+# Prefer keeping the daemon over its agents when the host is short of memory.
+MemoryLow=512M
+OOMScoreAdjust=100
+ManagedOOMPreference=avoid
+StandardOutput=append:%h/.local/share/retinue/retinued.log
+StandardError=append:%h/.local/share/retinue/retinued.log
+
+[Install]
+WantedBy=default.target

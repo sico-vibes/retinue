@@ -14,6 +14,12 @@ Last reviewed: 2026-10-22 (Rust 1.94.0 stable, Node 24, OpenCode 2.0.32, Codex C
 - `remoteBuild.test.ts` runs `npm run build:remote` itself. Under Vitest `NODE_ENV` is `test`, and the build inherited it, measuring 1.72 MB against the real 1.45 MB, so the test failed on `main` and CI skipped every later step (daemon tests, clippy, builds) on every push. Fixed 14 November 2026 by building with `NODE_ENV=production`. When CI fails at the unit tests, check whether the Rust steps ran at all.
 - `npm run docs:check` skips `apps/site/content/` (website pages link by site routes).
 
+## Linux (17 November 2026)
+
+- Nothing on this PC can prove a Linux build. `rustup target add x86_64-unknown-linux-gnu` installs the standard library, but `cargo check --target x86_64-unknown-linux-gnu` then stops at `libc`'s and `proc-macro2`'s build scripts with os error 4551 (every build script for a new target is a fresh `.exe`), and `rusqlite` (`bundled`) and `rustls` (`ring`) would need a cross C toolchain anyway. **The CI `linux` job is the proof**, and a lane reports "typechecked on Windows, not built on Linux".
+- A change that could break Linux is the one to look at twice: an ungated use of a Windows API, a file mode, a path separator, a binary name (`tailscale` not `tailscale.exe`, `retinue-hook` not `retinue-hook.exe`), and a `.exe` in a spawn argument. `crates/retinue-daemon/src/console.rs` and `paths.rs` are the two modules written for it.
+- The headless flow on a host, in order: `retinued` (unit sets `RETINUE_HEADLESS=1`) → `retinued remote on --method tailscale` → `retinued pair` → approve on the host with `retinued pair confirm --tier chat`. `console.json` in the data folder is the console client's only credential, and it is not the capability.
+
 ## Gates (run all before calling work done)
 
 From the repository root (or a worktree):
@@ -158,6 +164,12 @@ Last reviewed: 2026-10-22 (Rust 1.94.0 stable, Node 24, OpenCode 2.0.32, Codex C
 - Test only the changed crates (`-p retinue-daemon -p retinue-storage ...`): `--workspace` pulls a crate whose new build script is blocked. Test programs that start helper binaries (the Codex adapter's `app_server` tests with `fake_codex_server`, agent core's unit tests) are blocked too; CI runs them. Say so in the report.
 - `remoteBuild.test.ts` runs `npm run build:remote` itself. Under Vitest `NODE_ENV` is `test`, and the build inherited it, measuring 1.72 MB against the real 1.45 MB, so the test failed on `main` and CI skipped every later step (daemon tests, clippy, builds) on every push. Fixed 14 November 2026 by building with `NODE_ENV=production`. When CI fails at the unit tests, check whether the Rust steps ran at all.
 - `npm run docs:check` skips `apps/site/content/` (website pages link by site routes).
+
+## Linux (17 November 2026)
+
+- Nothing on this PC can prove a Linux build. `rustup target add x86_64-unknown-linux-gnu` installs the standard library, but `cargo check --target x86_64-unknown-linux-gnu` then stops at `libc`'s and `proc-macro2`'s build scripts with os error 4551 (every build script for a new target is a fresh `.exe`), and `rusqlite` (`bundled`) and `rustls` (`ring`) would need a cross C toolchain anyway. **The CI `linux` job is the proof**, and a lane reports "typechecked on Windows, not built on Linux".
+- A change that could break Linux is the one to look at twice: an ungated use of a Windows API, a file mode, a path separator, a binary name (`tailscale` not `tailscale.exe`, `retinue-hook` not `retinue-hook.exe`), and a `.exe` in a spawn argument. `crates/retinue-daemon/src/console.rs` and `paths.rs` are the two modules written for it.
+- The headless flow on a host, in order: `retinued` (unit sets `RETINUE_HEADLESS=1`) → `retinued remote on --method tailscale` → `retinued pair` → approve on the host with `retinued pair confirm --tier chat`. `console.json` in the data folder is the console client's only credential, and it is not the capability.
 
 ## Gates (run all before calling work done)
 

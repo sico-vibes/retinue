@@ -171,6 +171,13 @@ fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
 
+/// This machine's own OS, as the pairing request reports it (17 November 2026:
+/// it was hard-coded to `windows`, which a Linux host would have made a lie in
+/// the owner's own approval dialog).
+fn platform() -> &'static str {
+    std::env::consts::OS
+}
+
 fn self_value(st: &AppState) -> Value {
     json!({"id": machine_id(st), "name": machine_name(st), "version": version()})
 }
@@ -723,7 +730,7 @@ async fn pair_flow(st: &AppState, origin: &str, proof: Proof, cancel: &AtomicBoo
             if !probed.trusted {
                 return Err(failed("That machine now asks for its password. Start again."));
             }
-            (Trust::WebPki, "code", None, "/api/pair", json!({"code": code.as_str(), "name": machine_name(st), "kind": "machine", "platform": "windows"}))
+            (Trust::WebPki, "code", None, "/api/pair", json!({"code": code.as_str(), "name": machine_name(st), "kind": "machine", "platform": platform()}))
         }
         Proof::Password { username, password, fingerprint } => {
             let same = probed.fingerprint.is_some_and(|seen| subtle::ConstantTimeEq::ct_eq(seen.as_slice(), fingerprint.as_slice()).into());
@@ -735,7 +742,7 @@ async fn pair_flow(st: &AppState, origin: &str, proof: Proof, cancel: &AtomicBoo
                 "password",
                 Some(client::format_fingerprint(fingerprint)),
                 "/api/login",
-                json!({"username": username, "password": password.as_str(), "name": machine_name(st), "kind": "machine", "platform": "windows"}),
+                json!({"username": username, "password": password.as_str(), "name": machine_name(st), "kind": "machine", "platform": platform()}),
             )
         }
     };

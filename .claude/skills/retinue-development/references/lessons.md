@@ -2,6 +2,14 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-17 · Daemon · A headless host needs its own door in, and a token file is not the capability
+
+- **What was missing:** `remote.pair.begin` / `remote.pair.confirm` and `remote.enable` are window RPCs, and the daemon's capability reaches only the shell that launched it (`retinued.ready` on stdout). A systemd-started daemon therefore could not be turned on or paired at all (`docs/research/multi-device/04-linux-headless.md`, section 5).
+- **The shape that worked:** a `console.*` family routed in `main_rpc` **before** the capability check, with a token of its own, written at a headless start to `<data>/console.json` (`0600`, in the `0700` data folder) and removed at a clean exit. It opens those methods only; `dispatch` never sees it. Each decision calls the same function the desktop calls (`remote::rpc("remote.pair.confirm")`, `remote::enable`), so tiers, audit lines, events and sentences cannot drift.
+- **Two traps:** (1) the parity test's *guard* regex counts `req.method.starts_with("console.")`, so a prefix route needs a `tiers.json` family row (`console.*`, `never`) or the build fails; (2) `uses reqwest` in a new daemon module needs a `daemon-network` row in `scripts/check-architecture.mjs` (`ALLOWLIST`), and a stale row fails the check.
+- **Test it through `main_rpc`, not through the route fn:** `console_tests.rs` posts with no token, a wrong token, the *daemon capability* (refused) and the console token, then drives a real pending request to approval and reads the device row and the activity ledger.
+- **Off Windows secrets:** the Credential Manager backend was Windows-only and every call errored; the file store (`secrets.rs`, `store::files`) keeps its tests compiled on Windows so they run wherever the lane runs — a Linux-only module cannot be run on the owner's PC.
+
 ## 2026-11-17 · Daemon · A new RPC that nothing could call
 
 - **Symptom:** the remote-tiers parity test said `task.checkBack` was a stale row: "the dispatch no longer has" it.

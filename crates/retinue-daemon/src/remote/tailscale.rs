@@ -71,22 +71,50 @@ pub struct MissingCli;
 
 impl TailscaleCli for MissingCli {
     fn run(&self, _args: &[&str]) -> Result<CliOutput, String> {
-        Err("Tailscale is not installed on this computer.".to_string())
+        Err(missing_sentence().to_string())
     }
 }
 
-/// PATH first, then the default Windows install location.
+/// The same sentence on both platforms, naming what to start on Unix.
+pub fn missing_sentence() -> &'static str {
+    if cfg!(windows) {
+        "Tailscale is not installed on this computer."
+    } else {
+        "Tailscale is not installed on this computer. Install it, then start tailscaled."
+    }
+}
+
+/// The binary's name: `tailscale.exe` on Windows, `tailscale` everywhere else
+/// (17 November 2026: the headless Linux host finds it on `PATH`).
+pub fn exe_name() -> &'static str {
+    if cfg!(windows) { "tailscale.exe" } else { "tailscale" }
+}
+
+/// PATH first, then the places each platform installs it.
 pub fn find_tailscale() -> Option<PathBuf> {
-    if let Some(path) = std::env::var_os("PATH") {
+    let defaults: Vec<PathBuf> = if cfg!(windows) {
+        std::env::var_os("ProgramFiles").map(|program_files| vec![PathBuf::from(program_files).join("Tailscale")]).unwrap_or_default()
+    } else {
+        // A Linux host installs it with its package manager or as a static
+        // binary; a macOS desktop with Homebrew. `snap` is Ubuntu's own path.
+        ["/usr/local/bin", "/usr/bin", "/snap/bin", "/opt/homebrew/bin", "/opt/local/bin"].iter().map(PathBuf::from).collect()
+    };
+    find_tailscale_in(std::env::var_os("PATH"), exe_name(), &defaults)
+}
+
+/// The rule above, separated from this process's environment so both platforms'
+/// searches are tested on either of them.
+pub fn find_tailscale_in(path: Option<std::ffi::OsString>, exe: &str, defaults: &[PathBuf]) -> Option<PathBuf> {
+    if let Some(path) = path {
         for dir in std::env::split_paths(&path) {
-            let candidate = dir.join("tailscale.exe");
+            let candidate = dir.join(exe);
             if candidate.is_file() {
                 return Some(candidate);
             }
         }
     }
-    if let Some(program_files) = std::env::var_os("ProgramFiles") {
-        let candidate = PathBuf::from(program_files).join("Tailscale").join("tailscale.exe");
+    for dir in defaults {
+        let candidate = dir.join(exe);
         if candidate.is_file() {
             return Some(candidate);
         }
@@ -612,9 +640,33 @@ pub(crate) mod tests {
         }
     }
 
+    /// 17 November 2026: the headless Linux host finds `tailscale` (no extension)
+    /// on `PATH`, then in the places a distribution installs it. The rule is the
+    /// same function on both platforms, so it is proved here on Windows with a
+    /// temporary folder standing in for `/usr/bin`.
     #[test]
-    fn parses_a_running_node_and_drops_the_trailing_dot() {
-        let status = ready_status();
+    fn discovery_reads_the_bare_name_off_path_then_the_default_folders() {
+        let root = std::env::temp_dir().join(format!("retinue-tailscale-{}", uuid::Uuid::new_v4()));
+        let on_path = root.join("path");
+        let fallback = root.join("fallback");
+        std::fs::create_dir_all(&on_path).unwrap();
+        std::fs::create_dir_all(&fallback).unwrap();
+        // Windows uses `tailscale.exe`; the point of the test is that the name is
+        // the platform's own and that PATH wins over the default folders.
+        std::fs::write(on_path.join(exe_name()), b"not a program").unwrap();
+        std::fs::write(fallback.join(exe_name()), b"not a program").unwrap();
+        let joined = std::env::join_paths([&on_path, &fallback]).unwrap();
+        assert_eq!(find_tailscale_in(Some(joined.clone()), exe_name(), std::slice::from_ref(&fallback)), Some(on_path.join(exe_name())), "PATH first");
+        assert_eq!(find_tailscale_in(None, exe_name(), std::slice::from_ref(&fallback)), Some(fallback.join(exe_name())), "then the default folders");
+        assert_eq!(find_tailscale_in(Some(joined), exe_name(), &[]).map(|found| found.starts_with(&root)), Some(true));
+        assert_eq!(find_tailscale_in(None, exe_name(), &[]), None, "nothing anywhere is None, never a guess");
+        assert_eq!(exe_name(), if cfg!(windows) { "tailscale.exe" } else { "tailscale" });
+        assert!(missing_sentence().contains("Tailscale is not installed"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn parses_a_running_node_and_drops_the_trailing_dot() {        let status = ready_status();
         assert_eq!(status.backend_state, "Running");
         assert_eq!(status.dns_name.as_deref(), Some("work-pc.example-tailnet.ts.net"));
         assert_eq!(status.cert_domains, vec!["work-pc.example-tailnet.ts.net"]);
