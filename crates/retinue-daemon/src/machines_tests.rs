@@ -1950,3 +1950,6 @@ include!("handoff_tests.rs");
 
 // 17 November 2026: a project started on this machine by one of the owner's paired devices.
 include!("project_share_tests.rs");
+
+// 18 November 2026: the Retinue MCP's tools for the linked machines.
+include!("machine_mcp_tests.rs");

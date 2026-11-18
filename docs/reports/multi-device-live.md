@@ -45,13 +45,15 @@ New RPC, desktop only. Returns the rows the 20-second loop already holds. **No n
   "projectName": "Retinue",          // null when the conversation has no project
   "state": "working",                // the far machine's own session state word
   "updatedAt": "2026-11-17T09:14:02.114Z",
-  "archived": false
+  "archived": false,
+  "startedFrom": { "deviceId": "…", "deviceKind": "machine", "machineName": "Laptop" }  // 18 Nov: only when a paired device started it
 } ] }
 ```
 
 - One machine's rows keep the order its own `session.list` gave; machines come in `machine.list` order.
 - `archived` is the far row's own flag. It is `false` in practice today, because the 20-second read asks `session.list` without `includeArchived`; the field exists so the UI does not have to change when that read widens.
 - An offline machine keeps its last known rows (nothing is cleared), so the UI can grey them out; `machine.list`'s `state` says whether they are current.
+- `startedFrom` (added 18 November 2026) is the far `session.list` row's own `link.startedFrom`, copied only when it is an object: three keys, `deviceId`, `deviceKind` and `machineName`, and nothing else. A conversation started at that machine's own window, by an automation or by a handoff has no field at all.
 - Errors: `not_found` for an unknown `machineId`; no error for an offline machine.
 
 ### 3. The link row gains two fields (`machine.list`, `machine.info` of a link, `machine.pair.*` job rows)
