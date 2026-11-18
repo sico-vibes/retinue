@@ -63,7 +63,10 @@ pub(crate) async fn rpc(st: &AppState, p: &Value) -> Result<Value, DispatchError
             grounded.push(suggestion);
         }
     }
+    // Exactly three cards: the grounded kinds in their own priority order
+    // (readme, script, commit, agents), then the plain prompts for any gap.
     let degraded = grounded.len() < 3;
+    grounded.truncate(3);
     for (id, title, prompt) in STATIC {
         if grounded.len() >= 3 {
             break;

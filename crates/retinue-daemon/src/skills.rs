@@ -1152,6 +1152,7 @@ pub async fn tool_save(st: &AppState, session_id: &str, args: &Value) -> Result<
         })?;
         for evicted in evictions {
             forget_learned(st, &evicted).await;
+            st.emit("skills.learned.changed", json!({"action": "evicted", "name": evicted, "agentId": agent_id})).await;
         }
     }
     let (hash, bytes) = place_learned_file(st, name, &draft.description, &draft.body)?;
