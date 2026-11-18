@@ -374,19 +374,24 @@ pub(crate) mod store {
             fn names_with_slashes_and_dots_stay_inside_the_folder() {
                 let dir = temp("names");
                 // The internal callers use names `secret.*` would refuse; they are
-                // stored, read and deleted, and never listed.
+                // stored, read and deleted, and never listed. A dotted name such as
+                // `..` is a *legal* secret name (`valid_name` allows dots), so it is
+                // listed; the store must still keep it inside the folder, because the
+                // file name is hex rather than the name itself.
                 for name in ["vault/3f2a/password", "connector/abc", "..", "a.b-c_d"] {
                     write_in(&dir, name, b"value").unwrap();
                     assert_eq!(read_in(&dir, name).unwrap().unwrap().as_str(), "value");
                 }
                 let listed: Vec<String> = list_in(&dir).unwrap().into_iter().map(|(name, _)| name).collect();
-                assert_eq!(listed, vec!["a.b-c_d".to_string()], "only a name `secret.*` accepts is listed");
+                assert_eq!(listed, vec!["..".to_string(), "a.b-c_d".to_string()], "a slashed name is stored but not listed; a dotted one is a legal name");
                 assert!(delete_in(&dir, "vault/3f2a/password").unwrap());
                 assert!(read_in(&dir, "vault/3f2a/password").unwrap().is_none());
                 let files: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().filter_map(|entry| entry.file_name().to_str().map(str::to_owned)).collect();
-                assert!(files.iter().all(|file| file.ends_with(SUFFIX)), "every file is a secret file: {files:?}");
-                assert_eq!(files.len(), 3, "the four names, one deleted, became four plain hex names");
-                assert!(files.iter().all(|file| !file.contains('/') && !file.contains('.')));
+                assert_eq!(files.len(), 3, "the four names, one deleted, are three files: {files:?}");
+                for file in &files {
+                    let stem = file.strip_suffix(SUFFIX).expect("every file is a secret file");
+                    assert!(stem.bytes().all(|byte| byte.is_ascii_hexdigit()), "the on-disk name is hex, so no name can leave the folder: {file}");
+                }
                 let _ = std::fs::remove_dir_all(&dir);
             }
 

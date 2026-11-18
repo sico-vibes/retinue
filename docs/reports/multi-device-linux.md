@@ -224,8 +224,46 @@ Newest last. Each entry says what changed, what was run, and anything a later re
 
 ---
 
-# 7. Files touched
+# 6a. Paused (18 November 2026)
 
+The owner paused all work. State of the two test failures the Director reported from `int/wave3` (1291 passed, 9 failed; mine were 2 of the 9), fixed as **uncommitted edits in this worktree** on top of the Director's commit:
+
+**Both were test bugs, not code bugs. Neither test was weakened; both got stricter.**
+
+1. `phase2a_tests::the_console_refuses_denies_and_cancels_with_the_window_s_own_sentences` (failed at `console_tests.rs:128`). **Test wrong.** `PairingState::cancel` (`remote/pairing.rs`) reports `cancelled: true` whenever an offer object exists, including one already denied, because that is exactly what the desktop's `remote.pair.cancel` answers; my test compared it against `false` after a *denied* request, which was never "no code open". The console is a thin client and must not invent a third answer, so the code stayed as it is. The test now asserts `true` for the decided offer (with the reason written down) **and** adds the real "nothing to cancel" case on a fresh state, which asserts `false`.
+   - Edit: `crates/retinue-daemon/src/console_tests.rs` (the deny/cancel section only).
+2. `secrets::store::files::tests::names_with_slashes_and_dots_stay_inside_the_folder` (failed at `secrets.rs:383`). **Test wrong.** `valid_name` allows dots, so `..` is a legal secret name and *is* listed; the store is still safe because the file name is hex (`2e2e.secret`). My expectation dropped it from the listing. The test now expects `["..", "a.b-c_d"]` (slashed names stored but not listed) and checks every on-disk stem is pure hex, which is the property that matters.
+   - Edit: `crates/retinue-daemon/src/secrets.rs` (that one test only).
+
+**Verified after the edits:** `node scripts/check-format.mjs` — passed (1483 files). Nothing else re-run.
+
+**Not yet verified (the reason to resume):** the two tests have **not been executed**. `cargo test -p retinue-daemon --bin retinued --no-run` linked `retinued-efbea7b8d3b15610.exe` (4 m 52 s, the borrowed target, build script not refused this time), and running it — from the target folder and copied to `C:\tmp\ada-linux.exe` — was refused by Smart App Control (`An Application Control policy has blocked this file`, os 4551, by content). `git status` before the pause holds only the two files above; `build.rs` and `src/skill_library.rs` are **not** stubbed or moved (the no-stub build above proves the real build script ran), and no binary was copied into the tree.
+
+**Exact next steps:**
+1. `cd` to this worktree and set the gates' environment: `$env:CARGO_TARGET_DIR='C:\Users\Sico Vibes\Desktop\DevCN\Retinue-retinue\backend-work-from-the-owner-assigned\target'`, `$env:TEMP='C:\tmp'`, `$env:TMP='C:\tmp'`, `$env:RUST_MIN_STACK='33554432'`.
+2. `cargo test -p retinue-daemon --bin retinued --no-run`; if the build script is refused (os 4551), copy `build-script-build.exe` and `build_script_build-67d4b82b0fad1b27.exe` from `...\backend-work-from-the-owner-assigned-3\target\debug\build\retinue-daemon-67d4b82b0fad1b27\` over the shared target's files of the same name (delete the refused ones first), then re-run.
+3. Copy the printed `retinued-*.exe` to `C:\tmp\ada2.exe` at once (other builds replace it), check `C:\tmp\ada2.exe --list` holds `a_live_offer_expires`, `the_console_`, `names_with_slashes`, then from `crates\retinue-daemon` run `C:\tmp\ada2.exe console --test-threads=2` and `C:\tmp\ada2.exe secrets::store::files`.
+4. If Smart App Control still refuses the binary, the Director's `int/wave3` run is the verification; the two edits are assertions only and clippy will typecheck them: `cargo clippy -p retinue-daemon --all-targets -- -D warnings`.
+5. Then `node scripts/check-architecture.mjs`, `node scripts/check-format.mjs`, and add the result line to this report.
+
+**Nothing is half-written:** both edits are complete functions/tests, no conflict markers, and the format gate passes.
+
+### Resumed (18 November 2026)
+
+Both fixed tests **ran and passed**, on the borrowed target, the real build script (no stub, nothing moved), the test binary copied out at once:
+
+- `cargo test -p retinue-daemon --bin retinued --no-run` → `retinued-efbea7b8d3b15610.exe` (4 m 52 s), copied to `C:\tmp\ada-linux.exe`; `--list` held `the_console_refuses_denies_and_cancels…`, `a_live_offer_expires…`, `a_waiting_request…`, `console_methods…`, `console_status…`, `names_with_slashes…`. The binary runs now: Smart App Control let it through.
+- `ada-linux.exe console` → **7 passed, 0 failed** (includes both previously failing tests and two `quota_sources` names that contain "console").
+- `ada-linux.exe secrets::store::files` → **4 passed** (including `names_with_slashes_and_dots_stay_inside_the_folder`).
+- `ada-linux.exe paths::` → **3 passed**; `ada-linux.exe discovery_reads_the_bare_name…` → **1 passed**; `sandbox::` → **3 passed**; `remote::pairing::` → **13 passed**.
+- `cargo clippy -p retinue-daemon --all-targets -- -D warnings` → **clean** (4 m 14 s).
+- `node scripts/check-architecture.mjs` → **passed**; `node scripts/check-format.mjs` → **passed** (1483 files).
+
+Running the filtered binary is not the whole suite: the Director's `int/wave3` run (1291 passed, 9 failed) is the full-suite evidence, and these were 2 of its 9 failures. Nothing is left temporary: `build.rs` and `src/skill_library.rs` are untouched, no binary is in the tree, and `git status` holds only `console_tests.rs`, `secrets.rs` and this report. Not committed.
+
+---
+
+# 7. Files touched
 **New:** `crates/retinue-daemon/src/paths.rs`, `crates/retinue-daemon/src/console.rs`, `crates/retinue-daemon/src/console_tests.rs`, `docs/operations/linux-host.md`, `docs/operations/retinued.service`, this report.
 
 **Changed:** `crates/retinue-daemon/src/main.rs` (data-folder default, `mod paths`, `mod console`, `AppState.console` and its five initialisers, the `console.` route in `main_rpc`, `console::startup`/`shutdown`, the CLI and `--version`, the `console_tests` include), `crates/retinue-daemon/src/secrets.rs` (the file store, `set_data_folder`, `backend_name`), `crates/retinue-daemon/src/remote/tailscale.rs` (discovery, the Unix sentence, one test), `crates/retinue-daemon/src/remote/pairing.rs` (`live_pending`), `crates/retinue-daemon/src/machines.rs` (`platform()`), `crates/retinue-daemon/src/owner_computer.rs` (refused off Windows), `crates/retinue-daemon/src/sandbox.rs` (the Doctor's sentence), `apps/desktop/src/remote/tiers.json` (`console.*`, `never`), `scripts/check-architecture.mjs` (the `console.rs` network allowlist row), `.github/workflows/ci.yml` (the `linux` job), `docs/remote/THREAT_MODEL.md` (section 16's headless-Linux rows), `docs/reference/invariants.md` (two rows), and the development skill: `references/lessons.md` (a 2026-11-17 entry), `references/codebase-map.md` (the headless-host entry), `references/verification.md` (a Linux section, in both copies of the file — the file itself is duplicated in the repository, which is not this lane's to fix).
@@ -233,7 +271,6 @@ Newest last. Each entry says what changed, what was run, and anything a later re
 **Line endings:** every new file is LF; `tiers.json`, `ci.yml`, `main.rs`, `secrets.rs` and the skill files were edited in place and kept their CRLF.
 
 ## Owner and Director decisions this lane owes
-
 1. **The Secret Service keyring** is not wired (section 5). Either accept files on Linux for now, or make the keyring a follow-up lane when a Linux desktop app exists.
 2. **The console token file** is a new credential on disk. The threat model's new row says what it is worth; the owner may want to say no to it and keep only an in-process console, which would mean the console cannot be used while the daemon runs under systemd.
 3. **`npm run docs:build`** must be re-run for `docs/operations/linux-host.md` to appear in the documentation library.
