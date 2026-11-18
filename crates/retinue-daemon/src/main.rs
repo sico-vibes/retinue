@@ -114,6 +114,10 @@ mod remote;
 mod machine_client;
 mod machines;
 mod handoff;
+// 17 November 2026: a project started on this machine by one of the owner's paired devices, confined
+// to the one folder the owner set here. Distinct from `workspace.rs`, which reports where a
+// conversation works.
+mod project_share;
 #[cfg(test)]
 mod machines_tests;
 // Phase 5: secrets in the credential store and one-use secret requests.
@@ -1271,7 +1275,8 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         // Wave 2: what a bot can reach, in plain words, for a conversation or a
         // bot. Desktop only, because the answer names the owner's own folder.
         "reach.statement" => reach::rpc(st, &p).await,
-        "project.clone" | "project.clone.cancel" | "project.clone.list" | "project.discover" => project_clone::rpc(st, method, &p).await,
+        "project.clone" | "project.clone.cancel" | "project.clone.list" | "project.clone.status" | "project.discover" => project_clone::rpc(st, method, &p).await,
+        "project.browse" | "project.createFromFolder" => project_share::rpc(st, method, &p).await,
         "project.files.search" | "project.content.search" => project_search::rpc(st, method, &p).await,
         // Wave 3: three first tasks read from the project's own folder. Desktop
         // only, because the reply names the host path.
@@ -2047,7 +2052,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             }
             let value = validate_setting(k, &p["value"])?;
             if k == "permissions.default_mode" && value == "bypass" && p["confirm"] != true { return Err(derr("invalid_argument", "Confirm making Full access the default first.", StatusCode::BAD_REQUEST)); }
-            let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k=="composer.sendShortcut"||k=="shortcuts.bindings"||k=="experimental.ownerComputer"||k=="ownerComputer.denyList"||k=="prompts.contextFirst";
+            let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k==project_share::SETTING_ENABLED||k==project_share::SETTING_FOLDER||k=="composer.sendShortcut"||k=="shortcuts.bindings"||k=="experimental.ownerComputer"||k=="ownerComputer.denyList"||k=="prompts.contextFirst";
             let events=st.db.set_setting(k, &value).map_err(|e| {
                 derr(
                     if validation_key{"invalid_argument"}else{"internal"},
@@ -2127,7 +2132,11 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         | "machine.devices.revoke"
         | "machine.pair.pending"
         | "machine.pair.confirm"
-        | "machine.activity" => machines::rpc(st, method, &p).await,
+        | "machine.activity"
+        | "machine.project.browse"
+        | "machine.project.create"
+        | "machine.project.clone"
+        | "machine.clone.status" => machines::rpc(st, method, &p).await,
         "machine.takeOver.preview"
         | "machine.takeOver"
         | "machine.takeOver.list"
@@ -2175,6 +2184,13 @@ fn validate_setting(k: &str, value: &Value) -> Result<Value, DispatchError> {
     // Phase 3: the folder the clone dialog last used. Machine-specific, so it never travels.
     if k == "projects.folder" && !value.as_str().is_some_and(|path| path.is_empty() || (path.len() <= 1_024 && std::path::Path::new(path).is_absolute() && !path.contains('\0'))) {
         return Err(derr("invalid_argument", "projects.folder must be empty or an absolute folder path", StatusCode::BAD_REQUEST));
+    }
+    // 17 November 2026: projects on this machine, started from one of the owner's paired devices. The
+    // switch is off unless the owner turned it on, and the base folder is a folder on this machine,
+    // so neither travels in a backup.
+    if k == project_share::SETTING_ENABLED && !value.is_boolean() { return Err(derr("invalid_argument", "projects.devices.enabled requires a JSON boolean", StatusCode::BAD_REQUEST)); }
+    if k == project_share::SETTING_FOLDER && !value.as_str().is_some_and(|path| path.is_empty() || (path.len() <= 1_024 && std::path::Path::new(path).is_absolute() && !path.contains('\0'))) {
+        return Err(derr("invalid_argument", "projects.devices.folder must be empty or an absolute folder path", StatusCode::BAD_REQUEST));
     }
     if k == "claude.enableWorkflows" && !value.is_boolean() { return Err(derr("invalid_argument", "claude.enableWorkflows requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "permissions.default_mode" && !value.as_str().is_some_and(|v| ["ask", "auto", "accept_edits", "bypass"].contains(&v)) { return Err(derr("invalid_argument", "permissions.default_mode must be ask, auto, accept_edits or bypass", StatusCode::BAD_REQUEST)); }

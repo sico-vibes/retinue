@@ -163,7 +163,9 @@ export interface RemoteSecurityOptions {
   quietHours: { enabled: boolean; from: string; to: string }
 }
 
-export type RemoteActivityKind = 'paired' | 'revoked' | 'connected' | 'disconnected' | 'prompt' | 'approval' | 'denied' | 'mcp'
+// `workspace` (17 November 2026): one line per project action a paired device takes on the host —
+// browsing its folders, adding a project there, cloning into it, reading a clone's progress.
+export type RemoteActivityKind = 'paired' | 'revoked' | 'connected' | 'disconnected' | 'prompt' | 'approval' | 'denied' | 'mcp' | 'workspace'
 
 export interface RemoteActivityEntry {
   id: string
