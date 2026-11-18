@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "be9d799",
-  "documentCount": 443,
+  "revision": "155ac4b5",
+  "documentCount": 445,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -2896,7 +2896,7 @@
       "title": "Invariants",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "cfad687618fdda02c6581cafff1db674f614040b009ec492c5c4323785669ea4",
+      "sha256": "ed18a444754df2a57c84c7ead4dcc0455b9486e65cc489448386847ba1345373",
       "headings": [
         {
           "id": "safety-and-privacy",
@@ -3001,6 +3001,81 @@
         {
           "id": "owner-and-director-decisions-this-lane-owes",
           "text": "Owner and Director decisions this lane owes",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/linux-keyring",
+      "source": "docs/reports/linux-keyring.md",
+      "title": "Lane report: Linux secrets in the system keyring",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "705f47d915b45833e128aadbbce428657d050a83faf15136673497982fbab463",
+      "headings": [
+        {
+          "id": "11-the-rule-as-code",
+          "text": "1.1 The rule as code",
+          "level": 2
+        },
+        {
+          "id": "12-what-a-linux-desktop-or-host-now-does-by-state",
+          "text": "1.2 What a Linux desktop or host now does, by state",
+          "level": 2
+        },
+        {
+          "id": "21-what-is-left-unverified-plainly",
+          "text": "2.1 What is left unverified, plainly",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/reports/linux-ci-fixes",
+      "source": "docs/reports/linux-ci-fixes.md",
+      "title": "Lane report: the daemon's first full run on Linux (CI job linux, commit 79d9ae1)",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "157e5ba98f77374d5710e6f81443de7b163a57541cd357779e9b10c188f99078",
+      "headings": [
+        {
+          "id": "1-the-13-failures",
+          "text": "1. The 13 failures",
+          "level": 2
+        },
+        {
+          "id": "2-the-three-warnings--d-warnings",
+          "text": "2. The three warnings (-D warnings)",
+          "level": 2
+        },
+        {
+          "id": "3-what-was-run-on-the-owners-pc",
+          "text": "3. What was run (on the owner's PC)",
+          "level": 2
+        },
+        {
+          "id": "4-what-is-left-unverified-plainly",
+          "text": "4. What is left unverified, plainly",
+          "level": 2
+        },
+        {
+          "id": "5-files-touched",
+          "text": "5. Files touched",
+          "level": 2
+        },
+        {
+          "id": "61-the-capability-reached-a-log-file-on-a-headless-host",
+          "text": "6.1 The capability reached a log file on a headless host",
+          "level": 2
+        },
+        {
+          "id": "62-the-tailscale-refusal-did-not-name-its-fix",
+          "text": "6.2 The Tailscale refusal did not name its fix",
+          "level": 2
+        },
+        {
+          "id": "63-what-was-run-for-section-6-and-what-is-not-proven",
+          "text": "6.3 What was run for section 6, and what is not proven",
           "level": 2
         }
       ]
@@ -5159,7 +5234,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "285c4df413036d15f69b001beb5e9c8b6fa6234733063ba1bfa6d221093eb07c",
+      "sha256": "1d5c6fe2d1377a61eaa9d90df659a1d1bb0e0c711759d00440a0d1d037d343bd",
       "headings": [
         {
           "id": "update-commands",
@@ -8148,7 +8223,7 @@
       "title": "Retinue on a Linux host: install, start, update, stop",
       "section": "Operations",
       "status": "Operations",
-      "sha256": "f4949b2cbd7582641ec016992705bc8a58be6482ad5ee116b5f1187af6144def",
+      "sha256": "5da3d2ce4a3106c9b8e99c108d3b58f6bb30921973f99480511da9a825a0d872",
       "headings": [
         {
           "id": "1-what-you-need-on-the-host",
@@ -8503,7 +8578,7 @@
       "title": "Third-party notices",
       "section": "Legal",
       "status": "Legal notice",
-      "sha256": "b919845bfef0c7d58f8c894231abe06bbd03f7e90053ff2809e8e50c9f74c777",
+      "sha256": "9267c6ce5c0694b1b9ef9f2190a5f29f395f2f3c055432e86328cc4bb6265970",
       "headings": [
         {
           "id": "bundled-fonts",
@@ -8578,6 +8653,11 @@
         {
           "id": "react-bits",
           "text": "React Bits",
+          "level": 2
+        },
+        {
+          "id": "system-keyring-on-linux",
+          "text": "System keyring on Linux",
           "level": 2
         },
         {
@@ -23814,7 +23894,7 @@
       "title": "Remote mode: threat model",
       "section": "Remote specifications",
       "status": "Remote specification",
-      "sha256": "f8c0bb51ef268b6fbe8393c519af7f73fe156123ade6b3577df8a25baf4fb695",
+      "sha256": "565daf8ed4e2f652a04ecc40991cc6b8b7db749f41994f456bc6d2b88c9c2840",
       "headings": [
         {
           "id": "1-the-core-fact",
