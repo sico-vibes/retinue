@@ -30,7 +30,43 @@ env:
   CARGO_INCREMENTAL: '0'
 
 jobs:
+  # Refuses to build unless CI on this exact commit passed (wave 3,
+  # `docs/plans/nod-adoption-plan.md`, release safety; the design is
+  # `docs/research/n8n-nod/07-architecture.md` idea 7). A dispatch on a commit CI
+  # never ran — a tag, a side branch, an old commit — is refused too: run CI on
+  # the commit first, or release the commit CI built.
+  require-ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: CI on this commit must be green
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -eu
+          runs=$(gh api "repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SHA&per_page=50")
+          passed=$(echo "$runs" | jq '[.workflow_runs[] | select(.conclusion == "success")] | length')
+          failed=$(echo "$runs" | jq '[.workflow_runs[] | select(.conclusion == "failure" or .conclusion == "cancelled" or .conclusion == "timed_out")] | length')
+          total=$(echo "$runs" | jq '.workflow_runs | length')
+          echo "CI runs on $SHA: $total total, $passed passed, $failed failed."
+          if [ "$passed" -lt 1 ]; then
+            echo "::error::CI has no successful run on $SHA ($total runs). Run CI on this commit first (Actions → CI → Run workflow on main), then release again."
+            exit 1
+          fi
+          # The newest run is the one the owner is about to trust. An older green
+          # run does not cover a commit that a later red run measured.
+          newest=$(echo "$runs" | jq -r '.workflow_runs | sort_by(.created_at) | last | .conclusion')
+          if [ "$newest" != "success" ]; then
+            echo "::error::The newest CI run on $SHA ended $newest. Fix it and re-run CI before releasing."
+            exit 1
+          fi
+          echo "CI is green on $SHA (newest run: $newest)."
+
   build:
+    needs: require-ci
     runs-on: windows-latest
     timeout-minutes: 120
     env:

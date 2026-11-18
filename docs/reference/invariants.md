@@ -36,6 +36,14 @@
 | Production code never imports the preview harness, and never opens its own WebSocket outside the transport seam. | `scripts/check-architecture.mjs` | `scripts/check-architecture.test.mjs` |
 | A look stylesheet is a static import, never a dynamic `import()`. | `apps/desktop/src/main.tsx` | `ui/themeBuild.test.ts` |
 
+## Releases and the size of a read
+
+| Rule | Enforced by | Pinned by |
+|---|---|---|
+| A conversation read is bounded: a bot's `read_conversation` and a phone's `session.get` return a window with a `truncated` marker and a cursor, never a whole conversation. | `crates/retinue-daemon/src/external.rs` (`conversation_page`), `crates/retinue-daemon/src/remote/policy.rs` (`window_session`), `apps/desktop/src/remote/remoteTiers.ts` (`windowSessionForRemote`) | `external_tests.rs::read_conversation_returns_a_bounded_page_with_cursors`, `policy.rs::goldens_results` (the `session-get-windowed` cases), `remoteTiers` goldens |
+| The release workflow builds only a commit CI is green on, and the update manifest must offer a version newer than the published one. | `.github/workflows/release.yml` (`require-ci`), `scripts/release-windows.ps1`, `scripts/update-round-trip.mjs` | `scripts/update-round-trip.test.mjs`; the `require-ci` job itself is **only provable in CI** |
+| CI selects its checks by changed path, and the one required `checks` job fails unless every selected check passed; an unknown path runs everything. | `.github/workflows/ci.yml`, `scripts/ci-scope.mjs` | `scripts/ci-scope.test.mjs` |
+
 ## Tests and the tree
 
 | Rule | Enforced by | Pinned by |

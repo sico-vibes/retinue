@@ -2095,5 +2095,12 @@
     "permissions.default_mode",
     "experimental.memory"
   ],
-  "sensitiveKeyPattern": "token|secret|password|credential|capability|api[-_]?key|private[-_]?key|authorization|bearer|cookie"
+  "sensitiveKeyPattern": "token|secret|password|credential|capability|api[-_]?key|private[-_]?key|authorization|bearer|cookie",
+  "limits": {
+    "sessionMessages": 200,
+    "sessionMessageChars": 8000,
+    "sessionTurns": 40,
+    "sessionTools": 100,
+    "sessionFiles": 100
+  }
 }

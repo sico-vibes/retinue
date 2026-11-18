@@ -455,19 +455,98 @@ function redactAgentForRemote(agent: unknown, options: RedactOptions): unknown {
 }
 
 /**
+ * How much of one conversation a device may receive in one read (wave 3,
+ * `docs/plans/nod-adoption-plan.md`, idea 8). The numbers are `limits` in
+ * `tiers.json`, which the Rust gateway reads too, so the two ports cut in the
+ * same place.
+ */
+export interface SessionLimits {
+  sessionMessages: number
+  sessionMessageChars: number
+  sessionTurns: number
+  sessionTools: number
+  sessionFiles: number
+}
+
+/** What a conversation read returns when nothing narrows it. */
+export const DEFAULT_SESSION_LIMITS: SessionLimits = {
+  sessionMessages: 200,
+  sessionMessageChars: 8000,
+  sessionTurns: 40,
+  sessionTools: 100,
+  sessionFiles: 100,
+}
+
+/**
+ * The newest part of one conversation, with markers saying what is missing:
+ * `messagesTruncated` and `messagesCursor` for the phone to read back with
+ * `beforeMessageId`, and one `…Truncated` per list that was cut. The input is
+ * never mutated.
+ */
+export function windowSessionForRemote(session: unknown, limits: SessionLimits = DEFAULT_SESSION_LIMITS): unknown {
+  const source = ownKeys(session)
+  if (!source) return session
+  const out: Record<string, unknown> = { ...source }
+  const messages = Array.isArray(source.messages) ? (source.messages as Record<string, unknown>[]) : null
+  if (messages) {
+    const kept = messages.slice()
+    for (const message of kept) {
+      if (typeof message.content !== 'string') continue
+      // Characters, not bytes, and never inside a surrogate pair.
+      const characters = Array.from(message.content)
+      if (characters.length > limits.sessionMessageChars) {
+        outMessageCut(kept, message, characters.slice(0, limits.sessionMessageChars).join(''))
+      }
+    }
+    const overflow = kept.length - limits.sessionMessages
+    if (overflow > 0) {
+      kept.splice(0, overflow)
+      out.messagesTruncated = true
+      out.messagesCursor = kept.length ? kept[0].id ?? null : null
+    }
+    out.messages = kept
+  }
+  for (const [key, limit, marker] of [
+    ['turns', limits.sessionTurns, 'turnsTruncated'],
+    ['tools', limits.sessionTools, 'toolsTruncated'],
+    ['files', limits.sessionFiles, 'filesTruncated'],
+  ] as const) {
+    // A page the device asked for already says so; only ever add a marker.
+    if (out[marker] === true) continue
+    const rows = Array.isArray(source[key]) ? (source[key] as unknown[]) : null
+    if (!rows) continue
+    const overflow = rows.length - limit
+    if (overflow > 0) {
+      out[key] = rows.slice(overflow)
+      out[marker] = true
+    }
+  }
+  return out
+}
+
+function outMessageCut(kept: Record<string, unknown>[], original: Record<string, unknown>, text: string): void {
+  const index = kept.indexOf(original)
+  if (index === -1) return
+  kept[index] = { ...original, content: text, contentTruncated: true }
+}
+
+/**
  * Redact one RPC result for a remote device, by method. `app.snapshot` gets the
  * full snapshot policy; `session.get`/`session.list`, `agent.get`/`agent.list`,
  * `runtime.list`, `runtime.profile.list`, `search.messages` and `automation.get`
- * (prompt kept, paths trimmed) go through the same field watcher; `memory.get`
- * and `memory.list` are kept; `settings.get` is reduced to the allowlist. Any
- * other method whose class is `read` still goes through the field watcher, so a
- * read never passes raw; every other method's result is returned unchanged.
+ * (prompt kept, paths trimmed) go through the same field watcher; a `session.get`
+ * is then cut to the newest part of the conversation ([windowSessionForRemote]);
+ * `memory.get` and `memory.list` are kept; `settings.get` is reduced to the
+ * allowlist. Any other method whose class is `read` still goes through the field
+ * watcher, so a read never passes raw; every other method's result is returned
+ * unchanged.
  */
-export function redactResultForRemote(method: string, result: unknown, options: RedactOptions = {}): unknown {
+export function redactResultForRemote(method: string, result: unknown, options: RedactOptions = {}, limits: SessionLimits = DEFAULT_SESSION_LIMITS): unknown {
   switch (method) {
     case 'app.snapshot':
       return redactSnapshotForRemote(result, options)
     case 'session.get':
+      return windowSessionForRemote(redactNode(result, [], options), limits)
     case 'session.list':
       return redactNode(result, [], options)
     case 'agent.get':

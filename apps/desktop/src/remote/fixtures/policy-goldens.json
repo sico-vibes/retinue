@@ -1389,6 +1389,158 @@
           }
         ]
       }
+    },
+    {
+      "name": "session-get-windowed",
+      "method": "session.get",
+      "options": {},
+      "limits": {
+        "sessionMessages": 2,
+        "sessionMessageChars": 6,
+        "sessionTurns": 1,
+        "sessionTools": 1,
+        "sessionFiles": 1
+      },
+      "input": {
+        "id": "s_1",
+        "title": "Long one",
+        "providerSessionId": "thread_1",
+        "messages": [
+          {
+            "id": "m1",
+            "role": "user",
+            "content": "first message"
+          },
+          {
+            "id": "m2",
+            "role": "assistant",
+            "content": "second message"
+          },
+          {
+            "id": "m3",
+            "role": "user",
+            "content": "third message"
+          },
+          {
+            "id": "m4",
+            "role": "assistant",
+            "content": "fourth message"
+          }
+        ],
+        "turns": [
+          {
+            "id": "t1",
+            "state": "done"
+          },
+          {
+            "id": "t2",
+            "state": "done"
+          }
+        ],
+        "tools": [
+          {
+            "id": "x1",
+            "title": "Bash: ls",
+            "state": "done"
+          },
+          {
+            "id": "x2",
+            "title": "Read",
+            "state": "done"
+          }
+        ],
+        "files": [
+          {
+            "id": "f1",
+            "path": "C:/repo/src/a.ts"
+          }
+        ]
+      },
+      "expect": {
+        "id": "s_1",
+        "title": "Long one",
+        "messages": [
+          {
+            "id": "m3",
+            "role": "user",
+            "content": "third ",
+            "contentTruncated": true
+          },
+          {
+            "id": "m4",
+            "role": "assistant",
+            "content": "fourth",
+            "contentTruncated": true
+          }
+        ],
+        "turns": [
+          {
+            "id": "t2",
+            "state": "done"
+          }
+        ],
+        "tools": [
+          {
+            "id": "x2",
+            "title": "Tool",
+            "state": "done"
+          }
+        ],
+        "files": [
+          {
+            "id": "f1",
+            "path": "src/a.ts"
+          }
+        ],
+        "messagesTruncated": true,
+        "messagesCursor": "m3",
+        "turnsTruncated": true,
+        "toolsTruncated": true
+      }
+    },
+    {
+      "name": "session-get-paged-keeps-its-markers",
+      "method": "session.get",
+      "options": {},
+      "limits": {
+        "sessionMessages": 2,
+        "sessionMessageChars": 6,
+        "sessionTurns": 1,
+        "sessionTools": 1,
+        "sessionFiles": 1
+      },
+      "input": {
+        "id": "s_2",
+        "messages": [
+          {
+            "id": "m1",
+            "role": "user",
+            "content": "early"
+          }
+        ],
+        "turns": [],
+        "turnsTruncated": true,
+        "tools": [],
+        "toolsTruncated": true,
+        "files": [],
+        "filesTruncated": true
+      },
+      "expect": {
+        "id": "s_2",
+        "messages": [
+          {
+            "id": "m1",
+            "role": "user",
+            "content": "early"
+          }
+        ],
+        "turns": [],
+        "turnsTruncated": true,
+        "tools": [],
+        "toolsTruncated": true,
+        "files": [],
+        "filesTruncated": true
+      }
     }
   ],
   "snapshots": [

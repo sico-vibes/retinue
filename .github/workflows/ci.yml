@@ -1,12 +1,26 @@
 name: CI
 
 # The gates the Director runs by hand (`.claude/skills/retinue-development/references/verification.md`),
-# on every push and pull request to main. No secrets are used and the token is read-only.
+# on every push and pull request to main, and nightly. No secrets are used and the token is read-only.
+#
+# One job per kind of check, selected by path (`scripts/ci-scope.mjs`, wave 3 of
+# `docs/plans/nod-adoption-plan.md`, release safety; the design is
+# `docs/research/n8n-nod/07-architecture.md` idea 4). `checks` is the one required job:
+# it fails unless every check the `scope` job selected passed, so a wrong table
+# runs less work, never less proof. The selection fails closed: a lockfile, a
+# toolchain file, the workflow or the checks themselves, the native shell, or a
+# path the table does not know runs everything.
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  # The nightly run catches drift that no pull request touches: a dependency
+  # registry, a runner image, a provider CLI. A schedule only runs on the
+  # default branch, and it always runs every check.
+  schedule:
+    - cron: '10 4 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -22,12 +36,65 @@ env:
   CARGO_INCREMENTAL: '0'
 
 jobs:
+  # Decides what changed, and so which checks run. Needs no toolchain: Node only,
+  # so a selection bug is visible in about twenty seconds.
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      full: ${{ steps.select.outputs.full }}
+      reason: ${{ steps.select.outputs.reason }}
+      hygiene: ${{ steps.select.outputs.hygiene }}
+      types: ${{ steps.select.outputs.types }}
+      uiTests: ${{ steps.select.outputs.uiTests }}
+      build: ${{ steps.select.outputs.build }}
+      daemonTests: ${{ steps.select.outputs.daemonTests }}
+      clippy: ${{ steps.select.outputs.clippy }}
+      docs: ${{ steps.select.outputs.docs }}
+      perf: ${{ steps.select.outputs.perf }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # The base commit of a pull request, and a push's own commits, have to
+          # be here to be diffed.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Decide which checks this change needs
+        id: select
+        shell: bash
+        run: |
+          set -u
+          args=""
+          # A scheduled or manual run, and the first push of a branch, have no
+          # base to diff. Each runs everything rather than guessing.
+          if [ "${{ github.event_name }}" = "schedule" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            args="--full"
+          else
+            base='${{ github.event.pull_request.base.sha }}'
+            if [ -z "$base" ]; then base='${{ github.event.before }}'; fi
+            if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+              args="--full"
+            elif ! git diff --name-only --diff-filter=ACDMRTUXB "$base" "${{ github.sha }}" > changed.txt; then
+              # A force-push leaves no base to compare with: run everything.
+              args="--full"
+            else
+              args="--paths-file changed.txt"
+            fi
+          fi
+          node scripts/ci-scope.mjs $args --github-output --summary --json
+
   # Fast checks that need no toolchain: the import boundaries, the mechanical
-  # formatting rules, the secret scan and the tests of those checks. Separate
-  # from `gates` so a boundary or a committed key fails in a minute rather than
-  # at the end of a ninety-minute job, and so a red `main` says which kind of
-  # problem it is.
+  # formatting rules, the secret scan and the tests of those checks. This job
+  # always runs, so a boundary or a committed key fails in a minute rather than
+  # at the end of a long run, and a red `main` says which kind of problem it is.
   hygiene:
+    needs: scope
+    if: needs.scope.outputs.hygiene == 'true'
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -75,9 +142,8 @@ jobs:
         # A pull request scans its own commits; a push scans what it pushes.
         # With no base (the first push of a branch) it scans that commit alone:
         # `--all` does not finish on this history inside the timeout, and the
-        # working-tree scan below covers everything that is here now. A
-        # full-history scan belongs in a nightly run (`docs/plans/nod-adoption-plan.md`,
-        # wave 3, "release safety").
+        # working-tree scan below covers everything that is here now. The
+        # nightly run is the full-history scan.
         run: |
           $base = '${{ github.event.pull_request.base.sha }}'
           if (-not $base) { $base = '${{ github.event.before }}' }
@@ -94,9 +160,53 @@ jobs:
           & $env:GITLEAKS_PATH dir --config .gitleaks.toml --redact --no-banner --verbose .
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
-  gates:
+  types:
+    needs: scope
+    if: needs.scope.outputs.types == 'true'
     runs-on: windows-latest
-    timeout-minutes: 90
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  uiTests:
+    needs: scope
+    if: needs.scope.outputs.uiTests == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Unit and mounted tests
+        run: npm test
+
+  daemonTests:
+    needs: scope
+    if: needs.scope.outputs.daemonTests == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 80
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -120,15 +230,6 @@ jobs:
         run: |
           "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
           "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
-
-      - name: Install npm dependencies
-        run: npm ci
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Unit and mounted tests
-        run: npm test
 
       - name: Daemon and crate tests
         shell: pwsh
@@ -159,8 +260,40 @@ jobs:
             }
           }
 
+  clippy:
+    needs: scope
+    if: needs.scope.outputs.clippy == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: '.'
+
       - name: Clippy
         run: cargo clippy --workspace --exclude retinue-desktop --all-targets -- -D warnings
+
+  build:
+    needs: scope
+    if: needs.scope.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
 
       - name: Build the production bundle
         run: npm run build
@@ -168,8 +301,56 @@ jobs:
       - name: Build the phone PWA
         run: npm run build:remote --workspace @retinue/desktop
 
+  docs:
+    needs: scope
+    if: needs.scope.outputs.docs == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
       - name: Documentation library
         run: npm run docs:check
+
+  # The two budgets need both binaries and the mounted UI, so they get their own
+  # job rather than holding up the daemon tests.
+  perf:
+    needs: scope
+    if: needs.scope.outputs.perf == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: '.'
+
+      - name: Use a temp folder with a long name
+        shell: pwsh
+        run: |
+          "TEMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+          "TMP=$env:RUNNER_TEMP" >> $env:GITHUB_ENV
+
+      - name: Install npm dependencies
+        run: npm ci
 
       - name: Build the performance-gate binaries
         run: cargo build -p retinue-daemon --bin retinued -p retinue-storage --bin perf-seed
@@ -179,3 +360,42 @@ jobs:
 
       - name: Render budget
         run: npm run perf:render
+
+  # The one required check, and the reason a path filter cannot let a change
+  # through: it fails unless every check the scope job selected reported
+  # success. A job that was not selected must be `skipped`; anything else
+  # (a failure, a cancellation, a missing result) fails this job too.
+  checks:
+    name: checks
+    needs: [scope, hygiene, types, uiTests, build, daemonTests, clippy, docs, perf]
+    if: always()
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Every selected check passed
+        shell: pwsh
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          $needs = $env:NEEDS | ConvertFrom-Json
+          if ($needs.scope.result -ne 'success') {
+            Write-Host "::error::the scope job did not finish ($($needs.scope.result)); nothing can be certified"
+            exit 1
+          }
+          $problems = @()
+          foreach ($name in 'hygiene', 'types', 'uiTests', 'build', 'daemonTests', 'clippy', 'docs', 'perf') {
+            $selected = $needs.scope.outputs.$name -eq 'true'
+            $result = $needs.$name.result
+            if ($selected -and $result -ne 'success') {
+              $problems += "$name was selected and ended $result"
+            } elseif (-not $selected -and $result -ne 'skipped') {
+              # Unselected checks must be skipped. A success here means the job
+              # ran without being asked for, which is a selection bug worth seeing.
+              $problems += "$name was not selected but ended $result"
+            }
+          }
+          if ($problems.Count -gt 0) {
+            foreach ($problem in $problems) { Write-Host "::error::$problem" }
+            exit 1
+          }
+          Write-Host "Every selected check passed ($($needs.scope.outputs.reason))."

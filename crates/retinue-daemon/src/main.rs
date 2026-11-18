@@ -1709,11 +1709,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             }
             Ok(json!({"deleted":true}))
         }
-        "session.get" => st
-            .db
-            .session_detail(p["sessionId"].as_str().unwrap_or(""))
-            .map(|mut row| { shared_settings::effective_session_modes(st, std::slice::from_mut(&mut row)); row })
-            .map_err(|e| derr("not_found", &e.to_string(), StatusCode::NOT_FOUND)),
+        "session.get" => session_get(st, &p),
         "session.environment" => session_environment(st,&p).await,
         // FIX45: the actual working tree against HEAD, read-only. The folder
         // comes from the conversation, never from the caller.
@@ -2976,6 +2972,34 @@ fn recognized_cli_version(provider: &str, version: &str) -> bool {
         p if retinue_runtime::acp_provider(p).is_some() => true,
         _ => false,
     }
+}
+
+/// `session.get`: a conversation, its turns, messages, tools and file rows.
+///
+/// An optional `beforeMessageId` turns it into the page before that message
+/// (wave 3, `docs/plans/nod-adoption-plan.md`, idea 8): the messages before the
+/// cursor, and no turns, tools or files, which belong to the newest page. The
+/// phone passes the `messagesCursor` a truncated read gives it. The desktop
+/// never sends the cursor, so its read is unchanged.
+fn session_get(st:&AppState,p:&Value)->Result<Value,DispatchError>{
+    let id=p["sessionId"].as_str().unwrap_or("");
+    let mut row=st.db.session_detail(id).map_err(|e|derr("not_found",&e.to_string(),StatusCode::NOT_FOUND))?;
+    let cursor=p["beforeMessageId"].as_str().filter(|cursor|!cursor.is_empty());
+    if let Some(cursor)=cursor{
+        if cursor.chars().count()>128{return Err(derr("invalid_argument","beforeMessageId is not a message id",StatusCode::BAD_REQUEST))}
+        let messages=row["messages"].as_array_mut().ok_or_else(||derr("not_found","session not found",StatusCode::NOT_FOUND))?;
+        let at=messages.iter().position(|message|message["id"].as_str()==Some(cursor)).ok_or_else(||derr("invalid_argument","beforeMessageId is not in this conversation",StatusCode::BAD_REQUEST))?;
+        messages.truncate(at);
+        // Older history is its messages; the working detail stays on the newest page.
+        row["turns"]=json!([]);
+        row["turnsTruncated"]=json!(true);
+        row["tools"]=json!([]);
+        row["toolsTruncated"]=json!(true);
+        row["files"]=json!([]);
+        row["filesTruncated"]=json!(true);
+    }
+    shared_settings::effective_session_modes(st, std::slice::from_mut(&mut row));
+    Ok(row)
 }
 
 /// `session.environment`: where a conversation works. The project folder, its
@@ -14605,7 +14629,9 @@ mod phase2a_tests {
     // Wave 2, agent experience: the "now" line, memory recall, a plan that
     // outlives a turn, the docs tools and earlier-message search.
     include!("wave2_tests.rs");
-include!("wave3_tests.rs");
+
+    // Wave 3: learned skills, first-task suggestions, and the bounded conversation read.
+    include!("wave3_tests.rs");
 
     #[tokio::test]
     async fn team_update_project_move_does_not_archive() {

@@ -394,7 +394,7 @@ fn catalog() -> Vec<(Tier, Value)> {
         entry(Viewer, "ui_guide", "The guide to answering with an interactive view in an ```openui block: the components, their syntax and examples.", schema(json!({}), &[])),
         entry(Viewer, "list_presets", "The preset employees the owner can hire into a project: department, id, nickname, portrait, role, tags, description and whether each is already hired.", schema(json!({}), &[])),
         entry(Viewer, "list_conversations", "Conversations, newest first: id, bot, title, project, state, last update and its separate git copy when it has one.", schema(json!({"botId": id("Only this bot's conversations."), "projectId": id("Only conversations in this project (from list_projects)."), "limit": {"type": "integer", "minimum": 1, "maximum": 100, "description": "How many to return (default 20)."}}), &[])),
-        entry(Viewer, "read_conversation", "A conversation's messages: id, role, text, time and kind. Tool steps are one line each and images are paths only; a generated image names its mediaId and status instead. Without afterMessageId you get the latest messages; with it, the ones after that message.", schema(json!({"sessionId": id("The conversation."), "afterMessageId": id("Only messages after this one."), "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "How many to return (default 50)."}}), &["sessionId"])),
+        entry(Viewer, "read_conversation", "One page of a conversation's messages: id, role, text, time and kind. Tool steps are one line each and images are paths only; a generated image names its mediaId and status instead. Without a cursor you get the newest messages; afterMessageId gives the messages after that one and beforeMessageId the ones before it. The reply says whether it was truncated and which id to pass next, firstId going back and lastId going forward.", schema(json!({"sessionId": id("The conversation."), "afterMessageId": id("Only messages after this one."), "beforeMessageId": id("Only messages before this one. Use firstId from a truncated reply to read the page before it."), "limit": {"type": "integer", "minimum": 1, "maximum": 200, "description": "How many to return (default 50)."}}), &["sessionId"])),
         entry(Viewer, "wait_for_turn", "Waits for the conversation's running turn to finish (up to timeoutSecs, 600 at most), then returns the reply and the turn's metrics, or the error when the turn failed. It returns early when an approval or a question is waiting.", schema(json!({"sessionId": id("The conversation."), "timeoutSecs": {"type": "integer", "minimum": 1, "maximum": 600, "description": "How long to wait (default 120)."}}), &["sessionId"])),
         entry(Viewer, "turn_metrics", "Per turn: start and end time, duration, tool calls, tokens when the coding agent reported them, the outcome, and the error (message and detail) of a failed turn. Unknown values are left out, never zero.", schema(json!({"sessionId": id("The conversation."), "last": {"type": "integer", "minimum": 1, "maximum": 50, "description": "How many turns (default 5)."}}), &["sessionId"])),
         entry(Viewer, "worktree_status", "For a conversation working in its own git copy: branch, base, files changed and commits ahead. Null when it has none.", schema(json!({"sessionId": id("The conversation.")}), &["sessionId"])),
@@ -732,19 +732,70 @@ fn conversation_items(detail: &Value) -> Vec<Value> {
     items
 }
 
+/// The most messages one `read_conversation` reply may hold.
+const READ_CONVERSATION_MAX_BYTES: usize = 128 * 1024;
+
+/// One page of a conversation's items, oldest first, with what the caller needs
+/// to read the rest (wave 3, `docs/plans/nod-adoption-plan.md`, idea 8).
+///
+/// `after` and `before` are message ids, never both. Without either, the page is
+/// the newest `limit` items; with `after`, the items after that message; with
+/// `before`, the newest `limit` items before it. The page is then cut to
+/// `max_bytes` of JSON, always keeping at least one item, so one huge message
+/// cannot make the reply unbounded.
+fn conversation_page(items: Vec<Value>, after: Option<&str>, before: Option<&str>, limit: usize, max_bytes: usize) -> Result<Value, String> {
+    let total = items.len();
+    let position = |id: &str| items.iter().position(|item| item["id"].as_str() == Some(id));
+    let (mut window, range): (Vec<Value>, usize) = match (after, before) {
+        (Some(_), Some(_)) => return Err("Give afterMessageId or beforeMessageId, not both.".to_owned()),
+        (Some(after), None) => {
+            let at = position(after).ok_or("afterMessageId is not in this conversation.")?;
+            (items.into_iter().skip(at + 1).take(limit).collect(), total - (at + 1))
+        }
+        (None, Some(before)) => {
+            let at = position(before).ok_or("beforeMessageId is not in this conversation.")?;
+            let mut page: Vec<Value> = items.into_iter().take(at).collect();
+            let keep = page.len().saturating_sub(limit);
+            (page.split_off(keep), at)
+        }
+        (None, None) => {
+            let keep = total.saturating_sub(limit);
+            (items.into_iter().skip(keep).collect(), total)
+        }
+    };
+    // The newest items that fit, never none: one huge message must still come
+    // back, or a caller could never read past it.
+    let mut bytes = 0usize;
+    let mut first_kept = window.len().saturating_sub(1);
+    for (index, item) in window.iter().enumerate().rev() {
+        let size = item.to_string().len();
+        if bytes + size > max_bytes && index + 1 < window.len() {
+            break;
+        }
+        bytes += size;
+        first_kept = index;
+    }
+    window.drain(..first_kept);
+    let first = window.first().and_then(|item| item["id"].as_str()).map(str::to_owned);
+    let last = window.last().and_then(|item| item["id"].as_str()).map(str::to_owned);
+    Ok(json!({
+        "messages": window,
+        "count": window.len(),
+        "totalCount": total,
+        "truncated": window.len() < range,
+        "firstId": first,
+        "lastId": last,
+        "bytes": bytes,
+        "capBytes": max_bytes,
+    }))
+}
+
 fn read_conversation(st: &AppState, args: &Value) -> ToolResult {
     let (id, _) = require_session(st, args)?;
     let limit = count_arg(args, "limit", 50, 200);
     let detail = st.db.session_detail(&id).map_err(|_| "That conversation was not found.".to_owned())?;
     let items = conversation_items(&detail);
-    let page: Vec<Value> = match text_arg(args, "afterMessageId") {
-        Some(after) => {
-            let at = items.iter().position(|item| item["id"].as_str() == Some(after)).ok_or("afterMessageId is not in this conversation.")?;
-            items.into_iter().skip(at + 1).take(limit).collect()
-        }
-        None => { let skip = items.len().saturating_sub(limit); items.into_iter().skip(skip).collect() }
-    };
-    Ok(json!(page))
+    conversation_page(items, text_arg(args, "afterMessageId"), text_arg(args, "beforeMessageId"), limit, READ_CONVERSATION_MAX_BYTES)
 }
 
 /// The metrics of a conversation's last `last` turns, oldest first. Unknown values are left out.
