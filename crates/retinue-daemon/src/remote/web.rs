@@ -1045,7 +1045,6 @@ async fn events_loop(mut socket: WebSocket, state: WebState, device: DeviceAuth,
     let mut after = cursor["afterSequence"].as_u64().unwrap_or(0);
     // What this device may read of a tool row follows its kind: a machine link
     // sees the work log, a phone sees the word `Tool`.
-    let redact = RedactOptions::for_kind(&device.kind);
 
     loop {
         let batch = state.daemon.db.replay_events(after, REPLAY_BATCH).unwrap_or_default();

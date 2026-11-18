@@ -819,7 +819,7 @@ pub fn redact_event_for(event: &Value, kind: &str) -> Option<Value> {
     let envelope = event.as_object()?;
     let event_type = envelope.get("type")?.as_str()?;
     match policy().events.get(event_type)? {
-        EventPolicy::Allow => redact_envelope(envelope, event_type, &options),
+        EventPolicy::Allow => redact_event(event, &options),
         EventPolicy::Linked if linked_kinds(kind) => redact_envelope(envelope, event_type, &options),
         _ => None,
     }
@@ -1094,7 +1094,7 @@ mod tests {
         let dropped = json!({"sequence": 9, "type": "tool.changed", "payload": {"sessionId": "s1"}});
         assert_eq!(redact_event_for(&dropped, "phone"), None);
         // The plain reader keeps its meaning: only `allow` crosses.
-        assert_eq!(redact_event(&relay), None);
+        assert_eq!(redact_event(&relay, &RedactOptions::default()), None);
     }
 
     /// Redaction never touches the value it is given.
