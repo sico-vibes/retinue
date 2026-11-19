@@ -15,7 +15,7 @@
 .changes-files li { display: flex; align-items: center; gap: 2px; padding-left: 6px; border-radius: var(--radius-sm); }
 .changes-files li:hover { background: var(--surface-hover); }
 .changes-files li.selected { background: var(--surface-selected, var(--surface-hover)); }
-.changes-stage { flex: none; width: 14px; height: 14px; margin: 0; accent-color: var(--accent, currentColor); cursor: pointer; }
+.changes-stage { flex: none; margin: 0; cursor: pointer; }
 .changes-file { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; padding: 5px 6px; color: var(--text-2); border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; cursor: pointer; }
 .changes-file:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .changes-letter { flex: none; width: 14px; color: var(--text-3); font: 600 var(--fs-2xs) var(--font-mono); text-align: center; }

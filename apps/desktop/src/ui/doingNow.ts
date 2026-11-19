@@ -37,3 +37,27 @@ export function doingNowFor(session: { state?: unknown; tools?: readonly ToolRec
   const running = [...(session.tools ?? [])].reverse().find((tool) => ['running', 'pending', 'started'].includes(String(tool.state ?? '').toLowerCase()))
   return running ? doingNowLabel(running) : null
 }
+
+/** What kind of step a running tool is, for the working line's icon and motion (owner, 15 November 2026). */
+export type DoingKind = 'command' | 'read' | 'edit' | 'search' | 'web' | 'tool'
+export function doingNowKind(tool: ToolRecord): DoingKind {
+  // Read from the line itself, so the icon always agrees with the words beside it.
+  const label = doingNowLabel(tool)
+  if (label.startsWith('Running ')) return 'command'
+  if (label.startsWith('Reading ')) return 'read'
+  if (label.startsWith('Editing ')) return 'edit'
+  if (label.startsWith('Searching')) return 'search'
+  if (label.startsWith('Opening ')) return 'web'
+  const detail = tool.detail && typeof tool.detail === 'object' ? tool.detail : {}
+  const kind = `${text(tool.kind)} ${text(detail.kind)}`.toLowerCase()
+  if (/(bash|shell|command|exec|execute|terminal)/.test(kind)) return 'command'
+  if (/(read|view)/.test(kind)) return 'read'
+  return 'tool'
+}
+
+/** The running step of a working conversation, as a kind and a line; null while it is thinking. */
+export function doingNowStep(session: { state?: unknown; tools?: readonly ToolRecord[] } | null | undefined): { kind: DoingKind; label: string } | null {
+  if (!session || !['working', 'starting'].includes(String(session.state ?? ''))) return null
+  const running = [...(session.tools ?? [])].reverse().find((tool) => ['running', 'pending', 'started'].includes(String(tool.state ?? '').toLowerCase()))
+  return running ? { kind: doingNowKind(running), label: doingNowLabel(running) } : null
+}

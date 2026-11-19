@@ -285,13 +285,18 @@ describe('App mounted lifecycle', () => {
     expect(stops.map((stop) => stop.mock.calls.length)).toEqual([1, 1])
   })
 
-  it('invites you to create your first blob instead of opening a leftover conversation', async () => {
-    // Conversations exist (for example from blobs that were removed) but no blob does.
+  it('invites you to hire your CEO instead of opening a leftover conversation', async () => {
+    // Conversations exist (for example from blobs that were removed) but no blob does, so there is no CEO yet (owner, 16 November 2026).
     configure(snapshot(), { activeSession: 'session-b', activeRuntime: 'runtime-b' })
     const view = startApp()
     await view.settle()
-    expect(view.host.querySelector('.empty-conversation h1')?.textContent).toBe('Create your first employee')
-    expect(view.host.querySelector('.empty-conversation button')?.textContent).toContain('Create your first employee')
+    expect(view.host.querySelector('.empty-conversation h1')?.textContent).toBe('Hire your CEO')
+    const hire = view.host.querySelector<HTMLButtonElement>('.empty-conversation button')!
+    expect(hire.textContent).toContain('Hire your CEO')
+    expect(view.host.querySelector('.manager-setup-form')).toBeNull()
+    await act(async () => { hire.click(); await settleMicrotasks() })
+    expect(view.host.querySelector('.manager-setup-form'), 'the CEO form opens in the sidebar').not.toBeNull()
+    expect(document.activeElement).toBe(view.host.querySelector('.manager-setup-form input'))
     expect(view.host.querySelector('.message-list')).toBeNull()
     expect(view.host.querySelector('.header-actions')?.hasAttribute('hidden')).toBe(true)
   })

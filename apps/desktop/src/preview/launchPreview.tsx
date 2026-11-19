@@ -9,7 +9,7 @@ import '../ui/settings.css'
 import '../ui/themes/haze.css'
 import { AppWallpaper } from '../ui/AppWallpaper'
 import { FirstRunOnboarding } from '../ui/FirstRunOnboarding'
-import { LaunchIntro } from '../ui/LaunchIntro'
+import { LaunchBackdrop, LaunchIntro } from '../ui/LaunchIntro'
 import type { LaunchCheck } from '../ui/launchChecks'
 import type { Agent } from '../types'
 import { launchFixtureData, launchFixtureModes } from './fixtureBridge'
@@ -27,9 +27,9 @@ function LiveLaunch() {
     return () => window.clearInterval(timer)
   }, [run, base.checks.length])
   const checks = base.checks.map((check, index) => index < settled ? check : index === settled ? { ...check, state: 'running', detail: 'In progress' } : null).filter(Boolean) as LaunchCheck[]
-  return completed
+  return <><LaunchBackdrop />{completed
     ? <main className="launch-intro"><section className="launch-intro-content"><p className="launch-status">The intro completed and the app would open now.</p><button className="primary-button" onClick={() => setRun((value) => value + 1)}>Replay</button></section></main>
-    : <LaunchIntro key={run} checks={checks} runtimes={base.runtimes} serviceDown={false} onRetry={() => undefined} onContinueOffline={() => undefined} onComplete={() => setCompleted(true)} />
+    : <LaunchIntro key={run} checks={checks} runtimes={base.runtimes} serviceDown={false} onRetry={() => undefined} onContinueOffline={() => undefined} onComplete={() => setCompleted(true)} />}</>
 }
 
 function Preview() {
@@ -43,6 +43,7 @@ function Preview() {
   // As in App: Haze's own surfaces are transparent, so the backdrop is drawn behind both screens.
   return <>
     <AppWallpaper />
+    <LaunchBackdrop dim={onboarding} />
     <nav className="launch-preview-switcher" aria-label="Preview fixtures">
       {launchFixtureModes.map((item) => <button key={item} className="secondary-button small" aria-pressed={item === mode} onClick={() => { setMode(item); history.replaceState(null, '', `?fixture=${item}`) }}>{item}</button>)}
     </nav>

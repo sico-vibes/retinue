@@ -18,3 +18,14 @@ export function Skeleton({ lines = 1, variant = 'text', className }: { lines?: n
     {Array.from({ length: count }, (_, index) => <span key={index} className="skeleton-block" />)}
   </div>
 }
+
+/**
+ * A list or report that has not arrived yet (owner, 15 November 2026: "checking and loading should have a loader
+ * animation or skeleton"): skeleton rows where the content will sit, with the status words kept for screen readers.
+ */
+export function LoadingBlock({ label, lines = 3, variant = 'row', className }: { label: string; lines?: number; variant?: SkeletonVariant; className?: string }) {
+  return <div className={`loading-block${className ? ` ${className}` : ''}`} role="status">
+    <span className="sr-only">{label}</span>
+    <Skeleton lines={lines} variant={variant} />
+  </div>
+}

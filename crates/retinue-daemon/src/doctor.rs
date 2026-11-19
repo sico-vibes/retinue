@@ -43,6 +43,15 @@ fn rescan_fix() -> Value {
     json!({"label":"Scan for coding agents again","method":"runtime.refresh","params":{}})
 }
 
+/// Is this coding agent switched off in Settings? A published row carries
+/// `enabled: false` (and `status: "disabled"`); a row saved before those stamps
+/// existed reads as on.
+fn runtime_is_off(runtime: &Value) -> bool {
+    runtime["enabled"].as_bool() == Some(false)
+        || runtime["disabled"].as_bool() == Some(true)
+        || runtime["status"].as_str().is_some_and(|status| status.eq_ignore_ascii_case("disabled"))
+}
+
 /// Every coding agent the daemon keeps a record for: installed, version, sign-in
 /// and protocol, all read from the stored records rather than run again here.
 fn runtime_checks(runtimes: &[Value]) -> Vec<Value> {
@@ -53,6 +62,14 @@ fn runtime_checks(runtimes: &[Value]) -> Vec<Value> {
         let name = runtime["displayName"].as_str().map(str::trim).filter(|name| !name.is_empty())
             .map(str::to_owned)
             .unwrap_or_else(|| match provider { "claude" => "Claude Code".into(), "codex" => "Codex".into(), "opencode" => "OpenCode".into(), _ => "Coding agent".into() });
+        // An agent the owner turned off is not failing: one quiet row says so
+        // and nothing else is checked (owner report, 15 November 2026: an off
+        // Cursor CLI and Grok CLI still reported a protocol failure).
+        if runtime_is_off(runtime) {
+            checks.push(check(&format!("runtime.{id}.enabled"), "runtime", &format!("{name} is turned off"), "ok",
+                format!("{name} is turned off in Settings. Turn it back on to use it."), None));
+            continue;
+        }
         let executable = runtime["executablePath"].as_str().unwrap_or("");
         let installed = !executable.is_empty() && Path::new(executable).is_file();
         checks.push(if installed {
@@ -308,6 +325,32 @@ mod tests {
         assert!(version_is_newer("0.170.2", "0.165.0"));
         assert!(!version_is_newer("0.9.9", "0.165.0"));
         assert!(!version_is_newer("0.165.0", "0.165.0"));
+    }
+
+    #[test]
+    fn a_turned_off_coding_agent_is_not_a_failure() {
+        // Owner report, 15 November 2026: an off Cursor CLI and Grok CLI still
+        // reported a protocol failure. An off row is one quiet line and nothing
+        // else, whatever probe failure an older build left on it.
+        let row = json!({
+            "id": "rt_cursor", "provider": "cursor", "displayName": "Cursor CLI",
+            "protocolFamily": "acp", "executablePath": "C:/tools/cursor.exe",
+            "version": "1.2.3", "authState": "unknown", "status": "disabled",
+            "enabled": false, "disabled": true,
+            "probeStep": "Protocol check", "probeError": "The CLI does not advertise the required protocol."
+        });
+        let checks = runtime_checks(&[row]);
+        assert_eq!(checks.len(), 1, "{checks:?}");
+        assert_eq!(checks[0]["id"], "runtime.rt_cursor.enabled");
+        assert_eq!(checks[0]["status"], "ok");
+        assert_eq!(checks[0]["detail"], "Cursor CLI is turned off in Settings. Turn it back on to use it.");
+        assert!(checks[0]["fix"].is_null());
+        // A stale failure on a row stamped only by its status is skipped too.
+        let stale = json!({"id":"rt_grok","provider":"grok","displayName":"Grok CLI","executablePath":"C:/tools/grok.exe","status":"disabled","probeStep":"Protocol check","probeError":"The CLI does not advertise the required protocol."});
+        assert!(runtime_checks(&[stale]).iter().all(|row| row["status"] == "ok"));
+        // A row that is on keeps its real checks.
+        let on = json!({"id":"rt_cursor","provider":"cursor","displayName":"Cursor CLI","executablePath":"C:/tools/cursor.exe","version":"1.2.3","authState":"authenticated","status":"online","enabled":true});
+        assert!(runtime_checks(&[on]).iter().any(|row| row["id"] == "runtime.rt_cursor.protocol"));
     }
 
     #[test]

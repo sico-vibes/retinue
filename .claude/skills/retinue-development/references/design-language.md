@@ -57,7 +57,7 @@ The owner rejected the moving status gradient on rows ("the ribbon effect") and 
 - **Selected is a flat tint.** A bot's state is one word at the end of its row (Working, Needs you, Failed), amber and red only for the last two. A task's state is a dot and a word; its border never changes colour.
 - **One highlight per field.** A text field answers focus with its border or its wrapper's, never a ring, never both (`theme.css`, first rule after `:focus-visible`). A wrapper's `:focus-within` changes `border-color` only.
 - **Focus moved by code draws no ring:** `focus({ focusVisible: false })`.
-- **Amber and red colour a word or an icon, never a box.** Approvals, plans, board availability and the companion and phone badges are neutral.
+- **Amber and red colour a word or an icon, never an outline.** A notice or badge with a status is *filled*: the surface with the status colour washing in from the right edge and fading left, and the icon on the left in a tinted tile (owner, 15 November 2026). Use `ToneNote` / `.tone-wash[data-tone]` (`ui/ToneNote.tsx`, `ui/tone.css`) for banners, the chat's turn-error card and the bypass pill; never a coloured border. Approvals, plans, board availability and the companion and phone badges are neutral.
 - **Subtext is the last resort.** Hide a row that can't change anything, hide an empty section, and don't repeat a tab's name as a group title.
 - **Schedules** is the one name in anything a person reads; `automation` stays in code and RPCs.
 
@@ -113,7 +113,11 @@ Haze character portraits keep their source SVG colours. Small marks and picker c
 ## Second-round rules (owner, 1 November 2026)
 
 - **Haze's controls follow MonoCode, Stone keeps its own:** 6 to 7 px corners, hairline borders, flat selected fill, pill toggles with a white knob (`themes/haze.css`, last block). Scope any new control style to Haze.
-- **Chat background:** Haze only, off by default, in `ChatBackground.tsx` and `chatBackgroundStore.ts`. It stays in the window's IndexedDB and localStorage, never the daemon or a backup. Effects run on the main thread (30 to 140 ms at full size).
+- **Chat background:** Haze only, off by default, in `ChatBackground.tsx` and `chatBackgroundStore.ts`. It stays in the window's IndexedDB and localStorage, never the daemon or a backup. Effects run on the main thread (30 to 140 ms at full size). Preset pictures (owner, 16 November 2026): 28 hand-painted pictures by Iris (Anime, Nature, Fantasy, Space and Sci-fi have 5 each, Samurai 3; the counts live in `WALLPAPER_CATEGORIES`) in `apps/desktop/public/background/<category>-<n>.webp`, listed in `ui/wallpaperPresets.ts`, chosen from a category switch and a row of rounded 16:10 thumbnails under the image picker; the chosen one is ringed with a gap. A preset is copied into the same IndexedDB slot as an owner's own image (`chooseChatBackgroundPreset`, drawn through an `<img>` so the CSP's `img-src 'self'` covers it), and `prefs.preset` remembers which.
+- **Haze matches the picture** (owner, 16 November 2026): while a chat background is set and "Match colours to the picture" is on (default on), Haze wears the picture's palette. `ui/picturePalette.ts` reads a 96 px copy: each mist colour (`d1` to `d4`) is the strongest hue in the part of the picture its blob sits over, softened to Haze's lightness; the accent is the most vivid colour; the base leans towards the picture's darks. `ui/picturePaletteApply.ts` (`usePicturePalette`, main window only) sets `--picture-*` and `data-picture-palette`, which `themes/haze.css` maps onto `--haze-d1..4` and `--haze-base`; the accent goes through `setAccentOverride` in `blob/retinue.ts`, the only writer of `--user-accent`, and wins over the owner's accent and Haze tint while it is on. Stone is never affected.
+- **Onboarding look preview** (owner, 16 November 2026): a 16:10 box (`aspect-ratio`, at most 640 px wide), not a strip. Each look is a little desktop with the app window on it: Haze's window is frosted glass over a preset wallpaper (`ONBOARDING_WALLPAPER`), which also fills its chat as the chat background; Stone's window is solid on a plain desk. One line under it says the difference (`LOOK_PREVIEW_CAPTIONS`).
+- **No CEO yet** (owner, 16 November 2026): the empty conversation says "Hire your CEO" ("Your CEO plans the work with you and hires the rest of your team.") instead of "Create your first employee", and its button opens the sidebar's CEO form (`ManagerSetupCard` `openSignal`), focusing the name. Once a CEO exists, the old copy and the create dialog come back.
+- **Launch background through onboarding** (owner, 16 November 2026): the Gradient ASCII is `LaunchBackdrop` in `LaunchIntro.tsx`, a fixed layer at z-index 100 under both screens (which go transparent at 101). App renders it at the same position in both early returns so it stays mounted and doesn't replay; behind onboarding it is dimmed to 40%.
 - **Message actions sit under the message**, in both the main window and the companion. Under an employee's reply they start at the bubble's left edge, not under the photo (owner, 10 November 2026: `experiments.css` skips the 36px avatar column plus its 10px gap); under your own message they stay right-aligned.
 - **Needs you is a bell** beside the sidebar's buttons (`NeedsYouBell`), never a block in the bot list.
 - **The composer has no Plan button and no Steer or Queue control.** Plan is in the mode menu; the delivery choice is `composer.busySendMode` in Settings › Chat, and Ctrl+Enter still sends the other way.
@@ -132,6 +136,18 @@ One set of parts in `ui/QuotaBar.tsx`: `LimitMeter` (its mark shows how much of 
 - **Folding animates** (`Collapse`: grid rows 0fr→1fr, 180ms, chevron turns 90°); reduced motion is instant.
 - **Density is tokens**, not per-component overrides: `--dn-*` in `density.css` (row padding, row gap, group gap, nested gap, card padding, row minimums). A look must use the tokens, never a fixed height that beats density on specificity.
 - **Haze scrollbars** are a faint mist (`--scroll-thumb`, white 10% / black 12%) that brightens while the pointer is over its scroller; the usage bar sits on the backdrop with mist meters, colour only for warning or critical.
+
+## Controls and status, 15 November 2026 (owner)
+
+- **No native checkboxes.** Settings use switches (`.toggle` with an `<i />` knob; the CSS also accepts `b`/`span`). Where a checkbox is truly needed (staging files, picking rows) the global `input[type="checkbox"]` rule in `theme.css` draws Retinue's own rounded square with a drawn check.
+- **No browser disclosure triangle.** Every `<summary>` draws Retinue's chevron (`theme.css`), turning 90° when open; a summary with its own control sets `data-marker="none"`.
+- **Loading is a skeleton, not a word.** A list or report still loading uses `LoadingBlock` (`ui/Skeleton.tsx`), with the words kept for screen readers.
+- **Photo status is the ring badge** from the Bloblex blobs (`PresenceRing` in `blob/BlobCanvas.tsx`): a coloured disc in a dark ring with a motion inside (dots bounce while working, "!" waiting, cross failed, pause bars limited, "z" offline).
+- **Thinking and doing look different.** The working line (`WorkingMark` with `doingNowStep`) shows the lattice while thinking; while a tool runs it shows that step's icon with its own small motion and the step's words with a shimmer ("Running npm test"). This is the one place text shimmers.
+- **A tagged project** in a message is its icon then its name, like a tagged employee (`splitProjectTags`, `ProjectsContext`).
+- **The logo at the top left** always shows the metallic paint, not only on hover.
+- **The Look editor's left** is the employee's badge on a lanyard (React Bits Lanyard, three.js, lazy), redrawn live from photo, name, role and colour; the back is the company card (mark, RETINUE, "Authorised access"). Photos other employees wear show a lock and can't be picked.
+- **Launch** stays on screen at least `LAUNCH_HOLD_MS` (2 s) after every check settles.
 
 ## Tokens
 

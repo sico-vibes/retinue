@@ -4,7 +4,8 @@ import { visibleApprovalMode } from '../approvalContract'
 import type { Agent, Project, Runtime, Session } from '../types'
 import type { AgentDraft, FieldErrors, StoredExecution } from './agentForm'
 import type { ExecutionSendGate } from '../executionContract'
-import { Archive, Check, ChevronLeft, Copy, Download, Lock, Trash2 } from 'lucide-react'
+import { Archive, Check, ChevronLeft, Copy, Download, Lock, ShieldAlert, Trash2 } from 'lucide-react'
+import { ToneNote } from './ToneNote'
 import { BotSaveBar, sectionDomId } from './BotPageChrome'
 import { BotWizard } from './BotWizard'
 import { labelize } from '../types'
@@ -143,11 +144,11 @@ export function BlobPage({ mode, agent, draft, runtime, session, runtimes, proje
           {wizardActive && <BotWizard draft={draft} errors={errors} noun={noun} ready={ready} saving={saving} providerName={providerName} onDraftChange={onDraftChange} renderSections={(only) => renderSettings(only)} onCreate={trySave} onAdvanced={() => setAdvanced(true)} onCancel={requestBack} />}
           {!wizardActive && <>
           <BlobOverview draft={draft} runtime={runtime} session={session} connected={connected} model={execution.model} mode={mode} approvalMode={badgeMode} agentId={agent?.id ?? null} />
-          {error && <p className="blob-page-notice error" role="alert">{error}</p>}
-          {lockedBot && <p className="blob-page-notice warning" role="status"><Lock size={15} aria-hidden="true" /> This {noun} is locked. Unlock it from the sidebar to change its settings.</p>}
+          {error && <ToneNote tone="danger" role="alert" className="blob-page-notice">{error}</ToneNote>}
+          {lockedBot && <ToneNote tone="warning" icon={Lock} className="blob-page-notice">This {noun} is locked. Unlock it from the sidebar to change its settings.</ToneNote>}
           {remoteNotice && <p className="blob-page-notice" role="status">{remoteNotice}</p>}
-          {localNotice && <p className="blob-page-notice error" role="alert">{localNotice}</p>}
-          {bypassLine && <p className="blob-page-notice warning" role="status">Bypass is active for this {noun}. New requests are approved without asking.</p>}
+          {localNotice && <ToneNote tone="danger" role="alert" className="blob-page-notice">{localNotice}</ToneNote>}
+          {bypassLine && <ToneNote tone="warning" icon={ShieldAlert} className="blob-page-notice">Bypass is active for this {noun}. New requests are approved without asking.</ToneNote>}
           {renderSettings()}
           {mode === 'edit' && <BlobSessions agent={agent} sessions={sessions} legacyCount={legacyCount} canCreate={canStartSession} onOpenSession={onOpenSession} onNewSession={onNewSession} />}
           {mode === 'edit' && <section id={sectionDomId('manage')} className="settings-group blob-group" aria-label="Manage">

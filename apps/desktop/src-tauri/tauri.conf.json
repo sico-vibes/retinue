@@ -37,6 +37,9 @@
     "active": true,
     "createUpdaterArtifacts": true,
     "category": "DeveloperTool",
+    "publisher": "Bassem Hesham",
+    "copyright": "Copyright © 2026 Bassem Hesham",
+    "homepage": "https://github.com/sico-vibes/retinue",
     "shortDescription": "A local control plane for coding agents",
     "longDescription": "Manage local coding-agent runtimes and sessions from one desktop app.",
     "icon": [

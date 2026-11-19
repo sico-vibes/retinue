@@ -11,6 +11,7 @@ import { providerBrand } from './providerBrand'
 import { projectMatches, sideTitle } from './teamSelectors'
 import { useEntityNoun } from './vocabulary'
 import { FileMentionOptions, type FileMatch } from './ProjectSearch'
+import { ProjectIcon } from './ProjectIcon'
 
 function MiniBlob({ agent, name, size = 18 }: { agent: Agent | null | undefined; name: string; size?: number }) {
   return agent
@@ -227,7 +228,7 @@ export function ProjectPicker({ projects, query, activeIndex, onPick, onHover }:
   return <div className="mention-picker conversation-picker" role="listbox" aria-label="Which project this is for">
     <div className="mention-picker-heading"><Hash size={12} aria-hidden="true" />Project</div>
     {matches.map((project, index) => <button key={project.id} type="button" role="option" aria-selected={index === activeIndex} className={`mention-option side-option ${index === activeIndex ? 'active' : ''}`} onMouseDown={(event) => { event.preventDefault(); onPick(project) }} onMouseEnter={() => onHover(index)}>
-      <span className="discover-name"><strong>{project.name}</strong><small>{project.tags?.length ? project.tags.join(', ') : project.path ?? 'No folder'}</small></span>
+      <span className="project-option-icon" aria-hidden="true"><ProjectIcon project={project} size={14} /></span><span className="discover-name"><strong>{project.name}</strong><small>{project.tags?.length ? project.tags.join(', ') : project.path ?? 'No folder'}</small></span>
     </button>)}
   </div>
 }

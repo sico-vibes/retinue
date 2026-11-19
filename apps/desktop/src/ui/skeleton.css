@@ -21,3 +21,10 @@
 @media (prefers-reduced-motion: reduce) {
   .skeleton-block { animation: none; opacity: 1; }
 }
+
+/* A section still loading: skeleton rows inside the section's own padding. */
+.loading-block { padding: 12px 14px; }
+.loading-block .skeleton-row .skeleton-block:nth-child(2) { width: 86%; }
+.loading-block .skeleton-row .skeleton-block:nth-child(3) { width: 70%; }
+/* A button that is working shows a turning loader beside its words. */
+.busy-label { display: inline-flex; align-items: center; gap: 6px; }

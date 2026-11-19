@@ -352,9 +352,26 @@ input:not([type="checkbox"], [type="radio"], [type="range"]):focus-visible, text
 
 /* ── Toggle (monochrome switch) ──────────────────────────────────────── */
 .toggle { width: 36px; height: 20px; flex: 0 0 auto; padding: 2px; display: flex; align-items: center; border: 0; border-radius: var(--radius-pill); background: var(--surface-toggle-off); transition: background 160ms ease; }
-.toggle i { width: 16px; height: 16px; display: block; border-radius: 50%; background: var(--surface-toggle-knob); transition: transform 160ms ease, background 160ms ease; }
+.toggle > :is(i, b, span) { width: 16px; height: 16px; display: block; border-radius: 50%; background: var(--surface-toggle-knob); transition: transform 160ms ease, background 160ms ease; }
 .toggle.on { background: var(--text-1); }
-.toggle.on i { transform: translateX(16px); background: var(--text-inverse); }
+.toggle.on > :is(i, b, span) { transform: translateX(16px); background: var(--text-inverse); }
+/* Owner, 15 November 2026: never the browser's own disclosure triangle. Every <summary> draws Retinue's chevron, which turns when the section opens. A summary with its own control sets data-marker="none". */
+summary { list-style: none; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+summary::-webkit-details-marker { display: none; }
+summary::marker { content: ""; }
+summary:not([data-marker="none"])::before { content: ""; flex: 0 0 auto; width: 12px; height: 12px; background: currentColor; opacity: .7; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 18 6-6-6-6' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m9 18 6-6-6-6' fill='none' stroke='%23000' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; transition: transform 160ms ease; }
+details[open] > summary:not([data-marker="none"])::before { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { summary::before { transition: none; } }
+/* Owner, 15 November 2026: no native checkboxes. Settings use switches; where a checkbox is truly needed (picking files or rows) it is Retinue's own rounded square, filled with the accent and a drawn check when on. */
+input[type="checkbox"] { appearance: none; -webkit-appearance: none; flex: 0 0 auto; width: 16px; height: 16px; margin: 0; display: inline-grid; place-content: center; vertical-align: middle; color: var(--text-inverse); border: 1px solid var(--line-strong); border-radius: 5px; background: color-mix(in srgb, var(--text-1) 6%, transparent); cursor: pointer; transition: background 140ms ease, border-color 140ms ease; }
+input[type="checkbox"]::before { content: ""; width: 12px; height: 12px; background: currentColor; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6 9.6 3.6' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6 9.6 3.6' fill='none' stroke='%23000' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat; transform: scale(0); transition: transform 140ms ease; }
+input[type="checkbox"]:hover:not(:disabled) { border-color: var(--text-3); }
+input[type="checkbox"]:is(:checked, :indeterminate) { border-color: transparent; background: var(--user-accent, var(--text-1)); color: var(--user-accent-ink, var(--text-inverse)); }
+input[type="checkbox"]:is(:checked, :indeterminate)::before { transform: scale(1); }
+input[type="checkbox"]:indeterminate::before { -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 6h6' stroke='%23000' stroke-width='1.9' stroke-linecap='round'/%3E%3C/svg%3E"); mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 6h6' stroke='%23000' stroke-width='1.9' stroke-linecap='round'/%3E%3C/svg%3E"); }
+input[type="checkbox"]:disabled { opacity: .5; cursor: default; }
+input[type="checkbox"]:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+@media (prefers-reduced-motion: reduce) { input[type="checkbox"], input[type="checkbox"]::before { transition: none; } }
 
 /* ── Text inputs ─────────────────────────────────────────────────────── */
 .text-input { width: 100%; min-width: 0; height: 34px; padding: 0 12px; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-input); font-size: var(--fs-sm); }

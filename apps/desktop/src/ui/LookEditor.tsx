@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
-import { ChevronLeft, ChevronRight, ImageUp, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ImageUp, X, Lock } from 'lucide-react'
 import { usePhotoOwners } from './photoOwners'
 import { BlobCanvas } from '../blob/BlobCanvas'
-import { PROFILE_PHOTOS, isUploadedPhoto, photoFromFile } from '../blob/photos'
+import { PROFILE_PHOTOS, isUploadedPhoto, photoFromFile, profilePhotoUrl } from '../blob/photos'
+import { EmployeeBadge } from './EmployeeBadge'
 import type { BlobLook } from '../blob/look'
 import { rememberLookRuntime } from '../blob/haze/runtimeRegistry'
 import { SwatchGrid } from './SwatchGrid'
@@ -13,8 +14,10 @@ import '../blob/photos.css'
  * Slack or Teams. Choose one of the portraits, upload your own, or leave the
  * blank silhouette. Every change is a draft until the page saves.
  */
-export function LookEditor({ look, color, colorHex, name, locked = false, runtimeId, agentId = null, onLookChange, onColorChange }: {
+export function LookEditor({ look, color, colorHex, name, role = '', locked = false, runtimeId, agentId = null, onLookChange, onColorChange }: {
   look: BlobLook
+  /** The employee's role, printed on the badge. */
+  role?: string
   /** This employee, so its own photo never shows as taken. */
   agentId?: string | null
   /** The employee's coding agent, for the badge on the picture. */
@@ -56,8 +59,9 @@ export function LookEditor({ look, color, colorHex, name, locked = false, runtim
   useEffect(() => { if (page > pages - 1) setPage(pages - 1) }, [page, pages])
   const shown = all.filter(({ index }) => pageOf(index) === page)
   return <div className="look-editor photo-look-editor" style={{ ['--look-accent' as string]: colorHex }}>
-    <div className="look-stage">
-      <div className="look-stage-hero photo-look-hero"><BlobCanvas color={colorHex} size={112} look={look} label={`${name} preview`} /></div>
+    {/* Owner, 15 November 2026: the badge on its lanyard, as on the website, redrawn as you choose. */}
+    <div className="look-stage badge-look-stage">
+      <EmployeeBadge photoUrl={profilePhotoUrl(look)} name={name} role={role} colorHex={colorHex} />
       <div className="photo-look-row" aria-hidden="true"><BlobCanvas decorative color={colorHex} size={32} look={look} label={name} /><span>{name}</span></div>
     </div>
     <div className="look-panel">
@@ -96,5 +100,6 @@ const PHOTOS_PER_PAGE = 24
 function PhotoOption({ label, selected, locked, taken, onPick, children }: { label: string; selected: boolean; locked: boolean; taken?: string; onPick: () => void; children: React.ReactNode }) {
   return <button type="button" role="radio" aria-checked={selected} aria-label={label} title={taken ? `Worn by ${taken}. Change ${taken}'s photo first.` : label} tabIndex={selected ? 0 : -1} disabled={locked} className={`profile-photo-option${selected ? ' selected' : ''}${taken ? ' taken' : ''}`} onClick={onPick}>
     {children}
+    {taken && <span className="profile-photo-lock" aria-hidden="true"><Lock size={10} strokeWidth={2.4} /></span>}
   </button>
 }

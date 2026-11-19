@@ -49,6 +49,6 @@ describe('Retinue panel transitions', () => {
   it('keeps the eased preview timing in the look picker stylesheet', () => {
     const css = read('lookPicker.css')
     expect(css).toMatch(/\.look-preview\s*\{[\s\S]*?transition-timing-function:\s*cubic-bezier/)
-    expect(css).toMatch(/\.sp-window\s*\{[\s\S]*?transition-timing-function:\s*cubic-bezier/)
+    expect(css).toMatch(/\.sp-scene\s*\{[\s\S]*?transition-timing-function:\s*cubic-bezier/)
   })
 })

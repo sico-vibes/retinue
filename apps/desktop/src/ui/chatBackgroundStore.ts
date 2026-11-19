@@ -2,13 +2,16 @@
 // settings stay in this window's own storage: nothing goes to the daemon, a backup or a device.
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import { applyEffect, CHAT_BACKGROUND_EFFECTS, type ChatBackgroundEffect } from './chatBackgroundEffects'
+import { wallpaperPreset } from './wallpaperPresets'
+import { normalizePicturePalette, paletteFromCanvas, type PicturePalette } from './picturePalette'
 
 export type ChatBackgroundScope = 'empty' | 'all'
-export type ChatBackgroundPrefs = { hasImage: boolean; effect: ChatBackgroundEffect; scope: ChatBackgroundScope; emptyOpacity: number; sessionOpacity: number }
+/** `preset` names the chosen preset picture, or is null for the owner's own image. `palette` is the picture's colours, which Haze wears while `matchColors` is on. */
+export type ChatBackgroundPrefs = { hasImage: boolean; preset: string | null; palette: PicturePalette | null; matchColors: boolean; effect: ChatBackgroundEffect; scope: ChatBackgroundScope; emptyOpacity: number; sessionOpacity: number }
 
 export const CHAT_BACKGROUND_OPACITY_MIN = 0.05
 export const CHAT_BACKGROUND_OPACITY_MAX = 0.65
-export const DEFAULT_CHAT_BACKGROUND: ChatBackgroundPrefs = { hasImage: false, effect: 'none', scope: 'all', emptyOpacity: 0.24, sessionOpacity: 0.24 }
+export const DEFAULT_CHAT_BACKGROUND: ChatBackgroundPrefs = { hasImage: false, preset: null, palette: null, matchColors: true, effect: 'none', scope: 'all', emptyOpacity: 0.24, sessionOpacity: 0.24 }
 
 const PREFS_KEY = 'retinue.chatBackground'
 const DB_NAME = 'retinue-chat-background'
@@ -24,6 +27,9 @@ export function normalizeChatBackgroundPrefs(value: unknown): ChatBackgroundPref
   const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {}
   return {
     hasImage: raw.hasImage === true,
+    preset: raw.hasImage === true && typeof raw.preset === 'string' && wallpaperPreset(raw.preset) ? raw.preset : null,
+    palette: raw.hasImage === true ? normalizePicturePalette(raw.palette) : null,
+    matchColors: raw.matchColors !== false,
     effect: CHAT_BACKGROUND_EFFECTS.some((item) => item.value === raw.effect) ? raw.effect as ChatBackgroundEffect : DEFAULT_CHAT_BACKGROUND.effect,
     scope: raw.scope === 'empty' ? 'empty' : 'all',
     emptyOpacity: clampOpacity(raw.emptyOpacity, DEFAULT_CHAT_BACKGROUND.emptyOpacity),
@@ -87,18 +93,47 @@ export async function chooseChatBackground(file: File): Promise<string | null> {
   if (!file.type.startsWith('image/')) return 'Choose an image file.'
   if (file.size > MAX_FILE_BYTES) return 'That image is over 25 MB.'
   try {
-    const stored = await toBlob(await decode(file), 'image/webp')
+    const canvas = await decode(file)
+    const stored = await toBlob(canvas, 'image/webp')
     await withStore('readwrite', (store) => store.put(stored, IMAGE_KEY))
     revision += 1
-    updateChatBackgroundPrefs({ hasImage: true })
+    updateChatBackgroundPrefs({ hasImage: true, preset: null, palette: paletteFromCanvas(canvas) })
     return null
   } catch { return 'That image could not be read.' }
+}
+
+function loadImage(url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('The picture could not be loaded.'))
+    image.src = url
+  })
+}
+
+/** Uses one of the shipped preset pictures. It is drawn through an <img>, which the CSP allows from 'self'. */
+export async function chooseChatBackgroundPreset(id: string): Promise<string | null> {
+  const preset = wallpaperPreset(id)
+  if (!preset) return 'That picture is not available.'
+  try {
+    const image = await loadImage(preset.url)
+    const scale = Math.min(1, MAX_SIDE / image.naturalWidth, MAX_SIDE / image.naturalHeight)
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+    canvas.getContext('2d')?.drawImage(image, 0, 0, canvas.width, canvas.height)
+    const stored = await toBlob(canvas, 'image/webp')
+    await withStore('readwrite', (store) => store.put(stored, IMAGE_KEY))
+    revision += 1
+    updateChatBackgroundPrefs({ hasImage: true, preset: id, palette: paletteFromCanvas(canvas) })
+    return null
+  } catch { return 'That picture could not be loaded.' }
 }
 
 export async function removeChatBackground() {
   await withStore('readwrite', (store) => store.delete(IMAGE_KEY))
   revision += 1
-  updateChatBackgroundPrefs({ hasImage: false })
+  updateChatBackgroundPrefs({ hasImage: false, preset: null, palette: null })
 }
 
 /** Browser preview only: a generated picture, so the inspector can show each effect. */
@@ -115,7 +150,7 @@ export async function seedChatBackgroundForPreview(effect: ChatBackgroundEffect)
   context.fillStyle = '#ffe6ad'
   context.beginPath(); context.arc(820, 300, 110, 0, Math.PI * 2); context.fill()
   await withStore('readwrite', (store) => toBlobStore(store, canvas)).catch(() => undefined)
-  updateChatBackgroundPrefs({ hasImage: true, effect, scope: 'all', emptyOpacity: 0.5, sessionOpacity: 0.35 })
+  updateChatBackgroundPrefs({ hasImage: true, preset: null, palette: paletteFromCanvas(canvas), effect, scope: 'all', emptyOpacity: 0.5, sessionOpacity: 0.35 })
 }
 function toBlobStore(store: IDBObjectStore, canvas: HTMLCanvasElement): IDBRequest {
   // A data URL keeps this inside the store's one transaction, which a canvas callback would outlive.

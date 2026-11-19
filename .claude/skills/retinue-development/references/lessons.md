@@ -2,6 +2,16 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-19 · Release · SmartScreen, Smart App Control and Defender are three different flags
+
+- **Symptom:** "SmartScreen keeps flagging this app": the installer says "Windows protected your PC / Unknown publisher", a freshly built `.exe` sometimes will not start, and Defender once named an installer.
+- **Cause 1 (SmartScreen):** the installer and the app are **Authenticode `NotSigned`** — `Get-AuthenticodeSignature` on `%LOCALAPPDATA%\Retinue\Retinue.exe` and on the beta.51/beta.52 setup exes in `Downloads` — and every release is a new file hash with no download reputation, so each one starts at zero.
+- **Cause 2 (Smart App Control, this PC):** SAC is **enforced** (`HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy\VerifiedAndReputablePolicyState = 1`). It blocks unsigned or unknown executables outright, with no "Run anyway", and surfaces in the toolchain as `os error 4551`; `Microsoft-Windows-CodeIntegrity/Operational` (ids 3033/3077) names each blocked file, e.g. `target\desktop-dev\debug\deps\serde_repr-*.dll` loaded by `rustc`.
+- **Cause 3 (Defender):** on 10 November 2026 Defender's ML flagged the beta.51 installer as `Program:Win32/Contebrew.A!ml` (two detections: the `Unconfirmed … .crdownload` and the finished `Retinue_0.1.0-beta.51_x64-setup.exe`). The `!ml` suffix means a heuristic, not a known-malware hash.
+- **Fix:** only a valid signature removes SmartScreen and SAC for users. The SignPath workflow and `.signpath/` configurations are ready in the repository; the missing piece is the owner's SignPath application and the `SIGNPATH_API_TOKEN` secret (`docs/operations/code-signing.md`). A false positive goes to <https://www.microsoft.com/en-us/wdsi/filesubmission> as a **software developer** submission with version and SHA-256.
+- **Metadata (changed 2026-11-19):** `bundle.publisher` / `copyright` / `homepage` in `apps/desktop/src-tauri/tauri.conf.json` now fill the installer's Manufacturer and the app's CompanyName (before, CompanyName was `retinue` from the identifier and the installer had none). `retinued.exe` and `retinue-hook.exe` still have **no version resource**; adding one is the open item in `docs/operations/code-signing.md:60`.
+- **Never** turn Smart App Control off to unblock a build without the owner's explicit decision: it cannot be turned back on without reinstalling Windows.
+
 ## 2026-11-18 · Daemon · A test cannot stub the far machine's adapter after its gateway is up
 
 - **Symptom:** `machine_mcp_tests.rs` replaced the far `AppState`'s codex adapter and then started a turn through the link; the far turn ended in `error` with the generic "The turn could not be completed." — the stub was never used.
@@ -229,6 +239,32 @@ Timeout note: the daemon's own build scripts are still blocked by Smart App Cont
 - **Fixed (same day):** `safe_provider_error_detail` now hides only the secret-looking words (`redact_secret_words`, "[hidden]") and falls back to the generic sentence only if a marker survives. `failure_detail_and_sign_in` judges the sign-in from the raw text, `sign_in_hint` no longer matches "credential problem", and "401" must be a whole word.
 - **Owner rule (16 November 2026): never OpenCode pay-as-you-go.** Only Zen's free models (`opencode/*-free`, `opencode/big-pickle`) and OpenCode Go when linked (`gatewayAuthStates["opencode-go"] == "authenticated"`; an empty map leaves it to OpenCode). `catalog::keep_opencode_included_models` filters every served catalog (`get`, `cached`, prewarm compare), so cached lists follow it too. `validate_exec_catalog` refuses a paid Zen model even in an old conversation (`OPENCODE_PAID_ZEN_MESSAGE`). Other providers configured in OpenCode with the owner's own keys are untouched.
 - **How to diagnose next time:** read `opencode.log` near the turn's `startedAt`, and check the conversation's `model_lock_json`.
+
+## 2026-11-16 · Pipeline · Iris (Codex) can generate images but often can't save them into the repo
+
+- **Symptom:** asked through the Retinue MCP to save WebP wallpapers into `apps/desktop/public/background`, one Iris conversation saved them and two said the only shell was a cloud container without the project folder.
+- **Where they are:** Codex keeps every generated image as a PNG in `%USERPROFILE%\.codex\generated_images\<thread id>\exec-<id>.png`, named as in the conversation's "Generated an image" notice. Ask the bot for a table mapping each `exec-….png` to its target name, then convert yourself. No converter is installed; `python -m pip install --target <scratchpad>\pylib pillow` works.
+- **Check the files, not the report:** Iris said she had replaced `anime-1..5` with character art, but the files were still the first landscapes, and her two hand fixes were rejected by the owner. Build a contact sheet with Pillow and look before you accept a set.
+- **Art direction:** say "character as the bold subject, large in frame" when the owner wants character art; "a figure in a landscape" gives tiny figures. Steer with a written description of reference images and keep characters original.
+
+## 2026-11-15 · UI · WebGL canvases turned into sad-face squares after live reloads
+
+- **Symptom:** in the dev app the launch logo and the top-left logo became white squares with a sad face.
+- **Cause:** `reactbits/MetallicPaint.tsx` deleted its shaders and buffers on unmount but never released the WebGL context. Every hover (the top-left paint mounted on hover) and every live reload leaked one; past Chromium's limit of about 16 it kills the oldest, which draws the sad face. Making the paint always on reached the limit sooner.
+- **Second, bigger cause:** `canPaintMetal()` (`ui/MetallicMark.tsx`) probed with `document.createElement('canvas').getContext('webgl2')` on every call and kept the context, and `LaunchIntro` calls it on every render; after enough of them Chromium refused WebGL in that window, so the background vanished too. A reload did not help; restarting the app did.
+- **Fix:** the probe runs once per window and releases its context; dispose calls `gl.getExtension('WEBGL_lose_context')?.loseContext()`, and a lost canvas hides itself so the PNG beneath shows. The ported Lanyard calls `renderer.forceContextLoss()`. Any WebGL probe must release what it creates.
+- **To avoid:** every WebGL component releases its context on unmount, and shows a still fallback when the context is lost.
+
+## 2026-11-15 · UI · Lazy Lucide icons need their own import path
+
+- `import('lucide-react').then((m) => m.icons)` would pull all 1,500 icons into the main bundle, because the package is imported statically everywhere. `ui/replyIcons.tsx` imports `lucide-react/dist/esm/icons/index.js` (typed in `src/lucide-icons.d.ts`), which Vite splits into its own chunk. In Vitest that path transforms 1,544 modules (about 17 s), so mock it in tests (`SafeMarkdown.mounted.test.tsx`). A Vitest module mock throws on a missing export, so the lookup catches and treats it as unknown.
+
+## 2026-11-15 · Coding agents · A switched-off provider kept its probe failure on its row
+
+- **Symptom:** the owner turned Cursor CLI and Grok CLI off in Settings › Coding agents, yet the app still showed "Cursor CLI · Protocol check: The CLI does not advertise the required protocol."
+- **Cause:** `discover_enabled` (`crates/retinue-daemon/src/main.rs:662`) probes an off provider once when it has no saved row, so Settings can tell "installed, switched off" from "not installed". `persist_runtime_discovery` saved that row, and `stamp_runtime_state` (`main.rs:616`) set `status: "disabled"` but left `probeError`/`probeStep` on it. Every reader of the row — `runtime.list`, the Settings sheet, `doctor.rs`'s protocol row — then reported a failure for an agent that is not offered.
+- **Fix:** an off stamp removes `probeError` and `probeStep` (installed, version and executablePath stay); a row an older build saved is cleaned the next time discovery stamps it. The window also ignores a probe failure on an off row (`runtimeIsOff` in `apps/desktop/src/ui/runtimeDiscovery.ts`) and skips its startup sign-in and model checks. The Doctor's `runtime_checks` reports one `ok` row, "X is turned off in Settings. Turn it back on to use it.", and checks nothing else for it (`runtime_is_off` reads `enabled: false`, `disabled: true` or `status: "disabled"`).
+- **To avoid:** when a state stamp marks something off, strip every field that means "it failed" from the row, not only the status; and when you add a consumer of a runtime row, decide whether it should speak about an off one at all.
 
 ## 2026-11-14 · Tests · Backdating an `Instant` fails on a freshly booted CI runner
 

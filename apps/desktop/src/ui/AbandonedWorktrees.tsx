@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { rpc } from '../tauri'
 import { SettingsGroup } from './SettingsParts'
+import { LoadingBlock } from './Skeleton'
 
 export type AbandonedWorktree = { id: string; repo: string; path: string; branch: string; reason: 'conversation_deleted' | 'conversation_archived' | 'folder_missing'; dirtyFiles: number; commitsAhead: number; lastActivityAt: string | null }
 
@@ -71,7 +72,7 @@ export function AbandonedWorktrees() {
   useEffect(() => { void load() }, [load])
   return <SettingsGroup title="Leftover task copies" action={<button type="button" className="ghost-button small" disabled={items === null} onClick={() => { setItems(null); void load() }}>Check again</button>}>
     {items === null
-      ? <p className="settings-empty" role="status">Looking…</p>
+      ? <LoadingBlock label="Looking…" lines={2} />
       : problem
         ? <p className="settings-empty" role="status">{problem}</p>
         : !items.length

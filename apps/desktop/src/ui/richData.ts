@@ -8,7 +8,7 @@
 
 export type ColumnKind = 'number' | 'text'
 export type Cell = string | number | null
-export type DataColumn = { key: string; label: string; kind: ColumnKind }
+export type DataColumn = { key: string; label: string; kind: ColumnKind; /** The author left the header empty (an icon column, say): show no heading. */ blank?: boolean }
 export type DataTable = { columns: DataColumn[]; rows: Cell[][]; title?: string; caption?: string; truncated: boolean }
 export type ChartKind = 'bar' | 'line'
 export type ChartSeries = { name: string; values: Array<number | null> }
@@ -69,7 +69,7 @@ function build(headers: string[], rawRows: Cell[][], extra: { title?: string; ca
     let key = label
     for (let n = 2; used.has(key); n += 1) key = `${label} ${n}`
     used.add(key)
-    return { key, label, kind: kindOf(rows, index) }
+    return { key, label, kind: kindOf(rows, index), ...(cleanText(header, 80) ? {} : { blank: true }) }
   })
   // Cells keep the text the author wrote ("12%", "$1,200"); numbers are read from it only to sort and to plot.
   return { ok: true, value: { columns, rows, truncated, ...(extra.title ? { title: extra.title } : {}), ...(extra.caption ? { caption: extra.caption } : {}) } }

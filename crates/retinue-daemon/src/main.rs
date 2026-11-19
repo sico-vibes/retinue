@@ -726,6 +726,15 @@ fn stamp_runtime_state(runtime: &mut Value, disabled: &[String]) {
     if off {
         fields.insert("disabled".into(), json!(true));
         fields.insert("status".into(), json!("disabled"));
+        // A coding agent the owner turned off is not failing, so a probe's
+        // failure does not stay on its row (owner report, 15 November 2026: an
+        // off Cursor CLI and Grok CLI still showed "Protocol check: The CLI does
+        // not advertise the required protocol."). The one-time probe of a
+        // provider with no saved row may still record what it found (installed,
+        // version, executablePath); when the owner turns it back on, the next
+        // scan probes it for real.
+        fields.remove("probeError");
+        fields.remove("probeStep");
     } else {
         fields.remove("disabled");
         // A row an older switch left at `disabled` is not claimed to be offered;

@@ -180,6 +180,9 @@ export interface Runtime extends JsonRecord {
   gatewayAuthStates?: Record<string, string>
   probeError?: string | null
   probeStep?: string | null
+  /** Stamped by the daemon: false (with `disabled: true`, status `disabled`) when the owner switched it off. */
+  enabled?: boolean
+  disabled?: boolean
   capabilities?: JsonRecord | string[]
 }
 

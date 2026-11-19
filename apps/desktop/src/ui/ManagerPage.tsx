@@ -16,6 +16,7 @@ import { DelegationPause } from './DelegationPause'
 import { unwrapMarkdown } from './WhatsNew'
 import { openSafeLink } from './openSafeLink'
 import './managerPage.css'
+import { LoadingBlock } from './Skeleton'
 
 export const FACT_CATEGORIES: Array<{ id: ManagerFact['category']; label: string }> = [
   { id: 'identity', label: 'About you' },
@@ -136,7 +137,7 @@ export function ManagerPage({ manager, connected = true, onOpenManager, agents =
 
     <SettingsGroup title="What it knows about you" action={<button type="button" className="ghost-button small" disabled={busy || !connected || editingFact !== null} onClick={() => setEditingFact({ category: 'workflow', key: '', value: '', locked: true })}><Plus size={13} aria-hidden="true" />Add</button>}>
       {editingFact && !editingFact.id && <FactForm draft={editingFact} busy={busy} onSave={(draft) => void saveFact(draft)} onCancel={() => setEditingFact(null)} />}
-      {facts === null && <p className="settings-loading">Loading…</p>}
+      {facts === null && <LoadingBlock label="Loading…" lines={3} variant="text" />}
       {facts !== null && facts.length === 0 && !editingFact && <p className="settings-empty manager-empty">Nothing yet. The CEO notes what it learns as you work together, and you can add things yourself. Lock what matters, and it will ask before changing it.</p>}
       {groups.map((group) => <div key={group.id} className="manager-fact-group">
         <h4>{group.label}</h4>

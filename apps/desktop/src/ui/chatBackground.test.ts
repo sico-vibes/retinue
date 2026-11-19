@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { applyEffect, CHAT_BACKGROUND_EFFECTS } from './chatBackgroundEffects'
+import { ONBOARDING_WALLPAPER, WALLPAPER_CATEGORIES, WALLPAPER_PRESETS } from './wallpaperPresets'
 import { CHAT_BACKGROUND_OPACITY_MAX, CHAT_BACKGROUND_OPACITY_MIN, DEFAULT_CHAT_BACKGROUND, normalizeChatBackgroundPrefs } from './chatBackgroundStore'
 
 const source = (width = 12, height = 16) => {
@@ -42,6 +43,22 @@ describe('chat background settings', () => {
 
   it('puts an unknown effect or an out-of-range strength back in bounds', () => {
     const prefs = normalizeChatBackgroundPrefs({ hasImage: true, effect: 'plasma', scope: 'nowhere', emptyOpacity: 9, sessionOpacity: -1 })
-    expect(prefs).toEqual({ hasImage: true, effect: 'none', scope: 'all', emptyOpacity: CHAT_BACKGROUND_OPACITY_MAX, sessionOpacity: CHAT_BACKGROUND_OPACITY_MIN })
+    expect(prefs).toEqual({ hasImage: true, preset: null, palette: null, matchColors: true, effect: 'none', scope: 'all', emptyOpacity: CHAT_BACKGROUND_OPACITY_MAX, sessionOpacity: CHAT_BACKGROUND_OPACITY_MIN })
+  })
+
+  it('keeps a known preset only while an image is set', () => {
+    expect(normalizeChatBackgroundPrefs({ hasImage: true, preset: 'space-2' }).preset).toBe('space-2')
+    expect(normalizeChatBackgroundPrefs({ hasImage: true, preset: 'space-99' }).preset).toBeNull()
+    expect(normalizeChatBackgroundPrefs({ hasImage: false, preset: 'space-2' }).preset).toBeNull()
   })
 })
+
+describe('wallpaper presets', () => {
+  it('lists the pictures of each category, served from public/background', () => {
+    for (const { value, count } of WALLPAPER_CATEGORIES) expect(WALLPAPER_PRESETS.filter((preset) => preset.category === value)).toHaveLength(count)
+    expect(new Set(WALLPAPER_PRESETS.map((preset) => preset.id)).size).toBe(WALLPAPER_PRESETS.length)
+    for (const preset of WALLPAPER_PRESETS) expect(preset.url).toBe(`/background/${preset.id}.webp`)
+    expect(ONBOARDING_WALLPAPER.id).toBe('samurai-2')
+  })
+})
+

@@ -1,9 +1,10 @@
 import { useState, type RefObject } from 'react'
-import { Shield } from 'lucide-react'
+import { Shield, ShieldAlert } from 'lucide-react'
 import type { ApprovalMode, AutoResolvedAction } from '../approvalContract'
 import { newestFirst } from '../approvalContract'
 import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
 import { useEntityNoun } from './vocabulary'
+import './tone.css'
 
 export function ApprovalBadge({ mode }: { mode: ApprovalMode | null | undefined }) {
   if (mode !== 'auto' && mode !== 'accept_edits' && mode !== 'bypass') return null
@@ -14,7 +15,7 @@ export function ApprovalBadge({ mode }: { mode: ApprovalMode | null | undefined 
 export function ApprovalPill({ mode, compact = false }: { mode: ApprovalMode | null | undefined; compact?: boolean }) {
   if (mode !== 'auto' && mode !== 'accept_edits' && mode !== 'bypass') return null
   const label = mode === 'auto' ? 'Auto' : mode === 'accept_edits' ? 'Edits' : 'Bypass'
-  return <span className={`approval-pill approval-pill-${mode}${compact ? ' compact' : ''}`} role="status">{label}</span>
+  return <span className={`approval-pill approval-pill-${mode}${compact ? ' compact' : ''}`} data-tone={mode === 'bypass' ? 'warning' : undefined} role="status">{mode === 'bypass' && <ShieldAlert size={compact ? 10 : 12} aria-hidden="true" />}{label}</span>
 }
 
 export function AutoApprovedList({ actions }: { actions: readonly AutoResolvedAction[] }) {

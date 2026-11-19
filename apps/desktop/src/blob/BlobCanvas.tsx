@@ -399,13 +399,33 @@ function ProfilePhotoMark({ url, color, size = 24, mood = 'idle', look, label = 
   // Teams show a status badge; too small to read below 20px, so it is left off.
   const badge = provider && size >= 20 ? Math.max(11, Math.round(size * .34)) : 0
   const state = presence ? presenceFor(mood) : null
-  const dot = Math.max(8, Math.round(size * .26))
+  const dot = Math.max(10, Math.round(size * .4))
   return <span className={`profile-photo-mark${RESTING.has(mood) ? ' is-resting' : ''}${greeting ? ' is-greeting' : ''} ${className}`} style={{ width: size, height: size }} data-tauri-drag-region={dragRegion || undefined} {...a11y}>
     <span className={`profile-photo-clip${url ? '' : ' is-blank'}`} style={url ? undefined : { ['--photo-tint' as string]: color }}>
       {url ? <img src={url} alt="" draggable={false} /> : <BlankSilhouette />}
     </span>
     {badge > 0 && provider && <span className="profile-photo-badge" style={{ width: badge, height: badge }} aria-hidden="true"><ProviderLogo provider={provider} size={Math.round(badge * .66)} /></span>}
-    {state && <span className={`profile-photo-presence is-${state}`} style={{ width: dot, height: dot }} title={PRESENCE_WORDS[state]} aria-hidden="true" />}
+    {state && <PresenceRing state={state} size={dot} />}
+  </span>
+}
+
+/**
+ * The status at a photo's top left, brought back from the Bloblex blobs' corner badge (owner, 15 November 2026):
+ * a coloured disc in a dark ring with a small animation inside. Working bounces three dots, waiting for you shows
+ * "!", a failure a cross, a usage limit two pause bars, offline a "z". Below 14px only the disc is drawn.
+ */
+export function PresenceRing({ state, size }: { state: Presence; size: number }) {
+  const inner = size >= 14
+  return <span className={`presence-ring is-${state}`} style={{ width: size, height: size }} title={PRESENCE_WORDS[state]} aria-hidden="true">
+    <svg viewBox="0 0 24 24" width={size} height={size}>
+      <circle className="presence-ring-edge" cx="12" cy="12" r="12" />
+      <circle className="presence-ring-disc" cx="12" cy="12" r="9.6" />
+      {inner && state === 'working' && [0, 1, 2].map((index) => <circle key={index} className="presence-ring-dot" cx={7.4 + index * 4.6} cy="12" r="1.65" style={{ ['--i' as string]: index }} />)}
+      {inner && state === 'asking' && <g className="presence-ring-mark"><path d="M12 6.9v6" /><circle cx="12" cy="16.7" r="1.2" stroke="none" fill="currentColor" /></g>}
+      {inner && state === 'failed' && <g className="presence-ring-mark"><path d="M9 9l6 6M15 9l-6 6" /></g>}
+      {inner && state === 'limited' && <g className="presence-ring-mark"><path d="M10 8.6v6.8M14 8.6v6.8" /></g>}
+      {inner && state === 'offline' && <text className="presence-ring-z" x="12" y="12.6" textAnchor="middle" dominantBaseline="central">z</text>}
+    </svg>
   </span>
 }
 

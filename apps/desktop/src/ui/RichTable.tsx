@@ -79,7 +79,7 @@ export function RichTable({ table, label, renderCell }: { table: DataTable; labe
               const active = sort?.column === index
               return <th key={`${columnsKey}-${index}`} scope="col" className={column.kind === 'number' ? 'rich-num' : undefined} aria-sort={active ? (sort!.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
                 <button type="button" className="rich-sort" onClick={() => setSort(nextSort(sort, index))} aria-label={`Sort by ${column.label}`}>
-                  <span>{column.label}</span>{active ? (sort!.direction === 'asc' ? <ArrowUp size={12} aria-hidden="true" /> : <ArrowDown size={12} aria-hidden="true" />) : <span className="rich-sort-spacer" aria-hidden="true" />}
+                  <span>{column.blank ? '' : column.label}</span>{active ? (sort!.direction === 'asc' ? <ArrowUp size={12} aria-hidden="true" /> : <ArrowDown size={12} aria-hidden="true" />) : <span className="rich-sort-spacer" aria-hidden="true" />}
                 </button>
               </th>
             })}
@@ -94,7 +94,7 @@ export function RichTable({ table, label, renderCell }: { table: DataTable; labe
                   {row.map((cell, index) => <td key={index} className={table.columns[index]?.kind === 'number' ? 'rich-num' : undefined}><div className="rich-cell">{text(cell, `r${id}c${index}`)}</div></td>)}
                 </tr>,
                 expanded && <tr key={`d${id}`} className="rich-details"><td colSpan={table.columns.length + 1}>
-                  <dl>{table.columns.map((column, index) => <div key={index}><dt>{column.label}</dt><dd>{text(row[index] ?? null, `d${id}c${index}`)}</dd></div>)}</dl>
+                  <dl>{table.columns.map((column, index) => <div key={index}><dt>{column.blank ? '' : column.label}</dt><dd>{text(row[index] ?? null, `d${id}c${index}`)}</dd></div>)}</dl>
                 </td></tr>,
               ]
             })}

@@ -81,6 +81,19 @@
   --haze-d4: color-mix(in oklab, var(--haze-tint, var(--user-accent)) 25%, #dcdee1);
 }
 
+/* The chat background picture's colours (owner, 16 November 2026): while "Match colours to the picture" is on, each mist
+   blob takes the colour of the part of the picture it sits over and the base leans towards the picture's own darks.
+   The accent comes along through --user-accent (blob/retinue.ts setAccentOverride). Set by ui/picturePaletteApply.ts. */
+:root[data-style="haze"][data-picture-palette="on"]:not([data-theme="light"]):not(.companion-surface):not(.dictation-surface) {
+  --haze-d1: var(--picture-d1); --haze-d2: var(--picture-d2); --haze-d3: var(--picture-d3); --haze-d4: var(--picture-d4);
+  --haze-base: color-mix(in oklab, var(--picture-base) 55%, #1a1b1d);
+}
+:root[data-style="haze"][data-picture-palette="on"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) {
+  --haze-d1: color-mix(in oklab, var(--picture-d1) 60%, #e6e8ec); --haze-d2: color-mix(in oklab, var(--picture-d2) 60%, #e6e8ec);
+  --haze-d3: color-mix(in oklab, var(--picture-d3) 60%, #e6e8ec); --haze-d4: color-mix(in oklab, var(--picture-d4) 45%, #eef0f2);
+  --haze-base: color-mix(in oklab, var(--picture-base) 8%, #f1efeb);
+}
+
 /* The misty backdrop (owner, 26 October 2026, corrected: the background is about 80% OPAQUE, 20% transparent; blobs large and blended).
    .haze-backdrop is non-interactive and paints an opaque composition: a neutral dark or light base (--haze-base)
    under four broad blended colour blobs, and `opacity: .8` on this element only, so the whole backdrop composes to
@@ -288,9 +301,9 @@
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.density-control button.active, .segmented button.on, .analytics-switch button[aria-pressed="true"]) { color: var(--text-1); background: var(--surface-selected-strong); }
 /* The switch: a pill, as in MonoCode, with a white knob. The accent fills it when one is chosen. */
 :root[data-style="haze"]:not(.dictation-surface) .toggle { width: 36px; height: 20px; border-radius: 999px; background: color-mix(in srgb, var(--text-1) 18%, transparent); }
-:root[data-style="haze"]:not(.dictation-surface) .toggle > :is(i, b) { width: 16px; height: 16px; border-radius: 50%; background: #fff; }
+:root[data-style="haze"]:not(.dictation-surface) .toggle > :is(i, b, span) { width: 16px; height: 16px; border-radius: 50%; background: #fff; }
 :root[data-style="haze"]:not(.dictation-surface) .toggle.on { background: var(--user-accent, color-mix(in srgb, var(--text-1) 55%, transparent)); }
-:root[data-style="haze"]:not(.dictation-surface) .toggle.on > :is(i, b) { transform: translateX(16px); background: #fff; }
+:root[data-style="haze"]:not(.dictation-surface) .toggle.on > :is(i, b, span) { transform: translateX(16px); background: #fff; }
 :root[data-style="haze"]:not(.dictation-surface) .rail-remote .toggle.small { width: 28px; height: 16px; }
 :root[data-style="haze"]:not(.dictation-surface) .rail-remote .toggle.small > i { width: 12px; height: 12px; }
 :root[data-style="haze"]:not(.dictation-surface) .rail-remote .toggle.small.on > i { transform: translateX(12px); }

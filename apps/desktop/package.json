@@ -46,6 +46,7 @@
     "pdfjs-dist": "^4.10.38",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "three": "0.180.0",
     "zod": "4.1.12"
   },
   "devDependencies": {
@@ -53,6 +54,7 @@
     "@types/node": "^22.20.4",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "@types/three": "0.180.0",
     "@vitejs/plugin-react": "^4.7.0",
     "happy-dom": "^20.14.5",
     "typescript": "~5.8.3",

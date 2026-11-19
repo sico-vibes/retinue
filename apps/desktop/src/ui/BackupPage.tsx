@@ -6,7 +6,7 @@ import { useState } from 'react'
 import { AlertTriangle, Check, FileDown, FileUp } from 'lucide-react'
 import { previewBackupImport, rpc, selectBackupExportPath, selectBackupImportPath, writeBackupExport, type BackupInclude, type BackupStats } from '../tauri'
 import { Select } from './Select'
-import { SettingsGroup } from './SettingsParts'
+import { SettingsGroup, SettingsRow } from './SettingsParts'
 import { useEntityNoun } from './vocabulary'
 import './backup.css'
 
@@ -139,13 +139,13 @@ export function BackupPage({ connected }: { connected: boolean }) {
 
     <SettingsGroup title="Export">
       <div className="backup-section">
-        <ul className="backup-checks">
-          <li><label><input type="checkbox" checked disabled /><span>{Nouns}</span><small>Always included</small></label></li>
-          {OPTIONAL.map((item) => <li key={item.key}><label>
-            <input type="checkbox" checked={include[item.key]} disabled={exporting} onChange={(event) => setInclude((current) => ({ ...current, [item.key]: event.target.checked }))} />
-            <span>{item.label}</span>
-          </label></li>)}
-        </ul>
+        {/* Owner, 15 November 2026: no native checkboxes; each part is a switch row. */}
+        <div className="backup-parts">
+          <SettingsRow label={Nouns}><span className="settings-value">Always included</span></SettingsRow>
+          {OPTIONAL.map((item) => <SettingsRow key={item.key} label={item.label}>
+            <button type="button" className={`toggle ${include[item.key] ? 'on' : ''}`} role="switch" aria-label={`Include ${item.label.toLowerCase()}`} aria-checked={include[item.key]} disabled={exporting} onClick={() => setInclude((current) => ({ ...current, [item.key]: !current[item.key] }))}><i /></button>
+          </SettingsRow>)}
+        </div>
         <p className="backup-note">Passwords and keys are never written. Automations come back paused.</p>
         <div className="backup-actions">
           <button type="button" className="primary-button small" disabled={!connected || exporting || templating} onClick={() => void exportNow()}><FileDown size={13} aria-hidden="true" />{exporting ? 'Saving…' : 'Export a backup…'}</button>

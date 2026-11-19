@@ -5,10 +5,14 @@ import { friendlyError } from './errorCopy'
 import { ProviderLogo } from './providerBrand'
 import { lazy, Suspense } from 'react'
 import { MetallicMark, canPaintMetal } from './MetallicMark'
+import { AlertTriangle } from 'lucide-react'
+import './tone.css'
 const GradientASCII = lazy(() => import('./reactbits/GradientASCII'))
 import { useLegacyPixel } from '../blob/retinue'
 
 type Phase = 'scanning' | 'greeting' | 'ready'
+/** Owner, 15 November 2026: once every check has settled, the launch screen stays at least this long before the app opens. */
+export const LAUNCH_HOLD_MS = 2000
 
 /**
  * Startup checks. The mark breathes while Retinue looks for coding agents,
@@ -45,7 +49,7 @@ export function LaunchIntro({ checks, runtimes, agent: _agent = null, onComplete
     const timer = window.setTimeout(() => {
       completionTimer.current = null
       complete()
-    }, 220)
+    }, LAUNCH_HOLD_MS)
     completionTimer.current = timer
     return () => {
       window.clearTimeout(timer)
@@ -74,8 +78,6 @@ export function LaunchIntro({ checks, runtimes, agent: _agent = null, onComplete
   const running = checks.find((check) => check.state === 'running')
   const status = serviceDown ? 'Retinue could not connect to its service.' : finished ? 'Ready for your next conversation.' : running?.label ?? 'Getting Retinue ready…'
   return <main className={`launch-intro${reducedMotion ? ' reduced-motion' : ''}`} data-phase={phase} aria-label="Retinue launch checks" onPointerDown={() => { if (phase === 'greeting' && autoComplete) complete() }}>
-    {/* Owner, 14 November 2026: React Bits' Gradient ASCII reveals itself behind the checks. */}
-    {canPaintMetal() && <Suspense fallback={null}><div className="launch-ascii" aria-hidden="true"><GradientASCII intro shape="horizon" lightMode={document.documentElement.dataset.theme === 'light'} colors={launchColours()} mouseInteraction clickEffect="wave" /></div></Suspense>}
     <section className="launch-intro-content">
       <div className="launch-blob-stage">
         <LaunchLogo state={serviceDown ? 'error' : phase === 'greeting' ? 'greeting' : phase === 'ready' ? 'ready' : 'working'} onGreeted={greetingDone} />
@@ -86,6 +88,18 @@ export function LaunchIntro({ checks, runtimes, agent: _agent = null, onComplete
       {serviceDown && <div className="launch-actions"><button className="primary-button" onClick={retry}>Retry</button><button className="secondary-button" onClick={continueOffline}>Continue offline</button></div>}
     </section>
   </main>
+}
+
+/**
+ * The launch screen's background, kept behind onboarding too (owner, 16 November 2026).
+ * App renders it at the same place in both screens, so it stays mounted and the
+ * Gradient ASCII (owner, 14 November 2026) doesn't replay its reveal between them.
+ * `dim` quietens it behind onboarding's forms.
+ */
+export function LaunchBackdrop({ dim = false }: { dim?: boolean }) {
+  return <div className="launch-backdrop" data-dim={dim ? 'true' : 'false'} aria-hidden="true">
+    {canPaintMetal() && <Suspense fallback={null}><div className="launch-ascii"><GradientASCII intro shape="horizon" lightMode={document.documentElement.dataset.theme === 'light'} colors={launchColours()} mouseInteraction clickEffect="wave" /></div></Suspense>}
+  </div>
 }
 
 /** Checks scroll inside a fixed window; the one in progress stays in view. */
@@ -140,7 +154,8 @@ export function LaunchWarnings({ warnings, details, retrying = false, onSettings
     : warnings.map((warning) => friendlyError({ message: warning, provider: providerFromWarning(warning) }).title.replace(/[.\s]+$/, ''))
   const many = lines.length > 1
   const summary = lines.join('; ')
-  return <aside className="launch-warning-notice" role="status" aria-label={details ? summary : undefined} title={summary}>
+  return <aside className="launch-warning-notice tone-wash" data-tone="warning" role="status" aria-label={details ? summary : undefined} title={summary}>
+    <span className="tone-icon" aria-hidden="true"><AlertTriangle size={14} /></span>
     <div className="launch-warning-body">
       <span>{retrying ? 'Finding coding agents again…' : many ? `${lines.length} startup checks need attention.` : 'Startup checks need attention: ' + summary + '.'}</span>
       {many && !retrying && open && <ul className="launch-warning-list">{lines.map((line, index) => <li key={index}>{line}</li>)}</ul>}
@@ -165,7 +180,7 @@ function LaunchLogo({ state, onGreeted }: { state: 'greeting' | 'working' | 'rea
   done.current = onGreeted
   useEffect(() => {
     if (state !== 'greeting') return
-    const timer = window.setTimeout(() => done.current(), 900)
+    const timer = window.setTimeout(() => done.current(), LAUNCH_HOLD_MS)
     return () => window.clearTimeout(timer)
   }, [state])
   return <span className={`launch-logo is-${state}`} role="img" aria-label="Retinue">

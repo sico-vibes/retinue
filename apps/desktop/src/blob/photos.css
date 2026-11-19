@@ -80,27 +80,32 @@
 }
 @media (prefers-reduced-motion: reduce) { .profile-photo-mark { transition: none; } .profile-photo-mark.is-greeting { animation: none; } }
 
-/* The status dot at the photo's top left (owner, 9 November 2026, after the
-   companion blobs' corner indicator): online, working, asking, failed,
-   usage limit, offline. Ringed in the panel colour like the badge. */
-.profile-photo-presence {
-  position: absolute;
-  left: -1px;
-  top: -1px;
-  border-radius: 50%;
-  background: var(--presence, #3fbf74);
-  box-shadow: 0 0 0 2px var(--haze-base, var(--surface-sidebar, #1a1b1d));
-}
-.profile-photo-presence.is-online { --presence: #3fbf74; }
-.profile-photo-presence.is-working { --presence: #5aa2ff; animation: presence-pulse 1.4s ease-in-out infinite; }
-.profile-photo-presence.is-asking { --presence: #f2a93b; }
-.profile-photo-presence.is-failed { --presence: #ef5b5b; }
-.profile-photo-presence.is-limited { --presence: transparent; box-shadow: inset 0 0 0 2px #f2a93b, 0 0 0 2px var(--haze-base, var(--surface-sidebar, #1a1b1d)); }
-.profile-photo-presence.is-offline { --presence: #7c8088; }
-@keyframes presence-pulse { 50% { opacity: .45; } }
-@media (prefers-reduced-motion: reduce) { .profile-photo-presence.is-working { animation: none; } }
+/* The status at the photo's top left (owner, 15 November 2026: the Bloblex blobs'
+   ring badge, a disc with an animation inside, replaces the plain dot of
+   9 November). Ringed in the panel colour so it reads on any photo. */
+.presence-ring { position: absolute; left: -3px; top: -3px; display: block; line-height: 0; }
+.presence-ring svg { display: block; overflow: visible; }
+.presence-ring-edge { fill: var(--haze-base, var(--surface-sidebar, #1a1b1d)); }
+.presence-ring-disc { fill: var(--presence, #34d399); transition: fill .2s ease; }
+.presence-ring.is-online { --presence: #34d399; }
+.presence-ring.is-working { --presence: #3b9eff; }
+.presence-ring.is-asking { --presence: #f5a524; }
+.presence-ring.is-failed { --presence: #f45063; }
+.presence-ring.is-limited { --presence: #fb923c; }
+.presence-ring.is-offline { --presence: #94a2b8; }
+.presence-ring-dot { fill: #fff; transform-box: fill-box; transform-origin: center; animation: presence-ring-bounce 1.05s ease-in-out infinite; animation-delay: calc(var(--i) * .15s); }
+.presence-ring-mark { color: #fff; stroke: #fff; stroke-width: 2.2; stroke-linecap: round; fill: none; }
+.presence-ring.is-asking .presence-ring-mark { transform-box: view-box; transform-origin: 12px 12px; animation: presence-ring-nudge 1.8s ease-in-out infinite; }
+.presence-ring-z { fill: #fff; font: 800 11px/1 var(--font-ui, system-ui); animation: presence-ring-doze 2.6s ease-in-out infinite; }
+@keyframes presence-ring-bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .75; } 30% { transform: translateY(-2.6px); opacity: 1; } }
+@keyframes presence-ring-nudge { 0%, 70%, 100% { transform: rotate(0); } 78% { transform: rotate(-12deg); } 86% { transform: rotate(10deg); } 94% { transform: rotate(-4deg); } }
+@keyframes presence-ring-doze { 0%, 100% { opacity: .55; transform: translateY(.6px); } 50% { opacity: 1; transform: translateY(-.6px); } }
+@media (prefers-reduced-motion: reduce) { .presence-ring-dot, .presence-ring-mark, .presence-ring-z { animation: none !important; } }
 /* Taken photos and the pager (owner, 9 November 2026). */
-.profile-photo-grid .profile-photo-option.taken { opacity: .3; filter: grayscale(.7); }
+.profile-photo-grid .profile-photo-option.taken { position: relative; cursor: not-allowed; }
+.profile-photo-grid .profile-photo-option.taken img { opacity: .3; filter: grayscale(.8); }
+/* Owner, 15 November 2026: a photo another employee wears is plainly unavailable, with a lock on it. */
+.profile-photo-lock { position: absolute; right: 0; bottom: 0; width: 16px; height: 16px; display: grid; place-items: center; color: var(--text-1); border-radius: 50%; background: var(--surface-raised, #222); box-shadow: 0 0 0 2px var(--haze-base, var(--surface-sidebar, #1a1b1d)); }
 .profile-photo-pager { margin-top: 8px; display: flex; align-items: center; justify-content: center; gap: 8px; }
 .profile-photo-dots { display: flex; gap: 6px; }
 .profile-photo-dots button { width: 7px; height: 7px; padding: 0; border: 0; border-radius: 50%; background: var(--line-strong); cursor: pointer; }
@@ -115,3 +120,9 @@
 .profile-photo-grid .profile-photo-option.selected { border-color: var(--text-1); background: transparent; }
 .profile-photo-grid .profile-photo-upload { border-style: dashed !important; border-width: 1px !important; }
 .look-panel .profile-photo-pager { margin-top: auto; padding-top: 4px; }
+
+/* The badge on its lanyard (owner, 15 November 2026), on the left of the Look editor. */
+.badge-look-stage { padding: 0 0 12px; }
+.employee-badge { position: relative; flex: 1; width: 100%; min-height: 380px; display: grid; place-items: center; }
+.employee-badge > .rb-lanyard { position: absolute; inset: 0; }
+.employee-badge-still { width: 62%; max-width: 160px; height: auto; border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }

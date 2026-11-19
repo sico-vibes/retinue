@@ -1,0 +1,38 @@
+/*
+ * Status surfaces (owner, 15 November 2026): filled, never outlined in the
+ * status colour. The colour washes in from the right edge and fades out to
+ * the left; the icon sits on the left, beside the text, in a tinted tile.
+ * Used by ToneNote, the chat's turn-error card, the startup notice and the
+ * bypass pill.
+ */
+[data-tone] { --tone: var(--status-danger); --tone-ink: var(--danger-ink); }
+[data-tone="warning"] { --tone: var(--status-working); --tone-ink: var(--status-working-text, var(--status-working)); }
+[data-tone="info"] { --tone: var(--text-2); --tone-ink: var(--text-1); }
+
+.tone-wash[data-tone] { border: 0; background: linear-gradient(to left, color-mix(in srgb, var(--tone) 24%, transparent) 0%, color-mix(in srgb, var(--tone) 9%, transparent) 45%, transparent 85%), var(--surface-raised); }
+:root[data-theme="light"] .tone-wash[data-tone] { background: linear-gradient(to left, color-mix(in srgb, var(--tone) 16%, transparent) 0%, color-mix(in srgb, var(--tone) 6%, transparent) 45%, transparent 85%), var(--surface-raised); }
+
+.tone-icon { flex: 0 0 auto; width: 26px; height: 26px; display: inline-grid; place-items: center; color: var(--tone-ink); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--tone) 18%, transparent); }
+
+.tone-note[data-tone] { padding: 10px 12px; display: flex; align-items: center; gap: 10px; color: var(--text-1); border: 0; border-radius: var(--radius-md); background: linear-gradient(to left, color-mix(in srgb, var(--tone) 24%, transparent) 0%, color-mix(in srgb, var(--tone) 9%, transparent) 45%, transparent 85%), var(--surface-raised); font-size: var(--fs-sm); line-height: 1.45; }
+:root[data-theme="light"] .tone-note[data-tone] { background: linear-gradient(to left, color-mix(in srgb, var(--tone) 16%, transparent) 0%, color-mix(in srgb, var(--tone) 6%, transparent) 45%, transparent 85%), var(--surface-raised); }
+.tone-note-body { min-width: 0; flex: 1; }
+.tone-note-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; }
+
+/* The chat's turn-error card. */
+.turn-error-card { width: auto; max-width: min(620px, 100%); margin: 10px 0 0; padding: 12px 14px; display: grid; grid-template-columns: auto 1fr; column-gap: 12px; border-radius: 14px; }
+.turn-error-card .tone-icon { width: 32px; height: 32px; border-radius: 9px; }
+.turn-error-main { min-width: 0; display: grid; gap: 6px; }
+.turn-error-head { display: flex; align-items: baseline; gap: 8px; min-height: 32px; align-items: center; }
+.turn-error-head strong { color: var(--text-1); font-size: var(--fs-sm); font-weight: 600; }
+.turn-error-head .turn-error-meta { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-2xs); white-space: nowrap; }
+.turn-error-head .turn-error-meta b { color: var(--tone-ink); font-weight: 500; }
+.turn-error-card p { margin: 0; color: var(--text-2); font: var(--fs-sm)/1.5 var(--font-ui); white-space: pre-wrap; overflow-wrap: anywhere; }
+.turn-error-card .sign-in-help { margin-top: 2px; }
+.turn-error-card .activity-detail { margin-top: 2px; }
+.turn-error-card .activity-detail summary { color: var(--text-3); font-size: var(--fs-2xs); cursor: pointer; }
+.turn-error-card .activity-detail pre { margin: 6px 0 0; padding: 8px 10px; max-height: 220px; overflow: auto; color: var(--text-2); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--text-1) 5%, transparent); font: 11px/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
+.turn-error-card .activity-delivery-note { color: var(--text-3); font-size: var(--fs-xs); }
+
+/* Approval pills: filled, no outline. */
+.approval-pill.approval-pill-bypass { gap: 4px; color: var(--tone-ink); border: 0; background: linear-gradient(to left, color-mix(in srgb, var(--tone) 30%, transparent), color-mix(in srgb, var(--tone) 12%, transparent)); }

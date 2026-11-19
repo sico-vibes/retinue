@@ -169,7 +169,7 @@ export function FirstRunOnboarding({ runtimes, scanning, error, onScan, onCreate
     {step === 2 && <section className="onboarding-step onboarding-bot-step"><h1 id="onboarding-title" tabIndex={-1} ref={headingRef}>Meet your CEO</h1><p>It plans the work with you and asks before it creates anything. You can change all of this later.</p>
       <div className="onboarding-bot-layout">
         <div className="onboarding-bot-look">
-          <LookEditor look={look} runtimeId={draft.runtimeId} color={draft.color} colorHex={colorHex} name={draft.name.trim() || 'CEO'} onLookChange={(next, color) => setDraft({ ...draft, look: next, color: color ?? draft.color })} onColorChange={(next) => setDraft({ ...draft, color: next })} />
+          <LookEditor look={look} runtimeId={draft.runtimeId} color={draft.color} colorHex={colorHex} name={draft.name.trim() || 'CEO'} role="CEO" onLookChange={(next, color) => setDraft({ ...draft, look: next, color: color ?? draft.color })} onColorChange={(next) => setDraft({ ...draft, color: next })} />
         </div>
         <div className="onboarding-bot-fields">
           <label className="onboarding-field">Name<input className="text-input" value={draft.name} maxLength={40} onChange={(event) => setDraft({ ...draft, name: event.target.value })} onKeyDown={(event) => { if (event.key === 'Enter' && ready) { event.preventDefault(); void create() } }} /></label>

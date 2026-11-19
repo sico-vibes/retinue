@@ -14,6 +14,19 @@ Code signing of the direct download is covered in [code-signing.md](code-signing
 
 Windows 11's Smart App Control is stricter than SmartScreen. It blocks unsigned programs outright, whichever way they were downloaded. Only signing (SignPath, or the Store's own signature) gets past it.
 
+## Why Windows flags an unsigned release
+
+Three different Windows mechanisms, all reported as "SmartScreen". They need different answers, and only signing fixes them for users.
+
+| What the user sees | Mechanism | Cause | What removes it |
+| --- | --- | --- | --- |
+| "Windows protected your PC", "Unknown publisher", **More info → Run anyway** | SmartScreen app reputation | The installer has no Authenticode signature, and every release is a new file hash with no download history, so it starts at zero reputation each time | A valid signature, then reputation that builds with downloads of that certificate |
+| A program is blocked outright (`os error 4551`), or a freshly built `.exe` will not start | Smart App Control (Windows 11, enforced) | The file is unsigned and unknown to Microsoft; SAC does not offer "Run anyway" | Signing, or turning SAC off on that PC. Off cannot be undone without reinstalling Windows, so treat it as the owner's decision |
+| Defender quarantines or names the installer | Microsoft Defender antivirus | A machine-learning heuristic, not a hash of known malware. The `!ml` suffix says so; `beta.51`'s installer was named `Program:Win32/Contebrew.A!ml` on 10 November 2026 | Submit the file as a false positive, fix anything the report names, and sign the release |
+
+- **False positive:** submit the installer at <https://www.microsoft.com/en-us/wdsi/filesubmission> (choose **Software developer**), with the product name, version, the GitHub release URL and the published SHA-256. A developer account at <https://developer.microsoft.com/en-us/windows/> gives a tracked submission.
+- **Metadata matters to the heuristics.** A file with no publisher, product or version resource is treated as unknown. `bundle.publisher`, `bundle.copyright` and `bundle.homepage` now fill those in for the app and the installer. `retinued.exe` and `retinue-hook.exe` still have none: it is the open item in [code-signing.md](code-signing.md).
+
 ## winget
 
 **In the repository:** `packaging/winget/make-manifests.mjs` writes the three manifests for a release. It reads the installer's address and SHA-256 from the GitHub release, so they always match the published file. The package is `SicoVibes.Retinue`, publisher "Bassem Hesham", MIT, with the privacy page linked. Its output passes `winget validate`.

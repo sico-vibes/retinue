@@ -14,6 +14,7 @@ import { ConfirmDialog } from './BlobPage'
 import { entityNoun, useEntityNoun } from './vocabulary'
 import { themeStyle } from '../blob/retinue'
 import './memory.css'
+import { LoadingBlock } from './Skeleton'
 
 export const ABOUT_LIMIT = 1500
 export const TITLE_LIMIT = 120
@@ -141,7 +142,7 @@ export function MemoryPage({ agents, projects, enabled, sharedWrites, about, con
         <button type="button" className="secondary-button small" disabled={!connected} onClick={() => setEditing('new')}><Plus size={13} aria-hidden="true" />Add note</button>
       </div>
       {problem && <p className="memory-problem" role="alert">{problem}</p>}
-      {records === null && <p className="blob-muted">Loading…</p>}
+      {records === null && <LoadingBlock label="Loading…" lines={3} />}
       {records !== null && records.length === 0 && !problem && <p className="memory-empty">No notes yet. {Nouns} save them as they work once memory is on, or you can add one.</p>}
       {review.length > 0 && <>
         <h3 className="memory-heading">Needs your review <b>{review.length}</b></h3>

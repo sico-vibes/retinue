@@ -2,14 +2,23 @@ import { useEffect, useState } from 'react'
 import { ArrowUp } from 'lucide-react'
 import type { ThemeStyle } from './appearance'
 import { LookAvatar, LOOKS } from './LookPicker'
+import { ONBOARDING_WALLPAPER } from './wallpaperPresets'
 import './lookPicker.css'
 
 const ROSTER = ['Atlas', 'Pixel', 'Nova'] as const
 
+/** What sets each look apart, said under the preview (owner, 16 November 2026: the preview must show the difference). */
+export const LOOK_PREVIEW_CAPTIONS: Record<ThemeStyle, string> = {
+  haze: 'Frosted glass over your desktop, with a picture behind your chats.',
+  stone: 'Solid, quiet surfaces. Nothing shows through.',
+}
+
 /**
- * A miniature app window in one look. It is self-contained (its own tokens,
- * scoped to `.sp-window`) so both looks can be on screen at once, whatever the
- * document is currently wearing. The avatar is the real character renderer.
+ * A miniature app window in one look, on a little desktop. It is self-contained
+ * (its own tokens, scoped to `.sp-window`) so both looks can be on screen at once,
+ * whatever the document is currently wearing. The avatar is the real character renderer.
+ * Haze sits over a preset wallpaper, which also fills its chat as the chat background;
+ * Stone is solid, so nothing behind it shows.
  */
 function PreviewWindow({ look, active }: { look: ThemeStyle; active: boolean }) {
   const [phase, setPhase] = useState<0 | 1>(0)
@@ -22,7 +31,9 @@ function PreviewWindow({ look, active }: { look: ThemeStyle; active: boolean }) 
     return () => window.clearInterval(timer)
   }, [active])
   const name = LOOKS.find((item) => item.id === look)?.name ?? look
-  return <div className="sp-window" data-look={look} data-active={active ? 'true' : 'false'} aria-hidden={!active}>
+  const haze = look === 'haze'
+  return <div className="sp-scene" data-look={look} data-active={active ? 'true' : 'false'} aria-hidden={!active} style={haze ? { ['--sp-wallpaper' as string]: `url("${ONBOARDING_WALLPAPER.url}")` } : undefined}>
+  <div className="sp-window" data-look={look}>
     <div className="sp-titlebar"><i /><i /><i /><span>{name}</span></div>
     <div className="sp-body">
       <aside className="sp-side">
@@ -32,6 +43,7 @@ function PreviewWindow({ look, active }: { look: ThemeStyle; active: boolean }) 
         </div>)}
       </aside>
       <section className="sp-main">
+        {haze && <span className="sp-chat-bg" aria-hidden="true" />}
         <div className="sp-bubble user">Fix the failing test in the parser</div>
         <div className="sp-reply">
           <span className="sp-reply-avatar"><LookAvatar look={look} size={34} mood={phase === 0 ? 'thinking' : 'success'} /></span>
@@ -45,6 +57,7 @@ function PreviewWindow({ look, active }: { look: ThemeStyle; active: boolean }) 
       </section>
     </div>
   </div>
+  </div>
 }
 
 /** The preview that opens when a look is chosen. Both windows stay mounted so switching cross-fades. */
@@ -56,6 +69,7 @@ export function LookPreview({ look }: { look: ThemeStyle | null }) {
         <PreviewWindow look="haze" active={look === 'haze'} />
         <PreviewWindow look="stone" active={look === 'stone'} />
       </div>
+      <p className="look-preview-caption">{look ? LOOK_PREVIEW_CAPTIONS[look] : ''}</p>
     </div>
   </div>
 }

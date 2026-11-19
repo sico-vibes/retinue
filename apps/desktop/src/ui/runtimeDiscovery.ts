@@ -12,8 +12,12 @@ export type DiscoveryStatus = {
 }
 export const EMPTY_DISCOVERY_STATUS: DiscoveryStatus = { scanning: false, retrying: false, attempt: 0, found: 0, completedAt: null, failure: null }
 const SAFE_PROBE_ERRORS = new Set(['Could not start the coding agent.', 'Could not supervise the coding agent.', 'Could not read the probe result.', 'Probe timed out.', 'Probe exited unsuccessfully.', 'The CLI does not advertise the required protocol.', 'Could not start the sign-in check.', 'Could not supervise the sign-in check.', 'Could not read the sign-in result.', 'Sign-in check timed out.', 'Sign-in status could not be checked.'])
+/** A coding agent the owner switched off is not checked, so an old probe result on its row is not a failure. */
+export function runtimeIsOff(runtime: Runtime) {
+  return runtime.status === 'disabled' || runtime.disabled === true || runtime.enabled === false
+}
 export function runtimeProbeDetail(runtime: Runtime) {
-  if (!runtime.probeError) return null
+  if (!runtime.probeError || runtimeIsOff(runtime)) return null
   const step = ['Version check', 'Protocol check', 'Sign-in check'].includes(runtime.probeStep ?? '') ? runtime.probeStep : 'Probe'
   const message = SAFE_PROBE_ERRORS.has(runtime.probeError) ? runtime.probeError : 'The coding agent check failed.'
   return { step: providerBrand(runtime.provider).name + ' · ' + step, message }

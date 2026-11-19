@@ -7,6 +7,7 @@ import { rpc } from '../tauri'
 import { AbandonedWorktrees } from './AbandonedWorktrees'
 import { ReportProblemDialog } from './ReportProblemDialog'
 import { SettingsGroup, SettingsRow } from './SettingsParts'
+import { LoadingBlock } from './Skeleton'
 
 export type HealthCheck = { id: string; area: string; label: string; status: 'ok' | 'warn' | 'fail'; detail: string; fix: { label: string; method: string; params?: Record<string, unknown> } | null }
 
@@ -39,7 +40,7 @@ export function HealthPage() {
   const failing = (checks ?? []).filter((check) => check.status !== 'ok').length
   return <div className="health-page">
     <SettingsGroup title="Health check" action={<button type="button" className="ghost-button small" disabled={checks === null || !!fixing} onClick={() => { setChecks(null); void run() }}>Check again</button>}>
-      <p className="settings-empty" role="status">{checks === null ? 'Checking…' : problem ?? (checks.length === 0 ? 'The service reported no checks.' : failing ? `${failing} ${failing === 1 ? 'thing needs' : 'things need'} attention.` : 'Everything looks healthy.')}</p>
+      {checks === null ? <LoadingBlock label="Checking…" lines={3} /> : <p className="settings-empty" role="status">{problem ?? (checks.length === 0 ? 'The service reported no checks.' : failing ? `${failing} ${failing === 1 ? 'thing needs' : 'things need'} attention.` : 'Everything looks healthy.')}</p>}
     </SettingsGroup>
     {areas.map((area) => <SettingsGroup key={area} title={AREA_TITLES[area] ?? area}>
       <ul className="health-list">{(checks ?? []).filter((check) => check.area === area).map((check) => <li key={check.id} data-status={check.status}>

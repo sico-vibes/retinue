@@ -28,7 +28,7 @@ export function OwnerComputerSettings() {
   }
   return <SettingsGroup title="This computer">
     <SettingsRow label="Let employees control this computer" hint="Off: no employee can read your screen or use your mouse and keyboard. On: an employee still has to ask in its conversation, you approve it there, and a bar with Stop shows while it works. Screens are read as text, with password fields hidden; no pictures of your screen are sent.">
-      <button type="button" className={`toggle ${on ? 'on' : ''}`} role="switch" aria-label="Let employees control this computer" aria-checked={!!on} disabled={on === null || busy} onClick={() => void flip()}><span /></button>
+      <button type="button" className={`toggle ${on ? 'on' : ''}`} role="switch" aria-label="Let employees control this computer" aria-checked={!!on} disabled={on === null || busy} onClick={() => void flip()}><i /></button>
     </SettingsRow>
     {problem && <p className="settings-row-note" role="alert">{problem}</p>}
   </SettingsGroup>

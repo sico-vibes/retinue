@@ -1,5 +1,5 @@
 /* Look preview, accent controls and the two look orbs. */
-/* ── Preview window (opens when a look is chosen) ─────────────────────── */
+/* â”€â”€ Preview window (opens when a look is chosen) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 :root:root .look-preview {
   display: grid; grid-template-rows: 0fr; opacity: 0; margin-top: 0;
   transition: grid-template-rows 460ms cubic-bezier(.2, .8, .2, 1), opacity 320ms ease, margin-top 460ms cubic-bezier(.2, .8, .2, 1);
@@ -7,20 +7,27 @@
 }
 :root:root .look-preview[data-open="true"] { grid-template-rows: 1fr; opacity: 1; margin-top: 6px; }
 .look-preview-inner { min-height: 0; overflow: hidden; padding: 4px 6px 10px; margin: -4px -6px -10px; }
-.look-preview-stage { position: relative; height: 252px; }
+/* A window-shaped box, wider than tall (owner, 16 November 2026), holding a little desktop with the app window on it. */
+.look-preview-stage { position: relative; width: min(100%, 640px); margin: 0 auto; aspect-ratio: 16 / 10; }
+.look-preview-caption { min-height: 1.5em; margin: 10px 0 0; color: var(--text-2); font-size: var(--fs-sm, 13px); text-align: center; }
 
-.sp-window {
-  --sp-accent: var(--user-accent, var(--text-1));
-  --sp-accent-ink: var(--user-accent-ink, var(--text-inverse));
-  position: absolute; inset: 0; display: grid; grid-template-rows: 30px minmax(0, 1fr); overflow: hidden; font-size: 12px; color: var(--text-1);
-  background: var(--surface-app); pointer-events: none;
-}
-:root:root .sp-window {
+.sp-scene { position: absolute; inset: 0; overflow: hidden; border-radius: 18px; pointer-events: none; }
+:root:root .sp-scene {
   opacity: 0; transform: translateY(10px) scale(.975);
   transition: opacity 340ms ease, transform 420ms cubic-bezier(.2, .8, .2, 1);
   transition-timing-function: cubic-bezier(.2, .8, .2, 1);
 }
-:root:root .sp-window[data-active="true"] { opacity: 1; transform: none; pointer-events: auto; }
+:root:root .sp-scene[data-active="true"] { opacity: 1; transform: none; }
+/* Haze: the wallpaper is the desktop. Stone: a plain desk, since nothing of it shows through the window anyway. */
+.sp-scene[data-look="haze"] { background: #1b1d24 var(--sp-wallpaper) center / cover no-repeat; }
+.sp-scene[data-look="stone"] { background: var(--surface-panel); box-shadow: inset 0 0 0 1px var(--line); }
+
+.sp-window {
+  --sp-accent: var(--user-accent, var(--text-1));
+  --sp-accent-ink: var(--user-accent-ink, var(--text-inverse));
+  position: absolute; inset: 7% 6%; display: grid; grid-template-rows: 30px minmax(0, 1fr); overflow: hidden; font-size: 12px; color: var(--text-1);
+  background: var(--surface-app);
+}
 .sp-titlebar { display: flex; align-items: center; gap: 6px; padding: 0 12px; color: var(--text-2); border-bottom: 1px solid var(--line); background: var(--surface-panel); }
 .sp-titlebar i { width: 8px; height: 8px; background: var(--line-strong); }
 .sp-titlebar span { margin-left: 6px; font-size: 11px; font-weight: 600; }
@@ -30,7 +37,7 @@
 .sp-row { min-width: 0; height: 32px; padding: 0 6px; display: flex; align-items: center; gap: 8px; color: var(--text-2); }
 .sp-row.on { color: var(--text-1); background: var(--surface-selected); }
 .sp-row-avatar { width: 22px; height: 22px; display: grid; place-items: center; flex: 0 0 auto; }
-.sp-main { min-width: 0; padding: 12px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
+.sp-main { position: relative; isolation: isolate; min-width: 0; padding: 12px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: 10px; }
 .sp-bubble { max-width: 86%; padding: 8px 10px; line-height: 1.45; }
 .sp-bubble.user { justify-self: end; background: var(--surface-selected); }
 .sp-reply { display: flex; align-items: flex-end; gap: 8px; align-self: start; min-width: 0; }
@@ -45,10 +52,18 @@
 .sp-send { width: 26px; height: 26px; display: grid; place-items: center; color: var(--sp-accent-ink); background: var(--sp-accent); }
 
 /* Haze is smoky glass; Legacy keeps the original pixel treatment. */
-:root:root .sp-window[data-look="haze"] { border: 1px solid rgb(255 255 255 / .14); border-radius: 16px; background: rgb(30 31 35 / .84); backdrop-filter: blur(14px) saturate(1.1); }
+/* Haze is frosted glass: the wallpaper's colours come through the window, and the chat shows the picture as its background. */
+:root:root .sp-window[data-look="haze"] { color: #eceef2; border: 1px solid rgb(255 255 255 / .16); border-radius: 14px; background: rgb(22 23 28 / .58); backdrop-filter: blur(16px) saturate(1.15); }
 :root:root .sp-window[data-look="haze"] .sp-titlebar,
-:root:root .sp-window[data-look="haze"] .sp-side { background: rgb(30 31 35 / .74); }
-:root:root .sp-window[data-look="haze"] .sp-bubble.user { background: rgb(255 255 255 / .12); }
+:root:root .sp-window[data-look="haze"] .sp-side { color: #c9ccd4; border-color: rgb(255 255 255 / .1); background: rgb(22 23 28 / .42); }
+:root:root .sp-window[data-look="haze"] .sp-label, :root:root .sp-window[data-look="haze"] .sp-composer { color: #a3a7b1; }
+:root:root .sp-window[data-look="haze"] .sp-row.on { color: #fff; background: rgb(255 255 255 / .1); }
+:root:root .sp-window[data-look="haze"] .sp-bubble.user { background: rgb(255 255 255 / .14); }
+:root:root .sp-window[data-look="haze"] .sp-bubble.bot { border-color: rgb(255 255 255 / .12); background: rgb(22 23 28 / .62); }
+:root:root .sp-window[data-look="haze"] .sp-composer { border-color: rgb(255 255 255 / .18); background: rgb(22 23 28 / .55); }
+:root:root .sp-window[data-look="haze"] .sp-titlebar i { background: rgb(255 255 255 / .28); }
+.sp-chat-bg { position: absolute; inset: 0; z-index: -1; background: var(--sp-wallpaper) center / cover no-repeat; opacity: .55;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0 22%, rgb(0 0 0 / 45%) 50%, transparent 82%); mask-image: linear-gradient(to bottom, #000 0 22%, rgb(0 0 0 / 45%) 50%, transparent 82%); }
 :root:root .sp-window[data-look="legacy"] { border: 2px dotted var(--line-strong); border-radius: 0; box-shadow: 4px 4px 0 var(--bb-shadow-colour, #000); background-image: radial-gradient(var(--line) 1px, transparent 1.2px); background-size: 6px 6px; }
 :root:root .sp-window[data-look="legacy"] .sp-titlebar span,
 :root:root .sp-window[data-look="legacy"] .sp-label { font-family: "Doto", "DM Mono", ui-monospace, monospace; font-weight: 700; letter-spacing: .08em; }
@@ -62,7 +77,7 @@
 :root:root .sp-window[data-look="dot"] { border: 1px solid #aaa; background: #171717; color: #eee; }
 
 /* Stone window: soft corners, calm shadow, system type. */
-:root:root .sp-window[data-look="stone"] { border: 1px solid var(--line-strong); border-radius: 16px; box-shadow: 0 18px 44px rgba(0, 0, 0, .28); }
+:root:root .sp-window[data-look="stone"] { border: 1px solid var(--line-strong); border-radius: 14px; box-shadow: 0 18px 44px rgba(0, 0, 0, .28); }
 :root:root .sp-window[data-look="stone"] .sp-titlebar i { border-radius: 50%; }
 :root:root .sp-window[data-look="stone"] .sp-row { border-radius: 10px; }
 :root:root .sp-window[data-look="stone"] .sp-bubble { border-radius: 14px; }
@@ -78,11 +93,11 @@
   .sp-side { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  :root:root .look-preview, :root:root .sp-window, .look-card { transition: none; }
+  :root:root .look-preview, :root:root .sp-scene, .look-card { transition: none; }
   .sp-dots b { animation: none; opacity: .7; }
 }
 
-/* ── Accent picker ─────────────────────────────────────────────────────── */
+/* â”€â”€ Accent picker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .accent-picker { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
 .accent-swatch {
   position: relative; width: 24px; height: 24px; padding: 0; display: grid; place-items: center; flex: 0 0 auto; cursor: pointer;
@@ -99,7 +114,7 @@
 .accent-swatch.custom input { position: absolute; inset: -6px; width: 40px; height: 40px; opacity: 0; cursor: pointer; }
 .accent-swatch.custom svg { position: relative; pointer-events: none; }
 
-/* ── Onboarding look step ──────────────────────────────────────────────── */
+/* â”€â”€ Onboarding look step â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .onboarding-content:has(.look-step) { width: min(720px, 100%); }
 .look-step { gap: 16px; }
 .look-step .onboarding-actions { justify-content: center; margin-top: 4px; }

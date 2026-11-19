@@ -20,6 +20,7 @@ import {
 } from './automationSchedule'
 import './schedules.css'
 import { useEntityNoun } from './vocabulary'
+import { LoadingBlock } from './Skeleton'
 
 export interface AutomationInput {
   agentId: string
@@ -253,7 +254,7 @@ function ScheduleCard({ automation, agent, nowMs, busy, onToggle, onRunNow, onEd
       <p className="schedule-prompt" title={automation.prompt}>{automation.prompt}</p>
       <WebhookPanel automationId={automation.id} name={automation.name} webhook={automation.webhook as WebhookState | undefined} onChanged={() => undefined} />
       {runsError && <p className="schedules-problem" role="alert">{runsError}</p>}
-      {!runsError && runs === null && <p className="blob-muted">Loading…</p>}
+      {!runsError && runs === null && <LoadingBlock label="Loading…" lines={2} />}
       {runs && runs.length === 0 && <p className="blob-muted">No runs yet.</p>}
       {runs && runs.length > 0 && <ol className="schedule-runs">{runs.map((run) => <li key={run.id}>
         <i className={`run-dot ${statusDot(run.status)}`} aria-hidden="true" />

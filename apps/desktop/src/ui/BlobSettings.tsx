@@ -241,6 +241,7 @@ export function BlobSettings({ draft, runtimes, projects = [], errors, execution
         color={draft.color}
         colorHex={previewHex(draft.color, agentColorHex('mint'))}
         name={draft.name.trim() || `New ${noun}`}
+        role={draft.role}
         locked={locked}
         runtimeId={draft.runtimeId}
         agentId={agentId ?? null}
@@ -374,7 +375,7 @@ export function BlobSettings({ draft, runtimes, projects = [], errors, execution
     {show('notifications') && <EditGroup id="reply-style" title="Reply style">
       <div className="settings-row">
         <RowCopy label="Icons and emoji" hint={`Lets this ${noun} start table cells, list items and status words with a small icon or emoji, so a reply is easier to scan.`} />
-        <span className="settings-row-control"><button type="button" className={`toggle ${draft.replyIcons ? 'on' : ''}`} role="switch" aria-label="Icons and emoji in replies" aria-checked={!!draft.replyIcons} disabled={locked} onClick={() => onDraftChange({ ...draft, replyIcons: !draft.replyIcons })}><span /></button></span>
+        <span className="settings-row-control"><button type="button" className={`toggle ${draft.replyIcons ? 'on' : ''}`} role="switch" aria-label="Icons and emoji in replies" aria-checked={!!draft.replyIcons} disabled={locked} onClick={() => onDraftChange({ ...draft, replyIcons: !draft.replyIcons })}><i /></button></span>
       </div>
     </EditGroup>}
 

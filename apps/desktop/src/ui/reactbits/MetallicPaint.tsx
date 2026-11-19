@@ -900,6 +900,9 @@ export default function MetallicPaint({
       gl.deleteBuffer(buffer);
       gl.deleteVertexArray(vao);
       gl.deleteProgram(program);
+      // Retinue (15 November 2026): give the context back. Without this every unmount (a hover, a live reload)
+      // leaked one, and once Chromium's limit of about 16 was passed it killed the oldest and drew a sad face.
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
 
     const poll = (now: number) => {
@@ -950,6 +953,8 @@ export default function MetallicPaint({
       event.preventDefault();
       state.alive = false;
       cancelAnimationFrame(state.raf);
+      // A lost canvas steps aside, so the plain picture underneath shows instead of a blank or broken square.
+      canvas.style.visibility = 'hidden';
     };
 
     canvas.addEventListener('webglcontextlost', onLost);

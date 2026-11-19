@@ -2,12 +2,13 @@
 import { useRef, useState, type CSSProperties } from 'react'
 import { ImagePlus } from 'lucide-react'
 import { useThemeStyle } from '../blob/retinue'
-import { CHAT_BACKGROUND_OPACITY_MAX, CHAT_BACKGROUND_OPACITY_MIN, chooseChatBackground, removeChatBackground, updateChatBackgroundPrefs, useChatBackgroundPrefs, useChatBackgroundUrl, type ChatBackgroundScope } from './chatBackgroundStore'
+import { CHAT_BACKGROUND_OPACITY_MAX, CHAT_BACKGROUND_OPACITY_MIN, chooseChatBackground, chooseChatBackgroundPreset, removeChatBackground, updateChatBackgroundPrefs, useChatBackgroundPrefs, useChatBackgroundUrl, type ChatBackgroundScope } from './chatBackgroundStore'
 import { CHAT_BACKGROUND_EFFECTS, type ChatBackgroundEffect } from './chatBackgroundEffects'
 import { SegmentedControl } from './SegmentedControl'
 import { SettingsGroup, SettingsRow } from './SettingsParts'
 import { AccentPicker } from './AccentPicker'
 import { DEFAULT_HAZE, HAZE_LIMITS, resetHazeTuning, updateHazeTuning, useHazeTuning } from './hazeTuning'
+import { WALLPAPER_CATEGORIES, WALLPAPER_PRESETS, wallpaperPreset, type WallpaperCategory } from './wallpaperPresets'
 import './chatBackground.css'
 
 function Layer({ url, effect, opacity, empty, preview = false }: { url: string; effect: ChatBackgroundEffect; opacity: number; empty: boolean; preview?: boolean }) {
@@ -40,6 +41,12 @@ export function ChatBackgroundSettings() {
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
+  const [category, setCategory] = useState<WallpaperCategory>(() => wallpaperPreset(prefs.preset)?.category ?? 'anime')
+  const pickPreset = async (id: string) => {
+    setBusy(true); setProblem(null)
+    setProblem(await chooseChatBackgroundPreset(id))
+    setBusy(false)
+  }
   const pick = async (file: File | undefined) => {
     if (!file) return
     setBusy(true); setProblem(null)
@@ -63,7 +70,17 @@ export function ChatBackgroundSettings() {
       </div>}
       {problem && <p className="chat-bg-problem" role="alert">{problem}</p>}
     </div>
+    <div className="settings-row stacked chat-bg-presets">
+      <div className="chat-bg-presets-head"><span>Pictures</span><SegmentedControl<WallpaperCategory> label="Picture style" value={category} options={WALLPAPER_CATEGORIES.map(({ value, label }) => ({ value, label }))} onChange={setCategory} /></div>
+      <div className="chat-bg-preset-grid" role="radiogroup" aria-label="Preset pictures">{WALLPAPER_PRESETS.filter((preset) => preset.category === category).map((preset, index) => {
+        const label = (WALLPAPER_CATEGORIES.find((item) => item.value === category)?.label ?? category) + ' picture ' + (index + 1)
+        return <button key={preset.id} type="button" role="radio" aria-checked={prefs.preset === preset.id} aria-label={label} title={label} className="chat-bg-preset" disabled={busy} onClick={() => void pickPreset(preset.id)}><img src={preset.url} alt="" loading="lazy" decoding="async" draggable={false} /></button>
+      })}</div>
+    </div>
     {prefs.hasImage && <>
+      <SettingsRow label="Match colours to the picture" hint="Haze takes its mist and accent colours from this picture.">{prefs.palette
+        ? <span className="chat-bg-match"><span className="chat-bg-swatches" aria-hidden="true">{[prefs.palette.d1, prefs.palette.d2, prefs.palette.d3, prefs.palette.accent].map((colour, index) => <i key={index} style={{ background: colour }} />)}</span><button type="button" className={`toggle ${prefs.matchColors ? 'on' : ''}`} role="switch" aria-label="Match colours to the picture" aria-checked={prefs.matchColors} onClick={() => updateChatBackgroundPrefs({ matchColors: !prefs.matchColors })}><i /></button></span>
+        : <small className="settings-row-note">Choose the picture again to read its colours.</small>}</SettingsRow>
       <SettingsRow label="Effect"><SegmentedControl label="Background effect" value={prefs.effect} options={CHAT_BACKGROUND_EFFECTS} onChange={(effect) => updateChatBackgroundPrefs({ effect })} /></SettingsRow>
       <SettingsRow label="Show on"><SegmentedControl<ChatBackgroundScope> label="Show background on" value={prefs.scope} options={[{ value: 'empty', label: 'Empty only' }, { value: 'all', label: 'All conversations' }]} onChange={(scope) => updateChatBackgroundPrefs({ scope })} /></SettingsRow>
       <SettingsRow label="Empty chat visibility"><Strength label="Empty chat background visibility" value={prefs.emptyOpacity} onChange={(emptyOpacity) => updateChatBackgroundPrefs({ emptyOpacity })} /></SettingsRow>

@@ -244,3 +244,7 @@
 .team-row .role-chip { display: none; }
 /* The CEO's star sits after the name, so it never covers the coding agent's badge (owner, 9 November 2026). */
 .leader-star { flex: 0 0 auto; display: inline-grid; place-items: center; margin-left: 4px; color: #f2a13a; }
+/* A tagged project in a message: its icon, then its name, like a tagged employee (owner, 15 November 2026). */
+.project-mention { gap: 5px; }
+.project-mention > :first-child { flex: none; }
+.project-option-icon { flex: none; width: 22px; height: 22px; display: inline-grid; place-items: center; color: var(--text-2); border-radius: 6px; background: color-mix(in srgb, var(--text-1) 7%, transparent); }

@@ -1,5 +1,5 @@
-import { Fragment, useCallback, useMemo, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import { Activity, ArrowDown, Download, UserPlus, Stethoscope, Cable, Clock, Split, SquareTerminal, ListChecks, ListPlus, ArrowUp, ArrowUpRight, ChevronDown, ChevronLeft, ChevronUp, CircleAlert, ClipboardCopy, Code2, FileDown, FileText, FolderOpen, FolderInput, FolderPlus, Hash, Import, Gauge, GitCompare, GitPullRequest, LoaderCircle, MessageCircle, Maximize2, Minimize2, MoreHorizontal, PanelLeft, PanelLeftClose, PanelRight, Paperclip, Plus, RefreshCw, RotateCw, Settings2, ShieldAlert, Sparkles, Square, SquarePen, Terminal, Volume2, VolumeX, X, BriefcaseBusiness } from 'lucide-react'
+import { Fragment, useCallback, useContext, useMemo, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
+import { KeyRound, Activity, ArrowDown, Download, UserPlus, Stethoscope, Cable, Clock, Split, SquareTerminal, ListChecks, ListPlus, ArrowUp, ArrowUpRight, ChevronDown, ChevronLeft, ChevronUp, CircleAlert, ClipboardCopy, Code2, FileDown, FileText, FolderOpen, FolderInput, FolderPlus, Hash, Import, Gauge, GitCompare, GitPullRequest, LoaderCircle, MessageCircle, Maximize2, Minimize2, MoreHorizontal, PanelLeft, PanelLeftClose, PanelRight, Paperclip, Plus, RefreshCw, RotateCw, Settings2, ShieldAlert, Sparkles, Square, SquarePen, Terminal, Volume2, VolumeX, X, BriefcaseBusiness } from 'lucide-react'
 import { outsideSender } from './messageOrigin'
 import { agentLook, SHAPE_LABELS, type BlobLook } from '../blob/look'
 import { MAX_COMPANION_PEERS } from '../blob/companionLayout'
@@ -32,6 +32,7 @@ import { OutsideSessionPills, useOutsideSessions } from './OutsideSessions'
 import { AutoRetryNotice, ContextResetDivider, CreatedBotChip, HandoffDialog, DelegationChip, MentionPicker, PlanCard, ProjectPicker, QuestionCard, ReplyChip, SideConversationHeader, UpdateChip, UsageLimitNotice, mentionMatches } from './TeamMessages'
 import { CompanionConversationPicker } from './CompanionConversationPicker'
 import { SignInHelp } from './SignInHelp'
+import { TONE_ICON } from './ToneNote'
 import { ProposalCard } from './ProposalCard'
 import { ManagerSetupCard } from './ManagerSetupCard'
 import { DRAFT_SESSION_PREFIX, draftSessionFor, isDraftSession, managerOf } from './teamSelectors'
@@ -123,8 +124,8 @@ import { appendUsageTipDismissal, parseUsageTipDismissals, selectUsageTip, type 
 import { setApprovalBadge } from '../tauri'
 import { QuickSwitcher } from './QuickSwitcher'
 import { useQuickSwitcherShortcut } from './useQuickSwitcherShortcut'
-import { LaunchIntro, LaunchWarnings } from './LaunchIntro'
-import { discoveryResultText, useRuntimeDiscovery } from './runtimeDiscovery'
+import { LaunchBackdrop, LaunchIntro, LaunchWarnings } from './LaunchIntro'
+import { discoveryResultText, useRuntimeDiscovery, runtimeIsOff } from './runtimeDiscovery'
 import { FirstRunOnboarding } from './FirstRunOnboarding'
 import { LAUNCH_OVERALL_TIMEOUT_REASON, LAUNCH_TIMEOUTS, launchWarningsFor, runLaunchChecks, runtimeAuthSummary, throwIfLaunchAborted, type LaunchCheck } from './launchChecks'
 import { providerBrand } from './providerBrand'
@@ -145,6 +146,9 @@ import { startTour } from './tour/startTour'
 import { ComposerStatus, type LimitLine } from './PromptQueue'
 import { AttachMenu, AttachmentTray, MAX_COMPOSER_ATTACHMENTS, MessageAttachments, PermissionModeControl, prepareImageBytes, sessionApprovalMode, type ComposerAttachment } from './ComposerControls'
 import { WorkingMark } from './WorkingMark'
+import { doingNowStep } from './doingNow'
+import { ProjectsContext, splitProjectTags } from './projectMentions'
+import { ProjectIcon } from './ProjectIcon'
 import { ImportDialog } from './ImportDialog'
 import { OwnerComputerBar, useOwnerGrants } from './OwnerComputer'
 import { TurnPlan, planOf } from './TurnPlan'
@@ -162,6 +166,7 @@ import { setActivityProvider } from './liveOutput'
 import { TerminalDock } from './TerminalDock'
 import { NeedsYouBell } from './NeedsYou'
 import { ChatBackgroundLayer } from './ChatBackground'
+import { usePicturePalette } from './picturePaletteApply'
 import { FileReferenceChip } from './FileReferenceChip'
 import { fileReferenceText, splitFileReference, type LocalFileRef } from './fileReference'
 import { parseUnifiedDiff } from './diffParser'
@@ -177,12 +182,14 @@ function cachedFont(key: string) { try { return localStorage.getItem(key) ?? '' 
 
 export function App() {
   const companion = new URLSearchParams(location.search).has('companion')
+  useEffect(() => { void applyFonts(cachedFont('retinue.font'), cachedFont('retinue.monoFont'), themeStyle()) }, [])
+  // Haze wears the chat background picture's colours when the owner asks (owner, 16 November 2026).
+  usePicturePalette(!companion)
   // Project files open in a panel beside the chat, not a dialog (owner, 16 November 2026).
   useDocumentPanelSlot(!companion)
   const openDoc = useOpenDocument()
   const [docExpanded, setDocExpanded] = useState(false)
   useEffect(() => { if (!openDoc) setDocExpanded(false) }, [openDoc])
-  useEffect(() => { void applyFonts(cachedFont('retinue.font'), cachedFont('retinue.monoFont'), themeStyle()) }, [])
   const noun = useEntityNoun()
   const Noun = useEntityNoun({ capital: true })
   const platform = usePlatform()
@@ -200,6 +207,7 @@ export function App() {
   const [claudeWorkflowsEnabled, setClaudeWorkflowsEnabled] = useState(true)
   /** Separate from the bottom usage bar. */
   const [usageTipsEnabled, setUsageTipsEnabled] = useState(false)
+  const [ceoSetupSignal, setCeoSetupSignal] = useState(0)
   const [usageTipDismissals, setUsageTipDismissals] = useState<UsageTipDismissal[]>([])
   const usageTipDismissalsRef = useRef(usageTipDismissals)
   usageTipDismissalsRef.current = usageTipDismissals
@@ -1066,7 +1074,9 @@ export function App() {
       } }])
       if (signal.aborted || generation !== launchGeneration.current) return
       const discoveryFailed = checks.find((check) => check.id === 'discovery')?.state === 'failed'
-      const authSteps = discoveryFailed ? [] : found.map((runtime) => ({
+      // A coding agent the owner switched off is not checked at startup (owner, 15 November 2026: Cursor and Grok were).
+      const usable = found.filter((runtime) => !runtimeIsOff(runtime))
+      const authSteps = discoveryFailed ? [] : usable.map((runtime) => ({
         id: 'auth:' + runtime.id, label: 'Checking ' + providerBrand(runtime.provider).name + ' sign-in', timeoutMs: LAUNCH_TIMEOUTS.agent,
         run: async (stageSignal: AbortSignal) => {
           throwIfLaunchAborted(stageSignal)
@@ -1078,7 +1088,7 @@ export function App() {
       }))
       if (authSteps.length) await runSteps(authSteps)
       if (signal.aborted || generation !== launchGeneration.current) return
-      const modelSteps = discoveryFailed ? [] : found.map((runtime) => ({ id: 'models:' + runtime.id, label: 'Loading ' + providerBrand(runtime.provider).name + ' models', timeoutMs: LAUNCH_TIMEOUTS.models, run: async (stageSignal: AbortSignal) => {
+      const modelSteps = discoveryFailed ? [] : usable.map((runtime) => ({ id: 'models:' + runtime.id, label: 'Loading ' + providerBrand(runtime.provider).name + ' models', timeoutMs: LAUNCH_TIMEOUTS.models, run: async (stageSignal: AbortSignal) => {
         // Through the shared catalog cache, so the composer and editor pickers open from it.
         const result = await fetchCached<Record<string, unknown>>('runtime.models', { runtimeId: runtime.id })
         void fetchCached('runtime.capabilities', { runtimeId: runtime.id }).catch(() => undefined)
@@ -3015,12 +3025,13 @@ ${fileReferenceText(sentFile)}` : typed
     } catch (reason) { setError(messageForDaemonCode(daemonCodeOf(reason), 'agent.create')); return null }
   }
   // The launch and onboarding screens need Haze's backdrop too: Haze's --surface-app is transparent, so without it they sit on the bare (white) window.
-  if (launchVisible && !companion) return <><AppWallpaper /><LaunchIntro checks={launchChecks} runtimes={runtimes} agent={activeSelectedAgent} serviceDown={launchServiceDown} onRetry={retryLaunch} onContinueOffline={() => { setConnection('disconnected'); finishLaunch() }} onComplete={finishLaunch} /></>
-  if (onboardingVisible && !companion) return <><AppWallpaper /><FirstRunOnboarding runtimes={runtimes} scanning={discoveryStatus.scanning} error={error} onScan={() => void refreshRuntimes()} onCreate={createOnboardedBlob} onFinish={finishOnboarding} onSaveName={saveProfileName} /></>
+  // LaunchBackdrop sits at the same place in both, so it stays mounted from the launch screen into onboarding.
+  if (launchVisible && !companion) return <><AppWallpaper /><LaunchBackdrop /><LaunchIntro checks={launchChecks} runtimes={runtimes} agent={activeSelectedAgent} serviceDown={launchServiceDown} onRetry={retryLaunch} onContinueOffline={() => { setConnection('disconnected'); finishLaunch() }} onComplete={finishLaunch} /></>
+  if (onboardingVisible && !companion) return <><AppWallpaper /><LaunchBackdrop dim /><FirstRunOnboarding runtimes={runtimes} scanning={discoveryStatus.scanning} error={error} onScan={() => void refreshRuntimes()} onCreate={createOnboardedBlob} onFinish={finishOnboarding} onSaveName={saveProfileName} /></>
   return (
     <>
     {!companion && <AppWallpaper />}
-    <PhotoOwnersContext.Provider value={photoOwnerMap}>
+    <PhotoOwnersContext.Provider value={photoOwnerMap}><ProjectsContext.Provider value={projects}>
     <main className={`app-shell ${detailsVisible ? 'inspector-open' : ''} ${docVisible ? `doc-open${docExpanded ? ' doc-expanded' : ''}` : ''} ${convosOpen && activeSelectedAgent && !schedulesOpen && !tasksOpen && !compareOpen ? 'convos-open' : ''} ${reducedLaunchFade ? 'reduced-launch-fade' : ''}`} style={{ ...(accent ? { '--agent-accent': accent } : {}), ...(reducedLaunchFade ? { '--launch-fade-duration': '180ms' } : {}) } as React.CSSProperties}>
       <aside className="sidebar" aria-label="Agents">
         <div className="sidebar-top">
@@ -3055,7 +3066,7 @@ ${fileReferenceText(sentFile)}` : typed
           </div>
         </div>
         <div className="sr-only" aria-live="polite">{rosterAnnouncement}</div>
-        <TeamSidebar canCreate={runtimeReady} onOpenTeam={(tab) => openTeam(tab)} teamOpen={!!teamPage} onHire={(projectId) => openTeam('hire', projectId)} onAskCeo={(projectId) => void askCeoToStaff(projectId)} onOpenConversation={(agent, session) => { leavePages(); selectAgent(agent); selectConversation(session) }} onStartInProject={(agent, projectId) => { leavePages(); newSession(agent.id, null, projectId) }} selectedSessionId={sideSessionId ?? selectedSession?.id ?? null} onOpenSubbot={openSideConversation} machines={machines.length ? <MachineGroups machines={machines} selected={machineView} onOpen={(machine, bot) => setMachineView({ machineId: machine.id, botId: bot.id })} onNewProject={(machine) => setMachineAction({ kind: 'project', machineId: machine.id })} onManage={(machine) => setMachineAction({ kind: 'manage', machineId: machine.id })} /> : null} banner={!managerOf(agents) && connection === 'connected' ? <ManagerSetupCard runtimes={runtimes.filter((runtime) => runtimeUsable(runtime))} disabled={connection !== 'connected'} onCreate={createOnboardedBlob} /> : null} agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} runtimeLogos={runtimeLogos} sidebarModel={experiments.sidebarModel} botLock={experiments.botLock} connected={connection === 'connected'} now={now} pinnedIds={pins.favorites ?? []} unreadSessionIds={unreadSessionIds} approvalSessionIds={approvalSessionIds} selectedAgentId={activeSelectedAgent?.id ?? null} onOpenSearch={openQuickSwitcher} actions={{
+        <TeamSidebar canCreate={runtimeReady} onOpenTeam={(tab) => openTeam(tab)} teamOpen={!!teamPage} onHire={(projectId) => openTeam('hire', projectId)} onAskCeo={(projectId) => void askCeoToStaff(projectId)} onOpenConversation={(agent, session) => { leavePages(); selectAgent(agent); selectConversation(session) }} onStartInProject={(agent, projectId) => { leavePages(); newSession(agent.id, null, projectId) }} selectedSessionId={sideSessionId ?? selectedSession?.id ?? null} onOpenSubbot={openSideConversation} machines={machines.length ? <MachineGroups machines={machines} selected={machineView} onOpen={(machine, bot) => setMachineView({ machineId: machine.id, botId: bot.id })} onNewProject={(machine) => setMachineAction({ kind: 'project', machineId: machine.id })} onManage={(machine) => setMachineAction({ kind: 'manage', machineId: machine.id })} /> : null} banner={!managerOf(agents) && connection === 'connected' ? <ManagerSetupCard runtimes={runtimes.filter((runtime) => runtimeUsable(runtime))} disabled={connection !== 'connected'} onCreate={createOnboardedBlob} openSignal={ceoSetupSignal} /> : null} agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} runtimeLogos={runtimeLogos} sidebarModel={experiments.sidebarModel} botLock={experiments.botLock} connected={connection === 'connected'} now={now} pinnedIds={pins.favorites ?? []} unreadSessionIds={unreadSessionIds} approvalSessionIds={approvalSessionIds} selectedAgentId={activeSelectedAgent?.id ?? null} onOpenSearch={openQuickSwitcher} actions={{
           onSelect: (agent) => { leavePages(); selectAgent(agent) },
           onCreate: (projectId) => openCreate(projectId),
           onCreateProject: () => void openNewProject().then((project) => { if (project) setStaffProject(project) }),
@@ -3138,7 +3149,7 @@ ${fileReferenceText(sentFile)}` : typed
         {error && <div className="inline-error" role="alert"><ShieldAlert size={16} /><span>{error}</span><button aria-label="Dismiss error" onClick={() => setError(null)}><X size={15} /></button></div>}
         {archiveNotice && <div className="inline-error" role="status"><span>{archiveNotice}</span><button aria-label="Dismiss notice" onClick={() => setArchiveNotice(null)}><X size={15} /></button></div>}
 
-        {!selectedSession ? <>{activePermission && <ApprovalCard permission={activePermission} onReply={(choice, options) => answerPermission(activePermission, choice, options)} /> }<EmptyConversation connected={connection === 'connected'} hasRuntime={runtimes.length > 0} hasAgent={!!activeSelectedAgent} runtimeReady={runtimeReady} runtimeStatus={selectedRuntime?.status} accent={accent} mood={selectedMood} agentName={agentName} look={activeSelectedAgent ? agentLook(activeSelectedAgent) : null} onNewSession={(anchor) => newSession(undefined, anchor)} onCreate={() => openCreate()} onRefresh={() => void refreshRuntimes()} /></> : <>
+        {!selectedSession ? <>{activePermission && <ApprovalCard permission={activePermission} onReply={(choice, options) => answerPermission(activePermission, choice, options)} /> }<EmptyConversation connected={connection === 'connected'} hasRuntime={runtimes.length > 0} hasAgent={!!activeSelectedAgent} runtimeReady={runtimeReady} runtimeStatus={selectedRuntime?.status} accent={accent} mood={selectedMood} agentName={agentName} look={activeSelectedAgent ? agentLook(activeSelectedAgent) : null} onNewSession={(anchor) => newSession(undefined, anchor)} needsCeo={!managerOf(agents)} onHireCeo={() => setCeoSetupSignal((value) => value + 1)} onCreate={() => openCreate()} onRefresh={() => void refreshRuntimes()} /></> : <>
           {!sideSession && <ChangeBanner session={selectedSession} dismissed={reviewDismissals[selectedSession.id] ?? []} onDiff={(path, content) => setDiffViewer({ path, content })} onUndo={(file) => setRevertTarget({ sessionId: selectedSession.id, file })} onDismiss={(ids) => setReviewDismissals((current) => ({ ...current, [selectedSession.id]: [...(current[selectedSession.id] ?? []), ...ids] }))} onNewConversation={() => newSession()} />}
           <div className="conversation-frame">
             {conversationScrollable && <ConversationOutline key={selectedSession.id} sessionId={selectedSession.id} items={outlineItems} />}
@@ -3200,7 +3211,7 @@ ${fileReferenceText(sentFile)}` : typed
               {!sideSession && lastTurnWasPlan && !latestPlanId && <div className="plan-ready-bar" role="status"><span>Plan mode is on. Approve the plan to let {agentName} start building.</span><button type="button" className="primary-button small" onClick={() => void approvePlan()}>Approve &amp; build</button></div>}
               {latestPlan && <TurnPlan plan={latestPlan.plan} stopped={(!turnLive && latestPlan.live) || latestPlan.earlier} earlier={latestPlan.earlier} />}
               {selectedSession.state === 'starting' && <div className="working-indicator starting"><WorkingMark label={`Starting ${agentName}…`} timer={false} /></div>}
-              {selectedSession.state === 'working' && <div className="working-indicator"><WorkingMark label={`${agentName} is working`} /></div>}
+              {selectedSession.state === 'working' && <div className="working-indicator"><WorkingMark label={`${agentName} is working`} step={doingNowStep(selectedSession)} /></div>}
               {waitingDelegation && selectedSession.state !== 'working' && <div className="working-indicator waiting"><WorkingMark label={`Waiting for a free working slot for ${sideAgent?.name ?? agentName}…`} timer={false} /></div>}
               </div>
             </div>
@@ -3372,7 +3383,7 @@ ${fileReferenceText(sentFile)}` : typed
       {projectDelete && <ConfirmDialog title={`Delete ${projectDelete.name}?`} body="The project is removed from Retinue, with any approvals saved only for it. Its conversations stay, under No project. The folder on disk is not touched." confirmLabel="Delete project" cancelLabel="Keep it" tone="danger" onConfirm={() => { const project = projectDelete; setProjectDelete(null); const memberIds = agents.filter((agent) => agent.projectId === project.id).map((agent) => agent.id); if (experiments.undo) void removeProject(project, memberIds); else void projectAction('project.delete', { projectId: project.id }) }} onCancel={() => setProjectDelete(null)} />}
       {pendingBlobImport && <ImportBlobDialog blob={pendingBlobImport} runtimes={runtimes} onCancel={() => { setPendingBlobImport(null); restoreCreateFocus() }} onCreate={(runtimeId) => createImportedBlob(pendingBlobImport, runtimeId)} />}
     </main>
-    </PhotoOwnersContext.Provider>
+    </ProjectsContext.Provider></PhotoOwnersContext.Provider>
     </>
   )
 }
@@ -3433,29 +3444,34 @@ function ConversationCrumb({ project, title }: { project: string | null; title: 
   return <span className="conversation-crumb" title={text}>{project && <><span className="conversation-crumb-project">{project}</span><span className="conversation-crumb-sep" aria-hidden="true">/</span></>}<span className="conversation-crumb-title">{title}</span></span>
 }
 
-function EmptyConversation({ connected, hasRuntime, hasAgent, runtimeReady, runtimeStatus, accent, mood, agentName, look, onNewSession, onCreate, onRefresh }: { connected: boolean; hasRuntime: boolean; hasAgent: boolean; runtimeReady: boolean; runtimeStatus?: string; accent: string; mood: BlobMood; agentName: string; look: BlobLook | null; onNewSession: (anchor?: HTMLElement | null) => void; onCreate: () => void; onRefresh: () => void }) {
+function EmptyConversation({ connected, hasRuntime, hasAgent, runtimeReady, runtimeStatus, accent, mood, agentName, look, needsCeo = false, onHireCeo, onNewSession, onCreate, onRefresh }: { connected: boolean; hasRuntime: boolean; hasAgent: boolean; runtimeReady: boolean; runtimeStatus?: string; accent: string; mood: BlobMood; agentName: string; look: BlobLook | null; needsCeo?: boolean; onHireCeo?: () => void; onNewSession: (anchor?: HTMLElement | null) => void; onCreate: () => void; onRefresh: () => void }) {
   const noun = useEntityNoun()
   const canvas = hasAgent ? <BlobCanvas color={accent} size={128} mood={connected ? mood : 'offline'} effectOverscanTop={135} look={look} label={agentName} /> : <BlobCanvas color="#e6e9ee" size={128} mood={connected ? 'idle' : 'offline'} effectOverscanTop={135} label="Frost" />
   const needsRuntimeRecovery = hasAgent && !runtimeReady
-  const heading = !connected ? 'Connect to your local runtime' : needsRuntimeRecovery ? 'Coding agent needs attention' : hasAgent ? `Start a conversation with ${agentName}` : hasRuntime ? `Create your first ${noun}` : 'Find your coding agent'
-  const description = !connected ? 'Reconnect to load the latest state.' : needsRuntimeRecovery ? runtimeStatus === 'error' ? 'Update or repair this CLI in Settings → Coding agents, then scan again.' : 'This coding agent is offline. Open Settings → Coding agents and scan again before starting a conversation.' : hasAgent ? 'Your coding agent starts when you send the first message.' : hasRuntime ? `An ${noun} is a teammate on one of your coding agents.` : 'Scan this computer for Claude Code, Codex or OpenCode.'
-  const label = !connected ? 'Try again' : needsRuntimeRecovery ? 'Scan again' : hasAgent ? 'New conversation' : hasRuntime ? `Create your first ${noun}` : 'Scan for agents'
-  return <div className="empty-conversation"><PixelClouds className="empty-clouds" /><div className="empty-art">{canvas}</div><h1>{heading}</h1><p className="empty-description">{description}</p><button className="primary-button" onClick={(event) => { if (!connected || needsRuntimeRecovery || !hasAgent && !hasRuntime) onRefresh(); else if (hasAgent) onNewSession(event.currentTarget); else onCreate() }} disabled={!connected && !hasRuntime}>{!hasAgent && hasRuntime && connected ? <Plus size={15} /> : <FolderOpen size={15} />}{label}</button></div>
+  // With no CEO yet, the first hire is the CEO (owner, 16 November 2026): the button opens its form in the sidebar.
+  const hireCeo = connected && !hasAgent && hasRuntime && needsCeo && !!onHireCeo
+  const heading = !connected ? 'Connect to your local runtime' : needsRuntimeRecovery ? 'Coding agent needs attention' : hasAgent ? `Start a conversation with ${agentName}` : hireCeo ? 'Hire your CEO' : hasRuntime ? `Create your first ${noun}` : 'Find your coding agent'
+  const description = !connected ? 'Reconnect to load the latest state.' : needsRuntimeRecovery ? runtimeStatus === 'error' ? 'Update or repair this CLI in Settings → Coding agents, then scan again.' : 'This coding agent is offline. Open Settings → Coding agents and scan again before starting a conversation.' : hasAgent ? 'Your coding agent starts when you send the first message.' : hireCeo ? `Your CEO plans the work with you and hires the rest of your team.` : hasRuntime ? `An ${noun} is a teammate on one of your coding agents.` : 'Scan this computer for Claude Code, Codex or OpenCode.'
+  const label = !connected ? 'Try again' : needsRuntimeRecovery ? 'Scan again' : hasAgent ? 'New conversation' : hireCeo ? 'Hire your CEO' : hasRuntime ? `Create your first ${noun}` : 'Scan for agents'
+  return <div className="empty-conversation"><PixelClouds className="empty-clouds" /><div className="empty-art">{canvas}</div><h1>{heading}</h1><p className="empty-description">{description}</p><button className="primary-button" onClick={(event) => { if (!connected || needsRuntimeRecovery || !hasAgent && !hasRuntime) onRefresh(); else if (hasAgent) onNewSession(event.currentTarget); else if (hireCeo) onHireCeo!(); else onCreate() }} disabled={!connected && !hasRuntime}>{!hasAgent && hasRuntime && connected ? <Plus size={15} /> : <FolderOpen size={15} />}{label}</button></div>
 }
 
 /** Your own message, with @mentions of team blobs shown as their avatar and name in their colour. */
 function UserMessageText({ text, agents, references, onOpenReference }: { text: string; agents: readonly Agent[]; references?: Array<{ id: string; title: string }> | null; onOpenReference?: (sessionId: string) => void }) {
   const split = splitFileReference(text)
   if (split.file) return <>{split.body && <UserMessageText text={split.body} agents={agents} references={references} onOpenReference={onOpenReference} />}<FileReferenceChip file={split.file} /></>
-  type Segment = { text: string; agent?: Agent; reference?: { id: string; title: string } }
-  const segments: Segment[] = splitReferences(text, references).flatMap((part): Segment[] => part.reference ? [part] : splitMentions(part.text, agents))
-  if (!segments.some((segment) => segment.agent || segment.reference)) return <SafeMessageText text={text} />
+  const projects = useContext(ProjectsContext)
+  type Segment = { text: string; agent?: Agent; reference?: { id: string; title: string }; project?: Project }
+  const segments: Segment[] = splitReferences(text, references).flatMap((part): Segment[] => part.reference ? [part] : splitMentions(part.text, agents)).flatMap((part): Segment[] => part.agent || part.reference ? [part] : splitProjectTags(part.text, projects))
+  if (!segments.some((segment) => segment.agent || segment.reference || segment.project)) return <SafeMessageText text={text} />
   return <p className="message-mentions">{segments.map((segment, index) => segment.reference
     ? <button key={index} type="button" className="conversation-ref" title="Open this side conversation" onClick={() => onOpenReference?.(segment.reference!.id)}><Hash size={12} aria-hidden="true" />{segment.reference.title}</button>
     : segment.agent
     ? <span key={index} className="mention" style={{ ['--mention' as string]: agentColorHex(segment.agent.color) }} title={`@${segment.agent.name}`}>
         <BlobCanvas decorative color={agentColorHex(segment.agent.color)} size={18} mood="idle" look={agentLook(segment.agent)} label={segment.agent.name} />{segment.agent.name}
       </span>
+    : segment.project
+    ? <span key={index} className="mention project-mention" title={`#${segment.project.name}`}><ProjectIcon project={segment.project} size={14} />{segment.project.name}</span>
     : <span key={index}><SafeMarkdownInline text={segment.text} onOpenLink={(url) => void openSafeLink(url)} /></span>)}</p>
 }
 
@@ -3651,6 +3667,21 @@ function ActivityItem({ item, onDiff, runtime, onSignedIn }: { item: Conversatio
   const detail = friendly ? '' : file ? String(activity.path ?? 'Changed file') : String(activity.command ?? activity.summary ?? activity.detail ?? activity.output ?? '')
   const timeValue = activity.completedAt ?? activity.startedAt ?? activity.createdAt
   const time = typeof timeValue === 'string' ? new Date(timeValue) : null
+  // Owner, 15 November 2026: a failed turn is a filled card with the status colour washing in from the right and its icon on the left.
+  if (item.activityKind === 'turn' && friendly) {
+    const tone = friendly.tone === 'failure' ? 'danger' : friendly.tone === 'info' ? 'info' : 'warning'
+    const Icon = friendly.action?.kind === 'sign-in' ? KeyRound : TONE_ICON[tone]
+    return <article className="turn-error-card tone-wash" data-tone={tone} role="group" aria-label={friendly.title}>
+      <span className="tone-icon" aria-hidden="true"><Icon size={16} /></span>
+      <div className="turn-error-main">
+        <div className="turn-error-head"><strong>{friendly.title}</strong><span className="turn-error-meta"><b>{tone === 'danger' ? 'Failed' : tone === 'info' ? 'Note' : 'Needs you'}</b>{time && !Number.isNaN(time.valueOf()) && <time>{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>}</span></div>
+        {friendly.detail && <p>{friendly.detail}</p>}
+        {friendly.action?.kind === 'sign-in' && runtime && <SignInHelp provider={runtime.provider} runtimeId={runtime.id} onChecked={onSignedIn} />}
+        {activity.delivery === 'unknown' && <p className="activity-delivery-note">Retinue could not confirm the employee received this message, so it may have reached it. It will not be sent again on its own; check the conversation before sending it again.</p>}
+        {rawTurnDetail && rawTurnDetail !== friendly.detail && <details className="activity-detail"><summary>Details</summary><pre>{rawTurnDetail}</pre></details>}
+      </div>
+    </article>
+  }
   return <article className={`activity-card timeline-activity ${failed ? 'error' : ''}`}>
     <div className="activity-heading">{file ? <FileText size={15} /> : <Terminal size={15} />}<strong>{title}</strong><span>{labelize(activity.state ?? activity.status, file ? 'Reported' : 'Activity')}</span>{time && !Number.isNaN(time.valueOf()) && <time>{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>}</div>
     {friendly?.detail && <p>{friendly.detail}</p>}

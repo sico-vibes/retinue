@@ -49,6 +49,7 @@
 .price-row-menu { position: relative; justify-self: end; }
 .price-row-menu summary { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--radius-pill); color: var(--text-2); cursor: pointer; list-style: none; }
 .price-row-menu summary::-webkit-details-marker { display: none; }
+.price-row-menu summary::before { content: none; }
 .price-row-menu summary:hover, .price-row-menu[open] summary { background: var(--surface-selected); color: var(--text-1); }
 .price-row-menu .menu-surface { position: absolute; z-index: var(--z-menu); inset-block-start: 100%; inset-inline-end: 0; min-width: 172px; padding: 4px; }
 .price-row-menu .menu-item { width: 100%; text-align: left; }

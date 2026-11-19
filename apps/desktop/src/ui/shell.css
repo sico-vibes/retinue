@@ -159,8 +159,7 @@
 .header-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; }
 .header-actions[hidden] { display: none; }
 .model-pill { height: 26px; max-width: 220px; margin-right: 4px; padding: 0 10px; display: inline-flex; align-items: center; overflow: hidden; color: var(--text-2); border-radius: var(--radius-pill); background: var(--surface-raised); font-size: var(--fs-xs); text-overflow: ellipsis; white-space: nowrap; cursor: default; }
-.approval-pill { height: 22px; padding: 0 9px; display: inline-flex; align-items: center; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: var(--radius-pill); font-size: var(--fs-2xs); }
-.approval-pill-bypass { color: var(--status-working); border-color: var(--warning-line); }
+.approval-pill { height: 22px; padding: 0 9px; display: inline-flex; align-items: center; color: var(--text-2); border: 0; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--text-1) 8%, transparent); font-size: var(--fs-2xs); }
 .approval-pill-accept_edits { color: var(--text-1); }
 .approval-pill.compact { height: 18px; padding: 0 6px; font-size: 10px; }
 .more-menu-wrap { position: relative; }
@@ -447,7 +446,7 @@
 .launch-checklist small { color: var(--text-2); font-size: var(--fs-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .launch-actions, .onboarding-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
 .launch-actions { margin-top: 14px; }
-.launch-warning-notice { padding: 10px 14px; display: flex; align-items: center; gap: 10px; color: var(--text-1); border-bottom: 1px solid var(--warning-line); background: var(--surface-warning); font-size: var(--fs-sm); }
+.launch-warning-notice { padding: 8px 14px; display: flex; align-items: center; gap: 10px; color: var(--text-1); border-bottom: 1px solid var(--line); font-size: var(--fs-sm); }
 .launch-warning-body { flex: 1; min-width: 0; }
 .launch-warning-list { margin: 6px 0 0; padding-left: 18px; color: var(--text-2); }
 .onboarding-screen { overflow-y: auto; }
@@ -691,5 +690,9 @@
 .safe-markdown .reply-icon.warn { color: var(--reply-warn); }
 
 /* Launch background (owner, 14 November 2026): React Bits' Gradient ASCII. */
-.launch-ascii { position: absolute; inset: 0; z-index: 0; opacity: .85; }
+/* One layer behind both the launch screen and onboarding (owner, 16 November 2026), so the screens above it are see-through. */
+.launch-backdrop { position: fixed; inset: 0; z-index: 100; background: var(--surface-app); pointer-events: none; }
+.launch-backdrop ~ .launch-intro, .launch-backdrop ~ .onboarding-screen { z-index: 101; background: transparent; }
+.launch-ascii { position: absolute; inset: 0; z-index: 0; opacity: .85; transition: opacity 700ms ease; }
+.launch-backdrop[data-dim="true"] .launch-ascii { opacity: .4; }
 .launch-intro-content { position: relative; z-index: 1; }

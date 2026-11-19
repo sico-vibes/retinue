@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "be9d799",
+  "revision": "79d9ae17",
   "documentCount": 443,
   "assets": [
     {
@@ -7903,8 +7903,13 @@
       "title": "Distribution: winget and the Microsoft Store",
       "section": "Operations",
       "status": "Operations",
-      "sha256": "bd9ab1fee92cd9ed84968ce5e11b892b7f9cd39e471c7a9f5a49c05ed50b683e",
+      "sha256": "fe6ba226c84a66e8b19c3e9571b1db6884e63db6ae84e012857fc65e79c0eb50",
       "headings": [
+        {
+          "id": "why-windows-flags-an-unsigned-release",
+          "text": "Why Windows flags an unsigned release",
+          "level": 2
+        },
         {
           "id": "winget",
           "text": "winget",

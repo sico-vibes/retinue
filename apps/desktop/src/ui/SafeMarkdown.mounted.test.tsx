@@ -4,12 +4,25 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SafeMarkdown, SafeMarkdownInline } from './SafeMarkdown'
 
+// The full Lucide set is 1,500 modules that Vitest transforms one by one (about 17 s); one icon stands in for it.
+vi.mock('lucide-react/dist/esm/icons/index.js', async () => ({ Crown: (await import('lucide-react')).Crown }))
+
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 let host: HTMLDivElement
 let root: Root
 afterEach(() => { if (root) act(() => root.unmount()); host?.remove() })
 
 describe('SafeMarkdown mounted', () => {
+  it('draws any Lucide icon a reply names, inside a table too, and leaves an empty header empty', async () => {
+    host = document.createElement('div'); document.body.append(host); root = createRoot(host)
+    act(() => root.render(<SafeMarkdown text={['|  | Employee |', '|---|---|', '| :lucide-crown: | CEO |', '| :lucide-search: | Grey |', '| :lucide-not-a-real-icon: | Ada |'].join(String.fromCharCode(10))} onOpenLink={vi.fn()} />))
+    await vi.waitFor(() => expect(host.querySelector('svg[aria-label="crown"]')).not.toBeNull())
+    expect(host.querySelector('svg[aria-label="search"]')).not.toBeNull()
+    expect(host.textContent).not.toContain(':lucide-crown:')
+    await vi.waitFor(() => expect(host.textContent).toContain(':lucide-not-a-real-icon:'))
+    expect(host.querySelector('th')?.textContent).not.toContain('Column 1')
+  })
+
   it('renders active content as elements but keeps HTML injection literal', () => {
     host = document.createElement('div'); document.body.append(host); root = createRoot(host)
     act(() => root.render(<SafeMarkdown text={'# title\n\n<script>alert(1)</script>\n<img src=x onerror=alert(1)>'} onOpenLink={vi.fn()} />))

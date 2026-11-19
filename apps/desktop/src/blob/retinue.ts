@@ -27,11 +27,14 @@ function readAccent(): string {
 
 let style = readStyle()
 let accent = readAccent()
+/** The chat background picture's accent while Haze matches its colours (ui/picturePaletteApply.ts); it wins over the owner's accent. */
+let accentOverride = ''
 const listeners = new Set<() => void>()
 
 function applyAccent(root: HTMLElement) {
-  if (accent) {
-    const tokens = accentTokens(accent)
+  const shown = (style === 'haze' && accentOverride) || accent
+  if (shown) {
+    const tokens = accentTokens(shown)
     root.style.setProperty('--user-accent', tokens.accent)
     root.style.setProperty('--user-accent-pressed', tokens.pressed)
     root.style.setProperty('--user-accent-soft', tokens.soft)
@@ -91,6 +94,14 @@ export function legacyPixelEnabled() { return false }
 export function retinueEnabled() { return false }
 
 export function accentColor(): string { return accent }
+
+/** Haze's picture accent; '' gives the owner's own accent back. Not stored: the chat background store sets it at start. */
+export function setAccentOverride(hex: string) {
+  const next = normalizeAccent(hex)
+  if (next === accentOverride) return
+  accentOverride = next
+  if (typeof document !== 'undefined') applyAccent(document.documentElement)
+}
 
 export function setAccentColor(hex: string) {
   const next = normalizeAccent(hex)

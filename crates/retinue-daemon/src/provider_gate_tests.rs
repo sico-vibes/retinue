@@ -148,3 +148,46 @@ async fn a_switched_off_provider_is_absent_from_choices_and_listed_with_its_stat
     assert_eq!(grok["enabled"], true);
     assert!(dispatch(&st, "agent.create", json!({"name":"Grok bot","runtimeId":"rt_grok_1"})).await.is_ok(), "the refusal follows the switch");
 }
+
+// A provider the owner turned off is not a failure (owner report, 15 November
+// 2026): the one-time probe of a provider with no saved row may fail, but the
+// row that is stored and published carries no probe failure, so `runtime.list`,
+// Settings and the Doctor agree that the agent is simply off.
+#[tokio::test]
+async fn a_turned_off_provider_keeps_no_probe_failure_on_its_row() {
+    let (st, _events) = state();
+    st.db.set_setting("runtimes.disabled", &json!(["cursor"])).unwrap();
+    let failed: retinue_runtime::DiscoveredRuntime = serde_json::from_value(json!({
+        "id": "rt_cursor_1", "hostId": "host_windows_local", "provider": "cursor", "displayName": "Cursor CLI",
+        "protocolFamily": "acp", "executablePath": "C:/tools/cursor.exe", "launchArgs": ["--acp"],
+        "version": "1.2.3", "authState": "unknown", "gatewayAuthStates": {},
+        "status": "error", "capabilities": {},
+        "probeError": "The CLI does not advertise the required protocol.", "probeStep": "Protocol check"
+    })).unwrap();
+    let values = publish_runtime_discovery(&st, vec![failed]).await.unwrap();
+    let row = values.iter().find(|row| row["id"] == "rt_cursor_1").expect("the off row is published");
+    assert_eq!(row["status"], "disabled");
+    assert_eq!(row["enabled"], false);
+    assert!(row.get("probeError").is_none(), "{row}");
+    assert!(row.get("probeStep").is_none(), "{row}");
+    // What the probe found is kept, so Settings can still say it is installed.
+    assert_eq!(row["version"], "1.2.3");
+    assert_eq!(row["executablePath"], "C:/tools/cursor.exe");
+    // The stored row and `runtime.list` read the same way.
+    let stored = st.db.runtimes().unwrap().into_iter().find(|row| row["id"] == "rt_cursor_1").unwrap();
+    assert!(stored.get("probeError").is_none() && stored.get("probeStep").is_none(), "{stored}");
+    let listed = dispatch(&st, "runtime.list", json!({})).await.unwrap();
+    let listed = listed["runtimes"].as_array().unwrap().iter().find(|row| row["id"] == "rt_cursor_1").cloned().unwrap();
+    assert_eq!(listed["status"], "disabled");
+    assert!(listed.get("probeError").is_none(), "{listed}");
+    // A row an older build saved with the failure on it is cleaned the next time
+    // it is stamped, and turning the provider back on leaves it for the next scan.
+    let mut stale = stored.clone();
+    stale["probeError"] = json!("The CLI does not advertise the required protocol.");
+    stale["probeStep"] = json!("Protocol check");
+    stamp_runtime_state(&mut stale, &["cursor".to_owned()]);
+    assert!(stale.get("probeError").is_none() && stale.get("probeStep").is_none(), "{stale}");
+    stamp_runtime_state(&mut stale, &[]);
+    assert_eq!(stale["status"], "offline");
+    assert!(stale.get("probeError").is_none(), "{stale}");
+}

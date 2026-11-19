@@ -1354,7 +1354,9 @@ describe('blob roster and editor', () => {
     expect(view.host.querySelector('.activity-summary')?.textContent).toContain('Read notes.md')
     await act(async () => emit({ type: 'message.delta', sequence: 200, payload: { sessionId: side.id, messageId: 'reply', role: 'assistant', delta: 'Found the cause' } } as DaemonEvent))
     expect(view.host.querySelector('.side-target')?.textContent).toContain('Found the cause')
-    expect(view.host.querySelector('.working-indicator')?.textContent).toContain('Codex is working')
+    // Owner, 15 November 2026: while a tool runs, the working line names the step, with that step's icon.
+    expect(view.host.querySelector('.working-indicator')?.textContent).toContain('Reading notes.md')
+    expect(view.host.querySelector('.working-indicator .working-step')?.getAttribute('data-kind')).toBe('read')
   })
 
   it('answers an inline question with the chosen option', async () => {

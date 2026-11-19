@@ -16,6 +16,7 @@ import { SafeMarkdown } from './SafeMarkdown'
 import { shortTime } from './rosterSelectors'
 import { sessionIsBusy } from './teamSelectors'
 import './machines.css'
+import { LoadingBlock } from './Skeleton'
 
 const messageOf = (reason: unknown, fallback: string) => reason instanceof Error && reason.message ? reason.message : typeof reason === 'string' && reason ? reason : fallback
 const POLL_MS = 3000
@@ -308,7 +309,7 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
             ? <button type="button" className="secondary-button small machine-view-new" disabled={starting} onClick={() => void startConversation()}><Plus size={13} aria-hidden="true" />{starting ? 'Starting…' : 'New conversation'}</button>
             : <span />}
           <ul className="machine-view-list" aria-label={`${bot.name}'s conversations`}>
-            {conversations === null && <li><small>Loading…</small></li>}
+            {conversations === null && <li><LoadingBlock label="Loading…" lines={3} /></li>}
             {conversations?.length === 0 && <li><small>No conversations yet.</small></li>}
             {conversations?.map((item) => <li key={item.id} className={item.offline ? 'offline' : undefined}><button type="button" aria-current={item.id === selected ? 'true' : undefined} title={item.offline ? `Last known, while ${machine.name} can't be reached` : undefined} onClick={() => setSelected(item.id)}>
               <strong>{item.title || 'Conversation'}</strong>
