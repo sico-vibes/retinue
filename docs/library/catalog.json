@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "79d9ae17",
+  "revision": "695fbb6d",
   "documentCount": 443,
   "assets": [
     {
@@ -7868,7 +7868,7 @@
       "title": "Code signing (SignPath Foundation)",
       "section": "Operations",
       "status": "Operations",
-      "sha256": "eab485e8caa83e05d6ebde68cefed56553a9a580072b2ddcec251b174fa7fc00",
+      "sha256": "c54151b56305f40ff8bab6745eb7c6557b7ef53735f457f7b18967e6e6436876",
       "headings": [
         {
           "id": "why",
@@ -7903,7 +7903,7 @@
       "title": "Distribution: winget and the Microsoft Store",
       "section": "Operations",
       "status": "Operations",
-      "sha256": "fe6ba226c84a66e8b19c3e9571b1db6884e63db6ae84e012857fc65e79c0eb50",
+      "sha256": "41d01c3aa885536b28c050dd1ce874cc32664987d6a6b218b95165d9a7a4684a",
       "headings": [
         {
           "id": "why-windows-flags-an-unsigned-release",

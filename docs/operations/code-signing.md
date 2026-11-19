@@ -2,7 +2,7 @@
 
 > **What this is:** How Retinue's Windows installer gets an Authenticode signature for free through SignPath Foundation, what the owner sets up once, and how a signed release is made.
 > **Status:** current. The workflow and policy are in place; the SignPath application and setup are the owner's to do.
-> **Last updated:** 2026-11-09
+> **Last updated:** 2026-11-19
 
 The other free channels, winget and the Microsoft Store, are in [distribution.md](distribution.md).
 
@@ -57,7 +57,7 @@ The certificate is issued to **SignPath Foundation**, so Windows shows that name
 
 ## Open items
 
-- `retinued.exe` and `retinue-hook.exe` have no Windows version resource. So the `app-binaries` configuration restricts the product name on `Retinue.exe` only. SignPath asks for product name and version restrictions on every signed file. If they require them, add a version resource to both binaries in a short-path build: the resource compiler fails on the main checkout's path.
+- **Fixed 19 November 2026: both sidecars carry a version resource.** `crates/retinue-daemon/build.rs` and `tools/retinue-hook/build.rs` write one with `embed-resource` (already in the tree through `tauri-winres`, so no new crate): company, product, description, file and product version, copyright and original filename. Checked on the built files — `0.2.0-beta.5`, numeric `0.2.0.5` — and on the staged sidecars in `apps/desktop/src-tauri/binaries/`. The `app-binaries` configuration now restricts `product-name="Retinue"` on all three executables. What is still open is the signature, not the metadata: both are `NotSigned` until SignPath is set up.
 - The NSIS uninstaller inside the installer is not signed on its own.
 - The first signed run on GitHub is unverified. The unsigned path has not run on GitHub yet either.
 - The coding agents' logos (`apps/desktop/src/assets/providers/`) are trademarks of their owners. They are not open-source components. If SignPath objects to them, replace them with plain initials.

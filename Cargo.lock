@@ -4652,6 +4652,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
+ "embed-resource",
  "futures-util",
  "hkdf",
  "hmac",
@@ -4733,6 +4734,7 @@ dependencies = [
 name = "retinue-hook"
 version = "0.2.0-beta.5"
 dependencies = [
+ "embed-resource",
  "serde_json",
  "tokio",
 ]

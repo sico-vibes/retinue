@@ -10,3 +10,7 @@ path = "src/main.rs"
 [dependencies]
 serde_json.workspace = true
 tokio.workspace = true
+
+[build-dependencies]
+# Already in the tree through tauri-winres; it writes the version resource.
+embed-resource = "3"

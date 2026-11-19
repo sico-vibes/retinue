@@ -2,7 +2,7 @@
 
 > **What this is:** The two free channels beside the direct download: the winget package manager and the Microsoft Store. It covers what is in the repository, what the owner does once, and what to do for each release.
 > **Status:** current. The tooling is ready; nothing has been submitted yet.
-> **Last updated:** 2026-11-09
+> **Last updated:** 2026-11-19
 
 Code signing of the direct download is covered in [code-signing.md](code-signing.md).
 
@@ -25,7 +25,7 @@ Three different Windows mechanisms, all reported as "SmartScreen". They need dif
 | Defender quarantines or names the installer | Microsoft Defender antivirus | A machine-learning heuristic, not a hash of known malware. The `!ml` suffix says so; `beta.51`'s installer was named `Program:Win32/Contebrew.A!ml` on 10 November 2026 | Submit the file as a false positive, fix anything the report names, and sign the release |
 
 - **False positive:** submit the installer at <https://www.microsoft.com/en-us/wdsi/filesubmission> (choose **Software developer**), with the product name, version, the GitHub release URL and the published SHA-256. A developer account at <https://developer.microsoft.com/en-us/windows/> gives a tracked submission.
-- **Metadata matters to the heuristics.** A file with no publisher, product or version resource is treated as unknown. `bundle.publisher`, `bundle.copyright` and `bundle.homepage` now fill those in for the app and the installer. `retinued.exe` and `retinue-hook.exe` still have none: it is the open item in [code-signing.md](code-signing.md).
+- **Metadata matters to the heuristics.** A file with no publisher, product or version resource is treated as unknown. `bundle.publisher`, `bundle.copyright` and `bundle.homepage` fill those in for the app and the installer, and since 19 November 2026 `crates/retinue-daemon/build.rs` and `tools/retinue-hook/build.rs` write a version resource into `retinued.exe` and `retinue-hook.exe`, so all three executables carry a publisher, a product and a version. A resource is not a signature: it does not stop the warning.
 
 ## winget
 
