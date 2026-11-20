@@ -26,6 +26,24 @@ const MAX_ENTRIES: usize = 500;
 /// The sentence every refusal outside the base folder gives, so a device learns nothing about the
 /// host's disk beyond "no".
 const OUTSIDE: &str = "That folder is outside the folder this computer shares with other machines.";
+/// The switch is off. On a host with a window this names the Settings page; on a headless host
+/// (19 November 2026) that page does not exist, so it names the console command instead.
+const OFF: &str = "Projects from other machines are off on this computer. Turn them on in Settings › Machines.";
+const OFF_HEADLESS: &str = "Projects from other machines are off on this computer. Turn them on at that computer with `retinued settings set projects.devices.enabled true`.";
+/// The switch is on but no folder is chosen yet. Same two shapes.
+const NO_FOLDER: &str = "Choose the folder other machines may use for new projects in Settings › Machines first.";
+const NO_FOLDER_HEADLESS: &str = "Choose the folder other machines may use for new projects first: `retinued settings set projects.devices.folder <folder>`.";
+
+/// The sentence for "the switch is off". A pure function of the flag, so both shapes are tested on
+/// whichever platform runs the tests; the daemon records the flag once, at startup.
+pub(crate) fn off_sentence(headless: bool) -> &'static str {
+    if headless { OFF_HEADLESS } else { OFF }
+}
+
+/// The sentence for "no folder yet", in the same two shapes.
+pub(crate) fn folder_sentence(headless: bool) -> &'static str {
+    if headless { NO_FOLDER_HEADLESS } else { NO_FOLDER }
+}
 
 fn invalid(message: &str) -> DispatchError {
     derr("invalid_argument", message, StatusCode::BAD_REQUEST)
@@ -44,13 +62,15 @@ pub fn is_device_call(p: &Value) -> bool {
 /// The base folder as the disk knows it, or the sentence a device gets. This is the switch, the
 /// setting and the folder's own existence in one place, so every method refuses identically.
 pub fn base_folder(st: &AppState) -> Result<PathBuf, DispatchError> {
+    // A host with no window is told the console command, not a Settings page it does not have.
+    let headless = st.console.headless_host();
     let settings = st.db.settings().unwrap_or(Value::Null);
     if settings.get(SETTING_ENABLED) != Some(&Value::Bool(true)) {
-        return Err(denied("Projects from other machines are off on this computer. Turn them on in Settings › Machines."));
+        return Err(denied(off_sentence(headless)));
     }
     let configured = settings.get(SETTING_FOLDER).and_then(Value::as_str).map(str::trim).unwrap_or("");
     if configured.is_empty() {
-        return Err(denied("Choose the folder other machines may use for new projects in Settings › Machines first."));
+        return Err(denied(folder_sentence(headless)));
     }
     let missing = || denied("The folder other machines may use for new projects is missing on this computer.");
     let base = std::fs::canonicalize(configured).map_err(|_| missing())?;

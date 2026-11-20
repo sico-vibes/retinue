@@ -28,25 +28,48 @@
 //! tier rules, the audit lines, the events and the sentences are identical. This
 //! module adds no policy of its own.
 //!
+//! **Setting the host up (19 November 2026).** Pairing alone left the host
+//! incomplete: "projects from other machines" is a Settings switch and a folder,
+//! and no bot can be created without a window. The console answers both with an
+//! explicit allowlist — `projects.devices.enabled` and `projects.devices.folder` —
+//! and with `console.bot.create`, which goes through `dispatch("agent.create")`
+//! exactly as the desktop does, except that a bot made here always asks before it
+//! acts. `console.agents` and `console.bot.list` are the reads beside them. The
+//! allowlist is the whole reach: a key it does not name is refused, so the console
+//! can never write a preference, a credential or a secret.
+//!
 //! **Never logged.** The pairing code, the console token and the device token are
 //! printed to the terminal and nowhere else: not the log, not the database, not
 //! an event, not `console.json` (which holds only the console token).
 
 use crate::paths;
+use crate::project_share;
 use crate::{derr, remote, AppState, DispatchError};
 use axum::http::StatusCode;
 use retinue_protocol::PROTOCOL_VERSION;
 use serde_json::{json, Value};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex as StdMutex;
 use std::time::Duration;
 
 /// The file a headless daemon writes so the console client can reach it.
 const CONSOLE_FILE: &str = "console.json";
 
+/// What `console.settings.get` and `.set` reach, and nothing else. Two keys, both
+/// this machine's own: what another machine may do here, and the one folder it may
+/// do it in. A key outside this list is refused rather than ignored, so the console
+/// cannot read a secret and cannot write the desktop's preferences behind its back.
+const SETTINGS: [&str; 2] = [project_share::SETTING_ENABLED, project_share::SETTING_FOLDER];
+
 #[derive(Default)]
 pub struct Console {
     inner: StdMutex<Option<Live>>,
+    /// Whether a desktop shell started this daemon, recorded at startup
+    /// (`paths::headless()`). It cannot change while the daemon runs, and a
+    /// sentence that asked the environment on every call would read the test
+    /// process as a host with no window.
+    headless: AtomicBool,
 }
 
 struct Live {
@@ -71,10 +94,18 @@ impl Console {
         self.inner.lock().unwrap().is_some()
     }
 
+    /// Whether this daemon was started without a desktop shell, as the systemd unit
+    /// starts it. A host with no window has no Settings page, so a refusal that
+    /// would send the owner there names the console command instead.
+    pub fn headless_host(&self) -> bool {
+        self.headless.load(Ordering::Relaxed)
+    }
+
     /// The tests' own headless start: the token without a file, so no test writes
     /// into the owner's data folder.
     #[cfg(test)]
     pub fn start_in_memory(&self, token: &str) {
+        self.headless.store(true, Ordering::Relaxed);
         *self.inner.lock().unwrap() = Some(Live { token: token.to_string(), file: PathBuf::from("no-file") });
     }
 }
@@ -82,7 +113,9 @@ impl Console {
 /// Called once at startup, after the listener has an address. A desktop-launched
 /// daemon does nothing here.
 pub fn startup(st: &AppState) {
-    if !paths::headless() {
+    let headless = paths::headless();
+    st.console.headless.store(headless, Ordering::Relaxed);
+    if !headless {
         return;
     }
     let Some(address) = st.team.address.lock().ok().and_then(|address| address.clone()) else { return };
@@ -178,8 +211,252 @@ pub async fn route(st: &AppState, method: &str, p: &Value) -> Result<Value, Disp
             }
             remote::rpc(st, "remote.pair.confirm", &params).await
         }
+        // 19 November 2026: what a window was needed for. The settings are the two
+        // keys in `SETTINGS` and no others; a bot is created through the desktop's
+        // own `agent.create`, so the validation, the events and the hire path are
+        // the same code.
+        "console.settings.get" => settings_get(st, p),
+        "console.settings.set" => settings_set(st, p).await,
+        "console.agents" => Ok(agents(st).await),
+        "console.bot.list" => bot_list(st).await,
+        "console.bot.create" => bot_create(st, p).await,
         _ => Err(derr("unsupported", "method is not supported", StatusCode::NOT_FOUND)),
     }
+}
+
+/// The refusal for a key the console may not touch. It names the allowlist, so the
+/// owner learns what the terminal can do without reading the code.
+fn not_allowlisted() -> DispatchError {
+    derr(
+        "invalid_argument",
+        &format!(
+            "The console changes only {} — everything else belongs to the desktop's Settings page.",
+            SETTINGS.join(" and ")
+        ),
+        StatusCode::BAD_REQUEST,
+    )
+}
+
+/// `console.settings.get`: the allowlisted settings, and only those. Reading a key
+/// outside the list is refused as well, because otherwise the read would be a way
+/// to see whatever this host holds.
+fn settings_get(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+    let settings = st.db.settings().map_err(|error| derr("internal", &error.to_string(), StatusCode::INTERNAL_SERVER_ERROR))?;
+    let mut shown = serde_json::Map::new();
+    match p["key"].as_str().map(str::trim).filter(|key| !key.is_empty()) {
+        Some(key) => {
+            if !SETTINGS.contains(&key) {
+                return Err(not_allowlisted());
+            }
+            shown.insert(key.to_string(), settings.get(key).cloned().unwrap_or(Value::Null));
+        }
+        None => {
+            for key in SETTINGS {
+                shown.insert(key.to_string(), settings.get(key).cloned().unwrap_or(Value::Null));
+            }
+        }
+    }
+    Ok(json!({"settings": Value::Object(shown), "allowlist": SETTINGS}))
+}
+
+/// `console.settings.set`: one allowlisted key, through the same `settings.set` the
+/// desktop calls, so the value is validated once, the events are the desktop's and
+/// nothing is written twice. The folder is checked on the disk here, because a
+/// terminal has no picker: it must exist and be a folder, and the value stored is
+/// its canonical path. One content-free activity line records the change.
+async fn settings_set(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+    let key = p["key"].as_str().map(str::trim).unwrap_or("");
+    if !SETTINGS.contains(&key) {
+        return Err(not_allowlisted());
+    }
+    let mut value = p.get("value").cloned().unwrap_or(Value::Null);
+    if key == project_share::SETTING_FOLDER {
+        if let Some(raw) = value.as_str().map(str::trim).filter(|path| !path.is_empty()) {
+            let path = std::fs::canonicalize(raw).map_err(|_| derr("invalid_argument", "That folder is not on this computer.", StatusCode::BAD_REQUEST))?;
+            if !path.is_dir() {
+                return Err(derr("invalid_argument", "That folder is not on this computer.", StatusCode::BAD_REQUEST));
+            }
+            value = json!(project_share::display(&path));
+        }
+    }
+    crate::dispatch(st, "settings.set", json!({"key": key, "value": value.clone()})).await?;
+    // Content-free: no value and no path, because the activity list is the host's
+    // own record and never carries one.
+    let line = match (key, value.as_bool()) {
+        (project_share::SETTING_ENABLED, Some(true)) => "Projects from other machines were turned on from the console.",
+        (project_share::SETTING_ENABLED, Some(false)) => "Projects from other machines were turned off from the console.",
+        _ if key == project_share::SETTING_FOLDER => "The folder for projects from other machines was set from the console.",
+        _ => "A setting was changed from the console.",
+    };
+    remote::audit(st, None, "console", line).await;
+    Ok(json!({"saved": true, "key": key, "value": value}))
+}
+
+/// `console.agents`: what the runtime discovery found on this host, whether each is
+/// signed in, and how to sign one in. The rows are `provider_gate::list`'s, which
+/// the desktop's Agents page reads: no executable path, no launch arguments, and
+/// nothing read out of a sign-in.
+async fn agents(st: &AppState) -> Value {
+    let listed = crate::provider_gate::list(st).await;
+    let rows = listed["providers"].as_array().cloned().unwrap_or_default();
+    let agents = rows
+        .into_iter()
+        .map(|row| {
+            json!({
+                "provider": row["provider"],
+                "name": row["displayName"],
+                "installed": row["found"],
+                "version": row["version"],
+                "status": row["status"],
+                "enabled": row["enabled"],
+                "authState": row["authState"],
+                "signedIn": row["authState"].as_str() == Some("authenticated"),
+                "signInCommand": sign_in_for(row["provider"].as_str().unwrap_or(""), &row["signInCommand"]),
+                "runtimeIds": row["runtimeIds"],
+            })
+        })
+        .collect::<Vec<_>>();
+    json!({"agents": agents})
+}
+
+/// How to sign in from this host's terminal. The discovery's own `signInCommand`
+/// covers the ACP providers and Pi; Claude Code, Codex and OpenCode are not table
+/// rows there, so their commands are named here, in the same words as
+/// `apps/desktop/src/ui/providerGuides.ts` and `sign_in_hint` (`main.rs`). Without
+/// them a terminal would report "not signed in" and no next step.
+fn sign_in_for(provider: &str, reported: &Value) -> Value {
+    match reported.as_str() {
+        Some(command) => json!(command),
+        None => match provider {
+            "claude" => json!("claude"),
+            "codex" => json!("codex login"),
+            "opencode" => json!("opencode auth login"),
+            _ => Value::Null,
+        },
+    }
+}
+
+/// What one bot's row looks like in a console reply: who it is and what it runs on,
+/// never its instructions, its environment or its conversations.
+fn bot_summary(agent: &Value) -> Value {
+    json!({
+        "id": agent["id"],
+        "name": agent["name"],
+        "runtimeId": agent["runtimeId"],
+        "model": agent["model"],
+        "thinking": agent["thinking"],
+        "approvalMode": agent["approvalMode"],
+        "projectId": agent["projectId"],
+    })
+}
+
+/// `console.bot.list`: every active bot, with the coding agent it runs on.
+async fn bot_list(st: &AppState) -> Result<Value, DispatchError> {
+    let listed = crate::dispatch(st, "agent.list", json!({})).await?;
+    let runtimes = st.runtimes.read().await.clone();
+    let bots = listed["agents"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|agent| {
+            let provider = agent["runtimeId"]
+                .as_str()
+                .and_then(|id| runtimes.iter().find(|row| row["id"] == id))
+                .and_then(|row| row["provider"].as_str())
+                .unwrap_or("");
+            let mut summary = bot_summary(&agent);
+            summary["provider"] = json!(provider);
+            summary
+        })
+        .collect::<Vec<_>>();
+    Ok(json!({"bots": bots}))
+}
+
+/// The runtime an `--agent` names: an exact runtime id, else a running copy of that
+/// provider, else any installed copy of it — the same choice the hire dialog offers
+/// first.
+async fn runtime_for(st: &AppState, agent: &str) -> Result<Value, DispatchError> {
+    let runtimes = st.runtimes.read().await.clone();
+    runtimes
+        .iter()
+        .find(|row| row["id"] == agent)
+        .or_else(|| runtimes.iter().find(|row| row["provider"] == agent && row["status"] == "online"))
+        .or_else(|| runtimes.iter().find(|row| row["provider"] == agent))
+        .cloned()
+        .ok_or_else(|| {
+            derr(
+                "invalid_argument",
+                "That coding agent is not installed on this computer. `retinued agents` lists the ones that are.",
+                StatusCode::BAD_REQUEST,
+            )
+        })
+}
+
+/// The project a folder belongs to. A folder with no row yet is registered through
+/// `project.create`, the desktop's own New project path, so the row, its repository
+/// identity and its event are the same; then the bot is placed there by
+/// `agent.create`'s own team placement.
+async fn project_for(st: &AppState, folder: &str) -> Result<String, DispatchError> {
+    let path = std::fs::canonicalize(folder.trim()).map_err(|_| derr("invalid_argument", "That project folder is not on this computer.", StatusCode::BAD_REQUEST))?;
+    if !path.is_dir() {
+        return Err(derr("invalid_argument", "That project folder is not on this computer.", StatusCode::BAD_REQUEST));
+    }
+    let listed = crate::team::team_rpc(st, "project.list", &json!({})).await?;
+    let existing = listed["projects"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|project| project["path"].as_str().is_some_and(|stored| std::fs::canonicalize(stored.trim()).is_ok_and(|other| other == path)))
+        .and_then(|project| project["id"].as_str().map(str::to_owned));
+    if let Some(id) = existing {
+        return Ok(id);
+    }
+    let name = path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+    let created = crate::team::team_rpc(st, "project.create", &json!({"name": name, "path": project_share::display(&path)})).await?;
+    created["project"]["id"]
+        .as_str()
+        .map(str::to_owned)
+        .ok_or_else(|| derr("internal", "The project could not be added.", StatusCode::INTERNAL_SERVER_ERROR))
+}
+
+/// `console.bot.create`: a bot, created through `dispatch("agent.create")`, so the
+/// name, the runtime, the model and the effort are validated exactly as the
+/// desktop's form validates them, and the history, the events and the team
+/// placement are the same. Two deliberate differences, both about a terminal: the
+/// coding agent must be one the discovery reports installed here, and the bot always
+/// asks before it acts — the window's new-bot default is Full access, and a card
+/// that says so cannot be shown where there is no window.
+async fn bot_create(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+    let name = p["name"].as_str().map(str::trim).unwrap_or("");
+    if name.is_empty() {
+        return Err(derr("invalid_argument", "A bot needs a name: retinued bot add --name <name> --agent <codex|opencode|claude>.", StatusCode::BAD_REQUEST));
+    }
+    let asked = p["agent"].as_str().map(str::trim).unwrap_or("");
+    if asked.is_empty() {
+        return Err(derr("invalid_argument", "Name the coding agent it runs on: retinued bot add --name <name> --agent <codex|opencode|claude>.", StatusCode::BAD_REQUEST));
+    }
+    let runtime = runtime_for(st, asked).await?;
+    let mut fields = json!({
+        "name": name,
+        "runtimeId": runtime["id"],
+        "approvalMode": "ask",
+    });
+    if let Some(model) = p["model"].as_str().map(str::trim).filter(|value| !value.is_empty()) {
+        fields["model"] = json!(model);
+    }
+    if let Some(effort) = p["effort"].as_str().map(str::trim).filter(|value| !value.is_empty()) {
+        fields["thinking"] = json!(effort);
+    }
+    if let Some(folder) = p["project"].as_str().map(str::trim).filter(|value| !value.is_empty()) {
+        fields["projectId"] = json!(project_for(st, folder).await?);
+    }
+    // Boxed: `agent.create` reaches the whole hire path, and an inline future that
+    // size overflows a worker thread's stack in a debug build.
+    let reply = Box::pin(crate::dispatch(st, "agent.create", fields.clone())).await?;
+    let mut summary = bot_summary(&reply["agent"]);
+    summary["provider"] = runtime["provider"].clone();
+    Ok(json!({"agent": summary}))
 }
 
 fn status(st: &AppState) -> Value {
@@ -202,8 +479,9 @@ fn status(st: &AppState) -> Value {
 // ---------------------------------------------------------------------------
 // The console client: `retinued <command>`
 
-/// What `retinued pair …` and `retinued remote …` print and return. Fixed text
-/// only: nothing here reads a secret out of the file.
+/// What `retinued settings …`, `retinued agents`, `retinued bot …`, `retinued pair …`
+/// and `retinued remote …` print and return. Fixed text only: nothing here reads a
+/// secret out of the file.
 pub async fn run_cli(args: &[String]) -> i32 {
     let command = args.first().map(String::as_str).unwrap_or("");
     let rest = &args[1..];
@@ -211,6 +489,9 @@ pub async fn run_cli(args: &[String]) -> i32 {
         "status" => status_command().await,
         "pair" => pair_command(rest).await,
         "remote" => remote_command(rest).await,
+        "settings" => settings_command(rest).await,
+        "agents" => agents_command().await,
+        "bot" => bot_command(rest).await,
         other => {
             eprintln!("Unknown command: {other}");
             usage();
@@ -221,7 +502,7 @@ pub async fn run_cli(args: &[String]) -> i32 {
 
 fn usage() {
     eprintln!(
-        "usage:\n  retinued pair                     print a code and wait for a device\n  retinued pair list                show the waiting request\n  retinued pair confirm --tier T    approve it (viewer, chat or operator)\n  retinued pair deny                refuse it\n  retinued pair cancel              throw the open code away\n  retinued remote on [--method M]   turn the gateway on (tailscale or native)\n  retinued remote off               turn it off\n  retinued status                   show this host's version, folders and Remote state"
+        "usage:\n  retinued status                   show this host's version, folders and Remote state\n  retinued remote on [--method M]   turn the gateway on (tailscale or native)\n  retinued remote off               turn it off\n  retinued pair                     print a code and wait for a device\n  retinued pair list                show the waiting request\n  retinued pair confirm --tier T    approve it (viewer, chat or operator)\n  retinued pair deny                refuse it\n  retinued pair cancel              throw the open code away\n  retinued settings get [key]       show projects.devices.enabled and projects.devices.folder\n  retinued settings set <key> <value>   change one of those two\n  retinued agents                   what coding agents are installed and signed in\n  retinued bot add --name N --agent A [--model M] [--effort E] [--project F]\n  retinued bot list                 show this host's bots"
     );
 }
 
@@ -338,6 +619,190 @@ async fn remote_command(rest: &[String]) -> i32 {
                 eprintln!("Start it with: retinued remote on --method tailscale");
             }
             1
+        }
+    }
+}
+
+/// `retinued settings get [key]` and `retinued settings set <key> <value>`. Everything
+/// after the key is the value, so a folder with a space works quoted or not;
+/// `true`/`false` become JSON booleans and everything else is sent as text, which the
+/// daemon's own validation answers.
+async fn settings_command(rest: &[String]) -> i32 {
+    let action = rest.first().map(String::as_str).unwrap_or("");
+    let (method, params) = match action {
+        "get" => {
+            let key = rest.get(1).map(String::as_str).filter(|key| !key.is_empty());
+            let params = match key {
+                Some(key) => json!({"key": key}),
+                None => json!({}),
+            };
+            ("console.settings.get", params)
+        }
+        "set" => {
+            let key = rest.get(1).map(String::as_str).unwrap_or("");
+            if key.is_empty() || rest.len() < 3 {
+                eprintln!("Usage: retinued settings set <key> <value>");
+                return 2;
+            }
+            // Everything after the key is the value, so an unquoted folder with a
+            // space is not silently cut to its first word.
+            let text = rest[2..].join(" ");
+            let value = match text.to_ascii_lowercase().as_str() {
+                "true" => json!(true),
+                "false" => json!(false),
+                _ => json!(text),
+            };
+            ("console.settings.set", json!({"key": key, "value": value}))
+        }
+        other => {
+            eprintln!("Unknown settings command: {other}");
+            usage();
+            return 2;
+        }
+    };
+    let Some((address, token)) = endpoint() else { return 3 };
+    match call(&address, &token, method, params).await {
+        Ok(reply) if method == "console.settings.get" => {
+            for (key, value) in reply["settings"].as_object().into_iter().flatten() {
+                println!("{:<28} {}", key, setting_word(value));
+            }
+            0
+        }
+        Ok(reply) => {
+            println!("{} is now {}.", reply["key"].as_str().unwrap_or("The setting"), setting_word(&reply["value"]));
+            0
+        }
+        Err(message) => {
+            eprintln!("{message}");
+            1
+        }
+    }
+}
+
+/// One setting value for the terminal. `(not set)` rather than a bare blank, so a
+/// missing folder is not mistaken for an empty one.
+fn setting_word(value: &Value) -> String {
+    match value {
+        Value::Bool(true) => "true".to_string(),
+        Value::Bool(false) => "false".to_string(),
+        Value::Null => "(not set)".to_string(),
+        Value::String(text) if text.is_empty() => "(not set)".to_string(),
+        Value::String(text) => text.clone(),
+        other => other.to_string(),
+    }
+}
+
+/// `retinued agents`: what the discovery found, and whether each is signed in. Never
+/// a credential: the state word and the CLI's own sign-in command, both of which the
+/// desktop's Agents page already shows.
+async fn agents_command() -> i32 {
+    let Some((address, token)) = endpoint() else { return 3 };
+    let reply = match call(&address, &token, "console.agents", json!({})).await {
+        Ok(reply) => reply,
+        Err(message) => {
+            eprintln!("{message}");
+            return 1;
+        }
+    };
+    let rows = reply["agents"].as_array().cloned().unwrap_or_default();
+    let installed = rows.iter().filter(|row| row["installed"] == true).collect::<Vec<_>>();
+    if installed.is_empty() {
+        println!("No coding agent is installed for this host's user. Install one, then restart retinued.");
+        return 0;
+    }
+    for row in installed {
+        println!("{:<12} {:<16} {}", row["provider"].as_str().unwrap_or("-"), row["version"].as_str().unwrap_or("-"), sign_in_word(&row["authState"]));
+        if row["signedIn"] != true {
+            if let Some(command) = row["signInCommand"].as_str() {
+                println!("             sign in with: {command}");
+            }
+        }
+    }
+    0
+}
+
+/// The sign-in state as the daemon recorded it, in words.
+fn sign_in_word(auth_state: &Value) -> &'static str {
+    match auth_state.as_str() {
+        Some("authenticated") => "signed in",
+        Some("unauthenticated") => "not signed in",
+        Some("sign_in_failed") => "sign-in failed",
+        _ => "sign-in not known yet",
+    }
+}
+
+/// `retinued bot add …` and `retinued bot list`.
+async fn bot_command(rest: &[String]) -> i32 {
+    let action = rest.first().map(String::as_str).unwrap_or("");
+    let flag = |name: &str| rest.iter().position(|arg| arg == name).and_then(|at| rest.get(at + 1)).cloned();
+    let Some((address, token)) = endpoint() else { return 3 };
+    match action {
+        "list" => match call(&address, &token, "console.bot.list", json!({})).await {
+            Ok(reply) => {
+                let bots = reply["bots"].as_array().cloned().unwrap_or_default();
+                if bots.is_empty() {
+                    println!("No bots on this host yet. Add one with: retinued bot add --name <name> --agent <codex|opencode|claude>");
+                    return 0;
+                }
+                println!("{:<24} {:<12} {:<28} Id", "Name", "Agent", "Model");
+                for bot in bots {
+                    let agent = bot["provider"].as_str().filter(|name| !name.is_empty()).or_else(|| bot["runtimeId"].as_str()).unwrap_or("-");
+                    println!(
+                        "{:<24} {:<12} {:<28} {}",
+                        bot["name"].as_str().unwrap_or("-"),
+                        agent,
+                        bot["model"].as_str().unwrap_or("-"),
+                        bot["id"].as_str().unwrap_or("-")
+                    );
+                }
+                0
+            }
+            Err(message) => {
+                eprintln!("{message}");
+                1
+            }
+        },
+        "add" => {
+            let (Some(name), Some(agent)) = (flag("--name"), flag("--agent")) else {
+                eprintln!("Usage: retinued bot add --name <name> --agent <codex|opencode|claude> [--model <id>] [--effort <level>] [--project <folder>]");
+                return 2;
+            };
+            let mut params = json!({"name": name, "agent": agent});
+            for (flag_name, key) in [("--model", "model"), ("--effort", "effort"), ("--project", "project")] {
+                if let Some(value) = flag(flag_name) {
+                    params[key] = json!(value);
+                }
+            }
+            match call(&address, &token, "console.bot.create", params).await {
+                Ok(reply) => {
+                    let bot = &reply["agent"];
+                    let on = bot["provider"].as_str().filter(|name| !name.is_empty()).or_else(|| bot["runtimeId"].as_str()).unwrap_or("a coding agent");
+                    let model = match bot["model"].as_str() {
+                        Some(model) => format!(", model {model}"),
+                        None => String::new(),
+                    };
+                    let project = match bot["projectId"].as_str() {
+                        Some(_) => ", in its project",
+                        None => "",
+                    };
+                    println!(
+                        "Added {} on {}{model}{project}, id {}. It asks before it acts.",
+                        bot["name"].as_str().unwrap_or(&name),
+                        on,
+                        bot["id"].as_str().unwrap_or("-")
+                    );
+                    0
+                }
+                Err(message) => {
+                    eprintln!("{message}");
+                    1
+                }
+            }
+        }
+        other => {
+            eprintln!("Unknown bot command: {other}");
+            usage();
+            2
         }
     }
 }

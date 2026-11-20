@@ -6642,8 +6642,10 @@ async fn daemon_main() {
     // 17 November 2026 (multi-device piece 8): the console of a headless host.
     // `retinued pair …`, `retinued remote on|off`, `retinued status` talk to the
     // daemon already running here, over its loopback API, with the console token
-    // a headless start writes (`console.rs`).
-    if matches!(std::env::args().nth(1).as_deref(), Some("pair") | Some("remote") | Some("status")) {
+    // a headless start writes (`console.rs`). 19 November 2026: `settings`,
+    // `agents` and `bot` are the same client, for the host a window used to set
+    // up.
+    if matches!(std::env::args().nth(1).as_deref(), Some("pair") | Some("remote") | Some("status") | Some("settings") | Some("agents") | Some("bot")) {
         let args: Vec<String> = std::env::args().skip(1).collect();
         std::process::exit(console::run_cli(&args).await);
     }
