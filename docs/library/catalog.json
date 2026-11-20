@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "59dd83d5",
-  "documentCount": 445,
+  "revision": "f8dcad39",
+  "documentCount": 446,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -2896,7 +2896,7 @@
       "title": "Invariants",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "ed18a444754df2a57c84c7ead4dcc0455b9486e65cc489448386847ba1345373",
+      "sha256": "c85016835444ca524c2fd4a7d87afdea6e762597d4ee3efff3bdc0348e555fc8",
       "headings": [
         {
           "id": "safety-and-privacy",
@@ -5234,7 +5234,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "6cade4a86d9da6d779744b06c8a0e9b8e1fd8283003bc8e470d051fbf3dce56a",
+      "sha256": "54dc621ad855fb8b379ea083e69e0a5da8f6172010dbe28858b2715b8e17df12",
       "headings": [
         {
           "id": "update-commands",
@@ -5344,6 +5344,11 @@
         {
           "id": "projects-from-the-owners-devices-17-november-2026",
           "text": "Projects from the owner's devices (17 November 2026)",
+          "level": 3
+        },
+        {
+          "id": "the-console-of-a-host-with-no-window-17-november-2026-setting-the-host-up-1920-november-2026",
+          "text": "The console of a host with no window (17 November 2026; setting the host up, 19–20 November 2026)",
           "level": 3
         },
         {
@@ -6120,6 +6125,46 @@
           "id": "status-delta-and-gate-decisions",
           "text": "Status delta and gate decisions",
           "level": 3
+        }
+      ]
+    },
+    {
+      "id": "project/reports/headless-console-setup",
+      "source": "docs/reports/headless-console-setup.md",
+      "title": "Setting a headless host up from its own terminal",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "98002a47b8c9f0f0a43cbab6362ff73895606542defe1324923aac0b7ecfe9f2",
+      "headings": [
+        {
+          "id": "why",
+          "text": "Why",
+          "level": 2
+        },
+        {
+          "id": "what-the-console-answers-now",
+          "text": "What the console answers now",
+          "level": 2
+        },
+        {
+          "id": "the-rules-it-follows",
+          "text": "The rules it follows",
+          "level": 2
+        },
+        {
+          "id": "what-changes-for-existing-callers",
+          "text": "What changes for existing callers",
+          "level": 2
+        },
+        {
+          "id": "verification",
+          "text": "Verification",
+          "level": 2
+        },
+        {
+          "id": "open-for-the-director",
+          "text": "Open, for the Director",
+          "level": 2
         }
       ]
     },
@@ -8233,7 +8278,7 @@
       "title": "Retinue on a Linux host: install, start, update, stop",
       "section": "Operations",
       "status": "Operations",
-      "sha256": "5da3d2ce4a3106c9b8e99c108d3b58f6bb30921973f99480511da9a825a0d872",
+      "sha256": "d1860cabb8cdbe569fefc62d2aaf4e34780802e4acfb9cdd19749c22c9a213bd",
       "headings": [
         {
           "id": "1-what-you-need-on-the-host",
@@ -8261,23 +8306,28 @@
           "level": 2
         },
         {
-          "id": "6-update",
-          "text": "6. Update",
+          "id": "6-set-this-host-up-from-its-own-terminal",
+          "text": "6. Set this host up from its own terminal",
           "level": 2
         },
         {
-          "id": "7-stop-restart-remove",
-          "text": "7. Stop, restart, remove",
+          "id": "7-update",
+          "text": "7. Update",
           "level": 2
         },
         {
-          "id": "8-what-is-not-available-on-a-linux-host",
-          "text": "8. What is not available on a Linux host",
+          "id": "8-stop-restart-remove",
+          "text": "8. Stop, restart, remove",
           "level": 2
         },
         {
-          "id": "9-when-something-is-wrong",
-          "text": "9. When something is wrong",
+          "id": "9-what-is-not-available-on-a-linux-host",
+          "text": "9. What is not available on a Linux host",
+          "level": 2
+        },
+        {
+          "id": "10-when-something-is-wrong",
+          "text": "10. When something is wrong",
           "level": 2
         }
       ]
@@ -23904,7 +23954,7 @@
       "title": "Remote mode: threat model",
       "section": "Remote specifications",
       "status": "Remote specification",
-      "sha256": "565daf8ed4e2f652a04ecc40991cc6b8b7db749f41994f456bc6d2b88c9c2840",
+      "sha256": "30c3971229d344a692b2f2bf475be89eefa936b911150254319342e9b7af9859",
       "headings": [
         {
           "id": "1-the-core-fact",
