@@ -160,6 +160,9 @@ mod docs_search;
 mod paths;
 /// 17 November 2026 (multi-device piece 8): the console of a host with no window.
 mod console;
+/// 20 November 2026: the background cleanup of old tool payloads and events,
+/// and the owner-started compaction of the database file.
+mod upkeep;
 
 use quota::{normalize_codex_quota, PollFailure, PollOutcome, QuotaPollGate, QUOTA_POLL_INTERVAL, QUOTA_REQUEST_TIMEOUT};
 
@@ -2000,6 +2003,9 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             Ok(json!({"deleted":true}))
         }
         "doctor.run" => crate::doctor::run(st).await,
+        // 20 November 2026: the database's size, the background cleanup's
+        // progress, and the one compaction only the owner starts.
+        "storage.maintenance" | "storage.vacuum" => upkeep::rpc(st, method, &p).await,
         "budget.list" | "budget.set" | "budget.delete" => Err(derr("unsupported", "budget controls have been retired; historical records are preserved", StatusCode::NOT_FOUND)),
         "usage.summary" => st.db.usage_summary(&p).map_err(|e| {
             derr(
@@ -6583,6 +6589,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     );
     use std::io::Write;
     std::io::stdout().flush()?;
+    // 20 November 2026: the cleanup of rows and events stored before this
+    // version. Spawned only after the ready line, and its own first pass waits
+    // longer still, so it never sits in the window's way at start-up.
+    upkeep::start_at_boot(&st);
     let shutdown = st.stopping.clone();
     tokio::select! {r=axum::serve(listener,app.into_make_service_with_connect_info::<SocketAddr>()).with_graceful_shutdown(async move{shutdown.notified().await}).into_future()=>r?,_=tokio::signal::ctrl_c()=>{},_= &mut parent_gone=>{}}
     // Remove Retinue's own UPnP mapping before the process exits, so no router
@@ -14811,6 +14821,10 @@ mod phase2a_tests {
 
     // Wave 3: learned skills, first-task suggestions, and the bounded conversation read.
     include!("wave3_tests.rs");
+
+    // 20 November 2026: the background cleanup of old payloads and events, and
+    // the one owner-started compaction.
+    include!("upkeep_tests.rs");
 
     #[tokio::test]
     async fn team_update_project_move_does_not_archive() {

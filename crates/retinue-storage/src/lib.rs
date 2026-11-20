@@ -28,6 +28,9 @@ pub use computer_link::ComputerLink;
 #[cfg(test)]
 mod phase9_tests;
 pub mod cron;
+/// Keeping the stored database small after the fact: the old-row cleanup, the
+/// event trim, the size report and the one owner-started compaction.
+pub mod maintenance;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -2494,11 +2497,18 @@ fn ensure_default_agents_tx(tx:&Transaction<'_>,now:&str,emit_events:bool)->Resu
 }
 
 fn verified_backup(c: &Connection, db_path: &Path, expected_pre_migration_version: i64) -> Result<(), StorageError> {
+    verified_backup_named(c, db_path, expected_pre_migration_version, &format!("retinue-pre-v{expected_pre_migration_version}")).map(|_| ())
+}
+
+/// The same verified copy, with a name the caller chooses: a migration uses
+/// `retinue-pre-v<N>`, and the 20 November 2026 old-row cleanup uses
+/// `retinue-pre-cleanup`. Its manifest and integrity check are identical.
+fn verified_backup_named(c: &Connection, db_path: &Path, expected_version: i64, stem: &str) -> Result<PathBuf, StorageError> {
     let parent = db_path.parent().unwrap_or_else(|| Path::new("."));
     let dir = parent.join("backups");
     fs::create_dir_all(&dir)?;
     let instant=Utc::now();let stamp=format!("{}.{:07}Z",instant.format("%Y%m%dT%H%M%S"),instant.timestamp_subsec_nanos()/100);let timestamp=instant.to_rfc3339_opts(SecondsFormat::Nanos,true);
-    let stem = format!("retinue-pre-v{}-{stamp}", expected_pre_migration_version);
+    let stem = format!("{stem}-{stamp}");
     let backup_path = dir.join(format!("{stem}.db"));
     let manifest_path = dir.join(format!("{stem}.manifest.json"));
     let source_counts = table_counts(c)?;
@@ -2506,10 +2516,10 @@ fn verified_backup(c: &Connection, db_path: &Path, expected_pre_migration_versio
     Backup::new(c, &mut copy)?.run_to_completion(128, std::time::Duration::from_millis(10), None)?;
     let _:String=copy.query_row("PRAGMA journal_mode=DELETE",[],|r|r.get(0))?;
     drop(copy);
-    verify_backup_file(&backup_path,expected_pre_migration_version,&source_counts)?;
-    let manifest = json!({"sourcePath":db_path,"backupPath":backup_path,"timestamp":timestamp,"schemaVersion":expected_pre_migration_version,"integrity":"ok","tableRowCounts":source_counts});
+    verify_backup_file(&backup_path,expected_version,&source_counts)?;
+    let manifest = json!({"sourcePath":db_path,"backupPath":backup_path,"timestamp":timestamp,"schemaVersion":expected_version,"integrity":"ok","tableRowCounts":source_counts});
     fs::write(manifest_path, serde_json::to_vec_pretty(&manifest)?)?;
-    Ok(())
+    Ok(backup_path)
 }
 
 fn migrate_agents(c: &mut Connection, path: Option<&Path>, backup_done:bool) -> Result<(), StorageError> {
@@ -7027,8 +7037,13 @@ impl Storage {
             }
             detail.extend(fresh);
         }
-        let mut v =
-            json!({"id":id,"sessionId":session,"kind":kind,"title":title,"state":state,"raw":raw,"startedAt":started_at,"detail":detail});
+        // The provider's own payload is not stored: `detail` is the bounded,
+        // provider-neutral row the window draws, and until 20 November 2026 the
+        // raw payload was written beside it, unbounded, and never read back.
+        // `payloadBytes` keeps the honest size of what was not kept. Nested
+        // through `json!` so the key name can never be mistaken for a string.
+        let bytes = payload_bytes(raw).max(existing["payloadBytes"].as_u64().unwrap_or(0));
+        let mut v = json!({"id":id,"sessionId":session,"kind":kind,"title":title,"state":state,"startedAt":started_at,"detail":detail,"payloadBytes":bytes});
         // The parent survives a completion that does not repeat it.
         if let Some(parent) = parent_tool_call_id.map(str::trim).filter(|parent| !parent.is_empty()) {
             v["parentToolCallId"] = json!(parent);
@@ -7036,6 +7051,8 @@ impl Storage {
             v["parentToolCallId"] = existing["parentToolCallId"].clone();
         }
         if matches!(state, "completed" | "failed" | "error" | "cancelled") { v["completedAt"] = json!(now); }
+        let row_trimmed = cap_row(&mut v, TOOL_ROW_BYTES);
+        if row_trimmed { v["detailTruncated"] = json!(true); }
         c.execute("INSERT INTO tool_calls(id,session_id,turn_id,state,data) VALUES(?1,?2,?3,?4,?5) ON CONFLICT(id) DO UPDATE SET state=excluded.state,data=excluded.data,turn_id=COALESCE(tool_calls.turn_id,excluded.turn_id)",params![id,session,turn,state,v.to_string()])?;
         Ok(v)
     }
@@ -7052,7 +7069,11 @@ impl Storage {
         if !v.is_object() { return Ok(None); }
         let prior = v["detail"]["output"].as_str().unwrap_or_default().trim_end();
         let joined = if prior.is_empty() { text.to_owned() } else { format!("{prior}\n{text}") };
-        v["detail"]["output"] = json!(clip_text(&joined, DETAIL_TEXT_LIMIT));
+        v["detail"]["output"] = json!(clip_body(&joined, DETAIL_TEXT_LIMIT));
+        // A row written before 20 November 2026 still carries its provider
+        // payload; touching the row is the moment to drop it.
+        if let Some(object) = v.as_object_mut() { object.remove("raw"); }
+        if cap_row(&mut v, TOOL_ROW_BYTES) { v["detailTruncated"] = json!(true); }
         c.execute("UPDATE tool_calls SET data=?2 WHERE id=?1", params![id, v.to_string()])?;
         Ok(Some(v))
     }
@@ -7065,7 +7086,9 @@ impl Storage {
         let exists: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM sessions WHERE id=?1)", [session], |r| r.get(0))?;
         if !exists { return Ok(()); }
         let now = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
-        let data = json!({"raw":raw,"createdAt":now,"detail":file_detail(path, raw)});
+        // As for a tool row, the payload's own size is kept and the payload is not.
+        let mut data = json!({"payloadBytes":payload_bytes(raw),"createdAt":now,"detail":file_detail(path, raw)});
+        if cap_row(&mut data, TOOL_ROW_BYTES) { data["detailTruncated"] = json!(true); }
         c.execute(
             "INSERT INTO file_changes(id,session_id,turn_id,path,data) VALUES(?1,?2,?3,?4,?5)",
             params![Uuid::new_v4().to_string(), session, turn, path, data.to_string()],
@@ -7088,7 +7111,8 @@ impl Storage {
         let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         let exists: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM sessions WHERE id=?1)", [session], |r| r.get(0))?;
         if !exists { return Ok(()); }
-        let mut data = json!({"id":id,"sessionId":session,"title":title,"detail":detail,"choices":choices,"status":"pending","raw":raw});
+        // The card carries what it shows; the provider's request body is not kept.
+        let mut data = json!({"id":id,"sessionId":session,"title":title,"detail":detail,"choices":choices,"status":"pending","payloadBytes":payload_bytes(raw)});
         // The daemon's own reading of the request travels with the card: the
         // normalized kind and exact target a remembered rule would use, whether
         // it may be remembered at all, and the sentence that rule carries. The
@@ -8936,11 +8960,98 @@ fn normalize_retired_look(look: &Value) -> Value {
     look
 }
 const DETAIL_TEXT_LIMIT: usize = 4000;
+/// The most one provider field may take as UTF-8. 4,000 characters is at most
+/// 16 KB (the limit the tool view reads), and a row keeps at most 64 KB
+/// (`TOOL_ROW_BYTES`) however many fields fit under their own limit.
+const DETAIL_FIELD_BYTES: usize = 16 * 1024;
+/// The most one stored tool or file row may take, `detail` and markers together.
+/// The largest `detail` the tool view can use is a command, its output, the
+/// tool's input and result and a diff, each already clipped to 16 KB; this is
+/// the backstop that keeps a pathological payload (a diff of four-byte
+/// characters in every field) bounded.
+pub const TOOL_ROW_BYTES: usize = 64 * 1024;
+// The per-field limit is a character count, and the smallest UTF-8 character is
+// one byte; four bytes is the largest, so this pins the worst case under the
+// 16 KB field budget.
+const DETAIL_FIELD_CHARS: usize = DETAIL_FIELD_BYTES / 4;
+const _: () = assert!(DETAIL_TEXT_LIMIT <= DETAIL_FIELD_CHARS);
 
+/// A short clip for a label: no size note, so the line still reads as a label.
 fn clip_text(text: &str, limit: usize) -> String {
     let text = text.trim();
     if text.chars().count() <= limit { return text.to_owned(); }
-    format!("{}…", text.chars().take(limit).collect::<String>())
+    let kept: String = text.chars().take(limit.saturating_sub(1)).collect();
+    format!("{kept}…")
+}
+
+/// How much of a clipped value was not kept, in a sentence the owner can read.
+fn truncation_note(dropped_bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = 1024 * 1024;
+    if dropped_bytes >= MB {
+        format!("\n… truncated, {} MB not kept", dropped_bytes.div_ceil(MB))
+    } else if dropped_bytes >= KB {
+        format!("\n… truncated, {} KB not kept", dropped_bytes.div_ceil(KB))
+    } else {
+        format!("\n… truncated, {dropped_bytes} bytes not kept")
+    }
+}
+
+/// A content clip that says how much was dropped, inside the same limit. The
+/// note goes on its own line so a diff or a command is never silently cut.
+fn clip_body(text: &str, limit: usize) -> String {
+    let text = text.trim();
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= limit { return text.to_owned(); }
+    let dropped_bytes: u64 = chars[limit..].iter().map(|c| c.len_utf8() as u64).sum();
+    let note = truncation_note(dropped_bytes);
+    let room = limit.saturating_sub(note.chars().count());
+    let kept: String = chars[..room.min(chars.len())].iter().collect();
+    format!("{kept}{note}")
+}
+
+/// The size a provider payload had, so a row can say what was not kept.
+fn payload_bytes(raw: &Value) -> u64 {
+    serde_json::to_vec(raw).map(|bytes| bytes.len() as u64).unwrap_or(0)
+}
+
+/// Keeps one stored row under `limit` bytes, trimming the longest strings in
+/// `detail` first and saying how much it dropped. A row that fits is untouched.
+fn cap_row(row: &mut Value, limit: usize) -> bool {
+    if serde_json::to_vec(row).map(|bytes| bytes.len()).unwrap_or(0) <= limit { return false; }
+    let Some(detail) = row.get("detail").and_then(Value::as_object).cloned() else { return false };
+    // Everything except `detail`, measured once. `detail` is measured as JSON so
+    // an escaped character counts at its stored size.
+    let mut base = row.clone();
+    base["detail"] = json!({});
+    let base_size = serde_json::to_vec(&base).map(|bytes| bytes.len()).unwrap_or(0);
+    let mut detail = detail;
+    loop {
+        let detail_size = serde_json::to_vec(&Value::Object(detail.clone())).map(|bytes| bytes.len()).unwrap_or(0);
+        if base_size + detail_size <= limit { break; }
+        let Some((key, _, _)) = detail
+            .iter()
+            .filter_map(|(key, value)| value.as_str().map(|text| (key.clone(), text.len(), text.chars().count())))
+            .max_by_key(|(_, bytes, _)| *bytes)
+        else {
+            break;
+        };
+        let text = detail[&key].as_str().unwrap_or("").to_owned();
+        let chars: Vec<char> = text.chars().collect();
+        let keep = chars.len() / 2;
+        let dropped_bytes: u64 = chars[keep..].iter().map(|c| c.len_utf8() as u64).sum();
+        if keep == 0 {
+            detail.remove(&key);
+        } else {
+            let note = truncation_note(dropped_bytes);
+            let room = keep.saturating_sub(note.chars().count());
+            let kept: String = chars[..room].iter().collect();
+            detail.insert(key, json!(format!("{kept}{note}")));
+        }
+    }
+    row["detail"] = Value::Object(detail);
+    row["detailTruncated"] = json!(true);
+    true
 }
 
 /// Text from a provider value: a string, or the `text` parts of a content list.
@@ -8966,7 +9077,7 @@ fn value_text(value: &Value) -> Option<String> {
 pub fn tool_detail(kind: &str, raw: &Value) -> Value {
     let mut detail = serde_json::Map::new();
     let mut put = |key: &str, value: Option<String>| {
-        if let Some(text) = value.map(|text| clip_text(&text, DETAIL_TEXT_LIMIT)).filter(|text| !text.is_empty()) { detail.insert(key.into(), json!(text)); }
+        if let Some(text) = value.map(|text| clip_body(&text, DETAIL_TEXT_LIMIT)).filter(|text| !text.is_empty()) { detail.insert(key.into(), json!(text)); }
     };
     let input = [&raw["input"], &raw["arguments"], &raw["rawInput"]].into_iter().find(|value| value.is_object()).unwrap_or(raw);
     let field = |keys: &[&str]| keys.iter().find_map(|key| raw[*key].as_str().or_else(|| input[*key].as_str()));
@@ -8988,7 +9099,7 @@ pub fn tool_detail(kind: &str, raw: &Value) -> Value {
     put("tool", tool);
     let arguments = [&raw["arguments"], &raw["input"], &raw["rawInput"]].into_iter().find(|value| value.is_object() && !value.as_object().unwrap().is_empty())
         .map(|value| serde_json::to_string_pretty(value).unwrap_or_default());
-    put("input", arguments.map(|text| clip_text(&text, 1500)));
+    put("input", arguments.map(|text| clip_body(&text, 1500)));
     put("result", value_text(&raw["result"]).or_else(|| value_text(&raw["contentItems"])));
     put("progress", raw["progress"].as_str().or(raw["message"].as_str()).map(str::to_owned));
     put("query", field(&["query"]).or(raw["action"]["query"].as_str()).map(str::to_owned));
@@ -9021,7 +9132,7 @@ pub fn file_detail(path: &str, raw: &Value) -> Value {
     let mut detail = json!({"path": path});
     if let Some(kind) = change["kind"].as_str().or(change["kind"]["type"].as_str()).or(raw["kind"].as_str()) { detail["change"] = json!(kind); }
     if let Some(diff) = change["diff"].as_str().or(change["unified_diff"].as_str()).or(raw["diff"].as_str()) { let clipped = diff.chars().count() > DETAIL_TEXT_LIMIT;
-        detail["diff"] = json!(if clipped { clip_text(diff, DETAIL_TEXT_LIMIT) } else { diff.to_owned() });
+        detail["diff"] = json!(if clipped { clip_body(diff, DETAIL_TEXT_LIMIT) } else { diff.to_owned() });
         if clipped || ["clipped", "truncated", "incomplete", "diffClipped"].iter().any(|key| change[*key] == true || raw[*key] == true) || change["complete"] == false || raw["complete"] == false { detail["diffClipped"] = json!(true); } }
     detail
 }

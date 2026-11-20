@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "695fbb6d",
+  "revision": "9f930d1f",
   "documentCount": 443,
   "assets": [
     {
@@ -5159,7 +5159,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "285c4df413036d15f69b001beb5e9c8b6fa6234733063ba1bfa6d221093eb07c",
+      "sha256": "9d09047ae73aece725652e56a53ba6d574327c5fb8b21221e3d686bfd06a15d9",
       "headings": [
         {
           "id": "update-commands",
@@ -5419,6 +5419,11 @@
         {
           "id": "wave-3-learned-skills-and-first-run-suggestions-17-november-2026",
           "text": "Wave 3: learned skills and first-run suggestions (17 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "slim-tool-call-storage-the-event-log-trim-and-compaction-20-november-2026",
+          "text": "Slim tool-call storage, the event-log trim and compaction (20 November 2026)",
           "level": 2
         }
       ]

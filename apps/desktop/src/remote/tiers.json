@@ -2053,6 +2053,20 @@
       "params": null
     },
     {
+      "method": "storage.maintenance",
+      "class": "never",
+      "minTier": null,
+      "why": "The database's size, the free space on the host's disk and the cleanup's progress are the owner's at the computer, as the Doctor's database row is.",
+      "params": null
+    },
+    {
+      "method": "storage.vacuum",
+      "class": "never",
+      "minTier": null,
+      "why": "Compacting rewrites the host's database file and needs its own size free on that disk: only the owner, sitting at that computer, may start it.",
+      "params": null
+    },
+    {
       "method": "preview.servers",
       "class": "never",
       "minTier": null,

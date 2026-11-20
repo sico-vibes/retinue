@@ -2,6 +2,14 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-20 · Storage · A provider payload kept "just in case" was the whole database
+
+- **Symptom:** the owner's `retinue.db` reached 1.3 GB. Two causes, measured: `tool_calls.data.raw` held every provider's own payload (982 MB in 2,410 edit rows, the largest 2.4 MB), and `app_events` was never trimmed (166 MB).
+- **Cause:** `upsert_tool_in_turn` wrote `raw` beside the bounded `detail` it had just built, and nothing ever read it back; `insert_file_in_turn` and `insert_permission` did the same. `app_events` only ever grew.
+- **Fix:** new rows keep `payloadBytes` (the JSON size, largest across updates) and never `raw`; every content field is clipped with a visible note and the whole row is capped at 64 KB (`TOOL_ROW_BYTES`, longest `detail` strings trimmed first, `detailTruncated: true`). `crates/retinue-storage/src/maintenance.rs` cleans an existing database: a verified `backups/retinue-pre-cleanup-*` copy before the first row, batches of 200 rows or 4 MiB, whichever comes first, so one batch never holds the database lock for long (the owner's edit rows averaged 400 KB), with a cursor in `settings`, then events older than 3 days (500 per batch, `turn.error` and the newest `session.context.updated`/`session.context.reset` kept because storage reads them), then incremental vacuum steps. The daemon starts it after the ready line (`crates/retinue-daemon/src/upkeep.rs`, first pass 45 s, then every 6 hours), never from `Storage::open`.
+- **Compaction is the owner's:** `storage.vacuum {confirm:true}` runs the one `VACUUM` (rewrites the file, needs its size free, 30 s busy timeout) and is the only way a pre-existing file enters incremental auto-vacuum mode; the Doctor offers it as a `storage.vacuum` fix when 8 MB or more is reclaimable.
+- **Avoid:** when a row stores a provider payload "in case", check who reads it (`rg '\["raw"\]'` found no reader); keep a size instead. Any background rewrite of stored rows takes its own verified backup first.
+
 ## 2026-11-19 · Release · SmartScreen, Smart App Control and Defender are three different flags
 
 - **Symptom:** "SmartScreen keeps flagging this app": the installer says "Windows protected your PC / Unknown publisher", a freshly built `.exe` sometimes will not start, and Defender once named an installer.

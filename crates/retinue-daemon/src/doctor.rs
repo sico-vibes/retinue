@@ -163,6 +163,39 @@ fn database_checks(st: &AppState) -> Vec<Value> {
     ]
 }
 
+/// 20 November 2026: the pages the cleanup freed stay inside the file until one
+/// full `VACUUM` gives them back. That rewrites the whole file and needs about
+/// its own size in free space, so it is offered here as the owner's action and
+/// never run automatically (the background task only steps an already
+/// incremental file).
+fn storage_checks(st: &AppState) -> Vec<Value> {
+    const GIVE_BACK: u64 = 8 * 1024 * 1024;
+    let Ok(shape) = st.db.database_shape() else { return Vec::new() };
+    let size = shape["sizeBytes"].as_u64().unwrap_or(0);
+    let reclaimable = shape["reclaimableBytes"].as_u64().unwrap_or(0);
+    let mode = shape["autoVacuum"].as_u64().unwrap_or(0);
+    if reclaimable < GIVE_BACK { return Vec::new(); }
+    if mode == 2 {
+        return vec![check("database.compaction", "database", "Cleared space is being returned to the disk", "ok",
+            format!("{} in use; {} of deleted pages is being given back in the background.", human_size(size), human_size(reclaimable)), None)];
+    }
+    let free = crate::upkeep::free_bytes(&crate::paths::database());
+    let short = free.is_some_and(|free| free < size + 64 * 1024 * 1024);
+    // `warn` in both cases: either the file can be compacted (and the owner may
+    // do it) or the disk cannot hold the copy yet. `ok` means nothing to do.
+    vec![check("database.compaction", "database", "Cleared space can be given back to the disk", "warn",
+        if short {
+            format!("{} in use and {} of deleted pages is still inside the file, but there is not enough free disk space to compact it. Free some space first.", human_size(size), human_size(reclaimable))
+        } else {
+            format!("{} in use and {} of deleted pages is still inside the file. Compacting rewrites the file once (about {} at a time) and needs {} free.", human_size(size), human_size(reclaimable), human_duration(crate::upkeep::compaction_seconds(size)), human_size(size + 64 * 1024 * 1024))
+        },
+        (!short).then(|| json!({"label":"Compact the database","method":"storage.vacuum","params":{"confirm":true}})))]
+}
+
+fn human_duration(seconds: u64) -> String {
+    if seconds < 90 { format!("{seconds} s") } else { format!("{} min", seconds.div_ceil(60)) }
+}
+
 fn human_size(bytes: u64) -> String {
     match bytes {
         0..=1023 => format!("{bytes} bytes"),
@@ -226,6 +259,7 @@ pub async fn run(st: &AppState) -> Result<Value, DispatchError> {
         checks.extend(runtime_checks(&runtimes));
     }
     checks.extend(database_checks(st));
+    checks.extend(storage_checks(st));
     checks.extend(hook_checks());
     checks.extend(remote_checks(st));
     checks.extend(speech_checks());
@@ -277,8 +311,9 @@ mod tests {
             assert!(row["detail"].as_str().is_some());
             let fix = &row["fix"];
             if !fix.is_null() {
-                // Every fix points at an RPC that already exists.
-                assert!(["runtime.refresh", "runtime.auth.clear"].contains(&fix["method"].as_str().unwrap()), "{fix}");
+                // Every fix points at an RPC that already exists. The database row
+                // adds the one owner-started compaction (20 November 2026).
+                assert!(["runtime.refresh", "runtime.auth.clear", "storage.vacuum"].contains(&fix["method"].as_str().unwrap()), "{fix}");
                 assert!(fix["label"].as_str().is_some_and(|label| !label.is_empty()));
             }
             let detail = row["detail"].as_str().unwrap();
