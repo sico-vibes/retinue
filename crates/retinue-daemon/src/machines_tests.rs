@@ -134,6 +134,32 @@ async fn wait_until<F: Fn() -> bool>(what: &str, check: F) {
     }
 }
 
+/// How many `machine.changed` events this state has stored.
+fn changed_count(st: &AppState) -> usize {
+    st.db.replay_events(0, 5_000).unwrap().iter().filter(|event| event["type"] == "machine.changed").count()
+}
+
+/// The count once no `machine.changed` has been written for a moment.
+///
+/// A read emits on its own task, and the live socket announces its own connect (and
+/// a reconnect after a dropped socket) on another. A baseline taken between two
+/// reads can therefore have that unrelated event land just after it; on a slow or
+/// busy host that reads as the read itself having emitted. Settling keeps the
+/// assertion about the read exact.
+async fn quiet_changed_count(st: &AppState) -> usize {
+    let start = Instant::now();
+    let mut last = changed_count(st);
+    loop {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let now = changed_count(st);
+        if now == last {
+            return now;
+        }
+        assert!(start.elapsed() < Duration::from_secs(20), "machine.changed never settled");
+        last = now;
+    }
+}
+
 async fn pending_pairing(host: &AppState) -> String {
     let start = Instant::now();
     loop {
@@ -1105,19 +1131,18 @@ async fn a_change_emits_machine_changed() {
     let (me, my_dir) = local("change-me");
     link_native(&me, &other, "chat").await;
     let other_id = host_id(&other);
-    let count = |st: &AppState| st.db.replay_events(0, 5_000).unwrap().iter().filter(|event| event["type"] == "machine.changed").count();
     machines::refresh_one(&me, &other_id).await.unwrap();
     // The socket announces the first connection once; wait for it so the reads
     // below are the only source of events while they run.
     wait_until("the socket to settle", || crate::machine_stream::live(&me, &other_id)).await;
-    wait_until("its one event", || count(&me) >= 2).await;
-    let after_first = count(&me);
+    wait_until("its one event", || changed_count(&me) >= 2).await;
+    let after_first = quiet_changed_count(&me).await;
     assert!(after_first >= 1, "the first read is a change");
     machines::refresh_one(&me, &other_id).await.unwrap();
-    assert_eq!(count(&me), after_first, "an unchanged read emits nothing");
+    assert_eq!(changed_count(&me), after_first, "an unchanged read emits nothing");
     add_bot(&other.st, "Newcomer");
     machines::refresh_one(&me, &other_id).await.unwrap();
-    assert_eq!(count(&me), after_first + 1);
+    assert_eq!(changed_count(&me), after_first + 1);
     let event = crate::remote::events_last(&me, "machine.changed").await;
     assert_eq!(event["payload"], json!({"machineId": other_id, "state": "online", "live": true}));
     let row = dispatch(&me, "machine.list", json!({})).await.unwrap();
@@ -1126,7 +1151,7 @@ async fn a_change_emits_machine_changed() {
     crate::remote::disable(&other.st).await.unwrap();
     machines::refresh_one(&me, &other_id).await.unwrap();
     // The background loop can notice the same change, so at least one more event, not exactly one.
-    assert!(count(&me) >= after_first + 2);
+    assert!(changed_count(&me) >= after_first + 2);
     assert_eq!(crate::remote::events_last(&me, "machine.changed").await["payload"]["state"], "offline");
     let _ = std::fs::remove_dir_all(my_dir);
 }
@@ -1264,18 +1289,23 @@ async fn tier_follows(from: &str, to: &str) {
     let other_id = host_id(&other);
     assert_eq!(me.db.machine_link_get(&other_id).unwrap().unwrap()["tier"], from);
     machines::refresh_one(&me, &other_id).await.unwrap();
-    let count = |st: &AppState| st.db.replay_events(0, 5_000).unwrap().iter().filter(|event| event["type"] == "machine.changed").count();
-    let before = count(&me);
+    // The live socket announces its own connection as a `machine.changed`, on its own
+    // task; wait for it and for the count to stop moving before taking a baseline.
+    wait_until("the socket to settle", || crate::machine_stream::live(&me, &other_id)).await;
+    let before = quiet_changed_count(&me).await;
     set_host_tier(&other, to).await;
     let row = machines::refresh_one(&me, &other_id).await.unwrap();
     assert_eq!(row["tier"], to);
     assert_eq!(me.db.machine_link_get(&other_id).unwrap().unwrap()["tier"], to, "stored");
     // The background loop may notice first, so at least one event, not exactly one.
-    assert!(count(&me) > before, "a tier change is a change");
-    let settled = count(&me);
+    assert!(changed_count(&me) > before, "a tier change is a change");
+    // A busy host can replace the live socket under the update; that is the stream's
+    // event, not the read's. Wait for the socket and for its event to land.
+    wait_until("the socket to settle", || crate::machine_stream::live(&me, &other_id)).await;
+    let settled = quiet_changed_count(&me).await;
     // Unchanged on the next read, and a failed read keeps the stored tier.
     machines::refresh_one(&me, &other_id).await.unwrap();
-    assert_eq!(count(&me), settled, "an unchanged tier emits nothing");
+    assert_eq!(changed_count(&me), settled, "an unchanged tier emits nothing");
     crate::remote::disable(&other.st).await.unwrap();
     let away = machines::refresh_one(&me, &other_id).await.unwrap();
     assert_eq!((away["state"].clone(), away["tier"].clone()), (json!("offline"), json!(to)));

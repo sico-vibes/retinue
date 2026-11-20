@@ -710,7 +710,7 @@ fn unsafe_path_spelling(value: &str) -> bool {
         || base.contains('~')
 }
 fn foreign_windows_absolute(input:&str)->bool{
-    #[cfg(not(windows))] {let b=input.as_bytes();return (b.len()>=3&&b[0].is_ascii_alphabetic()&&b[1]==b':'&&(b[2]==b'\\'||b[2]==b'/'))||input.starts_with("\\\\")||input.contains('\\');}
+    #[cfg(not(windows))] {let b=input.as_bytes();(b.len()>=3&&b[0].is_ascii_alphabetic()&&b[1]==b':'&&(b[2]==b'\\'||b[2]==b'/'))||input.starts_with("\\\\")||input.contains('\\')}
     #[cfg(windows)] {let _=input;false}
 }
 fn normalize_path_spelling(input:&str)->Option<String>{

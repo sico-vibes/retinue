@@ -135,6 +135,28 @@ fn submodule_source(label: &str) -> Option<PathBuf> {
     Some(dir.canonicalize().unwrap())
 }
 
+/// The submodule's origin is a folder on this machine, and a conversation's own worktree keeps
+/// its module clone in `.git/worktrees/<name>/modules`, so `git submodule update` really clones.
+/// That clone runs with the new module's own config and never reads the superproject's, so the
+/// allowance has to travel in git's environment config, which the daemon's git child inherits.
+/// Test only: another test's git call in the same window merely gains a permission it never uses.
+struct LocalSubmoduleOrigins;
+impl LocalSubmoduleOrigins {
+    fn new() -> Self {
+        std::env::set_var("GIT_CONFIG_COUNT", "1");
+        std::env::set_var("GIT_CONFIG_KEY_0", "protocol.file.allow");
+        std::env::set_var("GIT_CONFIG_VALUE_0", "always");
+        Self
+    }
+}
+impl Drop for LocalSubmoduleOrigins {
+    fn drop(&mut self) {
+        std::env::remove_var("GIT_CONFIG_COUNT");
+        std::env::remove_var("GIT_CONFIG_KEY_0");
+        std::env::remove_var("GIT_CONFIG_VALUE_0");
+    }
+}
+
 /// A repository with a submodule and one worktree of it: the folder a conversation would work in.
 /// Returns the project, the bot, the repository, the worktree and the family folder.
 async fn submodule_project(st: &AppState, label: &str) -> Option<(String, String, PathBuf, PathBuf, PathBuf)> {
@@ -166,6 +188,7 @@ async fn submodules_are_initialised_in_the_worktree() {
     let Some((project, agent, repo, worktree, family)) = submodule_project(&st, "init").await else { return };
     assert!(!worktree.join("sub").join("inner.txt").exists(), "the checkout has the link, not the content");
     let sid = open_with_worktree(&st, &agent, &project, &worktree).await;
+    let _origins = LocalSubmoduleOrigins::new();
     dispatch(&st, "session.prompt", json!({"sessionId":sid,"text":"Start"})).await.unwrap();
     wait_for_messages(&st, &sid, |messages| messages.iter().any(|message| message["role"] == "assistant")).await;
     let notice = last_notice(&st, &sid);

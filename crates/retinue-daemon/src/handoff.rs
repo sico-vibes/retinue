@@ -355,13 +355,21 @@ fn step(id: &str, status: &str, detail: Option<&str>) -> Value {
     json!({"id": id, "status": status, "detail": detail})
 }
 
-/// A path shape that has no business in a package: a drive letter, a UNC share or a user's home.
+/// A path shape that has no business in a package: a drive letter, a UNC share,
+/// an absolute Unix path or a user's home.
 fn has_host_path(text: &str) -> bool {
     let bytes = text.as_bytes();
     let drive = bytes.windows(3).enumerate().any(|(at, window)| {
         window[0].is_ascii_alphabetic() && window[1] == b':' && (window[2] == b'\\' || window[2] == b'/') && (at == 0 || !bytes[at - 1].is_ascii_alphanumeric())
     });
-    drive || text.contains("\\\\") || ["/home/", "/Users/", "/mnt/", "/var/folders/"].iter().any(|home| text.contains(home))
+    // An absolute Unix path is a host path wherever a notice names it (`/tmp/…`, `/srv/…`,
+    // `/work/…`), not only under the handful of home folders below. A bare `/` ("and / or")
+    // is not one, and a protocol-relative `//host/path` is a URL rather than a local folder.
+    let absolute = text.split_whitespace().any(|word| {
+        let word = word.trim_matches(|ch: char| matches!(ch, '"' | '\'' | '(' | ')' | '[' | ']' | ',' | ';' | ':'));
+        word.len() > 1 && word.starts_with('/') && !word.starts_with("//")
+    });
+    drive || absolute || text.contains("\\\\") || ["/home/", "/Users/", "/mnt/", "/var/folders/"].iter().any(|home| text.contains(home))
 }
 
 /// The conversation's text, for the package: roles `user`, `assistant` and `notice` only, newest 2,000
@@ -1152,10 +1160,19 @@ fn the_package_caps_its_messages() {
 }
 #[test]
 fn a_notice_with_a_host_path_is_recognised() {
-    for text in ["Worked in C:\\Users\\sam\\repo", "see D:/work/app", "at /home/sam/app", "in /Users/sam/app", "\\\\server\\share\\x"] {
+    for text in [
+        "Worked in C:\\Users\\sam\\repo",
+        "see D:/work/app",
+        "at /home/sam/app",
+        "in /Users/sam/app",
+        "\\\\server\\share\\x",
+        "worked in /tmp/retinue-machines-package-repos-1/giver-retinue/fix-export",
+        "in /srv/app and /opt/tool",
+        "in (\"/work/site\")",
+    ] {
         assert!(has_host_path(text), "{text}");
     }
-    for text in ["Moved to Desk.", "Messaged Mate", "See src/main.rs and a:b", "Fixed 3 files"] {
+    for text in ["Moved to Desk.", "Messaged Mate", "See src/main.rs and a:b", "Fixed 3 files", "and / or", "a/b paths are relative", "see https://example.com/docs"] {
         assert!(!has_host_path(text), "{text}");
     }
 }

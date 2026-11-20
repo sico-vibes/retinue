@@ -1,9 +1,11 @@
-//! Phase 5: secrets in the Windows credential store, and one-use secret requests.
+//! Phase 5: secrets in the operating system's store, and one-use secret requests.
 //!
 //! Section 5: a bot's environment variable can point at a named secret instead
 //! of holding plain text. The value lives in Credential Manager under
-//! `Retinue/<name>` and is read only at spawn. No RPC returns a value, and the
-//! value never reaches the database, an event, a log, a reply, a backup or a
+//! `Retinue/<name>` on Windows, and (18 November 2026) in the freedesktop
+//! Secret Service keyring or in owner-only files off Windows, as `store`
+//! explains. It is read only at spawn. No RPC returns a value, and the value
+//! never reaches the database, an event, a log, a reply, a backup or a
 //! diagnostics bundle. A coding agent can read its own environment, so this
 //! protects the value at rest, not from the bot.
 //!
@@ -108,14 +110,28 @@ pub(crate) fn with_refs_all(st: &AppState, agents: Value) -> Value {
     }
 }
 
-/// Tells the file store where the data folder is. Off Windows the values live
-/// there; on Windows Credential Manager does not need it, so this is a no-op.
-pub(crate) fn set_data_folder(dir: &std::path::Path) {
+/// What the store chose at startup, for the one line the daemon logs: a
+/// backend name (`secret-service` / `files`), how many values moved into the
+/// keyring, and a fixed reason word (`keyring`, `moved`, `not-moved`,
+/// `locked`, `absent`). A name and a count only, never a value.
+pub(crate) type Startup = (&'static str, usize, &'static str);
+
+/// Tells the file store where the data folder is and, off Windows, chooses the
+/// store for this run (18 November 2026), returning the content-free summary the
+/// caller logs. This module itself never logs: a value must have no path into a
+/// log line, so the caller writes it from the summary alone.
+pub(crate) fn set_data_folder(dir: &std::path::Path) -> Option<Startup> {
     #[cfg(any(not(windows), test))]
     store::files::set_data_folder(dir);
     #[cfg(all(windows, not(test)))]
     let _ = dir;
+    startup()
 }
+
+#[cfg(all(not(windows), not(test)))]
+fn startup() -> Option<Startup> { Some(store::startup()) }
+#[cfg(any(windows, test))]
+fn startup() -> Option<Startup> { None }
 
 /// Reads a bot's referenced secrets into the spawn environment. A missing one
 /// is an error naming the secret and never a value.
@@ -163,26 +179,323 @@ pub(crate) mod store {
     }
     #[cfg(all(windows, not(test)))]
     use super::wincred as backend;
-    /// 17 November 2026 (multi-device piece 8, headless Linux): off Windows the
-    /// values are owner-only files under `<data>/secrets`, as T3 Code's server
-    /// does. The owner's rule (`AGENTS.md`, 17 November) allows this for Linux
-    /// only; it is never the database, a backup, a log or a diagnostics bundle.
+
+    // -----------------------------------------------------------------------
+    // The selection rule and the migration
+    //
+    // 18 November 2026 (owner decision): off Windows the values live in the
+    // freedesktop Secret Service keyring when one is running and unlocked for
+    // this user, and in the owner-only files otherwise. Both are behind the
+    // `Backend` trait below, so the rule and the migration are pure functions a
+    // test drives with a fake: they run on Windows too, where no keyring exists.
+
+    /// A place the store's values can live. `entries` includes the internal
+    /// names (`vault/<id>/password`, `connector/<id>`) that `secret.list`
+    /// deliberately hides, because the migration must move those too.
+    #[cfg(any(not(windows), test))]
+    trait Backend {
+        fn write(&self, name: &str, value: &[u8]) -> Result<(), String>;
+        fn read(&self, name: &str) -> Result<Option<Zeroizing<String>>, String>;
+        fn delete(&self, name: &str) -> Result<bool, String>;
+        fn entries(&self) -> Result<Vec<(String, String)>, String>;
+    }
+
+    /// What the startup probe found on the session bus.
+    #[cfg(any(not(windows), test))]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Keyring {
+        /// A Secret Service answered and its default collection is unlocked.
+        Unlocked,
+        /// A Secret Service answered, but the collection is locked: unlocking
+        /// it would prompt, and a systemd unit has nobody to answer.
+        Locked,
+        /// No session bus, no Secret Service, or no answer in time.
+        Absent,
+    }
+
+    /// Where this run's values live.
+    #[cfg(any(not(windows), test))]
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Choice {
+        Files,
+        Keyring,
+    }
+
+    /// One migration's outcome: names only, never a value.
+    #[cfg(any(not(windows), test))]
+    #[derive(Debug, Default)]
+    struct Migration {
+        moved: Vec<String>,
+        kept: Vec<String>,
+        failed: bool,
+    }
+
+    /// The selection rule, as one function. The keyring only when it is running
+    /// and unlocked *and* every value the files held reached it: a value left
+    /// behind would otherwise be invisible, which is the one thing this may
+    /// never do. A locked keyring counts as absent.
+    #[cfg(any(not(windows), test))]
+    fn choose(found: Keyring, migration: &Migration) -> Choice {
+        match found {
+            Keyring::Unlocked if !migration.failed && migration.kept.is_empty() => Choice::Keyring,
+            _ => Choice::Files,
+        }
+    }
+
+    /// Copies every value from `from` to `to`, reads it back to prove the copy,
+    /// and only then deletes the original. A refused write or a copy that reads
+    /// back differently keeps the original, so a later start tries again.
+    #[cfg(any(not(windows), test))]
+    fn migrate(from: &dyn Backend, to: &dyn Backend) -> Migration {
+        let mut outcome = Migration::default();
+        let entries = match from.entries() {
+            Ok(entries) => entries,
+            Err(_) => {
+                outcome.failed = true;
+                return outcome;
+            }
+        };
+        for (name, _) in entries {
+            let Ok(Some(value)) = from.read(&name) else {
+                outcome.kept.push(name);
+                continue;
+            };
+            let copied = to.write(&name, value.as_bytes()).is_ok() && matches!(to.read(&name), Ok(Some(read)) if read.as_str() == value.as_str());
+            if !copied {
+                outcome.kept.push(name);
+                continue;
+            }
+            // The value is in both stores now; a failed delete only means the
+            // next start copies it again, which loses nothing.
+            let _ = from.delete(&name);
+            outcome.moved.push(name);
+        }
+        outcome
+    }
+
+    // -----------------------------------------------------------------------
+    // The freedesktop Secret Service keyring (Linux and macOS)
+
+    /// One item per name in the default collection: attributes
+    /// `application=retinue` and `name=<name>`, label `Retinue: <name>`. The
+    /// client is pure Rust over zbus on the session socket, so no libdbus
+    /// headers and no OpenSSL are needed to build it.
     ///
-    /// **Not wired yet:** a Linux *desktop* with a running Secret Service
-    /// keyring. There is no Linux desktop app to give it a user, so the seam is
-    /// named here rather than half-built; a headless host is the only Linux
-    /// shape that exists today, and it uses the files.
+    /// Compiled under `cargo test` on Linux too, so the one test that talks to
+    /// a real keyring can reach it; that test skips when there is none.
+    #[cfg(all(not(windows), any(not(test), target_os = "linux")))]
+    mod keyring {
+        use super::*;
+        use secret_service::blocking::SecretService;
+        use secret_service::EncryptionType;
+
+        /// Retinue's own attribute on every item it writes.
+        const APPLICATION: &str = "retinue";
+        /// How long one D-Bus answer may take before the files are used. A
+        /// host with no session bus answers at once, so this costs nothing
+        /// there and keeps an unresponsive one from holding startup.
+        const WAIT: Duration = Duration::from_secs(2);
+        const UNAVAILABLE: &str = "The system keyring is not answering.";
+        const LOCKED: &str = "The system keyring is locked.";
+
+        fn label(name: &str) -> String { format!("Retinue: {name}") }
+
+        fn attributes(name: &str) -> HashMap<&str, &str> {
+            HashMap::from([("application", APPLICATION), ("name", name)])
+        }
+
+        /// Runs one exchange on its own thread: the blocking client must not be
+        /// called from a runtime thread, and the wait is the short D-Bus
+        /// timeout. A thread that outlives the wait cannot hold anything up.
+        fn answer<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+            let (sender, receiver) = std::sync::mpsc::channel();
+            std::thread::spawn(move || { let _ = sender.send(work()); });
+            receiver.recv_timeout(WAIT).ok()
+        }
+
+        /// `Unlocked` only when a service answered and its default collection
+        /// needs no prompt; nothing here ever calls `unlock`.
+        pub(super) fn probe() -> Keyring {
+            answer(|| {
+                let Ok(service) = SecretService::connect(EncryptionType::Dh) else { return Keyring::Absent };
+                let Ok(collection) = service.get_default_collection() else { return Keyring::Absent };
+                match collection.is_locked() {
+                    Ok(true) => Keyring::Locked,
+                    Ok(false) => Keyring::Unlocked,
+                    Err(_) => Keyring::Absent,
+                }
+            })
+            .unwrap_or(Keyring::Absent)
+        }
+
+        pub(super) fn write(name: &str, value: &[u8]) -> Result<(), String> {
+            let name = name.to_owned();
+            let value = Zeroizing::new(value.to_vec());
+            answer(move || -> Result<(), String> {
+                let service = SecretService::connect(EncryptionType::Dh).map_err(|_| UNAVAILABLE.to_owned())?;
+                let collection = service.get_default_collection().map_err(|_| UNAVAILABLE.to_owned())?;
+                if collection.is_locked().map_err(|_| UNAVAILABLE.to_owned())? { return Err(LOCKED.to_owned()); }
+                collection.create_item(&label(&name), attributes(&name), &value, true, "text/plain").map_err(|_| "The value could not be saved.".to_owned())?;
+                Ok(())
+            })
+            .unwrap_or_else(|| Err(UNAVAILABLE.to_owned()))
+        }
+
+        pub(super) fn read(name: &str) -> Result<Option<Zeroizing<String>>, String> {
+            let name = name.to_owned();
+            answer(move || -> Result<Option<Zeroizing<String>>, String> {
+                let service = SecretService::connect(EncryptionType::Dh).map_err(|_| UNAVAILABLE.to_owned())?;
+                let collection = service.get_default_collection().map_err(|_| UNAVAILABLE.to_owned())?;
+                if collection.is_locked().map_err(|_| UNAVAILABLE.to_owned())? { return Err(LOCKED.to_owned()); }
+                let items = collection.search_items(attributes(&name)).map_err(|_| UNAVAILABLE.to_owned())?;
+                let Some(item) = items.first() else { return Ok(None) };
+                let bytes = Zeroizing::new(item.get_secret().map_err(|_| "The value could not be read.".to_owned())?);
+                String::from_utf8(bytes.to_vec()).map(|text| Some(Zeroizing::new(text))).map_err(|_| "That value does not hold text.".to_owned())
+            })
+            .unwrap_or_else(|| Err(UNAVAILABLE.to_owned()))
+        }
+
+        pub(super) fn delete(name: &str) -> Result<bool, String> {
+            let name = name.to_owned();
+            answer(move || -> Result<bool, String> {
+                let service = SecretService::connect(EncryptionType::Dh).map_err(|_| UNAVAILABLE.to_owned())?;
+                let collection = service.get_default_collection().map_err(|_| UNAVAILABLE.to_owned())?;
+                if collection.is_locked().map_err(|_| UNAVAILABLE.to_owned())? { return Err(LOCKED.to_owned()); }
+                let items = collection.search_items(attributes(&name)).map_err(|_| UNAVAILABLE.to_owned())?;
+                let Some(item) = items.first() else { return Ok(false) };
+                item.delete().map_err(|_| "The value could not be deleted.".to_owned())?;
+                Ok(true)
+            })
+            .unwrap_or_else(|| Err(UNAVAILABLE.to_owned()))
+        }
+
+        /// Every item Retinue wrote, internal names included (the migration
+        /// needs those; `list` hides them, as the file store does).
+        pub(super) fn entries() -> Result<Vec<(String, String)>, String> {
+            answer(|| -> Result<Vec<(String, String)>, String> {
+                let service = SecretService::connect(EncryptionType::Dh).map_err(|_| UNAVAILABLE.to_owned())?;
+                let collection = service.get_default_collection().map_err(|_| UNAVAILABLE.to_owned())?;
+                if collection.is_locked().map_err(|_| UNAVAILABLE.to_owned())? { return Err(LOCKED.to_owned()); }
+                let items = collection.get_all_items().map_err(|_| "The stored values could not be listed.".to_owned())?;
+                let mut out = Vec::new();
+                for item in items {
+                    let Ok(found) = item.get_attributes() else { continue };
+                    if found.get("application").map(String::as_str) != Some(APPLICATION) { continue; }
+                    let Some(name) = found.get("name").filter(|name| !name.is_empty()) else { continue };
+                    let at = item
+                        .get_modified()
+                        .ok()
+                        .and_then(|seconds| chrono::DateTime::<Utc>::from_timestamp(seconds as i64, 0))
+                        .map(|at| at.to_rfc3339_opts(SecondsFormat::Millis, true))
+                        .unwrap_or_default();
+                    out.push((name.clone(), at));
+                }
+                out.sort();
+                Ok(out)
+            })
+            .unwrap_or_else(|| Err("The stored values could not be listed.".to_owned()))
+        }
+
+        /// What `secret.list` shows: the same names the file store lists.
+        pub(super) fn list() -> Result<Vec<(String, String)>, String> {
+            Ok(entries()?.into_iter().filter(|(name, _)| valid_name(name)).collect())
+        }
+
+        #[cfg(all(test, target_os = "linux"))]
+        mod tests {
+            use super::*;
+
+            /// Talks to this computer's real keyring, and skips it when there is
+            /// none: a CI runner has no session bus. This file writes no output
+            /// at all (`secrets_tests` checks the source), so the skip is silent.
+            #[test]
+            fn the_real_keyring_holds_a_value_when_this_computer_has_one() {
+                if probe() != Keyring::Unlocked {
+                    return;
+                }
+                let name = format!("keyring-test-{}", Uuid::new_v4());
+                write(&name, b"a-value-for-the-test").expect("the keyring accepts a value");
+                assert_eq!(read(&name).expect("a read").expect("the value").as_str(), "a-value-for-the-test");
+                assert!(list().expect("a listing").iter().any(|(listed, _)| listed == &name), "the item is listed under its name");
+                assert!(delete(&name).expect("a delete"));
+                assert!(read(&name).expect("a read").is_none(), "it is gone");
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Off Windows: the store chosen once, at startup
+
     #[cfg(all(not(windows), not(test)))]
     mod backend {
         use super::*;
 
-        fn folder() -> Result<std::path::PathBuf, String> {
-            super::files::folder().ok_or_else(|| "Retinue's data folder is not ready yet.".to_string())
+        static SELECTED: OnceLock<Choice> = OnceLock::new();
+
+        pub(super) fn selected() -> Choice { *SELECTED.get().unwrap_or(&Choice::Files) }
+
+        /// Chooses the store for this run (18 November 2026), before any call
+        /// can read or write a value, and returns a summary the daemon logs: the
+        /// keyring is used only when it is running and unlocked and every value
+        /// the files held moved into it; anything else stays on the files, which
+        /// is what a host with no session bus does silently and with no delay.
+        pub(super) fn startup() -> Startup {
+            let found = keyring::probe();
+            let migration = match found {
+                Keyring::Unlocked => migrate(&FilesBackend, &KeyringBackend),
+                _ => Migration::default(),
+            };
+            let choice = choose(found, &migration);
+            let reason = match choice {
+                Choice::Keyring if migration.moved.is_empty() => "keyring",
+                Choice::Keyring => "moved",
+                Choice::Files if found == Keyring::Locked => "locked",
+                Choice::Files if found == Keyring::Unlocked => "not-moved",
+                Choice::Files => "absent",
+            };
+            let _ = SELECTED.set(choice);
+            (chosen_name(), migration.moved.len(), reason)
         }
-        pub fn write(name: &str, value: &[u8]) -> Result<(), String> { super::files::write_in(&folder()?, name, value) }
-        pub fn read(name: &str) -> Result<Option<Zeroizing<String>>, String> { super::files::read_in(&folder()?, name) }
-        pub fn delete(name: &str) -> Result<bool, String> { super::files::delete_in(&folder()?, name) }
-        pub fn list() -> Result<Vec<(String, String)>, String> { super::files::list_in(&folder()?) }
+
+        fn folder() -> Result<std::path::PathBuf, String> {
+            files::folder().ok_or_else(|| "Retinue's data folder is not ready yet.".to_string())
+        }
+        fn files_write(name: &str, value: &[u8]) -> Result<(), String> { files::write_in(&folder()?, name, value) }
+        fn files_read(name: &str) -> Result<Option<Zeroizing<String>>, String> { files::read_in(&folder()?, name) }
+        fn files_delete(name: &str) -> Result<bool, String> { files::delete_in(&folder()?, name) }
+        fn files_entries() -> Result<Vec<(String, String)>, String> { files::all_in(&folder()?) }
+        fn files_list() -> Result<Vec<(String, String)>, String> { files::list_in(&folder()?) }
+
+        /// The file store behind the trait, for the migration only.
+        struct FilesBackend;
+        impl Backend for FilesBackend {
+            fn write(&self, name: &str, value: &[u8]) -> Result<(), String> { files_write(name, value) }
+            fn read(&self, name: &str) -> Result<Option<Zeroizing<String>>, String> { files_read(name) }
+            fn delete(&self, name: &str) -> Result<bool, String> { files_delete(name) }
+            fn entries(&self) -> Result<Vec<(String, String)>, String> { files_entries() }
+        }
+
+        /// The keyring behind the same trait.
+        struct KeyringBackend;
+        impl Backend for KeyringBackend {
+            fn write(&self, name: &str, value: &[u8]) -> Result<(), String> { keyring::write(name, value) }
+            fn read(&self, name: &str) -> Result<Option<Zeroizing<String>>, String> { keyring::read(name) }
+            fn delete(&self, name: &str) -> Result<bool, String> { keyring::delete(name) }
+            fn entries(&self) -> Result<Vec<(String, String)>, String> { keyring::entries() }
+        }
+
+        pub(super) fn write(name: &str, value: &[u8]) -> Result<(), String> {
+            match selected() { Choice::Files => files_write(name, value), Choice::Keyring => keyring::write(name, value) }
+        }
+        pub(super) fn read(name: &str) -> Result<Option<Zeroizing<String>>, String> {
+            match selected() { Choice::Files => files_read(name), Choice::Keyring => keyring::read(name) }
+        }
+        pub(super) fn delete(name: &str) -> Result<bool, String> {
+            match selected() { Choice::Files => files_delete(name), Choice::Keyring => keyring::delete(name) }
+        }
+        pub(super) fn list() -> Result<Vec<(String, String)>, String> {
+            match selected() { Choice::Files => files_list(), Choice::Keyring => keyring::list() }
+        }
     }
 
     pub fn write(name: &str, value: &str) -> Result<(), String> { backend::write(name, value.as_bytes()) }
@@ -190,11 +503,20 @@ pub(crate) mod store {
     pub fn delete(name: &str) -> Result<bool, String> { backend::delete(name) }
     /// `(name, updatedAt)` for every Retinue secret.
     pub fn list() -> Result<Vec<(String, String)>, String> { backend::list() }
+
+    /// Chooses the store for this run, once, after the data folder is known.
+    #[cfg(all(not(windows), not(test)))]
+    pub(crate) fn startup() -> Startup { backend::startup() }
+
+    #[cfg(any(windows, test))]
+    fn chosen_name() -> &'static str { if cfg!(windows) { "windows-credential-manager" } else { "files" } }
+    #[cfg(all(not(windows), not(test)))]
+    fn chosen_name() -> &'static str { match backend::selected() { Choice::Keyring => "secret-service", Choice::Files => "files" } }
+
     /// Which store the values live in, for `console.status` and the Doctor. A
-    /// name, never a value.
-    pub fn backend_name() -> &'static str {
-        if cfg!(windows) { "windows-credential-manager" } else { "files" }
-    }
+    /// name (`windows-credential-manager`, `secret-service` or `files`), never
+    /// a value.
+    pub fn backend_name() -> &'static str { chosen_name() }
 
     // -----------------------------------------------------------------------
     // The file store (any platform, so its tests run here and on Linux)
@@ -241,7 +563,7 @@ pub(crate) mod store {
             }
             let bytes: Vec<u8> = (0..hex.len()).step_by(2).map(|at| u8::from_str_radix(&hex[at..at + 2], 16).ok()).collect::<Option<_>>()?;
             let name = String::from_utf8(bytes).ok()?;
-            valid_name(&name).then_some(name)
+            validate(&name).ok().map(|()| name)
         }
 
         /// Creates the folder, owner only. A failure is an error: a secret must
@@ -311,10 +633,9 @@ pub(crate) mod store {
             }
         }
 
-        /// Off Windows the backend's `list` reports only names `secret.*` would
-        /// accept, exactly as Credential Manager's does (internal names such as
-        /// `vault/<id>/password` are stored but never listed).
-        pub(crate) fn list_in(dir: &Path) -> Result<Vec<(String, String)>, String> {
+        /// Every value this module wrote, internal names included: the startup
+        /// migration must move `vault/<id>/password` too, and `list_in` hides it.
+        pub(crate) fn all_in(dir: &Path) -> Result<Vec<(String, String)>, String> {
             let entries = match std::fs::read_dir(dir) {
                 Ok(entries) => entries,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -324,7 +645,6 @@ pub(crate) mod store {
             for entry in entries.flatten() {
                 let Some(file) = entry.file_name().to_str().map(str::to_owned) else { continue };
                 let Some(name) = name_of(&file) else { continue };
-                if !valid_name(&name) { continue; }
                 let at = entry
                     .metadata()
                     .ok()
@@ -337,6 +657,14 @@ pub(crate) mod store {
             }
             out.sort();
             Ok(out)
+        }
+
+        /// What `secret.list` shows: off Windows the backend reports only names
+        /// `secret.*` would accept, exactly as Credential Manager's does
+        /// (internal names such as `vault/<id>/password` are stored but never
+        /// listed).
+        pub(crate) fn list_in(dir: &Path) -> Result<Vec<(String, String)>, String> {
+            Ok(all_in(dir)?.into_iter().filter(|(name, _)| valid_name(name)).collect())
         }
 
         /// Any name this module writes: the internal callers use slashed names
@@ -384,6 +712,8 @@ pub(crate) mod store {
                 }
                 let listed: Vec<String> = list_in(&dir).unwrap().into_iter().map(|(name, _)| name).collect();
                 assert_eq!(listed, vec!["..".to_string(), "a.b-c_d".to_string()], "a slashed name is stored but not listed; a dotted one is a legal name");
+                let all: Vec<String> = all_in(&dir).unwrap().into_iter().map(|(name, _)| name).collect();
+                assert!(all.contains(&"vault/3f2a/password".to_string()), "the migration sees every stored value, internal names included");
                 assert!(delete_in(&dir, "vault/3f2a/password").unwrap());
                 assert!(read_in(&dir, "vault/3f2a/password").unwrap().is_none());
                 let files: Vec<String> = std::fs::read_dir(&dir).unwrap().flatten().filter_map(|entry| entry.file_name().to_str().map(str::to_owned)).collect();
@@ -432,6 +762,96 @@ pub(crate) mod store {
                 assert!(!listed[0].1.is_empty(), "an updated time is reported");
                 let _ = std::fs::remove_dir_all(&dir);
             }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // The selection rule and the migration, over a fake
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        /// A store in memory, with the three failures the migration must survive.
+        #[derive(Default)]
+        struct Fake {
+            values: StdMutex<BTreeMap<String, Vec<u8>>>,
+            refuse_write: bool,
+            alter_on_write: bool,
+            refuse_entries: bool,
+        }
+
+        impl Fake {
+            fn holding(entries: &[(&str, &str)]) -> Self {
+                Fake { values: StdMutex::new(entries.iter().map(|(name, value)| ((*name).to_owned(), value.as_bytes().to_vec())).collect()), ..Fake::default() }
+            }
+            fn value(&self, name: &str) -> Option<String> {
+                self.values.lock().unwrap().get(name).map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+            }
+            fn names(&self) -> Vec<String> { self.values.lock().unwrap().keys().cloned().collect() }
+        }
+
+        impl Backend for Fake {
+            fn write(&self, name: &str, value: &[u8]) -> Result<(), String> {
+                if self.refuse_write { return Err("refused".to_owned()); }
+                let stored = if self.alter_on_write { b"a different value".to_vec() } else { value.to_vec() };
+                self.values.lock().unwrap().insert(name.to_owned(), stored);
+                Ok(())
+            }
+            fn read(&self, name: &str) -> Result<Option<Zeroizing<String>>, String> {
+                Ok(self.values.lock().unwrap().get(name).map(|bytes| Zeroizing::new(String::from_utf8_lossy(bytes).into_owned())))
+            }
+            fn delete(&self, name: &str) -> Result<bool, String> { Ok(self.values.lock().unwrap().remove(name).is_some()) }
+            fn entries(&self) -> Result<Vec<(String, String)>, String> {
+                if self.refuse_entries { return Err("unreadable".to_owned()); }
+                Ok(self.values.lock().unwrap().keys().map(|name| (name.clone(), String::new())).collect())
+            }
+        }
+
+        #[test]
+        fn the_keyring_is_chosen_only_when_it_is_running_and_unlocked() {
+            assert_eq!(choose(Keyring::Unlocked, &Migration::default()), Choice::Keyring);
+            assert_eq!(choose(Keyring::Locked, &Migration::default()), Choice::Files, "a locked keyring would prompt, so it is refused");
+            assert_eq!(choose(Keyring::Absent, &Migration::default()), Choice::Files, "a headless host keeps using the files");
+        }
+
+        #[test]
+        fn every_value_moves_and_the_file_goes() {
+            let files = Fake::holding(&[("GITHUB_TOKEN", "a-value"), ("vault/3f/password", "another")]);
+            let keyring = Fake::default();
+            let outcome = migrate(&files, &keyring);
+            assert_eq!(outcome.moved.len(), 2);
+            assert!(outcome.kept.is_empty() && !outcome.failed);
+            assert_eq!(keyring.value("vault/3f/password").as_deref(), Some("another"), "an internal name moves too");
+            assert!(files.names().is_empty(), "the file is deleted once the copy is verified");
+            assert_eq!(choose(Keyring::Unlocked, &outcome), Choice::Keyring);
+        }
+
+        #[test]
+        fn a_refused_copy_keeps_the_file_and_this_run_on_the_files() {
+            let files = Fake::holding(&[("GITHUB_TOKEN", "a-value")]);
+            let keyring = Fake { refuse_write: true, ..Fake::default() };
+            let outcome = migrate(&files, &keyring);
+            assert!(outcome.moved.is_empty());
+            assert_eq!(outcome.kept, vec!["GITHUB_TOKEN".to_string()]);
+            assert_eq!(files.value("GITHUB_TOKEN").as_deref(), Some("a-value"), "the value is never lost");
+            assert_eq!(choose(Keyring::Unlocked, &outcome), Choice::Files, "a value that did not move must stay reachable");
+        }
+
+        #[test]
+        fn a_copy_that_reads_back_differently_is_not_moved() {
+            let files = Fake::holding(&[("ONE", "kept")]);
+            let outcome = migrate(&files, &Fake { alter_on_write: true, ..Fake::default() });
+            assert_eq!(outcome.kept, vec!["ONE".to_string()]);
+            assert_eq!(files.value("ONE").as_deref(), Some("kept"), "the copy is verified before the file is deleted");
+            assert_eq!(choose(Keyring::Unlocked, &outcome), Choice::Files);
+        }
+
+        #[test]
+        fn an_unreadable_file_store_is_never_reported_as_migrated() {
+            let outcome = migrate(&Fake { refuse_entries: true, ..Fake::default() }, &Fake::default());
+            assert!(outcome.failed);
+            assert_eq!(choose(Keyring::Unlocked, &outcome), Choice::Files, "a listing that failed says nothing about what is left behind");
         }
     }
 }

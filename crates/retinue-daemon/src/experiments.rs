@@ -14,7 +14,10 @@ pub(crate) fn on(settings: &Value, name: &str) -> bool {
 
 /// Git started by the background daemon must not flash a console window on Windows.
 pub(crate) fn git_command() -> Command {
+    #[cfg(windows)]
     let mut command = Command::new("git");
+    #[cfg(not(windows))]
+    let command = Command::new("git");
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

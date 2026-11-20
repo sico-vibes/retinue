@@ -196,9 +196,15 @@ async fn a_device_clone_is_confined_and_reports_its_progress_and_a_failure() {
     // An unknown job, and an empty one, are plain refusals.
     assert_eq!(dispatch(&st, "project.clone.status", json!({"id": "nope"})).await.unwrap_err().1.code, "not_found");
     assert_eq!(dispatch(&st, "project.clone.status", json!({"id": ""})).await.unwrap_err().1.code, "invalid_argument");
-    // The desktop's own job finished too.
-    let desktop = dispatch(&st, "project.clone.status", json!({"id": desktop_job})).await.unwrap();
-    assert_eq!(desktop["job"]["state"], "done");
+    // The desktop's own job finishes too. It started first but runs on its own, so wait for it as
+    // for the device's job rather than reading it once.
+    let mut desktop = Value::Null;
+    for _ in 0..400 {
+        desktop = dispatch(&st, "project.clone.status", json!({"id": desktop_job})).await.unwrap();
+        if desktop["job"]["state"] != "running" { break; }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert_eq!(desktop["job"]["state"], "done", "{desktop}");
 
     // A failure: the same test-only allowance pointed at a folder that holds no repository. The lock
     // that guards the allowance is one at a time, so the first repository is released first.

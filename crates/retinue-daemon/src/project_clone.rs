@@ -425,6 +425,8 @@ mod tests {
 
     #[test]
     fn urls_are_checked_before_git_runs() {
+        // A local folder, written in this platform's own shape.
+        let local = if cfg!(windows) { "C:/local/repo" } else { "/tmp/local/repo" };
         // The forms a person actually copies.
         for good in ["https://github.com/sico-vibes/retinue.git", "https://github.com/sico-vibes/retinue", "ssh://git@github.com/sico-vibes/retinue.git", "ssh://git@example.com:2222/a/b.git", "git@github.com:sico-vibes/retinue.git", "git@example.com:team/repo"] {
             assert_eq!(refuse_url(good, false), None, "{good}");
@@ -441,8 +443,8 @@ mod tests {
             assert_eq!(refuse_url(password, false).as_deref(), Some("Put no password in the URL. Sign in with git or the GitHub CLI instead."), "{password}");
         }
         // A local path is only ever allowed through the test-only allowance.
-        assert!(refuse_url("C:/local/repo", false).is_some());
-        assert_eq!(refuse_url("C:/local/repo", true), None);
+        assert!(refuse_url(local, false).is_some());
+        assert_eq!(refuse_url(local, true), None);
         assert_eq!(suggested_name("https://github.com/sico-vibes/retinue.git"), "retinue");
         assert_eq!(suggested_name("git@github.com:team/repo.git"), "repo");
         assert_eq!(suggested_name("https://github.com/team/repo/"), "repo");

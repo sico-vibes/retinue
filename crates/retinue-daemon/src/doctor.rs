@@ -215,6 +215,17 @@ fn hook_checks() -> Vec<Value> {
         else { "Missing: retinue-hook.exe is not in Retinue's install folder, so coding agents cannot report hook events. To fix it, install the latest Retinue release again; your bots and conversations are kept.".to_owned() }, None)]
 }
 
+/// Where the stored values live, for the owner's own eye: the same name
+/// `console.status` reports (18 November 2026).
+fn secret_store_check() -> Value {
+    let (status, detail) = match crate::secrets::store::backend_name() {
+        "windows-credential-manager" => ("ok", "Values are in Windows Credential Manager, which only you can open."),
+        "secret-service" => ("ok", "Values are in this computer's system keyring, which unlocks with your sign-in."),
+        _ => ("ok", "Values are in owner-only files in Retinue's data folder, because no system keyring is running here."),
+    };
+    check("secrets.store", "safety", "Saved values are kept where only you can read them", status, detail.to_owned(), None)
+}
+
 /// The Remote gateway, only when the owner has it on.
 fn remote_checks(st: &AppState) -> Vec<Value> {
     let status = st.remote.status_value(st);
@@ -263,6 +274,7 @@ pub async fn run(st: &AppState) -> Result<Value, DispatchError> {
     checks.extend(hook_checks());
     checks.extend(remote_checks(st));
     checks.extend(speech_checks());
+    checks.push(secret_store_check());
     // Wave 2: who can read Retinue's own data folder.
     checks.extend(crate::sandbox::doctor_checks(st));
     if checks.is_empty() {

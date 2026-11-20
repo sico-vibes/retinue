@@ -103,12 +103,31 @@ async fn a_favicon_comes_from_the_projects_own_folder() {
 /// comparison it feeds does not.
 #[test]
 fn a_resolved_file_must_stay_inside_the_project_folder() {
-    let root = Path::new(r"C:\work\shop");
-    assert!(crate::project_icon::stays_inside(root, Path::new(r"C:\work\shop\public\favicon.svg")));
-    assert!(crate::project_icon::stays_inside(root, Path::new(r"C:\work\shop")));
-    assert!(!crate::project_icon::stays_inside(root, Path::new(r"C:\work\shop-two\favicon.svg")), "a folder whose name starts the same is outside");
-    assert!(!crate::project_icon::stays_inside(root, Path::new(r"C:\Users\Someone\secret.svg")));
-    assert!(!crate::project_icon::stays_inside(root, Path::new(r"C:\work")));
+    // Whole components, so the paths are written in the platform's own shape.
+    let (root, inside, same, sibling, outside, parent) = if cfg!(windows) {
+        (
+            Path::new(r"C:\work\shop"),
+            Path::new(r"C:\work\shop\public\favicon.svg"),
+            Path::new(r"C:\work\shop"),
+            Path::new(r"C:\work\shop-two\favicon.svg"),
+            Path::new(r"C:\Users\Someone\secret.svg"),
+            Path::new(r"C:\work"),
+        )
+    } else {
+        (
+            Path::new("/work/shop"),
+            Path::new("/work/shop/public/favicon.svg"),
+            Path::new("/work/shop"),
+            Path::new("/work/shop-two/favicon.svg"),
+            Path::new("/home/someone/secret.svg"),
+            Path::new("/work"),
+        )
+    };
+    assert!(crate::project_icon::stays_inside(root, inside));
+    assert!(crate::project_icon::stays_inside(root, same));
+    assert!(!crate::project_icon::stays_inside(root, sibling), "a folder whose name starts the same is outside");
+    assert!(!crate::project_icon::stays_inside(root, outside));
+    assert!(!crate::project_icon::stays_inside(root, parent));
 }
 
 #[tokio::test]

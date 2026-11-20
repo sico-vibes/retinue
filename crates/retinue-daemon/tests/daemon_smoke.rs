@@ -31,6 +31,9 @@ async fn daemon_starts_with_authenticated_loopback_rpc_and_real_discovery() {
     let _ = std::fs::remove_file(&db);
     let mut child = Command::new(env!("CARGO_BIN_EXE_retinued"))
         .env("RETINUE_DB_PATH", &db)
+        // A desktop shell passes its own pid; without it the daemon is headless and, since
+        // 18 November 2026, deliberately omits the capability from its ready line.
+        .env("RETINUE_PARENT_PID", std::process::id().to_string())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
