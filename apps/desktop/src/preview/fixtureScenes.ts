@@ -12,6 +12,7 @@ export type Scene = {
   delegations?: Array<Record<string, unknown>>
   queue?: Array<Record<string, unknown>>
   queuePaused?: boolean
+  resumeOutcome?: 'works' | 'error' | 'busy' | 'repaused' | 'waiting' | 'unconfirmed'
   /** false: the coding agent cannot take a message into a running turn. */
   steer?: boolean
   /** Dev servers the conversation's coding agent started, as `preview.servers` answers. */
@@ -142,6 +143,16 @@ const lead = () => [user('Can you make the invoice parser tests pass?'), bot('Su
 const ledger = (id: string, status: string, topic: string, target: string, extra: Record<string, unknown> = {}) => ({ id, originSessionId: SCENE_SESSION_ID, originTurnId: 'scene-turn', sideSessionId: `scene-side-${id}`, sideTurnId: null, fromAgentId: 'agent-codex', targetAgentId: target, topic, briefPreview: `${topic}: read the code, then report back.`, status, error: null, workspace: { path: 'C:/work/korus', worktree: null }, createdAt: ago(20), startedAt: status === 'queued' ? null : ago(18), finishedAt: ['running', 'queued'].includes(status) ? null : ago(4), updatedAt: ago(2), ...extra })
 const side = (id: string, title: string, agentId: string, state: string) => ({ id: `scene-side-${id}`, runtimeId: agentId === 'agent-claude' ? 'runtime-claude' : agentId === 'agent-opencode' || agentId === 'agent-pololo' ? 'runtime-opencode' : 'runtime-codex', agentId, title, projectPath: 'C:/work/korus', state, updatedAt: ago(5), link: { kind: 'side', peerAgentId: 'agent-codex', peerName: 'Codex', originSessionId: SCENE_SESSION_ID, topic: title }, messages: [{ id: `scene-side-${id}-m`, role: 'user', content: `Hi, it's Codex. ${title}: read the code, then report back.`, createdAt: ago(18), meta: { kind: 'blob_message', fromAgentId: 'agent-codex', fromName: 'Codex' } }] })
 const sent = (id: string, peer: string, peerName: string, topic: string, direction = 'sent') => notice(`${topic}: read the code, then report back.`, { kind: 'delegation', direction, delegationId: id, originTurnId: 'scene-turn', peerAgentId: peer, peerName, topic, sideSessionId: `scene-side-${id}` })
+
+const longReviewFolder = 'C:/work/korus-retinue/a-conversation-working-in-its-own-copy'
+const resumeScene = (resumeOutcome: NonNullable<Scene['resumeOutcome']>): Scene => ({
+  title: 'Resume the queue',
+  state: resumeOutcome === 'busy' ? 'working' : 'idle',
+  messages: [user('Fix the parser.'), bot('I have started reviewing the parser.')],
+  queue: [{ id: 'q1', kind: 'user', text: 'Run the parser tests.' }],
+  queuePaused: true,
+  resumeOutcome,
+})
 
 const SCENES: Record<string, () => Scene> = {
   markdown: () => ({ title: 'Everything Markdown can do', messages: [user('Show me everything Markdown can do.'), bot(MARKDOWN)] }),
@@ -295,6 +306,38 @@ const SCENES: Record<string, () => Scene> = {
     { port: 5173, url: 'http://127.0.0.1:5173/', pid: 4242, process: 'node.exe', answeredHtml: true },
     { port: 8787, url: 'http://127.0.0.1:8787/', pid: 4250, process: 'node.exe', answeredHtml: false },
   ] }),
+  'review-long-path': () => ({
+    title: 'Review a long file path',
+    session: { link: { worktree: { path: longReviewFolder } } },
+    messages: [user('Update the conversation suggestions.'), bot('I updated the suggestions.', { turnId: 'scene-turn' })],
+    files: [{ id: 'long-review-file', turnId: 'scene-turn', path: longReviewFolder + '/apps/desktop/src/ui/conversations/suggestions/sessionSuggestions.ts', detail: { diff: '@@ -1 +1,2 @@\n-old\n+new\n+test' } }],
+  }),
+  'queue-resume-works': () => resumeScene('works'),
+  'queue-resume-error': () => resumeScene('error'),
+  'queue-resume-busy': () => resumeScene('busy'),
+  'queue-resume-repaused': () => resumeScene('repaused'),
+  'queue-resume-limited': () => ({
+    ...resumeScene('waiting'),
+    state: 'limited',
+    session: { limitedUntil: new Date(Date.now() + 3_600_000).toISOString() },
+    queue: [{ id: 'q1', kind: 'send_later', whenLimitResets: true, text: 'Run the parser tests after the reset.' }],
+  }),
+  'queue-resume-snoozed': () => ({
+    ...resumeScene('waiting'),
+    state: 'limited',
+    session: { limitSnoozed: true },
+    queue: [{ id: 'q1', kind: 'send_later', whenLimitResets: true, text: 'Run the parser tests after the reset.' }],
+  }),
+  'queue-resume-scheduled': () => ({
+    ...resumeScene('waiting'),
+    queue: [{ id: 'q1', kind: 'send_later', dueAt: new Date(Date.now() + 3_600_000).toISOString(), text: 'Run the parser tests in an hour.' }],
+  }),
+  'queue-resume-failed': () => ({
+    ...resumeScene('waiting'),
+    queue: [{ id: 'q1', kind: 'user', status: 'failed', error: 'The coding agent could not start the turn.', text: 'Run the parser tests.' }],
+  }),
+  'queue-resume-waiting': () => resumeScene('waiting'),
+  'queue-resume-unconfirmed': () => resumeScene('unconfirmed'),
   'queue-paused': () => ({ title: 'Queue paused', state: 'idle', messages: [user('Fix the parser.'), bot('Done.')], queue: [{ id: 'q1', kind: 'user', text: 'After that, run the whole suite.' }, { id: 'q2', kind: 'user', text: 'Addition to this lane from the owner (same rules, same report; add it to what you are doing, do not restart). ## Task D: the screen inside the app. The owner wants to open the live screen inside the window, watch, and take control when needed. ' + 'averyveryverylongunbrokenwordthatcannotwrap'.repeat(8) }], queuePaused: true }),
 }
 

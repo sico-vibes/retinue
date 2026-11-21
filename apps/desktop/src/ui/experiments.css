@@ -54,9 +54,10 @@ button.message-reaction-badge:focus-visible { outline: none; box-shadow: var(--f
 .change-review { margin: 12px 0 20px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; color: var(--text-2); font-size: 13px; }
 .change-review > strong { color: var(--text-1); }
 .change-review ul { padding: 0; margin: 8px 0 0; list-style: none; }
-.change-review li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 3px 0; }
-.change-review .review-path { flex: 1; min-width: 120px; justify-content: flex-start; color: var(--text-1); text-align: left; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; overflow-wrap: anywhere; }
-.review-counts { font-variant-numeric: tabular-nums; }
+.change-review li { display: grid; grid-template-columns: minmax(0, 1fr) 10ch auto auto; align-items: center; gap: 6px; padding: 3px 0; }
+.change-review .review-path { min-width: 0; justify-content: flex-start; color: var(--text-1); text-align: left; font-family: var(--font-mono, ui-monospace, monospace); font-size: 12px; }
+.review-path .path-tail { flex: 1; }
+.review-counts { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .review-counts > span { color: var(--status-success); }
 .conversation-auto-title { color: var(--text-3); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; }
 .message-search-result { align-items: flex-start; }

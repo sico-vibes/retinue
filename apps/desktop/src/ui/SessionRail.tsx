@@ -191,7 +191,7 @@ export function SessionRail({ session, usage, appliedModel, onOpenFile, onReveal
     const reviewable = !!onReview && file.source === 'repository' && !!file.relative
     return <li key={file.key} className="rail-file" data-source={file.source} data-change={file.change ?? undefined}>
       <button type="button" className="rail-file-open" title={reviewable ? `Review ${file.relative}` : reason ?? (file.truncated ? `View the shortened diff for ${file.relative ?? file.path}` : `View the diff for ${file.relative ?? file.path}`)} aria-disabled={reason && !reviewable ? true : undefined} disabled={!!reason && !reviewable} onClick={() => { if (reviewable && file.relative) onReview?.(file.relative); else if (file.diff) onDiff(file.path, file.diff) }}>
-        <FileText size={13} aria-hidden="true" /><span className="rail-file-name" title={file.relative ?? file.path}>{file.name}</span>{note && <span className={note === 'deleted' ? 'sr-only' : 'rail-tag'}>{note}</span>}
+        <FileText size={13} aria-hidden="true" /><span className="rail-file-name" title={file.path}>{file.name}</span>{note && <span className={note === 'deleted' ? 'sr-only' : 'rail-tag'}>{note}</span>}
       </button>
       {!file.binary && !!file.added && <em className="rail-add">+{lines(file.added)}</em>}
       {!file.binary && !!file.removed && <i className="rail-del">−{lines(file.removed)}</i>}

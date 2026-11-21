@@ -9,12 +9,13 @@ import { agentColorHex } from './agentColor'
 import { parseUnifiedDiff } from './diffParser'
 import { useDialogAccessibility } from './dialogFocus'
 import { friendlyErrorText } from './errorCopy'
+import { projectRelative } from './fileReference'
 import { shortcutRows } from './experiments'
 import type { SendShortcut, ShortcutBindings } from './shortcuts'
 import { useEntityNoun } from './vocabulary'
 import './experiments.css'
 
-export function ChangeReview({ files, dismissed, onKeep, onRevert, onDiff }: { files: JsonRecord[]; dismissed: string[]; onKeep: (id: string) => void; onRevert: (file: JsonRecord) => void; onDiff: (path: string, content: string) => void }) {
+export function ChangeReview({ files, folder, dismissed, onKeep, onRevert, onDiff }: { files: JsonRecord[]; folder?: string; dismissed: string[]; onKeep: (id: string) => void; onRevert: (file: JsonRecord) => void; onDiff: (path: string, content: string) => void }) {
   const visible = files.filter((file) => !dismissed.includes(String(file.id)) && (file.detail as JsonRecord | undefined)?.reverted !== true)
   if (!visible.length) return null
   return <section className="change-review" aria-label="Review changes"><strong>Review changes</strong><ul>{visible.map((file) => {
@@ -22,7 +23,8 @@ export function ChangeReview({ files, dismissed, onKeep, onRevert, onDiff }: { f
     const diff = typeof detail?.diff === 'string' ? detail.diff : ''
     const counts = parseUnifiedDiff(diff)
     const path = String(file.path ?? detail?.path ?? '')
-    return <li key={String(file.id)}><button type="button" className="ghost-button small review-path" disabled={!diff} onClick={() => onDiff(path, diff)}>{path}</button><span className="review-counts" aria-label={diff ? `${counts.additions} added, ${counts.deletions} removed` : 'Diff unavailable'}>{diff ? <><span>+{counts.additions}</span> / −{counts.deletions}{detail?.diffClipped === true ? ' (partial)' : ''}</> : 'Diff unavailable'}</span><button type="button" className="ghost-button small" onClick={() => onKeep(String(file.id))}>Keep</button><button type="button" className="ghost-button small" onClick={() => onRevert(file)}>Revert</button></li>
+    const displayPath = projectRelative(path, folder) ?? path.replace(/\\/g, '/')
+    return <li key={String(file.id)}><button type="button" className="ghost-button small review-path" title={path} aria-label={path} disabled={!diff} onClick={() => onDiff(path, diff)}><span className="path-tail"><bdi dir="ltr">{displayPath}</bdi></span></button><span className="review-counts" aria-label={diff ? `${counts.additions} added, ${counts.deletions} removed` : 'Diff unavailable'}>{diff ? <><span>+{counts.additions}</span> / −{counts.deletions}{detail?.diffClipped === true ? ' (partial)' : ''}</> : 'Diff unavailable'}</span><button type="button" className="ghost-button small" onClick={() => onKeep(String(file.id))}>Keep</button><button type="button" className="ghost-button small" onClick={() => onRevert(file)}>Revert</button></li>
   })}</ul></section>
 }
 

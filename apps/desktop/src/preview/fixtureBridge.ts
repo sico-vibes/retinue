@@ -1406,7 +1406,10 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       items.items = fixtureScene.queue.map((entry, position) => ({ status: 'queued', dueAt: null, error: null, ...entry, sessionId: session.id, position }))
       items.paused = fixtureScene.queuePaused === true
     }
-    if (method === 'session.queue.list') return { items: items.items.map((entry) => ({ ...entry })), paused: items.paused } as T
+    if (method === 'session.queue.list') {
+      if (session.id === SCENE_SESSION_ID && fixtureScene?.resumeOutcome === 'unconfirmed' && !items.paused) throw rpcError('internal', 'Could not read the queue.')
+      return { items: items.items.map((entry) => ({ ...entry })), paused: items.paused } as T
+    }
     if (method === 'session.queue.add') {
       if (session.link?.kind === 'side') throw rpcError('read_only', 'Side conversations are read-only. Send a new message in the main conversation.')
       const text = typeof params.text === 'string' ? params.text.trim() : ''
@@ -1463,7 +1466,24 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       publish()
       return { queued: true } as T
     }
-    if (method === 'session.queue.resume') { items.paused = false; publish(); return { ok: true } as T }
+    if (method === 'session.queue.resume') {
+      const outcome = session.id === SCENE_SESSION_ID ? fixtureScene?.resumeOutcome : undefined
+      if (outcome) await new Promise((resolve) => setTimeout(resolve, 450))
+      if (outcome === 'error') throw rpcError('permission_denied', 'Could not resume this queue.')
+      items.paused = outcome === 'repaused'
+      if (outcome === 'repaused' && items.items[0]) {
+        Object.assign(items.items[0], { status: 'failed', error: 'The coding agent could not start the turn.' })
+      }
+      if (outcome === 'works') {
+        const sent = items.items.shift()
+        if (sent) {
+          session.messages = [...(session.messages ?? []), { id: 'scene-queue-sent', role: 'user', content: `Sent from the queue: ${sent.text}`, createdAt: new Date().toISOString() }]
+          notifyFixtureDaemon('session.changed', { session: { ...session } })
+        }
+      }
+      publish()
+      return { paused: false } as T
+    }
   }
   if (method === 'session.prompt') {
     // A minimal echo so the preview shows sent messages, # references and a reply.

@@ -299,6 +299,13 @@ export function friendlyErrorText(raw: FriendlyErrorInput): string {
   return friendly.detail ? `${friendly.title} ${friendly.detail}` : friendly.title
 }
 
+/** Queue RPCs carry daemon-authored refusal text for codes without dedicated copy. */
+export function queueErrorText(raw: string): string {
+  const error = normalize(raw)
+  if (!error) return GENERIC.title
+  return byCode(error.code, error.provider) ? friendlyError(raw).title : error.message || GENERIC.title
+}
+
 /** A durable usage-limit state; missing or invalid resets never promise a retry. */
 export function usageLimitLabel(reset: unknown): string {
   const date = typeof reset === 'string' ? new Date(reset) : null

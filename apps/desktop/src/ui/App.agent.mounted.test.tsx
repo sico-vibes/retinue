@@ -1033,6 +1033,48 @@ describe('blob roster and editor', () => {
     return queued
   }
 
+  it.each(['error', 'repaused', 'busy', 'sent'] as const)('shows the pending and %s outcome of Resume', async (outcome) => {
+    const queued = queuedConversation(outcome === 'busy' ? 'working' : 'idle')
+    let paused = true
+    let complete!: () => void
+    const pending = new Promise<void>((resolve) => { complete = resolve })
+    const base = h.rpc.getMockImplementation()!
+    h.rpc.mockImplementation(async (method: string, params: Record<string, unknown> = {}) => {
+      if (method === 'session.queue.list') return { items: queued, paused }
+      if (method === 'session.queue.resume') {
+        await pending
+        if (outcome === 'error') throw new Error('permission_denied: Could not resume this queue.')
+        paused = outcome === 'repaused'
+        if (paused) Object.assign(queued[0], { status: 'failed', error: 'Could not start the turn.' })
+        if (outcome === 'sent') queued.shift()
+        return { paused: false }
+      }
+      if (method === 'session.queue.delete') throw 'read_only: This conversation is read-only.'
+      return base(method, params)
+    })
+    const view = startApp()
+    await view.settle()
+    const line = view.host.querySelector('.composer-status-line')!
+    const resume = line.querySelector('button')!
+    await click(resume)
+    expect(resume.textContent).toBe('Resuming?')
+    expect(resume.disabled).toBe(true)
+    await act(async () => { complete() })
+    await view.settle()
+    expect(view.host.textContent).not.toContain('Resuming?')
+    if (outcome === 'error') {
+      expect(line.querySelector('[role="alert"]')?.textContent).toBe('Permission was denied.')
+      await click(view.host.querySelector('[aria-label="Remove from queue"]'))
+      expect(line.querySelector('[role="alert"]')?.textContent).toBe('This conversation is read-only.')
+    }
+    if (outcome === 'repaused') expect(line.textContent).toContain('The queue is still paused.')
+    if (outcome === 'busy') expect(view.host.querySelector('.composer-status-line')?.textContent).toContain('Queued messages are waiting for the current turn to finish.')
+    if (outcome === 'sent') {
+      expect(view.host.querySelector('.composer-status-line')).toBeNull()
+      expect(view.host.querySelector('.queue-text')?.textContent).toBe('Then run the suite')
+    }
+  })
+
   it('sends a queued message into the running turn with one call to the daemon', async () => {
     const queued = queuedConversation('working')
     const base = h.rpc.getMockImplementation()!

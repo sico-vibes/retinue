@@ -2163,3 +2163,8 @@ The computer's screen (`computer.view`, `computer.rs`) is the first route on the
 ## 2026-11-13 · Computer · An employee's workplace
 
 - `computerWorkplace` on an employee (`agents.computer_workplace`, added by `ensure_computer_link_schema` in `crates/retinue-storage/src/computer_link.rs`) adds a `## Your workplace` section to new conversations' instructions (`computer::workplace_instructions`, from `team::runtime_instructions_in`) and wakes a sleeping computer once per conversation at the top of `run_turn` (`computer::before_first_turn`, claimed through `Storage::session_take_computer_wake`, 20 s budget, never sleeps it). Only when a computer is linked and shared with employees. The window's switch is `ComputerWorkplaceRow` in `ui/BlobSettings.tsx`, shown only when a computer is shared or the switch is already on.
+
+## 2026-11-21 ? Composer queue ? Resume appeared to do nothing
+
+- Queue mutations in `ui/App.tsx` used a shared RPC wrapper with a global error and an empty catch. The composer showed no error or pending state. Keep queue feedback scoped to the conversation, clear it at the next queue mutation, and render it on the composer status line.
+- `queue.rs::resume` clears the pause before attempting a drain and returns `paused: false` even if the drain re-pauses. Read `session.queue.list` after the mutation, and use visible turn, limit and item state to explain waits. A specific reason for an otherwise unexplained wait requires the daemon to return a drain outcome.
