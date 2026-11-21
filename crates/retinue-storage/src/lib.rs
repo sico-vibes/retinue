@@ -24,6 +24,9 @@ mod vault; // 16 November 2026: vault item metadata and the content-free ledger
 mod computer_link; // The linked VPS computer (Harbor): address, switch, token reference
 mod connectors; // Section D: owner-added MCP servers the daemon calls
 mod wave2; // Wave 2 (nod adoption): the per-model failure ledger
+// 21 November 2026: the full database check, after the ready line, with the marker
+// that keeps a failed file refused until it passes.
+mod integrity;
 pub use computer_link::ComputerLink;
 #[cfg(test)]
 mod phase9_tests;
@@ -56,6 +59,8 @@ pub enum StorageError {
     SessionActive,
     #[error("filesystem: {0}")]
     Io(#[from] std::io::Error),
+    #[error("the database file cannot be served: {0}")]
+    Corrupt(String),
 }
 
 fn schema_v3_valid(c: &Connection) -> Result<bool, StorageError> {
@@ -456,7 +461,11 @@ fn migrate_session_model_lock(c: &mut Connection, path: Option<&Path>, backup_do
 
 const USER_REACTIONS: &[&str] = &["👍", "👎", "❤️", "😂", "🎉", "😮"];
 
-fn schema_v12_valid(c: &Connection) -> Result<bool, StorageError> {
+/// The v12 schema's shape only: the ledger, `user_version`, the table and its
+/// columns, and the one value constraint the version added. Cheap and bounded
+/// (measured: under 1 ms on a 1.08 GB file), which is why the steady start uses
+/// it; the whole-file checks moved to [`integrity`].
+fn schema_v12_shape_valid(c: &Connection) -> Result<bool, StorageError> {
     let ledger: i64 = c.query_row("SELECT COALESCE(MAX(version),0) FROM schema_migrations", [], |r| r.get(0))?;
     let pragma: i64 = c.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     let table: bool = c.query_row("SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='message_reactions')", [], |r| r.get(0))?;
@@ -464,10 +473,15 @@ fn schema_v12_valid(c: &Connection) -> Result<bool, StorageError> {
     for column in ["session_id", "message_id", "emoji", "created_at"] {
         if !c.query_row("SELECT EXISTS(SELECT 1 FROM pragma_table_info('message_reactions') WHERE name=?1)", [column], |r| r.get::<_, bool>(0))? { return Ok(false); }
     }
-    let integrity: String = c.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
-    Ok(integrity == "ok"
-        && c.query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |r| r.get::<_, i64>(0))? == 0
-        && c.query_row("SELECT count(*) FROM message_reactions WHERE emoji NOT IN ('👍','👎','❤️','😂','🎉','😮')", [], |r| r.get::<_, i64>(0))? == 0)
+    Ok(c.query_row("SELECT count(*) FROM message_reactions WHERE emoji NOT IN ('👍','👎','❤️','😂','🎉','😮')", [], |r| r.get::<_, i64>(0))? == 0)
+}
+
+/// The shape plus the whole file: what a migration checks before it serves a
+/// database it just changed. A steady start runs [`integrity::gate_before_serving`]
+/// instead, which does not read every page.
+fn schema_v12_valid(c: &Connection) -> Result<bool, StorageError> {
+    if !schema_v12_shape_valid(c)? { return Ok(false); }
+    Ok(integrity::passes(c))
 }
 
 fn migrate_message_reactions(c: &mut Connection, path: Option<&Path>, backup_done: bool) -> Result<(), StorageError> {
@@ -2369,6 +2383,10 @@ pub struct Storage {
     /// spends about 100 ms reading its tool payloads (2026-11-01). `None` for an
     /// in-memory database, as for the others.
     detail_conn: Option<Mutex<Connection>>,
+    /// The file this database lives in, when it is a file at all. The full
+    /// database check opens a read-only connection of its own from it, after the
+    /// ready line (see [`integrity`]).
+    path: Option<PathBuf>,
 }
 
 /// What an unclean exit had to settle, so boot can announce it: the sessions
@@ -2600,6 +2618,10 @@ impl Drop for Storage {
 impl Storage {
     pub fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
         let path = path.as_ref();
+        // 21 November 2026: the file's own header, before SQLite parses it. 100
+        // bytes, so a file that is not a database at all is still refused before
+        // anything is served; the page-by-page check runs after the ready line.
+        integrity::check_file_header(path)?;
         let conn = Connection::open(path)?;
         Self::migrate(conn, Some(path))?.normalize_removed_theme()?.apply_setting_shims()
     }
@@ -2637,7 +2659,7 @@ impl Storage {
     fn migrate(conn: Connection, path: Option<&Path>) -> Result<Self, StorageError> {
         let storage = Self::migrate_versions(conn, path)?;
         { let mut c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; ensure_agent_accept_edits(&mut c, path)?; }
-        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; phase1b::ensure_phase1b_schema(&c)?; phase2::ensure_phase2_schema(&c)?; phase4::ensure_phase4_schema(&c)?; phase5::ensure_phase5_schema(&c)?; phase6::ensure_phase6_schema(&c)?; phase8::ensure_phase8_schema(&c)?; phase9::ensure_phase9_schema(&c)?; phase10::ensure_phase10_schema(&c)?; ensure_tasks_schema(&c)?; connectors::ensure_connectors_schema(&c)?; ensure_delegation_schema(&c)?; ensure_permission_rules_schema(&c)?; ensure_team_queue_schema(&c)?; ensure_client_message_id_indexes(&c)?; }
+        { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; phase1b::ensure_phase1b_schema(&c)?; phase2::ensure_phase2_schema(&c)?; phase4::ensure_phase4_schema(&c)?; phase5::ensure_phase5_schema(&c)?; phase6::ensure_phase6_schema(&c)?; phase8::ensure_phase8_schema(&c)?; phase9::ensure_phase9_schema(&c)?; phase10::ensure_phase10_schema(&c)?; ensure_tasks_schema(&c)?; connectors::ensure_connectors_schema(&c)?; ensure_delegation_schema(&c)?; ensure_permission_rules_schema(&c)?; ensure_team_queue_schema(&c)?; ensure_client_message_id_indexes(&c)?; integrity::ensure_schema(&c)?; }
         { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; phase9::ensure_phase9_data(&c)?; }
         { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; channels::ensure_channel_schema(&c)?; }
         { let c = storage.conn.lock().map_err(|_| StorageError::Poisoned)?; secret_refs::ensure_secret_refs_schema(&c)?; computer_link::ensure_computer_link_schema(&c)?; vault::ensure_vault_schema(&c)?; ensure_pi_gates(&c)?; wave2::ensure_wave2_schema(&c)?; }
@@ -2661,7 +2683,14 @@ impl Storage {
             let user:i64=conn.query_row("PRAGMA user_version",[],|r|r.get(0))?;
             if ledger>12||(user!=0&&user!=ledger)||(ledger>=2&&user!=ledger){return Err(StorageError::InvalidAgent)}
             if ledger==12 {
-                if !schema_v12_valid(&conn)? { return Err(StorageError::InvalidAgent); }
+                // 21 November 2026: the steady start no longer runs
+                // `PRAGMA integrity_check` over every page here. The shape is
+                // checked in full, the file's header is read (see
+                // `Storage::open`), and a marker left by a failed full check
+                // keeps the file refused until one passes; the full check
+                // otherwise runs after the ready line, at low priority.
+                if !schema_v12_shape_valid(&conn)? { return Err(StorageError::InvalidAgent); }
+                integrity::gate_before_serving(&conn)?;
                 ensure_team_schema(&conn)?;
                 ensure_queue_schema(&conn)?;
                 ensure_automation_schema(&conn)?;
@@ -2870,7 +2899,7 @@ impl Storage {
             Some(path) => (Some(Mutex::new(open_reader(path)?)), Some(Mutex::new(open_reader(path)?)), Some(Mutex::new(open_reader(path)?))),
             None => (None, None, None),
         };
-        Ok(Self { conn: Mutex::new(conn), snapshot_reader, read_conn, detail_conn })
+        Ok(Self { conn: Mutex::new(conn), snapshot_reader, read_conn, detail_conn, path: path.map(Path::to_path_buf) })
     }
     /// Changes the writer connection's durability mode. It exists so the
     /// timing example can compare the shipped `synchronous=FULL` (the owner's
