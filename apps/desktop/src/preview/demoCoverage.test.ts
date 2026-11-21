@@ -49,7 +49,7 @@ describe('preview demo coverage', () => {
       })
     }
     const fixtures = new Set<string>()
-    for (const path of ['preview/fixtureBridge.ts', 'preview/fixtureTasks.ts', 'preview/remoteFixture.ts']) {
+    for (const path of ['preview/fixtureBridge.ts', 'preview/fixtureTasks.ts', 'preview/remoteFixture.ts', 'preview/fixtureSuggestions.ts']) {
       walk(source(path), (node) => {
         if (ts.isCaseClause(node) && ts.isStringLiteral(node.expression)) fixtures.add(node.expression.text)
         if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken
