@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "bce8232a",
-  "documentCount": 446,
+  "revision": "a44b9133",
+  "documentCount": 447,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -2826,6 +2826,46 @@
       ]
     },
     {
+      "id": "project/reports/preview-demo-inventory",
+      "source": "docs/reports/preview-demo-inventory.md",
+      "title": "Demo inventory: production app vs the browser preview",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "0369f2b004dfb5436b70fa6a34d001f357a8a13191035850c4a45fc951ba2271",
+      "headings": [
+        {
+          "id": "method",
+          "text": "Method",
+          "level": 2
+        },
+        {
+          "id": "inventory",
+          "text": "Inventory",
+          "level": 2
+        },
+        {
+          "id": "summary-counts",
+          "text": "Summary counts",
+          "level": 2
+        },
+        {
+          "id": "error-messages",
+          "text": "Error messages",
+          "level": 2
+        },
+        {
+          "id": "events-the-preview-never-emits",
+          "text": "Events the preview never emits",
+          "level": 2
+        },
+        {
+          "id": "top-15-gaps",
+          "text": "Top 15 gaps",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/STYLE",
       "source": "docs/STYLE.md",
       "title": "Documentation style guide",
@@ -5204,7 +5244,7 @@
       "title": "Retinue collaboration instructions",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "042162ffb736f957bbc8f4726151a51f6c9c3d11a1c5ceb5e0ef3610ccd6c44a",
+      "sha256": "bee478ceca5875246c1e5d8a6ede0939f1c3e2ef6c4334b2c8abda63959e737e",
       "headings": [
         {
           "id": "resume-1-october-2026-evening-superseded-by-delegation-pipeline-above",

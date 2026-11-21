@@ -2,6 +2,10 @@
 
 **Every agent, whatever the model: before working in this repository, read `.claude/skills/retinue-development/SKILL.md` and the reference it points to for your task. Before you report a task done, update that skill with anything the task taught (a fix and its root cause, a changed design rule, a new pattern, a changed tool or gate), as its "Keep this skill current" section describes. If your sandbox is read-only, put the proposed update in your report.**
 
+# Rule (21 November 2026): everything is demoable
+
+Owner directive. Every function, screen, state and error that is live in the production app must be demoable in the web preview, through its "Demo" badge and debug menu. A change that adds one adds its demo entry and preview fixture in the same change; the demo coverage test enforces it, and anything that can't be demoed is listed there with its reason. The badge and menu never ship in the production bundle.
+
 # Amendment (17 November 2026): Retinue on many machines
 
 Owner decisions of 17 November 2026 (live session, after Grey's report in `docs/research/multi-device/`). The goal: the laptop, the home computer, the VPS and the phone see the same sessions live, any of them can carry one on, and work can be started on any machine from the device in hand, as in T3 Code. It amends the 31 October machine-link amendment and the 17 October Remote amendments for these paths only. Each lane adds its rows to `docs/remote/THREAT_MODEL.md` section 16.
