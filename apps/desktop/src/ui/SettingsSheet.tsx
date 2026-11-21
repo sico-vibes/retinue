@@ -57,6 +57,8 @@ import { useEntityNoun } from './vocabulary'
 import { useThemeStyle } from '../blob/retinue'
 import './retinueUi.css'
 
+import { FOLLOW_UP_SETTING } from './sessionSuggestions'
+
 export type SettingsPageId = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Computer' | 'Secrets' | 'Connectors' | 'Vault' | 'Channels' | 'Pi' | 'Updates' | 'Backup' | 'Health'
 
 type SettingsTab = { label: string; icon: typeof SlidersHorizontal; pages: Array<{ id: SettingsPageId; label: string }> }
@@ -200,6 +202,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
   const [confirmFullDefault, setConfirmFullDefault] = useState(false)
   const [readSignIns, setReadSignIns] = useState(false)
   // Wave 3 (17 November 2026): the context blocks before the owner's words, off for one release to compare.
+  const [followUpSuggestions, setFollowUpSuggestions] = useState(true)
   const [contextFirst, setContextFirst] = useState(false)
   const [sendShortcut, setSendShortcut] = useState<SendShortcut>('enter')
   const [bindings, setBindings] = useState<ShortcutBindings>({})
@@ -234,6 +237,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
       setSendShortcut(normalizeSendShortcut(settings['composer.sendShortcut']))
       setBindings(normalizeBindings(settings['shortcuts.bindings']))
       setReadSignIns(settings['usage.readCliSignIns'] === true)
+      setFollowUpSuggestions(settings[FOLLOW_UP_SETTING] !== false)
       setContextFirst(settings['prompts.contextFirst'] === true)
       setDisabledRuntimes(Array.isArray(settings['runtimes.disabled']) ? (settings['runtimes.disabled'] as unknown[]).filter((item): item is string => typeof item === 'string') : [])
       if (typeof settings['companion.openAtStartup'] === 'boolean') setCompanionOpenAtStartup(settings['companion.openAtStartup'])
@@ -655,6 +659,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
               <SettingsRow label="Steer a running OpenCode turn" hint="Needs OpenCode 2.2.7 or later. Older versions queue the message.">{pageSwitch('Steer a running OpenCode turn', steerGates.opencode, 'exec_gate.opencode.steer', (next) => setSteerGates((current) => ({ ...current, opencode: next })))}</SettingsRow>
             </SettingsGroup>
             <SettingsGroup title="Conversations">
+              <SettingsRow label="Show follow-up suggestions" hint="Suggests a next message after a reply.">{pageSwitch('Show follow-up suggestions', followUpSuggestions, FOLLOW_UP_SETTING, setFollowUpSuggestions)}</SettingsRow>
               <SettingsRow label="Agent activity" hint="What the coding agent did during a reply, as one line you can open.">{pageSwitch('Agent activity', activityDetails, 'experimental.activityDetails', (next) => onActivityDetailsChange?.(next))}</SettingsRow>
               {featureRow('messageActions')}
               {featureRow('changeReview')}

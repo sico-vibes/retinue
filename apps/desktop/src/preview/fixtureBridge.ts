@@ -606,6 +606,7 @@ function fixtureMembers(projectId: string) {
 export async function rpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
   if (method === 'app.snapshot') return await fetchSnapshot() as T
   if (method === 'permissions.policy.get') return await permissionsPolicyGet() as T
+  if (method === 'session.prompt' || method.startsWith('session.suggestion.')) { const reply = (await import('./fixtureSuggestions')).fixtureSuggestionRpc(method, params, fixtureSettings, daemonListeners, notifyFixtureDaemon); if (reply !== undefined) return reply as T }
   if (method === 'remote.preview.pair') {
     // Preview only: act as the phone submitting the code for the live offer. It
     // raises `remote.pairing.requested`; the owner still approves or rejects.
