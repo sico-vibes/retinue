@@ -2,6 +2,7 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+<<<<<<< HEAD
 ## 2026-11-21 · Gates · Daemon tests that fail only because the user folder has a space
 
 - **Symptom:** on the owner's machine (user folder `C:\Users\Sico Vibes`) a full `cargo test -p retinue-daemon` never passes in one run. With the default `TEMP` (the 8.3 form `C:\Users\SICOVI~1\...`) six path tests fail (`repository::tests::*`, `worktree_cleanup::tests::a_deleted_conversations_worktree_is_listed`, `review_scopes::tests::a_turn_in_a_nested_project_folder_reports_the_repository_path`, `phase2a_tests::session_repository_reads_the_conversations_own_folder_and_never_a_client_path`, `machines_tests::take_over_moves_the_conversation_and_the_code`): git reports the long path, the test expects the short one. With `TEMP` set to the long form, the clone tests (`phase2a_tests::clone_*`, `*_clone_*`) fail instead with `invalid_argument` "That doesn't look like a repository address.", because their local repository path now contains a space.
@@ -33,6 +34,17 @@ Newest first. One entry per lesson: date, area, symptom, root cause with evidenc
 - **Cause:** `harness_update` and its version read in `apps/desktop/src-tauri/src/harness_updates.rs` (`:88`, `:136`) spawn `powershell.exe` with no creation flag, from a process built as a GUI application (`apps/desktop/src-tauri/src/main.rs:1`). The mechanism is already written down: `docs/history/fix-35/c5-windows.md:9` — a console program started by a process with no console gets a console of its own.
 - **Fix (research and proposal, `docs/research/cli-install-and-update.md`):** run the resolved CLI directly instead of through PowerShell, with piped stdio, and hide every child in one place — `retinue_process::prepare_command` is the natural home, set to `CREATE_NO_WINDOW | CREATE_SUSPENDED` (`0x0800_0004`) exactly as `project_setup.rs:231-238` already does. `prepare_command` on its own sets only `CREATE_SUSPENDED`, so a job-owned child is paused but not hidden. The remaining unflagged sites are listed in section 9 of that report.
 - **Avoid:** a new `Command::new` in `crates/**/src` or `apps/desktop/src-tauri/src` goes through `prepare_command`/a `hide_window` helper, never a bare spawn; the report proposes a source-scan gate in the style of `fix39_p12_tests::every_log_call_site_is_a_fixed_message`.
+=======
+## 2026-11-21 · Performance · One streamed token re-renders the whole app, and the render gate fails
+
+- **Symptom:** a long conversation janks while a reply streams and while typing, in proportion to its length.
+- **Cause, measured and read:** every adapter delta becomes one DB write pair (`append_message_delta` + `push_event`, each autocommit on `synchronous=FULL`, 2.6–11.6 ms per token on the owner's data), one WS frame, one Tauri `daemon-event` and one `setSnapshot(applyEvent(...))`. `App` has no `React.memo` anywhere, no virtualisation, and `ui/App.tsx:705,850,853,899` rebuild the transcript's data structures on every render while `ui/SafeMarkdown.tsx:221-247` re-parses every message's Markdown: **33 ms** for 1,000 messages (590 KB of text) in Node 24 with no DOM. `ui/App.tsx:1173-1177` also reads `scrollHeight` on every token. The Codex/ACP adapters coalesce only above 128 queued events, and Claude does not coalesce at all.
+- **Second finding:** `npm run perf:render` fails on this machine (20.1 s, 39.1 s, 75.4 s; budget 30 s) and climbs each run, so its DOM-harness number is not a usable signal until each run gets a fresh process.
+- **What is not the problem (do not "optimise" it):** `BlobCanvas` sleeps between blinks and stops when hidden; only group-start rows mount an avatar; fonts, pdf.js, three.js and reply icons are already lazy; startup snapshots are lazy; drafts are debounced 250 ms.
+- **Fix, in order:** coalesce deltas in the daemon (33–50 ms or 8 KiB, flush before any non-delta event of the session); memoise rows, Markdown and the derived transcripts; window the transcript (reuse `earlierWindow`, `ui/chatScroll.ts:34`); move the composer to local state; lazy-load pages and give the companion its own entry; cache CLI probes and warm only the needed catalog at launch.
+- **Full report with numbers, sources (Pandacode, T3 Code, Synara) and the proposed budget and benchmark:** `docs/research/performance-2026-11.md`.
+- **Avoid:** reading `scrollHeight` after a render that changed the transcript, per-token state that re-renders a list without memoised rows, and a perf gate that measures a test DOM whose mount time only goes up.
+>>>>>>> retinue/research-making-retinue-faster-and-snapp
 
 ## 2026-11-20 · Storage · A provider payload kept "just in case" was the whole database
 
