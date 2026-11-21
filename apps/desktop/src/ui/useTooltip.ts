@@ -7,12 +7,13 @@ import { placeTooltip, type TipPlacement } from './tooltipPosition'
  * the portalled bubble, and `point` is the clamped fixed position to apply.
  * `bind` carries the open/close handlers (hover, focus and Escape).
  */
-export function useTooltip<T extends HTMLElement = HTMLElement>(placement: TipPlacement, watch: readonly unknown[] = []) {
+export function useTooltip<T extends HTMLElement = HTMLElement>(placement: TipPlacement, watch: readonly unknown[] = [], measureWhenClosed = true) {
   const anchor = useRef<T>(null)
   const bubble = useRef<T>(null)
   const [open, setOpen] = useState(false)
   const [point, setPoint] = useState({ left: 0, top: 0 })
   useLayoutEffect(() => {
+    if (!open && !measureWhenClosed) return
     const place = () => {
       const rect = anchor.current?.getBoundingClientRect()
       if (!rect) return
@@ -25,7 +26,7 @@ export function useTooltip<T extends HTMLElement = HTMLElement>(placement: TipPl
     window.addEventListener('scroll', place, true)
     return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, placement, ...watch])
+  }, [open, placement, measureWhenClosed, ...watch])
   const bind = {
     onMouseEnter: () => setOpen(true),
     onMouseLeave: () => setOpen(false),

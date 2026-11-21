@@ -322,6 +322,37 @@ async function openAssignment(host: HTMLElement) {
   await click(host.querySelector('.delegation-group .delegation-open'))
 }
 
+describe('turn stop cards', () => {
+  const waiting = { ...sessions[1], state: 'working', messages: [{ id: 'prompt', role: 'user', content: 'Run the tests.', turnId: 'startup' }], turns: [] }
+  const checkReason = (host: HTMLElement) => {
+    const cards = host.querySelectorAll('.turn-error-card')
+    expect(cards).toHaveLength(1)
+    expect(cards[0]?.querySelector('p')?.textContent).toBe('operation timed out')
+    expect(host.querySelector('.session-first-state')).toBeNull()
+  }
+
+  it('shows a live startup failure before any reply or tool and keeps its reason after reloading', async () => {
+    configure(snapshot({ sessions: [waiting] }))
+    const live = startApp()
+    await live.settle()
+    act(() => emit({ type: 'turn.error', sequence: 21, payload: { sessionId: waiting.id, turnId: 'startup', state: 'error', failureClass: 'other', message: 'The turn could not be completed.', detail: 'operation timed out' } }))
+    checkReason(live.host)
+    live.unmount()
+
+    configure(snapshot({ sessions: [{ ...waiting, state: 'error', turns: [{ id: 'startup', state: 'error', failureClass: 'other', failureMessage: 'The turn could not be completed.', detail: 'operation timed out' }] }] }))
+    const reloaded = startApp()
+    await reloaded.settle()
+    checkReason(reloaded.host)
+  })
+
+  it('renders an error message from the snapshot as a stop card when it is the only message', async () => {
+    configure(snapshot({ sessions: [{ ...waiting, state: 'error', messages: [{ id: 'startup-error', role: 'error', kind: 'error', text: 'The turn could not be completed.\noperation timed out' }] }] }))
+    const view = startApp()
+    await view.settle()
+    checkReason(view.host)
+  })
+})
+
 describe('blob roster and editor', () => {
   it('sets up the Manager from onboarding with the detected runtime id and Ask approval', async () => {
     configure(snapshot({ runtimes: [codexRuntime], agents: [], sessions: [] }))

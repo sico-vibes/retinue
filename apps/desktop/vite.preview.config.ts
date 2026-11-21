@@ -9,7 +9,13 @@ const fixture = (file: string) => fileURLToPath(new URL(`./src/preview/${file}`,
 
 export default defineConfig({
   server: { watch: { ignored: ['**/src-tauri/**', '**/target/**'] } },
-  plugins: [react()],
+  plugins: [react(), {
+    name: 'retinue-preview-demo',
+    transformIndexHtml(html, context) {
+      if (context.path !== '/index.html' && context.path !== '/') return html
+      return [{ tag: 'script', attrs: { type: 'module', src: '/src/preview/turnStopDemo.ts' }, injectTo: 'body' }]
+    },
+  }],
   clearScreen: false,
   resolve: {
     alias: [

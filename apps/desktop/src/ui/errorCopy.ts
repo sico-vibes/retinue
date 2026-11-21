@@ -159,7 +159,7 @@ const INTERNAL: FriendlyError = {
   tone: 'failure',
 }
 
-const CANCELLED: FriendlyError = { title: 'Cancelled.', tone: 'info' }
+const CANCELLED: FriendlyError = { title: 'Cancelled.', detail: 'The turn was cancelled.', tone: 'info' }
 
 const INVALID: FriendlyError = {
   title: 'That did not work.',
