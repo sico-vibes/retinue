@@ -2,6 +2,16 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-21 · Performance · One streamed token re-renders the whole app, and the render gate fails
+
+- **Symptom:** a long conversation janks while a reply streams and while typing, in proportion to its length.
+- **Cause, measured and read:** every adapter delta becomes one DB write pair (`append_message_delta` + `push_event`, each autocommit on `synchronous=FULL`, 2.6–11.6 ms per token on the owner's data), one WS frame, one Tauri `daemon-event` and one `setSnapshot(applyEvent(...))`. `App` has no `React.memo` anywhere, no virtualisation, and `ui/App.tsx:705,850,853,899` rebuild the transcript's data structures on every render while `ui/SafeMarkdown.tsx:221-247` re-parses every message's Markdown: **33 ms** for 1,000 messages (590 KB of text) in Node 24 with no DOM. `ui/App.tsx:1173-1177` also reads `scrollHeight` on every token. The Codex/ACP adapters coalesce only above 128 queued events, and Claude does not coalesce at all.
+- **Second finding:** `npm run perf:render` fails on this machine (20.1 s, 39.1 s, 75.4 s; budget 30 s) and climbs each run, so its DOM-harness number is not a usable signal until each run gets a fresh process.
+- **What is not the problem (do not "optimise" it):** `BlobCanvas` sleeps between blinks and stops when hidden; only group-start rows mount an avatar; fonts, pdf.js, three.js and reply icons are already lazy; startup snapshots are lazy; drafts are debounced 250 ms.
+- **Fix, in order:** coalesce deltas in the daemon (33–50 ms or 8 KiB, flush before any non-delta event of the session); memoise rows, Markdown and the derived transcripts; window the transcript (reuse `earlierWindow`, `ui/chatScroll.ts:34`); move the composer to local state; lazy-load pages and give the companion its own entry; cache CLI probes and warm only the needed catalog at launch.
+- **Full report with numbers, sources (Pandacode, T3 Code, Synara) and the proposed budget and benchmark:** `docs/research/performance-2026-11.md`.
+- **Avoid:** reading `scrollHeight` after a render that changed the transcript, per-token state that re-renders a list without memoised rows, and a perf gate that measures a test DOM whose mount time only goes up.
+
 ## 2026-11-20 · Storage · A provider payload kept "just in case" was the whole database
 
 - **Symptom:** the owner's `retinue.db` reached 1.3 GB. Two causes, measured: `tool_calls.data.raw` held every provider's own payload (982 MB in 2,410 edit rows, the largest 2.4 MB), and `app_events` was never trimmed (166 MB).
