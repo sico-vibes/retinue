@@ -152,7 +152,7 @@ One set of parts in `ui/QuotaBar.tsx`: `LimitMeter` (its mark shows how much of 
 - **A tagged project** in a message is its icon then its name, like a tagged employee (`splitProjectTags`, `ProjectsContext`).
 - **The logo at the top left** always shows the metallic paint, not only on hover.
 - **The Look editor's left** is the employee's badge on a lanyard (React Bits Lanyard, three.js, lazy), redrawn live from photo, name, role and colour; the back is the company card (mark, RETINUE, "Authorised access"). Photos other employees wear show a lock and can't be picked.
-- **Launch** stays on screen at least `LAUNCH_HOLD_MS` (2 s) after every check settles.
+- **Launch** opens the app as soon as every check settles, after a short `LAUNCH_HOLD_MS` (300 ms) so the mark shows it is ready (owner, 21 November 2026: the 2 s hold is gone, for speed).
 
 ## Tokens
 

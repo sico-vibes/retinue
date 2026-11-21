@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
 import type { JsonRecord } from '../types'
 import { outlineTickInfluence, stepOutlineSpring, stepOutlineCardSpring } from './meterMotion'
+import { transcriptElement } from './transcriptWindow'
 
 export type ConversationOutlineItem = {
   anchor: string
@@ -129,7 +130,7 @@ export function ConversationOutline({ items, sessionId }: { items: ConversationO
     const next = clampIndex(index)
     activeRef.current = next
     setActive(next)
-    const target = document.getElementById(items[next]?.anchor ?? '')
+    const target = transcriptElement(items[next]?.anchor ?? '')
     target?.scrollIntoView({ block: 'center', behavior: immediate || window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
   }
 

@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { reactWithCompiler } from './vite.react'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [reactWithCompiler()],
   clearScreen: false,
   server: {
     watch: { ignored: ['**/src-tauri/**', '**/target/**'] }, strictPort: true, port: 1420 },

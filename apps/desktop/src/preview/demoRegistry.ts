@@ -43,6 +43,7 @@ export const demoEntries: readonly DemoEntry[] = [
     url: conversation + '&companion&mode=home&view=chat&demo-live=' + state,
   })),
   live('paused', 'Conversation', 'Prompt queue paused'),
+  { id: 'haze-frame-strain', area: 'Main shell', label: 'Settings while the window is struggling (solid glass)', url: '/?no-intro&clean&open=settings:General&frame-strain' },
   { id: 'first-run', area: 'First run and launch', label: 'First run in the app', url: '/?no-intro&demo-first-run' },
   { id: 'scan-error', area: 'First run and launch', label: 'Coding agent scan fails', url: '/?no-intro&demo-first-run&demo-scan-error', steps: [{ clickText: 'Scan again' }] },
   { id: 'search-results', area: 'Conversation', label: 'Message search results', url: '/?no-intro&clean&open=search', steps: [{ type: ['input[aria-label="Search message text"]', 'invoice'] }] },

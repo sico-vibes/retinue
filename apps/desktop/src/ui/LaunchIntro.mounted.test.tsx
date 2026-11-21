@@ -51,7 +51,8 @@ describe('LaunchIntro', () => {
     expect(logo?.getAttribute('aria-label')).toBe('Retinue')
     expect(logo?.classList.contains('is-greeting')).toBe(true)
     expect(mounted.querySelector('canvas.blob-canvas')).toBeNull()
-    await act(async () => { await vi.advanceTimersByTimeAsync(1900) })
+    // Owner, 21 November 2026: the app opens LAUNCH_HOLD_MS (300 ms) after the checks settle, not 2 s.
+    await act(async () => { await vi.advanceTimersByTimeAsync(200) })
     expect(complete).not.toHaveBeenCalled()
     await act(async () => { await vi.advanceTimersByTimeAsync(3100) })
     expect(complete).toHaveBeenCalledOnce()

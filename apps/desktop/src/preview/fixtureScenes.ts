@@ -315,6 +315,14 @@ const SCENES: Record<string, () => Scene> = {
     messages: [user('Update the conversation suggestions.'), bot('I updated the suggestions.', { turnId: 'scene-turn' })],
     files: [{ id: 'long-review-file', turnId: 'scene-turn', path: longReviewFolder + '/apps/desktop/src/ui/conversations/suggestions/sessionSuggestions.ts', detail: { diff: '@@ -1 +1,2 @@\n-old\n+new\n+test' } }],
   }),
+  // The performance benchmark's long conversation (docs/research/performance-2026-11.md, section 8):
+  // 1,000 messages, every fourth reply a full Markdown document.
+  'bench-long': () => ({
+    title: 'A 1,000-message conversation',
+    messages: Array.from({ length: 1000 }, (_, index) => index % 2 === 0
+      ? user(`Question ${index / 2 + 1}: can you check the next part of the change?`, { turnId: `bench-turn-${index >> 1}` })
+      : bot(index % 8 === 7 ? MARKDOWN : `Done. Part ${(index + 1) / 2} is checked and the tests pass.`, { turnId: `bench-turn-${index >> 1}` })),
+  }),
   'queue-resume-works': () => resumeScene('works'),
   'queue-resume-error': () => resumeScene('error'),
   'queue-resume-busy': () => resumeScene('busy'),

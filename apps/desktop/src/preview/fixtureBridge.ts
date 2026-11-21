@@ -2252,6 +2252,10 @@ function notifyFixtureDaemon(type: string, payload: Record<string, unknown>) {
   const event = { sequence: ++sequence, type, payload } as DaemonEvent
   for (const handler of daemonListeners) handler(event)
 }
+// The performance benchmark delivers daemon events exactly as the app receives them (`?bench`).
+if (flags().has('bench')) (window as unknown as { __benchEmit?: typeof notifyFixtureDaemon }).__benchEmit = notifyFixtureDaemon
+// Haze's solid-glass fallback while frames are long (ui/frameStrain.ts), held on for the demo (`?frame-strain`).
+if (flags().has('frame-strain')) document.documentElement.dataset.frameStrain = 'true'
 export async function listenForDaemonConnection(handler: (connected: boolean) => void): Promise<Unlisten> {
   connectionListeners.add(handler)
   if (!fixtureConnected) handler(false)

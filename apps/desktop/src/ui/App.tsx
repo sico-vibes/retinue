@@ -48,6 +48,8 @@ import { applyFocusMode, focusModeFromSettings, FOCUS_MODE_CHANGED_EVENT, saveFo
 import { advanceDropZone, dropChips, dropZoneActive, DROP_LEAVE_GRACE_MS, type DropPhase } from './companionDrop'
 import { clearCompanionPosition } from './companionPositions'
 import { earlierWindow, isNearBottom, metricsOf } from './chatScroll'
+import { flushSync } from 'react-dom'
+import { LOAD_EARLIER_WITHIN, TRANSCRIPT_PAGE, onTranscriptShowAll, transcriptElement, transcriptWindowStart } from './transcriptWindow'
 import { SoundVolumeSlider } from './SoundVolumeSlider'
 import { DEFAULT_SOUND_VOLUME, normalizeSoundVolume } from '../blob/soundVolume'
 import { applySoundPrefs, saveSoundsEnabled, saveSoundVolume, soundPrefsFromSettings, subscribeSoundPrefs, SOUNDS_CHANGED_EVENT, SOUND_VOLUME_CHANGED_EVENT } from './soundPrefs'
@@ -181,6 +183,15 @@ type AppliedModelState = { sessionId: string; model: string | null; hasSnapshot:
 type MessageMenuTarget = { x: number; y: number; sessionId: string; messageId: string; text: string; latest: boolean; references: NonNullable<ChatMessage['references']>; attachments: Array<{ name: string; path: string }>; replyTo: ReplyTarget | null }
 
 function cachedFont(key: string) { try { return localStorage.getItem(key) ?? '' } catch { return '' } }
+
+/**
+ * `try { work } finally { after }`, kept outside the components: React Compiler cannot compile a
+ * component that contains a `finally` block, and App must compile so a keystroke or a streamed
+ * chunk does not re-render every row (21 November 2026, docs/research/performance-2026-11.md).
+ */
+async function withFinally<T>(work: () => Promise<T>, after: () => void): Promise<T> {
+  try { return await work() } finally { after() }
+}
 
 export function App() {
   const companion = new URLSearchParams(location.search).has('companion')
@@ -477,6 +488,10 @@ export function App() {
   /** The outline only appears once the conversation is long enough to scroll. */
   const [conversationScrollable, setConversationScrollable] = useState(false)
   const stickToBottom = useRef(true)
+  /** 21 November 2026: how many of the newest transcript rows are mounted, per conversation (transcriptWindow.ts). */
+  const [transcriptPage, setTranscriptPage] = useState<{ id: string | null; shown: number }>({ id: null, shown: TRANSCRIPT_PAGE })
+  const transcriptSessionId = useRef<string | null>(null)
+  const transcriptAnchor = useRef<number | null>(null)
   /** Owner, 14 November 2026: scrolled well up, a button above the composer goes back down. */
   const [farFromBottom, setFarFromBottom] = useState(false)
   /** Importing conversations from other coding agents (14 November 2026). */
@@ -714,7 +729,7 @@ export function App() {
     if (!stopTarget || selectedSession?.id !== stopTarget.sessionId || selectedSession.partial) return
     const stop = latestTurnStop(selectedSession)
     const frame = requestAnimationFrame(() => {
-      const card = stop && document.getElementById(`conversation-message-${encodeURIComponent(stop.id)}`)
+      const card = stop && transcriptElement(`conversation-message-${encodeURIComponent(stop.id)}`)
       if (card) {
         stickToBottom.current = false
         card.scrollIntoView?.({ block: 'center' })
@@ -748,7 +763,7 @@ export function App() {
     if (!searchTarget || selectedSession?.id !== searchTarget.sessionId) return
     const anchor = `conversation-message-${encodeURIComponent('message:' + searchTarget.messageId)}`
     const frame = requestAnimationFrame(() => {
-      const element = document.getElementById(anchor)
+      const element = transcriptElement(anchor)
       if (element) {
         element.scrollIntoView?.({ block: 'center' })
         element.setAttribute('tabindex', '-1')
@@ -872,6 +887,14 @@ export function App() {
   // Messages this conversation's bot sent to teammates read as one assignment card per turn, with the daemon's recorded status.
   const delegationLedger = useDelegations(selectedSession && !isDraftSession(selectedSession) ? selectedSession.id : null, connection === 'connected')
   const { runs: delegationRunMap, folded: delegationFolded } = delegationRuns(groupedConversationItems)
+  const transcriptShown = transcriptPage.id === (selectedSession?.id ?? null) ? transcriptPage.shown : TRANSCRIPT_PAGE
+  const transcriptImageOf = (entry: (typeof groupedConversationItems)[number] | undefined) => entry?.kind === 'message' && String(entry.value?.role ?? '') === 'notice' ? generatedImageMeta(entry.value?.meta) : null
+  const transcriptStart = transcriptWindowStart(groupedConversationItems.length, transcriptShown, (index) => !!transcriptImageOf(groupedConversationItems[index]) && !!transcriptImageOf(groupedConversationItems[index - 1]))
+  const loadEarlierRows = () => {
+    const node = messageListRef.current
+    if (node) transcriptAnchor.current = node.scrollHeight - node.scrollTop
+    setTranscriptPage({ id: selectedSession?.id ?? null, shown: transcriptShown + TRANSCRIPT_PAGE })
+  }
   const delegationQuestions = new Set((snapshot?.permissions ?? []).filter((permission) => permission.kind === 'question' && typeof permission.sessionId === 'string' && isPendingPermissionLive(permission, permissionClock)).map((permission) => permission.sessionId!))
   const delegationApprovals = new Set((snapshot?.permissions ?? []).filter((permission) => typeof permission.sessionId === 'string' && isPendingPermissionLive(permission, permissionClock)).map((permission) => permission.sessionId!))
   const newestLegacyBySide = newestNoticeBySide(delegationRunMap)
@@ -1027,7 +1050,7 @@ export function App() {
     refreshingRef.current = true
     hydrating.current = true
     setRefreshing(true)
-    try {
+    await withFinally(async () => { try {
       await ensureDaemon()
       const deletedSessionIds = snapshotRef.current?.deletedSessionIds ?? []
       let next = preserveDeletedSessions(await fetchSnapshot(), deletedSessionIds)
@@ -1049,14 +1072,14 @@ export function App() {
       hydrating.current = false
       setConnection('disconnected')
       setError(messageOf(reason))
-    } finally {
+    } }, () => {
       refreshingRef.current = false
       setRefreshing(false)
       if (refreshAgain.current) {
         refreshAgain.current = false
         window.setTimeout(() => void refresh(), 0)
       }
-    }
+    })
   }, [hydrateAgentChanges, hydrateSessionChange, refreshAppliedModelFromEvent])
 
   useEffect(() => {
@@ -1201,6 +1224,15 @@ export function App() {
     const element = messageListRef.current
     if (element && stickToBottom.current) element.scrollTop = element.scrollHeight
   }, [selectedSession?.id, sessionMessages, selectedSession?.tools, selectedSession?.files, selectedSession?.turns])
+  useEffect(() => { transcriptSessionId.current = selectedSession?.id ?? null }, [selectedSession?.id])
+  // A jump to a row outside the mounted page mounts the whole conversation first, synchronously (transcriptWindow.ts).
+  useEffect(() => onTranscriptShowAll(() => flushSync(() => setTranscriptPage({ id: transcriptSessionId.current, shown: Number.POSITIVE_INFINITY }))), [])
+  // Loading an earlier page keeps the rows the owner was reading where they were.
+  useLayoutEffect(() => {
+    const node = messageListRef.current
+    if (node && transcriptAnchor.current !== null) node.scrollTop = node.scrollHeight - transcriptAnchor.current
+    transcriptAnchor.current = null
+  }, [transcriptShown])
 
   useEffect(() => {
     if (!inDesktop) return
@@ -1340,7 +1372,7 @@ export function App() {
       }
       refreshingRef.current = true
       hydrating.current = true
-      try {
+      await withFinally(async () => { try {
         await ensureDaemon()
         const deletedSessionIds = snapshotRef.current?.deletedSessionIds ?? []
         let initial = preserveDeletedSessions(await fetchSnapshot(), deletedSessionIds)
@@ -1370,10 +1402,10 @@ export function App() {
           setConnection('disconnected')
           setError(messageOf(reason))
         }
-      } finally {
+      } }, () => {
         refreshingRef.current = false
         if (refreshAgain.current) { refreshAgain.current = false; window.setTimeout(() => void refresh(), 0) }
-      }
+      })
     }
     void connect()
     return () => { mounted = false }
@@ -1608,15 +1640,10 @@ export function App() {
   const doRpc = useCallback(async <T,>(method: string, params: Record<string, unknown> = {}, mapError?: (reason: unknown) => string) => {
     setBusy(true)
     setError(null)
-    try {
-      const result = await rpc<T>(method, params)
-      return result
-    } catch (reason) {
+    return withFinally(() => rpc<T>(method, params).catch((reason: unknown) => {
       setError(mapError ? mapError(reason) : messageOf(reason))
-      throw reason
-    } finally {
-      setBusy(false)
-    }
+      return Promise.reject(reason)
+    }), () => setBusy(false))
   }, [])
 
   const mergeAgent = (agent: Agent) => {
@@ -1643,7 +1670,8 @@ export function App() {
     }
   }
 
-  const openCreate = (projectId: string | null = activeSelectedAgent?.projectId ?? null) => {
+  const openCreate = (chosenProjectId?: string | null) => {
+    const projectId = chosenProjectId === undefined ? activeSelectedAgent?.projectId ?? null : chosenProjectId
     setCreateMenuOpen(false)
     const next = { ...createDraft(runtimes, activeSelectedAgent?.runtimeId ?? selectedRuntime?.id ?? null), projectId: typeof projectId === 'string' ? projectId : null }
     setDraft(next)
@@ -1659,7 +1687,7 @@ export function App() {
   const exportConversation = async (copy: boolean) => {
     if (!selectedSession) return
     const markdown = conversationMarkdown(selectedSession, agentName)
-    try {
+    await withFinally(async () => { try {
       if (copy) await navigator.clipboard.writeText(markdown)
       else {
         const selectionToken = await selectMarkdownExportPath()
@@ -1667,8 +1695,7 @@ export function App() {
         await writeMarkdownExport(selectionToken, markdown)
       }
       setError(null)
-    } catch (reason) { setError(messageOf(reason)) }
-    finally { restoreMoreFocus() }
+    } catch (reason) { setError(messageOf(reason)) } }, restoreMoreFocus)
   }
 
   // Wave 13: a bot is exported with its approved notes, schedules and usable skills, as a backup of one bot.
@@ -1830,12 +1857,10 @@ export function App() {
       if (showsLook) mergeAgent({ ...editing, ...(Object.prototype.hasOwnProperty.call(params, 'look') ? { look: draft.look } : {}), ...(Object.prototype.hasOwnProperty.call(params, 'color') ? { color: draft.color } : {}) })
       let agent: Agent | undefined = editing
       if (Object.keys(params).length > 1) {
-        try {
+        {
           const result = await doRpc<{ agent?: Agent }>('agent.update', params, (reason) => messageForDaemonCode(daemonCodeOf(reason), 'agent.update', { archived: editing.archived, sentName: Object.prototype.hasOwnProperty.call(params, 'name') }))
+            .catch((reason: unknown) => { if (showsLook) mergeAgent(editing); return Promise.reject(reason) })
           agent = result.agent
-        } catch (reason) {
-          if (showsLook) mergeAgent(editing)
-          throw reason
         }
       }
       if (agent?.id && Object.keys(team).length) {
@@ -1906,7 +1931,7 @@ export function App() {
   const createConversation = async (agent: Agent, options: { quiet?: boolean; projectId?: string | null } = {}): Promise<Session | null> => {
     if (ensuringConversation.current.has(agent.id)) return null
     ensuringConversation.current.add(agent.id)
-    try {
+    return withFinally(async () => { try {
       const result = await rpc<{ session?: Session }>('agent.conversation.create', { agentId: agent.id, ...(options.projectId !== undefined ? { projectId: options.projectId } : {}) })
       if (!result.session?.id) return null
       // A new conversation has nothing in it yet; saying so lets the empty rules apply at once.
@@ -1919,8 +1944,7 @@ export function App() {
       if (!options.quiet) setRosterAnnouncement(`Started a new conversation with ${agent.name}.`)
       requestAnimationFrame(() => composerRef.current?.focus())
       return result.session
-    } catch (reason) { if (!options.quiet) setError(messageOf(reason)); return null }
-    finally { ensuringConversation.current.delete(agent.id) }
+    } catch (reason) { if (!options.quiet) setError(messageOf(reason)); return null } }, () => { ensuringConversation.current.delete(agent.id) })
   }
   const renameConversation = async (session: Session, title: string) => {
     try { await rpc('session.rename', { sessionId: session.id, title }); await refresh() } catch (reason) { setError(messageOf(reason)) }
@@ -2288,7 +2312,8 @@ ${fileReferenceText(sentFile)}` : typed
     } catch (reason) {
       // The daemon could not confirm delivery: the message may have reached the bot, so it is never sent again on its own.
       const unknown = daemonCodeOf(reason) === 'delivery_unknown'
-      setPendingSends((current) => current.map((row) => row.id === item.id ? { ...row, status: 'failed', ambiguous: unknown, error: unknown ? AMBIGUOUS_SEND_COPY : refusalText(reason) } : row))
+      const failure = unknown ? AMBIGUOUS_SEND_COPY : refusalText(reason)
+      setPendingSends((current) => current.map((row) => row.id === item.id ? { ...row, status: 'failed', ambiguous: unknown, error: failure } : row))
     }
   }
 
@@ -2470,7 +2495,7 @@ ${fileReferenceText(sentFile)}` : typed
     queueActions.current.add(sessionId)
     const feedback = (value: (typeof queueFeedback)[string]) => setQueueFeedback((current) => ({ ...current, [sessionId]: value }))
     feedback({ pending: true, resuming })
-    try {
+    return withFinally(async () => { try {
       const result = await rpc<T>(method, { sessionId, ...params })
       const queue = await loadQueue(sessionId)
       feedback(resuming ? { waitingIds: queue && waitingIds.every((id) => queue.items.some((item) => item.id === id && item.status !== 'sending')) ? waitingIds : undefined, unchecked: !queue } : {})
@@ -2478,9 +2503,7 @@ ${fileReferenceText(sentFile)}` : typed
     } catch (reason) {
       feedback({ error: queueErrorText(messageOf(reason)) })
       void loadQueue(sessionId)
-    } finally {
-      queueActions.current.delete(sessionId)
-    }
+    } }, () => { queueActions.current.delete(sessionId) })
   }
   const sendQueuedNow = (id: string, confirmResend = false) => void queueRpc('session.queue.send_now', { id, ...(confirmResend ? { confirmResend: true } : {}) })
   const deleteQueued = (id: string) => void queueRpc('session.queue.delete', { id })
@@ -2640,7 +2663,7 @@ ${fileReferenceText(sentFile)}` : typed
 
   const jumpToMessage = (sourceSessionId: string, messageId: string) => {
     if (sourceSessionId !== selectedSession?.id) { setError('This reply points to a message in another conversation.'); return }
-    const target = document.getElementById(`conversation-message-${encodeURIComponent(`message:${messageId}`)}`)
+    const target = transcriptElement(`conversation-message-${encodeURIComponent(`message:${messageId}`)}`)
     if (!target) { setError('The original message is not visible in this conversation.'); return }
     target.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' })
     target.focus({ preventScroll: true })
@@ -2860,27 +2883,6 @@ ${fileReferenceText(sentFile)}` : typed
     void setActiveSession(target.sessionId)
   }
 
-  if (companion) {
-    return <>
-      <Companion suggestion={suggestion} dismissSuggestion={dismissSuggestion} sendShortcut={sendShortcut} deliveryNotice={deliveryNotice} busyMode={busyMode} steerAvailable={companionSteerAvailable} onToggleReaction={(sessionId, messageId, emoji) => toggleMessageReaction(sessionId, messageId, emoji)} permissionQueue={companionQueue} onPickPermission={setCompanionPick} onSnoozePermission={snoozeCompanionPermission} agent={companionAgent} agents={agents} projects={snapshot?.projects ?? []} sessions={sessions} quotas={snapshot?.quotas ?? []} onSessionUpdated={(updated) => setSnapshot((current) => current ? mergeHydratedSession(current, updated.id, updated) : current)} onError={(reason) => setError(messageOf(reason))} pinned={companionPinned} activityDetails={activityDetails} speechEnabled={speechEnabled} speechModel={speechModel} usageTip={usageTip} onDismissUsageTip={dismissUsageTip} onPinnedChange={(ids) => { setCompanionPinned(ids); void rpc('settings.set', { key: 'companion.pinnedBlobs', value: ids }).catch(() => undefined) }} onAnswerQuestion={answerQuestion} onOpenSession={(sessionId) => void showMainWindow(sessionId)} runtime={companionRuntime} runtimes={runtimes} session={companionSession} usage={snapshot?.usageSummary} connected={connection === 'connected'} appError={error} reconnectAttempts={reconnectAttempts} reconnectFailed={reconnectFailed} onRetryConnection={retryConnection} activityLabel={companionStatus.label} permission={companionPermission} approvalMode={companionMode} onReply={answerPermission} onNewSession={(anchor) => newSession(companionAgent?.id, anchor)} onOpenMain={() => void showMainWindow(companionRealSessionId)} onOpenSettings={(page) => void showMainSettings(companionRealSessionId, page)} onSendPrompt={async (draftOrSessionId, text, command, opposite = false, hasContext = false, noteList = []) => {
-        // The first message of a draft is what creates the conversation; the daemon titles it from that message.
-        let sessionId = draftOrSessionId
-        if (isDraftSession({ id: draftOrSessionId } as Session)) {
-          const draftAgent = agents.find((item) => draftOrSessionId === `${DRAFT_SESSION_PREFIX}${item.id}`)
-          const created = draftAgent ? await createConversation(draftAgent, { quiet: true }) : null
-          if (!created) throw new Error('Could not start the conversation. Try again.')
-          sessionId = created.id
-        }
-        const sendTarget = sessions.find((item) => item.id === sessionId)
-        const state = sendTarget?.state
-        const live = ['working', 'starting', 'waiting_permission', 'cancelling'].includes(state ?? '')
-        const delivery = busyDelivery(busyMode, opposite, state, companionSteerAvailable, hasContext || !!command || noteList.length > 0)
-        const waitingForLimit = !live ? limitWaitingUntil(sendTarget) : null
-        const method = waitingForLimit ? 'session.queue.add' : live ? delivery.mode === 'steer' ? 'session.steer' : 'session.queue.add' : 'session.prompt'
-        return sendWithDelivery(method, { sessionId, text, ...(waitingForLimit ? { whenLimitResets: true } : {}), ...(noteList.length ? { annotations: noteList } : {}), ...(command ? { command: { kind: command.kind, name: command.name } } : {}), ...(method !== 'session.steer' ? { clientMessageId: newClientMessageId() } : {}) }).then(({ queued, fallback }) => { setDeliveryNotice(fallback ? 'Queued because this turn could not accept steering.' : live ? delivery.reason : null); if (queued) void loadQueue(sessionId); void refreshTrayMenu().catch(() => undefined) })
-      }} queuedCount={companionSession ? snapshot?.queues?.[companionSession.id]?.items.length ?? 0 : 0} onLoadQueue={(sessionId) => void loadQueue(sessionId)} onCancelTurn={(sessionId) => doRpc('session.cancel', { sessionId }).then(() => { void refreshTrayMenu().catch(() => undefined); return refresh() })} onSelectAgent={selectAgent} onSelectConversation={(chosen) => { setSideSessionId(null); setSelectedAgentId(String(chosen.agentId ?? '')); setSelectedSessionId(chosen.id); void setActiveSession(chosen.id) }} slashSkills={slashSkills} />
-    </>
-  }
 
   const selectedMood = deriveCompanionStatus({ connected: connection === 'connected', runtime: selectedRuntime, session: selectedSession, composing: !!composer.trim(), now }).mood
   const sessionBusy = ['working', 'starting', 'waiting_permission'].includes(selectedSession?.state ?? '')
@@ -3101,6 +3103,28 @@ ${fileReferenceText(sentFile)}` : typed
   }
   // The launch and onboarding screens need Haze's backdrop too: Haze's --surface-app is transparent, so without it they sit on the bare (white) window.
   // LaunchBackdrop sits at the same place in both, so it stays mounted from the launch screen into onboarding.
+  // The companion window draws only the companion. It returns here, after every hook, so App keeps one hook order (React Compiler, 21 November 2026).
+  if (companion) {
+    return <>
+      <Companion suggestion={suggestion} dismissSuggestion={dismissSuggestion} sendShortcut={sendShortcut} deliveryNotice={deliveryNotice} busyMode={busyMode} steerAvailable={companionSteerAvailable} onToggleReaction={(sessionId, messageId, emoji) => toggleMessageReaction(sessionId, messageId, emoji)} permissionQueue={companionQueue} onPickPermission={setCompanionPick} onSnoozePermission={snoozeCompanionPermission} agent={companionAgent} agents={agents} projects={snapshot?.projects ?? []} sessions={sessions} quotas={snapshot?.quotas ?? []} onSessionUpdated={(updated) => setSnapshot((current) => current ? mergeHydratedSession(current, updated.id, updated) : current)} onError={(reason) => setError(messageOf(reason))} pinned={companionPinned} activityDetails={activityDetails} speechEnabled={speechEnabled} speechModel={speechModel} usageTip={usageTip} onDismissUsageTip={dismissUsageTip} onPinnedChange={(ids) => { setCompanionPinned(ids); void rpc('settings.set', { key: 'companion.pinnedBlobs', value: ids }).catch(() => undefined) }} onAnswerQuestion={answerQuestion} onOpenSession={(sessionId) => void showMainWindow(sessionId)} runtime={companionRuntime} runtimes={runtimes} session={companionSession} usage={snapshot?.usageSummary} connected={connection === 'connected'} appError={error} reconnectAttempts={reconnectAttempts} reconnectFailed={reconnectFailed} onRetryConnection={retryConnection} activityLabel={companionStatus.label} permission={companionPermission} approvalMode={companionMode} onReply={answerPermission} onNewSession={(anchor) => newSession(companionAgent?.id, anchor)} onOpenMain={() => void showMainWindow(companionRealSessionId)} onOpenSettings={(page) => void showMainSettings(companionRealSessionId, page)} onSendPrompt={async (draftOrSessionId, text, command, opposite = false, hasContext = false, noteList = []) => {
+        // The first message of a draft is what creates the conversation; the daemon titles it from that message.
+        let sessionId = draftOrSessionId
+        if (isDraftSession({ id: draftOrSessionId } as Session)) {
+          const draftAgent = agents.find((item) => draftOrSessionId === `${DRAFT_SESSION_PREFIX}${item.id}`)
+          const created = draftAgent ? await createConversation(draftAgent, { quiet: true }) : null
+          if (!created) throw new Error('Could not start the conversation. Try again.')
+          sessionId = created.id
+        }
+        const sendTarget = sessions.find((item) => item.id === sessionId)
+        const state = sendTarget?.state
+        const live = ['working', 'starting', 'waiting_permission', 'cancelling'].includes(state ?? '')
+        const delivery = busyDelivery(busyMode, opposite, state, companionSteerAvailable, hasContext || !!command || noteList.length > 0)
+        const waitingForLimit = !live ? limitWaitingUntil(sendTarget) : null
+        const method = waitingForLimit ? 'session.queue.add' : live ? delivery.mode === 'steer' ? 'session.steer' : 'session.queue.add' : 'session.prompt'
+        return sendWithDelivery(method, { sessionId, text, ...(waitingForLimit ? { whenLimitResets: true } : {}), ...(noteList.length ? { annotations: noteList } : {}), ...(command ? { command: { kind: command.kind, name: command.name } } : {}), ...(method !== 'session.steer' ? { clientMessageId: newClientMessageId() } : {}) }).then(({ queued, fallback }) => { setDeliveryNotice(fallback ? 'Queued because this turn could not accept steering.' : live ? delivery.reason : null); if (queued) void loadQueue(sessionId); void refreshTrayMenu().catch(() => undefined) })
+      }} queuedCount={companionSession ? snapshot?.queues?.[companionSession.id]?.items.length ?? 0 : 0} onLoadQueue={(sessionId) => void loadQueue(sessionId)} onCancelTurn={(sessionId) => doRpc('session.cancel', { sessionId }).then(() => { void refreshTrayMenu().catch(() => undefined); return refresh() })} onSelectAgent={selectAgent} onSelectConversation={(chosen) => { setSideSessionId(null); setSelectedAgentId(String(chosen.agentId ?? '')); setSelectedSessionId(chosen.id); void setActiveSession(chosen.id) }} slashSkills={slashSkills} />
+    </>
+  }
   if (launchVisible && !companion) return <><AppWallpaper /><LaunchBackdrop /><LaunchIntro checks={launchChecks} runtimes={runtimes} agent={activeSelectedAgent} serviceDown={launchServiceDown} onRetry={retryLaunch} onContinueOffline={() => { setConnection('disconnected'); finishLaunch() }} onComplete={finishLaunch} /></>
   if (onboardingVisible && !companion) return <><AppWallpaper /><LaunchBackdrop dim /><FirstRunOnboarding initialStep={previewMode && new URLSearchParams(location.search).has('demo-scan-error') ? 1 : undefined} runtimes={runtimes} scanning={discoveryStatus.scanning} error={error} onScan={() => void refreshRuntimes()} onCreate={createOnboardedBlob} onFinish={finishOnboarding} onSaveName={saveProfileName} /></>
   return (
@@ -3228,10 +3252,12 @@ ${fileReferenceText(sentFile)}` : typed
           {!sideSession && <ChangeBanner session={selectedSession} dismissed={reviewDismissals[selectedSession.id] ?? []} onDiff={(path, content) => setDiffViewer({ path, content })} onUndo={(file) => setRevertTarget({ sessionId: selectedSession.id, file })} onDismiss={(ids) => setReviewDismissals((current) => ({ ...current, [selectedSession.id]: [...(current[selectedSession.id] ?? []), ...ids] }))} onNewConversation={() => newSession()} />}
           <div className="conversation-frame">
             {conversationScrollable && <ConversationOutline key={selectedSession.id} sessionId={selectedSession.id} items={outlineItems} />}
-          <section ref={messageListRef} className="message-list" aria-label="Conversation" onScroll={(event) => { const node = event.currentTarget; const gap = node.scrollHeight - node.scrollTop - node.clientHeight; stickToBottom.current = gap < 72; setFarFromBottom(gap > 360) }}>
+          <section ref={messageListRef} className="message-list" aria-label="Conversation" onScroll={(event) => { const node = event.currentTarget; const gap = node.scrollHeight - node.scrollTop - node.clientHeight; stickToBottom.current = gap < 72; setFarFromBottom(gap > 360); if (transcriptStart > 0 && !stickToBottom.current && node.scrollTop < LOAD_EARLIER_WITHIN) loadEarlierRows() }}>
             <div className="conversation-layout">
               <div className="chat-column">
+              {transcriptStart > 0 && <button type="button" className="link-btn transcript-load-earlier" onClick={loadEarlierRows}>Show earlier messages</button>}
               {groupedConversationItems.length === 0 && visiblePendingSends.length === 0 && !waitingDelegation && !sideSession ? <div className="session-first-state"><BlobCanvas color={accent || '#e6e9ee'} size={112} mood={selectedMood} effectOverscanTop={118} look={activeSelectedAgent ? agentLook(activeSelectedAgent) : null} label={activeSelectedAgent?.name ?? agentName} /><h2>{runtimeReady ? 'Ready when you are.' : 'This employee needs attention.'}</h2><p>{runtimeReady ? currentProjectName ? <>Ask {agentName} to explore <code>{currentProjectName}</code> or make a change.</> : <>Ask {agentName} a question or make a change.</> : selectedRuntime?.status === 'error' ? 'Open Settings → Coding agents. Update or repair this CLI, then choose Scan again.' : 'Open Settings → Coding agents and scan again before starting a conversation.'}</p>{runtimeReady && selectedSession && projectOfSession(selectedSession, projects)?.id && <ProjectSuggestions projectId={projectOfSession(selectedSession, projects)!.id} onPick={(prompt) => { setComposer(prompt); requestAnimationFrame(() => { const box = composerRef.current; if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length) } }) }} />}</div> : groupedConversationItems.map((item, index) => {
+                if (index < transcriptStart) return null
                 // Owner, 14 November 2026: images made one after another sit side by side in one strip that scrolls.
                 const imageOf = (entry: (typeof groupedConversationItems)[number] | undefined) => entry?.kind === 'message' && String(entry.value?.role ?? '') === 'notice' ? generatedImageMeta(entry.value?.meta) : null
                 if (imageOf(item) && imageOf(groupedConversationItems[index - 1])) return null
@@ -3407,14 +3433,14 @@ ${fileReferenceText(sentFile)}` : typed
       {handoffOpen && selectedSession && <HandoffDialog agents={agents} sourceAgentId={activeSelectedAgent?.id ?? null} busy={handoffBusy} error={handoffError} limitedProvider={handoffLimited} providerOf={(agent) => runtimes.find((runtime) => runtime.id === agent.runtimeId)?.provider ?? null} onClose={() => setHandoffOpen(false)} onPick={(target) => void (async () => {
         setHandoffBusy(true)
         setHandoffError(null)
-        try {
+        await withFinally(async () => { try {
           const result = await rpc<{ draft?: string }>('session.handoff.draft', { fromSessionId: selectedSession.id })
           const draftText = typeof result.draft === 'string' ? result.draft : ''
           setHandoffOpen(false)
           selectAgent(target)
           saveDraft(draftKeyForAgent(target), draftText)
           requestAnimationFrame(() => composerRef.current?.focus())
-        } catch (reason) { setHandoffError(messageOf(reason)) } finally { setHandoffBusy(false) }
+        } catch (reason) { setHandoffError(messageOf(reason)) } }, () => setHandoffBusy(false))
       })()} />}
       {whatsNewOpen && !companion && <WhatsNewDialog onClose={() => setWhatsNewOpen(false)} onOpenLink={(url) => void openSafeLink(url)} />}
       {shortcutsOpen && experiments.shortcuts && <ShortcutSheet speechEnabled={speechEnabled} bindings={shortcutBindings} sendShortcut={sendShortcut} onClose={() => setShortcutsOpen(false)} />}

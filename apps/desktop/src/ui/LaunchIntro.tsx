@@ -11,8 +11,12 @@ const GradientASCII = lazy(() => import('./reactbits/GradientASCII'))
 import { useLegacyPixel } from '../blob/retinue'
 
 type Phase = 'scanning' | 'greeting' | 'ready'
-/** Owner, 15 November 2026: once every check has settled, the launch screen stays at least this long before the app opens. */
-export const LAUNCH_HOLD_MS = 2000
+/**
+ * Once every check has settled, the launch screen stays this long before the app opens: long enough
+ * for the mark to show it is ready, no longer. Owner, 21 November 2026 (performance plan): open as
+ * soon as the checks finish; this replaces the 2-second hold of 15 November.
+ */
+export const LAUNCH_HOLD_MS = 300
 
 /**
  * Startup checks. The mark breathes while Retinue looks for coding agents,

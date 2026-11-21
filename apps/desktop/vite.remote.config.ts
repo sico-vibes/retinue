@@ -17,7 +17,7 @@ import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, type Plugin, type ResolvedConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { reactWithCompiler } from './vite.react'
 
 const remote = (file: string) => fileURLToPath(new URL(`./src/remote/${file}`, import.meta.url))
 
@@ -103,7 +103,7 @@ function forbidNativeMarkers(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), remoteServiceWorkerManifest(), forbidNativeMarkers()],
+  plugins: [reactWithCompiler(), remoteServiceWorkerManifest(), forbidNativeMarkers()],
   clearScreen: false,
   base: '/',
   publicDir: 'remote-public',

@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom/client'
 import { App } from './ui/App'
 import { DictationBubble } from './ui/DictationBubble'
 import { startWindowBackdrop } from './ui/windowBackdrop'
+import { watchFrameStrain } from './ui/frameStrain'
 import { mainWindowReady, previewMode } from './tauri'
 import './ui/hazeTuning'
 import './ui/theme.css'
@@ -29,6 +30,8 @@ import './ui/themes/haze.css'
 const dictation = new URLSearchParams(window.location.search).has('dictation')
 // The native frosted backdrop belongs to the main window only (the helper also skips the companion).
 if (!dictation) startWindowBackdrop()
+// Haze's frosted sheets use their solid colour while frames are long (frameStrain.ts).
+if (!dictation) watchFrameStrain()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>{dictation ? <DictationBubble /> : <App />}</React.StrictMode>,

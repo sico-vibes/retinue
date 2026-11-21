@@ -326,3 +326,12 @@
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-meter.tone-warning > b { background: var(--status-working); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .quota-meter.tone-critical > b { background: var(--status-danger); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversations-panel { border-right-color: var(--line); }
+
+/* Owner, 21 November 2026 (performance plan): while the window is struggling (`data-frame-strain`, set by
+   ui/frameStrain.ts from the browser's long-task reports), the frosted sheets and dialogs use their solid
+   glass colour instead of re-blurring what moves behind them; the blur comes back once it is quiet. */
+:root[data-style="haze"][data-frame-strain]:not(.companion-surface):not(.dictation-surface) :is(.settings-sheet, .blob-dialog, .bot-savebar, .first-run-prompt, .terminal-dock, .team-dialog) {
+  background: var(--surface-panel);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}

@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { reactWithCompiler } from './vite.react'
 
 // Browser preview with fixture data: `npx vite --config vite.preview.config.ts`,
 // then open /gallery.html (every desktop-only surface), / (main window),
@@ -9,7 +9,7 @@ const fixture = (file: string) => fileURLToPath(new URL(`./src/preview/${file}`,
 
 export default defineConfig({
   server: { watch: { ignored: ['**/src-tauri/**', '**/target/**'] } },
-  plugins: [react(), {
+  plugins: [reactWithCompiler(), {
     name: 'retinue-preview-demo',
     apply: 'serve',
     transformIndexHtml: () => [{ tag: 'script', attrs: { type: 'module', src: '/src/preview/demoMenu.ts' }, injectTo: 'body' }],

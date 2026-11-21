@@ -138,6 +138,7 @@ export const GROUPS: Group[] = [
     scene('limited-controls', 'Usage limit with resume and snooze', 'Usage limit', 'Only where the daemon keeps resume per conversation.'),
     scene('servers', 'A conversation that started dev servers', 'Local servers', 'The rail lists them; a link opens in the system browser.'),
     scene('review-long-path', 'Review changes with a long path', 'sessionSuggestions.ts'),
+    scene('bench-long', 'A 1,000-message conversation (performance benchmark)', 'Show earlier messages'),
     scene('queue-resume-works', 'Resume sends a queued message', 'Sent from the queue', undefined, { steps: [{ click: '.composer-status-paused button' }] }),
     scene('queue-resume-error', 'Resume is refused', 'Permission was denied.', undefined, { steps: [{ click: '.composer-status-paused button' }] }),
     scene('queue-resume-busy', 'Resume while a turn is running', 'Queued messages are waiting for the current turn to finish.', undefined, { steps: [{ click: '.composer-status-paused button' }] }),
