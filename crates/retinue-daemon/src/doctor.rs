@@ -155,12 +155,36 @@ fn database_checks(st: &AppState) -> Vec<Value> {
     let version = diagnosis["schemaVersion"].as_i64().unwrap_or(0);
     let migrations = diagnosis["schemaMigrations"].as_i64().unwrap_or(0);
     let size = diagnosis["sizeBytes"].as_u64().unwrap_or(0);
+    let marker = st.db.integrity_marker().ok().flatten();
     vec![
         check("database.quickCheck", "database", "The database is intact", if quick == "ok" { "ok" } else { "fail" },
             if quick == "ok" { "SQLite's quick check passed.".to_owned() } else { format!("SQLite's quick check reported: {}.", one_line(quick, 160)) }, None),
         check("database.schema", "database", "The database schema is current", if version == migrations { "ok" } else { "fail" },
             format!("Schema version {version} of {migrations}, using {}.", human_size(size)), None),
+        integrity_row(marker.as_ref()),
     ]
+}
+
+/// 21 November 2026: the whole-file check runs after the ready line now, once a
+/// day or when the file changed, so its last result is reported here rather
+/// than by a start that reads every page. A failed check leaves no fix: nothing
+/// is repaired or deleted, and the next start checks again before serving.
+fn integrity_row(marker: Option<&Value>) -> Value {
+    let Some(marker) = marker else {
+        return check("database.integrity", "database", "The whole database was checked", "warn",
+            "The full check has not run yet. Retinue runs it in the background a minute after start-up.".to_owned(), None);
+    };
+    let when = marker["checkedAt"].as_str().and_then(|stamp| chrono::DateTime::parse_from_rfc3339(stamp).ok())
+        .map(|stamp| stamp.with_timezone(&chrono::Utc).format("%-d %B at %H:%M UTC").to_string())
+        .unwrap_or_else(|| "an unknown time".to_owned());
+    let size = human_size(marker["sizeBytes"].as_u64().unwrap_or(0));
+    if marker["result"].as_str() == Some("ok") {
+        return check("database.integrity", "database", "The whole database was checked", "ok",
+            format!("The full check passed on {when}, over {size}."), None);
+    }
+    let detail = marker["detail"].as_str().unwrap_or("the check gave no reason");
+    check("database.integrity", "database", "The whole database was checked", "fail",
+        format!("The full check failed on {when}: {}. Nothing was changed; the next start checks again before Retinue serves the database.", one_line(detail, 160)), None)
 }
 
 /// 20 November 2026: the pages the cleanup freed stay inside the file until one
@@ -398,6 +422,27 @@ mod tests {
         // A row that is on keeps its real checks.
         let on = json!({"id":"rt_cursor","provider":"cursor","displayName":"Cursor CLI","executablePath":"C:/tools/cursor.exe","version":"1.2.3","authState":"authenticated","status":"online","enabled":true});
         assert!(runtime_checks(&[on]).iter().any(|row| row["id"] == "runtime.rt_cursor.protocol"));
+    }
+
+    #[test]
+    fn the_full_check_row_reports_its_marker_and_never_offers_a_repair() {
+        // 21 November 2026: the whole-file check runs after the ready line, so
+        // its marker is what the Doctor reports. No marker yet is a warning, a
+        // pass carries the time and size, and a failure is a fail with no fix:
+        // nothing is repaired or deleted from here.
+        let none = integrity_row(None);
+        assert_eq!(none["status"], "warn");
+        assert!(none["fix"].is_null());
+        let passed = integrity_row(Some(&json!({"checkedAt":"2026-11-21T09:05:00.000Z","result":"ok","detail":null,"sizeBytes":1080549376,"pageCount":263806})));
+        assert_eq!(passed["status"], "ok");
+        assert_eq!(passed["detail"], "The full check passed on 21 November at 09:05 UTC, over 1030 MB.");
+        assert!(passed["fix"].is_null());
+        let failed = integrity_row(Some(&json!({"checkedAt":"2026-11-21T09:05:00.000Z","result":"failed","detail":"*** in database main ***\nPage 1234: 2nd reference to page 99","sizeBytes":1080549376,"pageCount":263806})));
+        assert_eq!(failed["status"], "fail");
+        assert!(failed["detail"].as_str().unwrap().contains("Page 1234: 2nd reference to page 99"));
+        assert!(!failed["detail"].as_str().unwrap().contains('\n'), "one line");
+        assert!(failed["fix"].is_null(), "nothing is repaired from the Doctor");
+        assert!(failed["detail"].as_str().unwrap().contains("next start checks again"));
     }
 
     #[test]

@@ -164,6 +164,9 @@ mod console;
 /// 20 November 2026: the background cleanup of old tool payloads and events,
 /// and the owner-started compaction of the database file.
 mod upkeep;
+/// 21 November 2026: the whole-file database check, after the ready line, once a
+/// day or when the file changed, with a marker the next start reads.
+mod integrity;
 
 use quota::{normalize_codex_quota, PollFailure, PollOutcome, QuotaPollGate, QUOTA_POLL_INTERVAL, QUOTA_REQUEST_TIMEOUT};
 
@@ -6613,6 +6616,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // version. Spawned only after the ready line, and its own first pass waits
     // longer still, so it never sits in the window's way at start-up.
     upkeep::start_at_boot(&st);
+    // 21 November 2026: the whole-file check, which used to read every page
+    // before the ready line. Same rule: after the ready line, at low priority,
+    // and at most once a day (or once per change to the file).
+    integrity::start_at_boot(&st);
     // 20 November 2026: everything below this line is work the window's first
     // requests do not need. It used to run before the ready line, so on a large
     // database the shell waited for all of it; now it runs at once, in the
