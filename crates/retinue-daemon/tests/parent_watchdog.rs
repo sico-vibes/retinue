@@ -19,11 +19,14 @@ fn parent_helper() {
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
-    let mut ready = String::new();
-    BufReader::new(daemon.stdout.take().unwrap())
-        .read_line(&mut ready)
-        .unwrap();
-    let ready: serde_json::Value = serde_json::from_str(&ready).unwrap();
+    // 20 November 2026: the daemon says it is starting before it says it is ready.
+    let mut reader = BufReader::new(daemon.stdout.take().unwrap());
+    let ready: serde_json::Value = loop {
+        let mut line = String::new();
+        assert!(reader.read_line(&mut line).unwrap() > 0, "the daemon closed its output before it was ready");
+        let value: serde_json::Value = serde_json::from_str(&line).unwrap();
+        if value["type"] == "retinued.ready" { break value }
+    };
     // Persist only a loopback address and our child's pid; never its capability.
     fs::write(
         folder.join("ready"),
