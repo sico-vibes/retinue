@@ -1120,6 +1120,7 @@ export function App() {
 
   useEffect(() => {
     if (companion || launchVisible || onboardingVisible || onboardingCompleteThisRun || connection !== 'connected') return
+    if (previewMode && new URLSearchParams(location.search).has('demo-first-run')) { setOnboardingVisible(true); return }
     const completeKey = 'retinue.firstRun.complete'
     const hasBlobs = (snapshot?.agents ?? []).length > 0
     const hasSessions = (snapshot?.sessions ?? []).length > 0
@@ -3027,7 +3028,7 @@ ${fileReferenceText(sentFile)}` : typed
   // The launch and onboarding screens need Haze's backdrop too: Haze's --surface-app is transparent, so without it they sit on the bare (white) window.
   // LaunchBackdrop sits at the same place in both, so it stays mounted from the launch screen into onboarding.
   if (launchVisible && !companion) return <><AppWallpaper /><LaunchBackdrop /><LaunchIntro checks={launchChecks} runtimes={runtimes} agent={activeSelectedAgent} serviceDown={launchServiceDown} onRetry={retryLaunch} onContinueOffline={() => { setConnection('disconnected'); finishLaunch() }} onComplete={finishLaunch} /></>
-  if (onboardingVisible && !companion) return <><AppWallpaper /><LaunchBackdrop dim /><FirstRunOnboarding runtimes={runtimes} scanning={discoveryStatus.scanning} error={error} onScan={() => void refreshRuntimes()} onCreate={createOnboardedBlob} onFinish={finishOnboarding} onSaveName={saveProfileName} /></>
+  if (onboardingVisible && !companion) return <><AppWallpaper /><LaunchBackdrop dim /><FirstRunOnboarding initialStep={previewMode && new URLSearchParams(location.search).has('demo-scan-error') ? 1 : undefined} runtimes={runtimes} scanning={discoveryStatus.scanning} error={error} onScan={() => void refreshRuntimes()} onCreate={createOnboardedBlob} onFinish={finishOnboarding} onSaveName={saveProfileName} /></>
   return (
     <>
     {!companion && <AppWallpaper />}

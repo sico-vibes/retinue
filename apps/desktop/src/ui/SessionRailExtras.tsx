@@ -8,7 +8,7 @@ import { rpc } from '../tauri'
 import { Skeleton } from './Skeleton'
 import { isDraftSession } from './teamSelectors'
 
-type Workspace = {
+export type Workspace = {
   sessionId: string
   mode: 'shared' | 'isolated' | 'unknown'
   projectPath: string
@@ -35,7 +35,7 @@ export type Reach = {
 }
 
 type CheckpointFile = { id: string; turnId: string | null; path: string; operation: string | null; additions: number | null; deletions: number | null; state: 'available' | 'reverted' | 'blocked'; reason: string | null }
-type Checkpoints = {
+export type Checkpoints = {
   sessionId: string
   capability: { fileUndo: boolean; fileUndoReason: string | null; providerStateRestore: boolean; providerReason: string }
   busy: boolean

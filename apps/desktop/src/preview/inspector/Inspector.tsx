@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import '../../ui/theme.css'
 import './inspector.css'
-import { GROUPS, SCENARIOS, type Scenario, type Step } from './scenarios'
+import { GROUPS, SCENARIOS, type Scenario } from './scenarios'
+import { runSteps, until, wait } from './scenarioSteps'
 
 type Look = { style: 'haze' | 'stone'; theme: 'dark' | 'light' }
 type Compare = 'off' | 'looks' | 'themes'
@@ -32,53 +33,6 @@ function scenarioUrl(scenario: Scenario, look: Look, extra = ''): string {
   return `${path}${joiner}style=${look.style}&theme=${look.theme}${clean}${extra}${hash ? `#${hash}` : ''}`
 }
 
-const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
-async function until<T>(read: () => T | null | undefined | false, ms: number): Promise<T | null> {
-  const end = Date.now() + ms
-  for (;;) {
-    const value = read()
-    if (value) return value
-    if (Date.now() > end) return null
-    await wait(120)
-  }
-}
-const byText = (doc: Document, text: string) => {
-  const shown = [...doc.querySelectorAll<HTMLElement>('button, [role="button"], [role="menuitem"], a, summary')].filter((element) => element.getClientRects().length > 0)
-  return shown.find((element) => element.textContent?.trim().startsWith(text)) ?? shown.find((element) => element.textContent?.includes(text))
-}
-
-/** Clicks and typing inside a scenario's frame, so a state only a person's action reaches opens by itself. */
-async function runSteps(frame: HTMLIFrameElement, steps: readonly Step[]): Promise<string | null> {
-  const doc = () => frame.contentDocument
-  for (const step of steps) {
-    if ('click' in step) {
-      const element = await until(() => doc()?.querySelector<HTMLElement>(step.click), 8000)
-      if (!element) return `no element ${step.click}`
-      element.click()
-    } else if ('clickText' in step) {
-      const element = await until(() => { const current = doc(); return current ? byText(current, step.clickText) : null }, 8000)
-      if (!element) return `nothing to click called "${step.clickText}"`
-      element.click()
-    } else if ('hover' in step) {
-      const element = await until(() => doc()?.querySelector<HTMLElement>(step.hover), 8000)
-      if (!element) return `no element ${step.hover}`
-      element.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
-    } else {
-      const [selector, text] = step.type
-      const element = await until(() => doc()?.querySelector<HTMLTextAreaElement>(selector), 8000)
-      if (!element) return `no field ${selector}`
-      const win = frame.contentWindow as (Window & typeof globalThis) | null
-      const proto = win?.HTMLTextAreaElement.prototype ?? HTMLTextAreaElement.prototype
-      element.focus()
-      Object.getOwnPropertyDescriptor(proto, 'value')?.set?.call(element, text)
-      element.setSelectionRange(text.length, text.length)
-      element.dispatchEvent(new (win?.Event ?? Event)('input', { bubbles: true }))
-    }
-    await wait(250)
-  }
-  return null
-}
-
 function Frame({ scenario, look, width, label, reloadKey }: { scenario: Scenario; look: Look; width: SizeId; label?: string; reloadKey: number }) {
   const host = useRef<HTMLDivElement>(null)
   const frame = useRef<HTMLIFrameElement>(null)
@@ -103,7 +57,7 @@ function Frame({ scenario, look, width, label, reloadKey }: { scenario: Scenario
       {problem && <p className="ins-step-problem" role="alert">This state didn't open by itself: {problem}</p>}
       <div className="ins-frame-box" style={{ width: frameWidth * scale, height: frameHeight * scale }}>
         <iframe key={`${src}|${reloadKey}`} ref={frame} title={label ? `${scenario.title}, ${label}` : scenario.title} src={src} width={frameWidth} height={frameHeight} style={{ transform: scale < 1 ? `scale(${scale})` : undefined }}
-          onLoad={() => { setProblem(null); if (scenario.steps && frame.current) void runSteps(frame.current, scenario.steps).then(setProblem) }} />
+          onLoad={() => { setProblem(null); if (scenario.steps && frame.current) void runSteps(() => frame.current?.contentDocument ?? null, scenario.steps).then(setProblem) }} />
       </div>
     </div>
   </div>
@@ -126,7 +80,7 @@ async function checkAll(look: Look, onResult: (result: CheckResult) => void, sto
       win?.addEventListener('error', (event) => errors.push(event.message))
       win?.addEventListener('unhandledrejection', (event) => errors.push(String((event as PromiseRejectionEvent).reason)))
       const rendered = await until(() => { const body = frame.contentDocument?.body; return body && (body.innerText ?? '').trim().length > 0 }, 15_000)
-      const stepProblem = scenario.steps ? await runSteps(frame, scenario.steps) : null
+      const stepProblem = scenario.steps ? await runSteps(() => frame.contentDocument, scenario.steps) : null
       const wanted = scenario.expect
       const found = wanted ? await until(() => (frame.contentDocument?.body?.innerText ?? '').includes(wanted), 8000) : true
       await wait(300)

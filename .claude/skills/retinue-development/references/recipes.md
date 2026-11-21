@@ -99,3 +99,5 @@ Follow `docs/STYLE.md`. Keep protected paths in place (`docs/releases/`, `docs/r
 ## Add a native terminal-style command (T3)
 
 Commands go in `src-tauri/src/pty.rs` style: take `window: tauri::Window`, call `guard_main`, return `Result<_, String>`, emit to `"main"` only; add the wrapper to `tauri.ts`, a refusing stub to `remote/remoteTauri.ts` and a stub to `preview/fixtureBridge.ts` (the export lists must match).
+
+Every production function, screen, state and error must be demoable in the web preview. A change that adds one adds its demo entry and fixture in the same change; the coverage test enforces it. Add entries in `apps/desktop/src/preview/demoRegistry.ts` or the shared inspector scenario catalog. Trigger live states through the fixture daemon and run `demoCoverage.test.ts` with the UI tests.
