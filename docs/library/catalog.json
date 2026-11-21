@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "482ca9d8",
+  "revision": "5da97cf4",
   "documentCount": 447,
   "assets": [
     {
@@ -941,7 +941,7 @@
       "title": "Daemon and storage",
       "section": "Architecture & internals",
       "status": "Reference",
-      "sha256": "7c8ed74d8a64b42c7add63a32231ee3079e4fc2ac4abf6906a4f0999aac6ff41",
+      "sha256": "d458c846b4966dd2c1648376ecd7b0fc02e02b735e15e0fe7188a7280bada758",
       "headings": [
         {
           "id": "purpose",
@@ -2936,7 +2936,7 @@
       "title": "Invariants",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "cbd9e1f4d3653bd4206f854fa16f56ba1b0e69557e50ecf4c1714b9a0f9e06ab",
+      "sha256": "2342834f6462b7e4185d0da0a7838af5f62a75c9bc3034a0598f83eefab0cf90",
       "headings": [
         {
           "id": "safety-and-privacy",
@@ -5274,7 +5274,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "00a1b5787dc0afa9f99fafd2453e7ff908e82b799866df8ef977c772e17512d0",
+      "sha256": "4f06d852a30a64cbbadb48370c3a37a27ea0a236c8bb344c2a1ea379a2e611d8",
       "headings": [
         {
           "id": "update-commands",
@@ -5544,6 +5544,11 @@
         {
           "id": "slim-tool-call-storage-the-event-log-trim-and-compaction-20-november-2026",
           "text": "Slim tool-call storage, the event-log trim and compaction (20 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "follow-up-prompt-suggestions-21-november-2026",
+          "text": "Follow-up prompt suggestions (21 November 2026)",
           "level": 2
         }
       ]

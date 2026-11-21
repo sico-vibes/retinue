@@ -660,6 +660,20 @@
       "params": null
     },
     {
+      "method": "session.suggestion.get",
+      "class": "never",
+      "minTier": null,
+      "why": "A follow-up suggestion is held in memory for this desktop's composer, and it carries the owner's own words; no device reads it.",
+      "params": null
+    },
+    {
+      "method": "session.suggestion.dismiss",
+      "class": "never",
+      "minTier": null,
+      "why": "Dismissing a suggestion is the desktop composer's own action, so no device may do it.",
+      "params": null
+    },
+    {
       "method": "session.cancel",
       "class": "chat",
       "minTier": "chat",
@@ -2187,6 +2201,9 @@
     "session.context_exhausted": "drop",
     "session.note": "drop",
     "session.plan": "drop",
+    "session.suggestion": "drop",
+    "session.suggestion.cleared": "drop",
+    "session.suggestion.ready": "drop",
     "session.replaced": "drop",
     "session.resume_rejected": "drop",
     "settings.changed": "drop",
