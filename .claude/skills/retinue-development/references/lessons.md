@@ -2,6 +2,12 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-21 · Gates · Daemon tests that fail only because the user folder has a space
+
+- **Symptom:** on the owner's machine (user folder `C:\Users\Sico Vibes`) a full `cargo test -p retinue-daemon` never passes in one run. With the default `TEMP` (the 8.3 form `C:\Users\SICOVI~1\...`) six path tests fail (`repository::tests::*`, `worktree_cleanup::tests::a_deleted_conversations_worktree_is_listed`, `review_scopes::tests::a_turn_in_a_nested_project_folder_reports_the_repository_path`, `phase2a_tests::session_repository_reads_the_conversations_own_folder_and_never_a_client_path`, `machines_tests::take_over_moves_the_conversation_and_the_code`): git reports the long path, the test expects the short one. With `TEMP` set to the long form, the clone tests (`phase2a_tests::clone_*`, `*_clone_*`) fail instead with `invalid_argument` "That doesn't look like a repository address.", because their local repository path now contains a space.
+- **Not a regression:** run the suite with the default `TEMP`, then rerun only the path tests with `TEMP`/`TMP` set to `C:\Users\Sico Vibes\AppData\Local\Temp`. Both halves pass. CI's paths have no spaces.
+- **Load flakes:** `machines_tests::one_offline_machine_does_not_hold_up_another` and `phase2a_tests::a_call_that_runs_too_long_is_stopped_and_answers_nothing` can fail while several lanes build at once; rerun them alone before suspecting the code.
+
 ## 2026-11-21 · Runtime · The runtime id is the executable path, so a moved CLI orphaned every bot
 
 - **Symptom:** the owner's Agents page listed the same coding agent twice — "OpenCode 2.3.2" and a stale "OpenCode 2.0.28", both signed in. The stale one was the OpenCode Desktop shim at `%USERPROFILE%\.local\bin\opencode.cmd`, renamed to `.bak`, whose old row stayed in the `runtimes` table.

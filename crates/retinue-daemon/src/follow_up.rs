@@ -393,7 +393,7 @@ fn usage_of(body: &Value, model: Option<&str>) -> Option<Value> {
 /// wraps the message despite being asked not to.
 fn normalize_answer(raw: &str) -> Option<String> {
     let line = raw.lines().map(str::trim).find(|line| !line.is_empty())?;
-    let mut text = line.trim_start_matches(|c| matches!(c, '"' | '\'' | '\u{201c}' | '\u{2018}')).trim_end_matches(|c| matches!(c, '"' | '\'' | '\u{201d}' | '\u{2019}'));
+    let mut text = line.trim_start_matches(['"', '\'', '\u{201c}', '\u{2018}']).trim_end_matches(['"', '\'', '\u{201d}', '\u{2019}']);
     for label in ["next:", "suggestion:", "prompt:"] {
         if text.to_ascii_lowercase().starts_with(label) { text = text[label.len()..].trim(); }
     }
