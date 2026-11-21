@@ -54,6 +54,25 @@ pub struct DaemonReady {
     pub capability: String,
 }
 
+/// 20 November 2026: the first line a daemon writes, before it opens its
+/// database. It carries the protocol version and nothing else, and exists so a
+/// shell can tell "still opening a large database" from "sent nothing at all"
+/// and wait instead of killing a start that is only slow. It is never the ready
+/// line: a shell that sends requests must wait for [`DaemonReady`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DaemonStarting {
+    #[serde(rename = "type")]
+    pub message_type: String,
+    pub protocol_version: u16,
+}
+
+/// The `type` of the line above. The shell and the daemon both name it, so it
+/// is written once.
+pub const DAEMON_STARTING_TYPE: &str = "retinued.starting";
+/// The `type` of the ready line.
+pub const DAEMON_READY_TYPE: &str = "retinued.ready";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AuthState {

@@ -72,7 +72,16 @@ impl Daemon {
             .expect("the daemon starts");
         let stdout = child.stdout.take().unwrap();
         let mut lines = BufReader::new(stdout).lines();
-        let line = timeout(Duration::from_secs(60), lines.next_line())
+        // 20 November 2026: the first line says the process is alive and
+        // starting; the ready line follows it.
+        let first = timeout(Duration::from_secs(60), lines.next_line())
+            .await
+            .expect("the daemon starts")
+            .unwrap()
+            .unwrap();
+        let starting: Value = serde_json::from_str(&first).unwrap();
+        assert_eq!(starting["type"], "retinued.starting", "{first}");
+        let line = timeout(Duration::from_secs(120), lines.next_line())
             .await
             .expect("the daemon becomes ready")
             .unwrap()

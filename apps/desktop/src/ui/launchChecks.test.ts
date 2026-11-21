@@ -65,6 +65,13 @@ describe('runLaunchChecks', () => {
     vi.useRealTimers()
   })
 
+  it('lets the service check outlast the shell bootstrap wait', () => {
+    // `await_bootstrap` in apps/desktop/src-tauri/src/lib.rs waits up to 120 s
+    // for the ready line, so the launch screen must not give up first.
+    expect(LAUNCH_TIMEOUTS.service).toBeGreaterThan(120_000)
+    expect(LAUNCH_TIMEOUTS.overall).toBeGreaterThan(LAUNCH_TIMEOUTS.service + 40_000)
+  })
+
   it('summarizes every failed or warning startup check in the notice', () => {
     expect(launchWarningsFor([
       { id: 'auth:r1', label: 'Sign-in', state: 'failed', detail: 'Version unavailable' },

@@ -16,7 +16,8 @@ use retinue_agent_core::{
     SessionHandle, SteerOutcome, SteerRequest,
 };
 use retinue_protocol::{
-    DaemonReady, EventEnvelope, RpcError, RpcRequest, RpcResponse, PROTOCOL_VERSION,
+    DaemonReady, DaemonStarting, EventEnvelope, RpcError, RpcRequest, RpcResponse,
+    DAEMON_READY_TYPE, DAEMON_STARTING_TYPE, PROTOCOL_VERSION,
 };
 use retinue_security::{capability_matches, is_loopback, new_capability};
 use retinue_storage::Storage;
@@ -6359,8 +6360,67 @@ fn note_secret_store(started: secrets::Startup) {
     }
 }
 
+/// Where a start spends its time before the ready line, for the log. A step
+/// name and milliseconds only: no paths, no count of anything the owner wrote.
+/// The log file is opened part-way through the start, so the steps before that
+/// are held and written once it exists.
+struct StartupClock {
+    last: Instant,
+    logging: bool,
+    held: Vec<(&'static str, u64)>,
+}
+
+impl StartupClock {
+    fn new() -> Self {
+        Self { last: Instant::now(), logging: false, held: Vec::new() }
+    }
+    /// Records one finished step.
+    fn step(&mut self, name: &'static str) {
+        let now = Instant::now();
+        let elapsed_ms = now.duration_since(self.last).as_millis().min(u64::MAX as u128) as u64;
+        self.last = now;
+        if self.logging {
+            log_startup_step(name, elapsed_ms);
+        } else {
+            self.held.push((name, elapsed_ms));
+        }
+    }
+    /// The log file exists now: write what was held, then every later step.
+    fn logging_started(&mut self) {
+        self.logging = true;
+        for (name, elapsed_ms) in std::mem::take(&mut self.held) {
+            log_startup_step(name, elapsed_ms);
+        }
+    }
+}
+
+fn log_startup_step(name: &'static str, elapsed_ms: u64) {
+    tracing::info!(step = name, elapsed_ms = elapsed_ms, "start-up step finished");
+}
+
+/// The first line a daemon writes, before it opens its database: the shell uses
+/// it to tell a slow start from a dead one (see `DaemonStarting`).
+fn print_starting_line() -> Result<(), Box<dyn std::error::Error>> {
+    use std::io::Write;
+    println!(
+        "{}",
+        serde_json::to_string(&DaemonStarting {
+            message_type: DAEMON_STARTING_TYPE.to_string(),
+            protocol_version: PROTOCOL_VERSION,
+        })?
+    );
+    std::io::stdout().flush()?;
+    Ok(())
+}
+
 async fn run() -> Result<(), Box<dyn std::error::Error>> {
     use std::time::Duration;
+    // 20 November 2026: the shell killed every start that took more than ten
+    // seconds, and the work done so far with it. This line, written before the
+    // database is touched, proves the process is alive and working, so the
+    // shell waits for the ready line instead.
+    print_starting_line()?;
+    let mut clock = StartupClock::new();
     // Only shell-launched daemons opt in. Hold the Windows process handle,
     // rather than polling a pid that can be reused after the shell crashes.
     let (parent_sender, mut parent_gone) = tokio::sync::oneshot::channel::<()>();
@@ -6402,6 +6462,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // Keep the sender alive when launched without a shell; that path must not
     // interpret a dropped oneshot sender as a parent exit.
     let _standalone_parent_sender = parent_sender;
+    clock.step("parent-watch");
     // 17 November 2026: the default now follows the host's own rule (XDG on
     // Unix), so a systemd-started daemon does not write to the temp folder.
     let db_path = paths::database();
@@ -6409,7 +6470,11 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::create_dir_all(parent)?
     }
     let data_dir = db_path.parent().map(PathBuf::from);
+    clock.step("database-location");
+    // `Storage::open` is the step that reads the whole file on a large
+    // database: its version check and read-index setup read every page.
     let db = Arc::new(Storage::open(db_path)?);
+    clock.step("storage-open");
     // FIX39 P12: the rolling log file. Level `info` unless the hidden
     // `diagnostics.logLevel` setting says `debug` (or `RUST_LOG` overrides).
     let log_level = db
@@ -6418,13 +6483,17 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(|settings| settings.get(diagnostics::LOG_LEVEL_SETTING).and_then(Value::as_str).map(str::to_owned))
         .filter(|level| level == "debug")
         .unwrap_or_else(|| "info".to_string());
+    clock.step("log-level");
     let _log_guard = data_dir.as_deref().and_then(|dir| diagnostics::init_logging(dir, &log_level));
+    clock.logging_started();
     let recovery = db.recover_restart_state()?;
+    clock.step("restart-recovery");
     let recovered_sessions = recovery.sessions;
     let closed_cards = recovery.closed_cards;
     // A failure saved after its turn had already completed is a stale label,
     // not a failed turn: the latest genuine terminal outcome wins.
     let repaired_sessions = db.repair_stale_failed_sessions()?;
+    clock.step("stale-failure-repair");
     let token = new_capability();
     let (events, _) = broadcast::channel(1024);
     let adapters = Arc::new(Adapters {
@@ -6482,31 +6551,23 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // the same way, once, unless the owner already uses it.
     if provider_gate::apply_new_provider_defaults(&st.db).is_err() { tracing::warn!("provider defaults could not be saved"); }
     load_saved_runtimes(&st).await;
+    clock.step("saved-runtimes");
     if let Ok(paused) = st.db.queue_paused_sessions() { st.queue.mark_startup_paused(paused); }
-    // A run interrupted by an unclean exit is not a failure; leave its session.
-    let _ = st.db.automation_interrupt_running();
-    // Durable tasks: ambiguous claims become needs_you (never a duplicate
-    // spawn) and queued work is resumed once.
-    tasks::startup(&st).await;
-    // Wave 12, part B: the team queue is durable, so boot offers every message
-    // that was still waiting for a busy teammate. This runs before the ledger's
-    // own briefs below, which dedupe against what is already waiting.
-    st.team.restore_persisted_queue(&st).await;
-    // FIX47: a lane that was live when the daemon stopped gets its turn's own
-    // outcome or an honest `interrupted`, and waiting briefs go back in the queue
-    // (they are drained once below, after the team address exists).
-    delegations::startup(&st).await;
-    // Drop automatic retries that missed their window while the daemon was down.
-    retry::reconcile_restart(&st).await;
-    tokio::spawn(retry::sweep_loop(st.clone()));
-    // The browser's contexts are closed when their turn ends or after ten idle
-    // minutes, wherever the owner goes next.
-    tokio::spawn(browser::sweep_loop(st.clone()));
+    clock.step("queue-paused");
+    // 20 November 2026: state left by the previous process is settled *before*
+    // the ready line, because these steps reconcile whatever looks unfinished.
+    // After the ready line the window can start turns, tasks and automations,
+    // and a reconciliation running then would mark that fresh work as a
+    // leftover of the restart. The measured cost of these steps is small; the
+    // slow part of a start is `Storage::open`.
+    settle_previous_process(&st).await;
+    clock.step("restart-reconciliation");
     // Native approval and question cards left pending by the previous process
     // cannot be answered any more: the adapter that raised them is gone. Each is
     // announced as expired and its conversation gets one content-free note, so a
     // card that still looked answerable does not outlive the process that could
-    // act on it.
+    // act on it. This stays before the ready line: the window's first snapshot
+    // must not show a card it cannot answer.
     for card in &closed_cards {
         st.emit("permission.resolved", json!({"permissionId":card["id"],"sessionId":card["sessionId"],"choice":"expired","status":"expired","reason":"daemon_restarted"})).await;
     }
@@ -6521,6 +6582,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
             st.emit("session.changed", session).await;
         }
     }
+    clock.step("restart-announcements");
     let app = Router::new()
         .route("/v1/rpc", post(main_rpc))
         .route("/v1/events", get(start_ws))
@@ -6533,33 +6595,96 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     *st.team.address.lock().unwrap() = Some(addr.to_string());
     if let Some(dir) = data_dir.as_deref() { secrets::sweep_leftovers(dir); if let Some(started) = secrets::set_data_folder(dir) { note_secret_store(started); } computer::sweep_endpoints(dir); browser::sweep_endpoints(dir); owner_computer::sweep_endpoints(dir); }
     *st.team.data_dir.lock().unwrap() = data_dir;
-    // Wave 2: the data folder is the owner's alone, and the two folders this wave
-    // keeps its disposables in are swept of old files.
+    // The data folder is restricted to the owner, and stale bridge endpoints are
+    // gone, before anything is served from them.
     sandbox::at_startup(&st);
-    // 17 November 2026: a host started without a desktop shell gets a console
-    // file, so its owner can pair it and turn Remote on from a terminal.
     console::startup(&st);
+    // The outside-session hook needs this run's address and token, and an MCP
+    // client needs its endpoint, so both are written before the ready line.
+    outside::startup(&st);
+    // Wave 14: a fresh token and endpoint file for the Retinue MCP, when it is on.
+    external::startup(&st);
+    clock.step("endpoints");
+    println!("{}", ready_line(paths::headless(), &addr.to_string(), &token));
+    use std::io::Write;
+    std::io::stdout().flush()?;
+    clock.step("ready-line");
+    // 20 November 2026: the cleanup of rows and events stored before this
+    // version. Spawned only after the ready line, and its own first pass waits
+    // longer still, so it never sits in the window's way at start-up.
+    upkeep::start_at_boot(&st);
+    // 20 November 2026: everything below this line is work the window's first
+    // requests do not need. It used to run before the ready line, so on a large
+    // database the shell waited for all of it; now it runs at once, in the
+    // background, in the same order, so each guarantee the comments describe
+    // still holds.
+    let after_ready = st.clone();
+    tokio::spawn(async move { resume_after_ready(after_ready).await; });
+    let shutdown = st.stopping.clone();
+    tokio::select! {r=axum::serve(listener,app.into_make_service_with_connect_info::<SocketAddr>()).with_graceful_shutdown(async move{shutdown.notified().await}).into_future()=>r?,_=tokio::signal::ctrl_c()=>{},_= &mut parent_gone=>{}}
+    // Remove Retinue's own UPnP mapping before the process exits, so no router
+    // is left forwarding the port after Remote has stopped.
+    remote::shutdown(&st).await;
+    console::shutdown(&st);
+    let sessions = std::mem::take(&mut *st.sessions.lock().await);
+    for (_, s) in sessions {
+        let _ = s.adapter.close_session(&s.handle).await;
+    }
+    st.adapters.acp.shutdown().await;
+    st.adapters.codex.shutdown().await;
+    st.adapters.claude.shutdown().await;
+    Ok(())
+}
+
+/// 20 November 2026: settle what the previous process left behind, before the
+/// ready line lets a new request in. Every step here reads rows that look
+/// unfinished, so none of it may run once the window can start a fresh turn,
+/// task or automation: that new work would be read as a leftover of the restart
+/// and marked ambiguous or interrupted.
+async fn settle_previous_process(st: &AppState) {
+    // A run interrupted by an unclean exit is not a failure; leave its session.
+    let _ = st.db.automation_interrupt_running();
+    // Durable tasks: ambiguous claims become needs_you (never a duplicate
+    // spawn) and queued work is resumed once.
+    tasks::startup(st).await;
+    // Wave 12, part B: the team queue is durable, so boot offers every message
+    // that was still waiting for a busy teammate. This runs before the drain
+    // that starts after the ready line, which dedupes against what is waiting.
+    st.team.restore_persisted_queue(st).await;
+    // FIX47: a lane that was live when the daemon stopped gets its turn's own
+    // outcome or an honest `interrupted`, and waiting briefs go back in the queue
+    // (they are drained once below, after the team address exists).
+    delegations::startup(st).await;
+    // Drop automatic retries that missed their window while the daemon was down.
+    retry::reconcile_restart(st).await;
+}
+
+/// 20 November 2026: the start-up work the window's first requests do not need.
+/// It runs once the ready line is out, in the same order it ran in before, so
+/// every guarantee the comments describe still holds. Everything that reconciles
+/// state left by the previous process stays *before* the ready line instead (see
+/// `run`): it would read fresh work as a leftover of the restart.
+async fn resume_after_ready(st: AppState) {
+    // Wave 2: the folders this wave keeps its disposables in are swept of old
+    // files. Age-based, so nothing this process just wrote is touched.
     scratch::prune(&st);
     tool_output::prune(&st);
     stash::prune_restored(&st);
     git_ops::prune_reverted(&st);
-    // The outside-session hook needs this run's address and token.
-    outside::startup(&st);
-    // Wave 14: a fresh token and endpoint file for the Retinue MCP, when it is on.
-    external::startup(&st);
-    // 16 November 2026: a chat channel that still has its credential picks up
-    // polling again, so a restart does not silently stop the owner's chat.
-    channels::start_at_boot(&st).await;
     // FIX47: the deliveries a restart restored have a team address now, so one
     // drain can start them (the same fast path every turn ending uses).
     let restored_queue = st.clone();
     tokio::spawn(async move { team::drain_queued_deliveries(&restored_queue, None).await; });
-    let quota_state = st.clone();
-    tokio::spawn(quota_poll_loop(quota_state, st.events.subscribe()));
-    let queue_state = st.clone();
-    tokio::spawn(queue::due_loop(queue_state));
-    let automation_state = st.clone();
-    tokio::spawn(automations::sweep_loop(automation_state));
+    tokio::spawn(retry::sweep_loop(st.clone()));
+    // 16 November 2026: a chat channel that still has its credential picks up
+    // polling again, so a restart does not silently stop the owner's chat.
+    channels::start_at_boot(&st).await;
+    // The browser's contexts are closed when their turn ends or after ten idle
+    // minutes, wherever the owner goes next.
+    tokio::spawn(browser::sweep_loop(st.clone()));
+    tokio::spawn(quota_poll_loop(st.clone(), st.events.subscribe()));
+    tokio::spawn(queue::due_loop(st.clone()));
+    tokio::spawn(automations::sweep_loop(st.clone()));
     // Phase 2: pending generated images are looked for every two seconds, so a
     // file that lands after its turn ended still reaches the transcript.
     let media_state = st.clone();
@@ -6593,31 +6718,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // registered before this version can be found on another machine. `project.list` never runs git.
     let identity_state = st.clone();
     tokio::spawn(async move { repo_identity::sweep(&identity_state).await; });
-    println!(
-        "{}",
-        ready_line(paths::headless(), &addr.to_string(), &token)
-    );
-    use std::io::Write;
-    std::io::stdout().flush()?;
-    // 20 November 2026: the cleanup of rows and events stored before this
-    // version. Spawned only after the ready line, and its own first pass waits
-    // longer still, so it never sits in the window's way at start-up.
-    upkeep::start_at_boot(&st);
-    let shutdown = st.stopping.clone();
-    tokio::select! {r=axum::serve(listener,app.into_make_service_with_connect_info::<SocketAddr>()).with_graceful_shutdown(async move{shutdown.notified().await}).into_future()=>r?,_=tokio::signal::ctrl_c()=>{},_= &mut parent_gone=>{}}
-    // Remove Retinue's own UPnP mapping before the process exits, so no router
-    // is left forwarding the port after Remote has stopped.
-    remote::shutdown(&st).await;
-    console::shutdown(&st);
-    let sessions = std::mem::take(&mut *st.sessions.lock().await);
-    for (_, s) in sessions {
-        let _ = s.adapter.close_session(&s.handle).await;
-    }
-    st.adapters.acp.shutdown().await;
-    st.adapters.codex.shutdown().await;
-    st.adapters.claude.shutdown().await;
-    Ok(())
 }
+
 /// Worker threads get 8 MiB of stack. The prompt path is a deep async state
 /// machine, and in a debug build (the dev app runs one) its frames outgrew the
 /// 2 MiB default: the daemon overflowed on shutdown in Wave 14. Release frames
@@ -6644,7 +6746,7 @@ fn ready_line(headless: bool, address: &str, capability: &str) -> String {
         .to_string();
     }
     serde_json::to_string(&DaemonReady {
-        message_type: "retinued.ready".into(),
+        message_type: DAEMON_READY_TYPE.into(),
         protocol_version: PROTOCOL_VERSION,
         address: address.to_string(),
         capability: capability.to_string(),
@@ -15404,6 +15506,86 @@ mod phase2a_tests {
         let result = import_of(&st, &preview, json!({})).await.unwrap();
         assert_eq!(result["imported"]["memory"], 0);
         assert_eq!(result["skipped"]["memory"], 1);
+    }
+}
+
+/// 20 November 2026: what the shell needs from a start before it can talk to the
+/// daemon, and where the rest of the start runs. The rules live in
+/// `apps/desktop/src-tauri/src/lib.rs` (`await_bootstrap`).
+#[cfg(test)]
+mod readiness_tests {
+    use super::phase2a_tests::state;
+    use super::*;
+
+    /// The shell names this type itself (it does not depend on
+    /// `retinue-protocol`), so a rename must break here as well as there.
+    #[test]
+    fn the_shell_and_the_daemon_agree_on_the_starting_line() {
+        assert_eq!(DAEMON_STARTING_TYPE, "retinued.starting");
+        assert_eq!(DAEMON_READY_TYPE, "retinued.ready");
+    }
+
+    /// A protocol version and nothing else: no address, no capability, no path.
+    #[test]
+    fn the_starting_line_carries_a_protocol_version_and_nothing_else() {
+        let line = serde_json::to_string(&DaemonStarting {
+            message_type: DAEMON_STARTING_TYPE.to_string(),
+            protocol_version: PROTOCOL_VERSION,
+        })
+        .unwrap();
+        assert_eq!(line, r#"{"type":"retinued.starting","protocolVersion":1}"#);
+    }
+
+    /// Everything settled before the ready line must still happen, once: a
+    /// durable team brief is restored and a retry that missed its window while
+    /// the daemon was down is dropped.
+    #[tokio::test]
+    async fn the_previous_process_is_settled_before_the_ready_line() {
+        let (st, _events) = state();
+        let agent = st.db.agent_create(&json!({"name":"Worker","runtimeId":"rt-test"})).unwrap().0;
+        st.db
+            .create_session_for_agent("resume-side", "rt-test", "codex", ".", "Side", agent["id"].as_str())
+            .unwrap();
+        // Busy, so the drain the restore starts leaves the brief where it is and
+        // the assertion below is about the restore alone.
+        st.db.update_session_state("resume-side", "working").unwrap();
+        st.db
+            .team_queue_add("resume-side", "Do it", &json!({"kind":"blob_message"}), 1, false)
+            .unwrap();
+        let missed = (Utc::now() - chrono::Duration::seconds(600)).to_rfc3339_opts(SecondsFormat::Millis, true);
+        st.db
+            .queue_add("resume-side", &json!({"text":"Please continue.","meta":{"retryOf":"turn-a"}}), "retry", Some(missed.as_str()))
+            .unwrap();
+        assert_eq!(st.db.team_queue_rows(None).unwrap().len(), 1);
+        assert_eq!(st.db.queue_list("resume-side").unwrap().len(), 1);
+
+        settle_previous_process(&st).await;
+
+        assert_eq!(st.team.queued_texts("resume-side").await, vec!["Do it".to_owned()], "the waiting brief is back in memory");
+        assert_eq!(st.db.team_queue_rows(None).unwrap().len(), 1, "the durable row stays until it is delivered");
+        assert!(st.db.queue_list("resume-side").unwrap().is_empty(), "the retry that missed its window is gone");
+    }
+
+    /// The deferred half really does the sweeps it owns, and only after the
+    /// ready line: an old saved tool output is removed with its empty folder.
+    #[tokio::test]
+    async fn the_deferred_sweeps_run_after_the_ready_line() {
+        let (st, _events) = state();
+        let dir = std::env::temp_dir().join(format!("retinue-ready-{}", Uuid::new_v4()));
+        let conversation = dir.join("tool-output").join("conv");
+        std::fs::create_dir_all(&conversation).unwrap();
+        let stale = conversation.join("old.txt");
+        std::fs::write(&stale, "old").unwrap();
+        let file = std::fs::File::options().write(true).open(&stale).unwrap();
+        file.set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(8 * 24 * 60 * 60)).unwrap();
+        drop(file);
+        *st.team.data_dir.lock().unwrap() = Some(dir.clone());
+
+        resume_after_ready(st.clone()).await;
+
+        assert!(!stale.exists(), "a saved output older than the week is pruned");
+        assert!(!conversation.exists(), "the folder it empties goes with it");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
