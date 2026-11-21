@@ -1,26 +1,5 @@
-// Remove each exception when its production result and interaction are represented.
+// These RPCs are simulated, but their native browser/host boundary cannot be demonstrated without a paired device.
 export const undemoedRpcs: Readonly<Record<string, string>> = {
-  'agent.reorder': 'The roster fixture does not apply a user-supplied employee order.',
-  'connector.oauth.start': 'The connector simulator has no test OAuth transaction lifecycle.',
-  'connector.oauth.status': 'The connector simulator has no signed-in, pending or failed OAuth transaction to query.',
-  'diagnostics.preview': 'The browser fixture has no synthetic diagnostics archive listing.',
-  'exec.snapshot.latest': 'Execution settings have no recorded effective turn settings fixture.',
-  'manager.troubleshoot': 'The Manager fixture has no troubleshoot reply or failure transition.',
-  'message.image': 'The fixture has no sent-image lookup keyed by message ID.',
-  'owner_computer.stop': 'The preview lacks a simulated attended owner-computer grant to end.',
-  'push.key': 'The phone fixture has no simulated push public configuration.',
-  'push.subscribe': 'The phone fixture has no simulated push subscription to register.',
-  'push.unsubscribe': 'The phone fixture has no simulated push subscription to remove.',
-  'runtime.auth.clear': 'Provider account fixtures have no clear-sign-in transition.',
-  'runtime.profile.delete': 'Runtime profiles have no fixture ledger from which to remove a profile.',
-  'runtime.profile.list': 'Runtime profiles have no seeded fixture ledger.',
-  'runtime.profile.save': 'Runtime profiles have no fixture ledger in which to store edits.',
-  'session.model.plan': 'The execution settings fixture has no model plan-mode transition.',
-  'session.warm': 'The preview owns no adapter process and has no warm-up state fixture.',
-  'skills.learned.approve': 'There is no fixture ledger to move a learned skill out of review.',
-  'skills.learned.edit': 'There is no fixture ledger to save an owner edit of a learned skill.',
-  'skills.learned.forget': 'There is no fixture ledger from which to remove a learned skill.',
-  'skills.learned.list': 'The skills fixture has no learned-skill review data.',
-  'usage.summary': 'The startup fixture supplies usage in the snapshot and has no separate summary RPC.',
+  'push.subscribe': 'Real registration requires a paired device, browser permission and a push service subscription.',
+  'push.unsubscribe': 'Real removal requires a subscription registered with a push service and the paired host.',
 }
-

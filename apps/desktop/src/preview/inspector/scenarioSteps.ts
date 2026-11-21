@@ -10,8 +10,13 @@ export async function until<T>(read: () => T | null | undefined | false, ms: num
     await wait(120)
   }
 }
+const canClick = (element: HTMLElement | null | undefined): element is HTMLElement => !!element
+  && element.getClientRects().length > 0
+  && !element.matches(':disabled, [aria-disabled="true"]')
+  && !element.closest('.retinue-preview-demo')
+
 const byText = (doc: Document, text: string) => {
-  const shown = [...doc.querySelectorAll<HTMLElement>('button, [role="button"], [role="menuitem"], a, summary')].filter((element) => element.getClientRects().length > 0)
+  const shown = [...doc.querySelectorAll<HTMLElement>('button, [role="button"], [role="menuitem"], a, summary')].filter(canClick)
   return shown.find((element) => element.textContent?.trim().startsWith(text)) ?? shown.find((element) => element.textContent?.includes(text))
 }
 
@@ -19,13 +24,22 @@ const byText = (doc: Document, text: string) => {
 export async function runSteps(doc: () => Document | null, steps: readonly Step[]): Promise<string | null> {
   for (const step of steps) {
     if ('click' in step) {
-      const element = await until(() => doc()?.querySelector<HTMLElement>(step.click), 8000)
+      const element = await until(() => {
+        const target = doc()?.querySelector<HTMLElement>(step.click)
+        return canClick(target) && target
+      }, 8000)
       if (!element) return `no element ${step.click}`
       element.click()
     } else if ('clickText' in step) {
       const element = await until(() => { const current = doc(); return current ? byText(current, step.clickText) : null }, 8000)
       if (!element) return `nothing to click called "${step.clickText}"`
       element.click()
+    } else if ('paste' in step) {
+      const element = await until(() => doc()?.querySelector<HTMLElement>(step.paste), 8000)
+      const win = element?.ownerDocument.defaultView
+      if (!element || !win) return `no paste target ${step.paste}`
+      element.focus()
+      element.dispatchEvent(new win.ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: new win.DataTransfer() }))
     } else if ('hover' in step) {
       const element = await until(() => doc()?.querySelector<HTMLElement>(step.hover), 8000)
       if (!element) return `no element ${step.hover}`

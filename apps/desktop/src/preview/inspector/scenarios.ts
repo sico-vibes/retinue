@@ -1,7 +1,7 @@
 // The inspector's index: every screen and state of the frontend, each opened in the real app with fixture data.
 // `expect` is text that must appear, so "Check all" can prove a scenario really reached its state.
 
-export type Step = { click: string } | { clickText: string } | { type: [selector: string, text: string] } | { hover: string }
+export type Step = { click: string } | { clickText: string } | { type: [selector: string, text: string] } | { hover: string } | { paste: string }
 export type Scenario = {
   id: string
   title: string

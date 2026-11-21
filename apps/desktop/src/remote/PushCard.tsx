@@ -3,18 +3,10 @@
 import { useEffect, useState } from 'react'
 import { Bell, BellOff } from 'lucide-react'
 import { rpc } from '../tauri'
+import { pushSupported, pushPermission, requestPushPermission, hasPushSubscription, subscribeToPush, unsubscribeFromPush, keyBytes } from './pushBrowser'
+export { keyBytes } from './pushBrowser'
 
 type PushState = 'loading' | 'unsupported' | 'off-at-computer' | 'blocked' | 'off' | 'on'
-
-/** A base64url VAPID key as the bytes `pushManager.subscribe` wants. */
-export function keyBytes(base64url: string): Uint8Array {
-  const padded = base64url.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(base64url.length / 4) * 4, '=')
-  const binary = atob(padded)
-  return Uint8Array.from(binary, (char) => char.charCodeAt(0))
-}
-
-const encoded = (key: ArrayBuffer | null) => key ? btoa(String.fromCharCode(...new Uint8Array(key))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : ''
-const supported = () => typeof navigator !== 'undefined' && 'serviceWorker' in navigator && typeof Notification !== 'undefined' && typeof PushManager !== 'undefined'
 
 export function PushCard() {
   const [state, setState] = useState<PushState>('loading')
@@ -24,34 +16,30 @@ export function PushCard() {
   useEffect(() => {
     let live = true
     void (async () => {
-      if (!supported()) { if (live) setState('unsupported'); return }
+      if (!pushSupported()) { if (live) setState('unsupported'); return }
       const reply = await rpc<{ publicKey?: string; enabled?: boolean }>('push.key', {}).catch(() => null)
       if (!live) return
       if (!reply?.enabled || !reply.publicKey) { setState('off-at-computer'); return }
       setPublicKey(reply.publicKey)
-      const registration = await navigator.serviceWorker.ready
-      const existing = await registration.pushManager.getSubscription()
+      const existing = await hasPushSubscription()
       if (!live) return
-      setState(Notification.permission === 'denied' ? 'blocked' : existing ? 'on' : 'off')
+      setState(pushPermission() === 'denied' ? 'blocked' : existing ? 'on' : 'off')
     })()
     return () => { live = false }
   }, [])
   const turnOn = async () => {
     setBusy(true); setProblem(null)
     try {
-      const permission = await Notification.requestPermission()
+      const permission = await requestPushPermission()
       if (permission !== 'granted') { setState(permission === 'denied' ? 'blocked' : 'off'); return }
-      const registration = await navigator.serviceWorker.ready
-      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) as BufferSource })
-      await rpc('push.subscribe', { endpoint: subscription.endpoint, p256dh: encoded(subscription.getKey('p256dh')), auth: encoded(subscription.getKey('auth')) })
+      await rpc('push.subscribe', await subscribeToPush(keyBytes(publicKey)))
       setState('on')
     } catch { setProblem('Notifications could not be turned on here.') } finally { setBusy(false) }
   }
   const turnOff = async () => {
     setBusy(true); setProblem(null)
     try {
-      const registration = await navigator.serviceWorker.ready
-      await (await registration.pushManager.getSubscription())?.unsubscribe()
+      await unsubscribeFromPush()
       await rpc('push.unsubscribe', {})
       setState('off')
     } catch { setProblem('Notifications could not be turned off here.') } finally { setBusy(false) }

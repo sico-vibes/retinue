@@ -6,6 +6,12 @@ import './demoMenu.css'
 const preference = 'retinue.preview.demoArea'
 const areas = [...new Set(demoEntries.map((entry) => entry.area))]
 const params = new URLSearchParams(location.search)
+if (params.get('demo-clipboard') === 'write') {
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: async () => { throw new DOMException('Clipboard permission denied.', 'NotAllowedError') } },
+  })
+}
 const current = demoEntries.find((entry) => entry.id === params.get('demo-entry'))
 let area = current?.area ?? areas[0]
 try {

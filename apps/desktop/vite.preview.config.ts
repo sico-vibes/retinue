@@ -17,6 +17,7 @@ export default defineConfig({
   clearScreen: false,
   resolve: {
     alias: [
+      { find: './pushBrowser', replacement: fixture('fixturePushBrowser.ts') },
       { find: /^\.\.\/tauri$/, replacement: fixture('fixtureBridge.ts') },
       { find: /^\.\.\/desktopIntegrations$/, replacement: fixture('fixtureDesktopIntegrations.ts') },
       { find: /^@tauri-apps\/api\/(event|window)$/, replacement: fixture('fixtureTauriApi.ts') },

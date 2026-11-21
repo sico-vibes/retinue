@@ -53,7 +53,7 @@ function ModelRow({ runtime, value, onChange }: { runtime: Runtime; value: strin
   return <label className="new-project-field"><span>{name}</span><Select ariaLabel={`Model for ${name} in this project`} variant="muted" value={value} searchable={8} onChange={onChange} options={options} /></label>
 }
 
-export type SharedSettings = { found: boolean; valid: boolean; problems: string[]; settings: { setupScript?: string | null; defaultBot?: string | null; approvalMode?: string | null }; hash: string | null; trusted: boolean; state: 'none' | 'untrusted' | 'trusted' | 'invalid' }
+export type SharedSettings = { found: boolean; valid: boolean; problems: string[]; settings: { setupScript?: string | null; defaultBot?: string | null; approvalMode?: string | null } | null; hash: string | null; trusted: boolean; state: 'none' | 'untrusted' | 'trusted' | 'invalid' }
 
 /** The repository's `.retinue.json`: what it asks for, and whether the owner trusts it. */
 export function SharedSettingsSection({ projectId, hasOwnSettings }: { projectId: string; hasOwnSettings: boolean }) {
