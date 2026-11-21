@@ -1,10 +1,18 @@
+import { normalizeDelegation, type DelegationRecord, type DelegationStatus } from '../ui/delegations'
+import type { ProjectSuggestion } from '../ui/ProjectSuggestions'
+import type { MessageSearchResult } from '../ui/ExperimentalFeatures'
+import type { ApprovalRule } from '../ui/ApprovalRulesPage'
+import type { Environment } from '../ui/SessionRail'
+import type { Workspace, Checkpoints } from '../ui/SessionRailExtras'
 // Development-only stand-in for src/tauri.ts, wired by vite.preview.config.ts
 // so the real App can be inspected in a browser without the daemon. Every
 // value below is a visual fixture, not product data.
 import { DEPARTMENTS, PRESETS } from '../team/presets'
 import { handleFixtureTaskRpc } from './fixtureTasks'
 import { EXPERIMENTS } from '../ui/experiments'
-import type { Agent, DaemonEvent, ImportRow, DaemonSupervisor, MessageMeta, PermissionRequest, Project, Runtime, Session, Snapshot, WindowBackdrop } from '../types'
+import type { HealthCheck } from '../ui/HealthPage'
+import { recordUnknownRpc } from './demoDiagnostics'
+import type { Agent, ChatMessage, DaemonEvent, ImportRow, DaemonSupervisor, MessageMeta, PermissionRequest, Project, Runtime, Session, Snapshot, WindowBackdrop } from '../types'
 import { answerUsageAnalytics } from '../ui/analyticsFixtures'
 import { normalizeAnalytics } from '../ui/analyticsFormat'
 import { parseCapabilities, parseExecSnapshot, parseModelCatalog } from '../executionContract'
@@ -48,6 +56,7 @@ const remoteFixtureSeed = (): RemoteSeed => {
   const tailscale: RemoteTailscaleState = flag === 'on' || flag === 'off' ? 'ready' : flag as RemoteTailscaleState
   return {
     enabled: flag === 'on' || flag === 'ready',
+    method: search.get('remote-method') === 'native' ? 'native' : 'tailscale',
     devices: devicesParam === '1' ? 1 : devicesParam === '3' ? 3 : 0,
     tailscale,
   }
@@ -328,6 +337,10 @@ if (fixtureScene) {
   sessions.push({ id: SCENE_SESSION_ID, runtimeId: 'runtime-codex', agentId: 'agent-codex', title: fixtureScene.title ?? 'Preview', projectPath: 'C:/work/korus', state: fixtureScene.state ?? 'idle', model: 'gpt-6.1-sol', updatedAt: new Date().toISOString(), messages: fixtureScene.messages ?? [], tools: fixtureScene.tools ?? [], files: fixtureScene.files ?? [], ...fixtureScene.session } as Session)
   for (const extra of fixtureScene.extraSessions ?? []) sessions.push(extra as unknown as Session)
 }
+if (flags().has('demo-first-run') || flags().has('empty')) {
+  agents = []
+  sessions = []
+}
 // `?chatbg=dither`: a generated chat background, so the inspector can show each effect.
 if (flags().get('chatbg')) void import('../ui/chatBackgroundStore').then((module) => module.seedChatBackgroundForPreview(flags().get('chatbg') as never))
 else if (flags().has('clean')) void import('../ui/chatBackgroundStore').then((module) => module.updateChatBackgroundPrefs({ hasImage: false }))
@@ -380,6 +393,7 @@ function sortAgents(list: Agent[]) {
 
 function currentSnapshot(): Snapshot {
   const search = flags()
+  const empty = search.has('empty') || search.has('demo-first-run')
   const runtimes = baseRuntimes.map((runtime) => {
     if (fixturePreset() === 'opencode-runtime-error' && runtime.id === 'runtime-opencode') return { ...runtime, status: 'error', probeStep: 'Protocol check', probeError: 'The CLI does not advertise the required protocol.' }
     return search.has('offline') && runtime.id === 'runtime-codex' ? { ...runtime, status: 'offline' } : { ...runtime }
@@ -387,9 +401,9 @@ function currentSnapshot(): Snapshot {
   return {
     sequence,
     runtimes,
-    agents: search.has('empty') ? [] : (search.get('subbots') ? [...agents, { ...agents[0], id: 'sub-1', name: 'Pricing research', hidden: true, parentAgentId: 'agent-codex' } as Agent] : agents).map((agent) => ({ ...agent, customArgs: [...agent.customArgs], customEnv: { ...agent.customEnv } })),
+    agents: (search.get('subbots') ? [...agents, { ...agents[0], id: 'sub-1', name: 'Pricing research', hidden: true, parentAgentId: 'agent-codex' } as Agent] : agents).map((agent) => ({ ...agent, customArgs: [...agent.customArgs], customEnv: { ...agent.customEnv } })),
     sessions: sessions.filter((session) => !session.archived).map((session) => ({ ...session })),
-    permissions: fixturePreset() === 'message-links'
+    permissions: [...livePermissions.values(), ...((empty || demoLive) ? [] : fixturePreset() === 'message-links'
       ? []
       : search.has('approval')
       ? [{ id: 'perm-1', sessionId: 'session-codex', runtimeId: 'runtime-codex', status: 'pending', title: 'Run shell command', command: 'npm test -- invoice', choices: ['allow_once', 'allow_session', 'deny'] }]
@@ -397,7 +411,8 @@ function currentSnapshot(): Snapshot {
       ? (fixtureScene.permissions ?? []).map((permission) => ({ sessionId: SCENE_SESSION_ID, runtimeId: 'runtime-codex', status: 'pending', ...permission } as unknown as PermissionRequest))
       // A pending approval pulls the window to its conversation, so a request for another conversation clears them.
       : search.get('session') && search.get('session') !== teamMainId ? []
-      : [...(fixtureProposalPending ? [teamProposal] : []), ...(sessions.some((session) => session.id === teamMainId && session.state === 'waiting_permission') ? [teamQuestion] : [])],
+      : [...(fixtureProposalPending ? [teamProposal] : []), ...(sessions.some((session) => session.id === teamMainId && session.state === 'waiting_permission') ? [teamQuestion] : [])])]
+      .filter((permission) => !answeredPermissions.has(permission.id)),
     projects: projects.map((project) => ({ ...project })),
     usageSummary: { inputTokens: 182_400, outputTokens: 24_900 },
     quotas: fixtureQuotas(),
@@ -467,9 +482,23 @@ const repositoryDiff = (name: string, added: string[], removed: string[]) => [`d
 const fixtureStaged = new Map<string, string>()
 const withStaged = <T extends { files: Array<Record<string, unknown>> }>(answer: T): T => ({ ...answer, files: answer.files.map((file) => ({ ...file, staged: fixtureStaged.get(String(file.repositoryPath)) ?? 'none' })) })
 // Phase 8: `?subbots=1` gives Codex a fleet.
+const stoppedHelpers = new Map<string, string>()
+let fixtureDelegations: Map<string, DelegationRecord> | undefined
+function delegationFixtures() {
+  return fixtureDelegations ??= new Map((fixtureScene?.delegations ?? []).flatMap((row) => {
+    const record = normalizeDelegation(row)
+    return record ? [[record.id, record]] : []
+  }))
+}
+function delegationWire(row: DelegationRecord) {
+  return { ...row, workspace: { path: row.workspacePath, worktree: row.worktree } }
+}
 function fixtureSubbots() {
-  const row = (agentId: string, name: string, model: string, status: string, doingNow: string | null, error: string | null = null) => ({ agentId, parentAgentId: 'agent-codex', originSessionId: 'session-codex', name, role: 'Research', provider: 'claude', model, thinking: null, sessionId: 'session-claude-2', delegationId: `delegation-${agentId}`, status, doingNow, startedAt: null, finishedAt: null, error })
-  return [row('sub-1', 'Pricing research', 'claude-haiku-5-5', 'running', 'Reading pricing.md'), row('sub-2', 'Competitors', 'claude-haiku-5-5', 'running', 'Running a search'), row('sub-3', 'Reviews', 'claude-haiku-5-5', 'queued', null), row('sub-4', 'Licences', 'claude-haiku-5-5', 'failed', null, 'The usage limit was reached.')]
+  const row = (agentId: string, name: string, model: string, status: DelegationStatus, doingNow: string | null, error: string | null = null) => ({ agentId, parentAgentId: 'agent-codex', originSessionId: 'session-codex', name, role: 'Research', provider: 'claude', model, thinking: null, sessionId: 'session-claude-2', delegationId: `delegation-${agentId}`, status, doingNow, startedAt: null, finishedAt: null, error })
+  return [row('sub-1', 'Pricing research', 'claude-haiku-5-5', 'running', 'Reading pricing.md'), row('sub-2', 'Competitors', 'claude-haiku-5-5', 'running', 'Running a search'), row('sub-3', 'Reviews', 'claude-haiku-5-5', 'queued', null), row('sub-4', 'Licences', 'claude-haiku-5-5', 'failed', null, 'The usage limit was reached.')].map((helper) => {
+    const finishedAt = stoppedHelpers.get(helper.delegationId)
+    return finishedAt ? { ...helper, status: 'cancelled' as const, doingNow: null, finishedAt } : helper
+  })
 }
 // Phase 5: accounts, custom models and secrets. `?secretrequest=1` shows a bot asking for one.
 let fixtureAccounts: Array<{ id: string; provider: string; name: string; signedIn: boolean; label: string | null; plan: string | null; bots: number }> = [{ id: 'preview-account-1', provider: 'claude', name: 'Work', signedIn: true, label: 'work@example.com', plan: 'max', bots: 2 }]
@@ -575,6 +604,8 @@ function fixtureMembers(projectId: string) {
 }
 
 export async function rpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+  if (method === 'app.snapshot') return await fetchSnapshot() as T
+  if (method === 'permissions.policy.get') return await permissionsPolicyGet() as T
   if (method === 'remote.preview.pair') {
     // Preview only: act as the phone submitting the code for the live offer. It
     // raises `remote.pairing.requested`; the owner still approves or rejects.
@@ -585,7 +616,18 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     ensureRemoteFixture()
     return remoteSimulator.call(method as RemoteMethod, params) as Promise<T>
   }
+  if (method === 'doctor.run') {
+    if (flags().get('demo-health') === 'error') throw rpcError('internal', 'Health check could not run.')
+    const checks: HealthCheck[] = [
+      { id: 'database', area: 'database', label: 'Database', status: 'ok', detail: 'The database passed its integrity check.', fix: null },
+      { id: 'runtime', area: 'runtime', label: 'Coding agents', status: fixtureHealthRefreshed ? 'ok' : 'fail', detail: fixtureHealthRefreshed ? 'Coding agents responded.' : 'A coding agent did not respond.', fix: { label: 'Scan again', method: 'runtime.refresh' } },
+      { id: 'speech', area: 'speech', label: 'Speech model', status: 'warn', detail: 'No speech model is downloaded.', fix: null },
+    ]
+    return { checks } as T
+  }
   if (method === 'runtime.refresh') {
+    fixtureHealthRefreshed = true
+    if (flags().has('demo-scan-error')) throw rpcError('provider_unavailable', 'Coding agents could not be scanned.')
     discoveryAttempts += 1
     // ?discovery-timeout-once exercises timeout, background recovery and confirmation.
     if (flags().has('discovery-timeout-once') && discoveryAttempts === 1) await new Promise((resolve) => window.setTimeout(resolve, 31_000))
@@ -656,7 +698,43 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   if (method === 'automation.webhook.enable' || method === 'automation.webhook.rotate') return { url: 'https://example.ts.net/api/hook/' + String(params.id), secret: 'preview-secret-shown-once', webhook: { enabled: true, includeBody: false } } as T
   if (method === 'automation.webhook.update') return { webhook: { enabled: true, includeBody: params.includeBody === true } } as T
   if (method === 'automation.webhook.disable') return { webhook: { enabled: false, includeBody: false } } as T
-  if (method === 'delegation.list' && fixtureScene?.delegations && params.originSessionId === SCENE_SESSION_ID) return { delegations: fixtureScene.delegations } as T
+  if (method === 'delegation.list') {
+    return { delegations: [...delegationFixtures().values()].filter((item) => item.originSessionId === params.originSessionId).map(delegationWire) } as T
+  }
+  if (method === 'delegation.cancel' || method === 'delegation.cancelGroup') {
+    if (method === 'delegation.cancelGroup' && (typeof params.originSessionId !== 'string'
+      || (!params.originTurnId && (!Array.isArray(params.delegationIds) || !params.delegationIds.length)))) {
+      throw rpcError('invalid_argument', 'Choose a conversation and assignment group.')
+    }
+    const helpers = flags().has('subbots') ? fixtureSubbots() : []
+    const matches = (row: DelegationRecord) => method === 'delegation.cancel' ? row.id === params.delegationId
+      : row.originSessionId === params.originSessionId && (typeof params.originTurnId === 'string'
+        ? row.originTurnId === params.originTurnId : Array.isArray(params.delegationIds) && params.delegationIds.includes(row.id))
+    const helperRows: DelegationRecord[] = helpers.map((helper) => ({
+      id: helper.delegationId, originSessionId: helper.originSessionId, originTurnId: null, sideSessionId: helper.sessionId, sideTurnId: null,
+      fromAgentId: helper.parentAgentId, targetAgentId: helper.agentId, topic: helper.name, briefPreview: '',
+      status: helper.status, error: helper.error, workspacePath: null, worktree: null,
+      createdAt: null, startedAt: helper.startedAt, finishedAt: helper.finishedAt, updatedAt: null, queueReason: null,
+    }))
+    const selected = [...delegationFixtures().values(), ...helperRows].filter(matches)
+    if (method === 'delegation.cancel' && !selected.length) throw rpcError('not_found', 'That assignment no longer exists.')
+    const now = new Date().toISOString()
+    const delegations = selected.map((row): DelegationRecord => {
+      if (row.status !== 'running' && row.status !== 'queued') return row
+      const stopped: DelegationRecord = { ...row, status: 'cancelled', finishedAt: now, updatedAt: now, queueReason: null }
+      if (delegationFixtures().has(row.id)) {
+        delegationFixtures().set(row.id, stopped)
+        const side = sessions.find((session) => session.id === row.sideSessionId)
+        if (side && row.status === 'running' && side.state === 'working') finishFixtureTurn(side, 'cancelled', row.sideTurnId ?? undefined)
+      } else {
+        stoppedHelpers.set(row.id, now)
+        notifyFixtureDaemon('subbot.changed', { sessionId: row.originSessionId, parentAgentId: row.fromAgentId })
+      }
+      notifyFixtureDaemon('delegation.updated', { delegation: delegationWire(stopped) })
+      return stopped
+    })
+    return (method === 'delegation.cancel' ? { delegation: delegationWire(delegations[0]) } : { delegations: delegations.map(delegationWire) }) as T
+  }
   if (method === 'subbot.list') return { subbots: flags().get('subbots') && (params.sessionId === 'session-codex' || params.agentId === 'agent-codex') ? fixtureSubbots() : [] } as T
   if (method === 'account.list') return { accounts: fixtureAccounts } as T
   if (method === 'account.create') { const account = { id: `preview-account-${fixtureAccounts.length + 1}`, provider: String(params.provider), name: String(params.name), signedIn: false, label: null, plan: null, bots: 0 }; fixtureAccounts = [...fixtureAccounts, account]; return { account } as T }
@@ -815,6 +893,24 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       { path: 'src/ui/DiffBody.tsx', line: 41, preview: `  // Uses ${query} when the mode changes` },
     ] } as T
   }
+  if (method === 'project.suggestions') {
+    if (!projects.some((project) => project.id === params.projectId)) throw rpcError('not_found', 'That project no longer exists.')
+    const suggestions: ProjectSuggestion[] = [
+      { id: 'preview-readme', kind: 'readme', title: 'Explore the invoice parser', prompt: 'Read the project overview and explain how the invoice parser is organised.', source: { file: 'README.md', detail: 'Project overview' } },
+      { id: 'preview-script', kind: 'script', title: 'Review the test setup', prompt: 'Explain how the test script runs the invoice parser tests.', source: { file: 'package.json', detail: 'test' } },
+      { id: 'preview-guide', kind: 'agents', title: 'Read the project instructions', prompt: 'Summarise the working rules in AGENTS.md before making changes.', source: { file: 'AGENTS.md', detail: 'Working in this project' } },
+    ]
+    return { suggestions, degraded: false } as T
+  }
+  if (method === 'session.get') {
+    const session = sessions.find((item) => item.id === params.sessionId)
+    if (!session) throw rpcError('not_found', 'That conversation is no longer available.')
+    if (!params.beforeMessageId) return { ...session } as T
+    const index = session.messages?.findIndex((message) => message.id === params.beforeMessageId) ?? -1
+    if (index < 0) throw rpcError('invalid_argument', 'The message is not in this conversation.')
+    const page: Session = { ...session, messages: session.messages?.slice(0, index), turns: [], tools: [], files: [], turnsTruncated: true, toolsTruncated: true, filesTruncated: true }
+    return page as T
+  }
   if (method === 'session.list') return { sessions: sessions.filter((session) => params.includeArchived === true || !session.archived).map((session) => ({ ...session })) } as T
   if (method === 'session.rename') {
     const session = sessions.find((item) => item.id === params.sessionId)
@@ -854,21 +950,68 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       limits: ['It runs as your own Windows account, so it can change anything you can.', 'Every tool call asks you first.', "The coding agent's own sandbox, if it has one, is its own: Retinue does not add one."],
     } } as T
   }
+  if (method === 'permission.rules.list') return { rules: [...fixtureApprovalRules.values()] } as T
+  if (method === 'permission.rules.update' || method === 'permission.rules.delete') {
+    const id = String(params.id ?? '')
+    const rule = fixtureApprovalRules.get(id)
+    if (!rule) throw rpcError('not_found', 'That approval no longer exists.')
+    if (method === 'permission.rules.delete') {
+      fixtureApprovalRules.delete(id)
+      notifyFixtureDaemon('permission.rules.changed', { agentId: rule.agentId })
+      return { deleted: true } as T
+    }
+    const project = projects.find((item) => item.id === params.projectId)
+    if (params.scope === 'project' && !project) throw rpcError('not_found', 'That project no longer exists.')
+    const updated = { ...rule, projectId: project?.id ?? null, projectName: project?.name ?? null }
+    fixtureApprovalRules.set(id, updated)
+    notifyFixtureDaemon('permission.rules.changed', { agentId: rule.agentId })
+    return { rule: updated } as T
+  }
+  if (method === 'session.environment' || method === 'session.workspace' || method === 'session.checkpoints') {
+    const session = sessions.find((item) => item.id === params.sessionId)
+    if (!session) throw rpcError('not_found', 'That conversation is no longer available.')
+    if (flags().get('demo-rail-error') === method) throw rpcError('internal', 'The project folder could not be read.')
+    const folder = session.projectPath ?? null
+    const branch = folder ? 'main' : null
+    if (method === 'session.environment') {
+      const environment: Environment = { projectPath: folder, gitRepo: !!folder, branch, detached: false, host: 'Windows' }
+      return environment as T
+    }
+    if (method === 'session.workspace') {
+      const workspace: Workspace = { sessionId: session.id, mode: folder ? 'shared' : 'unknown', projectPath: folder ?? '', isGit: !!folder, repoRoot: folder, branch, head: null, worktree: null, isolationFailure: null, sharedWith: [] }
+      return workspace as T
+    }
+    const files: Checkpoints['turns'][number]['files'] = (session.files ?? []).flatMap((file) => typeof file.id !== 'string' || typeof file.path !== 'string' ? [] : [{
+      id: file.id, path: file.path, turnId: typeof file.turnId === 'string' ? file.turnId : null,
+      operation: typeof file.operation === 'string' ? file.operation : null,
+      additions: typeof file.additions === 'number' ? file.additions : null, deletions: typeof file.deletions === 'number' ? file.deletions : null,
+      state: fixtureRevertedFiles.has(file.id) ? 'reverted' : 'available', reason: null,
+    }])
+    const checkpoints: Checkpoints = {
+      sessionId: session.id, busy: session.state === 'working',
+      capability: { fileUndo: !!folder, fileUndoReason: folder ? null : 'No project folder.', providerStateRestore: false, providerReason: 'This coding agent does not restore its own state.' },
+      turns: [...new Set(files.map((file) => file.turnId))].map((turnId) => ({ turnId, files: files.filter((file) => file.turnId === turnId) })),
+    }
+    return checkpoints as T
+  }
   if (method === 'search.messages') {
+    if (flags().has('demo-search-error')) throw rpcError('internal', 'Message search failed.')
     const query = String(params.query ?? '').trim().toLowerCase()
-    const results = query ? sessions.filter((session) => !session.archived).flatMap((session) => (session.messages ?? []).filter((message) => ['user', 'assistant'].includes(String(message.role)) && String(message.content ?? message.text ?? '').toLowerCase().includes(query)).map((message) => {
+    const results: MessageSearchResult[] = query ? sessions.filter((session) => !session.archived && (!params.sessionId || params.sessionId === session.id)).flatMap((session) => (session.messages ?? []).filter((message) => ['user', 'assistant'].includes(String(message.role)) && String(message.content ?? message.text ?? '').toLowerCase().includes(query)).map((message) => {
       const text = String(message.content ?? message.text ?? '')
       const at = text.toLowerCase().indexOf(query)
       const start = Math.max(0, at - 45)
       const agent = agents.find((a) => a.id === session.agentId)
-      return { sessionId: session.id, blobId: session.agentId, blob: agent ? { id: agent.id, name: agent.name, color: agent.color, look: agent.look, archived: agent.archived } : null, title: session.title, role: message.role, messageId: message.id, createdAt: message.createdAt ?? session.updatedAt, snippet: text.slice(start, Math.max(start + 180, at + query.length + 45)) }
+      return { sessionId: session.id, blobId: session.agentId ?? null, blob: agent ? { id: agent.id, name: agent.name, color: agent.color, look: agent.look, archived: agent.archived } : null, title: String(session.title ?? 'Conversation'), role: String(message.role), messageId: String(message.id ?? ''), createdAt: String(message.createdAt ?? session.updatedAt ?? ''), snippet: text.slice(start, Math.max(start + 180, at + query.length + 45)) }
     })).slice(0, 50) : []
     return { results } as T
   }
   if (method === 'file.revert') {
     const session = sessions.find((s) => s.id === params.sessionId)
     const file = session?.files?.find((f) => f.id === params.fileChangeId)
-    if (!file) throw rpcError('not_found', 'File change not found.')
+    if (!file || typeof file.id !== 'string') throw rpcError('not_found', 'File change not found.')
+    if (fixtureRevertedFiles.has(file.id)) throw rpcError('conflict', 'That change has already been undone.')
+    fixtureRevertedFiles.add(file.id)
     return { reverted: true } as T
   }
   if (method === 'agent.purge') {
@@ -1465,8 +1608,16 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     }
     if (method === 'session.queue.resume') { items.paused = false; publish(); return { ok: true } as T }
   }
+  if (method === 'session.cancel') {
+    const session = sessions.find((item) => item.id === params.sessionId)
+    if (!session) throw rpcError('not_found', 'Session not found.')
+    const turn = fixtureTurns.get(session.id)
+    if (!turn && !['working', 'starting', 'waiting_permission', 'cancelling'].includes(String(session.state))) return { cancellationRequested: false, reason: 'no_active_turn' } as T
+    finishFixtureTurn(session, 'cancelled', turn?.id ?? session.turnId)
+    return { cancellationRequested: true, cascaded: 0 } as T
+  }
   if (method === 'session.prompt') {
-    // A minimal echo so the preview shows sent messages, # references and a reply.
+    // Keep the sent message and its references before emitting the fixture turn.
     const session = sessions.find((item) => item.id === params.sessionId)
     if (!session) throw rpcError('not_found', 'session not found')
     const command = params.command as Record<string, unknown> | null | undefined
@@ -1503,13 +1654,9 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       if (owner && (session.title === owner.name || session.title === 'New chat')) session.title = String(params.text ?? '').split(/\s+/).slice(0, 6).join(' ').replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '').slice(0, 48)
     }
     session.messages = [...(session.messages ?? []), { id: `preview-user-${next}`, turnId: `preview-turn-${next}`, sequence: next, role: 'user', content: String(params.text ?? ''), createdAt: now, ...(references.length ? { references } : {}), ...(replySnapshot ? { meta: { replyTo: replySnapshot } } : {}) }]
-    session.updatedAt = now
-    notifyFixtureDaemon('session.changed', { session: { ...session } })
-    window.setTimeout(() => {
-      session.messages = [...(session.messages ?? []), { id: `preview-reply-${next}`, turnId: `preview-turn-${next}`, sequence: next + 1, role: 'assistant', content: references.length ? `Picking up "${references[0].title}" where it left off.` : 'Got it.', createdAt: new Date().toISOString() }]
-      notifyFixtureDaemon('session.changed', { session: { ...session } })
-    }, 700)
-    return { turnId: `preview-turn-${next}` } as T
+    const turnId = `preview-turn-${next}`
+    startFixtureTurn(session, turnId, { content: references.length ? `Picking up "${references[0].title}" where it left off.` : 'Got it.', sequence: next + 1 })
+    return { turnId } as T
   }
   if (method === 'runtime.capabilities') {
     const supported = { supported: true, enabled: true, scope: 'agent', evidence: 'preview' }
@@ -1841,6 +1988,22 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     agents = agents.map((agent) => agent.projectId === params.projectId ? { ...agent, projectId: null } : agent)
     return { deleted: true } as T
   }
+  if (method === 'permission.reply' && typeof params.permissionId === 'string' && params.permissionId !== 'perm-question') {
+    const permission = currentSnapshot().permissions?.find((item) => item.id === params.permissionId)
+    if (!permission || !permission.choices?.includes(String(params.choice))) throw rpcError('invalid_argument', 'That approval choice is unavailable.')
+    const session = sessions.find((item) => item.id === permission.sessionId)
+    if (session && livePermissions.has(permission.id)) {
+      if (params.choice === 'deny') finishFixtureTurn(session, 'permission_denied')
+      else {
+        resolveFixturePermission(permission, String(params.choice))
+        streamFixtureReply(session)
+      }
+    } else {
+      resolveFixturePermission(permission, String(params.choice))
+      if (session && session.state === 'waiting_permission') finishFixtureTurn(session, params.choice === 'deny' ? 'permission_denied' : 'completed')
+    }
+    return { resolved: true } as T
+  }
   if (method === 'permission.reply' && params.permissionId === 'perm-question') {
     sessions = sessions.map((session) => session.id === teamMainId ? { ...session, state: 'idle' } : session)
     notifyFixtureDaemon('permission.resolved', { permissionId: 'perm-question' })
@@ -1854,6 +2017,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     return { id: 'perm-proposal', decision } as T
   }
   if (method === 'usage.analytics') return answerUsageAnalytics(params, flags().get('analytics')) as T
+  recordUnknownRpc(method)
   return {} as T
 }
 let experimentalFixtureSeeded = false
@@ -1890,10 +2054,19 @@ export async function fetchSnapshot() {
 }
 export async function ensureDaemon() {}
 export async function startDaemonEventStream() {}
+const supervisorListeners = new Set<(state: DaemonSupervisor) => void>()
 const PREVIEW_SUPERVISOR: DaemonSupervisor = { state: 'running', attempt: 0, nextRetryMs: null, lastExitCode: null }
-export async function listenForDaemonSupervisor(_handler: (state: DaemonSupervisor) => void): Promise<Unlisten> { return noop }
-export async function daemonSupervisorState(): Promise<DaemonSupervisor> { return PREVIEW_SUPERVISOR }
-export async function restartDaemonNow(): Promise<DaemonSupervisor> { return PREVIEW_SUPERVISOR }
+let fixtureSupervisor = PREVIEW_SUPERVISOR
+export async function listenForDaemonSupervisor(handler: (state: DaemonSupervisor) => void): Promise<Unlisten> {
+  supervisorListeners.add(handler)
+  return () => { supervisorListeners.delete(handler) }
+}
+export async function daemonSupervisorState(): Promise<DaemonSupervisor> { return fixtureSupervisor }
+export async function restartDaemonNow(): Promise<DaemonSupervisor> {
+  setFixtureConnection(false, 'restarting')
+  window.setTimeout(() => setFixtureConnection(true, 'running'), 1100)
+  return fixtureSupervisor
+}
 export async function openProjectFolder() { return null }
 export async function selectLocalFile() { return null }
 let stagedAttachmentSerial = 0
@@ -2052,14 +2225,142 @@ export async function permissionsPolicyGet() {
 export async function listenForActiveSession(): Promise<Unlisten> { return noop }
 export async function listenForActiveRuntime(): Promise<Unlisten> { return noop }
 export async function listenForOpenSettings(_handler?: (page: string | null) => void): Promise<Unlisten> { return noop }
-export async function listenForDaemonEvents(handler: (event: DaemonEvent) => void): Promise<Unlisten> { daemonListeners.add(handler); return () => daemonListeners.delete(handler) }
+export async function listenForDaemonEvents(handler: (event: DaemonEvent) => void): Promise<Unlisten> { daemonListeners.add(handler); scheduleLiveDemo(); return () => daemonListeners.delete(handler) }
 function notifyFixtureDaemon(type: string, payload: Record<string, unknown>) {
   const event = { sequence: ++sequence, type, payload } as DaemonEvent
   for (const handler of daemonListeners) handler(event)
 }
 export async function listenForDaemonConnection(handler: (connected: boolean) => void): Promise<Unlisten> {
-  if (flags().has('disconnected')) handler(false)
-  return noop
+  connectionListeners.add(handler)
+  if (!fixtureConnected) handler(false)
+  return () => { connectionListeners.delete(handler) }
+}
+
+const demoLive = flags().get('demo-live')
+let demoScheduled = false
+let fixtureHealthRefreshed = false
+const fixtureRevertedFiles = new Set<string>()
+const fixtureApprovalRules = new Map<string, ApprovalRule>([
+  ['preview-rule', { id: 'preview-rule', agentId: 'agent-codex', kind: 'shell', label: 'Run invoice tests', projectId: null }],
+])
+const livePermissions = new Map<string, PermissionRequest>()
+const answeredPermissions = new Set<string>()
+const fixtureTurns = new Map<string, { id: string; reply: ChatMessage; timers: number[] }>()
+const connectionListeners = new Set<(connected: boolean) => void>()
+let fixtureConnected = !flags().has('disconnected')
+
+function setFixtureConnection(connected: boolean, state: DaemonSupervisor['state']) {
+  fixtureConnected = connected
+  fixtureSupervisor = state === 'running' ? PREVIEW_SUPERVISOR : {
+    state, attempt: state === 'restarting' ? 1 : 3, nextRetryMs: state === 'restarting' ? 1100 : null, lastExitCode: 1,
+  }
+  for (const handler of supervisorListeners) handler(fixtureSupervisor)
+  for (const handler of connectionListeners) handler(connected)
+}
+
+function resolveFixturePermission(permission: PermissionRequest, choice: string) {
+  livePermissions.delete(permission.id)
+  answeredPermissions.add(permission.id)
+  notifyFixtureDaemon('permission.resolved', { permissionId: permission.id, choice })
+}
+
+function finishFixtureTurn(session: Session, outcome: string, turnId = fixtureTurns.get(session.id)?.id) {
+  const active = fixtureTurns.get(session.id)
+  active?.timers.forEach((timer) => window.clearTimeout(timer))
+  fixtureTurns.delete(session.id)
+  for (const permission of currentSnapshot().permissions ?? []) {
+    if (permission.sessionId === session.id) resolveFixturePermission(permission, 'deny')
+  }
+  const failed = outcome !== 'completed' && outcome !== 'cancelled'
+  const state = failed ? 'error' : outcome
+  session.state = state
+  delete session.turnId
+  session.workingNote = null
+  session.updatedAt = new Date().toISOString()
+  session.turns = session.turns?.map((turn) => turn.id === turnId || (!turnId && turn.state === 'working')
+    ? { ...turn, state, endedAt: session.updatedAt, ...(failed ? { failureClass: outcome } : {}) } : turn)
+  session.tools = session.tools?.map((tool) => tool.state === 'running' && (!turnId || tool.turnId === turnId)
+    ? { ...tool, state: failed ? 'failed' : outcome, endedAt: session.updatedAt } : tool)
+  if (failed) notifyFixtureDaemon('turn.error', { sessionId: session.id, turnId, failureClass: outcome, state })
+  else notifyFixtureDaemon(outcome === 'completed' ? 'turn.completed' : 'turn.cancelled', { sessionId: session.id, turnId, state })
+  notifyFixtureDaemon('session.changed', { session: { ...session } })
+}
+
+function streamFixtureReply(session: Session) {
+  const turn = fixtureTurns.get(session.id)
+  if (!turn) return
+  const turnId = turn.id
+  session.state = 'working'
+  const tool = { id: `${turnId}-tool`, turnId, tool: 'shell', title: 'Run invoice tests', command: 'npm test -- invoice', state: 'running', startedAt: new Date().toISOString() }
+  session.tools = [...(session.tools ?? []), tool]
+  notifyFixtureDaemon('tool.changed', { sessionId: session.id, tool })
+  const reply = turn.reply
+  const content = reply.content ?? ''
+  const pieces = content.match(/\S+\s*/g) ?? [content]
+  let accumulated = ''
+  pieces.forEach((delta, index) => {
+    turn.timers.push(window.setTimeout(() => {
+      accumulated += delta
+      const message = { ...reply, content: accumulated }
+      session.messages = [...(session.messages ?? []).filter((item) => item.id !== reply.id), message]
+      notifyFixtureDaemon('message.delta', { sessionId: session.id, turnId, messageId: reply.id, role: reply.role, message: reply, delta })
+      if (index !== pieces.length - 1) return
+      notifyFixtureDaemon('message.completed', { sessionId: session.id, turnId, messageId: reply.id, message })
+      finishFixtureTurn(session, 'completed')
+    }, 400 + 260 * index))
+  })
+}
+
+function startFixtureTurn(session: Session, id: string, reply: ChatMessage, mode?: string) {
+  const previous = fixtureTurns.get(session.id)
+  if (previous) finishFixtureTurn(session, 'cancelled')
+  const now = new Date().toISOString()
+  session.state = 'working'
+  session.turnId = id
+  session.updatedAt = now
+  session.turns = [...(session.turns ?? []), { id, state: 'working', startedAt: now }]
+  const turn = { id, reply: { ...reply, id: `${id}-reply`, turnId: id, role: 'assistant', createdAt: now }, timers: [] as number[] }
+  fixtureTurns.set(session.id, turn)
+  notifyFixtureDaemon('session.changed', { session: { ...session } })
+  if (mode === 'stoppable') return
+  if (mode === 'approval') {
+    const permission: PermissionRequest = {
+      id: `${id}-permission`, sessionId: session.id, runtimeId: session.runtimeId, title: 'Run shell command',
+      kind: 'shell', command: 'npm test -- invoice', status: 'pending', choices: ['allow_once', 'allow_session', 'deny'],
+    }
+    session.state = 'waiting_permission'
+    livePermissions.set(permission.id, permission)
+    notifyFixtureDaemon('permission.requested', { sessionId: session.id, permission })
+  } else if (mode?.startsWith('error-')) {
+    turn.timers.push(window.setTimeout(() => finishFixtureTurn(session, mode.slice(6)), 650))
+  } else streamFixtureReply(session)
+}
+
+function scheduleLiveDemo() {
+  if (!demoLive || demoScheduled) return
+  demoScheduled = true
+  window.setTimeout(() => {
+    if (demoLive === 'restarting' || demoLive === 'gave_up') {
+      setFixtureConnection(false, demoLive)
+      return
+    }
+    if (demoLive === 'reconnect') {
+      void restartDaemonNow()
+      return
+    }
+    const session = sessions.find((item) => item.id === 'session-codex')
+    if (!session) return
+    if (demoLive === 'paused') {
+      const queue = (fixtureQueues[session.id] ??= { items: [], paused: false })
+      queue.paused = true
+      notifyFixtureDaemon('queue.changed', { sessionId: session.id, ...queue })
+    } else if (['rate_limited', 'retrying', 'sleeping'].includes(demoLive)) {
+      session.state = demoLive
+      notifyFixtureDaemon('session.changed', { session: { ...session } })
+    } else {
+      startFixtureTurn(session, 'preview-live-turn', { content: 'The invoice parser tests passed.' }, demoLive)
+    }
+  }, 1300)
 }
 
 const updateAvailableHandlers = new Set<(info: UpdateInfo) => void>()

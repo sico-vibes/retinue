@@ -23,7 +23,7 @@ import { isDraftSession } from './teamSelectors'
 import { buildRailView, conversationFiles, repositoryRefreshKey, useSessionRepository, type RailFile, type RepositoryState } from './sessionRepository'
 import './sessionRail.css'
 
-type Environment = { projectPath: string | null; gitRepo: boolean; branch: string | null; detached: boolean; host: string }
+export type Environment = { projectPath: string | null; gitRepo: boolean; branch: string | null; detached: boolean; host: string }
 
 const environmentCache = new Map<string, Environment>()
 

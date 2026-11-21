@@ -192,3 +192,4 @@ Last reviewed: 2026-10-27 (T7 wave: model plan, idempotent sends, conversation f
 - `ui/workingMark.css`, `doingNowStep`/`doingNowKind` in `ui/doingNow.ts`: the working line's step icon and shimmer.
 - `runtimeIsOff` in `ui/runtimeDiscovery.ts`: a switched-off coding agent is never a probe failure, and launch skips its sign-in and model checks.
 
+The preview Vite config injects the Demo badge on HTML pages. `demoRegistry.ts` reuses the inspector scenarios and adds live fixtures. `fixtureBridge.ts` emits live demo events and records fallback RPCs through `demoDiagnostics.ts`.

@@ -1,0 +1,50 @@
+.retinue-preview-demo {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  right: max(8px, env(safe-area-inset-right));
+  z-index: 2147483647;
+  color: var(--text-1, CanvasText);
+  font: 13px/1.4 system-ui, sans-serif;
+  text-align: right;
+}
+
+.retinue-preview-demo button,
+.retinue-preview-demo select {
+  min-height: 32px;
+  padding: 4px 9px;
+  border: 1px solid var(--line, GrayText);
+  border-radius: var(--radius-sm, 9px);
+  background: var(--surface-app, Canvas);
+  color: inherit;
+  font: inherit;
+}
+
+.retinue-preview-demo button,
+.retinue-preview-demo summary { cursor: pointer; }
+
+.retinue-preview-demo :focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.retinue-preview-demo section {
+  box-sizing: border-box;
+  width: min(330px, calc(100vw - 16px));
+  max-height: calc(100dvh - 54px);
+  overflow: auto;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid var(--line, GrayText);
+  border-radius: var(--radius-md, 12px);
+  background: var(--surface-app, Canvas);
+  text-align: left;
+}
+
+.retinue-preview-demo select { width: 100%; }
+.retinue-preview-demo section > div { display: flex; gap: 6px; margin-top: 8px; }
+.retinue-preview-demo ul { list-style: none; padding: 0; margin: 8px 0; }
+.retinue-preview-demo li { overflow-wrap: anywhere; }
+.retinue-preview-demo li button { width: 100%; border-color: transparent; text-align: left; }
+.retinue-preview-demo li button:hover,
+.retinue-preview-demo li button[aria-current] { background: var(--surface-selected, ButtonFace); }
+

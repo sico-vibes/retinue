@@ -97,6 +97,8 @@ When measuring theme contrast, wait for colour transitions to finish (250 ms in 
 
 ## The browser preview
 
+Every production function, screen, state and error must be demoable in the web preview. A change that adds one adds its demo entry and fixture in the same change; the coverage test enforces it. Add entries in `apps/desktop/src/preview/demoRegistry.ts` or the shared inspector scenario catalog. Trigger live states through the fixture daemon and run `demoCoverage.test.ts` with the UI tests.
+
 `npx vite --config apps/desktop/vite.preview.config.ts apps/desktop --port 5174 --strictPort --host 127.0.0.1` (the Claude desktop app has this as the `desktop-preview` launch config). It swaps `tauri.ts` for `preview/fixtureBridge.ts` (fixture bots and conversations, no daemon).
 
 The task board is on `main` (phase 1, 22 October 2026). Its browser-preview data comes from `apps/desktop/src/preview/fixtureTasks.ts`, a preview-only ledger that mimics the task contract, so the board checks run without the daemon. Any local launch file (`.claude/launch.json`, git-ignored) and worktree from the earlier `exp/board-ui` lane are historical; check them before reuse.
