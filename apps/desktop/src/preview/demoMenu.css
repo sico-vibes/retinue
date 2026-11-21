@@ -14,7 +14,7 @@
   padding: 4px 9px;
   border: 1px solid var(--line, GrayText);
   border-radius: var(--radius-sm, 9px);
-  background: var(--surface-app, Canvas);
+  background: var(--surface-panel, Canvas);
   color: inherit;
   font: inherit;
 }
@@ -36,7 +36,7 @@
   padding: 10px;
   border: 1px solid var(--line, GrayText);
   border-radius: var(--radius-md, 12px);
-  background: var(--surface-app, Canvas);
+  background: var(--surface-panel, Canvas);
   text-align: left;
 }
 
