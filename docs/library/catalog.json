@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "4bcf7be2",
-  "documentCount": 447,
+  "revision": "f3eea777",
+  "documentCount": 449,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -2931,6 +2931,236 @@
       ]
     },
     {
+      "id": "project/research/cli-install-and-update",
+      "source": "docs/research/cli-install-and-update.md",
+      "title": "Installing and updating coding-agent CLIs from inside the app",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "bcae96b2f7ee50b0ed85129ccabc6f18dcb4a4a054904f3ca45a2eb001645c71",
+      "headings": [
+        {
+          "id": "1-summary-and-recommendation",
+          "text": "1. Summary and recommendation",
+          "level": 2
+        },
+        {
+          "id": "2-how-this-was-checked-and-what-is-not-settled",
+          "text": "2. How this was checked, and what is not settled",
+          "level": 2
+        },
+        {
+          "id": "21-method",
+          "text": "2.1 Method",
+          "level": 3
+        },
+        {
+          "id": "22-reproducing-the-requests",
+          "text": "2.2 Reproducing the requests",
+          "level": 3
+        },
+        {
+          "id": "23-not-settled-here",
+          "text": "2.3 Not settled here",
+          "level": 3
+        },
+        {
+          "id": "3-what-retinue-does-today",
+          "text": "3. What Retinue does today",
+          "level": 2
+        },
+        {
+          "id": "31-discovery-path-only-with-an-honest-gate",
+          "text": "3.1 Discovery: PATH only, with an honest gate",
+          "level": 3
+        },
+        {
+          "id": "32-install-a-visible-terminal-running-the-publishers-script",
+          "text": "3.2 Install: a visible terminal running the publisher's script",
+          "level": 3
+        },
+        {
+          "id": "33-update-powershell-with-no-creation-flags-the-reported-window",
+          "text": "3.3 Update: PowerShell with no creation flags — the reported window",
+          "level": 3
+        },
+        {
+          "id": "34-the-pi-mark-is-a-letter",
+          "text": "3.4 The Pi mark is a letter",
+          "level": 3
+        },
+        {
+          "id": "35-what-the-ui-can-show-today",
+          "text": "3.5 What the UI can show today",
+          "level": 3
+        },
+        {
+          "id": "4-orca-stablyaiorca",
+          "text": "4. Orca (stablyai/orca)",
+          "level": 2
+        },
+        {
+          "id": "41-the-owners-own-cli-find-it-work-out-what-installed-it-run-that",
+          "text": "4.1 The owner's own CLI: find it, work out what installed it, run that",
+          "level": 3
+        },
+        {
+          "id": "42-orcas-own-copies-digest-checked-downloads-into-its-data-folder",
+          "text": "4.2 Orca's own copies: digest-checked downloads into its data folder",
+          "level": 3
+        },
+        {
+          "id": "43-no-console",
+          "text": "4.3 No console",
+          "level": 3
+        },
+        {
+          "id": "44-failures-admin-rights-pi",
+          "text": "4.4 Failures, admin rights, Pi",
+          "level": 3
+        },
+        {
+          "id": "5-t3-code-pingdotggt3code",
+          "text": "5. T3 Code (pingdotgg/t3code)",
+          "level": 2
+        },
+        {
+          "id": "51-the-update-runs-inside-the-server-not-the-window",
+          "text": "5.1 The update runs inside the server, not the window",
+          "level": 3
+        },
+        {
+          "id": "52-which-command-the-installer-that-owns-the-cli",
+          "text": "5.2 Which command: the installer that owns the CLI",
+          "level": 3
+        },
+        {
+          "id": "53-no-console",
+          "text": "5.3 No console",
+          "level": 3
+        },
+        {
+          "id": "54-where-t3-and-retinues-situations-differ",
+          "text": "5.4 Where T3 and Retinue's situations differ",
+          "level": 3
+        },
+        {
+          "id": "6-synara-trysynaracom",
+          "text": "6. Synara (trysynara.com)",
+          "level": 2
+        },
+        {
+          "id": "7-pis-mark-and-licence",
+          "text": "7. Pi's mark and licence",
+          "level": 2
+        },
+        {
+          "id": "8-proposed-design",
+          "text": "8. Proposed design",
+          "level": 2
+        },
+        {
+          "id": "81-where-the-code-lives",
+          "text": "8.1 Where the code lives",
+          "level": 3
+        },
+        {
+          "id": "82-per-cli-sources-pins-and-digests",
+          "text": "8.2 Per-CLI sources, pins and digests",
+          "level": 3
+        },
+        {
+          "id": "83-layout-on-disk-and-the-receipt",
+          "text": "8.3 Layout on disk, and the receipt",
+          "level": 3
+        },
+        {
+          "id": "84-two-modes-adopt-or-manage",
+          "text": "8.4 Two modes: adopt, or manage",
+          "level": 3
+        },
+        {
+          "id": "85-discovery-and-the-runtime-id",
+          "text": "8.5 Discovery and the runtime id",
+          "level": 3
+        },
+        {
+          "id": "86-protecting-a-running-bot",
+          "text": "8.6 Protecting a running bot",
+          "level": 3
+        },
+        {
+          "id": "87-never-a-console-window",
+          "text": "8.7 Never a console window",
+          "level": 3
+        },
+        {
+          "id": "88-consent-progress-and-failure",
+          "text": "8.8 Consent, progress and failure",
+          "level": 3
+        },
+        {
+          "id": "89-remote-devices-and-the-headless-host-proposed-never",
+          "text": "8.9 Remote devices and the headless host: proposed never",
+          "level": 3
+        },
+        {
+          "id": "810-the-threat-model-rows-to-add",
+          "text": "8.10 The threat-model rows to add",
+          "level": 3
+        },
+        {
+          "id": "811-tests-and-gates",
+          "text": "8.11 Tests and gates",
+          "level": 3
+        },
+        {
+          "id": "812-demo-coverage-and-the-docs-the-change-makes-stale",
+          "text": "8.12 Demo coverage and the docs the change makes stale",
+          "level": 3
+        },
+        {
+          "id": "9-the-window-showing-spawn-inventory",
+          "text": "9. The window-showing spawn inventory",
+          "level": 2
+        },
+        {
+          "id": "91-no-creation-flag-at-all-and-a-console-program-can-show-a-window",
+          "text": "9.1 No creation flag at all, and a console program — can show a window",
+          "level": 3
+        },
+        {
+          "id": "92-flagged-with-createsuspended-only-0x4-job-owned-but-not-createnowindow",
+          "text": "9.2 Flagged with CREATE_SUSPENDED only (0x4) — job-owned, but not CREATE_NO_WINDOW",
+          "level": 3
+        },
+        {
+          "id": "93-correctly-hidden-today-do-not-regress",
+          "text": "9.3 Correctly hidden today (do not regress)",
+          "level": 3
+        },
+        {
+          "id": "94-visible-by-design-leave-alone",
+          "text": "9.4 Visible by design (leave alone)",
+          "level": 3
+        },
+        {
+          "id": "10-open-decisions-for-the-owner",
+          "text": "10. Open decisions for the owner",
+          "level": 2
+        },
+        {
+          "id": "11-sources",
+          "text": "11. Sources",
+          "level": 2
+        },
+        {
+          "id": "appendix-a-what-the-requests-answered-today-21-november-2026",
+          "text": "Appendix A — what the requests answered today (21 November 2026)",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/reference/invariants",
       "source": "docs/reference/invariants.md",
       "title": "Invariants",
@@ -3160,6 +3390,191 @@
         {
           "id": "limits",
           "text": "Limits",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/research/performance-2026-11",
+      "source": "docs/research/performance-2026-11.md",
+      "title": "Making Retinue faster and snappier without losing its visual life",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "4a4943924a4d6af0786005105fe6ae96a9cce417448c00e958358d38ba16142c",
+      "headings": [
+        {
+          "id": "1-verdict",
+          "text": "1. Verdict",
+          "level": 2
+        },
+        {
+          "id": "2-what-i-measured-and-how",
+          "text": "2. What I measured, and how",
+          "level": 2
+        },
+        {
+          "id": "3-where-the-time-goes-today",
+          "text": "3. Where the time goes today",
+          "level": 2
+        },
+        {
+          "id": "31-one-token-costs-one-whole-app-render-v",
+          "text": "3.1 One token costs one whole-app render [V]",
+          "level": 3
+        },
+        {
+          "id": "32-a-keystroke-costs-the-same-whole-app-render-v",
+          "text": "3.2 A keystroke costs the same whole-app render [V]",
+          "level": 3
+        },
+        {
+          "id": "33-conversation-switching-v",
+          "text": "3.3 Conversation switching [V]",
+          "level": 3
+        },
+        {
+          "id": "34-the-sidebar-and-the-shell-v",
+          "text": "3.4 The sidebar and the shell [V]",
+          "level": 3
+        },
+        {
+          "id": "35-css-and-motion-vm",
+          "text": "3.5 CSS and motion [V][M]",
+          "level": 3
+        },
+        {
+          "id": "36-start-up-v",
+          "text": "3.6 Start-up [V]",
+          "level": 3
+        },
+        {
+          "id": "37-the-companion-window-vu",
+          "text": "3.7 The companion window [V][U]",
+          "level": 3
+        },
+        {
+          "id": "38-sqlite-per-keystroke-and-per-event-v",
+          "text": "3.8 SQLite per keystroke and per event [V]",
+          "level": 3
+        },
+        {
+          "id": "39-the-first-requests-and-webview2-settings-vu",
+          "text": "3.9 The first requests and WebView2 settings [V][U]",
+          "level": 3
+        },
+        {
+          "id": "4-what-must-not-be-broken",
+          "text": "4. What must not be broken",
+          "level": 2
+        },
+        {
+          "id": "5-how-the-others-do-it",
+          "text": "5. How the others do it",
+          "level": 2
+        },
+        {
+          "id": "pandacode-aicodekingpandacode",
+          "text": "Pandacode (aicodeking/pandacode)",
+          "level": 3
+        },
+        {
+          "id": "t3-code-pingdotggt3code",
+          "text": "T3 Code (pingdotgg/t3code)",
+          "level": 3
+        },
+        {
+          "id": "synara-emanuele-web04synara-docs-at-trysynaracom",
+          "text": "Synara (Emanuele-web04/synara, docs at trysynara.com)",
+          "level": 3
+        },
+        {
+          "id": "6-the-plan-ranked",
+          "text": "6. The plan, ranked",
+          "level": 2
+        },
+        {
+          "id": "1-coalesce-streamed-deltas-before-they-reach-the-ui-ada-director-for-the-last-step",
+          "text": "1. Coalesce streamed deltas before they reach the UI (Ada; Director for the last step)",
+          "level": 3
+        },
+        {
+          "id": "2-stop-re-rendering-the-world-memoise-the-rows-and-split-the-live-state-director",
+          "text": "2. Stop re-rendering the world: memoise the rows and split the live state (Director)",
+          "level": 3
+        },
+        {
+          "id": "3-window-the-transcript-director",
+          "text": "3. Window the transcript (Director)",
+          "level": 3
+        },
+        {
+          "id": "4-make-the-composer-local-director",
+          "text": "4. Make the composer local (Director)",
+          "level": 3
+        },
+        {
+          "id": "5-make-the-bottom-scroll-and-the-layout-cheap-director",
+          "text": "5. Make the bottom-scroll and the layout cheap (Director)",
+          "level": 3
+        },
+        {
+          "id": "6-split-the-bundle-and-give-the-companion-its-own-entry-director",
+          "text": "6. Split the bundle and give the companion its own entry (Director)",
+          "level": 3
+        },
+        {
+          "id": "7-start-faster-ada-for-probes-director-for-the-hold",
+          "text": "7. Start faster (Ada for probes, Director for the hold)",
+          "level": 3
+        },
+        {
+          "id": "8-keep-the-glass-drop-the-cost-when-the-frame-budget-is-gone-director-owner-sign-off",
+          "text": "8. Keep the glass, drop the cost when the frame budget is gone (Director; owner sign-off)",
+          "level": 3
+        },
+        {
+          "id": "9-trim-the-render-paths-constant-costs-director",
+          "text": "9. Trim the render path's constant costs (Director)",
+          "level": 3
+        },
+        {
+          "id": "10-a-budget-and-a-benchmark-the-gates-can-run-director-with-ada-for-the-daemon-side",
+          "text": "10. A budget and a benchmark the gates can run (Director, with Ada for the daemon side)",
+          "level": 3
+        },
+        {
+          "id": "held-back-and-why",
+          "text": "Held back, and why",
+          "level": 3
+        },
+        {
+          "id": "7-the-performance-budget",
+          "text": "7. The performance budget",
+          "level": 2
+        },
+        {
+          "id": "8-a-repeatable-benchmark",
+          "text": "8. A repeatable benchmark",
+          "level": 2
+        },
+        {
+          "id": "9-owner-decisions",
+          "text": "9. Owner decisions",
+          "level": 2
+        },
+        {
+          "id": "10-what-i-could-not-measure",
+          "text": "10. What I could not measure",
+          "level": 2
+        },
+        {
+          "id": "11-sources",
+          "text": "11. Sources",
+          "level": 2
+        },
+        {
+          "id": "appendix-raw-measurements",
+          "text": "Appendix: raw measurements",
           "level": 2
         }
       ]
