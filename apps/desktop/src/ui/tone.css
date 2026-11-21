@@ -29,6 +29,8 @@
 .turn-error-head .turn-error-meta b { color: var(--tone-ink); font-weight: 500; }
 .turn-error-card p { margin: 0; color: var(--text-2); font: var(--fs-sm)/1.5 var(--font-ui); white-space: pre-wrap; overflow-wrap: anywhere; }
 .turn-error-card .sign-in-help { margin-top: 2px; }
+.turn-error-card .tone-note-actions { flex-wrap: wrap; }
+.turn-error-card .tone-note-actions .secondary-button { border-radius: var(--radius-sm); }
 .turn-error-card .activity-detail { margin-top: 2px; }
 .turn-error-card .activity-detail summary { color: var(--text-3); font-size: var(--fs-2xs); cursor: pointer; }
 .turn-error-card .activity-detail pre { margin: 6px 0 0; padding: 8px 10px; max-height: 220px; overflow: auto; color: var(--text-2); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--text-1) 5%, transparent); font: 11px/1.5 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; }

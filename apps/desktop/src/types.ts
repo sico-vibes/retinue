@@ -616,7 +616,7 @@ export function applyEvent(snapshot: Snapshot, event: DaemonEvent): Snapshot {
   }
   if (event.type === 'daemon.health') return { ...snapshot, sequence, daemon: { ...(snapshot.daemon ?? {}), ...payload } }
 
-  if (!['message.delta', 'message.completed', 'message.reactions.changed', 'tool.changed', 'command.changed', 'file.changed', 'permission.requested', 'usage.updated', 'turn.completed', 'turn.error', 'session.plan', 'session.note'].includes(event.type)) {
+  if (!['message.delta', 'message.completed', 'message.reactions.changed', 'tool.changed', 'command.changed', 'file.changed', 'permission.requested', 'usage.updated', 'turn.completed', 'turn.error', 'turn.cancelled', 'session.plan', 'session.note'].includes(event.type)) {
     return { ...snapshot, sequence }
   }
 
@@ -705,12 +705,18 @@ export function applyEvent(snapshot: Snapshot, event: DaemonEvent): Snapshot {
         const turns = turnId ? (session.turns ?? []).map((turn) => turn.id === turnId ? { ...turn, state: 'completed', failureClass: undefined, detail: undefined, recoveryHandled: undefined } : turn) : session.turns
         return { ...session, state: 'completed', ...(turns ? { turns } : {}) }
       }
-      if (event.type === 'turn.error') {
+      if (event.type === 'turn.error' || event.type === 'turn.cancelled') {
         const turnId = typeof payload.turnId === 'string' ? payload.turnId : null
-        const turns = (session.turns ?? []).map((turn) => turn.id === turnId
-          ? { ...turn, state: 'error', failureClass: payload.failureClass, detail: payload.detail, recoveryHandled: payload.recoveryHandled }
-          : turn)
-        return { ...session, state: typeof payload.state === 'string' ? payload.state : stateForEvent(event.type) ?? session.state, turns }
+        const cancelled = event.type === 'turn.cancelled'
+        const turns = [...(session.turns ?? [])]
+        if (turnId) {
+          const index = turns.findIndex((turn) => turn.id === turnId)
+          const terminal = { ...turns[index], id: turnId, state: cancelled ? 'cancelled' : 'error', failureClass: cancelled ? 'cancelled' : payload.failureClass, failureMessage: payload.message, detail: payload.detail, recoveryHandled: payload.recoveryHandled }
+          if (index < 0) turns.push(terminal)
+          else turns[index] = terminal
+        }
+        // Cancellation can leave an unopened provider session idle. Keep the session.changed summary.
+        return { ...session, state: cancelled ? session.state : typeof payload.state === 'string' ? payload.state : 'error', turns }
       }
       return { ...session, state: stateForEvent(event.type) ?? session.state }
     })

@@ -11,7 +11,7 @@ import { applyFonts } from './fonts'
 import { disposeCompanionAudio, playCompanionCue, setCompanionSoundsEnabled, setCompanionSoundVolume, unlockCompanionAudioFromGesture } from '../blob/soundCues'
 import { playDictationCue } from './dictationSound'
 import { CompanionFsm, type CompanionMode } from '../blob/companionFsm'
-import { buildConversationItems, groupConversationActivity, isSubagentItem, withoutStaleContextNotices, type ConversationItem, type GroupedConversationItem } from './conversation'
+import { buildConversationItems, groupConversationActivity, isSubagentItem, latestTurnStop, turnStopCopy, withoutStaleContextNotices, type ConversationItem, type GroupedConversationItem } from './conversation'
 import { compactMoodLabel, deriveCompanionStatus } from './companionStatus'
 import { AnalyticsView } from './AnalyticsView'
 import { SchedulesView, type AutomationInput } from './SchedulesView'
@@ -78,7 +78,7 @@ import { conversationPlaceName, conversationsToLoad, hashQuery, HYDRATE_AT_ONCE,
 import { effectiveApprovalMode } from '../approvalContract'
 import type { ExecutionSendGate } from '../executionContract'
 import { parseExecSnapshot } from '../executionContract'
-import { friendlyError, friendlyErrorText } from './errorCopy'
+import { friendlyErrorText } from './errorCopy'
 import { changedFields, createDraft, createParams, daemonCodeOf, draftFromAgent, teamParams, duplicateParams, executionFromAgent, isAgentDirty, messageForDaemonCode, updateParams, validateAgentDraft, type AgentDraft } from './agentForm'
 import { activeAgents, agentSessions, agentsForRuntime, duplicateAgentName, legacySessions, nextAgentAfterArchive, placeAgentOrder, projectGroups, reorderAgentInProject, runtimeUsable, sessionDisplayTitle, sessionSelectionTarget } from './rosterSelectors'
 import { conversationMarkdown } from './conversationMarkdown'
@@ -240,6 +240,7 @@ export function App() {
   const [messageMenu, setMessageMenu] = useState<MessageMenuTarget | null>(null)
   const messageMenuAnchor = useRef<HTMLElement | null>(null)
   const [searchTarget, setSearchTarget] = useState<MessageSearchResult | null>(null)
+  const [stopTarget, setStopTarget] = useState<{ sessionId: string } | null>(null)
   const [reviewDismissals, setReviewDismissals] = useState<Record<string, string[]>>({})
   const [revertTarget, setRevertTarget] = useState<{ sessionId: string; file: Record<string, unknown> } | null>(null)
   const undoToasts = useUndoToasts()
@@ -707,6 +708,20 @@ export function App() {
     return () => observer.disconnect()
   }, [selectedSession?.id, sessionMessages.length])
   const conversationItems = selectedSession ? buildConversationItems(selectedSession) : []
+  useEffect(() => {
+    if (!stopTarget || selectedSession?.id !== stopTarget.sessionId || selectedSession.partial) return
+    const stop = latestTurnStop(selectedSession)
+    const frame = requestAnimationFrame(() => {
+      const card = stop && document.getElementById(`conversation-message-${encodeURIComponent(stop.id)}`)
+      if (card) {
+        stickToBottom.current = false
+        card.scrollIntoView?.({ block: 'center' })
+        card.focus({ preventScroll: true })
+      }
+      setStopTarget(null)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [stopTarget, selectedSession])
   // The app's rebindable shortcuts (Settings › Chat › Keyboard). Ctrl+` for the terminal is the same key as in editors.
   const shortcutHandlers = useRef<Parameters<typeof useShortcutActions>[2]>({})
   const stableShortcutHandlers = useMemo(() => ({
@@ -1920,6 +1935,7 @@ export function App() {
   /** Clicking an employee or conversation in the sidebar leaves any page (settings, tasks, usage, an employee's page) for that chat (owner, 9 November 2026). */
   const leavePages = () => { setTeamPage(null); setAnalyticsOpen(false); setSchedulesOpen(false); setTasksOpen(false); setCompareOpen(false); setBlobPage(null); setSettingsSheet(false); setMachineView(null) }
   const selectConversation = (session: Session) => {
+    setStopTarget(['error', 'failed'].includes(String(session.state)) ? { sessionId: session.id } : null)
     setTeamPage(null)
     setSideSessionId(null)
     setSelectedSessionId(session.id)
@@ -2109,11 +2125,8 @@ export function App() {
     requestAnimationFrame(() => composerRef.current?.focus())
   }
 
-  const openUserMessageMenu = (event: ReactMouseEvent<HTMLElement>, message: Record<string, unknown>) => {
-    if (!experiments.messageActions || sideSession || message.role !== 'user' || !selectedSession || typeof message.id !== 'string') return
+  const promptForRetry = (message: Record<string, unknown>) => {
     const text = originalMessageText(message.content ?? message.text)
-    if (!text) return
-    event.preventDefault()
     const meta = message.meta && typeof message.meta === 'object' ? message.meta as Record<string, unknown> : {}
     const rawReply = meta.replyTo && typeof meta.replyTo === 'object' ? meta.replyTo as Record<string, unknown> : null
     const replyTo = rawReply && typeof rawReply.sourceSessionId === 'string' && typeof rawReply.messageId === 'string' && typeof rawReply.author === 'string' && typeof rawReply.excerpt === 'string'
@@ -2121,17 +2134,32 @@ export function App() {
       : null
     const references = Array.isArray(message.references) ? message.references.filter((item): item is { id: string; title: string } => !!item && typeof item === 'object' && typeof item.id === 'string' && typeof item.title === 'string') : []
     const attachments = Array.isArray(message.attachments) ? message.attachments.filter((item): item is { name: string; path: string } => !!item && typeof item === 'object' && typeof item.name === 'string' && typeof item.path === 'string') : []
+    return { text, references, attachments, replyTo }
+  }
+
+  const retryPrompt = (sessionId: string, { text, references, attachments, replyTo }: ReturnType<typeof promptForRetry>) => {
+    void doRpc('session.prompt', {
+      sessionId,
+      text,
+      ...(references.length ? { conversationRefs: references.map((reference) => reference.id) } : {}),
+      ...(replyTo ? { replyTo: { sourceSessionId: replyTo.sourceSessionId, messageId: replyTo.messageId } } : {}),
+      ...(attachments.length ? { attachments: attachments.map((attachment) => ({ path: attachment.path, name: attachment.name })) } : {}),
+    }).then(refresh).catch(() => undefined)
+  }
+
+  const openUserMessageMenu = (event: ReactMouseEvent<HTMLElement>, message: Record<string, unknown>) => {
+    if (!experiments.messageActions || sideSession || message.role !== 'user' || !selectedSession || typeof message.id !== 'string') return
+    const prompt = promptForRetry(message)
+    if (!prompt.text) return
+    event.preventDefault()
     messageMenuAnchor.current = event.currentTarget
     setMessageMenu({
       x: event.clientX,
       y: event.clientY,
       sessionId: selectedSession.id,
       messageId: message.id,
-      text,
+      ...prompt,
       latest: sessionMessages.filter((item) => item.role === 'user').at(-1)?.id === message.id,
-      references,
-      attachments,
-      replyTo,
     })
   }
 
@@ -2884,6 +2912,17 @@ ${fileReferenceText(sentFile)}` : typed
   const approvalFocusOnMount = !composerTypingRef.current || connection !== 'connected' || busy || selectedSession?.state === 'waiting_permission' || !runtimeReady
   const canStartSession = connection === 'connected' && !busy && !!activeSelectedAgent && runtimeReady && !sideSession
   const visiblePendingSends = selectedSession && !sideSession ? pendingSends.filter((item) => item.sessionId === selectedSession.id && !(selectedSession.messages ?? []).some((message) => message.role === 'user' && originalMessageText(message.content ?? message.text).trim() === item.text && Date.parse(String(message.createdAt ?? '')) >= item.at - 5000)) : []
+  const lastPrompt = sessionMessages.filter((message) => message.role === 'user').at(-1)
+  const lastStop = conversationItems.filter((item) => item.activityKind === 'turn').at(-1)
+  const retryLastStop = !sideSession && lastPrompt && lastStop && lastStop.activity?.state !== 'cancelled'
+    && !lastStop.activity?.recoveryHandled && lastStop.activity?.delivery !== 'unknown'
+    && (!lastPrompt.turnId || !lastStop.activity?.id || lastPrompt.turnId === lastStop.activity.id)
+    && conversationItems.indexOf(lastStop) > conversationItems.findIndex((item) => item.value === lastPrompt)
+    && selectedSession && connection === 'connected' && runtimeReady && !busy && !sessionBusy
+    && (['error', 'failed'].includes(String(selectedSession.state)) || selectedSession.turns?.at(-1) === lastStop.activity)
+    && !['limited', 'rate_limited'].includes(String(selectedSession.state)) && !selectedSession.partial
+    && originalMessageText(lastPrompt.content ?? lastPrompt.text).trim()
+    ? () => retryPrompt(selectedSession.id, promptForRetry(lastPrompt)) : undefined
   const conversationEmpty = !selectedSession || (selectedSession.messages ?? []).length === 0
   const lastAgentIndex = conversationItems.reduce((last, item, index) => item.kind === 'message' && !isUserMessage(item.value) ? index : last, -1)
   // The details panel describes the open conversation, so it steps aside for the blob editor and Analytics.
@@ -3183,7 +3222,7 @@ ${fileReferenceText(sentFile)}` : typed
                   ? (activityDetails || sideSession || !item.items.every((entry) => isMakingImage(entry)) ? <ActivitySummaryLine group={item} onDiff={(path, content) => setDiffViewer({ path, content })} /> : <ImageMakingCards group={item} />)
                   : item.kind === 'message'
                     ? (team && experiments.search && !team.props.id ? <div id={`conversation-message-${encodeURIComponent(item.id)}`}>{team}</div> : team) ?? <MessageItem id={`conversation-message-${encodeURIComponent(item.id)}`} message={item.value!} accent={accent} agentName={agentName} avatar={activeSelectedAgent ? <BlobCanvas decorative color={accent} size={36} look={agentLook(activeSelectedAgent)} label={agentName} /> : undefined} showAvatar={!isUserMessage(item.value) && (index === 0 || isPreviousItemNonMessageOrUser(groupedConversationItems, index))} mood={index === lastAgentIndex ? selectedMood : 'idle'} agents={agents} onOpenReference={openSideConversation} sourceSessionId={selectedSession?.id ?? ''} sourceMessages={sessionMessages} onJumpToMessage={jumpToMessage} onContextMenu={item.value?.role === 'user' && !sideSession ? (event) => openUserMessageMenu(event, item.value!) : undefined} onToggleReaction={experiments.messageActions && !sideSession && item.value?.id ? (emoji) => { void toggleMessageReaction(selectedSession.id, String(item.value!.id), emoji).catch(() => setError('Could not save your reaction. Try again.')) } : undefined} onTroubleshoot={managerOf(agents) && activeSelectedAgent && activeSelectedAgent.systemRole !== 'manager' ? (turnId) => void askCeoToTroubleshoot(selectedSession.id, turnId) : undefined} />
-                    : <ActivityItem item={item} onDiff={(path, content) => setDiffViewer({ path, content })} runtime={selectedRuntime} onSignedIn={() => void refresh()} />
+                    : <ActivityItem item={item} onDiff={(path, content) => setDiffViewer({ path, content })} runtime={selectedRuntime} onSignedIn={() => void refresh()} onRetry={item === lastStop ? retryLastStop : undefined} onTroubleshoot={item.activityKind === 'turn' && item.activity?.state !== 'cancelled' && managerOf(agents) && activeSelectedAgent && activeSelectedAgent.systemRole !== 'manager' ? () => void askCeoToTroubleshoot(selectedSession.id, typeof item.activity?.id === 'string' ? item.activity.id : null) : undefined} />
                 const message = item.kind === 'message' ? item.value : undefined
                 const text = originalMessageText(message?.content ?? message?.text)
                 const messageMeta = message?.meta && typeof message.meta === 'object' ? message.meta as Record<string, unknown> : {}
@@ -3314,13 +3353,7 @@ ${fileReferenceText(sentFile)}` : typed
       {quickSwitcherOpen && <QuickSwitcher items={quickSwitcherItems} onChoose={chooseQuickSwitcherItem} onClose={() => setQuickSwitcherOpen(false)} />}
       {settingsSheet && <SettingsSheet experiments={experiments} onExperimentChange={changeExperiment} scanStatus={discoveryStatus} snapshot={snapshot} usageBarEnabled={usageBarEnabled} onUsageBarChange={setUsageBarEnabled} onSendShortcutChange={setSendShortcut} onShortcutBindingsChange={setShortcutBindings} claudeWorkflowsEnabled={claudeWorkflowsEnabled} onClaudeWorkflowsChange={setClaudeWorkflowsEnabled} usageTipsEnabled={usageTipsEnabled} onUsageTipsChange={setUsageTipsEnabled} activityDetails={activityDetails} onActivityDetailsChange={setActivityDetails} runtimeLogos={runtimeLogos} onRuntimeLogosChange={setRuntimeLogos} speechEnabled={speechEnabled} onSpeechEnabledChange={setSpeechEnabled} speechModel={speechModel} onSpeechModelChange={setSpeechModel} initialPage={settingsInitialPage} initialGroup={settingsGroup} focusUpdates={settingsFocus === 'updates'} onClose={() => { setSettingsSheet(false); setSettingsFocus(null); setSettingsGroup(null) }} onRefresh={refreshRuntimes} onError={setError} onRunSetup={() => { setSettingsSheet(false); setOnboardingVisible(true) }} onOpenAgent={(agentId) => { const target = agents.find((agent) => agent.id === agentId); setSettingsSheet(false); if (target) openEdit(target) }} onOpenSession={(sessionId) => { const target = sessions.find((item) => item.id === sessionId); setSettingsSheet(false); setSettingsFocus(null); if (!target) return; if (isSideSession(target)) openSideConversation(sessionId); else { setSideSessionId(null); selectSession(target) } }} />}
       {messageMenu && selectedSession?.id === messageMenu.sessionId && <MessageContextMenu position={messageMenu} canRetry={messageMenu.latest && connection === 'connected' && runtimeReady && !busy && !sessionBusy} onClose={closeMessageMenu} onRetry={() => {
-        void doRpc('session.prompt', {
-          sessionId: messageMenu.sessionId,
-          text: messageMenu.text,
-          ...(messageMenu.references.length ? { conversationRefs: messageMenu.references.map((reference) => reference.id) } : {}),
-          ...(messageMenu.replyTo ? { replyTo: { sourceSessionId: messageMenu.replyTo.sourceSessionId, messageId: messageMenu.replyTo.messageId } } : {}),
-          ...(messageMenu.attachments.length ? { attachments: messageMenu.attachments.map((attachment) => ({ path: attachment.path, name: attachment.name })) } : {}),
-        }).then(refresh).catch(() => undefined)
+        retryPrompt(messageMenu.sessionId, messageMenu)
       }} onEdit={() => {
         setComposer(messageMenu.text)
         setConversationRefs(messageMenu.references)
@@ -3664,45 +3697,43 @@ function mergeHydratedSession(snapshot: Snapshot, id: string, fullSession: Sessi
   return { ...snapshot, sessions: [...sessions.filter((session) => session.id !== id), merged] }
 }
 
-function ActivityItem({ item, onDiff, runtime, onSignedIn }: { item: ConversationItem; onDiff?: (path: string, content: string) => void; runtime?: Runtime | null; onSignedIn?: () => void }) {
+function ActivityItem({ item, onDiff, runtime, onSignedIn, onRetry, onTroubleshoot }: { item: ConversationItem; onDiff?: (path: string, content: string) => void; runtime?: Runtime | null; onSignedIn?: () => void; onRetry?: () => void; onTroubleshoot?: () => void }) {
   const activity = item.activity ?? {}
   const [previewing, setPreviewing] = useState(false)
   const previewPath = item.activityKind === 'file' && typeof activity.path === 'string' && isPreviewablePath(activity.path) ? activity.path : null
   const file = item.activityKind === 'file'
   const failed = ['error', 'failed', 'rejected'].includes(String(activity.state ?? activity.status ?? '').toLowerCase()) || item.activityKind === 'turn'
-  const rawTurnDetail = String(activity.summary ?? activity.detail ?? activity.output ?? activity.command ?? '')
-  const friendly = item.activityKind === 'turn' ? friendlyError({ ...(typeof activity.failureClass === 'string' ? { code: activity.failureClass } : {}), message: rawTurnDetail }) : null
+  const friendly = item.activityKind === 'turn' ? turnStopCopy(activity) : null
   const title = friendly ? friendly.title : file ? labelize(activity.operation, 'File change') : formatUnknownSafe(activity.title, formatUnknownSafe(activity.kind, 'Agent activity'))
-  const detail = friendly ? '' : file ? String(activity.path ?? 'Changed file') : String(activity.command ?? activity.summary ?? activity.detail ?? activity.output ?? '')
+  const detail = file ? String(activity.path ?? 'Changed file') : String(activity.command ?? activity.summary ?? activity.detail ?? activity.output ?? '')
   const timeValue = activity.completedAt ?? activity.startedAt ?? activity.createdAt
   const time = typeof timeValue === 'string' ? new Date(timeValue) : null
   // Owner, 15 November 2026: a failed turn is a filled card with the status colour washing in from the right and its icon on the left.
   if (item.activityKind === 'turn' && friendly) {
     const tone = friendly.tone === 'failure' ? 'danger' : friendly.tone === 'info' ? 'info' : 'warning'
     const Icon = friendly.action?.kind === 'sign-in' ? KeyRound : TONE_ICON[tone]
-    return <article className="turn-error-card tone-wash" data-tone={tone} role="group" aria-label={friendly.title}>
+    return <article id={`conversation-message-${encodeURIComponent(item.id)}`} tabIndex={-1} className="turn-error-card tone-wash" data-tone={tone} role="group" aria-label={friendly.title}>
       <span className="tone-icon" aria-hidden="true"><Icon size={16} /></span>
       <div className="turn-error-main">
         <div className="turn-error-head"><strong>{friendly.title}</strong><span className="turn-error-meta"><b>{tone === 'danger' ? 'Failed' : tone === 'info' ? 'Note' : 'Needs you'}</b>{time && !Number.isNaN(time.valueOf()) && <time>{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>}</span></div>
-        {friendly.detail && <p>{friendly.detail}</p>}
+        {friendly.reason !== friendly.title && <p>{friendly.reason}</p>}
         {friendly.action?.kind === 'sign-in' && runtime && <SignInHelp provider={runtime.provider} runtimeId={runtime.id} onChecked={onSignedIn} />}
         {activity.delivery === 'unknown' && <p className="activity-delivery-note">Retinue could not confirm the employee received this message, so it may have reached it. It will not be sent again on its own; check the conversation before sending it again.</p>}
-        {rawTurnDetail && rawTurnDetail !== friendly.detail && <details className="activity-detail"><summary>Details</summary><pre>{rawTurnDetail}</pre></details>}
+        {(onRetry && friendly.action?.kind === 'retry' || onTroubleshoot) && <div className="tone-note-actions">
+          {onRetry && friendly.action?.kind === 'retry' && <button type="button" className="secondary-button small" onClick={onRetry}>Retry</button>}
+          {onTroubleshoot && <button type="button" className="secondary-button small" onClick={onTroubleshoot}>Ask the CEO to troubleshoot</button>}
+        </div>}
       </div>
     </article>
   }
   return <article className={`activity-card timeline-activity ${failed ? 'error' : ''}`}>
     <div className="activity-heading">{file ? <FileText size={15} /> : <Terminal size={15} />}<strong>{title}</strong><span>{labelize(activity.state ?? activity.status, file ? 'Reported' : 'Activity')}</span>{time && !Number.isNaN(time.valueOf()) && <time>{time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>}</div>
-    {friendly?.detail && <p>{friendly.detail}</p>}
-    {friendly?.action?.kind === 'sign-in' && runtime && <SignInHelp provider={runtime.provider} runtimeId={runtime.id} onChecked={onSignedIn} />}
     {detail && <p>{detail}</p>}
-    {item.activityKind === 'turn' && activity.delivery === 'unknown' && <p className="activity-delivery-note">Retinue could not confirm the employee received this message, so it may have reached it. It will not be sent again on its own; check the conversation before sending it again.</p>}
     {typeof activity.exitCode === 'number' && <small>Exit code {activity.exitCode}</small>}
     {previewPath && <button type="button" className="ghost-button small activity-diff-button" aria-expanded={previewing} onClick={() => setPreviewing((value) => !value)}>{previewing ? 'Hide preview' : 'Preview file'}</button>}
     {previewing && previewPath && <MediaPreview path={previewPath} />}
     {typeof activity.diff === 'string' && <button type="button" className="ghost-button small activity-diff-button" onClick={() => onDiff?.(String(activity.path ?? activity.filePath ?? activity.title ?? 'Reported change'), activity.diff as string)}>View reported diff</button>}
     {typeof activity.output === 'string' && activity.output !== detail && <details className="activity-detail"><summary>Output</summary><pre>{activity.output}</pre></details>}
-    {item.activityKind === 'turn' && rawTurnDetail && rawTurnDetail !== friendly?.detail && <details className="activity-detail"><summary>Details</summary><pre>{rawTurnDetail}</pre></details>}
   </article>
 }
 

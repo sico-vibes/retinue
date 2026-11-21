@@ -10,8 +10,8 @@ describe('P8 watchdog presentation', () => {
     expect(status.label).toContain('Limited until')
     expect(DEFAULT_EXPERIMENTS.resumeAfterUsageLimits).toBe(true)
   })
-  it('shows recovery once instead of an error for every attempt', () => {
+  it('keeps the watchdog reason alongside automatic recovery', () => {
     const items = buildConversationItems({ id: 's', runtimeId: 'r', messages: [{ id: 'n', role: 'notice', content: 'Retrying (2 of 3)…' }], turns: [{ id: 't', state: 'error', recoveryHandled: true }] })
-    expect(items.some(item => item.kind === 'activity' && item.id === 'turn-error:t')).toBe(false)
+    expect(items.some(item => item.kind === 'activity' && item.id === 'turn-error:t')).toBe(true)
   })
 })

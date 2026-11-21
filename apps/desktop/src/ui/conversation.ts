@@ -1,4 +1,5 @@
 import type { JsonRecord, Session } from '../types'
+import { friendlyError } from './errorCopy'
 
 export type ConversationItem = { kind: 'message' | 'activity'; id: string; value?: JsonRecord; activity?: JsonRecord; activityKind?: 'tool' | 'file' | 'turn'; children?: ConversationItem[] }
 export type ActivityGroup = {
@@ -62,6 +63,23 @@ function orderOf(value: JsonRecord) {
 }
 
 const turnOf = (value: JsonRecord): string | null => typeof value.turnId === 'string' && value.turnId ? value.turnId : null
+const isErrorMessage = (message: JsonRecord) => message.role === 'error' || message.kind === 'error'
+
+export function turnStopCopy(activity: JsonRecord) {
+  const error = activity.error as JsonRecord | undefined
+  const firstText = (...values: unknown[]) => values.find((value): value is string => typeof value === 'string' && !!value.trim())?.trim()
+  const code = firstText(activity.failureClass, error?.code)
+  const message = firstText(activity.failureMessage, activity.message, error?.message, activity.summary)
+  const parts = message?.split(/\r?\n/, 2) ?? []
+  const diagnostic = firstText(activity.detail, error?.detail, parts[1])
+  const friendly = friendlyError({ code, message: [message, diagnostic].filter(Boolean).join('\n') })
+  const reason = diagnostic ?? firstText(parts[0], friendly.detail) ?? friendly.title
+  return { ...friendly, reason }
+}
+
+export function latestTurnStop(session: Session) {
+  return buildConversationItems(session).reverse().find((item) => item.activityKind === 'turn')
+}
 
 /** The original mixed ordering: one clock when timestamps exist, else sequence. */
 function legacySort(items: Ordered[]) {
@@ -115,7 +133,18 @@ export function buildConversationItems(session: Session): ConversationItem[] {
   const all = session.messages ?? session.turns?.flatMap((turn) => Array.isArray(turn.messages) ? turn.messages as JsonRecord[] : []) ?? session.events ?? []
   // A model's private reasoning (OpenCode stores it as a 'thinking' message) is not part of the conversation.
   const messages = withoutStaleContextNotices(all.filter((message) => !HIDDEN_MESSAGE_ROLES.has(String(message.role ?? '').toLowerCase())))
-  const messageItems: Ordered[] = messages.map((message, index) => ({ kind: 'message', id: `message:${String(message.id ?? `${message.turnId ?? ''}:${message.role ?? ''}:${index}`)}`, value: message, ...orderOf(message), tie: index, turnId: turnOf(message) }))
+  const turns = session.turns ?? []
+  const errorTurnIds = new Set<string>()
+  const messageItems: Ordered[] = messages.map((message, index) => {
+    const id = `message:${String(message.id ?? `${message.turnId ?? ''}:${message.role ?? ''}:${index}`)}`
+    const order = { ...orderOf(message), tie: index, turnId: turnOf(message) }
+    if (!isErrorMessage(message)) return { kind: 'message', id, value: message, ...order }
+    // The conversation reader also exposes synthesized errors as <turn id>-error.
+    const turn = turns.find((entry) => order.turnId ? entry.id === order.turnId : `${entry.id}-error` === message.id)
+    const turnId = typeof turn?.id === 'string' ? turn.id : order.turnId
+    if (turnId) errorTurnIds.add(turnId)
+    return { kind: 'activity', id, activityKind: 'turn', activity: { ...turn, id: turnId, state: 'error', failureClass: turn?.failureClass ?? message.code, failureMessage: message.text ?? message.content ?? turn?.failureMessage, createdAt: message.createdAt }, ...order, turnId }
+  })
   const nested = nestSubagentSteps((session.tools ?? []).filter((tool) => !HIDDEN_TOOL_KINDS.has(String(tool.kind ?? '').toLowerCase())))
   const childItems = (id: unknown): ConversationItem[] | undefined => {
     const rows = nested.children.get(String(id ?? ''))
@@ -124,7 +153,7 @@ export function buildConversationItems(session: Session): ConversationItem[] {
   const activities: Ordered[] = [
     ...nested.top.map((activity, index): Ordered => ({ kind: 'activity', id: `tool:${String(activity.id ?? `${activity.turnId ?? ''}:${index}`)}`, activity, activityKind: 'tool', children: childItems(activity.id), ...orderOf(activity), tie: 10_000 + index, turnId: turnOf(activity) })),
     ...(session.files ?? []).map((activity, index): Ordered => ({ kind: 'activity', id: `file:${String(activity.id ?? activity.path ?? index)}`, activity, activityKind: 'file', ...orderOf(activity), tie: 20_000 + index, turnId: turnOf(activity) })),
-    ...(session.turns ?? []).filter((turn) => !turn.recoveryHandled && (turn.state === 'error' || turn.state === 'failed')).map((turn, index): Ordered => ({ kind: 'activity', id: `turn-error:${String(turn.id ?? index)}`, activity: turn, activityKind: 'turn', ...orderOf(turn), tie: 30_000 + index, turnId: typeof turn.id === 'string' ? turn.id : null })),
+    ...turns.filter((turn) => !errorTurnIds.has(String(turn.id)) && ['error', 'failed', 'cancelled'].includes(String(turn.state))).map((turn, index): Ordered => ({ kind: 'activity', id: `turn-error:${String(turn.id ?? index)}`, activity: turn, activityKind: 'turn', ...orderOf({ ...turn, createdAt: turn.completedAt ?? turn.createdAt }), tie: 30_000 + index, turnId: typeof turn.id === 'string' ? turn.id : null })),
   ]
   const ordered = messageItems.length > 0 && messageItems.every((item) => item.sequence !== null)
     ? [...messageItems].sort((left, right) => left.sequence! - right.sequence! || left.tie - right.tie)
@@ -138,8 +167,8 @@ export function buildConversationItems(session: Session): ConversationItem[] {
   const legacyLead: Ordered[] = []
   let previous: string | null = null
   for (const item of legacySort([...messageItems, ...legacy])) {
-    if (item.kind === 'message') { previous = item.id; continue }
-    if (item.turnId && !known.has(item.turnId)) continue
+    if (item.kind === 'message' || item.activityKind === 'turn' && messageItems.includes(item)) { previous = item.id; continue }
+    if (item.turnId && !known.has(item.turnId) && item.activityKind !== 'turn') continue
     if (previous) legacyAfter.set(previous, [...(legacyAfter.get(previous) ?? []), item])
     else legacyLead.push(item)
   }
@@ -150,8 +179,8 @@ export function buildConversationItems(session: Session): ConversationItem[] {
     result.push(item, ...(legacyAfter.get(item.id) ?? []))
     if (item.turnId && lastOfTurn.get(item.turnId) === item.id) result.push(...(byTurn.get(item.turnId) ?? []))
   }
-  // A turn with activity but no message yet (it is still running) goes last.
-  result.push(...activities.filter((item) => item.turnId && !known.has(item.turnId)))
+  // Steps with no message yet go last. Terminal records already have a place above.
+  result.push(...activities.filter((item) => item.activityKind !== 'turn' && item.turnId && !known.has(item.turnId)))
   return result.map(({ kind, id, value, activity, activityKind, children }) => ({ kind, id, value, activity, activityKind, children }))
 }
 

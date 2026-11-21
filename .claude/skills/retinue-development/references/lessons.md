@@ -16,6 +16,11 @@ Newest first. One entry per lesson: date, area, symptom, root cause with evidenc
 - **Fix:** `AppState::emit_live(marker_kind, marker, kind, payload)` writes a content-free marker row first (`session.suggestion.ready {sessionId}`), reuses its `sequence` and `event_id`, then broadcasts the real payload without storing it. The reservation keeps the sequence monotonic, a reconnecting window replays the marker (which it ignores) and reads the text back through `session.suggestion.get`, and a phone never sees either because both events are `drop` in `tiers.json`. The invariant table names this as the one exception.
 - **Avoid:** before adding a "live only" event, check what the transport does with its sequence. If content must not be persisted, persist a marker and read the content with an RPC; do not invent a sequence.
 
+## 2026-11-21 · Failed turns in the desktop transcript
+
+- `read_conversation` synthesizes an error message from a failed turn in `external::conversation_items`. The desktop snapshot carries the turn's `failureClass`, `failureMessage` and `detail` separately. The live reducer used to update only existing turns, so startup failures without a turn row left the sidebar in an error state and no card in the chat. Upsert terminal events, render terminal turn records even when there are no replies or tools, and treat stored error-role messages as the same kind of card. Exercise both delivery paths in mounted tests.
+- The silence watchdog records `stalled_turn` in the daemon's adapter-event loop and calls `finish_turn_failed`. It writes a timeout outcome and emits `turn.error`. On reload the snapshot carries the timeout explanation and any saved diagnostic detail. A cancellation similarly comes from the recorded outcome, while the session itself can be idle.
+
 ## 2026-11-20 · Storage · A provider payload kept "just in case" was the whole database
 
 - **Symptom:** the owner's `retinue.db` reached 1.3 GB. Two causes, measured: `tool_calls.data.raw` held every provider's own payload (982 MB in 2,410 edit rows, the largest 2.4 MB), and `app_events` was never trimmed (166 MB).
