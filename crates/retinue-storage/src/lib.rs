@@ -3866,6 +3866,23 @@ impl Storage {
         }
         events.push(push_agent_event(&tx,"updated",&old)?);tx.commit()?; Ok((old,events))
     }
+    /// Moves a bot onto another runtime of its provider. This is the daemon's
+    /// own repair of a runtime id an executable move retired, not an edit the
+    /// owner made, so it applies to an archived bot too and changes only the
+    /// runtime and (when given) the model and effort. It is announced as an
+    /// `agent.changed` like any other change.
+    pub fn agent_repoint_runtime(&self,id:&str,runtime_id:&str,model:Option<&str>,thinking:Option<&str>)->Result<(Value,Vec<Value>),StorageError>{
+        validate_agent_id(id)?;
+        let mut c=self.conn.lock().map_err(|_|StorageError::Poisoned)?;
+        let tx=c.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let old=agent_read(&tx,id)?;
+        if old["runtimeId"].as_str()==Some(runtime_id){tx.commit()?;return Ok((old,vec![]));}
+        if !runtime_exists(&tx,runtime_id)?{return Err(StorageError::AgentNotFound);}
+        let now=Utc::now().to_rfc3339_opts(SecondsFormat::Millis,true);
+        let pos:i64=tx.query_row("SELECT COALESCE(MAX(sort_order)+1,0) FROM agents WHERE runtime_id=?1 AND archived=0 AND parent_agent_id IS NULL",[runtime_id],|r|r.get(0))?;
+        tx.execute("UPDATE agents SET runtime_id=?2,sort_order=?3,model=COALESCE(?4,model),thinking=COALESCE(?5,thinking),updated_at=?6 WHERE id=?1",params![id,runtime_id,pos,model,thinking,now])?;
+        let agent=agent_read(&tx,id)?;let event=push_agent_event(&tx,"updated",&agent)?;tx.commit()?;Ok((agent,vec![event]))
+    }
     pub fn agent_archive(&self,id:&str)->Result<(Value,Vec<Value>),StorageError>{
         validate_agent_id(id)?;let mut c=self.conn.lock().map_err(|_|StorageError::Poisoned)?;let tx=c.transaction_with_behavior(TransactionBehavior::Immediate)?;let old=agent_read(&tx,id)?;
         if old["systemRole"].as_str()==Some("manager"){return Err(StorageError::AgentConflict)}
@@ -7719,6 +7736,9 @@ impl Storage {
             collected
                 .into_iter()
                 .filter_map(|s| serde_json::from_str::<Value>(&s).ok())
+                // A runtime discovery replaced or found gone is kept for old
+                // conversations but never shown (21 November 2026).
+                .filter(|runtime| runtime["retired"] != true)
                 .collect::<Vec<_>>()
         };
         let sessions = {

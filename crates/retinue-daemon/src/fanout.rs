@@ -203,7 +203,7 @@ async fn start_one(st: &AppState, agent: &Value, scope: &Scope, text: &str, atta
         }
     }
     let mut params = json!({"agentId": agent["id"], "lazy": true, "title": title});
-    if let Some(path) = &path { params["projectPath"] = json!(path.to_string_lossy()); }
+    if let Some(path) = &path { params["projectPath"] = json!(crate::worktree::native_string(path)); }
     params["projectId"] = project_id.as_ref().map_or(Value::Null, |id| json!(id));
     if !link.is_null() { params["link"] = link; }
     // B2: a fan-out the Retinue MCP started says so on every conversation it opens.

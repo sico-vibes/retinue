@@ -364,7 +364,7 @@ fn failure_detail_and_sign_in(provider: &str, failure_class: &str, raw: &str) ->
 /// tell the user which CLI to sign in to instead of a generic provider error.
 fn sign_in_hint(provider: &str, detail: &str) -> Option<String> {
     let lower = detail.to_ascii_lowercase();
-    let auth = ["failed to authenticate", "oauth", "not logged in", "please log in", "login required", "unauthorized", "invalid api key"].iter().any(|needle| lower.contains(needle))
+    let auth = ["failed to authenticate", "authentication required", "oauth", "not logged in", "not signed in", "please log in", "login required", "unauthorized", "invalid api key"].iter().any(|needle| lower.contains(needle))
         // A bare 401 status, not "401" inside an id or a longer number.
         || lower.split(|ch: char| !ch.is_ascii_alphanumeric()).any(|word| word == "401");
     if !auth { return None; }
@@ -501,6 +501,12 @@ fn provider_error_detail_tests() {
     assert!(sign_in_hint("opencode", &credential).is_none());
     assert!(sign_in_hint("opencode", "request req_84019 failed").is_none());
     assert!(sign_in_hint("opencode", "HTTP 401 from provider").is_some());
+    // An ACP provider's own signed-out wording is a sign-in failure too, and a
+    // generic ACP failure is not (21 November 2026).
+    assert!(sign_in_hint("antigravity", "ACP error -32000: Authentication required").unwrap().contains("agy acp --login"));
+    assert!(sign_in_hint("qwen", "not signed in").is_some());
+    assert!(sign_in_hint("antigravity", "ACP process exited").is_none());
+    assert!(sign_in_hint("antigravity", "-32000 provider failed").is_none());
     // A bearer value is hidden and the rest of the line stays.
     let bearer = safe_provider_error_detail("upstream rejected Bearer abc123 for model x").unwrap();
     assert!(bearer.contains("upstream rejected") && !bearer.contains("abc123"), "{bearer}");
@@ -770,16 +776,22 @@ fn runtime_off_for(db: &Storage, runtime: &Value) -> DispatchError {
 
 /// `retinue_runtime::discover()` without the providers the owner turned off.
 ///
-/// One exception (11 November 2026): a provider that is off and has never been
-/// recorded is probed once, so Settings can tell "installed, switched off" from
-/// "not installed" on the Providers page. Once it has a saved row it is not
-/// probed again while it is off, so turning a coding agent off still saves the
-/// startup scan.
+/// A turned-off provider is never probed, directly or as a one-time check
+/// (owner, 21 November 2026: Cursor CLI and Grok CLI were still checked and
+/// still warned although they are off). A provider that is off keeps its saved
+/// row, stamped off below, so Settings can show the switch; a provider with no
+/// saved row simply has no runtime until it is turned on, and then the next scan
+/// probes it.
 async fn discover_enabled(st: &AppState) -> Vec<retinue_runtime::DiscoveredRuntime> {
-    let disabled = disabled_runtimes(&st.db);
-    let recorded = st.db.runtimes().unwrap_or_default().iter().filter_map(|runtime| runtime["provider"].as_str().map(str::to_owned)).collect::<Vec<_>>();
-    let probe = disabled.iter().filter(|provider| !recorded.iter().any(|recorded| recorded == *provider)).cloned().collect::<Vec<_>>();
-    retinue_runtime::discover_except(&probe).await
+    retinue_runtime::discover_except(&providers_to_skip(&st.db)).await
+}
+
+/// The provider ids discovery must leave alone: exactly the ones the owner
+/// turned off. A runtime id is not here (one installed copy can be off without
+/// the provider being off), and a main provider can never be off.
+fn providers_to_skip(db: &Storage) -> Vec<String> {
+    let disabled = disabled_runtimes(db);
+    retinue_runtime::discovery_ids().into_iter().filter(|provider| disabled.iter().any(|off| off == provider)).map(str::to_owned).collect()
 }
 
 fn persist_runtime_discovery(
@@ -809,21 +821,76 @@ fn persist_runtime_discovery(
                 inherit_sign_in_failure(&mut value, previous);
             }
         }
+        // A retired row that answers again (the CLI reinstalled at the same path)
+        // is live once more.
+        if let Some(fields) = value.as_object_mut() { fields.remove(RETIRED); }
         stamp_runtime_state(&mut value, &disabled);
         db.upsert_runtime(&value)?;
         values.push(value);
     }
-    // A provider that was skipped keeps its saved row, marked off, so the UI can
-    // show it and turn it back on. Nothing is deleted.
+    // Exactly one runtime per provider, on screen and in the store. A saved row
+    // discovery superseded (the executable moved, so its id changed) is retired,
+    // as is one whose executable is gone; nothing is deleted, so an old
+    // conversation can still name its provider.
+    let discovered_providers = values.iter().filter_map(|value| value["provider"].as_str().map(str::to_owned)).collect::<HashSet<_>>();
+    // A provider this scan asked about and did not find has no current runtime
+    // here. One that is switched off was not asked at all, so its saved row is
+    // the only way Settings can show the switch.
+    let probed = retinue_runtime::discovery_ids().into_iter()
+        .filter(|provider| !disabled.iter().any(|off| off == provider))
+        .collect::<HashSet<_>>();
+    let mut kept = Vec::new();
     for previous in saved {
-        if values.iter().any(|value| value["id"] == previous["id"]) || !runtime_is_disabled(&previous, &disabled) { continue; }
-        let mut kept = previous;
-        stamp_runtime_state(&mut kept, &disabled);
-        db.upsert_runtime(&kept)?;
-        values.push(kept);
+        if values.iter().any(|value| value["id"] == previous["id"]) || previous[RETIRED] == true { continue; }
+        let provider = previous["provider"].as_str().unwrap_or("").to_owned();
+        if discovered_providers.contains(&provider) || probed.contains(provider.as_str()) || executable_is_gone(&previous) {
+            db.upsert_runtime(&retired_row(&previous))?;
+            continue;
+        }
+        kept.push(previous);
+    }
+    // A provider that is off and has several saved copies (an older build wrote
+    // one per install) keeps one row, so it cannot show twice while off. The one
+    // the path resolves when it is turned back on replaces it.
+    let mut seen = HashSet::new();
+    for mut previous in kept {
+        let provider = previous["provider"].as_str().unwrap_or("").to_owned();
+        if !seen.insert(provider) {
+            db.upsert_runtime(&retired_row(&previous))?;
+            continue;
+        }
+        stamp_runtime_state(&mut previous, &disabled);
+        db.upsert_runtime(&previous)?;
+        values.push(previous);
     }
     Ok(values)
 }
+
+/// The data flag on a saved runtime discovery replaced or found gone. The row
+/// stays in the table (old conversations and sessions name it) but every list
+/// the window reads drops it; it revives when discovery finds that path again.
+const RETIRED: &str = "retired";
+
+/// Whether the executable a saved row names is no longer on disk. An empty path
+/// (a row written before the field existed) is not evidence either way.
+fn executable_is_gone(runtime: &Value) -> bool {
+    runtime["executablePath"].as_str().filter(|path| !path.is_empty()).is_some_and(|path| !Path::new(path).is_file())
+}
+
+/// A saved row kept for an old conversation, hidden from every list.
+fn retired_row(previous: &Value) -> Value {
+    let mut retired = previous.clone();
+    if let Some(fields) = retired.as_object_mut() {
+        fields.insert(RETIRED.into(), json!(true));
+        // An off or gone row is not a failure, so a probe's error does not ride
+        // along (the reason a turned-off provider stopped warning, 15 November
+        // 2026, applies here too).
+        fields.remove("probeError");
+        fields.remove("probeStep");
+    }
+    retired
+}
+
 
 /// The stored runtime `authState` for a sign-in that failed during a turn. It
 /// is a data field on the runtime row, so no schema migration is needed.
@@ -853,6 +920,12 @@ async fn publish_runtime_values(st: &AppState, values: Vec<Value>) {
     let roster = {
         let mut runtimes = st.runtimes.write().await;
         for value in values {
+            // A retired row is kept for old conversations but never reaches a
+            // list, even when a turn on an old session reports a sign-in for it.
+            if value[RETIRED] == true {
+                runtimes.retain(|runtime| runtime["id"] != value["id"]);
+                continue;
+            }
             match runtimes.iter_mut().find(|runtime| runtime["id"] == value["id"]) {
                 Some(slot) => *slot = value,
                 None => runtimes.push(value),
@@ -942,10 +1015,13 @@ async fn runtime_auth_clear(
         fields.remove("authFailedAt");
         st.db.upsert_runtime(&runtime).map_err(|_| derr("internal", "Could not clear the sign-in flag.", StatusCode::INTERNAL_SERVER_ERROR))?;
         publish_runtime_value(st, runtime).await;
-        let found = discovery.await.into_iter().filter(|found| found.id == runtime_id).collect::<Vec<_>>();
+        // The scan is the whole roster, not just this runtime: one runtime per
+        // provider means the other providers' saved rows must be judged by the
+        // same answer (21 November 2026).
+        let found = discovery.await;
         if !found.is_empty() {
-            let values = persist_runtime_discovery(&st.db, found).map_err(|_| derr("internal", "Could not save the coding agent scan.", StatusCode::INTERNAL_SERVER_ERROR))?;
-            publish_runtime_values(st, values).await;
+            publish_runtime_discovery(st, found).await
+                .map_err(|_| derr("internal", "Could not save the coding agent scan.", StatusCode::INTERNAL_SERVER_ERROR))?;
         }
     }
     Ok(st.runtimes.read().await.clone())
@@ -957,8 +1033,78 @@ async fn publish_runtime_discovery(
 ) -> Result<Vec<Value>, retinue_storage::StorageError> {
     let values = persist_runtime_discovery(&st.db, discovered)?;
     *st.runtimes.write().await = values.clone();
+    // A runtime id that changed with its executable must never orphan a bot:
+    // every bot on a row discovery replaced is moved to its provider's one
+    // current runtime before the window hears about the new list.
+    move_bots_off_retired_runtimes(st, &values).await;
     st.emit("runtime.changed", json!({"runtimes":values})).await;
     Ok(values)
+}
+
+/// The model and effort a moved bot ends up with.
+struct MovedBotOptions {
+    model: Option<String>,
+    thinking: Option<String>,
+    /// The new runtime's catalog was known, so the answer was checked against it.
+    checked: bool,
+    model_kept: bool,
+    effort_kept: bool,
+}
+
+/// What a moved bot keeps: its model and effort when the new runtime's catalog
+/// offers them, the catalog's default where it does not, and both unchanged when
+/// nothing is cached to check against.
+fn moved_bot_options(provider: &str, agent: &Value, catalog: Option<&Value>) -> MovedBotOptions {
+    let model = agent["model"].as_str().map(str::to_owned);
+    let thinking = agent["thinking"].as_str().map(str::to_owned);
+    let kept = |checked: bool| MovedBotOptions { model: model.clone(), thinking: thinking.clone(), checked, model_kept: true, effort_kept: true };
+    let Some(catalog) = catalog.filter(|catalog| catalog["validated"] == true && catalog["fallback"] != true) else { return kept(false); };
+    let Some(models) = catalog["models"].as_array() else { return kept(false); };
+    let target = model.as_deref()
+        .and_then(|id| models.iter().find(|row| row["id"].as_str() == Some(id)).or_else(|| legacy_model_alias_target(provider, id, models)))
+        .or_else(|| preferred_catalog_model(provider, models));
+    let Some(target) = target else { return kept(false); };
+    let next_model = target["id"].as_str().map(str::to_owned).or_else(|| model.clone());
+    let supported = target["supportedThinking"].as_array().map(|levels| levels.iter().filter_map(Value::as_str).collect::<Vec<_>>()).unwrap_or_default();
+    let next_thinking = if supported.is_empty() { None }
+        else if thinking.as_deref().is_some_and(|effort| supported.contains(&effort)) { thinking.clone() }
+        else { target["defaultThinking"].as_str().filter(|effort| supported.contains(effort)).map(str::to_owned) };
+    MovedBotOptions {
+        model_kept: next_model == model,
+        effort_kept: next_thinking == thinking,
+        model: next_model,
+        thinking: next_thinking,
+        checked: true,
+    }
+}
+
+/// Moves every bot whose runtime left the roster onto its provider's current
+/// runtime and announces it, so the Agents page updates with no restart.
+async fn move_bots_off_retired_runtimes(st: &AppState, live: &[Value]) {
+    let Ok(saved) = st.db.runtimes() else { return; };
+    let Ok(agents) = st.db.agent_list(true, None) else { return; };
+    for agent in agents {
+        let Some(from) = agent["runtimeId"].as_str().filter(|id| !id.is_empty()) else { continue };
+        if live.iter().any(|runtime| runtime["id"].as_str() == Some(from)) { continue; }
+        let Some(previous) = saved.iter().find(|runtime| runtime["id"].as_str() == Some(from)) else { continue };
+        let provider = previous["provider"].as_str().unwrap_or("");
+        let Some(target) = live.iter().find(|runtime| runtime["provider"].as_str() == Some(provider) && runtime[RETIRED] != true) else { continue };
+        let (Some(to), Some(agent_id)) = (target["id"].as_str().filter(|id| !id.is_empty()), agent["id"].as_str()) else { continue };
+        // A locked bot's own model stays its own; only the runtime is repaired.
+        let locked = agent["locked"].as_bool().unwrap_or(false);
+        let catalog = if locked { None } else { catalog::cached(st, target).map(|served| served.value) };
+        let options = moved_bot_options(provider, &agent, catalog.as_ref());
+        let (model, thinking) = if locked { (None, None) } else { (options.model.as_deref(), options.thinking.as_deref()) };
+        let Ok((moved, events)) = st.db.agent_repoint_runtime(agent_id, to, model, thinking) else { continue; };
+        st.broadcast_persisted(events);
+        st.emit("agent.changed", json!({
+            "action": "moved", "agentId": agent_id, "runtimeId": to, "fromRuntimeId": from,
+            "reason": "runtime retired", "checked": options.checked,
+            "modelKept": options.model_kept, "effortKept": options.effort_kept,
+            "archived": moved["archived"], "sortOrder": moved["sortOrder"],
+            "updatedAt": moved["updatedAt"], "notificationLevel": moved["notificationLevel"],
+        })).await;
+    }
 }
 
 /// Seed `st.runtimes` from the saved rows before discovery finishes, so a send
@@ -967,6 +1113,9 @@ async fn publish_runtime_discovery(
 /// table) agrees with the roster from the first paint.
 async fn load_saved_runtimes(st: &AppState) {
     if let Ok(mut saved) = st.db.runtimes() {
+        // A retired row is kept for old conversations, never shown or used to
+        // launch. It is stamped only if discovery brings that path back.
+        saved.retain(|runtime| runtime[RETIRED] != true);
         let disabled = disabled_runtimes(&st.db);
         for runtime in &mut saved {
             let before = runtime.clone();
@@ -14943,6 +15092,9 @@ mod phase2a_tests {
 
     // Providers behind switches: main providers always on, the rest off by default.
     include!("provider_gate_tests.rs");
+
+    // One runtime per provider, and a turned-off provider never probed (21 November 2026).
+    include!("runtime_retire_tests.rs");
 
     // Hire options: name, photo, personality and skills (9 November 2026).
     include!("hire_options_tests.rs");

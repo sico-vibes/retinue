@@ -310,13 +310,31 @@ async fn agents(st: &AppState) -> Value {
                 "status": row["status"],
                 "enabled": row["enabled"],
                 "authState": row["authState"],
-                "signedIn": row["authState"].as_str() == Some("authenticated"),
+                // Three answers, not two: `true` signed in, `false` known signed
+                // out or failed, `null` not known. An unanswered probe must never
+                // read as "not signed in" (21 November 2026).
+                "signedIn": signed_in(&row["authState"]),
                 "signInCommand": sign_in_for(row["provider"].as_str().unwrap_or(""), &row["signInCommand"]),
                 "runtimeIds": row["runtimeIds"],
             })
         })
         .collect::<Vec<_>>();
     json!({"agents": agents})
+}
+
+/// `true` only for a known signed-in row; `null` when the answer is unknown.
+pub(crate) fn signed_in(auth_state: &Value) -> Value {
+    match auth_state.as_str() {
+        Some("authenticated") => json!(true),
+        Some("unauthenticated" | "sign_in_failed") => json!(false),
+        _ => Value::Null,
+    }
+}
+
+/// Whether the row's sign-in command should be offered: only when the state says
+/// the owner must sign in. An unknown state gets the command nowhere.
+pub(crate) fn sign_in_needed(auth_state: &Value) -> bool {
+    matches!(auth_state.as_str(), Some("unauthenticated" | "sign_in_failed"))
 }
 
 /// How to sign in from this host's terminal. The discovery's own `signInCommand`
@@ -712,7 +730,9 @@ async fn agents_command() -> i32 {
     }
     for row in installed {
         println!("{:<12} {:<16} {}", row["provider"].as_str().unwrap_or("-"), row["version"].as_str().unwrap_or("-"), sign_in_word(&row["authState"]));
-        if row["signedIn"] != true {
+        // A sign-in command only where the state says a sign-in is needed; an
+        // unknown answer is not a signed-out one.
+        if sign_in_needed(&row["authState"]) {
             if let Some(command) = row["signInCommand"].as_str() {
                 println!("             sign in with: {command}");
             }

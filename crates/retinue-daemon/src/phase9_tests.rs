@@ -265,9 +265,14 @@ async fn a_turned_off_coding_agent_is_marked_kept_and_refused() {
     assert_eq!(main.1.code, "invalid_argument");
     assert_eq!(main.1.message, "Codex is always on and cannot be turned off. Turn off one installed copy instead.");
     assert!(disabled_runtimes(&st.db).is_empty());
-    dispatch(&st, "settings.set", json!({"key":"runtimes.disabled","value":["rt-test"]})).await.unwrap();
+    // The owner's own switch is the list; the scan's one row for that copy is
+    // then published off. The test supplies that row rather than probing this
+    // machine's CLIs (owner, 21 November 2026: one runtime per provider, so a
+    // scan no longer keeps a second row for the same provider).
+    st.db.set_setting("runtimes.disabled", &json!(["rt-test"])).unwrap();
     assert_eq!(disabled_runtimes(&st.db), vec!["rt-test".to_owned()]);
-    // The saved row is kept, published, and marked off.
+    publish_runtime_discovery(&st, vec![discovered_runtime("rt-test", "codex", "unknown")]).await.unwrap();
+    // The row is kept, published, and marked off.
     let roster = st.runtimes.read().await.clone();
     let row = roster.iter().find(|row| row["id"] == "rt-test").expect("the saved row is still published");
     assert_eq!(row["disabled"], true, "{roster:?}");

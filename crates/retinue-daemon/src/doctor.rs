@@ -399,6 +399,25 @@ mod tests {
     }
 
     #[test]
+    fn an_unknown_sign_in_is_reported_as_unknown_not_as_signed_out() {
+        // 21 November 2026: an ACP provider whose sign-in was not answered must
+        // say exactly that. Only a real signed-out answer may say "not signed in".
+        let row = |state: &str| json!({
+            "id": "rt_agy", "provider": "antigravity", "displayName": "Antigravity",
+            "protocolFamily": "acp", "executablePath": std::env::current_exe().unwrap().to_string_lossy(),
+            "version": "1.5.13", "authState": state, "status": "online"
+        });
+        let unknown = runtime_checks(&[row("unknown")]);
+        let auth = unknown.iter().find(|row| row["id"] == "runtime.rt_agy.auth").expect("a sign-in row");
+        assert_eq!(auth["status"], "warn");
+        assert_eq!(auth["detail"], "Retinue could not tell whether Antigravity is signed in.");
+        assert!(!auth["detail"].as_str().unwrap().to_lowercase().contains("not signed in"), "{}", auth["detail"]);
+        let out = runtime_checks(&[row("unauthenticated")]);
+        let auth = out.iter().find(|row| row["id"] == "runtime.rt_agy.auth").expect("a sign-in row");
+        assert_eq!(auth["detail"], "Antigravity is not signed in.");
+    }
+
+    #[test]
     fn a_turned_off_coding_agent_is_not_a_failure() {
         // Owner report, 15 November 2026: an off Cursor CLI and Grok CLI still
         // reported a protocol failure. An off row is one quiet line and nothing

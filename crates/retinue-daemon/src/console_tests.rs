@@ -315,7 +315,8 @@ async fn agents_lists_what_is_installed_and_never_a_credential() {
     let rows = body["result"]["agents"].as_array().unwrap();
     let codex = rows.iter().find(|row| row["provider"] == json!("codex")).expect("the discovery's own codex row");
     assert_eq!(codex["installed"], true);
-    assert_eq!(codex["signedIn"], false, "an offline row is not a signed-in one");
+    assert_eq!(codex["signedIn"], Value::Null, "no sign-in answer is unknown, never signed out");
+    assert_eq!(codex["authState"], Value::Null);
     assert_eq!(codex["runtimeIds"], json!(["rt-test"]));
     // The row says how to sign in, even where the discovery has no table command of
     // its own (Codex is one of the three main providers); it never carries the
@@ -324,11 +325,33 @@ async fn agents_lists_what_is_installed_and_never_a_credential() {
     let text = body.to_string();
     assert!(!text.contains(st.token.as_str()) && !text.contains(&token));
     assert!(!text.to_ascii_lowercase().contains("executablepath"), "the launcher's own path stays out: {text}");
-    // A provider the discovery reports signed in says so.
+    // A provider the discovery reports signed in says so; one it reports signed
+    // out says that, and only then is a sign-in command offered.
     *st.runtimes.write().await = vec![json!({"id":"rt-test","provider":"codex","status":"online","authState":"authenticated"})];
     let (_, body) = console_post(&st, Some(&token), "console.agents", json!({})).await;
     let codex = body["result"]["agents"].as_array().unwrap().iter().find(|row| row["provider"] == json!("codex")).cloned().unwrap();
     assert_eq!(codex["signedIn"], true);
+    *st.runtimes.write().await = vec![json!({"id":"rt-test","provider":"codex","status":"online","authState":"unauthenticated"})];
+    let (_, body) = console_post(&st, Some(&token), "console.agents", json!({})).await;
+    let codex = body["result"]["agents"].as_array().unwrap().iter().find(|row| row["provider"] == json!("codex")).cloned().unwrap();
+    assert_eq!(codex["signedIn"], false);
+}
+
+#[test]
+fn an_unknown_sign_in_is_never_a_signed_out_one() {
+    use crate::console::{sign_in_needed, signed_in};
+    let state = |value: &str| json!(value);
+    assert_eq!(signed_in(&state("authenticated")), true);
+    assert_eq!(signed_in(&state("unauthenticated")), false);
+    assert_eq!(signed_in(&state("sign_in_failed")), false);
+    assert_eq!(signed_in(&state("unknown")), Value::Null);
+    assert_eq!(signed_in(&Value::Null), Value::Null);
+    // The sign-in command is offered for a known signed-out state only.
+    assert!(sign_in_needed(&state("unauthenticated")) && sign_in_needed(&state("sign_in_failed")));
+    for unknown in ["unknown", "needs_interaction", ""] {
+        assert!(!sign_in_needed(&state(unknown)), "{unknown}");
+    }
+    assert!(!sign_in_needed(&Value::Null));
 }
 
 #[tokio::test]

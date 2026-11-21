@@ -70,7 +70,7 @@ async fn p10_isolates_a_code_task_when_another_runs_in_the_repo() {
     let project_path = side["projectPath"].as_str().unwrap();
     assert!(PathBuf::from(project_path).starts_with(family_of(&root)), "ran in its own copy: {project_path}");
     assert_eq!(side["link"]["worktree"]["branch"], "retinue/add-login");
-    assert_eq!(side["link"]["worktree"]["repo"].as_str().unwrap(), root.to_string_lossy());
+    assert_eq!(side["link"]["worktree"]["repo"].as_str().unwrap(), crate::worktree::native_string(&root));
     let messages = side["messages"].as_array().cloned().unwrap_or_default();
     assert!(messages.iter().any(|message| message["content"].as_str().unwrap_or("").contains("separate copy")), "one line note: {messages:?}");
     std::fs::remove_dir_all(&repo).ok();
