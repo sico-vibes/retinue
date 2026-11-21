@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "f3eea777",
+  "revision": "e7ad0915",
   "documentCount": 449,
   "assets": [
     {
@@ -9098,7 +9098,7 @@
       "title": "Third-party notices",
       "section": "Legal",
       "status": "Legal notice",
-      "sha256": "9267c6ce5c0694b1b9ef9f2190a5f29f395f2f3c055432e86328cc4bb6265970",
+      "sha256": "cb701941aefaa09e49a30ce1a922e76370f4070952705813caa488a026ab11e3",
       "headings": [
         {
           "id": "bundled-fonts",
@@ -9178,6 +9178,11 @@
         {
           "id": "system-keyring-on-linux",
           "text": "System keyring on Linux",
+          "level": 2
+        },
+        {
+          "id": "pis-mark",
+          "text": "Pi's mark",
           "level": 2
         },
         {

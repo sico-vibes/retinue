@@ -100,6 +100,10 @@ The Linux build uses [secret-service](https://github.com/hwchen/secret-service-r
 
 The Linux build also uses [gethostname](https://codeberg.org/swsnr/gethostname.rs) **1.1.0** (Apache-2.0) to read the host's own name when `HOSTNAME` is not set, for a Native certificate. It is a dependency of Unix builds only. No source file was copied into Retinue; the licence is at <https://www.apache.org/licenses/LICENSE-2.0>.
 
+## Pi's mark
+
+`apps/desktop/src/assets/providers/pi.svg` is Pi's published mark, fetched unchanged from `https://pi.dev/logo-auto.svg` on 21 November 2026 (334 bytes). Pi ([earendil-works/pi](https://github.com/earendil-works/pi)) is MIT-licensed, Copyright (c) 2025 Mario Zechner; the licence covers the software, not the mark. Retinue uses the mark only to name the Pi coding agent a bot runs on (nominative use), shows it as published without recolouring, and claims no rights in it.
+
 ## T3 Code
 
 The chat work log, checkpoint, terminal and rich-content designs were informed by reading [T3 Code](https://github.com/pingdotgg/t3code) (MIT, Copyright (c) 2026 T3 Tools Inc.), pinned at commit 220eb735. No T3 source file was copied; the implementations are written for Retinue. If code is ever copied, keep T3's copyright and permission notice with it.

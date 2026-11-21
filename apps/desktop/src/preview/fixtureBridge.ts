@@ -1439,6 +1439,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       row('cursor', 'Cursor', false, true, '1.9.0', null),
       row('grok', 'Grok Build', false, false, null, 'Install it from its own site, then scan again.'),
       row('antigravity', 'Antigravity', false, false, null, 'Install Google Antigravity, then scan again.'),
+      row('pi', 'Pi', false, true, '1.5.2', null),
     ] } as T
   }
   if (method.startsWith('computer.')) {

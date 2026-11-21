@@ -16,6 +16,7 @@ const brands = {
   grok: { name: 'Grok CLI', mark: 'G', file: 'grok' },
   qwen: { name: 'Qwen Code', mark: 'Q', file: 'qwen' },
   antigravity: { name: 'Antigravity', mark: 'A', file: 'antigravity' },
+  pi: { name: 'Pi', mark: 'P', file: 'pi' },
 } as const
 
 export function providerBrand(provider: string) {
