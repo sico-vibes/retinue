@@ -2,6 +2,13 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-21 · Shell · A CLI update opened a console window
+
+- **Symptom:** the owner pressed Update on a coding agent in Settings › Agents and a visible console window appeared ("looks like CMD") and stayed for the whole download.
+- **Cause:** `harness_update` and its version read in `apps/desktop/src-tauri/src/harness_updates.rs` (`:88`, `:136`) spawn `powershell.exe` with no creation flag, from a process built as a GUI application (`apps/desktop/src-tauri/src/main.rs:1`). The mechanism is already written down: `docs/history/fix-35/c5-windows.md:9` — a console program started by a process with no console gets a console of its own.
+- **Fix (research and proposal, `docs/research/cli-install-and-update.md`):** run the resolved CLI directly instead of through PowerShell, with piped stdio, and hide every child in one place — `retinue_process::prepare_command` is the natural home, set to `CREATE_NO_WINDOW | CREATE_SUSPENDED` (`0x0800_0004`) exactly as `project_setup.rs:231-238` already does. `prepare_command` on its own sets only `CREATE_SUSPENDED`, so a job-owned child is paused but not hidden. The remaining unflagged sites are listed in section 9 of that report.
+- **Avoid:** a new `Command::new` in `crates/**/src` or `apps/desktop/src-tauri/src` goes through `prepare_command`/a `hide_window` helper, never a bare spawn; the report proposes a source-scan gate in the style of `fix39_p12_tests::every_log_call_site_is_a_fixed_message`.
+
 ## 2026-11-20 · Storage · A provider payload kept "just in case" was the whole database
 
 - **Symptom:** the owner's `retinue.db` reached 1.3 GB. Two causes, measured: `tool_calls.data.raw` held every provider's own payload (982 MB in 2,410 edit rows, the largest 2.4 MB), and `app_events` was never trimmed (166 MB).
