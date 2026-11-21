@@ -54,6 +54,7 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { page: 'Chat', group: 'Sending', label: 'Steer a running Codex turn', keywords: 'steer codex running' },
   { page: 'Chat', group: 'Sending', label: 'Steer a running Claude Code turn', keywords: 'steer claude running send now' },
   { page: 'Chat', group: 'Sending', label: 'Steer a running OpenCode turn', keywords: 'steer opencode running send now' },
+  { page: 'Chat', group: 'Conversations', label: 'Show follow-up suggestions', keywords: 'next prompt ghost text tab draft' },
   { page: 'Chat', group: 'Conversations', label: 'Agent activity', keywords: 'steps commands files diffs tools' },
   { page: 'Chat', group: 'Conversations', label: 'Message actions', keywords: 'react reply copy message' },
   { page: 'Chat', group: 'Conversations', label: 'Change review', keywords: 'diff keep revert files changed' },
