@@ -67,8 +67,10 @@
 
 /* ── Diff viewer ─────────────────────────────────────────────────────── */
 .diff-sheet { width: min(900px, calc(100% - 40px)); max-height: min(760px, calc(100% - 40px)); padding: 20px; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius-lg); background: var(--surface-overlay); box-shadow: var(--shadow-pop); }
-.diff-sheet header { display: flex; align-items: flex-start; justify-content: space-between; }
-.diff-sheet h2 { margin: 4px 0; font-size: var(--fs-lg); font-weight: 600; }
+.diff-sheet header { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+.diff-file-heading { flex: 1 1 120px; min-width: 0; }
+.path-tail { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.diff-sheet h2 { overflow-wrap: anywhere; margin: 4px 0; font-size: var(--fs-lg); font-weight: 600; }
 .diff-sheet header small { color: var(--text-3); font: var(--fs-2xs) var(--font-mono); }
 .diff-counts { display: flex; gap: 8px; font: var(--fs-xs) var(--font-mono); }
 .diff-counts em { font-style: normal; }

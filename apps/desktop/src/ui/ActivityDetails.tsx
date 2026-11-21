@@ -175,7 +175,7 @@ function Step({ item, onDiff }: { item: ConversationItem; onDiff?: (path: string
   return <li className={`activity-step state-${state}`}>
     <button type="button" className="activity-step-head" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
       <span className="activity-step-icon"><StepIcon item={item} /></span>
-      <span className="activity-step-title">{activityTitle(item)}</span>
+      <span className="activity-step-title" title={activityTitle(item)}>{activityTitle(item)}</span>
       {state === 'running' && <span className="activity-step-state">Running</span>}
       {state === 'stopped' && <span className="activity-step-state">Did not finish</span>}
       {children.length > 0 && <span className="activity-step-state">{children.length} step{children.length === 1 ? '' : 's'}</span>}

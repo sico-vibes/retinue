@@ -5,7 +5,7 @@ import ReactDOM from 'react-dom/client'
 import { App } from './ui/App'
 import { DictationBubble } from './ui/DictationBubble'
 import { startWindowBackdrop } from './ui/windowBackdrop'
-import { mainWindowReady } from './tauri'
+import { mainWindowReady, previewMode } from './tauri'
 import './ui/hazeTuning'
 import './ui/theme.css'
 import './ui/styles.css'
@@ -33,6 +33,17 @@ if (!dictation) startWindowBackdrop()
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>{dictation ? <DictationBubble /> : <App />}</React.StrictMode>,
 )
+
+// The fixture bridge alone enables the Demo link. Vite removes it from production.
+if (import.meta.env.DEV && previewMode && window.self === window.top && !dictation && !new URLSearchParams(location.search).has('companion')) {
+  const demo = document.createElement('a')
+  demo.className = 'secondary-button small'
+  demo.textContent = 'Demo'
+  demo.title = 'Open the preview debug menu'
+  demo.href = '/inspector.html'
+  Object.assign(demo.style, { position: 'fixed', bottom: '8px', right: '8px', zIndex: '1000' })
+  document.body.append(demo)
+}
 
 // After the first render: let the shell show the main window (it starts
 // hidden so its saved size is restored before anyone sees a frame; 8 November

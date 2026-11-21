@@ -262,7 +262,8 @@
 .composer-status-limit b { color: var(--warning); font-weight: 500; }
 .composer-status-editing { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; color: var(--text-2); }
 .composer-status-paused, .composer-status-retry { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; color: var(--warning); }
-.composer-status-note { min-width: 0; flex: 1 1 auto; overflow: hidden; color: var(--text-3); text-overflow: ellipsis; }
+.composer-status-line:has(.composer-status-feedback) { flex-wrap: wrap; row-gap: 2px; }
+.composer-status-feedback { min-width: 0; flex: 1 1 160px; white-space: normal; overflow-wrap: anywhere; }
 .composer-status-end { margin-left: auto; flex: 0 0 auto; display: inline-flex; align-items: center; gap: 12px; }
 .composer-status-end:empty { display: none; }
 .composer-status .queue-link { font-size: inherit; }

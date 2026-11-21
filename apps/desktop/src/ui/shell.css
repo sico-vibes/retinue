@@ -242,7 +242,7 @@
 .activity-card { width: min(100%, 620px); padding: 10px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); }
 .activity-card.error { border-color: var(--error-line); background: var(--surface-error-subtle); }
 .activity-heading { display: flex; align-items: center; gap: 8px; color: var(--text-2); }
-.activity-heading strong { color: var(--text-1); font-size: var(--fs-sm); font-weight: 500; }
+.activity-heading strong { min-width: 0; overflow-wrap: anywhere; color: var(--text-1); font-size: var(--fs-sm); font-weight: 500; }
 .activity-heading > span { margin-left: auto; color: var(--text-3); font-size: var(--fs-2xs); }
 .activity-heading time { color: var(--text-3); font-size: var(--fs-2xs); }
 .activity-heading > strong + time { margin-left: auto; }

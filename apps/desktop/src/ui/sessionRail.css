@@ -94,7 +94,7 @@
 .rail-more { margin-top: 6px; align-self: flex-start; }
 .rail-diffstat { flex: 0 0 auto; white-space: nowrap; }
 .rail-tag { padding: 0; border: 0; white-space: nowrap; }
-.rail-file-name { flex: 1 1 auto; min-width: 72px; }
+.rail-file-name { flex: 1 1 auto; }
 .rail-file-open { flex: 1 1 0; min-width: 0; }
 .rail-file-open > svg { flex: 0 0 auto; }
 .rail-add, .rail-del { flex: 0 0 auto; }

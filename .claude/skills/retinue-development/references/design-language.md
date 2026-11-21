@@ -37,6 +37,11 @@ Haze is **frosted glass**: the real desktop behind the main window is actually b
 - **Tables:** headers never break a word; an opened row is a two-column sheet (labels in one column, full values beside them).
 - **Changes card:** at most 8 files, then "Show all N files"; a folder that is not a Git repository (always the Manager's) is explained calmly, never shown as an error.
 
+## File paths in narrow rows (21 November 2026)
+
+- Show paths relative to the conversation's worktree or project folder when inside it. Keep the original full path as the hover title and accessible label.
+- Give the path a shrinkable column and truncate from the start so the filename stays in view. Keep counts and actions in their own columns. Check narrow rows in Haze and Stone, dark and light.
+
 ## Haze: backdrop opacity (owner directive, 26 October 2026, corrected the same day; the fallback look when no native blur is drawn)
 
 The main Haze window's background is **about 80% opaque, 20% transparent**, with the large blended coloured blobs kept in dark and light. (Earlier readings, "90% transparent" and "80% transparent", were wrong; the owner meant 80% opaque, and the picture had become nearly invisible.) This is the background only; text, controls, menus, dialogs, the settings sheet, the composer and the terminal dock keep their own surfaces and stay readable.

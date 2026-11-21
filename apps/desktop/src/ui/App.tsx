@@ -78,7 +78,7 @@ import { conversationPlaceName, conversationsToLoad, hashQuery, HYDRATE_AT_ONCE,
 import { effectiveApprovalMode } from '../approvalContract'
 import type { ExecutionSendGate } from '../executionContract'
 import { parseExecSnapshot } from '../executionContract'
-import { friendlyErrorText } from './errorCopy'
+import { friendlyError, friendlyErrorText, queueErrorText } from './errorCopy'
 import { changedFields, createDraft, createParams, daemonCodeOf, draftFromAgent, teamParams, duplicateParams, executionFromAgent, isAgentDirty, messageForDaemonCode, updateParams, validateAgentDraft, type AgentDraft } from './agentForm'
 import { activeAgents, agentSessions, agentsForRuntime, duplicateAgentName, legacySessions, nextAgentAfterArchive, placeAgentOrder, projectGroups, reorderAgentInProject, runtimeUsable, sessionDisplayTitle, sessionSelectionTarget } from './rosterSelectors'
 import { conversationMarkdown } from './conversationMarkdown'
@@ -220,6 +220,8 @@ export function App() {
   const [shortcutBindings, setShortcutBindings] = useState<ShortcutBindings>({})
   const [projectSettings, setProjectSettings] = useState<Project | null>(null)
   const [steerRevision, setSteerRevision] = useState(0)
+  const [queueFeedback, setQueueFeedback] = useState<Record<string, { pending?: boolean; resuming?: boolean; error?: string; waitingIds?: string[]; unchecked?: boolean }>>({})
+  const queueActions = useRef(new Set<string>())
   const [deliveryNotice, setDeliveryNotice] = useState<string | null>(null)
   /** Companion preferences: chat height and the teammates kept on the island. */
   const [companionPinned, setCompanionPinned] = useState<string[]>([])
@@ -2456,19 +2458,36 @@ ${fileReferenceText(sentFile)}` : typed
       const result = await rpc<unknown>('session.queue.list', { sessionId })
       const state = normalizeQueueState(result)
       setSnapshot((current) => current ? { ...current, queues: { ...current.queues, [sessionId]: state } } : current)
+      return state
     } catch { /* The queue is optional chrome; the conversation keeps working without it. */ }
   }, [])
   useEffect(() => { if (selectedSession?.id && !isDraftSession(selectedSession) && connection === 'connected') void loadQueue(selectedSession.id) }, [selectedSession?.id, connection, loadQueue])
-  const queueRpc = async (method: string, params: Record<string, unknown>) => {
-    if (!selectedSession) return
-    try { await doRpc(method, { sessionId: selectedSession.id, ...params }) } catch { /* inline */ }
-    void loadQueue(selectedSession.id)
+  const queueRpc = async <T,>(method: string, params: Record<string, unknown>, target = selectedSession): Promise<T | undefined> => {
+    if (!target || queueActions.current.has(target.id)) return
+    const sessionId = target.id
+    const resuming = method === 'session.queue.resume'
+    const waitingIds = snapshotRef.current?.queues?.[sessionId]?.items.map((item) => item.id) ?? []
+    queueActions.current.add(sessionId)
+    const feedback = (value: (typeof queueFeedback)[string]) => setQueueFeedback((current) => ({ ...current, [sessionId]: value }))
+    feedback({ pending: true, resuming })
+    try {
+      const result = await rpc<T>(method, { sessionId, ...params })
+      const queue = await loadQueue(sessionId)
+      feedback(resuming ? { waitingIds: queue && waitingIds.every((id) => queue.items.some((item) => item.id === id && item.status !== 'sending')) ? waitingIds : undefined, unchecked: !queue } : {})
+      return result
+    } catch (reason) {
+      feedback({ error: queueErrorText(messageOf(reason)) })
+      void loadQueue(sessionId)
+    } finally {
+      queueActions.current.delete(sessionId)
+    }
   }
   const sendQueuedNow = (id: string, confirmResend = false) => void queueRpc('session.queue.send_now', { id, ...(confirmResend ? { confirmResend: true } : {}) })
   const deleteQueued = (id: string) => void queueRpc('session.queue.delete', { id })
   const reorderQueued = (ids: string[]) => void queueRpc('session.queue.reorder', { ids })
   const resumeQueue = () => void queueRpc('session.queue.resume', {})
   const editQueued = (item: QueuedPrompt) => {
+    setQueueFeedback((current) => ({ ...current, [item.sessionId]: {} }))
     if (queueEdit) setComposer(queueEdit.previous)
     setQueueEdit({ id: item.id, key: composerKey, previous: queueEdit ? queueEdit.previous : composer })
     setComposer(item.text)
@@ -2479,11 +2498,8 @@ ${fileReferenceText(sentFile)}` : typed
   const steerQueued = async (id: string) => {
     const session = selectedSession
     if (!session) return
-    try {
-      const result = await doRpc<{ steered?: boolean; reason?: string }>('session.queue.send_now', { sessionId: session.id, id, steer: true })
-      setDeliveryNotice(result?.steered === false ? result.reason?.trim() || 'This turn could not take the message. It is next in the queue.' : null)
-    } catch { /* inline */ }
-    void loadQueue(session.id)
+    const result = await queueRpc<{ steered?: boolean; reason?: string }>('session.queue.send_now', { id, steer: true }, session)
+    setDeliveryNotice(result?.steered === false ? result.reason?.trim() || 'This turn could not take the message. It is next in the queue.' : null)
   }
   /** "Stop and send": stop the running turn, wait until it has really ended, then send this queued message. */
   const stopAndSendQueued = async (id: string) => {
@@ -2495,7 +2511,7 @@ ${fileReferenceText(sentFile)}` : typed
     for (let waited = 0; waited < 12000 && live(); waited += 250) await new Promise((resolve) => window.setTimeout(resolve, 250))
     await refresh().catch(() => undefined)
     if (live()) { setError('The turn is still stopping, so the message was not sent. It is still in the queue; send it once the turn has stopped.'); return }
-    await queueRpc('session.queue.send_now', { id })
+    await queueRpc('session.queue.send_now', { id }, target)
   }
   /** Per-conversation resume and snooze exist only where the daemon reports them on the conversation. */
   const setLimitResume = (on: boolean) => void queueRpc('session.limit.resume', { autoResume: on })
@@ -2888,8 +2904,19 @@ ${fileReferenceText(sentFile)}` : typed
   const turnLive = ['working', 'waiting_permission'].includes(selectedSession?.state ?? '')
   const composerDelivery = busyDelivery(busyMode, false, selectedSession?.state, steerAvailable, !!(attachments.length || slashCommand || leadingCommand(composer, { skills: slashSkills, isManager: activeSelectedAgent?.systemRole === 'manager' }) || conversationRefs.length || replyTarget))
   const promptQueue = selectedSession ? snapshot?.queues?.[selectedSession.id] : undefined
-  const hasScheduledPrompt = !!promptQueue?.items.some((item) => item.kind === 'send_later')
   const [queueNowMs, setQueueNowMs] = useState(() => Date.now())
+  const queueAction = selectedSession ? queueFeedback[selectedSession.id] : undefined
+  const stillWaiting = promptQueue?.items.filter((item) => queueAction?.waitingIds?.includes(item.id)) ?? []
+  const resumeNote = queueAction?.unchecked ? 'Could not check the queue after resuming.'
+    : queueAction?.waitingIds && promptQueue?.paused ? 'The queue is still paused.'
+    : stillWaiting.length === 0 ? null
+    : stillWaiting.every((item) => item.status === 'failed') ? 'Failed messages need to be sent again manually.'
+    : ['working', 'starting', 'waiting_permission', 'cancelling'].includes(selectedSession?.state ?? '') ? 'Queued messages are waiting for the current turn to finish.'
+    : stillWaiting.every((item) => item.whenLimitResets) && selectedSession?.limitSnoozed ? 'Queued messages are waiting because usage-limit resume is snoozed.'
+    : stillWaiting.every((item) => item.whenLimitResets) && selectedSession?.limitedUntil && Date.parse(selectedSession.limitedUntil) > queueNowMs ? 'Queued messages are waiting for the usage limit to reset.'
+    : stillWaiting.every((item) => item.dueAt && Date.parse(item.dueAt) > queueNowMs) ? 'Queued messages are waiting for their scheduled time.'
+    : 'Messages are still in the queue.'
+  const hasScheduledPrompt = !!promptQueue?.items.some((item) => item.kind === 'send_later')
   useEffect(() => {
     if (!hasScheduledPrompt) return
     setQueueNowMs(Date.now())
@@ -3240,7 +3267,7 @@ ${fileReferenceText(sentFile)}` : typed
                     const rect = row.getBoundingClientRect()
                     row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left + Math.min(rect.width, 120), clientY: rect.top + Math.min(rect.height, 48) }))
                   }}>{content}<MessageActions text={text} time={messageClock(message?.createdAt)} reactions={Array.isArray(message.reactions) ? message.reactions as string[] : []} canReply={!!text.trim() && !!message.id} onReply={() => stageMessageReply(message)} onToggleReaction={(emoji) => toggleMessageReaction(selectedSession.id, String(message.id), emoji)} onError={setError} /></div> : content}
-                  {files.length > 0 && <ChangeReview files={files} dismissed={reviewDismissals[selectedSession.id] ?? []} onKeep={(id) => dismissReviewFile(selectedSession.id, id)} onRevert={(file) => setRevertTarget({ sessionId: selectedSession.id, file })} onDiff={(path, content) => setDiffViewer({ path, content })} />}
+                  {files.length > 0 && <ChangeReview files={files} folder={(selectedSession.link?.worktree as { path?: string } | undefined)?.path ?? selectedSession.projectPath} dismissed={reviewDismissals[selectedSession.id] ?? []} onKeep={(id) => dismissReviewFile(selectedSession.id, id)} onRevert={(file) => setRevertTarget({ sessionId: selectedSession.id, file })} onDiff={(path, content) => setDiffViewer({ path, content })} />}
                 </Fragment>
               })}
               {visiblePendingSends.map((item) => <article key={item.id} className={`message-row user pending ${item.status}`} aria-label="You, sending" aria-busy={item.status === 'sending'}>
@@ -3272,7 +3299,7 @@ ${fileReferenceText(sentFile)}` : typed
             {farFromBottom && <button type="button" className="jump-latest" aria-label="Back to the latest message" title="Back to the latest message" onClick={() => { const node = messageListRef.current; if (!node) return; stickToBottom.current = true; node.scrollTo({ top: node.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }) }}><ArrowDown size={15} aria-hidden="true" /></button>}
             {usageTip && <UsageTip tip={usageTip} onDismiss={() => dismissUsageTip(usageTip)} onViewUsage={() => showUsage()} />}
             <div data-tour="composer" className={`composer-box ${composerDropActive ? 'drop-active' : ''}`} onDragOver={(event) => { if (!imagesSupported || !Array.from(event.dataTransfer.items).some((item) => item.kind === 'file')) return; event.preventDefault(); setComposerDropActive(true) }} onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setComposerDropActive(false) }} onDrop={(event) => { setComposerDropActive(false); if (!imagesSupported) return; const files = Array.from(event.dataTransfer.files); if (!files.length) return; event.preventDefault(); addAttachments(files) }}>
-              <ComposerStatus onInterrupt={turnLive && composer.trim() && !busy ? () => void interruptAndSend() : undefined} items={promptQueue?.items ?? []} paused={promptQueue?.paused ?? false} sessionBusy={sessionBusy} notice={deliveryNotice} nowMs={queueNowMs} disabled={connection !== 'connected'} limit={limitLine} editing={queueEdit && queueEdit.key === composerKey ? { id: queueEdit.id, onCancel: cancelQueueEdit } : null} botName={agentName} steer={steerAvailable && selectedSession?.state === 'working'} waitNote={queueWaitNote} onResume={resumeQueue} onSendNow={sendQueuedNow} onSteer={(id) => void steerQueued(id)} onStopAndSend={turnLive ? (id) => void stopAndSendQueued(id) : undefined} onEdit={editQueued} onDelete={(id) => { if (queueEdit?.id === id) cancelQueueEdit(); deleteQueued(id) }} onReorder={reorderQueued} onCancelRetry={cancelAutoRetry} />
+              <ComposerStatus onInterrupt={turnLive && composer.trim() && !busy ? () => void interruptAndSend() : undefined} items={promptQueue?.items ?? []} paused={promptQueue?.paused ?? false} sessionBusy={sessionBusy} notice={resumeNote ?? deliveryNotice} queueError={queueAction?.error} resuming={queueAction?.resuming} nowMs={queueNowMs} disabled={connection !== 'connected' || queueAction?.pending} limit={limitLine} editing={queueEdit && queueEdit.key === composerKey ? { id: queueEdit.id, onCancel: cancelQueueEdit } : null} botName={agentName} steer={steerAvailable && selectedSession?.state === 'working'} waitNote={queueWaitNote} onResume={resumeQueue} onSendNow={sendQueuedNow} onSteer={(id) => void steerQueued(id)} onStopAndSend={turnLive ? (id) => void stopAndSendQueued(id) : undefined} onEdit={editQueued} onDelete={(id) => { if (queueEdit?.id === id) cancelQueueEdit(); deleteQueued(id) }} onReorder={reorderQueued} onCancelRetry={cancelAutoRetry} />
               {replyTarget && <ReplyContextStrip target={replyTarget} onCancel={() => { replyTargetRef.current = null; setReplyTarget(null) }} />}
               <AnnotationTray annotations={annotations} onRemove={(index) => setAnnotations((current) => current.filter((_, position) => position !== index))} />
               <AttachmentTray attachments={attachments} onRemove={removeAttachment} />
@@ -3542,7 +3569,7 @@ function MessageItem({ id, message, accent, agentName, avatar, showAvatar, mood,
       {isUser && via && <div className="message-via"><Cable size={11} aria-hidden="true" />via {via}</div>}
       {isUser && <MessageAnnotations meta={message.meta} />}
       {isUser && <MessageAttachments attachments={message.attachments} sessionId={sourceSessionId} messageId={typeof message.id === 'string' ? message.id : undefined} />}
-      <div className="message-bubble-wrap">{isTool ? <div className={`activity-card ${isError ? 'error' : ''}`}><div className="activity-heading"><Terminal size={14} /><strong>{labelize(toolName ?? eventType.replace('.', ' '))}</strong><span>{isError ? 'Failed' : formatUnknownSafe(String(message.status ?? ''), 'Activity')}</span></div><p>{text || (typeof message.command === 'string' ? message.command : typeof message.summary === 'string' ? message.summary : 'Details are unavailable for this event.')}</p>{typeof message.path === 'string' && <code>{message.path}</code>}</div> : text || !(isUser && Array.isArray(message.attachments) && message.attachments.length) ? <div className={`message-bubble ${isError ? 'message-error' : ''}`}>{isError && onTroubleshoot && <button type="button" className="troubleshoot-button" title="Open a conversation with the CEO about this error" onClick={() => onTroubleshoot(typeof message.turnId === 'string' ? message.turnId : null)}><Stethoscope size={13} aria-hidden="true" />Ask the CEO to troubleshoot</button>}{isUser && text ? <UserMessageText text={text} agents={agents} references={Array.isArray(message.references) ? message.references as Array<{ id: string; title: string }> : null} onOpenReference={onOpenReference} /> : <SafeMessageText text={text || 'Message content unavailable.'} />}</div> : null}
+      <div className="message-bubble-wrap">{isTool ? <div className={`activity-card ${isError ? 'error' : ''}`}><div className="activity-heading"><Terminal size={14} /><strong>{labelize(toolName ?? eventType.replace('.', ' '))}</strong><span>{isError ? 'Failed' : formatUnknownSafe(String(message.status ?? ''), 'Activity')}</span></div><p>{text || (typeof message.command === 'string' ? message.command : typeof message.summary === 'string' ? message.summary : 'Details are unavailable for this event.')}</p>{typeof message.path === 'string' && <code className="path-tail" title={message.path}><bdi dir="ltr">{message.path}</bdi></code>}</div> : text || !(isUser && Array.isArray(message.attachments) && message.attachments.length) ? <div className={`message-bubble ${isError ? 'message-error' : ''}`}>{isError && onTroubleshoot && <button type="button" className="troubleshoot-button" title="Open a conversation with the CEO about this error" onClick={() => onTroubleshoot(typeof message.turnId === 'string' ? message.turnId : null)}><Stethoscope size={13} aria-hidden="true" />Ask the CEO to troubleshoot</button>}{isUser && text ? <UserMessageText text={text} agents={agents} references={Array.isArray(message.references) ? message.references as Array<{ id: string; title: string }> : null} onOpenReference={onOpenReference} /> : <SafeMessageText text={text || 'Message content unavailable.'} />}</div> : null}
       <MessageReactionBadges reactions={message.reactions} onRemove={onToggleReaction} /></div>
       {stamp && <div className="message-time">{stamp}</div>}
     </div>
@@ -3745,7 +3772,7 @@ function DiffViewer({ path, content, onClose }: { path: string; content: string;
   const { ref: dialogRef, close } = useDialogAccessibility(onClose)
   const parsed = parseUnifiedDiff(content)
   const [mode, setMode] = useDiffMode()
-  return <div className="sheet-backdrop diff-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close() }}><section ref={dialogRef} className="diff-sheet" role="dialog" aria-modal="true" aria-labelledby="diff-title"><header><div><p className="eyebrow">FILE CHANGE</p><h2 id="diff-title">{fileNameForPath(path)}</h2><small>{path}</small></div><span className="diff-counts"><em>+{parsed.additions}</em><i>−{parsed.deletions}</i></span>{!parsed.empty && !parsed.binary && <DiffModeSwitch mode={mode} onChange={setMode} />}<button className="icon-button" data-dialog-initial-focus aria-label="Close diff" onClick={close}><X size={17} /></button></header>
+  return <div className="sheet-backdrop diff-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) close() }}><section ref={dialogRef} className="diff-sheet" role="dialog" aria-modal="true" aria-labelledby="diff-title"><header><div className="diff-file-heading"><p className="eyebrow">FILE CHANGE</p><h2 id="diff-title">{fileNameForPath(path)}</h2><small className="path-tail" title={path}><bdi dir="ltr">{path}</bdi></small></div><span className="diff-counts"><em>+{parsed.additions}</em><i>−{parsed.deletions}</i></span>{!parsed.empty && !parsed.binary && <DiffModeSwitch mode={mode} onChange={setMode} />}<button className="icon-button" data-dialog-initial-focus aria-label="Close diff" onClick={close}><X size={17} /></button></header>
     <div className="diff-content" role="region" aria-label={`Diff for ${path}`} tabIndex={0}><DiffBody content={content} mode={mode} path={path} /></div>
   </section></div>
 }

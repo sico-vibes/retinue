@@ -154,12 +154,14 @@ export interface LimitLine {
  * is nothing to say (no queue, no usage limit, no pause, retry or notice), so an
  * idle composer has no blank strip above the input.
  */
-export function ComposerStatus({ items, paused, sessionBusy, notice, limit, editing, nowMs, disabled, onResume, onCancelRetry, onInterrupt, ...queue }: Omit<QueueBannerProps, 'editingId'> & {
+export function ComposerStatus({ items, paused, sessionBusy, notice, queueError, resuming, limit, editing, nowMs, disabled, onResume, onCancelRetry, onInterrupt, ...queue }: Omit<QueueBannerProps, 'editingId'> & {
   /** Stop the running turn, wait for it to end, then send what is in the box as a fresh message. Absent when there is nothing to send. */
   onInterrupt?: () => void
   paused: boolean
   /** Why the last message went to the queue instead of reaching the turn. */
   notice?: string | null
+  queueError?: string
+  resuming?: boolean
   limit?: LimitLine | null
   /** A queued message is open in the message box; sending the box saves it back. */
   editing?: { id: string; onCancel: () => void } | null
@@ -168,16 +170,16 @@ export function ComposerStatus({ items, paused, sessionBusy, notice, limit, edit
   const failed = items.filter((item) => item.status === 'failed').length
   const retrying = items.some((item) => item.kind === 'retry')
   const interrupt = sessionBusy && onInterrupt && !editing
-  const line = !!(limit || editing || interrupt || paused || retrying || notice)
+  const line = !!(limit || editing || interrupt || paused || resuming || retrying || notice || queueError)
   if (!items.length && !line) return null
   const armed = !!limit && limit.resumes && !limit.snoozed
   return <div className="composer-status" role="group" aria-label="Delivery status">
     {line && <div className="composer-status-line">
       {limit && <span className="composer-status-limit" role="status"><b>Usage limit</b> · {limit.at ? `${armed ? 'resumes' : 'resets'} ${limit.at}` : 'reset time unknown'}{limit.snoozed ? ' · snoozed' : ''}</span>}
       {editing && <span className="composer-status-editing" role="status">Editing a queued message<button type="button" className="queue-link" onClick={editing.onCancel}>Cancel</button></span>}
-      {paused && <span className="composer-status-paused" role="status">{failed ? 'Paused: a message could not be sent' : 'Paused until you resume'}<button type="button" className="queue-link" disabled={disabled} onClick={onResume}>Resume</button></span>}
+      {(paused || resuming) && <span className="composer-status-paused" role="status">{failed ? 'Paused: a message could not be sent' : 'Paused until you resume'}<button type="button" className="queue-link" disabled={disabled || resuming} onClick={onResume}>{resuming ? 'Resuming?' : 'Resume'}</button></span>}
       {retrying && <span className="composer-status-retry" role="status">Retrying automatically{onCancelRetry && <button type="button" className="queue-link" disabled={disabled} onClick={onCancelRetry}>Cancel</button>}</span>}
-      {notice && <span className="composer-status-note" title={notice}>{notice}</span>}
+      {queueError ? <span className="composer-status-feedback composer-file-error" role="alert">{queueError}</span> : notice && <span className="composer-status-feedback composer-status-note" title={notice} role="status">{notice}</span>}
       <span className="composer-status-end">
         {limit?.onResumeAtReset && limit.at && <button type="button" className="queue-link" disabled={disabled} aria-label={limit.resumes ? 'Cancel automatic resume' : undefined} onClick={() => limit.onResumeAtReset?.(!limit.resumes)}>{limit.resumes ? 'Cancel' : 'Resume at reset'}</button>}
         {limit?.onSnooze && limit.resumes && limit.at && <button type="button" className="queue-link" disabled={disabled} onClick={() => limit.onSnooze?.(!limit.snoozed)}>{limit.snoozed ? 'Wake now' : 'Snooze'}</button>}
@@ -185,7 +187,7 @@ export function ComposerStatus({ items, paused, sessionBusy, notice, limit, edit
       </span>
     </div>}
     {items.length > 0 && <div className="composer-queue" id="composer-queue-rows">
-      <QueueBanner {...queue} items={items} sessionBusy={sessionBusy} editingId={editing?.id ?? null} nowMs={nowMs} disabled={disabled} onCancelRetry={onCancelRetry} />
+      <QueueBanner {...queue} items={items} sessionBusy={sessionBusy} editingId={editing?.id ?? null} nowMs={nowMs} disabled={disabled || resuming} onCancelRetry={onCancelRetry} />
     </div>}
   </div>
 }
