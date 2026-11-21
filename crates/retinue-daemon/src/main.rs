@@ -85,6 +85,8 @@ mod knowledge;
 mod skill_library;
 mod skills;
 mod suggestions;
+// 21 November 2026: the composer's follow-up suggestion, held in memory only.
+mod follow_up;
 mod commands;
 // Wave 12, part F: the Doctor's read-only checks and their safe fixes.
 mod doctor;
@@ -231,6 +233,9 @@ struct AppState {
     /// 17 November 2026: the console token of a host started without a desktop
     /// shell, so a VPS can be paired and turned on from its own terminal.
     console: Arc<console::Console>,
+    /// 21 November 2026: the composer's follow-up suggestion, one per
+    /// conversation. Memory only: never in the database, a log or a backup.
+    follow_up: Arc<follow_up::FollowUp>,
 }
 #[derive(Clone)]
 struct Adapters {
@@ -273,6 +278,26 @@ impl AppState {
         crate::remote::push::on_event(self, kind, &payload).await;
         self.persist_event(kind, &payload);
         if let Some(summary) = woken { self.persist_event("session.changed", &summary); }
+    }
+    /// A live-only event (21 November 2026). The follow-up suggestion is held in
+    /// memory only, but the window's event stream is ordered by a sequence taken
+    /// from `app_events`. A content-free marker row takes that sequence, and this
+    /// broadcasts the real payload without storing it; a window that reconnects
+    /// replays the marker (which it ignores) and reads the text back through
+    /// `session.suggestion.get`. Nothing here logs a payload.
+    async fn emit_live(&self, marker_kind: &str, marker: Value, kind: &str, payload: Value) {
+        if let Some(id) = payload.get("sessionId").and_then(Value::as_str) {
+            if self.deleted_sessions.lock().await.contains(id) { return; }
+        }
+        let Ok((sequence, event_id, _)) = self.db.push_event(marker_kind, &marker) else { return };
+        let _ = self.events.send(EventEnvelope {
+            v: 1,
+            event_id,
+            sequence,
+            timestamp: Utc::now().to_rfc3339(),
+            event_type: kind.into(),
+            payload,
+        });
     }
     /// The one way an event reaches the log and the live sockets.
     fn persist_event(&self, kind: &str, payload: &Value) {
@@ -1797,6 +1822,9 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         // Lane 6: the owner's "snooze until it needs me", and what the desktop
         // is looking at. Both desktop-only; `attention.focus` is `never` remote.
         "session.snooze" => session_snooze(st, p).await,
+        // 21 November 2026: the composer's greyed follow-up suggestion. Desktop
+        // only, answered from memory, and `never` in `tiers.json`.
+        "session.suggestion.get" | "session.suggestion.dismiss" => follow_up::rpc(st, method, &p).await,
         "attention.focus" => attention_focus(st, &p),
         "session.handoff.draft" => handoff_draft(st, &p),
         "turn.retry.cancel" => retry::cancel_rpc(st, &p).await,
@@ -2083,7 +2111,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             }
             let value = validate_setting(k, &p["value"])?;
             if k == "permissions.default_mode" && value == "bypass" && p["confirm"] != true { return Err(derr("invalid_argument", "Confirm making Full access the default first.", StatusCode::BAD_REQUEST)); }
-            let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k==project_share::SETTING_ENABLED||k==project_share::SETTING_FOLDER||k=="composer.sendShortcut"||k=="shortcuts.bindings"||k=="experimental.ownerComputer"||k=="ownerComputer.denyList"||k=="prompts.contextFirst";
+            let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k==project_share::SETTING_ENABLED||k==project_share::SETTING_FOLDER||k=="composer.sendShortcut"||k=="shortcuts.bindings"||k=="experimental.ownerComputer"||k=="ownerComputer.denyList"||k=="prompts.contextFirst"||k=="chat.followUpSuggestions";
             let events=st.db.set_setting(k, &value).map_err(|e| {
                 derr(
                     if validation_key{"invalid_argument"}else{"internal"},
@@ -2233,6 +2261,10 @@ fn validate_setting(k: &str, value: &Value) -> Result<Value, DispatchError> {
     // words. Desktop only (not in `tiers.json`'s `settingsAllowlist`), off by
     // default, and travelling in a backup like any other preference.
     if k == "prompts.contextFirst" && !value.is_boolean() { return Err(derr("invalid_argument", "prompts.contextFirst requires a JSON boolean", StatusCode::BAD_REQUEST)); }
+    // 21 November 2026: the composer's greyed follow-up suggestion. Desktop only
+    // (not in `tiers.json`'s `settingsAllowlist`), on by default, and travelling
+    // in a backup like any other preference.
+    if k == "chat.followUpSuggestions" && !value.is_boolean() { return Err(derr("invalid_argument", "chat.followUpSuggestions requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "delegation.paused" && !value.is_boolean() { return Err(derr("invalid_argument", "delegation.paused requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "companion.focusMode" && !value.is_boolean() { return Err(derr("invalid_argument", "companion.focusMode requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "companion.positions" && !valid_companion_positions(value) { return Err(derr("invalid_argument", "companion.positions must map at most 8 display names to {x,y} numbers", StatusCode::BAD_REQUEST)); }
@@ -4830,6 +4862,9 @@ async fn session_prompt_impl(st: &AppState, p: Value, origin: PromptOrigin) -> R
         })?;
         turns.insert(sid.clone(), turn.clone());
         drop(turns);
+        // 21 November 2026: a new turn ends any follow-up suggestion the
+        // composer was showing, and cancels one still being written.
+        crate::follow_up::clear(st, &sid).await;
         if let Ok(working) = st.db.session_event_summary(&sid) {
             st.emit("session.changed", working).await;
         }
@@ -5196,6 +5231,9 @@ pub(crate) async fn steer_live(st: &AppState, sid: &str, text: &str, client_mess
             // Lane 6: a steer from the window (or the queue's Send now) is the
             // owner typing here; one from the MCP is a bot's own message.
             if mcp_client.is_none() { crate::attention::owner_sent(st, sid).await; }
+            // 21 November 2026: a steer is the owner sending, so the follow-up
+            // suggestion for this turn goes and one being written is dropped.
+            if mcp_client.is_none() { crate::follow_up::clear(st, sid).await; }
             Ok(SteerAttempt::Accepted { turn_id })
         }
         Ok(SteerOutcome::Stale) => Ok(SteerAttempt::Stale),
@@ -6089,6 +6127,12 @@ async fn forward_events_with_timeouts(
                 if let Ok(summary) = st.db.session_event_summary(&sid) {
                     st.emit("session.changed", summary).await;
                 }
+                // 21 November 2026: a turn that completed is the one moment a
+                // follow-up suggestion may be asked for. It decides from the
+                // database here and answers off this loop.
+                if let Some(t) = turn.as_deref() {
+                    crate::follow_up::after_turn(&st, &sid, t).await;
+                }
                 (
                     "turn.completed",
                     json!({"sessionId":sid,"turnId":turn,"state":"completed"}),
@@ -6469,6 +6513,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         owner_computer: Arc::new(owner_computer::OwnerComputer::default()),
         channels: Arc::new(channels::Channels::default()),
         console: Arc::new(console::Console::default()),
+        follow_up: Arc::new(follow_up::FollowUp::default()),
     };
     // A send right after boot must not fail with "runtime is not installed":
     // show the saved roster until discovery replaces it. `validate_spawn_target`
@@ -8063,7 +8108,7 @@ mod phase2a_tests {
     /// a second state on the same file.
     pub(crate) fn state_with(db:Storage)->(AppState,broadcast::Receiver<EventEnvelope>){
         let db=Arc::new(db);db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"})).unwrap();let(events,rx)=broadcast::channel(64);
-        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default()),channels:Arc::new(channels::Channels::default()),console:Arc::new(console::Console::default())};(st,rx)
+        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default()),channels:Arc::new(channels::Channels::default()),console:Arc::new(console::Console::default()),follow_up:Arc::new(follow_up::FollowUp::default())};(st,rx)
     }
     #[tokio::test]
     async fn bot_purge_is_confirmed_atomic_and_removes_both_sides_only() {
@@ -14879,6 +14924,9 @@ mod phase2a_tests {
     // 20 November 2026: the background cleanup of old payloads and events, and
     // the one owner-started compaction.
     include!("upkeep_tests.rs");
+
+    // 21 November 2026: the composer's follow-up suggestion, which is memory only.
+    include!("follow_up_tests.rs");
 
     #[tokio::test]
     async fn team_update_project_move_does_not_archive() {

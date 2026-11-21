@@ -2218,6 +2218,7 @@ fn validate_setting_value(k:&str,v:&Value)->Result<(),StorageError>{
     if k=="companion.positions" && !valid_companion_positions(v){return Err(StorageError::InvalidAgent)}
     if k=="profile.about" && v.as_str().is_none_or(|text| text.trim().chars().count() > 1500){return Err(StorageError::InvalidAgent)}
     if k=="conversations.autoTitle" && !v.is_boolean(){return Err(StorageError::InvalidAgent)}
+    if k=="chat.followUpSuggestions" && !v.is_boolean(){return Err(StorageError::InvalidAgent)}
     if k=="usage.readCliSignIns" && !v.is_boolean(){return Err(StorageError::InvalidAgent)}
     if k=="composer.sendShortcut" && !valid_send_shortcut(v){return Err(StorageError::InvalidAgent)}
     if k=="shortcuts.bindings" && !valid_shortcut_bindings(v){return Err(StorageError::InvalidAgent)}
@@ -2309,7 +2310,7 @@ fn write_setting(tx:&Transaction<'_>,k:&str,v:&Value)->Result<Vec<Value>,Storage
         let enabled=v.as_bool().ok_or(StorageError::InvalidAgent)?;
         let same=previous.as_deref().and_then(|old|serde_json::from_str::<Value>(old).ok()).as_ref()==Some(v);
         if !same { events.push(push_settings_event(tx,k,enabled)?); }
-    } else if k.starts_with("experimental.") || k.starts_with("companion.") || k.starts_with("speech.") || k.starts_with("automations.") || k.starts_with("task.") || k.starts_with("memory.") || k.starts_with("appearance.") || k.starts_with("hints.") || k.starts_with("onboarding.") || k.starts_with("conversations.") || k.starts_with("usage.") || k.starts_with("composer.") || k.starts_with("shortcuts.") {
+    } else if k.starts_with("experimental.") || k.starts_with("companion.") || k.starts_with("speech.") || k.starts_with("automations.") || k.starts_with("task.") || k.starts_with("memory.") || k.starts_with("appearance.") || k.starts_with("hints.") || k.starts_with("onboarding.") || k.starts_with("conversations.") || k.starts_with("usage.") || k.starts_with("composer.") || k.starts_with("shortcuts.") || k.starts_with("chat.") {
         // Window-level preferences: the main window and the companion both follow them live.
         let same=previous.as_deref().and_then(|old|serde_json::from_str::<Value>(old).ok()).as_ref()==Some(v);
         if !same {
@@ -3757,6 +3758,20 @@ impl Storage {
     pub fn session_latest_user_message_id(&self, session: &str) -> Result<Option<String>, StorageError> {
         let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         Ok(c.query_row("SELECT id FROM messages WHERE session_id=?1 AND role='user' ORDER BY sequence DESC LIMIT 1", [session], |r| r.get::<_, String>(0)).optional()?)
+    }
+    /// The newest user message's text and `meta` (its `data.meta`, or null), for
+    /// the follow-up suggestion (21 November 2026): one row, never a transcript.
+    pub fn session_latest_user_message(&self, session: &str) -> Result<Option<(String, Value)>, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let row: Option<(String, String)> = c.query_row(
+            "SELECT content, data FROM messages WHERE session_id=?1 AND role='user' ORDER BY sequence DESC LIMIT 1",
+            [session],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        ).optional()?;
+        Ok(row.map(|(content, data)| {
+            let meta = serde_json::from_str::<Value>(&data).ok().and_then(|data| data.get("meta").cloned()).unwrap_or(Value::Null);
+            (content, meta)
+        }))
     }
     /// The assistant text of the latest turn that replied, used to recognise a
     /// scheduled run that ended with the silent `(pass)`.

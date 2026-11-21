@@ -969,3 +969,33 @@ The owner's database reached 1.3 GB: `tool_calls.data.raw` kept every provider's
 - `storage.vacuum { confirm: true }` is the one full compaction. Without `confirm: true` it is `invalid_argument`; when free space is under the file's size plus 64 MiB it is `conflict` and nothing changes. Otherwise it runs `PRAGMA auto_vacuum=INCREMENTAL; VACUUM; PRAGMA wal_checkpoint(TRUNCATE)` with a 30-second busy timeout (it rewrites the file and holds the write lock), and answers `{ beforeBytes, afterBytes, reclaimedBytes, millis, autoVacuum: "incremental" }`. It is the only way a database written before this version enters incremental mode; until then the background pass cannot return pages.
 
 **Who is affected.** Nothing read the stored `raw`, and the window draws `detail`; a window or a phone older than this change ignores `payloadBytes` and `detailTruncated`. The rows on the wire are otherwise unchanged.
+
+## Follow-up prompt suggestions (21 November 2026)
+
+After a turn completes, the composer may show one greyed suggestion of the next prompt the owner would plausibly type. The owner asked for what Claude Code and Synara have: ghost text after a reply, Tab to use it. The words are held in memory only: they are never a row in the database, a log, a backup or a push. Code: `crates/retinue-daemon/src/follow_up.rs`.
+
+**The setting.** `chat.followUpSuggestions`, a JSON boolean, absent means on. It is desktop only (not in `tiers.json`'s `settingsAllowlist`) and travels in a backup like the other preferences. `settings.set` with anything but a boolean is `invalid_argument`, and both validators (`main.rs` and `retinue-storage`) hold it to that rule.
+
+**When a suggestion is produced.** Only after a turn completes successfully, and only when all of these hold: the setting is on; the conversation is not an automation or an unattended task run, not a side conversation, not a channel (Telegram/WhatsApp) conversation, and not one a paired device started; the bot is not in plan mode; no question card is waiting; the conversation is not limited and the provider's last quota reading is not at or near a limit (90% of any window, or `ordinaryUsageAllowed: false`); and the desktop reports that conversation as the visible, focused one. The last user message and the last reply must both exist. Nothing is produced when the owner has already sent a new message: a send, a steer, a dismissal or a new turn bumps the conversation's epoch, and an answer that arrives afterwards is dropped.
+
+**One side call, one per conversation.** The daemon spawns one short process off the turn's own loop, at most one per conversation at a time, with a hard 20-second limit; a send or a dismissal stops it. The prompt is passed on stdin and carries only the last user message (2,000 characters at most) and the last reply (4,000 at most).
+
+- **Claude** runs `claude -p --output-format json --permission-mode default --no-session-persistence` with the cheap model the runtime reports (a Haiku alias, when its catalog names one). This is the same one-shot call the adapter's catalog probe already makes, and it keeps no session.
+- **Codex** runs `codex exec --ephemeral --sandbox read-only --skip-git-repo-check -C <temp> --output-last-message <temp> -`, with `--ephemeral` so no session files are kept. The temp answer file is deleted at once.
+- **OpenCode, the other ACP providers and Pi** answer nothing: OpenCode's `run` has no stdin form and a prompt in `argv` would break the stdin rule, and the others have no clean one-shot side session. The feature simply produces no suggestion for those conversations.
+
+The answer is normalised to one line (quotes and a leading label trimmed, `NONE` treated as no suggestion) and cut to 200 characters. Usage is recorded only when the CLI reports token numbers, against the turn it followed and with `source: "suggestion"`; it is never estimated.
+
+**Events.**
+
+- `session.suggestion { sessionId, turnId, text }` is **live only**: the window hears it on the event stream, and nothing about the text is stored. The event stream needs a sequence number, so a content-free marker row, `session.suggestion.ready { sessionId }`, takes it; that marker is what a window which reconnects replays (and ignores), and the text is read back with `session.suggestion.get`. `session.suggestion.ready` is not sent live.
+- `session.suggestion.cleared { sessionId }` is emitted when a suggestion that the window may be showing goes: the owner sends, a new turn starts, or it is dismissed. It is content-free and an ordinary stored event.
+
+Both events are `drop` in `tiers.json`, so no paired device ever sees one. A cleared event is announced once per suggestion: a send with nothing held is silent.
+
+**Methods**, both class `never` (this is the desktop composer's own state, and the text is the owner's words).
+
+- `session.suggestion.get { sessionId }` gives `{ turnId, text }` for a reloaded window, or `null`. With the setting off it answers `null`.
+- `session.suggestion.dismiss { sessionId }` gives `{ sessionId, cleared: boolean }`; `false` when there was nothing to clear. A missing or empty `sessionId` is `invalid_argument`.
+
+**Who is affected.** The window (composer ghost text, Tab and Right Arrow, the Settings switch) is a separate lane; the daemon keeps the contract above. No existing reply shape changed, and a window that does not know these events ignores them.

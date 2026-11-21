@@ -54,6 +54,8 @@ The owner approved generating a PNG from the Nuphos reference family first, then
 3. The UI call in `apps/desktop/src/tauri.ts`, mirrored in `apps/desktop/src/preview/fixtureBridge.ts` (fixture behaviour) and `apps/desktop/src/remote/remoteTauri.ts` (a refusing stub if native-only); the parity tests check all three export the same names.
 4. Document it in `docs/ipc-contract.md`.
 
+   **A live-only event** (content that must never be stored) cannot simply skip `db.push_event`: both event sockets forward only `sequence > after`. Use `AppState::emit_live(marker_kind, marker, kind, payload)`, which stores a content-free marker row for the sequence, broadcasts the payload live, and exposes the content through an RPC (see `follow_up.rs` and the 2026-11-21 lesson).
+
 ## Add a task RPC or a board change (22 October 2026)
 
 1. Storage first: the `task_*` function in `crates/retinue-storage/src/lib.rs` (one `Immediate` transaction, a version check, the state rule the methods above it follow; append a `task_run_events` row for any run change). `ensure_tasks_schema` uses `CREATE TABLE IF NOT EXISTS`, so a new column on an existing table needs its own guarded `ALTER`.

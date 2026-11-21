@@ -2,6 +2,13 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-21 · Daemon · An event that must not be stored still needs a stored row
+
+- **Symptom:** the follow-up suggestion (`session.suggestion {sessionId, turnId, text}`) had to reach the window with its text, but `docs/reference/invariants.md` says every event is a row in `app_events` before it is broadcast, and the feature's own rule says the text is never stored.
+- **Cause:** both the daemon's own socket (`ws_client`) and the desktop shell (`apps/desktop/src-tauri/src/lib.rs`) forward only `event.sequence > after`, and `after` comes from the persisted sequence. A live-only envelope with `sequence: 0` is therefore dropped by both, and giving it a made-up high sequence would make every later stored event (`rowid`) look like a replay and vanish.
+- **Fix:** `AppState::emit_live(marker_kind, marker, kind, payload)` writes a content-free marker row first (`session.suggestion.ready {sessionId}`), reuses its `sequence` and `event_id`, then broadcasts the real payload without storing it. The reservation keeps the sequence monotonic, a reconnecting window replays the marker (which it ignores) and reads the text back through `session.suggestion.get`, and a phone never sees either because both events are `drop` in `tiers.json`. The invariant table names this as the one exception.
+- **Avoid:** before adding a "live only" event, check what the transport does with its sequence. If content must not be persisted, persist a marker and read the content with an RPC; do not invent a sequence.
+
 ## 2026-11-20 · Storage · A provider payload kept "just in case" was the whole database
 
 - **Symptom:** the owner's `retinue.db` reached 1.3 GB. Two causes, measured: `tool_calls.data.raw` held every provider's own payload (982 MB in 2,410 edit rows, the largest 2.4 MB), and `app_events` was never trimmed (166 MB).
@@ -119,6 +126,7 @@ Newest first. One entry per lesson: date, area, symptom, root cause with evidenc
 - **Symptom:** a freshly linked daemon test binary was refused (`os error 4551`) even copied to `C:\tmp` under a new name and retried after 25 seconds; the previous relink had run fine from the same folder.
 - **Cause:** Smart App Control's decision is per binary content and apparently asynchronous; a copy keeps the blocked content, and renaming does not help.
 - **Fix that worked:** touch a source file so cargo relinks (`Finished test profile`, 6–9 minutes on this PC), then copy the new `deps\retinued-<hash>.exe` to `C:\tmp` and run it there. One relink out of two was allowed. Keep the same target dir; when the daemon's own build script is refused, delete `target\debug\build\retinue-daemon-*`, rerun, and rerun once more because the first run after that panics on the missing `OUT_DIR`.
+- **The block can also lift on its own (21 November 2026):** the same `C:\tmp` copy refused at 14:25 and again at 14:31 ran `--list` fine at 14:39 with no rebuild and no byte change. So after a refusal, do the work that does not need the binary and retry the same file once before spending another 2–20 minutes relinking. Check CodeIntegrity/Operational id 3077 for the refused path and the policy id (SAC is `{0283ac0f-fff1-49ae-ada1-8a933130cad6}`), and confirm new tests registered with `--list` before trusting a filter that finds nothing.
 ## 2026-11-17 · Gates · Getting a lane's daemon tests to run at all on this PC
 
 Four things, in the order that works, all learned while doing wave 3 lane "prompts":

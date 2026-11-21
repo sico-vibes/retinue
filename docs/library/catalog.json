@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "bce8232a",
-  "documentCount": 446,
+  "revision": "a44b9133",
+  "documentCount": 447,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -2826,6 +2826,46 @@
       ]
     },
     {
+      "id": "project/reports/preview-demo-inventory",
+      "source": "docs/reports/preview-demo-inventory.md",
+      "title": "Demo inventory: production app vs the browser preview",
+      "section": "Project documentation",
+      "status": "Project reference",
+      "sha256": "0369f2b004dfb5436b70fa6a34d001f357a8a13191035850c4a45fc951ba2271",
+      "headings": [
+        {
+          "id": "method",
+          "text": "Method",
+          "level": 2
+        },
+        {
+          "id": "inventory",
+          "text": "Inventory",
+          "level": 2
+        },
+        {
+          "id": "summary-counts",
+          "text": "Summary counts",
+          "level": 2
+        },
+        {
+          "id": "error-messages",
+          "text": "Error messages",
+          "level": 2
+        },
+        {
+          "id": "events-the-preview-never-emits",
+          "text": "Events the preview never emits",
+          "level": 2
+        },
+        {
+          "id": "top-15-gaps",
+          "text": "Top 15 gaps",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/STYLE",
       "source": "docs/STYLE.md",
       "title": "Documentation style guide",
@@ -2896,7 +2936,7 @@
       "title": "Invariants",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "c85016835444ca524c2fd4a7d87afdea6e762597d4ee3efff3bdc0348e555fc8",
+      "sha256": "299e01ae04a3a8127b8776aeb408dcde37034092cd68928bddae2ef1f97990d7",
       "headings": [
         {
           "id": "safety-and-privacy",
@@ -5234,7 +5274,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "54dc621ad855fb8b379ea083e69e0a5da8f6172010dbe28858b2715b8e17df12",
+      "sha256": "93283f9fd5023b96557b55b6f8fba18d8a3a2b3cee0d92c62b87d45ea9e373af",
       "headings": [
         {
           "id": "update-commands",
@@ -5504,6 +5544,11 @@
         {
           "id": "slim-tool-call-storage-the-event-log-trim-and-compaction-20-november-2026",
           "text": "Slim tool-call storage, the event-log trim and compaction (20 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "follow-up-prompt-suggestions-21-november-2026",
+          "text": "Follow-up prompt suggestions (21 November 2026)",
           "level": 2
         }
       ]
