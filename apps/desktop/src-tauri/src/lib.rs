@@ -151,6 +151,35 @@ struct ReadyLine {
     capability: String,
 }
 
+/// 20 November 2026: the line the daemon writes before it opens its database
+/// (`retinue_protocol::DAEMON_STARTING_TYPE`, which the desktop crate does not
+/// depend on, so the name is repeated here and both sides pin it by test).
+const DAEMON_STARTING_TYPE: &str = "retinued.starting";
+/// How long a start may say nothing at all. A daemon that is working says it is
+/// starting straight away, so silence for this long is a failure.
+const BOOTSTRAP_SILENCE_LIMIT: Duration = Duration::from_secs(10);
+/// How long a start may take once it has said it is starting. The owner's 1.3 GB
+/// database needed far longer than ten seconds to open on a busy disk, and every
+/// start that passed ten seconds used to be killed, throwing the work away.
+const BOOTSTRAP_WAIT_LIMIT: Duration = Duration::from_secs(120);
+/// How often the wait looks at the child, so an exit is noticed at once rather
+/// than at the next line or the deadline.
+const BOOTSTRAP_POLL: Duration = Duration::from_millis(100);
+/// How often the window is told that a start is still in progress. The first
+/// report comes with the starting line, which is usually before the window has
+/// loaded, so the reports continue while the wait does.
+const BOOTSTRAP_PROGRESS_EVERY: Duration = Duration::from_secs(2);
+
+/// One reading of the daemon's output stream.
+enum BootstrapLine {
+    Line(String),
+    /// Nothing arrived before the slice ended.
+    Idle,
+    /// The stream ended, so nothing more will arrive.
+    Closed,
+    Failed(String),
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RpcRequest<'a> {
@@ -345,6 +374,77 @@ fn candidate_daemon_paths(app: &AppHandle) -> Vec<PathBuf> {
     candidates
 }
 
+/// Wait for the ready line, 20 November 2026.
+///
+/// The rules, and only these, are failures: the process exits, it says nothing
+/// at all for [`BOOTSTRAP_SILENCE_LIMIT`], it sends something the contract does
+/// not allow, or the start passes [`BOOTSTRAP_WAIT_LIMIT`]. While the process is
+/// alive and has said it is starting (`retinued.starting`), the wait continues:
+/// opening a large database is slow, not broken.
+///
+/// Kept apart from the process so the rules can be tested without one: `next`
+/// yields one reading of the stream, `alive` says whether the child runs, and
+/// `elapsed` is the time since the wait began.
+fn await_bootstrap(
+    mut next: impl FnMut(Duration) -> BootstrapLine,
+    mut alive: impl FnMut() -> bool,
+    mut elapsed: impl FnMut() -> Duration,
+    progress: &mut dyn FnMut(u64),
+) -> Result<String, String> {
+    let mut starting_seen = false;
+    let mut last_report = Duration::ZERO;
+    loop {
+        let waited = elapsed();
+        if waited >= BOOTSTRAP_WAIT_LIMIT {
+            return Err("Daemon did not send its bootstrap line within 120 seconds.".to_string());
+        }
+        let slice = BOOTSTRAP_POLL.min(BOOTSTRAP_WAIT_LIMIT - waited);
+        match next(slice) {
+            BootstrapLine::Line(line) => {
+                let text = line.trim();
+                if text.is_empty() {
+                    continue;
+                }
+                if is_starting_line(text) {
+                    starting_seen = true;
+                    last_report = elapsed();
+                    progress(last_report.as_millis() as u64);
+                    continue;
+                }
+                return Ok(text.to_string());
+            }
+            BootstrapLine::Idle => {
+                if !alive() {
+                    return Err("Daemon exited before sending its bootstrap line.".to_string());
+                }
+                let now = elapsed();
+                if !starting_seen && now >= BOOTSTRAP_SILENCE_LIMIT {
+                    return Err("Daemon did not send its bootstrap line within 10 seconds.".to_string());
+                }
+                // A slow start says so while it waits, not only in its first line.
+                if starting_seen && now.saturating_sub(last_report) >= BOOTSTRAP_PROGRESS_EVERY {
+                    last_report = now;
+                    progress(now.as_millis() as u64);
+                }
+            }
+            BootstrapLine::Closed => {
+                return Err("Daemon exited before sending its bootstrap line.".to_string())
+            }
+            BootstrapLine::Failed(error) => {
+                return Err(format!("Could not read daemon bootstrap: {error}"))
+            }
+        }
+    }
+}
+
+/// Whether one line is the early "the process is alive and starting" line.
+fn is_starting_line(line: &str) -> bool {
+    serde_json::from_str::<Value>(line)
+        .ok()
+        .and_then(|value| value.get("type").and_then(Value::as_str).map(str::to_owned))
+        .is_some_and(|kind| kind == DAEMON_STARTING_TYPE)
+}
+
 fn start_daemon(app: &AppHandle, state: &AppState) -> Result<(), String> {
     let _startup_guard = state
         .daemon_start_lock
@@ -427,36 +527,53 @@ fn start_daemon(app: &AppHandle, state: &AppState) -> Result<(), String> {
         .take()
         .ok_or_else(|| "Daemon bootstrap stream is unavailable.".to_string())?;
     let stderr = child.stderr.take();
-    let mut reader = BufReader::new(stdout);
-    let (bootstrap_tx, bootstrap_rx) = std::sync::mpsc::sync_channel(1);
+    // Every line is forwarded, not just the first: the daemon says it is
+    // starting, then says it is ready, and the thread stays to drain whatever
+    // follows so the child can never block on a full pipe.
+    let (line_tx, line_rx) = std::sync::mpsc::channel::<BootstrapLine>();
     thread::spawn(move || {
-        let mut line = String::new();
-        let result = reader
-            .read_line(&mut line)
-            .map(|_| line)
-            .map_err(|error| error.to_string());
-        let _ = bootstrap_tx.send(result);
-        for _line in reader.lines() {}
+        let mut reader = BufReader::new(stdout);
+        loop {
+            let mut line = String::new();
+            match reader.read_line(&mut line) {
+                Ok(0) => {
+                    let _ = line_tx.send(BootstrapLine::Closed);
+                    return;
+                }
+                Ok(_) => {
+                    // A send error only means the start finished and stopped
+                    // listening; the rest is drained either way.
+                    let _ = line_tx.send(BootstrapLine::Line(line));
+                }
+                Err(error) => {
+                    let _ = line_tx.send(BootstrapLine::Failed(error.to_string()));
+                    return;
+                }
+            }
+        }
     });
-    let line = match bootstrap_rx.recv_timeout(Duration::from_secs(10)) {
-        Ok(Ok(line)) if !line.trim().is_empty() => line,
-        Ok(Ok(_)) => {
+    let app_for_progress = app.clone();
+    let mut progress = move |elapsed_ms: u64| {
+        let _ = app_for_progress.emit("daemon-starting", json!({ "elapsedMs": elapsed_ms }));
+    };
+    let bootstrap_start = Instant::now();
+    let line = match await_bootstrap(
+        |slice| match line_rx.recv_timeout(slice) {
+            Ok(item) => item,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => BootstrapLine::Idle,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => BootstrapLine::Closed,
+        },
+        // An unreadable process state is not a death: keep waiting to the cap.
+        || !matches!(child.try_wait(), Ok(Some(_))),
+        || bootstrap_start.elapsed(),
+        &mut progress,
+    ) {
+        Ok(line) => line,
+        Err(error) => {
             let _ = child.kill();
             let _ = child.wait();
             let _ = fs::remove_file(&executable_copy);
-            return Err("Daemon exited before sending its bootstrap line.".to_string());
-        }
-        Ok(Err(error)) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = fs::remove_file(&executable_copy);
-            return Err(format!("Could not read daemon bootstrap: {error}"));
-        }
-        Err(_) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            let _ = fs::remove_file(&executable_copy);
-            return Err("Daemon did not send its bootstrap line within 10 seconds.".to_string());
+            return Err(error);
         }
     };
     let ready: ReadyLine = match serde_json::from_str(line.trim()) {
@@ -609,7 +726,16 @@ async fn daemon_rpc(
     };
     let result = match first {
         Err(error) if retry_startup_read(&method, &error) => {
-            start_daemon(&app, &state)?;
+            // 20 November 2026: a start may wait up to two minutes for a large
+            // database to open, so it runs on the blocking pool, never on an
+            // async worker.
+            let app_for_start = app.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                let state = app_for_start.state::<AppState>();
+                start_daemon(&app_for_start, &state)
+            })
+            .await
+            .map_err(|error| error.to_string())??;
             let current = connection(&state)?;
             rpc_call(&current, &method, params).await?
         }
@@ -728,7 +854,7 @@ async fn daemon_events_start(app: AppHandle, state: State<'_, AppState>) -> Resu
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn ensure_daemon(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
     // Wave 13 (found in the live test): the window's reconnect must not start the
     // daemon behind the supervisor's back. While it waits out a backoff, or after it
@@ -745,6 +871,91 @@ fn supervisor_blocks_start(payload: &DaemonSupervisor) -> Option<&'static str> {
         "gave_up" => Some("The Retinue service keeps stopping, so it was not restarted again. Use Try again."),
         "restarting" => Some("The Retinue service is restarting."),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod bootstrap_wait_tests {
+    use super::*;
+    use std::cell::Cell;
+
+    const READY: &str = r#"{"type":"retinued.ready","protocolVersion":1,"address":"127.0.0.1:5000","capability":"abc"}"#;
+    const STARTING: &str = r#"{"type":"retinued.starting","protocolVersion":1}"#;
+
+    /// Runs the wait over a scripted stream. `step` is how much time each read
+    /// costs, so a ten-second rule is tested in microseconds.
+    fn wait(
+        script: Vec<BootstrapLine>,
+        step: Duration,
+        alive: impl Fn(usize) -> bool,
+    ) -> (Result<String, String>, usize, u64) {
+        let mut queue = script.into_iter();
+        let clock = Cell::new(Duration::ZERO);
+        let reads = Cell::new(0usize);
+        let heard = Cell::new(0u64);
+        let mut progress = |elapsed_ms: u64| { heard.set(elapsed_ms); };
+        let result = await_bootstrap(
+            |_slice| {
+                reads.set(reads.get() + 1);
+                clock.set(clock.get() + step);
+                queue.next().unwrap_or(BootstrapLine::Idle)
+            },
+            || alive(reads.get()),
+            || clock.get(),
+            &mut progress,
+        );
+        (result, reads.get(), heard.get())
+    }
+
+    #[test]
+    fn a_living_daemon_that_is_starting_is_waited_for() {
+        let mut script = vec![BootstrapLine::Line(STARTING.to_string())];
+        for _ in 0..50 {
+            script.push(BootstrapLine::Idle);
+        }
+        script.push(BootstrapLine::Line(READY.to_string()));
+        let (result, reads, heard) = wait(script, Duration::from_secs(1), |_| true);
+        assert_eq!(result.unwrap(), READY, "the ready line, after fifty seconds of a slow start");
+        assert!(reads > 50);
+        assert_eq!(heard, 51_000, "the window is told the start is still going while it waits");
+    }
+
+    #[test]
+    fn an_exited_process_fails_at_once() {
+        let (result, reads, _) = wait(vec![BootstrapLine::Idle], Duration::from_millis(1), |_| false);
+        assert_eq!(result.unwrap_err(), "Daemon exited before sending its bootstrap line.");
+        assert_eq!(reads, 1, "no further waiting once the process is gone");
+    }
+
+    #[test]
+    fn silence_fails_at_ten_seconds() {
+        let (result, _, _) = wait(Vec::new(), Duration::from_secs(2), |_| true);
+        assert_eq!(result.unwrap_err(), "Daemon did not send its bootstrap line within 10 seconds.");
+    }
+
+    #[test]
+    fn a_start_that_never_reaches_ready_stops_at_the_cap() {
+        // Says it is starting, then neither retires nor dies.
+        let (result, _, _) = wait(vec![BootstrapLine::Line(STARTING.to_string())], Duration::from_secs(20), |_| true);
+        assert_eq!(result.unwrap_err(), "Daemon did not send its bootstrap line within 120 seconds.");
+    }
+
+    #[test]
+    fn a_closed_or_unreadable_stream_is_reported() {
+        let (closed, _, _) = wait(vec![BootstrapLine::Closed], Duration::from_millis(1), |_| true);
+        assert_eq!(closed.unwrap_err(), "Daemon exited before sending its bootstrap line.");
+        let (failed, _, _) = wait(vec![BootstrapLine::Failed("broken pipe".into())], Duration::from_millis(1), |_| true);
+        assert_eq!(failed.unwrap_err(), "Could not read daemon bootstrap: broken pipe");
+    }
+
+    #[test]
+    fn only_the_starting_line_is_progress_and_the_ready_line_answers() {
+        assert!(is_starting_line(STARTING));
+        assert!(!is_starting_line(READY));
+        assert!(!is_starting_line("not json"));
+        let (result, _, heard) = wait(vec![BootstrapLine::Line(READY.to_string())], Duration::from_millis(1), |_| true);
+        assert_eq!(result.unwrap(), READY);
+        assert_eq!(heard, 0, "an older daemon sends no starting line");
     }
 }
 
@@ -774,7 +985,10 @@ fn daemon_supervisor_state(state: State<'_, AppState>) -> DaemonSupervisor {
 /// Restart the child now, however long ago the last crash was, and start the
 /// crash window again. The wait between automatic restarts is never applied to a
 /// restart the owner asked for.
-#[tauri::command]
+///
+/// `(async)` since 20 November 2026: the start may wait up to two minutes for a
+/// large database to open, and a synchronous command runs on the main thread.
+#[tauri::command(async)]
 fn daemon_restart_now(app: AppHandle, state: State<'_, AppState>) -> Result<DaemonSupervisor, String> {
     let supervisor = Arc::clone(&state.daemon_supervisor);
     {
@@ -3533,9 +3747,38 @@ pub fn run() {
             let mut start_at_last_position = false;
             let mut hotkey_enabled = true;
             if let Some(state) = app.try_state::<AppState>() {
-                if let Err(error) = start_daemon(app.handle(), &state) {
-                    eprintln!("Retinue daemon startup: {error}");
-                    log_shell("warn", &format!("daemon startup failed: {error}"));
+                // 20 November 2026: a start can legitimately take a minute or more
+                // on a large database, and `setup` runs on the main thread: the
+                // window, tray and companion must not wait for it. The start runs
+                // on its own thread, and setup waits only briefly so the saved
+                // settings below still apply on a normal start. The window's
+                // `ensure_daemon` waits on the same start lock for the real
+                // readiness.
+                let app_for_start = app.handle().clone();
+                let starter = thread::spawn(move || {
+                    let state = app_for_start.state::<AppState>();
+                    if let Err(error) = start_daemon(&app_for_start, &state) {
+                        eprintln!("Retinue daemon startup: {error}");
+                        log_shell("warn", &format!("daemon startup failed: {error}"));
+                        return;
+                    }
+                    // A start that outlived the grace period below did not have its
+                    // saved settings read there; the close behaviour is the one the
+                    // window uses without asking. Everything else is applied by the
+                    // front end when it loads.
+                    if let Ok(conn) = connection(&state) {
+                        if let Ok(settings) = tauri::async_runtime::block_on(rpc_call(&conn, "settings.get", json!({}))) {
+                            let preferences = settings.get("settings").unwrap_or(&settings);
+                            state.close_to_tray.store(
+                                preferences.get("closeToTray").and_then(Value::as_bool).unwrap_or(true),
+                                Ordering::SeqCst,
+                            );
+                        }
+                    }
+                });
+                let grace = Instant::now() + Duration::from_secs(5);
+                while Instant::now() < grace && connection(&state).is_err() && !starter.is_finished() {
+                    thread::sleep(Duration::from_millis(50));
                 }
                 // Wave 12, part E: a crash now restarts the daemon without waiting
                 // for the window to ask.

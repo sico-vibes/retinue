@@ -15,11 +15,14 @@ This separation is what makes the companion, a remote phone and the main window 
 ### Startup
 
 1. The desktop shell starts `retinued.exe` as a child process.
-2. The daemon opens the database, runs migrations, recovers interrupted runs and queue state, and starts the scheduler.
-3. It binds `127.0.0.1` on an ephemeral port.
-4. It writes one bootstrap JSON object to stdout before any log:
+2. Before it touches the database, the daemon writes a starting line to stdout: `{"type":"retinued.starting","protocolVersion":1}`. It says only that the process is alive and working, so the shell can tell a slow start from a dead one.
+3. The daemon opens the database, runs migrations, recovers interrupted runs and queue state, and prepares what the window needs first.
+4. It binds `127.0.0.1` on an ephemeral port.
+5. It writes the ready bootstrap JSON object to stdout:
    `{"type":"retinued.ready","protocolVersion":1,"address":"127.0.0.1:49152","capability":"…"}`.
-5. The shell reads the address and capability and starts proxying renderer calls.
+6. The shell waits while the child is alive: it fails only when the process exits, says nothing at all for 10 seconds, sends a line that breaks the contract, or has not been ready within 120 seconds. Then it reads the address and capability and starts proxying renderer calls.
+7. What a restart left unfinished is settled before the ready line, so fresh work cannot be mistaken for it: interrupted automation runs, ambiguous task claims, the durable team queue, interrupted lanes and missed retries.
+8. Work the window's first requests do not need finishes after the ready line, in the background: older disposable files and saves, chat channel polling, background sweeps, catalog warming, the Remote and machine gateways, and repository identity.
 
 The capability is random and 256-bit. It exists in daemon memory and the shell's child-process channel only. It is never persisted, logged or sent to the renderer.
 

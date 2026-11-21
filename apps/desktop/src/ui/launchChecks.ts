@@ -30,7 +30,12 @@ export function runtimeAuthSummary(runtime: { provider: string; authState?: stri
   return { state: fallback, label: fallback === 'authenticated' ? 'Signed in' : fallback === 'unauthenticated' ? 'Not signed in' : 'Sign-in status unknown' }
 }
 
-export const LAUNCH_TIMEOUTS = { service: 12_000, discovery: 31_000, agent: 1_000, models: 10_000, usage: 8_000, overall: 90_000 } as const
+// 20 November 2026: the service step waits for the shell to return from
+// `ensureDaemon`, and the shell now waits up to 120 s for the daemon's ready
+// line on a large database (`await_bootstrap` in `apps/desktop/src-tauri`), so
+// these caps must sit above that wait or the launch screen fails a start that
+// is still going. The overall cap covers every stage in sequence.
+export const LAUNCH_TIMEOUTS = { service: 130_000, discovery: 31_000, agent: 1_000, models: 10_000, usage: 8_000, overall: 200_000 } as const
 export const LAUNCH_OVERALL_TIMEOUT_REASON = 'launch-overall-timeout'
 
 export function throwIfLaunchAborted(signal: AbortSignal) {

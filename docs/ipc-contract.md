@@ -16,11 +16,19 @@ This document includes intended contract requirements, not a statement that ever
 
 ## Transport and startup
 
-The desktop shell owns the daemon child process and starts it for the signed-in Windows user. The daemon binds an ephemeral TCP port on `127.0.0.1` only. It must never bind `0.0.0.0`, a LAN interface, or IPv6 wildcard. On startup, the daemon writes one bootstrap JSON object to stdout before any logs:
+The desktop shell owns the daemon child process and starts it for the signed-in Windows user. The daemon binds an ephemeral TCP port on `127.0.0.1` only. It must never bind `0.0.0.0`, a LAN interface, or IPv6 wildcard. On startup, before it opens its database, the daemon writes one **starting** line to stdout: it carries a protocol version and nothing else, and it exists so the shell can tell a slow start from a dead one (20 November 2026):
+
+```json
+{"type":"retinued.starting","protocolVersion":1}
+```
+
+Once it is listening, it writes one **ready** bootstrap JSON object to stdout before any logs:
 
 ```json
 {"type":"retinued.ready","protocolVersion":1,"address":"127.0.0.1:49152","capability":"<random-256-bit-secret>"}
 ```
+
+The shell reads every line, treats `retinued.starting` as progress, and fails a start only when the process exits, sends nothing at all within 10 seconds, sends a line that breaks this contract, or has not been ready within 120 seconds. While the process is alive and starting, it waits: opening a large database is slow, not broken. The wait runs off the main thread, so the window, tray and companion never wait behind a start. What a restart left unfinished (task claims, team-queue briefs, interrupted lanes, missed retries) is settled before the ready line, so a request that arrives at the ready line can never be mistaken for a leftover of the previous process. Work the window's first requests do not need (older disposable files, chat channel polling, background sweeps, catalog warming, the Remote and machine gateways) runs after the ready line, in the background. The shell also emits a `daemon-starting` event with `{ elapsedMs }` when that line arrives and every two seconds while the wait continues, so the window can say a start is still in progress.
 
 The capability exists only in daemon memory and the desktop shell's child-process channel; do not persist or log it. The shell keeps it in the native Tauri process and proxies renderer calls through Tauri commands. A connecting client must send it in `Authorization: Bearer <capability>`. Reject requests without a valid capability using a constant-time comparison. CORS is disabled. Only loopback peers are accepted. If another UI client is needed, it must receive the secret through the same authenticated native shell path.
 

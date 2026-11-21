@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "695fbb6d",
+  "revision": "9f930d1f",
   "documentCount": 443,
   "assets": [
     {
@@ -941,7 +941,7 @@
       "title": "Daemon and storage",
       "section": "Architecture & internals",
       "status": "Reference",
-      "sha256": "3d5b5fe6e821f9039b1dc1fe2efbf1197f4e7977d2f00a233e04a125f5f159f0",
+      "sha256": "7c8ed74d8a64b42c7add63a32231ee3079e4fc2ac4abf6906a4f0999aac6ff41",
       "headings": [
         {
           "id": "purpose",
@@ -2896,7 +2896,7 @@
       "title": "Invariants",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "cfad687618fdda02c6581cafff1db674f614040b009ec492c5c4323785669ea4",
+      "sha256": "103853e8b34ef8a28f7af0d55779a07e1d7cb7e475de8bf54c94c64db0e316f4",
       "headings": [
         {
           "id": "safety-and-privacy",
@@ -5159,7 +5159,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "285c4df413036d15f69b001beb5e9c8b6fa6234733063ba1bfa6d221093eb07c",
+      "sha256": "56c048508a353417e0999583079257b8478f7708dfc7314b32da827e0d79ad71",
       "headings": [
         {
           "id": "update-commands",
