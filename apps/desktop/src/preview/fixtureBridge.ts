@@ -1,3 +1,9 @@
+import type { SharedSettings } from '../ui/ProjectSettingsDialog'
+import { clipboardReadFailures, pairingFailures, scaffoldFailures, workflowError } from './demoWorkflowErrors'
+import type { Connector, ConnectorSignIn } from '../ui/ConnectorsPage'
+import type { LearnedSkill } from '../ui/SkillsPage'
+import type { DiagnosticsPreview } from '../tauri'
+import type { ModelChangePlan } from '../types'
 import { normalizeDelegation, type DelegationRecord, type DelegationStatus } from '../ui/delegations'
 import type { ProjectSuggestion } from '../ui/ProjectSuggestions'
 import type { MessageSearchResult } from '../ui/ExperimentalFeatures'
@@ -170,6 +176,7 @@ let sessions: Session[] = [
     id: 'session-codex', runtimeId: 'runtime-codex', agentId: 'agent-codex', title: 'Invoice parser tests', projectPath: 'C:/work/korus', ...(fixturePreset() === 'moved' ? { link: { movedTo: { machineId: 'preview-laptop', name: 'Work laptop', at: new Date().toISOString() } } } : {}), state: flags().has('idle') ? 'idle' : 'working', model: 'gpt-6.1-sol', updatedAt: minutesAgo(fixturePreset() === 'generated-image' ? 0 : 2),
     messages: [
       { id: 'm1', role: 'user', content: 'Can you make the invoice parser tests pass?', createdAt: minutesAgo(9), ...(fixturePreset() === 'mcp' ? { meta: { origin: { kind: 'mcp', client: 'claude-code' } } } : {}) },
+      ...(flags().has('demo-image') ? [{ id: 'm-image', role: 'user', content: 'Here is the invoice screenshot.', createdAt: minutesAgo(8), attachments: [{ name: 'invoice.png' }] }] : []),
       { id: 'm2', role: 'assistant', turnId: 'turn-codex-1', content: 'Sure. I found two failing cases in **tests/invoice.test.ts**: the currency field is parsed before the locale is known, and totals use floats.\n\nI will switch totals to integer minor units and parse the locale first.', createdAt: minutesAgo(8) },
       ...(fixturePreset() === 'openui' ? [{ id: 'openui-1', role: 'assistant', content: "Here is the test run at a glance.\n\n```openui\nroot = Stack([title, stats, tabs, card])\ntitle = Heading(\"Test run\", 1)\nstats = Row([Stat(\"Passed\", 1687, \"+12\", \"good\"), Stat(\"Failed\", 2, \"-1\", \"good\"), Stat(\"Duration\", \"4m 12s\"), Badge(\"main\", \"info\")])\ntabs = Tabs([Tab(\"By suite\", [chart]), Tab(\"Failures\", [table])])\nchart = Chart(\"bar\", [\"ui\", \"daemon\", \"storage\"], [{name: \"tests\", values: [1687, 966, 160]}], \"Tests by suite\")\ntable = Table([\"Test\", \"Suite\", \"Reason\"], [[\"composer sends\", \"ui\", \"timeout\"], [\"warm resume\", \"daemon\", \"assertion\"]])\ncard = Card(\"Next step\", [Text(\"Two tests fail on Windows only.\"), Progress(\"Release checklist\", 70), form])\nform = Form(\"next\", [Select(\"who\", \"Who fixes them\", [\"Ada\", \"Sleuth\"]), Checkbox(\"release\", \"Release after\")], \"Send to the team\")\n```", createdAt: new Date().toISOString(), sequence: 101 }] : []),
       ...(fixturePreset() === 'visual' ? [{ id: 'visual-1', role: 'assistant', content: "Here is a mock of the card.\n\n```retinue-visual\n<div style=\"padding:16px;border-radius:12px;background:#eef\"><h3 style=\"margin:0\">Invoice 104</h3><p>Paid on 31 October</p><script>document.body.innerHTML=\"SCRIPT RAN\"</script></div>\n```\n\nAnd as SVG:\n\n```svg\n<svg width=\"120\" height=\"60\" xmlns=\"http://www.w3.org/2000/svg\"><rect width=\"120\" height=\"60\" rx=\"10\" fill=\"#7a7\"/></svg>\n```", createdAt: new Date().toISOString(), sequence: 100 }] : []),
@@ -255,6 +262,11 @@ let projects: Project[] = [
   { id: 'project-board', name: 'Board', path: 'C:/work/korus', sortOrder: 0, collapsed: false },
   { id: 'project-side', name: 'Side Projects', path: 'C:/work/site', sortOrder: 1, collapsed: false },
 ]
+if (flags().get('demo-shared') === 'missing' && projects[0]) {
+  const project = projects[0]
+  projects[0] = { ...project, overrides: { ...project.overrides, setupScript: 'npm install' } }
+}
+
 const teamFields: Record<string, Partial<Agent>> = {
   'agent-codex': { projectId: 'project-board', role: 'CTO', leader: true },
   'agent-claude': { projectId: 'project-side', role: 'Copywriter' },
@@ -337,6 +349,13 @@ if (fixtureScene) {
   sessions.push({ id: SCENE_SESSION_ID, runtimeId: 'runtime-codex', agentId: 'agent-codex', title: fixtureScene.title ?? 'Preview', projectPath: 'C:/work/korus', state: fixtureScene.state ?? 'idle', model: 'gpt-6.1-sol', updatedAt: new Date().toISOString(), messages: fixtureScene.messages ?? [], tools: fixtureScene.tools ?? [], files: fixtureScene.files ?? [], ...fixtureScene.session } as Session)
   for (const extra of fixtureScene.extraSessions ?? []) sessions.push(extra as unknown as Session)
 }
+if (flags().has('demo-troubleshoot')) {
+  const session = sessions.find((item) => item.id === 'session-codex')
+  if (session) {
+    session.state = 'error'
+    session.turns = [{ id: 'preview-failed-turn', state: 'error', failureClass: 'process_exited', createdAt: minutesAgo(3), endedAt: minutesAgo(2) }]
+  }
+}
 if (flags().has('demo-first-run') || flags().has('empty')) {
   agents = []
   sessions = []
@@ -391,10 +410,13 @@ function sortAgents(list: Agent[]) {
   return [...list].sort((a, b) => a.runtimeId.localeCompare(b.runtimeId) || a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))
 }
 
+const clearedSignIns = new Set<string>()
+
 function currentSnapshot(): Snapshot {
   const search = flags()
   const empty = search.has('empty') || search.has('demo-first-run')
   const runtimes = baseRuntimes.map((runtime) => {
+    if (search.has('demo-auth') && runtime.id === 'runtime-codex' && !clearedSignIns.has(runtime.id)) return { ...runtime, status: 'auth_required', authState: 'signed_out' }
     if (fixturePreset() === 'opencode-runtime-error' && runtime.id === 'runtime-opencode') return { ...runtime, status: 'error', probeStep: 'Protocol check', probeError: 'The CLI does not advertise the required protocol.' }
     return search.has('offline') && runtime.id === 'runtime-codex' ? { ...runtime, status: 'offline' } : { ...runtime }
   })
@@ -538,7 +560,7 @@ let fixtureMachineList: Array<Record<string, unknown>> | null = null
 let fixturePairJob: { id: string; url: string; state: string; detail: string | null; machine: { id: string; name: string } | null } | null = null
 const fixtureMachineSent: Record<string, Array<Record<string, unknown>>> = {}
 let fixtureTakeOver: { id: string; state: string; steps: Array<{ id: string; status: string; detail: string | null }>; sessionId: string | null; detail: string | null } | null = null
-let fixtureShared: Record<string, unknown> = { found: true, valid: true, problems: [], settings: { setupScript: 'npm install', defaultBot: 'Rae', approvalMode: 'ask' }, hash: 'preview', trusted: false, state: 'untrusted' }
+let fixtureShared: SharedSettings = { found: true, valid: true, problems: [], settings: { setupScript: 'npm install', defaultBot: 'Rae', approvalMode: 'ask' }, hash: 'preview', trusted: false, state: 'untrusted' }
 function fixtureMachines(): Array<Record<string, unknown>> {
   if (fixtureMachineList) return fixtureMachineList
   const wanted = flags().get('machines')
@@ -603,7 +625,143 @@ function fixtureMembers(projectId: string) {
   return [...ids].filter((id) => !fixtureReleased.has(`${projectId}:${id}`) && agents.some((agent) => agent.id === id && agent.systemRole !== 'manager')).map((agentId, sortOrder) => ({ agentId, hiredAt: 0, sortOrder }))
 }
 
+const profileSample = { id: 'preview-launcher', name: 'Codex launcher', provider: 'codex', protocolFamily: 'codex_app_server', executablePath: 'C:/Tools/codex.exe', args: ['--no-alt-screen'], workingDirectoryPolicy: 'per_session' }
+const fixtureProfiles = new Map<string, unknown>(flags().get('demo-profiles') === 'saved' ? [[profileSample.id, profileSample]] : [])
+const warmedSessions = new Set<string>()
+let ownerGrantScheduled = false
+let ownerGrantLive = flags().has('demo-owner-grant')
+const skillsStamp = '2026-11-20T12:00:00Z'
+const learnedSkills = new Map<string, LearnedSkill>(flags().has('demo-learned') ? [['invoice-tests', {
+  name: 'invoice-tests', description: 'Run the invoice parser regression tests.', reviewState: 'pending',
+  learnedBy: 'agent-codex', learnedByName: 'Codex', ownerEdited: false, importedAt: skillsStamp, updatedAt: skillsStamp, usedAt: null, enabled: true,
+}]] : [])
+const learnedBodies = new Map<string, string>()
+
 export async function rpc<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+  const failure = flags().get('demo-rpc-error')
+  if (failure === method) {
+    const code = flags().get('demo-error-code')
+    if (code) throw rpcError(code, workflowError(method, code) ?? 'The local daemon request failed.')
+    // Some production catch handlers use their own copy only when the failure has no message.
+    throw { code: 'internal' }
+  }
+  if (method === 'agent.reorder') {
+    if (!baseRuntimes.some((runtime) => runtime.id === params.runtimeId)) throw rpcError('not_found', 'Runtime not found.')
+    const active = agents.filter((agent) => agent.runtimeId === params.runtimeId && !agent.archived && !agent.parentAgentId)
+    const ids: unknown[] = Array.isArray(params.agentIds) ? params.agentIds : []
+    if (ids.length !== active.length || new Set(ids).size !== ids.length || active.some((agent) => !ids.includes(agent.id))) {
+      throw rpcError('invalid_argument', 'The roster order is out of date.')
+    }
+    const ordered = active.map((agent) => {
+      const sortOrder = ids.indexOf(agent.id)
+      return sortOrder === agent.sortOrder ? agent : { ...agent, sortOrder, updatedAt: new Date().toISOString() }
+    }).sort((a, b) => a.sortOrder - b.sortOrder)
+    agents = sortAgents(agents.map((agent) => ordered.find((item) => item.id === agent.id) ?? agent))
+    for (const agent of ordered) if (!active.includes(agent)) notifyFixtureDaemon('agent.changed', { action: 'reordered', agent, agentId: agent.id })
+    return { agents: ordered } as T
+  }
+  if (method === 'push.key') return { publicKey: 'cHJldmlldw', enabled: flags().get('demo-push') !== 'off-at-computer' } as T
+  if (method === 'push.subscribe') return { subscribed: true } as T
+  if (method === 'push.unsubscribe') return { subscribed: false } as T
+  if (method === 'diagnostics.preview') return diagnosticsPreview as T
+  if (method === 'runtime.profile.list') return { profiles: [...fixtureProfiles.values()] } as T
+  if (method === 'runtime.profile.save') {
+    const profile = params.profile
+    const key = profile && typeof profile === 'object' && 'id' in profile && typeof profile.id === 'string' ? profile.id : ''
+    fixtureProfiles.set(key, profile ?? null)
+    return { saved: true } as T
+  }
+  if (method === 'runtime.profile.delete') {
+    fixtureProfiles.delete(typeof params.profileId === 'string' ? params.profileId : '')
+    return { deleted: true } as T
+  }
+  if (method === 'runtime.auth.clear') {
+    if (!params.runtimeId) throw rpcError('invalid_argument', 'runtimeId is required')
+    const runtime = baseRuntimes.find((item) => item.id === params.runtimeId)
+    if (!runtime) throw rpcError('not_found', 'Runtime not found.')
+    clearedSignIns.add(runtime.id)
+    const { runtimes } = currentSnapshot()
+    notifyFixtureDaemon('runtime.changed', { runtimes })
+    return { runtimes } as T
+  }
+  if (method === 'usage.summary') {
+    const from = typeof params.from === 'string' ? params.from : '0000'
+    const to = typeof params.to === 'string' ? params.to : '9999'
+    return { from, to, inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, reasoningTokens: null } as T
+  }
+  if (method === 'owner_computer.stop') {
+    const stopped = ownerGrantLive && (!params.sessionId || params.sessionId === 'session-codex')
+    if (stopped) {
+      ownerGrantLive = false
+      notifyFixtureDaemon('owner_computer.grant', { sessionId: 'session-codex', agentId: 'agent-codex', state: 'ended', endsAt: null })
+    }
+    return { stopped } as T
+  }
+  if (method === 'message.image') {
+    const session = sessions.find((item) => item.id === params.sessionId)
+    const message = session?.messages?.find((item) => item.id === params.messageId)
+    const index = params.index
+    if (typeof index !== 'number' || !Number.isInteger(index) || index < 0) throw rpcError('invalid_argument', 'index must be the position of an image in this message')
+    const attachments: unknown[] = Array.isArray(message?.attachments) ? message.attachments : []
+    const attachment = attachments[index]
+    if (!attachment || typeof attachment !== 'object' || !('name' in attachment)) throw rpcError('not_found', 'That image is not part of this message.')
+    if (flags().get('demo-image') === 'missing') throw rpcError('not_found', 'The image file is no longer available.')
+    const image = await readClipboardImage()
+    const dataUrl = 'data:image/png;base64,' + btoa(Array.from(image, (byte) => String.fromCharCode(byte)).join(''))
+    return { messageId: message?.id, index, name: attachment.name, mediaType: 'image/png', dataUrl } as T
+  }
+  if (method === 'exec.snapshot.latest' || method === 'session.warm' || method === 'session.model.plan') {
+    if (!params.sessionId) throw rpcError('invalid_argument', 'sessionId is required')
+    const session = sessions.find((item) => item.id === params.sessionId)
+    if (!session) throw rpcError('not_found', 'Conversation not found.')
+    if (method === 'exec.snapshot.latest') {
+      if (!flags().has('demo-execution') || !session.model) return null as T
+      const model = session.model
+      return {
+        id: 'preview-execution', sessionId: session.id, turnId: 'turn-codex-1', agentId: session.agentId,
+        runtimeId: session.runtimeId, provider: 'codex', createdAt: minutesAgo(8), status: 'applied',
+        requested: { model }, applied: { model: { requested: model, applied: true } },
+        evidence: { model: { kind: 'provider_echo', value: model } }, instructionSha256: null, adapterFlags: {},
+      } as T
+    }
+    if (method === 'session.warm') {
+      const active = warmedSessions.has(session.id)
+      const warming = !active && session.state === 'idle' && !session.archived && session.link?.kind !== 'side' && session.link?.kind !== 'automation' && !flags().has('offline')
+      if (warming) warmedSessions.add(session.id)
+      return { warming, active } as T
+    }
+    const model = typeof params.model === 'string' ? params.model.trim() : ''
+    if (!model) throw rpcError('invalid_argument', 'Choose a concrete model. Conversation model selections cannot be unset.')
+    const provider = baseRuntimes.find((item) => item.id === session.runtimeId)?.provider ?? ''
+    const currentModel = session.model ?? null
+    const modelChanged = currentModel !== model
+    const hasHistory = Boolean(session.messages?.length)
+    const continuity = modelChanged && hasHistory ? 'recap' : 'none'
+    const reason = continuity === 'recap'
+      ? 'This runtime cannot switch models inside a chat, so the new model starts a fresh session and is given a short summary of the conversation; it will not have the full working memory.'
+      : modelChanged ? 'There is no conversation context to lose, so the new model starts a fresh provider session.' : 'This conversation already uses this model.'
+    const plan = { ok: true, sessionId: session.id, provider, currentModel, nextModel: model, modelChanged, hasHistory, continuity, busy: session.state !== 'idle', contextAtRisk: continuity === 'recap', locked: false, reason } satisfies ModelChangePlan & { ok: boolean; sessionId: string; provider: string; currentModel: string | null; nextModel: string; hasHistory: boolean }
+    return plan as T
+  }
+  if (method === 'manager.troubleshoot') {
+    const original = sessions.find((item) => item.id === params.sessionId)
+    const manager = agents.find((agent) => agent.systemRole === 'manager' && !agent.archived)
+    if (!params.sessionId) throw rpcError('invalid_argument', 'sessionId is required.')
+    if (!manager) throw rpcError('conflict', 'There is no CEO yet. Set up a CEO first, then ask them to troubleshoot.')
+    if (!original) throw rpcError('not_found', 'That conversation is no longer available.')
+    const session: Session = {
+      id: `preview-troubleshoot-${sessions.length}`, runtimeId: manager.runtimeId, agentId: manager.id,
+      title: `Troubleshoot: ${original.title}`, state: 'idle', updatedAt: new Date().toISOString(),
+      messages: [
+        { id: 'm-troubleshoot-request', role: 'user', content: `Troubleshoot the failed turn in "${original.title}".`, createdAt: new Date().toISOString() },
+        { id: 'm-troubleshoot', role: 'assistant', content: 'The coding agent stopped before completing the turn. Check its sign-in and retry the message.', createdAt: new Date().toISOString() },
+      ],
+    }
+    sessions = [...sessions, session]
+    notifyFixtureDaemon('session.changed', { session })
+    return { sessionId: session.id } as T
+  }
+
   if (method === 'app.snapshot') return await fetchSnapshot() as T
   if (method === 'permissions.policy.get') return await permissionsPolicyGet() as T
   if (method === 'session.prompt' || method.startsWith('session.suggestion.')) { const reply = (await import('./fixtureSuggestions')).fixtureSuggestionRpc(method, params, fixtureSettings, daemonListeners, notifyFixtureDaemon); if (reply !== undefined) return reply as T }
@@ -759,12 +917,27 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   if (method === 'machine.list') return { machines: fixtureMachines() } as T
   if (method === 'machine.refresh' || method === 'machine.rename') return { ok: true } as T
   if (method === 'machine.remove') { fixtureMachineList = fixtureMachines().filter((item) => item.id !== params.id); return { removed: true, signedOut: true } as T }
-  if (method === 'machine.probe') return (String(params.url).includes('ts.net')
+  if (method === 'machine.probe') {
+    const probe = flags().get('demo-machine-probe')
+    if (probe === 'unreachable' || probe === 'wrong-server') return { origin: params.url, reachable: probe === 'wrong-server', isRetinue: false, auth: 'code', fingerprint: null, trusted: false } as T
+    return (String(params.url).includes('ts.net')
     ? { origin: String(params.url), reachable: true, isRetinue: true, auth: 'code', fingerprint: null, trusted: true }
     : { origin: String(params.url), reachable: true, isRetinue: true, auth: 'password', fingerprint: 'AB:12:9F:44:0C:7E:D1:52:6A:33:BE:08:91:C4:7F:20:5D:EE:16:48:A9:02:C7:3B:60:1F:84:D5:72:96:BC:0E', trusted: false }) as T
+  }
   if (method === 'machine.pair.begin') {
     fixturePairJob = { id: 'preview-pair', url: String(params.url), state: 'pending', detail: null, machine: null }
-    window.setTimeout(() => { fixturePairJob = { ...fixturePairJob!, state: 'approved', machine: { id: 'preview-laptop', name: 'Work laptop' } } }, 2500)
+    const job = fixturePairJob
+    window.setTimeout(() => {
+      if (fixturePairJob !== job) return
+      const mode = flags().get('demo-machine-pair') ?? ''
+      const details: Record<string, string> = pairingFailures
+      const detail = details[mode]
+      fixturePairJob = detail ? { ...job, state: 'failed', detail }
+        : mode === 'expired' || mode === 'rejected' || mode === 'cancelled' ? { ...job, state: mode }
+        : mode === 'failed' ? { ...job, state: 'failed' }
+        : { ...job, state: 'approved', machine: { id: 'preview-laptop', name: 'Work laptop' } }
+      notifyFixtureDaemon('machine.pair.changed', { job: fixturePairJob })
+    }, 1800)
     return { job: fixturePairJob } as T
   }
   if (method === 'machine.pair.list') return { jobs: fixturePairJob ? [fixturePairJob] : [] } as T
@@ -852,7 +1025,15 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     return { job: fixtureTakeOver } as T
   }
   if (method === 'machine.takeOver.list') return { jobs: fixtureTakeOver ? [fixtureTakeOver] : [] } as T
-  if (method === 'project.sharedSettings.get') return fixtureShared as T
+  if (method === 'project.sharedSettings.get') {
+    const demo = flags().get('demo-shared')
+    if (demo && fixtureShared.state === 'untrusted') {
+      if (demo === 'trusted') fixtureShared = { ...fixtureShared, trusted: true, state: 'trusted' }
+      if (demo === 'invalid') fixtureShared = { found: true, valid: false, problems: ["The file isn't valid JSON."], settings: null, hash: null, trusted: false, state: 'invalid' }
+      if (demo === 'missing') fixtureShared = { found: false, valid: false, problems: [], settings: null, hash: null, trusted: false, state: 'none' }
+    }
+    return fixtureShared as T
+  }
   if (method === 'project.sharedSettings.trust') { fixtureShared = { ...fixtureShared, trusted: true, state: 'trusted' }; return fixtureShared as T }
   if (method === 'project.sharedSettings.untrust') { fixtureShared = { ...fixtureShared, trusted: false, state: 'untrusted' }; return fixtureShared as T }
   if (method === 'project.sharedSettings.write') return fixtureShared as T
@@ -885,6 +1066,7 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     return { files: found.slice(0, Number(params.limit ?? 20)), truncated: false, source: 'git' } as T
   }
   if (method === 'project.content.search') {
+    if (flags().has('demo-search-pattern')) return { results: [], truncated: false, source: 'walk', reason: "That isn't a valid search pattern." } as T
     if (params.regex === true && /[[(]$/.test(String(params.query))) return { results: [], truncated: false, source: 'git', reason: "That isn't a valid search pattern." } as T
     const query = String(params.query ?? '')
     if (query === 'nothing') return { results: [], truncated: false, source: 'git', reason: null } as T
@@ -1213,7 +1395,37 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   }
   if (typeof method === 'string' && method.startsWith('skills.')) {
     const find = () => fixtureSkills.find((item) => item.name === params.name)
-    if (method === 'skills.list') return { skills: fixtureSkills.map((item) => ({ ...item, disabledFor: [...(item.disabledFor as string[])] })) } as T
+    if (method === 'skills.list') return { skills: [...fixtureSkills.map((item) => ({ ...item, disabledFor: [...(item.disabledFor as string[])] })), ...[...learnedSkills.values()].map((skill) => ({ ...skill, source: 'agent' }))] } as T
+    if (method === 'skills.learned.list') {
+      const review = typeof params.reviewState === 'string' ? params.reviewState.trim() || 'all' : 'all'
+      if (review !== 'all' && review !== 'pending' && review !== 'approved') throw rpcError('invalid_argument', 'reviewState must be pending, approved or all')
+      const skills = [...learnedSkills.values()]
+        .filter((skill) => (review === 'all' || skill.reviewState === review) && (!params.agentId || skill.learnedBy === params.agentId))
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      return { skills } as T
+    }
+    if (method === 'skills.learned.approve' || method === 'skills.learned.edit' || method === 'skills.learned.forget') {
+      const name = typeof params.name === 'string' ? params.name : ''
+      const previous = learnedSkills.get(name)
+      if (!previous) throw rpcError('not_found', 'That skill is not in the pool.')
+      const action = method === 'skills.learned.approve' ? 'approved' : method === 'skills.learned.edit' ? 'edited' : 'forgotten'
+      if (action === 'forgotten') {
+        if (params.confirm !== true) throw rpcError('invalid_argument', 'Confirm forgetting this skill first.')
+        learnedSkills.delete(name)
+        learnedBodies.delete(name)
+        notifyFixtureDaemon('skills.learned.changed', { action, name, agentId: previous.learnedBy })
+        return { forgotten: true } as T
+      }
+      const skill: LearnedSkill = { ...previous, reviewState: 'approved', updatedAt: new Date().toISOString() }
+      if (action === 'edited') {
+        skill.ownerEdited = true
+        if (typeof params.description === 'string') skill.description = params.description
+        if (typeof params.body === 'string') learnedBodies.set(name, params.body)
+      }
+      learnedSkills.set(name, skill)
+      notifyFixtureDaemon('skills.learned.changed', { action, name, agentId: skill.learnedBy })
+      return { skill } as T
+    }
     if (method === 'skills.forAgent') {
       const agentId = typeof params.agentId === 'string' ? params.agentId : ''
       if (!agentId) throw rpcError('invalid_argument', 'agentId is required')
@@ -1221,6 +1433,11 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       return { skills } as T
     }
     if (method === 'skills.get') {
+      const learned = typeof params.name === 'string' ? learnedSkills.get(params.name) : undefined
+      if (learned) {
+        const body = learnedBodies.get(learned.name) ?? '# Invoice tests\n\nRun the invoice parser regression suite.'
+        return { name: learned.name, description: learned.description, body, files: [{ path: 'SKILL.md', bytes: new TextEncoder().encode(body).length }] } as T
+      }
       const skill = find()
       if (!skill) throw rpcError('not_found', 'That skill is not in the pool.')
       return { name: skill.name, description: skill.description, body: `# ${skill.name}\n\n${skill.description}\n\n1. Read the input.\n2. Follow the steps.\n3. Report what changed.`, files: [{ path: 'SKILL.md', bytes: 1200 }, { path: 'scripts/run.py', bytes: 3400 }] } as T
@@ -1348,6 +1565,15 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   if (method === 'project.scaffold.status') return { git: true, gh: { available: true, login: 'preview-user', loginChecked: true } } as T
   if (method === 'project.scaffold.login') return { login: 'preview-user', loginChecked: true } as T
   if (method === 'project.scaffold') {
+    const failure = flags().get('demo-scaffold-step')
+    if (failure === 'folder' || failure === 'first_commit') {
+      const ids = ['folder', 'project', 'git_init', 'first_commit', 'github']
+      const failedAt = ids.indexOf(failure)
+      return { project: failure === 'folder' ? null : { id: 'project-demo-scaffold', name: params.name, path: `${params.parentPath}/${params.name}` }, githubUrl: null, steps: ids.map((id, index) => ({
+        id, status: index === failedAt ? 'failed' : index < failedAt ? 'done' : 'skipped',
+        detail: index === failedAt ? scaffoldFailures[failure] : index < failedAt ? null : id === 'github' && !params.github ? 'Not asked for.' : 'An earlier step failed.',
+      })) } as T
+    }
     if (params.confirm !== true) throw rpcError('invalid_argument', 'Confirm creating the project first.')
     const name = String(params.name ?? '').trim()
     const path = `${String(params.parentPath ?? 'C:/work')}/${name}`
@@ -2070,6 +2296,10 @@ export async function fetchSnapshot() {
     setPreviewSelection('agent-invoice')
     for (const session of sessions.filter((item) => item.agentId === 'agent-invoice')) session.state = 'idle'
   }
+  if (flags().has('demo-execution')) {
+    const recorded = sessions.find((session) => session.id === 'session-codex')
+    if (recorded) recorded.updatedAt = new Date().toISOString()
+  }
   const snapshot = currentSnapshot()
   snapshot.remote = await remoteSimulator.call('remote.status', {}) as RemoteStatus
   return snapshot
@@ -2089,15 +2319,21 @@ export async function restartDaemonNow(): Promise<DaemonSupervisor> {
   window.setTimeout(() => setFixtureConnection(true, 'running'), 1100)
   return fixtureSupervisor
 }
-export async function openProjectFolder() { return null }
+export async function openProjectFolder() { return flags().has('demo-project-folder') ? 'C:/work' : null }
 export async function selectLocalFile() { return null }
 let stagedAttachmentSerial = 0
 export async function stagePromptAttachment(bytes: Uint8Array) {
+  if (flags().get('demo-clipboard') === 'stage') throw new Error('The image could not be read.')
   if (!bytes.length) throw new Error('The image could not be read.')
   stagedAttachmentSerial += 1
   return `C:/preview/attachments/staged-${stagedAttachmentSerial}.png`
 }
 export async function readClipboardImage() {
+  const fault = flags().get('demo-clipboard')
+  if (fault === 'empty') throw new Error('The clipboard does not contain a readable image.')
+  const failures: Record<string, string> = clipboardReadFailures
+  const message = fault && failures[fault]
+  if (message) throw new Error(message)
   const response = await fetch('/src/assets/brand/retinue-tile-dark.png')
   if (!response.ok) throw new Error('The preview image is unavailable.')
   return new Uint8Array(await response.arrayBuffer())
@@ -2119,27 +2355,37 @@ export async function writeBlobExport(_selectionToken: string, _text: string) {}
 export type BackupInclude = { memory?: boolean; skills?: boolean; automations?: boolean; settings?: boolean }
 export type BackupExportRequest = BackupInclude & { agentIds?: string[] }
 export type BackupStats = { bots: number; memory: number; skills: number; automations: number; settings: number }
-export async function selectBackupExportPath(_suggestedName?: string) { return 'preview-backup-export-token' }
-export async function selectBackupImportPath() { return 'preview-backup-import-token' }
-export type DiagnosticsPreview = { generatedAt: string; fileName: string; files: { name: string; sizeBytes: number }[] }
-export async function selectDiagnosticsExportPath() { return 'preview-diagnostics-token' }
+export async function selectBackupExportPath(_suggestedName?: string) {
+  if (flags().get('demo-backup') === 'save-dialog') throw { code: 'internal' }
+  return 'preview-backup-export-token'
+}
+export async function selectBackupImportPath() {
+  if (flags().get('demo-backup') === 'open-dialog') throw { code: 'internal' }
+  return 'preview-backup-import-token'
+}
+export type { DiagnosticsPreview } from '../tauri'
+const diagnosticsPreview: DiagnosticsPreview = {
+  generatedAt: '2026-10-18T12:00:00Z', fileName: 'retinue-diagnostics-2026-10-18.zip',
+  files: [
+    { name: 'README.txt', sizeBytes: 900 }, { name: 'environment.json', sizeBytes: 640 },
+    { name: 'settings.json', sizeBytes: 1_240 }, { name: 'events.json', sizeBytes: 12_800 },
+    { name: 'logs/daemon.2026-10-18.log', sizeBytes: 33_932 },
+  ],
+}
+export async function selectDiagnosticsExportPath() {
+  if (flags().get('demo-diagnostics') === 'dialog-error') throw { code: 'internal' }
+  return 'preview-diagnostics-token'
+}
 export async function writeDiagnosticsExport(_selectionToken: string): Promise<{ path: string; sizeBytes: number; files: { name: string; sizeBytes: number }[] }> {
-  return {
-    path: 'C:\\Users\\you\\Documents\\retinue-diagnostics-2026-10-18.zip',
-    sizeBytes: 48_512,
-    files: [
-      { name: 'README.txt', sizeBytes: 900 },
-      { name: 'environment.json', sizeBytes: 640 },
-      { name: 'settings.json', sizeBytes: 1_240 },
-      { name: 'events.json', sizeBytes: 12_800 },
-      { name: 'logs/daemon.2026-10-18.log', sizeBytes: 33_932 },
-    ],
-  }
+  if (flags().get('demo-diagnostics') === 'write-error') throw { code: 'internal' }
+  return { path: `C:/Users/you/Documents/${diagnosticsPreview.fileName}`, sizeBytes: 48_512, files: diagnosticsPreview.files }
 }
 export async function writeBackupExport(_selectionToken: string, _include?: BackupExportRequest) {
+  if (flags().get('demo-backup') === 'write') throw { code: 'internal' }
   return { path: 'C:\\Users\\you\\Documents\\retinue-backup-2026-10-17.retinue-backup.json', stats: { bots: agents.length, memory: fixtureMemory.length, skills: fixtureSkills.length, automations: 1, settings: 9 } }
 }
 export async function previewBackupImport(_selectionToken: string) {
+  if (flags().get('demo-backup') === 'read') throw { code: 'invalid_argument' }
   return {
     previewId: 'preview-backup',
     counts: { bots: 3, memory: 14, skills: 2, automations: 1, settings: 9 },
@@ -2363,6 +2609,12 @@ function startFixtureTurn(session: Session, id: string, reply: ChatMessage, mode
 }
 
 function scheduleLiveDemo() {
+  if (ownerGrantLive && !ownerGrantScheduled) {
+    ownerGrantScheduled = true
+    window.setTimeout(() => {
+      if (ownerGrantLive) notifyFixtureDaemon('owner_computer.grant', { sessionId: 'session-codex', agentId: 'agent-codex', state: 'live', endsAt: new Date(Date.now() + 300_000).toISOString() })
+    }, 500)
+  }
   if (!demoLive || demoScheduled) return
   demoScheduled = true
   window.setTimeout(() => {
@@ -2650,11 +2902,16 @@ function previewVaultChannelsPi(method: string, params: Record<string, unknown>)
 }
 
 // ---- Preview-only connectors (docs/plans/nod-adoption-plan.md, D). Addresses here are placeholders, not checked.
-type PreviewConnector = { id: string; name: string; url: string; auth: 'none' | 'token' | 'oauth'; enabled: boolean; status: 'ok' | 'error' | 'unchecked'; detail: string | null; toolCount: number | null; unattended: 'off' | 'readOnly'; lastCheckedAt: string | null }
+type PreviewConnector = Connector
 let previewConnectors: PreviewConnector[] = flags().get('connectors') === 'empty' ? [] : [
   { id: 'c1', name: 'Linear', url: 'https://mcp.linear.app/mcp', auth: 'token', enabled: true, status: 'ok', detail: null, toolCount: 4, unattended: 'readOnly', lastCheckedAt: minutesAgo(12) },
   { id: 'c2', name: 'Internal wiki', url: 'https://wiki.example.com/mcp', auth: 'token', enabled: true, status: 'error', detail: 'The server refused the token (401).', toolCount: null, unattended: 'off', lastCheckedAt: minutesAgo(90) },
 ]
+const oauthSeed = flags().get('demo-oauth')
+if (oauthSeed) previewConnectors = [{ id: 'preview-oauth', name: 'Example connector', url: 'https://connector.example.invalid/mcp', auth: 'oauth', enabled: true, status: 'unchecked', detail: null, toolCount: null, unattended: 'off', lastCheckedAt: null }]
+const oauthStates = new Map<string, ConnectorSignIn>()
+const oauthTimers = new Map<string, number>()
+
 const previewConnectorTools: Record<string, Array<{ name: string; title: string | null; description: string; readOnly: boolean | null; rule: 'ask' | 'allow' | 'deny' }>> = {
   c1: [
     { name: 'list_issues', title: 'List issues', description: 'Find issues by team, state or text.', readOnly: true, rule: 'allow' },
@@ -2671,9 +2928,39 @@ const previewCatalogue = [
 ]
 function previewConnectorsRpc(method: string, params: Record<string, unknown>): unknown {
   switch (method) {
+    case 'connector.oauth.status':
+    case 'connector.oauth.start':
+    case 'connector.oauth.cancel': {
+      const connector = previewConnectors.find((item) => item.id === params.id)
+      if (!connector) throw rpcError('not_found', 'Connector not found.')
+      const { id, auth } = connector
+      const update = (status: ConnectorSignIn['status'], detail: string | null = null, expiresAt: string | null = null) => {
+        const state: ConnectorSignIn = { id, auth, status, detail, expiresAt }
+        oauthStates.set(id, state)
+        notifyFixtureDaemon('connector.oauth.changed', state)
+      }
+      if (method === 'connector.oauth.status') return oauthStates.get(id) ?? { id, auth, status: 'idle', detail: null, expiresAt: null } satisfies ConnectorSignIn
+      const timer = oauthTimers.get(id)
+      if (timer !== undefined) window.clearTimeout(timer)
+      oauthTimers.delete(id)
+      if (method === 'connector.oauth.cancel') {
+        const cancelled = oauthStates.get(id)?.status === 'pending'
+        if (cancelled) update('idle')
+        return { cancelled }
+      }
+      if (auth !== 'oauth') throw rpcError('invalid_argument', 'This connector does not use browser sign-in.')
+      const expiresAt = new Date(Date.now() + 300_000).toISOString()
+      update('pending', null, expiresAt)
+      if (oauthSeed !== 'pending') oauthTimers.set(id, window.setTimeout(() => {
+        oauthTimers.delete(id)
+        if (oauthSeed === 'error') update('error', 'The sign-in was not completed in time. Try again.')
+        else update('authorized')
+      }, 1200))
+      return { status: 'pending', authorizationUrl: 'https://connector.example.invalid/authorize', expiresAt }
+    }
     case 'connector.list': return { connectors: previewConnectors, catalogue: previewCatalogue }
     case 'connector.add': {
-      const connector: PreviewConnector = { id: `c${Date.now()}`, name: String(params.name), url: String(params.url), auth: params.token ? 'token' : 'none', enabled: true, status: 'ok', detail: null, toolCount: 3, unattended: 'off', lastCheckedAt: new Date().toISOString() }
+      const connector: PreviewConnector = { id: `c${Date.now()}`, name: String(params.name), url: String(params.url), auth: params.auth === 'oauth' ? 'oauth' : params.token ? 'token' : 'none', enabled: true, status: 'ok', detail: null, toolCount: 3, unattended: 'off', lastCheckedAt: new Date().toISOString() }
       previewConnectors = [...previewConnectors, connector]
       previewConnectorTools[connector.id] = [{ name: 'search', title: 'Search', description: 'Search this app.', readOnly: true, rule: 'ask' }, { name: 'read', title: 'Read', description: 'Read one item.', readOnly: true, rule: 'ask' }, { name: 'write', title: 'Write', description: 'Change one item.', readOnly: false, rule: 'ask' }]
       return { connector }

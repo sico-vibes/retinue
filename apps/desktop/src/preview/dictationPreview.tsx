@@ -5,6 +5,7 @@ import '../ui/styles.css'
 import '../ui/shell.css'
 import '../ui/companion.css'
 import { DictationIsland, type IslandPhase } from '../ui/DictationIsland'
+import { dictationReasons } from './demoWorkflowErrors'
 import { setThemeStyle } from '../blob/retinue'
 import { isThemeStyle, type ThemeStyle } from '../ui/appearance'
 
@@ -46,6 +47,16 @@ const STATES: Array<{ label: string; phase: IslandPhase; warming?: boolean; erro
 function Preview() {
   const only = new URLSearchParams(location.search).get('state')
   const since = Date.now() - 7000
+  const reason = previewParams.get('reason')
+  const variant = previewParams.get('surface') === 'companion' ? 'companion' : 'bubble'
+  if (only === 'error') {
+    const fallback = previewParams.get('fallback')
+    const errorText = reason && dictationReasons.includes(reason)
+      ? fallback === 'failed' ? `ChatGPT transcription failed (${reason}), and the on-device model could not run.`
+        : `ChatGPT transcription is unavailable (${reason}) and no on-device model is installed.`
+      : STATES.find((state) => state.phase === 'error')?.errorText
+    return <main className="dictation-preview single"><DictationIsland variant={variant} phase="error" level={0} since={since} stoppedAt={since + 7000} errorText={errorText} /></main>
+  }
   if (only === 'live') return <main className="dictation-preview single"><LiveIsland variant="bubble" /></main>
   return <main className="dictation-preview">
     <h1>Dictation</h1>
