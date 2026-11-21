@@ -122,16 +122,16 @@ fn ref_name_ok(repo: &Path, branch: &str) -> bool {
     run(repo, &["check-ref-format", "--branch", branch]).is_ok()
 }
 
-/// A free `<repo>-retinue/<slug>` folder, adding a number when the name is taken. It never reuses or
-/// removes an existing folder.
+/// A free `<repo>-retinue/<slug>` folder, adding a number and then a short random suffix when the
+/// name is taken. It never reuses or removes an existing folder.
 fn free_path(repo: &Path, branch: &str) -> Result<PathBuf, String> {
     let parent = repo.parent().ok_or_else(|| "The repository has no parent folder.".to_owned())?;
     let name = repo.file_name().and_then(|name| name.to_str()).unwrap_or("repo");
     let family = parent.join(format!("{name}{FAMILY_SUFFIX}"));
     std::fs::create_dir_all(&family).map_err(|error| format!("The task copy folder could not be created: {error}"))?;
     let slug = worktree::slug(branch.strip_prefix(PREFIX).unwrap_or(branch));
-    for attempt in 0..20usize {
-        let candidate = if attempt == 0 { family.join(&slug) } else { family.join(format!("{slug}-{}", attempt + 1)) };
+    for attempt in 0..worktree::NAME_ATTEMPTS {
+        let candidate = family.join(worktree::candidate_slug(&slug, attempt));
         if !candidate.exists() { return Ok(candidate); }
     }
     Err("No free name was available for a task copy.".to_owned())
@@ -188,6 +188,25 @@ mod tests {
         let outcome = run_limited(Path::new("."), &["-c", "alias.hang=!sleep 30", "hang"], Duration::from_millis(400));
         assert_eq!(outcome, Err("Git took too long and was stopped.".to_owned()));
         assert!(started.elapsed() < Duration::from_secs(10), "returned after {:?}", started.elapsed());
+    }
+
+    #[test]
+    fn every_numbered_name_taken_still_yields_a_short_suffix() {
+        let root = std::env::temp_dir().join(format!("retinue-attach-names-{}", uuid::Uuid::new_v4()));
+        let repo = root.join("shop");
+        let family = root.join("shop-retinue");
+        std::fs::create_dir_all(&family).unwrap();
+        for attempt in 0..worktree::NAME_ATTEMPTS {
+            std::fs::create_dir_all(family.join(worktree::candidate_slug("add-login", attempt))).unwrap();
+        }
+        let free = free_path(&repo, "retinue/add-login").expect("a free name is always found");
+        assert!(free.starts_with(&family));
+        assert!(!free.exists(), "{free:?}");
+        let name = free.file_name().unwrap().to_string_lossy().into_owned();
+        let prefix = worktree::candidate_slug("add-login", worktree::NAME_ATTEMPTS);
+        assert!(name.starts_with("add-login-"), "{name}");
+        assert_eq!(name.rsplit('-').next().unwrap().len(), prefix.rsplit('-').next().unwrap().len(), "{name}");
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[test]

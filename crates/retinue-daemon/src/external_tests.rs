@@ -496,6 +496,31 @@ async fn external_steer_and_stop_work_on_a_running_turn_and_steer_is_marked() {
 }
 
 #[tokio::test]
+async fn send_message_takes_a_folder_path_in_either_separator_and_answers_in_one() {
+    let c = fixture("operator", false).await;
+    let st = &c.st;
+    let folder = temp_dir("either-separator");
+    let project = st.db.project_create("Either", Some(&folder.to_string_lossy())).unwrap().0;
+    let project_id = project["id"].as_str().unwrap().to_owned();
+    // The spelling a model writes by hand: backslashes on Windows, slashes
+    // elsewhere, which is the other form from the one the daemon built.
+    let typed = if cfg!(windows) { folder.to_string_lossy().replace('/', "\\") } else { folder.to_string_lossy().replace('\\', "/") };
+    let (error, sent) = tool(st, "send_message", json!({"botId": c.agent, "text": "In the project", "newConversation": true, "projectPath": typed})).await;
+    assert!(!error, "{sent}");
+    let detail = st.db.session_detail(sent["sessionId"].as_str().unwrap()).unwrap();
+    assert_eq!(detail["projectId"], project_id.as_str());
+    assert_eq!(crate::worktree::normalize(Path::new(detail["projectPath"].as_str().unwrap())), crate::worktree::normalize(&folder));
+    #[cfg(windows)]
+    assert!(!detail["projectPath"].as_str().unwrap().contains('/'), "{}", detail["projectPath"]);
+    // A bot placed in that folder gets the same one form back.
+    let (error, bot) = tool(st, "update_bot", json!({"botId": c.agent, "projectPath": typed})).await;
+    assert!(!error, "{bot}");
+    let native = crate::worktree::native_string(&folder);
+    assert_eq!(bot["projectPath"].as_str(), Some(native.as_str()));
+    let _ = std::fs::remove_dir_all(&c.dir);
+}
+
+#[tokio::test]
 async fn external_worktree_send_creates_a_linked_worktree() {
     let Some(repo) = make_repo() else { return };
     let c = fixture("operator", true).await;
@@ -505,6 +530,12 @@ async fn external_worktree_send_creates_a_linked_worktree() {
     let path = PathBuf::from(sent["worktree"]["path"].as_str().unwrap());
     let branch = sent["worktree"]["branch"].as_str().unwrap().to_owned();
     assert!(path.is_dir(), "the worktree exists");
+    // One native form leaves the daemon: no `C:/…\…` mix (owner report, 21
+    // November 2026). On Windows that means backslashes only.
+    #[cfg(windows)]
+    assert!(!sent["worktree"]["path"].as_str().unwrap().contains('/'), "{}", sent["worktree"]["path"]);
+    #[cfg(not(windows))]
+    assert!(!sent["worktree"]["path"].as_str().unwrap().contains('\\'), "{}", sent["worktree"]["path"]);
     assert!(branch.starts_with("retinue/"), "{branch}");
     let session = sent["sessionId"].as_str().unwrap().to_owned();
     let detail = st.db.session_detail(&session).unwrap();

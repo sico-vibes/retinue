@@ -478,6 +478,14 @@ fn text_arg<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
     args.get(key).and_then(Value::as_str).map(str::trim).filter(|text| !text.is_empty())
 }
 
+/// A folder argument with either separator accepted, returned in one native form
+/// (owner report, 21 November 2026: a `projectPath` written `C:\Users\…` was
+/// refused where `C:/Users/…` worked). A model writes paths by hand, so both
+/// spellings mean the same folder; nothing downstream sees a mix.
+fn folder_arg(args: &Value, key: &str) -> Option<String> {
+    text_arg(args, key).map(|path| crate::worktree::native_string(Path::new(path)))
+}
+
 fn count_arg(args: &Value, key: &str, default: usize, max: usize) -> usize {
     args.get(key).and_then(Value::as_u64).map_or(default, |value| value as usize).clamp(1, max)
 }
@@ -573,7 +581,7 @@ fn project_path_of(st: &AppState, agent: &Value) -> Option<String> {
     // A bot's folder comes from the project it works in. The legacy
     // `defaultProject` path is deliberately not read any more (2026-11-01): bots
     // work across projects, so no single stored path describes where they work.
-    agent["projectId"].as_str().and_then(|id| st.db.project_get(id).ok()).and_then(|project| project["path"].as_str().filter(|path| !path.is_empty()).map(str::to_owned))
+    agent["projectId"].as_str().and_then(|id| st.db.project_get(id).ok()).and_then(|project| project["path"].as_str().filter(|path| !path.is_empty()).map(|path| crate::worktree::native_string(Path::new(path))))
 }
 
 /// A bot as the MCP shows it: allowlisted fields only (never instructions, environment or profile values).
@@ -1031,9 +1039,9 @@ async fn send_message(st: &AppState, tier: Tier, args: &Value) -> ToolResult {
                 let folder = project["path"].as_str().map(PathBuf::from).filter(|path| path.is_dir()).ok_or_else(|| "That project has no folder on this computer.".to_owned())?;
                 project_id = Some(wanted.to_owned());
                 named_folder = Some(folder);
-            } else if let Some(path) = text_arg(args, "projectPath") {
-                allowed_folder(st, tier, &agent, path)?;
-                let wanted = crate::worktree::normalize(Path::new(path));
+            } else if let Some(path) = folder_arg(args, "projectPath") {
+                allowed_folder(st, tier, &agent, &path)?;
+                let wanted = crate::worktree::normalize(Path::new(&path));
                 project_id = st.db.project_list().unwrap_or_default().iter()
                     .find(|row| row["path"].as_str().is_some_and(|known| crate::worktree::normalize(Path::new(known)) == wanted))
                     .and_then(|row| row["id"].as_str().map(str::to_owned));
@@ -1064,7 +1072,7 @@ async fn send_message(st: &AppState, tier: Tier, args: &Value) -> ToolResult {
                         link = json!({"kind": "main", "worktree": made.to_json()});
                         worktree = Some(made.to_json());
                     }
-                    let mut params = json!({"agentId": bot, "projectPath": folder.to_string_lossy(), "lazy": true, "link": link});
+                    let mut params = json!({"agentId": bot, "projectPath": crate::worktree::native_string(&folder), "lazy": true, "link": link});
                     if let Some(project_id) = &project_id { params["projectId"] = json!(project_id); }
                     // B2: the conversation says it was started through the MCP.
                     let origin = origin(Some(client_name));
@@ -1153,15 +1161,15 @@ async fn create_bot(st: &AppState, args: &Value) -> ToolResult {
     let name = text_arg(args, "name").ok_or("name is required.")?;
     let runtime_id = text_arg(args, "runtimeId").ok_or("runtimeId is required.")?;
     let model = text_arg(args, "model").ok_or("model is required.")?;
-    let project = text_arg(args, "projectPath").ok_or("projectPath is required.")?;
+    let project = folder_arg(args, "projectPath").ok_or("projectPath is required.")?;
     let mode = text_arg(args, "approvalMode").unwrap_or("ask");
     check_mode(st, mode)?;
-    if !Path::new(project).is_dir() { return Err("projectPath must be an existing folder.".to_owned()); }
+    if !Path::new(&project).is_dir() { return Err("projectPath must be an existing folder.".to_owned()); }
     let mut fields = json!({"name": name, "runtimeId": runtime_id, "model": model, "approvalMode": mode});
     if let Some(effort) = text_arg(args, "effort") { fields["thinking"] = json!(effort); }
     if let Some(role) = text_arg(args, "role") { fields["role"] = json!(role); }
     if let Some(icons) = args.get("replyIcons") { fields["replyIcons"] = json!(icons.as_bool().ok_or("replyIcons must be true or false.")?); }
-    let project_id = project_for_folder(st, project).await?;
+    let project_id = project_for_folder(st, &project).await?;
     let created = crate::agent_create_from_rpc(st, fields).await.map_err(fail)?;
     let agent_id = created["id"].as_str().unwrap_or("").to_owned();
     if !project_id.is_empty() {
@@ -1226,8 +1234,11 @@ async fn update_bot(st: &AppState, args: &Value) -> ToolResult {
         None => None,
         Some(Value::Null) => Some(None),
         Some(_) => {
-            let folder = text_field(args, "projectPath", 1000, false)?.unwrap_or("");
-            if !Path::new(folder).is_dir() { return Err("projectPath must be an existing folder.".to_owned()); }
+            // The field check keeps the length rule; the folder itself is taken in
+            // one native form.
+            text_field(args, "projectPath", 1000, false)?;
+            let folder = folder_arg(args, "projectPath").unwrap_or_default();
+            if !Path::new(&folder).is_dir() { return Err("projectPath must be an existing folder.".to_owned()); }
             Some(Some(folder))
         }
     };
@@ -1237,7 +1248,7 @@ async fn update_bot(st: &AppState, args: &Value) -> ToolResult {
         crate::dispatch(st, "agent.update", fields).await.map_err(fail)?;
     }
     match folder {
-        Some(Some(folder)) => { team["projectId"] = json!(project_for_folder(st, folder).await?); }
+        Some(Some(folder)) => { team["projectId"] = json!(project_for_folder(st, &folder).await?); }
         Some(None) => { team["projectId"] = Value::Null; }
         None => {}
     }

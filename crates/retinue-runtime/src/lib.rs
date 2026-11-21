@@ -11,7 +11,7 @@ use std::{
     process::Stdio,
 };
 use tokio::{
-    io::AsyncReadExt,
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
     process::Command,
     time::{timeout, Duration},
 };
@@ -22,6 +22,10 @@ pub use account::{from_claude_status, from_codex_account_read, from_opencode_aut
 
 /// Sign-in probe budget for Claude and Codex.
 const SIGN_IN_TIMEOUT_SECS: u64 = 5;
+/// The ACP sign-in probe is a full `initialize` + `session/new` exchange, so it
+/// gets more room than a status subcommand (the ACP adapter itself bounds
+/// `session/new` at 20 s; discovery's own budget is 31 s).
+const ACP_SIGN_IN_TIMEOUT_SECS: u64 = 10;
 /// OpenCode 2 answers commands through a background service, so a cold
 /// `auth list` can take several seconds. The whole OpenCode sign-in phase gets
 /// 15 s, and each probe in it may use the full budget: the first probe can
@@ -237,7 +241,17 @@ pub async fn discover_except(disabled: &[String]) -> Vec<DiscoveredRuntime> {
     // instead.
     let environment = discovery_environment();
     let probes = specs.into_iter().map(|(id, resolved, off)| { let environment = &environment; async move { if off { None } else { discover_one(id, resolved, environment).await } } });
-    futures_util::future::join_all(probes).await.into_iter().flatten().collect()
+    one_per_provider(futures_util::future::join_all(probes).await.into_iter().flatten().collect())
+}
+
+/// One runtime per provider, always. Two answers for one provider (two copies of
+/// a CLI, a table row beside a legacy one) would give the Agents page two rows
+/// for one coding agent, and one of them a runtime id no bot is on. The first
+/// answer wins; discovery asks each provider once, so this is a guard, not a
+/// choice.
+pub fn one_per_provider(runtimes: Vec<DiscoveredRuntime>) -> Vec<DiscoveredRuntime> {
+    let mut seen = std::collections::HashSet::new();
+    runtimes.into_iter().filter(|runtime| seen.insert(runtime.provider.clone())).collect()
 }
 
 #[cfg(test)]
@@ -387,6 +401,12 @@ async fn auth_status(provider: &str, exe: &Path, args: &[String], environment: &
     if provider == "pi" {
         return pi_auth_status(environment);
     }
+    // Every other ACP provider is asked over its own protocol: `initialize`,
+    // then `session/new`. No credential file or keyring is opened; the CLI
+    // answers from the sign-in it already holds (Google's keyring for `agy`).
+    if is_acp_provider(provider) {
+        return acp_auth_status(provider, exe, args).await;
+    }
     let mut av = args.iter().map(String::as_str).collect::<Vec<_>>();
     match provider {
         "claude" => av.extend(["auth", "status"]),
@@ -417,6 +437,126 @@ async fn auth_status(provider: &str, exe: &Path, args: &[String], environment: &
     };
     SignIn { state, gateways: BTreeMap::new(), error: None, output: Some(out) }
 }
+
+/// An ACP provider's sign-in, asked over its own protocol. `initialize` is
+/// followed by a throwaway `session/new`: a session that opens proves the server
+/// accepted the CLI's stored sign-in, and the auth error an ACP server returns
+/// when nothing is signed in (`-32000` "Authentication required" for `agy`)
+/// proves the opposite. Anything else is unknown.
+///
+/// No credential file, keyring entry or token is read: the CLI answers from the
+/// sign-in it already holds, which for Antigravity is Google's own keyring
+/// profile. The probe is bounded and its process tree is killed afterwards.
+async fn acp_auth_status(provider: &str, exe: &Path, args: &[String]) -> SignIn {
+    let state = timeout(Duration::from_secs(ACP_SIGN_IN_TIMEOUT_SECS), acp_sign_in_probe(provider, exe, args))
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or(AuthState::Unknown);
+    // Quietly unknown, with no probe failure: the protocol check above already
+    // proved the CLI runs, and an answer the server did not give must never be
+    // read as signed out (or fail the whole scan and set off its retry backoff).
+    SignIn::new(state, BTreeMap::new(), None)
+}
+
+async fn acp_sign_in_probe(provider: &str, exe: &Path, args: &[String]) -> Option<AuthState> {
+    let cwd = AcpProbeDirectory::new(provider)?;
+    let cwd_arg = cwd.path().to_string_lossy().into_owned();
+    let mut command = Command::new(exe);
+    prepare_command(&mut command);
+    command
+        .args(args)
+        .current_dir(cwd.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true);
+    // The unit tests drive this probe with the test binary standing in for the
+    // CLI; the marker tells the fixture it is the child of a probe, so the
+    // ordinary suite run only prints nothing.
+    #[cfg(test)]
+    command.env("RETINUE_ACP_PROBE_FIXTURE", "1");
+    let mut child = command.spawn().ok()?;
+    let process_tree = ProcessTree::attach(&mut child).ok()?;
+    let outcome = acp_sign_in_exchange(&mut child, &cwd_arg).await;
+    let _ = process_tree.terminate();
+    let _ = child.kill().await;
+    let _ = child.wait().await;
+    outcome
+}
+
+async fn acp_sign_in_exchange(child: &mut tokio::process::Child, cwd: &str) -> Option<AuthState> {
+    let mut stdin = child.stdin.take()?;
+    let stdout = child.stdout.take()?;
+    let mut lines = BufReader::new(stdout).lines();
+    write_rpc(&mut stdin, &serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": 1, "clientCapabilities": {}, "clientInfo": {"name": "Retinue", "version": env!("CARGO_PKG_VERSION")}}
+    })).await?;
+    let ready = read_rpc(&mut lines, 1).await?;
+    // Only `session/new` answers the sign-in question. A server that cannot
+    // initialize says nothing about who is signed in.
+    if !ready.get("error").is_none_or(serde_json::Value::is_null) {
+        return None;
+    }
+    write_rpc(&mut stdin, &serde_json::json!({"jsonrpc": "2.0", "method": "initialized", "params": {}})).await?;
+    write_rpc(&mut stdin, &serde_json::json!({
+        "jsonrpc": "2.0", "id": 2, "method": "session/new",
+        "params": {"cwd": cwd, "mcpServers": []}
+    })).await?;
+    let reply = read_rpc(&mut lines, 2).await?;
+    if let Some(error) = reply.get("error").filter(|error| !error.is_null()) {
+        return Some(if acp_auth_failure(error) { AuthState::Unauthenticated } else { AuthState::Unknown });
+    }
+    let session = reply["result"]["sessionId"].as_str().filter(|id| !id.is_empty())?.to_owned();
+    // Best effort: close the throwaway session before the process is reaped.
+    let _ = write_rpc(&mut stdin, &serde_json::json!({"jsonrpc": "2.0", "id": 3, "method": "session/close", "params": {"sessionId": session}})).await;
+    Some(AuthState::Authenticated)
+}
+
+/// The one place an ACP auth failure is recognised: the server's own words,
+/// never an error code on its own (`-32000` also means "provider failed").
+fn acp_auth_failure(error: &serde_json::Value) -> bool {
+    let message = error["message"].as_str().unwrap_or("").to_ascii_lowercase();
+    ["authentication required", "auth required", "not signed in", "not logged in", "please log in", "login required", "sign in to", "unauthorized", "invalid api key", "no credentials"]
+        .iter()
+        .any(|needle| message.contains(needle))
+}
+
+async fn write_rpc(stdin: &mut tokio::process::ChildStdin, message: &serde_json::Value) -> Option<()> {
+    let mut bytes = serde_json::to_vec(message).ok()?;
+    bytes.push(b'\n');
+    stdin.write_all(&bytes).await.ok()
+}
+
+async fn read_rpc(lines: &mut tokio::io::Lines<BufReader<tokio::process::ChildStdout>>, id: u64) -> Option<serde_json::Value> {
+    loop {
+        let line = lines.next_line().await.ok()??;
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else { continue; };
+        if value.get("id").and_then(serde_json::Value::as_u64) == Some(id) {
+            return Some(value);
+        }
+    }
+}
+
+/// A throwaway working folder for the probe session, removed when it is done.
+struct AcpProbeDirectory(PathBuf);
+
+impl AcpProbeDirectory {
+    fn new(provider: &str) -> Option<Self> {
+        let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).ok()?.as_nanos();
+        let name = provider.chars().filter(char::is_ascii_alphanumeric).collect::<String>();
+        let path = std::env::temp_dir().join(format!("retinue-acp-signin-{name}-{}-{nonce}", std::process::id()));
+        std::fs::create_dir_all(&path).ok()?;
+        Some(Self(path))
+    }
+    fn path(&self) -> &Path { &self.0 }
+}
+
+impl Drop for AcpProbeDirectory {
+    fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.0); }
+}
+
 /// OpenCode sign-in. A CLI-free stored-credential check runs first and is the
 /// source of truth for "a credential is stored"; only when it finds nothing
 /// does the CLI get asked. OpenCode 2 answers through a background service, so
@@ -804,9 +944,112 @@ mod tests {
         // A runtime id is not a provider id: it skips nothing here.
         assert!(discover_except(&["rt_opencode_80ecc406".to_owned()]).await.len() <= discovery_ids().len());
     }
+    #[test]
+    fn two_candidates_for_one_provider_publish_one_runtime() {
+        let row = |id: &str, provider: &str| serde_json::from_value::<DiscoveredRuntime>(serde_json::json!({
+            "id": id, "hostId": "host_windows_local", "provider": provider, "displayName": provider,
+            "protocolFamily": "claude_stream", "executablePath": format!("C:/tools/{id}.exe"),
+            "launchArgs": [], "version": null, "authState": "authenticated",
+            "gatewayAuthStates": {}, "account": null, "status": "online",
+            "capabilities": {}, "probeError": null, "probeStep": null
+        })).unwrap();
+        // The stale OpenCode Desktop shim beside the real CLI (owner report, 21
+        // November 2026): one provider, two candidates, one runtime published.
+        let picked = one_per_provider(vec![row("rt_opencode_new", "opencode"), row("rt_opencode_old", "opencode"), row("rt_codex", "codex")]);
+        assert_eq!(picked.len(), 2, "{picked:?}");
+        assert_eq!(picked.iter().filter(|runtime| runtime.provider == "opencode").count(), 1);
+        assert_eq!(picked[0].id, "rt_opencode_new", "the first answer is the current one");
+        assert!(picked.iter().any(|runtime| runtime.provider == "codex"));
+    }
+    // ACP sign-in probes (21 November 2026): every other provider is asked over
+    // its own protocol. These fixtures speak the request/response pair the probe
+    // sends, one reply per request, so the exchange is deterministic.
+    fn acp_probe_fixture(name: &str) -> (PathBuf, Vec<String>) {
+        (std::env::current_exe().unwrap(), vec!["--exact".to_owned(), format!("tests::{name}"), "--nocapture".to_owned()])
+    }
+
+    fn acp_fixture_answer(init: &str, session: &str) {
+        use std::io::{BufRead, Write};
+        // Only a probe's child speaks: the ordinary suite run prints nothing and
+        // never waits on the terminal's input.
+        if std::env::var_os("RETINUE_ACP_PROBE_FIXTURE").is_none() {
+            return;
+        }
+        let mut request = String::new();
+        std::io::stdin().lock().read_line(&mut request).unwrap();
+        let mut out = std::io::stdout();
+        writeln!(out, "{init}").unwrap();
+        out.flush().unwrap();
+        request.clear();
+        std::io::stdin().lock().read_line(&mut request).unwrap();
+        request.clear();
+        std::io::stdin().lock().read_line(&mut request).unwrap();
+        writeln!(out, "{session}").unwrap();
+        out.flush().unwrap();
+    }
+
+    #[test]
+    fn acp_fixture_signed_in() {
+        acp_fixture_answer(
+            r#"{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"authMethods":[{"id":"oauth-personal"}]}}"#,
+            r#"{"jsonrpc":"2.0","id":2,"result":{"sessionId":"fixture-session"}}"#,
+        );
+    }
+
+    #[test]
+    fn acp_fixture_signed_out() {
+        acp_fixture_answer(
+            r#"{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}"#,
+            r#"{"jsonrpc":"2.0","id":2,"error":{"code":-32000,"message":"Authentication required"}}"#,
+        );
+    }
+
+    #[test]
+    fn acp_fixture_refused() {
+        acp_fixture_answer(
+            r#"{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}"#,
+            r#"{"jsonrpc":"2.0","id":2,"error":{"code":-32000,"message":"provider failed"}}"#,
+        );
+    }
+
+    #[test]
+    fn an_acp_auth_failure_is_read_from_the_servers_words_not_the_error_code() {
+        assert!(acp_auth_failure(&serde_json::json!({"code": -32000, "message": "Authentication required"})));
+        assert!(acp_auth_failure(&serde_json::json!({"code": -32000, "message": "You are not signed in"})));
+        // `-32000` is a server error code; it also carries ordinary failures.
+        assert!(!acp_auth_failure(&serde_json::json!({"code": -32000, "message": "provider failed"})));
+        assert!(!acp_auth_failure(&serde_json::json!({"code": -32000, "message": "Session is busy"})));
+    }
+
     #[tokio::test]
-    async fn discovery_polls_all_providers_concurrently() {
-        let barrier = tokio::sync::Barrier::new(3);
+    async fn an_acp_session_that_opens_is_signed_in_and_a_refusal_is_signed_out() {
+        let (exe, args) = acp_probe_fixture("acp_fixture_signed_in");
+        assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args).await, Some(AuthState::Authenticated)));
+        let (exe, args) = acp_probe_fixture("acp_fixture_signed_out");
+        assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args).await, Some(AuthState::Unauthenticated)));
+        // Any other refusal says nothing about the sign-in.
+        let (exe, args) = acp_probe_fixture("acp_fixture_refused");
+        assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args).await, Some(AuthState::Unknown)));
+    }
+
+    #[tokio::test]
+    async fn the_acp_sign_in_answer_is_quiet_and_routed_for_every_table_provider() {
+        let (exe, args) = acp_probe_fixture("acp_fixture_signed_in");
+        let SignIn { state, gateways, error, .. } = auth_status("antigravity", &exe, &args, &[]).await;
+        assert!(matches!(state, AuthState::Authenticated));
+        assert!(gateways.is_empty());
+        assert!(error.is_none(), "a sign-in answer the server gave is not a probe failure");
+        // The other table providers take the same path.
+        let (exe, args) = acp_probe_fixture("acp_fixture_signed_out");
+        for provider in ["qwen", "cursor", "grok"] {
+            let SignIn { state, error, .. } = auth_status(provider, &exe, &args, &[]).await;
+            assert!(matches!(state, AuthState::Unauthenticated), "{provider}");
+            assert!(error.is_none(), "{provider}");
+        }
+    }
+
+    #[tokio::test]
+    async fn discovery_polls_all_providers_concurrently() {        let barrier = tokio::sync::Barrier::new(3);
         let probe = || async { barrier.wait().await; None };
         let result = tokio::time::timeout(Duration::from_secs(1), collect_discovery(probe(), probe(), probe())).await;
         assert!(result.is_ok(), "sequential probes cannot pass the three-provider barrier");

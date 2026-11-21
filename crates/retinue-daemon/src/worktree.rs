@@ -14,6 +14,15 @@ use std::path::{Path, PathBuf};
 const MAX_SLUG: usize = 40;
 /// The folder family holds every task copy of one repository: `<repo>-retinue`.
 const FAMILY_SUFFIX: &str = "-retinue";
+/// The names a task copy tries before one is free: the topic itself, then
+/// `-2` … `-20`, then a short random suffix. The family can already hold every
+/// numbered name when many conversations start with the same few words.
+const NUMBERED_NAMES: usize = 20;
+const RANDOM_NAMES: usize = 8;
+/// How many characters a random name suffix takes.
+const SUFFIX_CHARS: usize = 4;
+/// Every name a task copy may try, numbered then random.
+pub(crate) const NAME_ATTEMPTS: usize = NUMBERED_NAMES + RANDOM_NAMES;
 
 /// A created task copy: the repository it belongs to, where it lives, the branch
 /// checked out there, the branch it was taken from, and the commit it started at.
@@ -31,13 +40,25 @@ impl Worktree {
     /// conversation text — only paths, a branch and a commit.
     pub(crate) fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
-            "repo": self.repo.to_string_lossy(),
-            "path": self.path.to_string_lossy(),
+            "repo": native_string(&self.repo),
+            "path": native_string(&self.path),
             "branch": self.branch,
             "base": self.base,
             "baseCommit": self.base_commit,
         })
     }
+}
+
+/// A path in one native form: backslashes on Windows, unchanged elsewhere.
+///
+/// Git prints `C:/…` and a joined child uses the platform separator, so a record
+/// returned to a model would otherwise read `C:/a\b` (owner report, 21 November
+/// 2026). This is the one place that form is made.
+pub(crate) fn native_string(path: &Path) -> String {
+    #[cfg(windows)]
+    { path.to_string_lossy().replace('/', "\\") }
+    #[cfg(not(windows))]
+    { path.to_string_lossy().into_owned() }
 }
 
 /// What a task copy changed against its base commit, for the merge card.
@@ -121,6 +142,20 @@ pub(crate) fn slug(topic: &str) -> String {
     if trimmed.is_empty() { "task".to_owned() } else { trimmed.to_owned() }
 }
 
+/// The slug for one attempt: the topic itself, then `-2` … `-20`, then a short
+/// random suffix rather than a refusal. The stem is cut so the suffix still fits
+/// inside `MAX_SLUG`; `task` is the fallback when nothing is left.
+pub(crate) fn candidate_slug(base: &str, attempt: usize) -> String {
+    if attempt == 0 { return base.to_owned(); }
+    if attempt < NUMBERED_NAMES { return format!("{base}-{}", attempt + 1); }
+    let random = uuid::Uuid::new_v4().simple().to_string();
+    let suffix = random.chars().take(SUFFIX_CHARS).collect::<String>();
+    let keep = MAX_SLUG.saturating_sub(SUFFIX_CHARS + 1);
+    let stem = base.chars().take(keep).collect::<String>();
+    let stem = stem.trim_matches('-');
+    format!("{}-{suffix}", if stem.is_empty() { "task" } else { stem })
+}
+
 /// Create `<repo>-retinue/<slug>` on a new `retinue/<slug>` branch from `HEAD`.
 /// Returns `Err` (never panics) so the caller can fall back to the shared folder.
 pub(crate) fn create(repo: &Path, topic: &str) -> Result<Worktree, String> {
@@ -132,8 +167,8 @@ pub(crate) fn create(repo: &Path, topic: &str) -> Result<Worktree, String> {
     let family = parent.join(format!("{name}{FAMILY_SUFFIX}"));
     std::fs::create_dir_all(&family).map_err(|error| format!("The task copy folder could not be created: {error}"))?;
     let base_slug = slug(topic);
-    for attempt in 0..20usize {
-        let slug = if attempt == 0 { base_slug.clone() } else { format!("{base_slug}-{}", attempt + 1) };
+    for attempt in 0..NAME_ATTEMPTS {
+        let slug = candidate_slug(&base_slug, attempt);
         let branch = format!("retinue/{slug}");
         let path = family.join(&slug);
         if path.exists() || branch_exists(&repo, &branch) { continue; }
@@ -344,11 +379,56 @@ mod tests {
     }
 
     #[test]
+    fn a_taken_name_gets_a_number_and_then_a_short_suffix() {
+        let base = slug("Add login");
+        assert_eq!(candidate_slug(&base, 0), "add-login");
+        assert_eq!(candidate_slug(&base, 1), "add-login-2");
+        assert_eq!(candidate_slug(&base, 19), "add-login-20");
+        // Past the numbered names a short random suffix keeps the copy inside the
+        // slug limit and safe for a branch.
+        let long = slug(&"the same first words every message ".repeat(4));
+        assert_eq!(long.len(), MAX_SLUG);
+        let suffixed = (NAME_ATTEMPTS..NAME_ATTEMPTS + 8).map(|attempt| candidate_slug(&long, attempt)).collect::<Vec<_>>();
+        for name in &suffixed {
+            assert!(name.len() <= MAX_SLUG, "{name}");
+            assert_ne!(name, &long);
+            assert!(name.chars().all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-'), "{name}");
+            assert!(!name.starts_with('-') && !name.ends_with('-'), "{name}");
+        }
+        assert!(suffixed.iter().collect::<std::collections::BTreeSet<_>>().len() > 1, "{suffixed:?}");
+    }
+
+    #[test]
     fn repo_root_is_none_for_a_plain_folder() {
         let dir = std::env::temp_dir().join(format!("retinue-plain-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         assert!(repo_root(&dir).is_none());
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_family_full_of_one_name_still_gets_a_copy() {
+        // Owner report (21 November 2026): two messages that start the same way
+        // both want `add-login`. The numbered names can all already be taken by
+        // copies kept from earlier conversations, so a later copy must still get a
+        // short suffix instead of a refusal.
+        let Some(repo) = repo() else { return };
+        let mut made = Vec::new();
+        for index in 0..NAME_ATTEMPTS {
+            match create(&repo, "Add login") {
+                Ok(copy) => made.push(copy),
+                Err(error) => panic!("copy {} failed: {error}", index + 1),
+            }
+        }
+        assert_eq!(made.iter().map(|copy| copy.branch.clone()).collect::<std::collections::BTreeSet<_>>().len(), NAME_ATTEMPTS, "every copy has its own name");
+        let extra = create(&repo, "Add login").expect("a task copy still gets a name once every numbered one is taken");
+        assert!(extra.branch.starts_with("retinue/add-login-"), "{}", extra.branch);
+        assert_eq!(extra.branch.rsplit('-').next().unwrap().len(), SUFFIX_CHARS, "{}", extra.branch);
+        for copy in made.iter().chain(std::iter::once(&extra)) {
+            discard(&repo, &copy.path, &copy.branch);
+        }
+        if let Some(family) = made.first().and_then(|copy| copy.path.parent()) { let _ = std::fs::remove_dir_all(family); }
+        std::fs::remove_dir_all(&repo).ok();
     }
 
     #[test]

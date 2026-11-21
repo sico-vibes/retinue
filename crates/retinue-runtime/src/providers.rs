@@ -65,13 +65,17 @@ pub const ACP_PROVIDERS: &[AcpProvider] = &[
     // server over stdin/stdout (antigravity.google/docs/ide/extensions/acp), and
     // `agy acp --login` as the in-terminal sign-in.
     //
-    // UNVERIFIED ON WINDOWS (11 November 2026): `agy` is not installed on this
-    // machine, so the command line above and the `acp` probe below are the
-    // documentation's, not a run. One third-party integration reports that
-    // Antigravity ships no Windows ACP server and resolves a wrapper instead
-    // (docs/research/accounts-and-openbot-2026-11.md, Part 3.6 and 3.8). Its
-    // sign-in is the CLI's own keyring flow: Retinue never reads it, and the
-    // provider is single-account (default account only).
+    // VERIFIED ON WINDOWS (21 November 2026, agy 1.5.13): `agy --help` lists the
+    // `acp` subcommand, and `agy acp` answers `initialize` with `authMethods`
+    // (four Google sign-in methods) whether or not anyone is signed in. The
+    // sign-in evidence is `session/new`: it opens a session and reports the
+    // account's tier under `_meta.antigravity.tier` when the CLI holds a
+    // keyring sign-in, and a server with nothing signed in refuses with `-32000`
+    // "Authentication required". `retinue-runtime` asks exactly that, without
+    // reading the keyring.
+    //
+    // Its sign-in is the CLI's own keyring flow: Retinue never reads it, and the
+    // provider is single-account (the machine's own sign-in).
     AcpProvider {
         provider: "antigravity",
         display_name: "Antigravity",

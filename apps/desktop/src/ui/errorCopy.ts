@@ -104,6 +104,18 @@ const QUOTA: FriendlyError = {
   tone: 'attention',
 }
 
+/**
+ * An unanswered sign-in question: the check timed out, the scan never ran, or the
+ * agent did not say. It is not the same as being signed out (21 November 2026:
+ * the launch screen showed "Sign in to Antigravity." for it).
+ */
+const SIGN_IN_UNKNOWN: FriendlyError = {
+  title: 'The sign-in could not be checked.',
+  detail: 'Retinue could not confirm it. Open Settings › Coding agents and scan again.',
+  action: action('rescan', 'Scan again'),
+  tone: 'info',
+}
+
 const PROVIDER_UNAVAILABLE: FriendlyError = {
   title: 'The coding agent is not available.',
   detail: 'It may be offline or need an update. Check Settings, then try again.',
@@ -256,6 +268,9 @@ function byCode(code: string, provider: string | undefined): FriendlyError | nul
 function byMessage(message: string, provider: string | undefined): FriendlyError | null {
   const lower = message.toLowerCase()
   if (!lower) return null
+  // A sign-in that could not be checked is unknown, never signed out: this comes
+  // before the auth words below, which would otherwise claim a sign-in is needed.
+  if (/(sign[- ]?in (check|status)|could not be confirmed|status unknown|sign-in not known|could not be checked|not checked)/.test(lower)) return SIGN_IN_UNKNOWN
   if (/(sign[- ]?in|sign in|log in|login|authenticat|credential|api key|token expired|\b401\b)/.test(lower)) return signIn(provider)
   if (/(rate limit|\b429\b|overloaded|too many requests|temporarily unavailable)/.test(lower)) return RATE_LIMITED
   if (/(context (window )?(is )?(full|overflow)|context exhausted|too many tokens)/.test(lower)) return CONTEXT_FULL
