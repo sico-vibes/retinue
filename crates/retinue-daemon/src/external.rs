@@ -75,6 +75,10 @@ impl External {
         *self.token.lock().unwrap_or_else(|poison| poison.into_inner()) = token;
     }
 
+    fn current_token(&self) -> Option<String> {
+        self.token.lock().unwrap_or_else(|poison| poison.into_inner()).clone()
+    }
+
     fn client(&self) -> Option<String> {
         self.last_client.lock().unwrap_or_else(|poison| poison.into_inner()).clone()
     }
@@ -206,6 +210,38 @@ async fn refresh_bridge(st: &AppState) {
     if let Some(dir) = data_dir(st) {
         let _ = tokio::task::spawn_blocking(move || copy_bridge(&dir)).await;
     }
+}
+
+/// How often the running service checks that the endpoint file names it.
+const ENDPOINT_CHECK: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Rewrites the endpoint file when it does not name this run's address and
+/// token (22 November 2026). The owner's file once pointed at a port nothing
+/// listened on, written by another service process that then went away, and
+/// every MCP call said "Retinue is not reachable" until a restart. Answers
+/// whether it rewrote the file.
+pub(crate) fn heal_endpoint(st: &AppState) -> bool {
+    if !enabled(st) { return false; }
+    let (Some(token), Some(path), Some(address)) = (st.external.current_token(), endpoint_path(st), st.team.address.lock().unwrap().clone()) else { return false };
+    let current = std::fs::read_to_string(&path).ok().and_then(|text| serde_json::from_str::<Value>(&text).ok());
+    let ours = current.as_ref().is_some_and(|value| value["address"].as_str() == Some(address.as_str()) && value["token"].as_str() == Some(token.as_str()));
+    if ours { return false; }
+    write_endpoint(st, &token).is_ok()
+}
+
+/// Keeps the endpoint file pointing at this run while the MCP is on.
+pub fn watch_endpoint(st: &AppState) {
+    let state = st.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(ENDPOINT_CHECK);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        loop {
+            tokio::select! {
+                _ = interval.tick() => { if heal_endpoint(&state) { tracing::info!("the Retinue MCP endpoint file named another address; rewrote it"); } }
+                _ = state.stopping.notified() => break,
+            }
+        }
+    });
 }
 
 /// Startup: a fresh token, endpoint file and bridge copy when the owner had the

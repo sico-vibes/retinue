@@ -27,15 +27,49 @@ const DUE_MAX_SECS: i64 = 366 * 24 * 60 * 60;
 /// A send this many seconds late appends a transcript notice.
 const LATE_NOTICE_SECS: i64 = 60;
 
+/// How recent the oldest waiting message must be for a queue to be sent on its
+/// own after a restart. Older ones wait, paused and visible, for the owner.
+pub(crate) const RESUME_AFTER_RESTART_SECS: i64 = 60 * 60;
+
+/// The startup decision for every conversation holding queued messages (22
+/// November 2026). Before, every one was paused after any restart, an app update
+/// included, so a healthy queue behind a finished turn never sent and nothing
+/// said so. Now a queue is sent on its own only when its conversation's last turn
+/// finished normally, the conversation is idle, and the oldest message is recent;
+/// every other queue stays paused, and the lists show it.
+pub(crate) fn startup_split(rows: Vec<retinue_storage::QueueStartupRow>, now: chrono::DateTime<chrono::Utc>) -> (Vec<String>, Vec<String>) {
+    let mut send = Vec::new();
+    let mut hold = Vec::new();
+    for row in rows {
+        let finished_well = row.last_turn_state.as_deref().is_none_or(|state| state == "completed");
+        let idle = row.session_state.as_deref().is_some_and(|state| matches!(state, "idle" | "completed"));
+        let recent = chrono::DateTime::parse_from_rfc3339(&row.oldest_at)
+            .map(|at| (now - at.with_timezone(&chrono::Utc)).num_seconds() < RESUME_AFTER_RESTART_SECS)
+            .unwrap_or(false);
+        if finished_well && idle && recent { send.push(row.session_id) } else { hold.push(row.session_id) }
+    }
+    (send, hold)
+}
+
+/// `session.queue.overview`: how many messages wait in each conversation, and
+/// whether that queue is paused, so a waiting queue shows outside its
+/// conversation too.
+pub async fn overview(st: &AppState) -> Result<Value, DispatchError> {
+    let rows = st.db.queue_overview().map_err(queue_error)?;
+    Ok(json!({"sessions": rows.into_iter().map(|(session_id, count)| json!({"sessionId": session_id, "count": count, "paused": st.queue.is_paused(&session_id)})).collect::<Vec<_>>()}))
+}
+
 /// In-memory per-session queue control: pause flags and one drain lock each.
 pub struct Queue {
     paused: StdMutex<HashSet<String>>,
     locks: StdMutex<HashMap<String, Arc<Mutex<()>>>>,
+    /// The queues the startup review chose to send once the service is ready.
+    resume_after_start: StdMutex<Vec<String>>,
 }
 
 impl Default for Queue {
     fn default() -> Self {
-        Self { paused: StdMutex::new(HashSet::new()), locks: StdMutex::new(HashMap::new()) }
+        Self { paused: StdMutex::new(HashSet::new()), locks: StdMutex::new(HashMap::new()), resume_after_start: StdMutex::new(Vec::new()) }
     }
 }
 
@@ -56,6 +90,12 @@ impl Queue {
     /// Every session with a queued plain prompt starts paused after a restart.
     pub fn mark_startup_paused(&self, sessions: Vec<String>) {
         if let Ok(mut set) = self.paused.lock() { for session in sessions { set.insert(session); } }
+    }
+    pub fn set_resume_after_start(&self, sessions: Vec<String>) {
+        if let Ok(mut list) = self.resume_after_start.lock() { *list = sessions; }
+    }
+    pub fn take_resume_after_start(&self) -> Vec<String> {
+        self.resume_after_start.lock().map(|mut list| std::mem::take(&mut *list)).unwrap_or_default()
     }
     pub fn forget(&self, session_id: &str) {
         if let Ok(mut set) = self.paused.lock() { set.remove(session_id); }
@@ -630,7 +670,36 @@ pub async fn queue_rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, 
         "session.queue.delete" => delete(st, p.clone()).await,
         "session.queue.send_now" => send_now(st, p.clone()).await,
         "session.queue.resume" => resume(st, p.clone()).await,
+        "session.queue.overview" => overview(st).await,
         _ => Err(derr("not_found", "unknown queue method", StatusCode::NOT_FOUND)),
+    }
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::*;
+    use retinue_storage::QueueStartupRow;
+
+    fn row(id: &str, minutes_ago: i64, last_turn: Option<&str>, state: &str, now: chrono::DateTime<chrono::Utc>) -> QueueStartupRow {
+        QueueStartupRow { session_id: id.into(), oldest_at: (now - chrono::Duration::minutes(minutes_ago)).to_rfc3339(), last_turn_state: last_turn.map(str::to_owned), session_state: Some(state.into()) }
+    }
+
+    // 22 November 2026: every queue used to pause after any restart, an app
+    // update included, and a paused queue in an old conversation said nothing.
+    #[test]
+    fn a_restart_sends_only_recent_queues_behind_a_finished_turn() {
+        let now = chrono::Utc::now();
+        let (send, hold) = startup_split(vec![
+            row("recent-done", 5, Some("completed"), "idle", now),
+            row("recent-new", 5, None, "idle", now),
+            row("after-error", 5, Some("error"), "idle", now),
+            row("after-cancel", 5, Some("cancelled"), "completed", now),
+            row("cut-off", 5, Some("working"), "working", now),
+            row("days-old", 60 * 24 * 5, Some("completed"), "completed", now),
+            QueueStartupRow { session_id: "bad-time".into(), oldest_at: "not a time".into(), last_turn_state: None, session_state: Some("idle".into()) },
+        ], now);
+        assert_eq!(send, ["recent-done", "recent-new"]);
+        assert_eq!(hold, ["after-error", "after-cancel", "cut-off", "days-old", "bad-time"]);
     }
 }
 

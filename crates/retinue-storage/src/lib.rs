@@ -338,16 +338,39 @@ fn migrate_agent_outfit_ids(c: &mut Connection, path: Option<&Path>, backup_done
 const AGENT_MODE_CHECK_OLD: &str = "approval_mode IN ('ask','auto','bypass')";
 const AGENT_MODE_CHECK_NEW: &str = "approval_mode IN ('ask','auto','accept_edits','bypass')";
 
+/// One conversation with queued messages, as the daemon reviews it at startup.
+#[derive(Debug, Clone)]
+pub struct QueueStartupRow {
+    pub session_id: String,
+    pub oldest_at: String,
+    pub last_turn_state: Option<String>,
+    pub session_state: Option<String>,
+}
+
 /// Pi's execution gates (16 November 2026). The schema-3 seed ran once, so an
 /// existing database has no `exec_gate.pi.*` row, and every Pi turn with a model
 /// or instructions would be refused as "unavailable". These four rows are
 /// inserted on every open with `OR IGNORE`, so an owner's choice is never
 /// rewritten.
+/// A tool step the provider never finished, closed when its turn ends (22
+/// November 2026). Turns that ended in an error left 81 steps "running" in 29
+/// of the owner's conversations, and the window showed those idle employees as
+/// working. A step takes its turn's outcome: failed for an errored turn,
+/// cancelled for a cancelled one, completed for a completed one. With `None`,
+/// every turn that has already ended is swept (once per open, for old rows).
+fn close_open_tool_calls(c: &Connection, turn_id: Option<&str>) -> Result<usize, StorageError> {
+    let now = Utc::now().to_rfc3339();
+    let sql = "UPDATE tool_calls SET state=(SELECT CASE t.state WHEN 'completed' THEN 'completed' WHEN 'cancelled' THEN 'cancelled' ELSE 'failed' END FROM turns t WHERE t.id=tool_calls.turn_id), data=json_set(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.state',(SELECT CASE t.state WHEN 'completed' THEN 'completed' WHEN 'cancelled' THEN 'cancelled' ELSE 'failed' END FROM turns t WHERE t.id=tool_calls.turn_id),'$.completedAt',COALESCE(json_extract(CASE WHEN json_valid(data) THEN data ELSE '{}' END,'$.completedAt'),?2)) WHERE state IN ('running','pending','started') AND turn_id IS NOT NULL AND (?1 IS NULL OR turn_id=?1) AND EXISTS(SELECT 1 FROM turns t WHERE t.id=tool_calls.turn_id AND t.state IN ('completed','error','cancelled','failed'))";
+    Ok(c.execute(sql, params![turn_id, now])?)
+}
+
 fn ensure_pi_gates(c: &Connection) -> Result<(), StorageError> {
     for key in ["exec_gate.pi.model", "exec_gate.pi.thinking", "exec_gate.pi.instructions", "exec_gate.pi.steer"] {
         c.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?1,'true')", [key])?;
     }
-    ensure_acp_table_gates(c)
+    ensure_acp_table_gates(c)?;
+    close_open_tool_calls(c, None)?;
+    Ok(())
 }
 
 /// The ACP table providers (`retinue_runtime::ACP_PROVIDERS`: Qwen Code, Cursor,
@@ -4817,6 +4840,24 @@ impl Storage {
         let rows = q.query_map([now], |r| r.get::<_,String>(0))?.collect::<Result<Vec<_>,_>>()?;
         Ok(rows)
     }
+    /// Every conversation that holds queued messages at startup, with what the
+    /// daemon needs to decide whether to send them or hold them (22 November
+    /// 2026): the oldest waiting message's time, the last turn's state and the
+    /// conversation's own state.
+    pub fn queue_startup_review(&self) -> Result<Vec<QueueStartupRow>, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let mut q = c.prepare("SELECT q.session_id, MIN(q.created_at), (SELECT t.state FROM turns t WHERE t.session_id=q.session_id ORDER BY t.created_at DESC LIMIT 1), (SELECT s.state FROM sessions s WHERE s.id=q.session_id) FROM queued_prompts q WHERE q.status='queued' AND q.kind='user' GROUP BY q.session_id")?;
+        let rows = q.query_map([], |r| Ok(QueueStartupRow { session_id: r.get(0)?, oldest_at: r.get(1)?, last_turn_state: r.get(2)?, session_state: r.get(3)? }))?.collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+    /// How many messages wait in each conversation's queue, for the lists that
+    /// show a waiting queue outside its conversation (22 November 2026).
+    pub fn queue_overview(&self) -> Result<Vec<(String, i64)>, StorageError> {
+        let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
+        let mut q = c.prepare("SELECT session_id, COUNT(*) FROM queued_prompts WHERE status='queued' AND kind='user' GROUP BY session_id")?;
+        let rows = q.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?.collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
     pub fn queue_paused_sessions(&self) -> Result<Vec<String>, StorageError> {
         let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         let mut q = c.prepare("SELECT DISTINCT session_id FROM queued_prompts WHERE status='queued' AND kind='user'")?;
@@ -7047,6 +7088,7 @@ impl Storage {
         )?;
         if matches!(state, "completed" | "error" | "cancelled") {
             c.execute("DELETE FROM active_turn_reservations WHERE turn_id=?1", [id])?;
+            close_open_tool_calls(&c, Some(id))?;
         }
         Ok(())
     }
@@ -11141,6 +11183,32 @@ mod tests {
         assert!(listed.iter().all(|agent| agent.get("look").is_some()));
         assert!(db.snapshot().unwrap()["agents"].as_array().unwrap().iter().all(|agent| agent.get("look").is_some()));
     }
+    // 22 November 2026: a turn that ends leaves no tool step "running" behind; the
+    // window showed an idle employee as working because of one.
+    #[test]
+    fn a_finished_turn_closes_its_unfinished_tool_steps() {
+        let db = Storage::open_in_memory().unwrap();
+        db.upsert_runtime(&json!({"id":"rt-open","provider":"opencode"})).unwrap();
+        db.create_session("s-open", "rt-open", "opencode", ".", "Open tools").unwrap();
+        for (turn, call) in [("t-error", "c-error"), ("t-cancel", "c-cancel"), ("t-live", "c-live")] {
+            db.create_turn(turn, "s-open").unwrap();
+            db.upsert_tool_in_turn("s-open", Some(turn), call, "commandExecution", "cargo test", "running", &json!({"command":"cargo test"}), None).unwrap();
+        }
+        db.update_turn_outcome("t-error", "error", Some("provider_error")).unwrap();
+        db.update_turn_outcome("t-cancel", "cancelled", Some("cancelled")).unwrap();
+        let tools = db.session_detail("s-open").unwrap()["tools"].as_array().unwrap().clone();
+        let state = |id: &str| tools.iter().find(|tool| tool["id"] == id).unwrap()["state"].clone();
+        assert_eq!(state("c-error"), "failed");
+        assert_eq!(state("c-cancel"), "cancelled");
+        assert_eq!(state("c-live"), "running", "a turn still working keeps its running step");
+        // Rows left behind before this fix are swept when the database opens.
+        let c = db.conn.lock().unwrap();
+        c.execute("UPDATE tool_calls SET state='running' WHERE id='c-error'", []).unwrap();
+        assert_eq!(close_open_tool_calls(&c, None).unwrap(), 1);
+        let swept: String = c.query_row("SELECT state FROM tool_calls WHERE id='c-error'", [], |row| row.get(0)).unwrap();
+        assert_eq!(swept, "failed");
+    }
+
     #[test]
     fn tool_details_are_bounded_provider_neutral_and_merge_start_with_completion() {
         let codex_command = tool_detail("commandExecution", &json!({"type":"commandExecution","command":"npm test","aggregatedOutput":"2 passing","exitCode":0}));

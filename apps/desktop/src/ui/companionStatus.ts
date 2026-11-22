@@ -59,7 +59,12 @@ export function deriveCompanionStatus(input: { connected: boolean; runtime?: Run
   const activeTurn = [...(session?.turns ?? [])].reverse().find((turn) => ['working', 'running', 'starting', 'pending'].includes(String(turn.state ?? '').toLowerCase()))
   const activeTurnId = activeTurn?.id ?? session?.turnId
   const belongsToActiveTurn = (item: Record<string, unknown>) => !activeTurnId || item.turnId === activeTurnId
-  const latestTool = [...(session?.tools ?? [])].reverse().find((item) => belongsToActiveTurn(item) && ['running', 'pending', 'started'].includes(String(item.state ?? '').toLowerCase()))
+  // A step still marked running counts only while the conversation is working:
+  // a turn that ended in an error could leave one behind, and with no active
+  // turn every old step "belongs", so an idle employee showed as working
+  // (owner, 22 November 2026).
+  const live = ['working', 'starting', 'cancelling'].includes(String(session?.state ?? ''))
+  const latestTool = live ? [...(session?.tools ?? [])].reverse().find((item) => belongsToActiveTurn(item) && ['running', 'pending', 'started'].includes(String(item.state ?? '').toLowerCase())) : undefined
   // The bot's own "now" note (wave 2) comes ahead of the tool-derived label, for its own turn only.
   const note = session?.workingNote
   if (note?.text && ['working', 'starting'].includes(session?.state ?? '') && (!activeTurnId || note.turnId === activeTurnId)) {

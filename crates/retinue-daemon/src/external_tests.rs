@@ -1010,3 +1010,25 @@ async fn external_send_message_can_wait_for_a_usage_limit() {
     assert_eq!((items[0]["whenLimitResets"].clone(), items[0]["meta"]["kind"].clone()), (json!(true), json!("mcp")));
     let _ = std::fs::remove_dir_all(&c.dir);
 }
+
+// 22 November 2026: the owner's endpoint file named a port nothing listened on,
+// and every MCP call said "Retinue is not reachable" until a restart.
+#[tokio::test]
+async fn a_stale_or_missing_endpoint_file_is_rewritten_to_this_run() {
+    let ctx = fixture("operator", false).await;
+    let path = ctx.dir.join("mcp-external.json");
+    let own = |text: &str| { let value: Value = serde_json::from_str(text).unwrap(); value["address"] == "127.0.0.1:1" && value["token"] == ctx.token.as_str() };
+    assert!(own(&std::fs::read_to_string(&path).unwrap()), "enable writes this run's endpoint");
+    assert!(!crate::external::heal_endpoint(&ctx.st), "a current file is left alone");
+    std::fs::write(&path, r#"{"address":"127.0.0.1:57568","token":"someone-else"}"#).unwrap();
+    assert!(crate::external::heal_endpoint(&ctx.st));
+    assert!(own(&std::fs::read_to_string(&path).unwrap()));
+    std::fs::remove_file(&path).unwrap();
+    assert!(crate::external::heal_endpoint(&ctx.st), "a deleted file comes back");
+    assert!(own(&std::fs::read_to_string(&path).unwrap()));
+    // With the MCP off, nothing is written.
+    rpc(&ctx.st, "external.disable", &json!({})).await.unwrap();
+    std::fs::write(&path, "{}").unwrap();
+    assert!(!crate::external::heal_endpoint(&ctx.st));
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "{}");
+}

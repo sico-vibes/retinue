@@ -5,6 +5,7 @@
 // cards: the title, then when it last changed and what it is doing now. A
 // selected name or title longer than its row scrolls (Marquee). Folding is
 // animated (Collapse). Spacing follows the density tokens in density.css.
+import { useQueueWaiting, waitingLabel } from './queueOverview'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { BellRing, ChevronRight, CircleAlert, Copy, Plus } from 'lucide-react'
@@ -32,6 +33,7 @@ const RECENT_PER_BOT = 4
 function ConversationRow({ session, selected, status, onOpen, onMenu }: {
   session: Session; selected: boolean; status: ConversationStatus; onOpen: () => void; onMenu: React.MouseEventHandler<HTMLButtonElement>
 }) {
+  const queued = useQueueWaiting().get(session.id)
   const [loaded, setLoaded] = useState<{ detail: Session; version: Session['updatedAt'] } | null>(null)
   const cached = loaded && loaded.version === session.updatedAt ? loaded.detail : null
   const stop = status.tone === 'bad' ? latestTurnStop(session.partial && cached ? cached : session) : undefined
@@ -46,7 +48,7 @@ function ConversationRow({ session, selected, status, onOpen, onMenu }: {
   }, [tooltip.open, status.tone, session.id, session.partial, session.updatedAt, cached])
   return <li role="none"><button type="button" role="treeitem" aria-current={selected ? 'true' : undefined} className={`ps-convo marquee-host${selected ? ' selected' : ''}`} ref={tooltip.anchor} {...tooltip.bind} aria-describedby={tooltip.open && reason ? tipId : undefined} onClick={onOpen} onContextMenu={onMenu}>
     <span className="ps-convo-line">{session.origin?.kind === 'mcp' && <McpMark client={session.origin.client} />}<Marquee className="ps-convo-title" text={session.title?.trim() || 'New chat'} active={selected} /></span>
-    <span className="ps-convo-meta"><time dateTime={stampOf(session)}>{shortTime(stampOf(session))}</time><span aria-hidden="true">·</span><StatusLabel tone={status.tone} label={status.label} /></span>
+    <span className="ps-convo-meta"><time dateTime={stampOf(session)}>{shortTime(stampOf(session))}</time><span aria-hidden="true">·</span><StatusLabel tone={status.tone} label={status.label} />{queued && <><span aria-hidden="true">·</span><span className={`convo-waiting${queued.paused ? ' paused' : ''}`}>{waitingLabel(queued)}</span></>}</span>
   </button>{tooltip.open && reason && createPortal(<span ref={tooltip.bubble} className="runtime-problem-tooltip" id={tipId} role="tooltip" style={tooltip.point}>{reason}</span>, document.body)}</li>
 }
 

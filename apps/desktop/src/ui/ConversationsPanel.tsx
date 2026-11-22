@@ -2,6 +2,7 @@
 // selected bot, grouped by the project each one works in (Phase 1A: bots work
 // in every project), newest first, with bot-to-bot conversations branching
 // under the conversation that started them.
+import { useQueueWaiting, waitingLabel } from './queueOverview'
 import { Collapse } from './Collapse'
 import { Marquee } from './Marquee'
 import { StatusLabel, conversationStatus } from './ProjectsSidebar'
@@ -94,6 +95,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
   /** Kept for callers; hiding the panel now lives in the main header (28 October 2026). */
   onClose?: () => void
 }) {
+  const waitingQueues = useQueueWaiting()
   // Conversations nothing was said in are not listed, except the open one.
   const tree = useMemo(() => conversationTree(sessions.filter((session) => session.id === selectedSessionId || !isEmptyConversation(session)), agent.id), [sessions, agent.id, selectedSessionId])
   const activeId = sideSessionId ?? selectedSessionId
@@ -176,7 +178,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
               <span className="convo-title-line">{session.origin?.kind === 'mcp' && <McpMark client={session.origin.client} />}<Marquee className="convo-title" text={title} active={active} /></span>
               {node.kind === 'side'
                 ? <span className="convo-sub">{node.role === 'sender' ? `Asked ${peerName}` : `From ${peerName}`}</span>
-                : <span className="convo-sub convo-meta"><time>{relativeTime(session.lastMessageAt ?? session.updatedAt ?? session.createdAt, now)}</time><span aria-hidden="true">·</span><StatusLabel {...conversationStatus({ ...session, state: presentedSessionState(session) }, false)} /></span>}
+                : <span className="convo-sub convo-meta"><time>{relativeTime(session.lastMessageAt ?? session.updatedAt ?? session.createdAt, now)}</time><span aria-hidden="true">·</span><StatusLabel {...conversationStatus({ ...session, state: presentedSessionState(session) }, false)} />{waitingQueues.get(session.id) && <><span aria-hidden="true">·</span><span className={`convo-waiting${waitingQueues.get(session.id)!.paused ? ' paused' : ''}`}>{waitingLabel(waitingQueues.get(session.id)!)}</span></>}</span>}
             </span>
             {session.link?.movedTo ? <MachineBadge name={session.link.movedTo.name} /> : node.kind !== 'side' ? null : needsYou ? <span className="convo-flag needs">Needs you</span> : failed ? <span className="convo-flag failed">Failed</span> : busy ? <i className="convo-dot" aria-label="Working" /> : node.kind === 'side' ? <time className="convo-time">{relativeTime(session.lastMessageAt ?? session.updatedAt ?? session.createdAt, now)}</time> : null}
           </button>}

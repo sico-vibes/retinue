@@ -39,6 +39,7 @@
 :root[data-theme="light"] .team-row.selected .leader-badge { border-color: #ffffff; }
 .role-chip { max-width: 140px; padding: 1px 6px; overflow: hidden; flex: 0 1 auto; color: var(--text-2); border: 1px solid var(--line); border-radius: 6px; background: var(--surface-subtle); font-size: var(--fs-2xs); font-weight: 500; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
 .bot-row-preview.waiting { color: var(--warning); }
+.bot-row-preview.queued { color: var(--text-2); }
 .team-hidden-toggle { margin: 6px 6px 10px; padding: 6px 8px; display: flex; align-items: center; gap: 6px; color: var(--text-3); border: 0; border-radius: 8px; background: transparent; font-size: var(--fs-2xs); cursor: pointer; }
 .team-hidden-toggle:hover { color: var(--text-1); background: var(--surface-hover); }
 

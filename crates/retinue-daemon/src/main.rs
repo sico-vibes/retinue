@@ -2091,7 +2091,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "attention.focus" => attention_focus(st, &p),
         "session.handoff.draft" => handoff_draft(st, &p),
         "turn.retry.cancel" => retry::cancel_rpc(st, &p).await,
-        "session.queue.add" | "session.queue.list" | "session.queue.update" | "session.queue.reorder" | "session.queue.delete" | "session.queue.send_now" | "session.queue.resume" => queue::queue_rpc(st, method, &p).await,
+        "session.queue.add" | "session.queue.list" | "session.queue.update" | "session.queue.reorder" | "session.queue.delete" | "session.queue.send_now" | "session.queue.resume" | "session.queue.overview" => queue::queue_rpc(st, method, &p).await,
         "session.cancel" => cancel_session_turn(st, p["sessionId"].as_str().unwrap_or("")).await,
         "session.close" => close_session(st, p["sessionId"].as_str().unwrap_or("")).await,
         "session.warm" => session_warm(st, p).await,
@@ -6942,7 +6942,12 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     if provider_gate::apply_new_provider_defaults(&st.db).is_err() { tracing::warn!("provider defaults could not be saved"); }
     load_saved_runtimes(&st).await;
     clock.step("saved-runtimes");
-    if let Ok(paused) = st.db.queue_paused_sessions() { st.queue.mark_startup_paused(paused); }
+    // 22 November 2026: only a queue that may safely go on is sent after a
+    // restart; the rest stay paused (and the lists show them).
+    match st.db.queue_startup_review() {
+        Ok(rows) => { let (send, hold) = queue::startup_split(rows, chrono::Utc::now()); st.queue.mark_startup_paused(hold); st.queue.set_resume_after_start(send); }
+        Err(_) => { if let Ok(paused) = st.db.queue_paused_sessions() { st.queue.mark_startup_paused(paused); } }
+    }
     clock.step("queue-paused");
     // 20 November 2026: state left by the previous process is settled *before*
     // the ready line, because these steps reconcile whatever looks unfinished.
@@ -6998,6 +7003,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     outside::startup(&st);
     // Wave 14: a fresh token and endpoint file for the Retinue MCP, when it is on.
     external::startup(&st);
+    external::watch_endpoint(&st);
     clock.step("endpoints");
     println!("{}", ready_line(paths::headless(), &addr.to_string(), &token));
     use std::io::Write;
@@ -7073,6 +7079,13 @@ async fn resume_after_ready(st: AppState) {
     // drain can start them (the same fast path every turn ending uses).
     let restored_queue = st.clone();
     tokio::spawn(async move { team::drain_queued_deliveries(&restored_queue, None).await; });
+    let resumed = st.clone();
+    let resume_queues = st.queue.take_resume_after_start();
+    tokio::spawn(async move {
+        for session_id in resume_queues {
+            if !team::session_busy(&resumed, &session_id).await { queue::drain_next(&resumed, &session_id, true).await; }
+        }
+    });
     tokio::spawn(retry::sweep_loop(st.clone()));
     // 16 November 2026: a chat channel that still has its credential picks up
     // polling again, so a restart does not silently stop the owner's chat.

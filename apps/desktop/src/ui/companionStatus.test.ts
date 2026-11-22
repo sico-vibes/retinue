@@ -21,6 +21,14 @@ describe('companion status from live app state', () => {
     expect(deriveCompanionStatus({ connected: true, runtime, session })).toEqual({ mood: 'tool_activity', label: 'Run tests' })
   })
 
+  it('never shows an idle conversation as working because of a step its ended turn left running', () => {
+    // 22 November 2026: Ada's avatar showed the working dots on an idle conversation.
+    const session = { id: 's-idle', runtimeId: runtime.id, state: 'idle', updatedAt: new Date(Date.now() - 60_000).toISOString(), tools: [{ id: 'old', turnId: 'turn-old', state: 'running', title: 'Ran a command' }] }
+    const status = deriveCompanionStatus({ connected: true, runtime, session })
+    expect(status.mood).not.toBe('tool_activity')
+    expect(['working', 'thinking', 'tool_activity', 'file_activity']).not.toContain(status.mood)
+  })
+
   it('distinguishes thinking, visible typing, local composer, and file updates', () => {
     const session = { id: 's-1', runtimeId: runtime.id, state: 'working' }
     expect(deriveCompanionStatus({ connected: true, runtime, session: { ...session, messages: [{ role: 'thinking' }] } }).mood).toBe('thinking')

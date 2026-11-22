@@ -1853,6 +1853,8 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     notifyFixtureDaemon('queue.changed', { sessionId: session.id, items: queue.items.map((entry) => ({ ...entry })), paused: queue.paused })
     return { cancelled: true } as T
   }
+  // `?queue-paused`: two messages wait, paused, in Codex's conversation (22 November 2026).
+  if (method === 'session.queue.overview') return { sessions: flags().has('queue-paused') ? [{ sessionId: 'session-codex', count: 2, paused: true }] : [] } as T
   if (typeof method === 'string' && method.startsWith('session.queue.')) {
     // An in-memory stand-in for the daemon's durable queue so the preview can show every state.
     const session = sessions.find((item) => item.id === params.sessionId)

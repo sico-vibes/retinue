@@ -1,6 +1,7 @@
 // Bot-first sidebar (Phase 1A, owner decision 29 October 2026): one list of
 // bots, the CEO pinned on top. Bots work in every project; a bot's
 // conversations are grouped by project in its conversations panel.
+import { useQueueWaiting, type QueueWaiting } from './queueOverview'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ProjectIcon } from './ProjectIcon'
 import { Archive, ArrowDownUp, Users, Check, ChevronRight, Copy, Eye, EyeOff, FolderInput, FolderOpen, FolderPlus, Lock, LockOpen, MailOpen, Mail, Pencil, Pin, PinOff, Plus, Settings2, Tag, Trash2, X, Copy as Duplicate, Download, Star } from 'lucide-react'
@@ -327,6 +328,7 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
     }
   }
 
+  const waitingQueues = useQueueWaiting()
   const renderRow = (agent: Agent) => {
     const session = mainSessionFor(sessions, agent.id)
     const runtime = runtimes.find((item) => item.id === agent.runtimeId)
@@ -342,6 +344,10 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
     const otherFailures = connected ? unseenFailures(sessions, agent.id, unreadSessionIds).filter((item) => item.id !== session?.id) : []
     const failed = connected && (status.mood === 'error' || otherFailures.length > 0)
     const failedPreview = otherFailures.length && !waiting && !working ? (otherFailures.length === 1 ? 'A conversation stopped with an error' : `${otherFailures.length} conversations stopped with an error`) : null
+    // Messages waiting in a queue, in any of this employee's conversations (22 November 2026).
+    const queued = sessions.filter((item) => item.agentId === agent.id).map((item) => waitingQueues.get(item.id)).filter((entry): entry is QueueWaiting => !!entry)
+    const queuedCount = queued.reduce((sum, entry) => sum + entry.count, 0)
+    const queuedPreview = queuedCount && !waiting && !working && !failedPreview ? `${queuedCount === 1 ? '1 message' : `${queuedCount} messages`} waiting${queued.some((entry) => entry.paused) ? ' · paused' : ''}` : null
     return <button key={agent.id} type="button" role="treeitem" data-agent-id={agent.id} aria-current={selected ? 'true' : undefined} aria-selected={selected} aria-describedby={runtimeIssue ? `runtime-problem-${runtime!.id}-${agent.id}` : undefined}
       aria-label={`${agent.name}${agent.role ? `, ${agent.role}` : ''}${isManager(agent) ? ', Manager' : ''}${approval ? ', needs approval' : failedPreview ? `, ${failedPreview.toLowerCase()}` : unread ? ', unread' : ''}`}
       tabIndex={selected || (!selectedAgentId && rowOrder[0]?.id === agent.id) ? 0 : -1}
@@ -412,7 +418,7 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
           {(unread || approval || failedPreview) && <i className={`unread-dot ${approval ? 'approval' : failedPreview || (unread && failed) ? 'failed' : ''}`} aria-hidden="true" />}
           {haze && (waiting || failed || working) ? <span className={`haze-row-state ${waiting ? 'needs' : failed ? 'failed' : 'working'}`}>{waiting ? 'Needs you' : failed ? 'Failed' : 'Working'}</span> : (session?.lastMessageAt ?? session?.updatedAt) && <time>{shortTime((session.lastMessageAt ?? session.updatedAt)!)}</time>}
         </span>
-        <span className="bot-row-line"><span className={`bot-row-preview ${waiting ? 'waiting' : working ? 'active' : failedPreview ? 'failed' : ''}`}>{failedPreview ?? preview}</span></span>
+        <span className="bot-row-line"><span className={`bot-row-preview ${waiting ? 'waiting' : working ? 'active' : failedPreview ? 'failed' : queuedPreview ? 'queued' : ''}`}>{failedPreview ?? queuedPreview ?? preview}</span></span>
       </span>
     </button>
   }

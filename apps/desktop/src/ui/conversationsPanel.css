@@ -24,6 +24,9 @@
 .convo-row.active .convo-open { color: var(--text-1); }
 .convo-copy { min-width: 0; flex: 1; display: grid; gap: 2px; }
 .convo-meta { display: flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+/* Messages waiting in this conversation's queue; a paused queue reads as needing the owner (22 November 2026). */
+.convo-waiting { white-space: nowrap; }
+.convo-waiting.paused { color: var(--warning); }
 .convo-title { overflow: hidden; font-size: var(--fs-sm); text-overflow: ellipsis; white-space: nowrap; }
 .convo-sub { overflow: hidden; color: var(--text-3); font-size: var(--fs-2xs); text-overflow: ellipsis; white-space: nowrap; }
 .convo-time { flex: 0 0 auto; color: var(--text-3); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
