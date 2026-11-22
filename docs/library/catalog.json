@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "fd003735",
+  "revision": "5b7266dd",
   "documentCount": 450,
   "assets": [
     {
@@ -1076,7 +1076,7 @@
       "title": "Runtimes and adapters",
       "section": "Architecture & internals",
       "status": "Reference",
-      "sha256": "f34f3ae44bc66f84c271e8ae5baa4447db2d8e47523d423a342fe37e8dd4c569",
+      "sha256": "1a21f1be7196dda3158182a9b248bb02f12f1027583178e05e07253fe45f08eb",
       "headings": [
         {
           "id": "purpose",
@@ -3366,7 +3366,7 @@
       "title": "Invariants",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "edc892a341a3ed733f698dbc935bed464bf44e8324c1399ae548372b69be39e0",
+      "sha256": "7f22d0378295a59ad08d852e480c8823e72ebd0ce98381c5e98e42f79fa04ed4",
       "headings": [
         {
           "id": "safety-and-privacy",
@@ -5889,7 +5889,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "4048c27436c56a5d66b91b73454f51b7b8a721b9d3c00e552f78e61cc51f9984",
+      "sha256": "c37e22ec0a9034aa8954246fd31c4c9586c2c8858d0e59140cc1c87d60a0a839",
       "headings": [
         {
           "id": "update-commands",
@@ -6169,6 +6169,11 @@
         {
           "id": "follow-up-prompt-suggestions-21-november-2026",
           "text": "Follow-up prompt suggestions (21 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "installing-and-updating-the-coding-agent-clis-21-november-2026",
+          "text": "Installing and updating the coding-agent CLIs (21 November 2026)",
           "level": 2
         }
       ]
@@ -24624,7 +24629,7 @@
       "title": "Remote mode: threat model",
       "section": "Remote specifications",
       "status": "Remote specification",
-      "sha256": "30c3971229d344a692b2f2bf475be89eefa936b911150254319342e9b7af9859",
+      "sha256": "89a7333d1f63f0f3f351bdb902c2868f045dca55e086b2b87c22e22c97f645db",
       "headings": [
         {
           "id": "1-the-core-fact",
@@ -24774,6 +24779,11 @@
         {
           "id": "24-projects-on-another-machine-from-the-owners-devices-17-november-2026",
           "text": "24. Projects on another machine, from the owner's devices (17 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "25-installing-and-updating-coding-agent-clis-from-inside-the-app-21-november-2026",
+          "text": "25. Installing and updating coding-agent CLIs from inside the app (21 November 2026)",
           "level": 2
         }
       ]
