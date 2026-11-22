@@ -81,7 +81,17 @@ async function main() {
     const unzip = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', `Expand-Archive -LiteralPath '${zip}' -DestinationPath '${expanded}' -Force`], { encoding: 'utf8' })
     if (unzip.status !== 0) throw new Error(`the zip could not be expanded: ${unzip.stderr || unzip.error || 'unknown error'}`)
     const extracted = join(expanded, DRIVER.exeName)
-    if (!existsSync(extracted)) throw new Error(`the zip holds no ${DRIVER.exeName}.`)
+    // 22 November 2026: on a newer runner image Expand-Archive exited 0 and left
+    // no exe behind, although the pinned zip holds it at the top level. Try the
+    // system's bsdtar once, then say what the folder holds instead of guessing.
+    if (!existsSync(extracted)) {
+      const tar = spawnSync('tar', ['-xf', zip, '-C', expanded], { encoding: 'utf8' })
+      if (!existsSync(extracted)) {
+        const { readdirSync } = await import('node:fs')
+        const found = readdirSync(expanded)
+        throw new Error(`the zip holds no ${DRIVER.exeName} after unpacking (Expand-Archive said: ${(unzip.stdout + unzip.stderr).trim() || 'nothing'}; tar exited ${tar.status}: ${(tar.stderr || '').trim() || 'nothing'}; the folder holds: ${found.join(', ') || 'nothing'}). An antivirus may have removed it.`)
+      }
+    }
 
     const actual = sha256(extracted)
     if (actual !== DRIVER.exeSha256) {

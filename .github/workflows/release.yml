@@ -110,7 +110,12 @@ jobs:
           $triple = (rustc -vV | Select-String '^host: (.+)$').Matches[0].Groups[1].Value
           $dir = Join-Path $env:RUNNER_TEMP 'owner-computer-driver'
           node scripts/fetch-owner-computer-driver.mjs --dest $dir
-          if ($LASTEXITCODE -ne 0) { throw 'The computer-use driver could not be fetched and checked.' }
+          if ($LASTEXITCODE -ne 0) {
+            # Read-only: say whether Defender removed the driver (22 November 2026).
+            Get-MpThreatDetection -ErrorAction SilentlyContinue | Select-Object -Last 5 ThreatID, ActionSuccess, InitialDetectionTime, @{n='Resources';e={$_.Resources -join '; '}} | Format-List | Out-String | Write-Host
+            Get-MpThreat -ErrorAction SilentlyContinue | Select-Object -Last 5 ThreatName, SeverityID | Format-List | Out-String | Write-Host
+            throw 'The computer-use driver could not be fetched and checked.'
+          }
           Copy-Item (Join-Path $dir 'open-computer-use.exe') "apps/desktop/src-tauri/binaries/open-computer-use-$triple.exe" -Force
 
       - name: Build the app without bundling
