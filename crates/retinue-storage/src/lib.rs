@@ -4270,11 +4270,15 @@ impl Storage {
     pub fn session_brief(&self, id: &str) -> Result<Value, StorageError> {
         let c = self.conn.lock().map_err(|_| StorageError::Poisoned)?;
         let raw: Option<String> = c.query_row(
-            "SELECT json_object('id',id,'runtimeId',runtime_id,'agentId',agent_id,'provider',provider,'providerSessionId',provider_session_id,'projectPath',project_path,'title',COALESCE(title_override,title),'state',state,'archived',json(CASE WHEN archived=1 THEN 'true' ELSE 'false' END),'projectId',COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),'link',json_extract(data,'$.link'),'lastMessageAt',(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1)) FROM sessions WHERE id=?1",
+            "SELECT json_object('id',id,'runtimeId',runtime_id,'agentId',agent_id,'provider',provider,'providerSessionId',provider_session_id,'projectPath',project_path,'title',COALESCE(title_override,title),'state',state,'archived',json(CASE WHEN archived=1 THEN 'true' ELSE 'false' END),'projectId',COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),'link',json_extract(data,'$.link'),'importMeta',json_extract(data,'$.import'),'resumableNow',json(CASE WHEN resumable!=0 AND provider_session_id IS NOT NULL AND EXISTS(SELECT 1 FROM agents a JOIN runtimes r ON r.id=a.runtime_id WHERE a.id=sessions.agent_id AND r.provider=sessions.provider) THEN 'true' ELSE 'false' END),'lastMessageAt',(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1)) FROM sessions WHERE id=?1",
             [id],
             |r| r.get(0),
         ).optional()?;
-        Ok(serde_json::from_str(&raw.ok_or(StorageError::AgentNotFound)?)?)
+        let mut brief: Value = serde_json::from_str(&raw.ok_or(StorageError::AgentNotFound)?)?;
+        let imported = imported_summary(brief.get("importMeta").cloned().unwrap_or(Value::Null), brief["resumableNow"].as_bool() == Some(true));
+        if let Some(object) = brief.as_object_mut() { object.remove("importMeta"); object.remove("resumableNow"); }
+        if let Some(imported) = imported { brief["imported"] = imported; }
+        Ok(brief)
     }
     pub fn session_event_summary(&self, id: &str) -> Result<Value, StorageError> {
         self.read_in(&self.read_conn, |c| session_event_summary_locked(c, id))
@@ -8622,9 +8626,25 @@ fn search_date_prefix(raw: &str) -> Option<String> {
     Some(parsed.naive_utc().format("%Y-%m-%dT%H:%M:%S").to_string())
 }
 
+/// The `imported` field a session row carries when it is imported history:
+/// `{source, conversationId, canResumeWith, readOnly}`. `canResumeWith` is only
+/// claimed while the stored row is still resumable and its bot is on the source
+/// agent, which is what the read-only guard checks (apart from the file being
+/// there). Present only for an import, like `origin`.
+fn imported_summary(meta: Value, resumable_now: bool) -> Option<Value> {
+    let meta = meta.as_object()?;
+    let source = meta.get("source")?.as_str()?;
+    Some(json!({
+        "source": source,
+        "conversationId": meta.get("conversationId").cloned().unwrap_or(Value::Null),
+        "canResumeWith": if resumable_now { meta.get("canResumeWith").cloned().unwrap_or(Value::Null) } else { Value::Null },
+        "readOnly": !resumable_now,
+    }))
+}
+
 fn session_event_summary_locked(c: &Connection, id: &str) -> Result<Value, StorageError> {
     let json: Option<String> = c.query_row(
-        "SELECT json_object('id',id,'runtimeId',runtime_id,'agentId',agent_id,'provider',provider,'title',COALESCE(title_override,title),'modelLock',json(model_lock_json),'archived',json(CASE WHEN archived=1 THEN 'true' ELSE 'false' END),'state',state,'limitedUntil',limited_until,'limitAutoResume',json(CASE WHEN limit_auto_resume!=0 THEN 'true' ELSE 'false' END),'limitSnoozed',json(CASE WHEN limit_snoozed!=0 THEN 'true' ELSE 'false' END),'snoozed',json(CASE WHEN snoozed_until_needed!=0 THEN 'true' ELSE 'false' END),'resumable',json(CASE WHEN resumable!=0 THEN 'true' ELSE 'false' END),'createdAt',created_at,'updatedAt',updated_at,'workspaceLabel',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path),'Casual'),'projectId',COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),'projectName',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path)),'fanoutId',(SELECT f.id FROM fanouts f WHERE f.id=json_extract(sessions.data,'$.fanoutId')),'origin',json(json_extract(data,'$.origin')),'projectApprovalMode',(SELECT CASE WHEN json_valid(q.overrides_json) THEN json_extract(q.overrides_json,'$.approvalMode') END FROM projects q WHERE q.id=COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path))),'link',json_extract(data,'$.link'),'lastMessageAt',(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1)) FROM sessions WHERE id=?1",
+        "SELECT json_object('id',id,'runtimeId',runtime_id,'agentId',agent_id,'provider',provider,'title',COALESCE(title_override,title),'modelLock',json(model_lock_json),'archived',json(CASE WHEN archived=1 THEN 'true' ELSE 'false' END),'state',state,'limitedUntil',limited_until,'limitAutoResume',json(CASE WHEN limit_auto_resume!=0 THEN 'true' ELSE 'false' END),'limitSnoozed',json(CASE WHEN limit_snoozed!=0 THEN 'true' ELSE 'false' END),'snoozed',json(CASE WHEN snoozed_until_needed!=0 THEN 'true' ELSE 'false' END),'resumable',json(CASE WHEN resumable!=0 THEN 'true' ELSE 'false' END),'createdAt',created_at,'updatedAt',updated_at,'workspaceLabel',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path),'Casual'),'projectId',COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path)),'projectName',COALESCE((SELECT p.name FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.name FROM projects p WHERE p.path=sessions.project_path)),'fanoutId',(SELECT f.id FROM fanouts f WHERE f.id=json_extract(sessions.data,'$.fanoutId')),'origin',json(json_extract(data,'$.origin')),'projectApprovalMode',(SELECT CASE WHEN json_valid(q.overrides_json) THEN json_extract(q.overrides_json,'$.approvalMode') END FROM projects q WHERE q.id=COALESCE((SELECT p.id FROM projects p WHERE p.id=json_extract(sessions.data,'$.projectId')),(SELECT p.id FROM projects p WHERE p.path=sessions.project_path))),'link',json_extract(data,'$.link'),'importMeta',json_extract(data,'$.import'),'resumableNow',json(CASE WHEN resumable!=0 AND provider_session_id IS NOT NULL AND EXISTS(SELECT 1 FROM agents a JOIN runtimes r ON r.id=a.runtime_id WHERE a.id=sessions.agent_id AND r.provider=sessions.provider) THEN 'true' ELSE 'false' END),'lastMessageAt',(SELECT m.created_at FROM messages m WHERE m.session_id=sessions.id AND m.role IN ('user','assistant') ORDER BY m.sequence DESC LIMIT 1)) FROM sessions WHERE id=?1",
         [id],
         |r| r.get(0),
     ).optional()?;
@@ -8633,6 +8653,12 @@ fn session_event_summary_locked(c: &Connection, id: &str) -> Result<Value, Stora
     if summary["origin"].is_null() {
         if let Some(object) = summary.as_object_mut() { object.remove("origin"); }
     }
+    // Conversation import (21 November 2026): the row says when it is imported
+    // history, so the list, the header and the companion can mark it read-only
+    // before a prompt fails.
+    let imported = imported_summary(summary.get("importMeta").cloned().unwrap_or(Value::Null), summary["resumableNow"].as_bool() == Some(true));
+    if let Some(object) = summary.as_object_mut() { object.remove("importMeta"); object.remove("resumableNow"); }
+    if let Some(imported) = imported { summary["imported"] = imported; }
     if summary["state"] != "limited" {
         if let Some(object) = summary.as_object_mut() { object.remove("limitAutoResume"); object.remove("limitSnoozed"); }
     }

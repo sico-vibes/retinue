@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "5b7266dd",
+  "revision": "d2d74344",
   "documentCount": 450,
   "assets": [
     {
@@ -3366,7 +3366,7 @@
       "title": "Invariants",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "7f22d0378295a59ad08d852e480c8823e72ebd0ce98381c5e98e42f79fa04ed4",
+      "sha256": "b5b9ad8418d56d298729a443973e9904cba0511d1c388c3be03877431aaa068b",
       "headings": [
         {
           "id": "safety-and-privacy",
@@ -5889,7 +5889,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "c37e22ec0a9034aa8954246fd31c4c9586c2c8858d0e59140cc1c87d60a0a839",
+      "sha256": "1a6009117200d58b33335fc934088c50e41bf951143814b8e29d71784d19266d",
       "headings": [
         {
           "id": "update-commands",
