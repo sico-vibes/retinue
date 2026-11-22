@@ -4,6 +4,9 @@ use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 pub mod providers;
 pub use providers::{acp_launch_args, acp_provider, discovery_ids, install_hint, is_acp_provider, is_main_provider, optional_providers, sign_in_command, AcpProvider, ACP_PROVIDERS, MAIN_PROVIDERS, PI_DISPLAY_NAME, PI_INSTALL_HINT, PI_PROBE_TOKEN, PI_PROVIDER, PI_SIGN_IN_COMMAND};
+// 21 November 2026: the version and protocol answers, remembered per binary.
+mod probe_cache;
+pub use probe_cache::{ProbeCache, ProbeEntry, SpawnCounter};
 use std::{
     collections::BTreeMap,
     env,
@@ -58,6 +61,24 @@ pub struct DiscoveredRuntime {
     pub probe_error: Option<String>,
     #[serde(default)]
     pub probe_step: Option<String>,
+    /// 21 November 2026: how old the cached version and protocol answer was when
+    /// this row was served, in milliseconds (`None` when the binary was probed
+    /// now). Settings can show it as "checked N minutes ago".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub probe_cached_age_ms: Option<u64>,
+}
+
+/// What one scan did, for the daemon's log line and the timing example.
+#[derive(Debug)]
+pub struct DiscoveryReport {
+    /// One row per provider, as before.
+    pub runtimes: Vec<DiscoveredRuntime>,
+    /// Providers whose version and protocol answers came from the cache.
+    pub cached: usize,
+    /// Providers whose version or protocol answer was probed now.
+    pub probed: usize,
+    /// CLI processes the whole scan started, sign-in checks included.
+    pub spawns: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -184,11 +205,12 @@ fn quoted_tokens(input: &str) -> Vec<String> {
 }
 
 // All diagnostics are fixed text; provider stdout/stderr never becomes an error.
-async fn bounded_output(exe: &Path, args: &[&str]) -> Result<String, &'static str> {
+async fn bounded_output(exe: &Path, args: &[&str], spawns: &SpawnCounter) -> Result<String, &'static str> {
     let mut cmd = Command::new(exe);
     prepare_command(&mut cmd);
     cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     let mut child = cmd.spawn().map_err(|_| "Could not start the coding agent.")?;
+    spawns.count();
     let process_tree = ProcessTree::attach(&mut child).map_err(|_| "Could not supervise the coding agent.")?;
     let stdout = child.stdout.take().ok_or("Could not read the probe result.")?;
     let stderr = child.stderr.take().ok_or("Could not read the probe result.")?;
@@ -228,6 +250,16 @@ pub async fn discover() -> Vec<DiscoveredRuntime> { discover_except(&[]).await }
 /// and no process for an id in `disabled`. Entries that are not provider ids
 /// (a runtime id, say) are ignored here; the daemon marks those rows itself.
 pub async fn discover_except(disabled: &[String]) -> Vec<DiscoveredRuntime> {
+    // No memory and no forgiveness: the old behaviour, for a caller that does
+    // not hold a cache (the account tests, and the daemon's own tests).
+    discover_except_cached(disabled, &mut ProbeCache::empty(), false).await.runtimes
+}
+
+/// The scan the daemon runs, with the version and protocol answers kept per
+/// binary (21 November 2026). `force` is an explicit "Scan again": it bypasses
+/// the cache and probes every installed CLI, and the fresh answers replace the
+/// cached ones. A turned-off provider is still never resolved or probed.
+pub async fn discover_except_cached(disabled: &[String], cache: &mut ProbeCache, force: bool) -> DiscoveryReport {
     let skip: Vec<bool> = discovery_ids().iter().map(|id| disabled.iter().any(|off| off == id)).collect();
     // Resolve away from the async executor; PATH may include slow network drives.
     // A table provider's executable is its row's `command` (Cursor's CLI is `agent`, not `cursor`).
@@ -235,13 +267,42 @@ pub async fn discover_except(disabled: &[String]) -> Vec<DiscoveredRuntime> {
         let skip = skip.clone();
         move || discovery_ids().into_iter().zip(skip).map(|(id, off)| (id, if off { None } else { resolve_command(acp_provider(id).map_or(id, |row| row.command)) }, off)).collect::<Vec<_>>()
     }).await;
-    let Ok(specs) = specs else { return Vec::new(); };
+    let Ok(specs) = specs else { return DiscoveryReport { runtimes: Vec::new(), cached: 0, probed: 0, spawns: 0 } };
     // The OpenCode stored-credential check and Pi's `auth.json` check are
     // CLI-free and only ever read these variables; tests pass a synthetic set
     // instead.
     let environment = discovery_environment();
-    let probes = specs.into_iter().map(|(id, resolved, off)| { let environment = &environment; async move { if off { None } else { discover_one(id, resolved, environment).await } } });
-    one_per_provider(futures_util::future::join_all(probes).await.into_iter().flatten().collect())
+    let mut prepared = Vec::with_capacity(specs.len());
+    let mut candidate = std::collections::BTreeSet::new();
+    let mut cached = 0usize;
+    let mut probed = 0usize;
+    for (id, resolved, off) in specs {
+        if let Some(resolved) = resolved.as_ref() { candidate.insert(resolved.executable.to_string_lossy().to_lowercase()); }
+        // A turned-off provider is never asked, so it is never a cache hit either.
+        let hit = if off || force { None } else { resolved.as_ref().and_then(|resolved| cache.lookup(&resolved.executable)).cloned() };
+        if !off {
+            if hit.is_some() { cached += 1 } else { probed += 1 }
+        }
+        prepared.push((id, resolved, off, hit));
+    }
+    let spawns = SpawnCounter::new();
+    let probes = prepared.into_iter().map(|(id, resolved, off, hit)| {
+        let environment = &environment;
+        let spawns = spawns.clone();
+        async move {
+            if off { (None, None) } else { discover_one_with(id, resolved, environment, hit, &spawns).await }
+        }
+    });
+    let answered = futures_util::future::join_all(probes).await;
+    let mut runtimes = Vec::with_capacity(answered.len());
+    for (runtime, fresh) in answered {
+        if let Some(fresh) = fresh { cache.record(fresh); }
+        if let Some(runtime) = runtime { runtimes.push(runtime); }
+    }
+    // Only what this scan saw stays in the file, so it cannot grow stale forever.
+    cache.retain_seen(&candidate);
+    let runtimes = one_per_provider(runtimes);
+    DiscoveryReport { runtimes, cached, probed, spawns: spawns.total() }
 }
 
 /// One runtime per provider, always. Two answers for one provider (two copies of
@@ -275,48 +336,103 @@ fn safe_version(output: &str) -> Option<String> {
 pub async fn version_of(executable: &Path, args: &[String]) -> Option<String> {
     let mut argv = args.iter().map(String::as_str).collect::<Vec<_>>();
     argv.push("--version");
-    safe_version(&bounded_output(executable, &argv).await.ok()?)
+    safe_version(&bounded_output(executable, &argv, &SpawnCounter::detached()).await.ok()?)
 }
 
-/// One provider's probes. Public so the account tests can drive a fake CLI
-/// through the exact discovery path.
+/// One provider's probes, public so the account tests can drive a fake CLI
+/// through the exact discovery path. It never reads or writes a cache.
 pub async fn discover_one(id: &str, resolved: Option<ResolvedCommand>, environment: &[(String, String)]) -> Option<DiscoveredRuntime> {
-    let resolved = resolved?;
+    discover_one_with(id, resolved, environment, None, &SpawnCounter::detached()).await.0
+}
+
+/// One provider's probes, with the binary's version and protocol answer served
+/// from `cached` when it describes this exact file (21 November 2026). The
+/// second value is an entry to store: written only when a protocol check passed,
+/// so a failure is retried on the next scan.
+async fn discover_one_with(
+    id: &str,
+    resolved: Option<ResolvedCommand>,
+    environment: &[(String, String)],
+    cached: Option<ProbeEntry>,
+    spawns: &SpawnCounter,
+) -> (Option<DiscoveredRuntime>, Option<ProbeEntry>) {
+    let Some(resolved) = resolved else { return (None, None) };
     let mut runtime = DiscoveredRuntime {
         id: format!("rt_{id}_{}", short_hash(&resolved.executable.to_string_lossy())),
         host_id: "host_windows_local".into(), provider: id.into(), display_name: provider_display_name(id).into(),
         protocol_family: match id { "codex" => ProtocolFamily::CodexAppServer, "pi" => ProtocolFamily::PiRpc, p if is_acp_provider(p) => ProtocolFamily::Acp, _ => ProtocolFamily::ClaudeStream },
         executable_path: resolved.executable.to_string_lossy().into_owned(), launch_args: resolved.args.clone(),
         version: None, auth_state: AuthState::Unknown, gateway_auth_states: BTreeMap::new(), account: None,
-        status: "error".into(), capabilities: BTreeMap::new(), probe_error: None, probe_step: None,
+        status: "error".into(), capabilities: BTreeMap::new(), probe_error: None, probe_step: None, probe_cached_age_ms: None,
     };
-    let mut version_args = resolved.args.iter().map(String::as_str).collect::<Vec<_>>();
-    version_args.push("--version");
-    match bounded_output(&resolved.executable, &version_args).await {
-        Ok(output) => runtime.version = safe_version(&output),
-        Err(error) => { runtime.probe_step = Some("Version check".into()); runtime.probe_error = Some(error.into()); }
+    let identity = probe_cache::file_identity(&resolved.executable);
+    // A cached entry is only used when its path, size and modification time all
+    // match, and its protocol check passed. `force` never reaches here: the scan
+    // simply passes no entry.
+    let hit = cached.filter(|entry| identity == Some((entry.size, entry.modified_ms)) && entry.protocol_ok);
+    let mut fresh: Option<ProbeEntry> = None;
+    if let Some(entry) = hit {
+        runtime.probe_cached_age_ms = Some(entry.age_ms(probe_cache::now_ms()));
+        // The protocol is proven; the version answer is the only one that may be
+        // missing (its probe failed when the entry was written).
+        runtime.version = match entry.version.clone() {
+            Some(version) => Some(version),
+            None => {
+                let mut version_args = resolved.args.iter().map(String::as_str).collect::<Vec<_>>();
+                version_args.push("--version");
+                match bounded_output(&resolved.executable, &version_args, spawns).await {
+                    Ok(output) => safe_version(&output),
+                    Err(error) => { runtime.probe_step = Some("Version check".into()); runtime.probe_error = Some(error.into()); None }
+                }
+            }
+        };
+        runtime.status = "online".into();
+        // Filling in a version that failed then must not move the protocol
+        // check's own age, so the entry keeps its `checked_at`.
+        if let Some(identity) = identity {
+            let filled = runtime.version.is_some();
+            if filled {
+                fresh = Some(ProbeEntry { path: resolved.executable.to_string_lossy().into_owned(), size: identity.0, modified_ms: identity.1, version: runtime.version.clone(), protocol_ok: true, checked_at_ms: entry.checked_at_ms });
+            }
+        }
+    } else {
+        let mut version_args = resolved.args.iter().map(String::as_str).collect::<Vec<_>>();
+        version_args.push("--version");
+        match bounded_output(&resolved.executable, &version_args, spawns).await {
+            Ok(output) => runtime.version = safe_version(&output),
+            Err(error) => { runtime.probe_step = Some("Version check".into()); runtime.probe_error = Some(error.into()); }
+        }
+        let mut probe_args = resolved.args.iter().map(String::as_str).collect::<Vec<_>>();
+        match id { "opencode" => probe_args.extend(["acp", "--help"]), "codex" => probe_args.extend(["app-server", "--help"]), _ => probe_args.push("--help") }
+        let help = bounded_output(&resolved.executable, &probe_args, spawns).await;
+        let supported = help.as_ref().is_ok_and(|help| match id {
+            "opencode" => help.contains("ACP") || help.contains("acp"),
+            "codex" => help.contains("app-server"),
+            // Pi proves itself by advertising the mode flag it is launched with.
+            "pi" => help.contains(PI_PROBE_TOKEN) && help.contains("rpc"),
+            // A table provider proves itself by advertising the flag it is launched
+            // with (`--acp`); that is the check the installed CLI can answer.
+            p if is_acp_provider(p) => acp_provider(p).is_some_and(|row| help.to_lowercase().contains(row.probe_token)),
+            _ => help.contains("--input-format") && help.contains("stream-json"),
+        });
+        if !supported {
+            runtime.probe_step = Some("Protocol check".into());
+            runtime.probe_error = Some(help.err().unwrap_or("The CLI does not advertise the required protocol.").into());
+            // Failed probes are retained and retried, never negatively cached.
+            return (Some(runtime), None);
+        }
+        runtime.status = "online".into();
+        // A passed protocol check is the answer worth keeping. The `--version`
+        // probe is bounded by the same 6 s budget and its answer is a label, so
+        // it shares the entry and its time.
+        if let Some(identity) = identity {
+            fresh = Some(ProbeEntry {
+                path: resolved.executable.to_string_lossy().into_owned(), size: identity.0, modified_ms: identity.1,
+                version: runtime.version.clone(), protocol_ok: true, checked_at_ms: probe_cache::now_ms(),
+            });
+        }
     }
-    let mut probe_args = resolved.args.iter().map(String::as_str).collect::<Vec<_>>();
-    match id { "opencode" => probe_args.extend(["acp", "--help"]), "codex" => probe_args.extend(["app-server", "--help"]), _ => probe_args.push("--help") }
-    let help = bounded_output(&resolved.executable, &probe_args).await;
-    let supported = help.as_ref().is_ok_and(|help| match id {
-        "opencode" => help.contains("ACP") || help.contains("acp"),
-        "codex" => help.contains("app-server"),
-        // Pi proves itself by advertising the mode flag it is launched with.
-        "pi" => help.contains(PI_PROBE_TOKEN) && help.contains("rpc"),
-        // A table provider proves itself by advertising the flag it is launched
-        // with (`--acp`); that is the check the installed CLI can answer.
-        p if is_acp_provider(p) => acp_provider(p).is_some_and(|row| help.to_lowercase().contains(row.probe_token)),
-        _ => help.contains("--input-format") && help.contains("stream-json"),
-    });
-    if !supported {
-        runtime.probe_step = Some("Protocol check".into());
-        runtime.probe_error = Some(help.err().unwrap_or("The CLI does not advertise the required protocol.").into());
-        // Failed probes are retained and retried, never negatively cached.
-        return Some(runtime);
-    }
-    runtime.status = "online".into();
-    let sign_in = auth_status(id, &resolved.executable, &resolved.args, environment).await;
+    let sign_in = auth_status(id, &resolved.executable, &resolved.args, environment, spawns).await;
     runtime.auth_state = sign_in.state;
     runtime.gateway_auth_states = sign_in.gateways;
     if let Some(error) = sign_in.error {
@@ -330,7 +446,7 @@ pub async fn discover_one(id: &str, resolved: Option<ResolvedCommand>, environme
     runtime.account = match id {
         "claude" => sign_in.output.as_deref().and_then(account::from_claude_status),
         "opencode" => sign_in.output.as_deref().and_then(account::from_opencode_auth_list),
-        "codex" => account::read("codex", &resolved.executable, &resolved.args, &[]).await,
+        "codex" => account::read_counted("codex", &resolved.executable, &resolved.args, &[], spawns).await,
         _ => None,
     };
     for key in ["newSession", "resume", "cancel", "permissions", "usage", "files"] {
@@ -349,7 +465,7 @@ pub async fn discover_one(id: &str, resolved: Option<ResolvedCommand>, environme
         };
         runtime.capabilities.insert(key.into(), supported);
     }
-    Some(runtime)
+    (Some(runtime), fresh)
 }
 /// Pi's own stored sign-ins: `auth.json` under `PI_CODING_AGENT_DIR` (default
 /// `~/.pi/agent`). Only which providers have an entry is read; no credential
@@ -391,9 +507,9 @@ impl SignIn {
     }
 }
 
-async fn auth_status(provider: &str, exe: &Path, args: &[String], environment: &[(String, String)]) -> SignIn {
+async fn auth_status(provider: &str, exe: &Path, args: &[String], environment: &[(String, String)], spawns: &SpawnCounter) -> SignIn {
     if provider == "opencode" {
-        return opencode_auth_status(exe, args, environment).await;
+        return opencode_auth_status(exe, args, environment, spawns).await;
     }
     // Pi keeps its own sign-ins in `auth.json`; reading which providers have an
     // entry is a presence check that never builds a value, and it cannot see the
@@ -405,7 +521,7 @@ async fn auth_status(provider: &str, exe: &Path, args: &[String], environment: &
     // then `session/new`. No credential file or keyring is opened; the CLI
     // answers from the sign-in it already holds (Google's keyring for `agy`).
     if is_acp_provider(provider) {
-        return acp_auth_status(provider, exe, args).await;
+        return acp_auth_status(provider, exe, args, spawns).await;
     }
     let mut av = args.iter().map(String::as_str).collect::<Vec<_>>();
     match provider {
@@ -413,7 +529,7 @@ async fn auth_status(provider: &str, exe: &Path, args: &[String], environment: &
         "codex" => av.extend(["login", "status"]),
         _ => return SignIn::new(AuthState::Unknown, BTreeMap::new(), None),
     };
-    let out = match safe_status_output(exe, &av).await {
+    let out = match safe_status_output(exe, &av, spawns).await {
         Ok((_, text)) => text,
         Err(error) => return SignIn::new(AuthState::Unknown, BTreeMap::new(), Some(error)),
     };
@@ -447,8 +563,8 @@ async fn auth_status(provider: &str, exe: &Path, args: &[String], environment: &
 /// No credential file, keyring entry or token is read: the CLI answers from the
 /// sign-in it already holds, which for Antigravity is Google's own keyring
 /// profile. The probe is bounded and its process tree is killed afterwards.
-async fn acp_auth_status(provider: &str, exe: &Path, args: &[String]) -> SignIn {
-    let state = timeout(Duration::from_secs(ACP_SIGN_IN_TIMEOUT_SECS), acp_sign_in_probe(provider, exe, args))
+async fn acp_auth_status(provider: &str, exe: &Path, args: &[String], spawns: &SpawnCounter) -> SignIn {
+    let state = timeout(Duration::from_secs(ACP_SIGN_IN_TIMEOUT_SECS), acp_sign_in_probe(provider, exe, args, spawns))
         .await
         .ok()
         .flatten()
@@ -459,7 +575,7 @@ async fn acp_auth_status(provider: &str, exe: &Path, args: &[String]) -> SignIn 
     SignIn::new(state, BTreeMap::new(), None)
 }
 
-async fn acp_sign_in_probe(provider: &str, exe: &Path, args: &[String]) -> Option<AuthState> {
+async fn acp_sign_in_probe(provider: &str, exe: &Path, args: &[String], spawns: &SpawnCounter) -> Option<AuthState> {
     let cwd = AcpProbeDirectory::new(provider)?;
     let cwd_arg = cwd.path().to_string_lossy().into_owned();
     let mut command = Command::new(exe);
@@ -477,6 +593,7 @@ async fn acp_sign_in_probe(provider: &str, exe: &Path, args: &[String]) -> Optio
     #[cfg(test)]
     command.env("RETINUE_ACP_PROBE_FIXTURE", "1");
     let mut child = command.spawn().ok()?;
+    spawns.count();
     let process_tree = ProcessTree::attach(&mut child).ok()?;
     let outcome = acp_sign_in_exchange(&mut child, &cwd_arg).await;
     let _ = process_tree.terminate();
@@ -561,23 +678,23 @@ impl Drop for AcpProbeDirectory {
 /// source of truth for "a credential is stored"; only when it finds nothing
 /// does the CLI get asked. OpenCode 2 answers through a background service, so
 /// the whole phase is capped at 15 s.
-async fn opencode_auth_status(exe: &Path, args: &[String], environment: &[(String, String)]) -> SignIn {
+async fn opencode_auth_status(exe: &Path, args: &[String], environment: &[(String, String)], spawns: &SpawnCounter) -> SignIn {
     // A stored credential proves a credential is stored, never that it is
     // valid; the label stays "signed in" as it does today for `stored`.
     if let Some(states) = opencode_stored_gateways(environment) {
         return SignIn::new(aggregate_auth_states(&states), states, None);
     }
     let limit = Duration::from_secs(OPENCODE_SIGN_IN_TIMEOUT_SECS);
-    match timeout(limit, opencode_auth_status_from_cli(exe, args)).await {
+    match timeout(limit, opencode_auth_status_from_cli(exe, args, spawns)).await {
         Ok(result) => result,
         Err(_) => SignIn::new(AuthState::Unknown, BTreeMap::new(), Some("Sign-in status could not be checked.")),
     }
 }
-async fn opencode_auth_status_from_cli(exe: &Path, args: &[String]) -> SignIn {
+async fn opencode_auth_status_from_cli(exe: &Path, args: &[String], spawns: &SpawnCounter) -> SignIn {
     let limit = Duration::from_secs(OPENCODE_SIGN_IN_TIMEOUT_SECS);
     let mut av = args.iter().map(String::as_str).collect::<Vec<_>>();
     av.extend(["auth", "list"]);
-    if let Ok((true, output)) = safe_status_output_within(exe, &av, limit).await {
+    if let Ok((true, output)) = safe_status_output_within(exe, &av, limit, spawns).await {
         if let Some(states) = parse_opencode_auth_list(&output) {
             return SignIn { state: aggregate_auth_states(&states), gateways: states, error: None, output: Some(output) };
         }
@@ -593,7 +710,7 @@ async fn opencode_auth_status_from_cli(exe: &Path, args: &[String]) -> SignIn {
     // falls through to the plain v2 listing rather than ending the check.
     let mut verbose_args = args.iter().map(String::as_str).collect::<Vec<_>>();
     verbose_args.extend(["models", "--verbose"]);
-    if let Ok((true, output)) = safe_status_output_within(exe, &verbose_args, limit).await {
+    if let Ok((true, output)) = safe_status_output_within(exe, &verbose_args, limit, spawns).await {
         let states = opencode_model_gateways(&output);
         if !states.is_empty() {
             return SignIn::new(aggregate_auth_states(&states), states, None);
@@ -605,7 +722,7 @@ async fn opencode_auth_status_from_cli(exe: &Path, args: &[String]) -> SignIn {
     // it reports a quiet unknown rather than a checked-and-failed probe.
     let mut model_args = args.iter().map(String::as_str).collect::<Vec<_>>();
     model_args.push("models");
-    if let Ok((true, output)) = safe_status_output_within(exe, &model_args, limit).await {
+    if let Ok((true, output)) = safe_status_output_within(exe, &model_args, limit, spawns).await {
         if opencode_plain_model_listing_names_a_gateway(&output) {
             return SignIn::new(AuthState::Unknown, BTreeMap::new(), None);
         }
@@ -894,10 +1011,10 @@ fn opencode_plain_model_listing_names_a_gateway(output: &str) -> bool {
         line.trim().split_once('/').is_some_and(|(provider, model)| !model.is_empty() && safe_gateway_name(provider).is_some())
     })
 }
-async fn safe_status_output(exe: &Path, args: &[&str]) -> Result<(bool, String), &'static str> {
-    safe_status_output_within(exe, args, Duration::from_secs(SIGN_IN_TIMEOUT_SECS)).await
+async fn safe_status_output(exe: &Path, args: &[&str], spawns: &SpawnCounter) -> Result<(bool, String), &'static str> {
+    safe_status_output_within(exe, args, Duration::from_secs(SIGN_IN_TIMEOUT_SECS), spawns).await
 }
-async fn safe_status_output_within(exe: &Path, args: &[&str], limit: Duration) -> Result<(bool, String), &'static str> {
+async fn safe_status_output_within(exe: &Path, args: &[&str], limit: Duration, spawns: &SpawnCounter) -> Result<(bool, String), &'static str> {
     let mut cmd = Command::new(exe);
     prepare_command(&mut cmd);
     cmd.args(args)
@@ -906,6 +1023,7 @@ async fn safe_status_output_within(exe: &Path, args: &[&str], limit: Duration) -
         .stderr(Stdio::piped())
         .kill_on_drop(true);
     let mut child = cmd.spawn().map_err(|_| "Could not start the sign-in check.")?;
+    spawns.count();
     let process_tree = ProcessTree::attach(&mut child).map_err(|_| "Could not supervise the sign-in check.")?;
     let result = timeout(limit, child.wait_with_output()).await;
     let _ = process_tree.terminate();
@@ -1024,25 +1142,25 @@ mod tests {
     #[tokio::test]
     async fn an_acp_session_that_opens_is_signed_in_and_a_refusal_is_signed_out() {
         let (exe, args) = acp_probe_fixture("acp_fixture_signed_in");
-        assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args).await, Some(AuthState::Authenticated)));
+        assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args, &SpawnCounter::detached()).await, Some(AuthState::Authenticated)));
         let (exe, args) = acp_probe_fixture("acp_fixture_signed_out");
-        assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args).await, Some(AuthState::Unauthenticated)));
+        assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args, &SpawnCounter::detached()).await, Some(AuthState::Unauthenticated)));
         // Any other refusal says nothing about the sign-in.
         let (exe, args) = acp_probe_fixture("acp_fixture_refused");
-        assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args).await, Some(AuthState::Unknown)));
+        assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args, &SpawnCounter::detached()).await, Some(AuthState::Unknown)));
     }
 
     #[tokio::test]
     async fn the_acp_sign_in_answer_is_quiet_and_routed_for_every_table_provider() {
         let (exe, args) = acp_probe_fixture("acp_fixture_signed_in");
-        let SignIn { state, gateways, error, .. } = auth_status("antigravity", &exe, &args, &[]).await;
+        let SignIn { state, gateways, error, .. } = auth_status("antigravity", &exe, &args, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Authenticated));
         assert!(gateways.is_empty());
         assert!(error.is_none(), "a sign-in answer the server gave is not a probe failure");
         // The other table providers take the same path.
         let (exe, args) = acp_probe_fixture("acp_fixture_signed_out");
         for provider in ["qwen", "cursor", "grok"] {
-            let SignIn { state, error, .. } = auth_status(provider, &exe, &args, &[]).await;
+            let SignIn { state, error, .. } = auth_status(provider, &exe, &args, &[], &SpawnCounter::detached()).await;
             assert!(matches!(state, AuthState::Unauthenticated), "{provider}");
             assert!(error.is_none(), "{provider}");
         }
@@ -1210,7 +1328,7 @@ mod tests {
         let executable = std::env::current_exe().unwrap();
         let args = ["--exact", "tests::fake_opencode_auth_cli_process_fixture", "--nocapture"];
         let runtime = tokio::runtime::Builder::new_current_thread().enable_all().build().unwrap();
-        let (success, output) = runtime.block_on(safe_status_output(&executable, &args)).unwrap();
+        let (success, output) = runtime.block_on(safe_status_output(&executable, &args, &SpawnCounter::detached())).unwrap();
         assert!(success);
         let states = parse_opencode_auth_list(&output).unwrap();
         assert!(matches!(states.get("opencode-go"), Some(AuthState::Unauthenticated)));
@@ -1268,7 +1386,7 @@ mod tests {
     #[tokio::test]
     async fn opencode_v2_auth_list_row_signs_in_on_the_calling_path() {
         let command = auth_fixture("OpenCode Console  Default                     stored");
-        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[]).await;
+        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Authenticated));
         assert_eq!(gateways.len(), 1);
         assert!(matches!(gateways.get("opencode"), Some(AuthState::Authenticated)));
@@ -1277,7 +1395,7 @@ mod tests {
     #[tokio::test]
     async fn opencode_v2_auth_list_unknown_status_is_a_quiet_unknown() {
         let command = auth_fixture("OpenCode Console  Default  mystery-state");
-        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[]).await;
+        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Unknown));
         assert!(gateways.is_empty());
         assert!(error.is_none());
@@ -1293,7 +1411,7 @@ mod tests {
     #[tokio::test]
     async fn opencode_go_plain_models_is_a_quiet_unknown_not_a_sign_in() {
         let command = auth_fixture("opencode-go/glm-5.2");
-        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[]).await;
+        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Unknown), "a model listing is not proof of sign-in");
         assert!(gateways.is_empty());
         assert!(error.is_none());
@@ -1301,7 +1419,7 @@ mod tests {
     #[tokio::test]
     async fn opencode_zen_only_plain_models_is_a_quiet_unknown() {
         let command = auth_fixture("opencode/big-pickle");
-        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[]).await;
+        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Unknown));
         assert!(gateways.is_empty());
         assert!(error.is_none());
@@ -1392,7 +1510,7 @@ mod tests {
             executable: PathBuf::from("/bin/sh"),
             args: vec!["-c".into(), "sleep 30".into()],
         };
-        let result = timeout(Duration::from_secs(2), auth_status("opencode", &command.executable, &command.args, &environment)).await;
+        let result = timeout(Duration::from_secs(2), auth_status("opencode", &command.executable, &command.args, &environment, &SpawnCounter::detached())).await;
         let SignIn { state, gateways, error, .. } = result.expect("a stored credential must not wait on a slow CLI");
         assert!(matches!(state, AuthState::Authenticated));
         assert!(matches!(gateways.get("opencode"), Some(AuthState::Authenticated)));
@@ -1402,7 +1520,7 @@ mod tests {
     #[tokio::test]
     async fn opencode_presence_check_without_a_credential_falls_through_to_the_cli() {
         let command = auth_fixture("OpenCode Console  Default  stored");
-        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[]).await;
+        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Authenticated));
         assert!(matches!(gateways.get("opencode"), Some(AuthState::Authenticated)));
         assert!(error.is_none());

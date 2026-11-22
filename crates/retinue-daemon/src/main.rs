@@ -65,6 +65,9 @@ mod experiments;
 // Lane 6 (11 November 2026): what the owner is looking at, and the snooze that
 // keeps a conversation quiet until it needs them.
 mod attention;
+// 21 November 2026: streamed assistant text is packed into one row update and
+// one `message.delta` per window instead of one per token.
+mod coalesce;
 // Authorised media preview and the per-turn checkpoint report.
 mod media;
 mod checkpoints;
@@ -243,6 +246,50 @@ struct AppState {
     /// 21 November 2026: the composer's follow-up suggestion, one per
     /// conversation. Memory only: never in the database, a log or a backup.
     follow_up: Arc<follow_up::FollowUp>,
+    /// 21 November 2026: the version and protocol probes, remembered per binary
+    /// so a relaunch reuses yesterday's answer (performance item 7).
+    probe_cache: Arc<Mutex<retinue_runtime::ProbeCache>>,
+    /// 21 November 2026: whether the window has sent its first request since
+    /// launch, so work it does not need waits for that request.
+    first_request: Arc<FirstRequest>,
+}
+
+/// Whether the window's first request has arrived (21 November 2026).
+/// `app.snapshot`, `session.get` and `settings.get` are the first three calls
+/// the window makes, and catalogue warming stands behind them.
+#[derive(Default)]
+struct FirstRequest {
+    seen: std::sync::atomic::AtomicBool,
+    notify: tokio::sync::Notify,
+}
+
+impl FirstRequest {
+    fn note(&self) {
+        if !self.seen.swap(true, std::sync::atomic::Ordering::Relaxed) {
+            self.notify.notify_waiters();
+        }
+    }
+
+    fn seen(&self) -> bool {
+        self.seen.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Waits until the window has asked for something, or `cap` passes (a
+    /// headless host or a phone may never send one of those three methods).
+    async fn wait(&self, cap: std::time::Duration) {
+        if self.seen() {
+            return;
+        }
+        let notified = self.notify.notified();
+        tokio::pin!(notified);
+        // Register first, then read again: a request that landed between the two
+        // reads still wakes this wait instead of being missed.
+        notified.as_mut().enable();
+        if self.seen() {
+            return;
+        }
+        let _ = tokio::time::timeout(cap, notified).await;
+    }
 }
 #[derive(Clone)]
 struct Adapters {
@@ -674,6 +721,11 @@ async fn main_rpc(
             Json(error(req.id, "unsupported", "protocol version mismatch")),
         );
     }
+    // 21 November 2026: the window's first request is the signal that start-up
+    // work it does not need (the rest of the model catalogues) may run.
+    if matches!(req.method.as_str(), "app.snapshot" | "session.get" | "settings.get") {
+        st.first_request.note();
+    }
     let id = req.id.clone();
     match dispatch(&st, req.method.as_str(), req.params).await {
         Ok(v) => (
@@ -811,7 +863,25 @@ fn runtime_off_for(db: &Storage, runtime: &Value) -> DispatchError {
 /// saved row simply has no runtime until it is turned on, and then the next scan
 /// probes it.
 async fn discover_enabled(st: &AppState) -> Vec<retinue_runtime::DiscoveredRuntime> {
-    retinue_runtime::discover_except(&providers_to_skip(&st.db)).await
+    discover_enabled_with(st, false).await
+}
+
+/// The same scan, keeping each binary's version and protocol answer between
+/// launches (21 November 2026, performance item 7). `force` is an explicit
+/// "Scan again": it ignores the cache and probes every installed CLI again.
+/// The sign-in checks always run; only the two answers a rebuilt binary would
+/// change are reused. The cache file is written after every scan, best effort.
+async fn discover_enabled_with(st: &AppState, force: bool) -> Vec<retinue_runtime::DiscoveredRuntime> {
+    let mut cache = st.probe_cache.lock().await;
+    let report = retinue_runtime::discover_except_cached(&providers_to_skip(&st.db), &mut cache, force).await;
+    if let Err(error) = cache.save() {
+        tracing::warn!(error = %error, "the runtime probe cache could not be saved");
+    }
+    if report.cached > 0 || report.probed > 0 {
+        // Content-free, and the number the start-up budget is judged by.
+        tracing::info!(cached = report.cached, probed = report.probed, spawns = report.spawns, "runtime discovery finished its probes");
+    }
+    report.runtimes
 }
 
 /// The provider ids discovery must leave alone: exactly the ones the owner
@@ -1719,11 +1789,20 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         // whether it is main, whether it is on, and whether it was found here.
         "provider.list" => Ok(provider_gate::list(st).await),
         "runtime.refresh" => {
+            // An explicit "Scan again" sends `force: true` (21 November 2026):
+            // it ignores the cached version and protocol answers and probes
+            // every installed CLI. The launch checks send `{}`, so a relaunch
+            // reuses them.
+            let force = p["force"].as_bool().unwrap_or(false);
             st.catalog.invalidate_all();
-            let values = refresh_runtime_discovery(st, discover_enabled(st)).await.map_err(|_| derr("internal", "Could not save the coding agent scan.", StatusCode::INTERNAL_SERVER_ERROR))?;
+            if force { *st.discovery.lock().await = None; }
+            let values = refresh_runtime_discovery(st, discover_enabled_with(st, force)).await.map_err(|_| derr("internal", "Could not save the coding agent scan.", StatusCode::INTERNAL_SERVER_ERROR))?;
+            // Warm only what this launch's conversations use; the rest waits for
+            // the window to open one or for the idle pass after its first
+            // requests (21 November 2026, performance item 7).
             let prewarm = st.clone();
-            tokio::spawn(async move { catalog::prewarm_all(&prewarm).await; });
-            Ok(json!({"runtimes":values}))
+            tokio::spawn(async move { catalog::prewarm_wanted(&prewarm).await; });
+            Ok(json!({"runtimes":values,"forced":force}))
         }
         "runtime.auth.clear" => {
             let runtime_id = p["runtimeId"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "runtimeId is required", StatusCode::BAD_REQUEST))?;
@@ -5485,7 +5564,13 @@ fn attention_focus(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
         Some(_) => return Err(derr("invalid_argument", "sessionId must be a conversation id or null.", StatusCode::BAD_REQUEST)),
     };
     let visible = p["visible"].as_bool().ok_or_else(|| derr("invalid_argument", "visible must be true or false.", StatusCode::BAD_REQUEST))?;
-    st.attention.report_focus(session_id, visible, Instant::now());
+    st.attention.report_focus(session_id.clone(), visible, Instant::now());
+    // The window is showing this conversation: give its bot's provider a model
+    // catalogue if none was read yet (21 November 2026, performance item 7).
+    // A cached catalogue is left alone, so the 90-second heartbeat costs a read.
+    if visible {
+        if let Some(id) = session_id.as_deref() { crate::catalog::warm_when_opened(st, id); }
+    }
     Ok(json!({"reported":true}))
 }
 
@@ -5734,6 +5819,25 @@ async fn forward_events(
     forward_events_with_timeouts(st, sid, provider, runtime_id, rx, start, TURN_SILENCE_LIMIT).await;
 }
 
+/// Writes the buffered assistant text as one row append and one `message.delta`
+/// (21 November 2026). The payload is the same shape a per-token delta had, with
+/// the concatenated text, so the window's append applies it unchanged and a
+/// replay rebuilds the same transcript. One `push_event` is one commit, which is
+/// the point: a flush is one commit pair instead of one per token.
+async fn flush_delta_buffer(st: &AppState, sid: &str, buffer: &mut Option<coalesce::DeltaBuffer>) {
+    let Some(pending) = buffer.as_mut() else { return };
+    let text = pending.take();
+    let turn = pending.turn().to_owned();
+    *buffer = None;
+    if text.is_empty() { return; }
+    let m = st.db.append_message_delta(sid, &turn, &text).unwrap_or(Value::Null);
+    let turn_id = if turn.is_empty() { Value::Null } else { Value::String(turn) };
+    st.emit(
+        "message.delta",
+        json!({"sessionId":sid,"turnId":turn_id,"id":m["id"],"messageId":m["id"],"sequence":m["sequence"],"createdAt":m["createdAt"],"role":"assistant","delta":text}),
+    ).await;
+}
+
 fn completed_tool_state(raw: &Value) -> &'static str {
     let error_reported = !raw["error"].is_null() && raw["error"] != false && raw["error"].as_str() != Some("");
     if matches!(raw["status"].as_str(), Some("failed" | "declined")) || raw["success"] == false || error_reported {
@@ -5810,7 +5914,16 @@ async fn forward_events_with_timeouts(
     // Phase 8: text a provider's own sub-agent produced for a parent row that
     // the adapter has not reported yet, kept until that row appears.
     let mut pending_subagent_text: HashMap<String, String> = HashMap::new();
+    // 21 November 2026: this turn's assistant text between flushes. One buffer
+    // per session loop; a delta from another turn, any other event, a terminal
+    // event or the end of the loop flushes it first.
+    let mut delta_buffer: Option<coalesce::DeltaBuffer> = None;
     loop {
+        // A window that closed while nothing else arrived is written and sent
+        // here, before the loop decides what to wait for next.
+        if delta_buffer.as_ref().is_some_and(|buffer| buffer.is_due(Instant::now())) {
+            flush_delta_buffer(&st, &sid, &mut delta_buffer).await;
+        }
         // While the user is being asked, the provider is legitimately idle:
         // neither window applies, and leaving that state restarts the window.
         let session_waiting = st.db.session_state(&sid).ok().flatten().as_deref() == Some("waiting_permission");
@@ -5832,9 +5945,25 @@ async fn forward_events_with_timeouts(
                 startup_no_progress_timeout
             };
             let remaining = limit.saturating_sub(last_semantic_progress.elapsed());
-            match tokio::time::timeout(remaining, rx.recv()).await {
+            // While text waits to be flushed, wake at its window, whichever is
+            // sooner, so a stream that pauses still reaches the window.
+            let flush_in = match &delta_buffer {
+                Some(buffer) => buffer.time_to_due(Instant::now()),
+                None => remaining,
+            };
+            let flush_wait = flush_in < remaining;
+            match tokio::time::timeout(remaining.min(flush_in), rx.recv()).await {
                 Ok(event) => event,
                 Err(_) => {
+                    // The buffer's own window closed, not the silence limit: the
+                    // provider is streaming, only the text was waiting.
+                    if flush_wait {
+                        flush_delta_buffer(&st, &sid, &mut delta_buffer).await;
+                        continue;
+                    }
+                    // The turn may be about to fail or close: its terminal event
+                    // must not overtake text the provider already sent.
+                    flush_delta_buffer(&st, &sid, &mut delta_buffer).await;
                     let session_waiting = st.db.session_state(&sid).ok().flatten().as_deref() == Some("waiting_permission");
                     if session_waiting || was_waiting {
                         last_semantic_progress = Instant::now();
@@ -5905,6 +6034,9 @@ async fn forward_events_with_timeouts(
             }
         } else {
             watched_turn = None;
+            // No turn is running, so nothing else will carry the text: write it
+            // before waiting for the next event.
+            flush_delta_buffer(&st, &sid, &mut delta_buffer).await;
             match tokio::time::timeout(std::time::Duration::from_millis(100), rx.recv()).await {
                 Ok(event) => event,
                 Err(_) => continue,
@@ -5917,6 +6049,18 @@ async fn forward_events_with_timeouts(
             || !st.db.session_exists(&sid).unwrap_or(false)
             || !st.sessions.lock().await.contains_key(&sid)
         { break; }
+        // Replay order holds because nothing overtakes buffered text: any other
+        // event for this session flushes it before it is handled, and a delta
+        // that belongs to a different turn closes the previous turn's buffer.
+        match &ev {
+            AgentEvent::AssistantDelta { .. } => {
+                let delta_turn = st.active_turns.lock().await.get(&sid).cloned();
+                if delta_buffer.as_ref().is_some_and(|buffer| Some(buffer.turn()) != delta_turn.as_deref()) {
+                    flush_delta_buffer(&st, &sid, &mut delta_buffer).await;
+                }
+            }
+            _ => flush_delta_buffer(&st, &sid, &mut delta_buffer).await,
+        }
         match &ev {
             AgentEvent::ToolStarted { tool_call_id, .. } => { open_tools.insert(tool_call_id.clone()); }
             AgentEvent::ToolCompleted { tool_call_id, .. } => { open_tools.remove(tool_call_id); }
@@ -5968,14 +6112,22 @@ async fn forward_events_with_timeouts(
             }
             AgentEvent::ContextReset => ("session.context.reset", json!({"sessionId":sid})),
             AgentEvent::AssistantDelta { text } => {
-                let m = st
-                    .db
-                    .append_message_delta(&sid, turn.as_deref().unwrap_or(""), &text)
-                    .unwrap_or(Value::Null);
-                (
-                    "message.delta",
-                    json!({"sessionId":sid,"turnId":turn,"id":m["id"],"messageId":m["id"],"sequence":m["sequence"],"createdAt":m["createdAt"],"role":"assistant","delta":text}),
-                )
+                // 21 November 2026: hold the text for its window instead of
+                // writing and sending it per token. The turn's row, the event
+                // and its sequence are unchanged; only how often they are
+                // written is.
+                let turn_id = turn.as_deref().unwrap_or("");
+                match &mut delta_buffer {
+                    Some(buffer) if buffer.turn() == turn_id => buffer.push(&text),
+                    _ => {
+                        delta_buffer = Some(coalesce::DeltaBuffer::new(turn_id));
+                        if let Some(buffer) = delta_buffer.as_mut() { buffer.push(&text); }
+                    }
+                }
+                if delta_buffer.as_ref().is_some_and(|buffer| buffer.is_due(Instant::now())) {
+                    flush_delta_buffer(&st, &sid, &mut delta_buffer).await;
+                }
+                continue;
             }
             AgentEvent::AssistantMessage { text } => {
                 let m = st
@@ -6478,6 +6630,8 @@ async fn forward_events_with_timeouts(
     // Wave 2: the "now" line belongs to the turn that wrote it. This is the one
     // point every terminal path passes through, so the window never has to time
     // a note out. Nothing is emitted for a turn that wrote no note.
+    // Any text still buffered is written first: a clean end loses nothing.
+    flush_delta_buffer(&st, &sid, &mut delta_buffer).await;
     crate::working_note::announce_clear(&st, &sid).await;
 }
 
@@ -6738,6 +6892,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         channels: Arc::new(channels::Channels::default()),
         console: Arc::new(console::Console::default()),
         follow_up: Arc::new(follow_up::FollowUp::default()),
+        // The file lives beside the database, in the owner's data folder. It
+        // holds no secret: executable paths, sizes, versions and one boolean.
+        probe_cache: Arc::new(Mutex::new(retinue_runtime::ProbeCache::at(data_dir.as_ref().map(|dir| dir.join("runtime-probes.json"))))),
+        first_request: Arc::new(FirstRequest::default()),
     };
     // A send right after boot must not fail with "runtime is not installed":
     // show the saved roster until discovery replaces it. `validate_spawn_target`
@@ -6907,8 +7065,15 @@ async fn resume_after_ready(st: AppState) {
         if refresh_runtime_discovery(&discovery_state, discover_enabled(&discovery_state)).await.is_err() {
             tracing::warn!("runtime discovery could not be persisted");
         } else {
-            // Warm the catalog for every usable runtime, two at a time, so model
-            // and effort switching is instant after boot.
+            // 21 November 2026 (performance item 7): warm only the providers the
+            // conversations at launch use. Every other catalog waits for the
+            // window to open one of its conversations, or for the idle pass
+            // below, so a start does not begin a CLI for a bot nobody opens.
+            catalog::prewarm_wanted(&discovery_state).await;
+            discovery_state.first_request.wait(std::time::Duration::from_secs(15)).await;
+            // The rest, two at a time, once the window has asked for its first
+            // conversation (or 15 s have passed when nothing did), so model and
+            // effort switching stays instant in a long session.
             catalog::prewarm_all(&discovery_state).await;
         }
     });
@@ -8369,7 +8534,7 @@ mod phase2a_tests {
     /// a second state on the same file.
     pub(crate) fn state_with(db:Storage)->(AppState,broadcast::Receiver<EventEnvelope>){
         let db=Arc::new(db);db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"})).unwrap();let(events,rx)=broadcast::channel(64);
-        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default()),channels:Arc::new(channels::Channels::default()),console:Arc::new(console::Console::default()),follow_up:Arc::new(follow_up::FollowUp::default())};(st,rx)
+        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default()),channels:Arc::new(channels::Channels::default()),console:Arc::new(console::Console::default()),follow_up:Arc::new(follow_up::FollowUp::default()),probe_cache:Arc::new(Mutex::new(retinue_runtime::ProbeCache::empty())),first_request:Arc::new(FirstRequest::default())};(st,rx)
     }
     #[tokio::test]
     async fn bot_purge_is_confirmed_atomic_and_removes_both_sides_only() {
@@ -9613,6 +9778,170 @@ mod phase2a_tests {
         assert_eq!(hydrated["contextModel"], "claude-opus-5-5");
         drop(tx);
         task.await.unwrap();
+    }
+
+    // ── 21 November 2026: streamed text is coalesced (performance item 1) ─────
+    //
+    // One row append and one `message.delta` per flush, never per token, and
+    // nothing overtakes the text that was buffered before it.
+    async fn streaming(st: &AppState, sid: &str, turn: &str) -> (tokio::sync::mpsc::Sender<AgentEvent>, tokio::task::JoinHandle<()>) {
+        st.db.create_session(sid, "rt-test", "codex", ".", "Stream").unwrap();
+        st.db.create_turn(turn, sid).unwrap();
+        st.db.update_session_state(sid, "working").unwrap();
+        st.active_turns.lock().await.insert(sid.into(), turn.into());
+        let adapter = Arc::new(LifecycleAdapter { reject_resume: false, allow_resume: true, resume_calls: Default::default(), new_calls: Default::default(), close_calls: Default::default() });
+        let handle = SessionHandle { session_id: sid.into(), provider_session_id: "stream-session".into(), capabilities: retinue_agent_core::AgentCapabilities::default() };
+        let runtime = RuntimeSpec { runtime_id: "rt-test".into(), provider: "codex".into(), executable: PathBuf::from("fake"), args: vec![], cwd: None };
+        st.sessions.lock().await.insert(sid.into(), ActiveSession { handle, runtime, adapter, launch_approval_mode: ApprovalMode::Ask });
+        let (tx, rx) = tokio::sync::mpsc::channel(2048);
+        let task = tokio::spawn(forward_events(st.clone(), sid.into(), "codex".into(), "rt-test".into(), rx));
+        (tx, task)
+    }
+    fn assistant_text(st: &AppState, sid: &str) -> String {
+        st.db.session_detail(sid).unwrap()["messages"].as_array().cloned().unwrap_or_default().iter()
+            .filter(|message| message["role"] == "assistant")
+            .map(|message| message["content"].as_str().unwrap_or(""))
+            .collect()
+    }
+    /// Every event up to `terminal`, in the order the window would receive it.
+    async fn events_until(events: &mut broadcast::Receiver<EventEnvelope>, terminal: &str) -> Vec<EventEnvelope> {
+        let mut seen = Vec::new();
+        loop {
+            let event = tokio::time::timeout(std::time::Duration::from_secs(2), events.recv()).await.expect("an event arrives").expect("a live event");
+            let done = event.event_type == terminal;
+            seen.push(event);
+            if done { break; }
+        }
+        seen
+    }
+    fn deltas(events: &[EventEnvelope]) -> Vec<String> {
+        events.iter().filter(|event| event.event_type == "message.delta")
+            .map(|event| event.payload["delta"].as_str().unwrap_or("").to_owned()).collect()
+    }
+    fn position(events: &[EventEnvelope], kind: &str) -> Option<usize> {
+        events.iter().position(|event| event.event_type == kind)
+    }
+
+    #[tokio::test]
+    async fn a_tool_event_mid_stream_flushes_the_text_before_it_and_order_is_kept() {
+        let (st, mut events) = state();
+        let (sid, turn) = ("coalesce-order", "coalesce-order-turn");
+        let (tx, task) = streaming(&st, sid, turn).await;
+        tx.send(AgentEvent::AssistantDelta { text: "Hello".into() }).await.unwrap();
+        tx.send(AgentEvent::AssistantDelta { text: ", ".into() }).await.unwrap();
+        tx.send(AgentEvent::ToolStarted { tool_call_id: "tool-1".into(), kind: "execute".into(), title: "Run tests".into(), raw: json!({}), parent_tool_call_id: None }).await.unwrap();
+        tx.send(AgentEvent::AssistantDelta { text: "world".into() }).await.unwrap();
+        tx.send(AgentEvent::TurnCompleted).await.unwrap();
+        drop(tx);
+        task.await.unwrap();
+        let seen = events_until(&mut events, "turn.completed").await;
+        assert_eq!(deltas(&seen), ["Hello, ", "world"], "one delta per flush, in order: {seen:?}");
+        let delta_at = position(&seen, "message.delta").unwrap();
+        let tool_at = position(&seen, "tool.changed").unwrap();
+        assert!(delta_at < tool_at, "the buffered text is written before the tool event: {seen:?}");
+        assert_eq!(assistant_text(&st, sid), "Hello, world", "the stored row is the concatenation");
+    }
+
+    #[tokio::test]
+    async fn a_turn_end_and_a_clean_channel_close_both_flush_everything() {
+        let (st, mut events) = state();
+        let (sid, turn) = ("coalesce-turn-end", "coalesce-turn-end-turn");
+        let (tx, task) = streaming(&st, sid, turn).await;
+        tx.send(AgentEvent::AssistantDelta { text: "The build ".into() }).await.unwrap();
+        tx.send(AgentEvent::AssistantDelta { text: "passed.".into() }).await.unwrap();
+        tx.send(AgentEvent::TurnCompleted).await.unwrap();
+        drop(tx);
+        task.await.unwrap();
+        let seen = events_until(&mut events, "turn.completed").await;
+        assert_eq!(deltas(&seen), ["The build passed."], "the turn's end flushes its text once: {seen:?}");
+        assert!(position(&seen, "message.delta").unwrap() < position(&seen, "turn.completed").unwrap(), "the text precedes the terminal event");
+        assert_eq!(assistant_text(&st, sid), "The build passed.");
+
+        // A stream that ends with no terminal event (the provider's channel
+        // closed) still writes what it received.
+        let (st, mut events) = state();
+        let (sid, turn) = ("coalesce-clean-end", "coalesce-clean-end-turn");
+        let (tx, task) = streaming(&st, sid, turn).await;
+        tx.send(AgentEvent::AssistantDelta { text: "half a ".into() }).await.unwrap();
+        tx.send(AgentEvent::AssistantDelta { text: "reply".into() }).await.unwrap();
+        drop(tx);
+        task.await.unwrap();
+        let seen = events_until(&mut events, "message.delta").await;
+        assert_eq!(deltas(&seen), ["half a reply"], "nothing is lost on a clean end");
+        assert_eq!(assistant_text(&st, sid), "half a reply");
+    }
+
+    #[tokio::test]
+    async fn a_cancel_flushes_the_partial_reply_before_its_terminal_event() {
+        let (st, mut events) = state();
+        let (sid, turn) = ("coalesce-cancel", "coalesce-cancel-turn");
+        let (tx, task) = streaming(&st, sid, turn).await;
+        tx.send(AgentEvent::AssistantDelta { text: "I was saying".into() }).await.unwrap();
+        tx.send(AgentEvent::TurnCancelled).await.unwrap();
+        drop(tx);
+        task.await.unwrap();
+        let seen = events_until(&mut events, "turn.cancelled").await;
+        assert_eq!(deltas(&seen), ["I was saying"], "{seen:?}");
+        assert!(position(&seen, "message.delta").unwrap() < position(&seen, "turn.cancelled").unwrap());
+        assert_eq!(assistant_text(&st, sid), "I was saying");
+    }
+
+    #[tokio::test]
+    async fn an_error_flushes_the_partial_reply_before_its_terminal_event() {
+        let (st, mut events) = state();
+        let (sid, turn) = ("coalesce-error", "coalesce-error-turn");
+        let (tx, task) = streaming(&st, sid, turn).await;
+        tx.send(AgentEvent::AssistantDelta { text: "Before the ".into() }).await.unwrap();
+        tx.send(AgentEvent::AssistantDelta { text: "failure".into() }).await.unwrap();
+        tx.send(AgentEvent::Error { message: "provider stopped".into() }).await.unwrap();
+        drop(tx);
+        task.await.unwrap();
+        let seen = events_until(&mut events, "turn.error").await;
+        assert_eq!(deltas(&seen), ["Before the failure"], "{seen:?}");
+        assert!(position(&seen, "message.delta").unwrap() < position(&seen, "turn.error").unwrap(), "the failure never overtakes the text");
+        assert_eq!(assistant_text(&st, sid), "Before the failure");
+    }
+
+    #[tokio::test]
+    async fn a_thousand_small_deltas_become_a_few_commits_and_the_row_is_their_concatenation() {
+        let (st, _events) = state();
+        let (sid, turn) = ("coalesce-thousand", "coalesce-thousand-turn");
+        let (tx, task) = streaming(&st, sid, turn).await;
+        let mut expected = String::new();
+        for index in 0..1_000 {
+            let chunk = format!("{index:04}");
+            expected.push_str(&chunk);
+            tx.send(AgentEvent::AssistantDelta { text: chunk }).await.unwrap();
+        }
+        drop(tx);
+        task.await.unwrap();
+        // One commit is one persisted `message.delta`: before the change this
+        // was 1,000 of them, each with its own row rewrite and fsync.
+        let commits = st.db.replay_events(0, 10_000).unwrap().iter().filter(|event| event["type"] == "message.delta").count();
+        assert!(commits >= 1, "the turn wrote its text");
+        assert!(commits <= 8, "1,000 chunks of 4 bytes inside one 8 KiB / 40 ms window became {commits} commits");
+        assert!(commits * 100 < 1_000, "at least a 95% drop: {commits}");
+        assert_eq!(assistant_text(&st, sid), expected, "the stored row is the concatenation");
+    }
+
+    #[tokio::test]
+    async fn the_first_window_request_releases_a_waiter_and_a_cap_expires_without_one() {
+        let first = Arc::new(FirstRequest::default());
+        let waiter = Arc::clone(&first);
+        let task = tokio::spawn(async move { waiter.wait(std::time::Duration::from_secs(5)).await; });
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        first.note();
+        tokio::time::timeout(std::time::Duration::from_secs(1), task).await.expect("the waiter is released").unwrap();
+        assert!(first.seen());
+        // A request that lands before anyone waits is not missed.
+        let early = FirstRequest::default();
+        early.note();
+        early.wait(std::time::Duration::from_millis(5)).await;
+        // With no request at all, the cap ends the wait.
+        let idle = FirstRequest::default();
+        let started = Instant::now();
+        idle.wait(std::time::Duration::from_millis(30)).await;
+        assert!(started.elapsed() >= std::time::Duration::from_millis(25));
     }
 
     #[tokio::test]

@@ -48,11 +48,17 @@ impl AccountInfo {
 /// Read one provider's account with that provider's own command, for one
 /// account's environment.
 pub async fn read(provider: &str, exe: &Path, args: &[String], environment: &[(String, String)]) -> Option<AccountInfo> {
+    read_counted(provider, exe, args, environment, &crate::probe_cache::SpawnCounter::detached()).await
+}
+
+/// The same read, counting the CLI process it starts (21 November 2026), so one
+/// discovery scan can report what it cost.
+pub(crate) async fn read_counted(provider: &str, exe: &Path, args: &[String], environment: &[(String, String)], spawns: &crate::probe_cache::SpawnCounter) -> Option<AccountInfo> {
     let limit = Duration::from_secs(ACCOUNT_TIMEOUT_SECS);
     match provider {
-        "claude" => from_claude_status(&plain_output(exe, args, &["auth", "status"], environment, limit).await?),
-        "opencode" => from_opencode_auth_list(&plain_output(exe, args, &["auth", "list", "--format", "json"], environment, limit).await?),
-        "codex" => read_codex(exe, args, environment).await,
+        "claude" => from_claude_status(&plain_output(exe, args, &["auth", "status"], environment, limit, spawns).await?),
+        "opencode" => from_opencode_auth_list(&plain_output(exe, args, &["auth", "list", "--format", "json"], environment, limit, spawns).await?),
+        "codex" => read_codex(exe, args, environment, spawns).await,
         _ => None,
     }
 }
@@ -172,7 +178,7 @@ fn safe_plan(text: &str) -> Option<String> {
 
 /// One short command whose stdout is the whole answer. Nothing from stderr is
 /// parsed: a sign-in products' notices are not account output.
-async fn plain_output(exe: &Path, args: &[String], extra: &[&str], environment: &[(String, String)], limit: Duration) -> Option<String> {
+async fn plain_output(exe: &Path, args: &[String], extra: &[&str], environment: &[(String, String)], limit: Duration, spawns: &crate::probe_cache::SpawnCounter) -> Option<String> {
     let mut command = Command::new(exe);
     prepare_command(&mut command);
     command
@@ -186,6 +192,7 @@ async fn plain_output(exe: &Path, args: &[String], extra: &[&str], environment: 
         command.env(name, value);
     }
     let mut child = command.spawn().ok()?;
+    spawns.count();
     let process_tree = ProcessTree::attach(&mut child).ok()?;
     let result = tokio::time::timeout(limit, child.wait_with_output()).await;
     let _ = process_tree.terminate();
@@ -199,7 +206,7 @@ async fn plain_output(exe: &Path, args: &[String], extra: &[&str], environment: 
 /// The app server's `account/read`: initialize, then ask. Notifications that
 /// arrive first (an `account/updated` on a plan change) carry no `id` and are
 /// skipped. The whole exchange sits inside one budget.
-async fn read_codex(exe: &Path, args: &[String], environment: &[(String, String)]) -> Option<AccountInfo> {
+async fn read_codex(exe: &Path, args: &[String], environment: &[(String, String)], spawns: &crate::probe_cache::SpawnCounter) -> Option<AccountInfo> {
     let limit = Duration::from_secs(ACCOUNT_TIMEOUT_SECS);
     let mut command = Command::new(exe);
     prepare_command(&mut command);
@@ -214,6 +221,7 @@ async fn read_codex(exe: &Path, args: &[String], environment: &[(String, String)
         command.env(name, value);
     }
     let mut child = command.spawn().ok()?;
+    spawns.count();
     let process_tree = ProcessTree::attach(&mut child).ok()?;
     let result = tokio::time::timeout(limit, async {
         let stdin = child.stdin.take()?;
