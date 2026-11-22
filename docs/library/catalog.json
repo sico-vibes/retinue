@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "dde9d387",
-  "documentCount": 451,
+  "revision": "f7dca1d5",
+  "documentCount": 452,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -24369,6 +24369,31 @@
         {
           "id": "for-the-curious",
           "text": "For the curious",
+          "level": 2
+        },
+        {
+          "id": "installation",
+          "text": "Installation",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/releases/0.2.0-beta.7",
+      "source": "docs/releases/0.2.0-beta.7.md",
+      "title": "Retinue 0.2.0-beta.7",
+      "section": "Release notes",
+      "status": "Release note",
+      "sha256": "35805e3045e598f9ec24fcc4432c62c462ebce8ba70bff2a0b8308d5e15f41fc",
+      "headings": [
+        {
+          "id": "new",
+          "text": "New",
+          "level": 2
+        },
+        {
+          "id": "changed",
+          "text": "Changed",
           "level": 2
         },
         {
