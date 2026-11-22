@@ -2,10 +2,10 @@
 // or in `meta`. The transcript and the companion show who sent it, so a message from an outside session never
 // reads as one the owner typed.
 
-/** `claude-code` reads as "Claude Code"; anything else is shown as the client named itself. */
+/** `claude-code` (and its short form `cc`) reads as "Claude Code"; anything else is shown as the client named itself. */
 export function clientLabel(client: string | null): string {
   if (!client) return 'an MCP client'
-  if (/^claude[-_ ]?code$/i.test(client)) return 'Claude Code'
+  if (/^(?:claude[-_ ]?code|cc)$/i.test(client)) return 'Claude Code'
   return client
 }
 

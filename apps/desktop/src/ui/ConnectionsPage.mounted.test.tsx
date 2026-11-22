@@ -35,6 +35,7 @@ describe('Retinue MCP settings', () => {
     expect(normalizeExternalStatus({ tier: 'chat' })).toBeNull()
     expect(normalizeExternalStatus(null)).toBeNull()
     expect(clientLabel('claude-code')).toBe('Claude Code')
+    expect(clientLabel('cc')).toBe('Claude Code')
     expect(clientLabel('cursor')).toBe('cursor')
     expect(clientLabel(null)).toBe('an MCP client')
     const now = Date.parse('2026-10-29T12:00:00Z')
