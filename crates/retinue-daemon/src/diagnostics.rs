@@ -518,9 +518,20 @@ fn timestamp() -> String {
 /// command prints beyond that is dropped.
 pub(crate) fn os_version() -> String {
     #[cfg(target_os = "windows")]
-    let output = std::process::Command::new("cmd").args(["/c", "ver"]).output();
+    let output = {
+        let mut command = std::process::Command::new("cmd");
+        command.args(["/c", "ver"]);
+        retinue_process::hide_std_window(&mut command);
+        command.output()
+    };
     #[cfg(unix)]
-    let output = std::process::Command::new("uname").arg("-r").output();
+    let output = {
+        let mut command = std::process::Command::new("uname");
+        command.arg("-r");
+        // A no-op on Unix; kept so the one reading of this line is the same everywhere.
+        retinue_process::hide_std_window(&mut command);
+        command.output()
+    };
     #[cfg(not(any(unix, target_os = "windows")))]
     let output: Result<std::process::Output, std::io::Error> = Err(std::io::Error::other("unsupported platform"));
     let Ok(output) = output else { return "unknown".to_string() };

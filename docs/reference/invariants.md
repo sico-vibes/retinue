@@ -45,6 +45,7 @@
 | The window reaches Tauri only through `apps/desktop/src/transport/` (plus the two legacy bridges), and the phone build exports the same names as refusing stubs. | `transport/nativeBridge.ts` | `transport/noDirectNative.test.ts`, `remote/remoteTauri.parity.test.ts` |
 | Production code never imports the preview harness, and never opens its own WebSocket outside the transport seam. | `scripts/check-architecture.mjs` | `scripts/check-architecture.test.mjs` |
 | A look stylesheet is a static import, never a dynamic `import()`. | `apps/desktop/src/main.tsx` | `ui/themeBuild.test.ts` |
+| No process Retinue starts shows a console window on Windows. A console program started by the GUI-subsystem shell or the daemon (neither has a console) would get one, so every child goes through `prepare_command` (paused until its job tree attaches) or `hide_window`, or writes `CREATE_NO_WINDOW` itself. The coding-agent update runs the CLI Retinue discovered, directly, never through PowerShell or `cmd`. | `crates/retinue-process/src/lib.rs` (`prepare_command`, `prepare_std_command`, `hide_window`, `hide_std_window`), `apps/desktop/src-tauri/src/harness_updates.rs` | `crates/retinue-daemon/src/spawn_window_tests.rs::no_spawn_that_can_show_a_console_window` (scans every `Command::new(` in the crates and the shell, so a new spawn must be hidden or listed with its reason), `harness_updates.rs::a_failure_line_is_the_last_one_redacted_and_capped` |
 
 ## Releases and the size of a read
 

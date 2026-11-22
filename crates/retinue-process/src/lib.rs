@@ -8,7 +8,20 @@ use tokio::{
 };
 use std::process::Command as StdCommand;
 
-/// Starts each child in an isolated process group where the platform supports it.
+#[cfg(windows)]
+const CREATE_SUSPENDED: u32 = 0x0000_0004;
+/// A console program started by a process with no console of its own gets a
+/// console window; this is the flag that stops it (`apps/desktop` is built as a
+/// GUI application, so every child it starts would otherwise show one).
+#[cfg(windows)]
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Starts each child in an isolated process group where the platform supports it,
+/// with no console window and, until `ProcessTree::attach`, paused so nothing it
+/// starts escapes its tree. Windows has no getter for creation flags, so a test
+/// that reads source cannot substitute for this pair: the spawn-scan gate in the
+/// daemon (`spawn_window_tests`) names this function and `hide_window` as the two
+/// ways a spawn is made windowless.
 pub fn prepare_command(command: &mut Command) {
     #[cfg(unix)]
     {
@@ -18,7 +31,7 @@ pub fn prepare_command(command: &mut Command) {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        command.as_std_mut().creation_flags(0x0000_0004);
+        command.as_std_mut().creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
     }
     #[cfg(not(any(unix, windows)))]
     let _ = command;
@@ -34,8 +47,32 @@ pub fn prepare_std_command(command: &mut StdCommand) {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        command.creation_flags(0x0000_0004);
+        command.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
     }
+}
+
+/// Hides a child that is not job-owned and must run to completion: no console
+/// window, and no suspension, so it needs no `ProcessTree::attach`. Off Windows
+/// this does nothing.
+pub fn hide_window(command: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.as_std_mut().creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    let _ = command;
+}
+
+/// `hide_window` for a standard-library child.
+pub fn hide_std_window(command: &mut StdCommand) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    let _ = command;
 }
 
 /// Owns the provider process tree. Windows descendants are killed when the job

@@ -1,13 +1,18 @@
-use std::{process::Stdio, time::Duration};
+use std::{path::PathBuf, process::Stdio, time::Duration};
 
 use serde::Serialize;
 use serde_json::Value;
-use tauri::command;
+use tauri::{command, State};
 use tokio::process::Command;
+
+use crate::{connection, redact_log_line, rpc_call, AppState};
 
 const REGISTRY: &str = "https://registry.npmjs.org";
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(10);
 const UPDATE_TIMEOUT: Duration = Duration::from_secs(300);
+/// How much of the CLI's own last line a failure carries. Longer output is
+/// dropped: the CLI decides the sentence, Retinue only passes it on.
+const FAILURE_LINE_CHARS: usize = 200;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,6 +40,60 @@ fn parse_version(value: &str) -> Option<semver::Version> {
         .next()?
         .trim_start_matches('v');
     semver::Version::parse(candidate).ok()
+}
+
+/// The CLI's own last line, redacted and capped: never its whole output, never a
+/// credential the CLI happened to print.
+fn failure_line(stdout: &[u8], stderr: &[u8]) -> Option<String> {
+    let line = [stderr, stdout]
+        .into_iter()
+        .find_map(|bytes| {
+            String::from_utf8_lossy(bytes)
+                .lines()
+                .map(str::trim)
+                .rev()
+                .find(|line| !line.is_empty())
+                .map(str::to_owned)
+        })?;
+    let collapsed = line.split_whitespace().collect::<Vec<_>>().join(" ");
+    let redacted = redact_log_line(&collapsed);
+    let capped: String = redacted.chars().take(FAILURE_LINE_CHARS).collect();
+    (!capped.is_empty()).then_some(capped)
+}
+
+/// The executable the daemon's discovery runs for this provider, with its launch
+/// arguments. Read rather than re-derived: an npm `.cmd` shim arrives here already
+/// rewritten to `node.exe <script>`, so the update runs the same binary a bot turn
+/// runs, and no shell has to parse the command line.
+async fn discovered_cli(state: &State<'_, AppState>, provider: &str) -> Option<(PathBuf, Vec<String>)> {
+    let rpc = connection(state).ok()?;
+    let listed = rpc_call(&rpc, "runtime.list", serde_json::json!({})).await.ok()?;
+    let row = listed["runtimes"].as_array()?.iter().find(|row| {
+        row["provider"].as_str() == Some(provider)
+            && row["executablePath"].as_str().is_some_and(|path| !path.is_empty())
+    })?;
+    let executable = PathBuf::from(row["executablePath"].as_str()?);
+    if !executable.is_file() {
+        return None;
+    }
+    let launch = row["launchArgs"]
+        .as_array()
+        .map(|values| values.iter().filter_map(Value::as_str).map(str::to_owned).collect())
+        .unwrap_or_default();
+    Some((executable, launch))
+}
+
+/// One CLI invocation, run directly: same binary, same arguments, piped stdio and
+/// no console window. A provider discovery has not found yet falls back to the
+/// bare name on `PATH`.
+async fn cli(state: &State<'_, AppState>, provider: &str, fallback: &'static str, args: &[&str]) -> Command {
+    let (executable, launch) = discovered_cli(state, provider)
+        .await
+        .unwrap_or_else(|| (PathBuf::from(fallback), Vec::new()));
+    let mut command = Command::new(executable);
+    retinue_process::hide_window(&mut command);
+    command.args(launch).args(args);
+    command
 }
 
 async fn latest_version(package: &'static str) -> Result<String, String> {
@@ -71,6 +130,7 @@ pub async fn harness_latest_version(provider: String) -> Result<String, String> 
 pub async fn harness_update(
     provider: String,
     current_version: String,
+    state: State<'_, AppState>,
 ) -> Result<HarnessUpdateResult, String> {
     let (package, executable, args) = package_and_updater(&provider)
         .ok_or_else(|| "Updates are not available for this harness.".to_owned())?;
@@ -83,22 +143,7 @@ pub async fn harness_update(
         return Err("This harness is already up to date.".into());
     }
 
-    #[cfg(windows)]
-    let mut command = {
-        let mut command = Command::new("powershell.exe");
-        command.args(["-NoProfile", "-NonInteractive", "-Command"]);
-        // Both the executable and its arguments come from the fixed provider
-        // table above; no renderer-supplied command text reaches PowerShell.
-        command.arg(format!("& {executable} {}", args.join(" ")));
-        command
-    };
-    #[cfg(not(windows))]
-    let mut command = {
-        let mut command = Command::new(executable);
-        command.args(args);
-        command
-    };
-
+    let mut command = cli(&state, &provider, executable, args).await;
     command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -109,12 +154,14 @@ pub async fn harness_update(
         .map_err(|_| "The harness update timed out. Retry from Settings → Agents.".to_owned())?
         .map_err(|error| format!("Could not start the harness updater: {error}"))?;
     if !output.status.success() {
-        return Err(
-            "The harness updater reported an error. Retry or update it with its own CLI.".into(),
-        );
+        let detail = failure_line(&output.stdout, &output.stderr);
+        return Err(match detail {
+            Some(line) => format!("The harness updater reported an error: {line}"),
+            None => "The harness updater reported an error. Retry or update it with its own CLI.".into(),
+        });
     }
 
-    let installed = read_installed_version(executable).await?;
+    let installed = read_installed_version(&state, &provider, executable).await?;
     let installed_parsed = parse_version(&installed).ok_or_else(|| {
         "The updater finished, but the installed version could not be verified.".to_owned()
     })?;
@@ -130,20 +177,12 @@ pub async fn harness_update(
     })
 }
 
-async fn read_installed_version(executable: &'static str) -> Result<String, String> {
-    #[cfg(windows)]
-    let mut command = {
-        let mut command = Command::new("powershell.exe");
-        command.args(["-NoProfile", "-NonInteractive", "-Command"]);
-        command.arg(format!("& {executable} --version"));
-        command
-    };
-    #[cfg(not(windows))]
-    let mut command = {
-        let mut command = Command::new(executable);
-        command.arg("--version");
-        command
-    };
+async fn read_installed_version(
+    state: &State<'_, AppState>,
+    provider: &str,
+    executable: &'static str,
+) -> Result<String, String> {
+    let mut command = cli(state, provider, executable, &["--version"]).await;
     command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -154,7 +193,39 @@ async fn read_installed_version(executable: &'static str) -> Result<String, Stri
         .map_err(|_| "Timed out while verifying the installed harness version.".to_owned())?
         .map_err(|error| format!("Could not verify the installed harness version: {error}"))?;
     if !output.status.success() {
-        return Err("The updater finished, but the harness version check failed.".into());
+        let detail = failure_line(&output.stdout, &output.stderr);
+        return Err(match detail {
+            Some(line) => format!("The updater finished, but the harness version check failed: {line}"),
+            None => "The updater finished, but the harness version check failed.".into(),
+        });
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The updater is the CLI's own verb, never a shell: the table is the command.
+    #[test]
+    fn each_provider_runs_its_own_update_verb_directly() {
+        assert_eq!(package_and_updater("claude"), Some(("@anthropic-ai/claude-code", "claude", &["update"][..])));
+        assert_eq!(package_and_updater("codex"), Some(("@openai/codex", "codex", &["update"][..])));
+        assert_eq!(package_and_updater("opencode"), Some(("opencode-ai", "opencode", &["upgrade"][..])));
+        assert_eq!(package_and_updater("cursor"), None);
+    }
+
+    /// A failure carries the CLI's last line, collapsed, redacted and bounded.
+    #[test]
+    fn a_failure_line_is_the_last_one_redacted_and_capped() {
+        let stderr = b"starting\nfetching 100%\nerror: report from https://example.test\n";
+        assert_eq!(failure_line(b"", stderr).as_deref(), Some("error: report from https://example.test"));
+        assert_eq!(failure_line(b"stdout only\n", b"  \n").as_deref(), Some("stdout only"));
+        assert_eq!(failure_line(b"", b""), None);
+        let secret = failure_line(b"", b"failed with token=supersecretvalue123456\n").unwrap();
+        assert!(!secret.contains("supersecretvalue123456"), "{secret}");
+        assert!(secret.contains("[redacted]"), "{secret}");
+        let long = format!("{}\n", "x".repeat(500));
+        assert!(failure_line(b"", long.as_bytes()).unwrap().chars().count() <= FAILURE_LINE_CHARS);
+    }
 }

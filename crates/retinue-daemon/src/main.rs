@@ -130,6 +130,9 @@ mod project_share;
 mod machines_tests;
 #[cfg(test)]
 mod machine_phone_tests;
+// 21 November 2026: no process Retinue starts may show a console window.
+#[cfg(test)]
+mod spawn_window_tests;
 // Phase 5: secrets in the credential store and one-use secret requests.
 mod secrets;
 // Section D: connectors, owner-added MCP servers the daemon calls.

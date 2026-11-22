@@ -571,13 +571,15 @@ fn terminate_process_tree(pid: Option<u32>) {
     if !taskkill.is_file() {
         return;
     }
-    let Ok(mut child) = std::process::Command::new(taskkill)
+    let mut command = std::process::Command::new(taskkill);
+    command
         .args(["/PID", &pid.to_string(), "/T", "/F"])
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-    else {
+        .stderr(std::process::Stdio::null());
+    // The shell has no console of its own, so taskkill would get a window.
+    retinue_process::hide_std_window(&mut command);
+    let Ok(mut child) = command.spawn() else {
         return;
     };
     let deadline = Instant::now() + TASKKILL_WAIT;

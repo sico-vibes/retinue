@@ -2,7 +2,14 @@ use std::path::Path;
 use tokio::process::Command;
 
 pub async fn distributions() -> Result<Vec<String>, String> {
-    let out = Command::new("wsl.exe")
+    let mut command = Command::new("wsl.exe");
+    // A probe started by the GUI shell must not flash a console window.
+    // Tokio's own `creation_flags` on Windows, so no trait import here.
+    #[cfg(windows)]
+    {
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let out = command
         .args(["-l", "-q"])
         .output()
         .await

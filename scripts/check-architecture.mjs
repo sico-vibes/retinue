@@ -48,8 +48,10 @@ const CRATE_DEPENDENCIES = {
     'retinue-storage',
     'retinue-usage',
   ],
-  // The native shell uses the speech crate for the dictation island.
-  'apps/desktop/src-tauri': ['retinue-speech'],
+  // The native shell uses the speech crate for the dictation island, and
+  // retinue-process so that every child it starts is hidden: a GUI-subsystem
+  // parent gives a console program a console window (21 November 2026).
+  'apps/desktop/src-tauri': ['retinue-process', 'retinue-speech'],
 }
 
 /** Only these crates may open an HTTP or WebSocket client of their own. */
