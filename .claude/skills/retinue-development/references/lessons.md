@@ -2,6 +2,14 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-22 · Release · The driver vanished after Expand-Archive, and Rust proof moved to CI
+
+- **Symptom:** the Release build for beta.6 failed twice at "Fetch and check the computer-use driver" with "the zip holds no open-computer-use.exe", although the zip matched its pin and holds the exe at the top level (checked by listing it locally).
+- **Cause:** not established. On the November runner image (20261111) `Expand-Archive` exited 0 and left nothing; Defender removing the driver is the likely reason. Same script and zip passed on 19 November.
+- **Fix:** `scripts/fetch-owner-computer-driver.mjs` falls back to `tar -xf` and reports what the folder holds; the workflow step lists `Get-MpThreatDetection` on failure. The third run staged the exe against its pin (`5e4e89a`). If it recurs, read those lines first: if Defender is removing it, users' Defender may too.
+- **Smart App Control, release night:** every rebuilt build script and proc-macro (`zip`, `derive_more_impl`, `zeroize_derive`, `phf_macros`) stayed blocked across eight clean-and-retry rounds, and a lane building into the main checkout's target broke it for everyone. Push a PR branch and let CI run the Rust tests (it found five real bugs that night); tell lanes to use their own target and stop after two blocked tries.
+- **Lane reports:** OpenCode lanes often end without a final message; the report may be in a later turn or missing. Read the diff yourself, and when a test fails that the lane could not explain, check the fixture first (beta.6: a tar typeflag written as the byte `2` instead of `b'2'`).
+
 ## 2026-11-21 · Performance · React Compiler, the transcript window, and the benchmark
 
 - **Measure first:** the preview has a 1,000-message conversation (`?scene=bench-long`) and, with `?bench`, `window.__benchEmit(type, payload)` delivers daemon events as the app receives them. Measure on a production build of the preview (`npx vite build --config vite.preview.config.ts --outDir dist-bench`, served by the `desktop-preview-prod` launch entry on port 5176), never the dev server: dev React was about 3.5 s per full render of that chat. Before (21 November): load 9.8 s, keystroke 1.0 s, streamed chunk 0.83 s. After the compiler and the window: 2.4 s, 85 ms, 80 ms.
