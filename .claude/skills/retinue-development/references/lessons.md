@@ -2,6 +2,14 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+## 2026-11-21 · Import · Read-only history looked live, and one call could write gigabytes
+
+- **Symptom (before this change):** an imported conversation appeared in the list, header and companion exactly like a live one; the first thing the owner did with it was hit `imported_read_only`. An OpenCode conversation was offered again after it had been imported, and importing it again after any *other* OpenCode conversation changed created a duplicate. `import.apply` was capped per field (2,000 messages x 20,000 characters) but not per conversation or per call, the shape of the 2026-11-20 lesson about `tool_calls.data.raw`.
+- **Cause:** the session summary and `session_brief` never read `data.import`; the ledger's SHA-256 for OpenCode hashed the shared `opencode.db`, which changes whenever any session does; and there was no budget beside the caps.
+- **Fix (21 November 2026, `crates/retinue-daemon/src/import.rs`):** summaries and `session_brief` carry `imported {source, conversationId, canResumeWith, readOnly}` (derived in `retinue-storage/src/lib.rs`, one `json_extract`); OpenCode's identity is a hash of the conversation's own stored text, and the database is copied once per call (`Reader`); a conversation is bounded to 2 MiB of stored text and a call to 50 MiB, with one `notice` saying what was dropped.
+- **Avoid:** when a row can be read-only, put that on the row the list already reads, not only in the error. When a file is shared by many records, hash the record, not the file. Put a per-call budget beside per-row caps before the first owner with a large history tries it.
+
+
 ## 2026-11-21 · Composer queue · Resume appeared to do nothing
 
 - Queue mutations in `ui/App.tsx` used a shared RPC wrapper with a global error and an empty catch. The composer showed no error or pending state. Keep queue feedback scoped to the conversation, clear it at the next queue mutation, and render it on the composer status line.

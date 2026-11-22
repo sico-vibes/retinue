@@ -1462,7 +1462,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         "computer.link" | "computer.unlink" | "computer.setEnabled" | "computer.action" | "computer.routines" | "computer.routine.run" | "computer.logs" | "computer.view" => computer::rpc(st, method, &p).await,
         // Phase 10: conversations from other coding agents. Desktop only: it reads
         // the owner's own files under `~/.claude`, `~/.codex` and OpenCode's store.
-        "import.scan" | "import.preview" | "import.apply" | "import.distribute" | "import.assign" => import::rpc(st, method, &p).await,
+        "import.scan" | "import.preview" | "import.projects" | "import.apply" | "import.distribute" | "import.assign" | "import.continue" => import::rpc(st, method, &p).await,
         // Phase C: Stop, from the conversation's bar or the companion pill, and
         // nothing else. Desktop only and never remote, as the computer methods are.
         "owner_computer.stop" => owner_computer::rpc(st, method, &p).await,
@@ -4457,7 +4457,7 @@ const HANDOFF_EXCERPT_CHARS: usize = 4000;
 
 /// A read-only first message for another blob. It stores nothing and sends
 /// nothing; the UI drops it into the target blob's composer for editing.
-fn handoff_draft(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+pub(crate) fn handoff_draft(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
     let from_session = p["fromSessionId"].as_str().filter(|id| !id.is_empty()).ok_or_else(|| derr("invalid_argument", "fromSessionId is required", StatusCode::BAD_REQUEST))?;
     let source = st.db.session_detail(from_session).map_err(|_| derr("not_found", "Conversation not found.", StatusCode::NOT_FOUND))?;
     if source["archived"] == true { return Err(derr("not_found", "Conversation not found.", StatusCode::NOT_FOUND)); }
