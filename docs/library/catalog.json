@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "ed672a3b",
-  "documentCount": 452,
+  "revision": "a1d4d1c9",
+  "documentCount": 453,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -24389,6 +24389,31 @@
         {
           "id": "new",
           "text": "New",
+          "level": 2
+        },
+        {
+          "id": "changed",
+          "text": "Changed",
+          "level": 2
+        },
+        {
+          "id": "installation",
+          "text": "Installation",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/releases/0.2.0-beta.8",
+      "source": "docs/releases/0.2.0-beta.8.md",
+      "title": "Retinue 0.2.0-beta.8",
+      "section": "Release notes",
+      "status": "Release note",
+      "sha256": "0477a9a919ef42e78ca2bafd63be4362f7079e22106b1118868a04174d64b2ac",
+      "headings": [
+        {
+          "id": "fixed",
+          "text": "Fixed",
           "level": 2
         },
         {
