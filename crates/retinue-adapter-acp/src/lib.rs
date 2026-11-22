@@ -57,6 +57,12 @@ struct Conn {
     local_session_id: String,
     events: SessionEventSink,
     spawned_instructions: Option<String>,
+    /// True only for a session this connection created (`session/new`): its
+    /// first message may carry the instructions. A resumed session already has
+    /// them in its history.
+    fresh_session: AtomicBool,
+    /// Instructions waiting to go at the top of the next prompt.
+    instructions_preamble: Mutex<Option<String>>,
     spawned_env: BTreeMap<String, String>,
     config_options: Mutex<Vec<Value>>,
     default_mode: Mutex<Option<String>>,
@@ -300,6 +306,8 @@ impl AcpAdapter {
             local_session_id: local_session_id.to_owned(),
             events: SessionEventSink::new(events),
             spawned_instructions: secret,
+            fresh_session: AtomicBool::new(false),
+            instructions_preamble: Mutex::new(None),
             spawned_env: options.env.clone(),
             config_options: Mutex::new(Vec::new()),
             default_mode: Mutex::new(None),
@@ -611,6 +619,8 @@ impl AcpAdapter {
             local_session_id: old.local_session_id.clone(),
             events: old.events.clone(),
             spawned_instructions: exec::normalize_instructions(&options.instructions),
+            fresh_session: AtomicBool::new(false),
+            instructions_preamble: Mutex::new(None),
             spawned_env: options.env.clone(),
             config_options: Mutex::new(Vec::new()),
             default_mode: Mutex::new(None),
@@ -892,6 +902,12 @@ impl AcpAdapter {
         thinking: &str,
         turn_id: Option<&str>,
     ) -> Result<(), AdapterError> {
+        // `model/effort` as the model value is OpenCode's own convention. Every
+        // other ACP agent sets its effort option itself (Antigravity's
+        // `thought_level`; 22 November 2026: "Unknown model ID: gemini-3.8-flash/high").
+        if c.runtime.provider != "opencode" {
+            return Self::select(c, provider_session_id, "effort", thinking, "thinking", exec::ERR_EFFORT_MISSING, exec::ERR_EFFORT_REJECTED, turn_id).await;
+        }
         let (effort_id, model_id, offered, current_model) = {
             let options = c.config_options.lock().await;
             let effort_id = exec::resolve_option_id(&options, "effort");
@@ -985,9 +1001,21 @@ impl AcpAdapter {
             }
         }
         let applied_mode = c.applied.lock().await.mode.clone();
+        // An agent with no `retinue` mode gets the instructions in the first
+        // message of a new session instead (22 November 2026: every Antigravity
+        // employee failed to start with "requested mode is not offered").
+        let agent_mode = exec::offers_mode(&c.config_options.lock().await, exec::AGENT_NAME);
+        if !agent_mode {
+            if let Some(instructions) = exec::normalize_instructions(&options.instructions) {
+                if c.fresh_session.swap(false, Ordering::AcqRel) {
+                    *c.instructions_preamble.lock().await = Some(instructions);
+                }
+                c.applied.lock().await.instructions_in_prompt = true;
+            }
+        }
         let wanted_mode = if options.plan_mode {
             Some(exec::PLAN_MODE.to_owned())
-        } else if exec::normalize_instructions(&options.instructions).is_some() {
+        } else if agent_mode && exec::normalize_instructions(&options.instructions).is_some() {
             Some(exec::AGENT_NAME.to_owned())
         } else if matches!(applied_mode.as_deref(), Some(mode) if mode == exec::AGENT_NAME || mode == exec::PLAN_MODE) {
             let default_mode = c.default_mode.lock().await.clone();
@@ -1415,6 +1443,7 @@ impl AgentAdapter for AcpAdapter {
         let c = self
             .spawn(runtime, &req.project_path, events, &req.session_id, &req.exec_options)
             .await?;
+        c.fresh_session.store(true, Ordering::Release);
         let setup = async {
             let can_resume = Self::ensure_initialized(&c).await?;
             c.can_resume.store(can_resume, Ordering::Release);
@@ -1555,8 +1584,12 @@ impl AgentAdapter for AcpAdapter {
         if !req.attachments.is_empty() && !c.process.image_prompts.load(Ordering::Acquire) {
             return Err(AdapterError::Unsupported("This coding agent did not advertise image support.".into()));
         }
-        let prompt = image_prompt_content(&req).await?;
+        let mut prompt = image_prompt_content(&req).await?;
         Self::apply_options(&c, &provider_id, &req.exec_options, Some(&req.turn_id)).await?;
+        let preamble = c.instructions_preamble.lock().await.take();
+        if let Some(instructions) = preamble.as_deref() {
+            prompt[0] = json!({"type":"text","text":exec::with_instructions(instructions, &req.text)});
+        }
         *c.usage.lock().await = exec::UsageSnap::default();
         {
             let _lifecycle = c.turn_lifecycle.lock().await;
@@ -1576,6 +1609,8 @@ impl AgentAdapter for AcpAdapter {
             Ok(result) => result,
             Err(error) => {
                 let value = serde_json::from_str::<Value>(&error.to_string().replace("provider protocol error: ", "")).unwrap_or_else(|_| json!({"message":error.to_string()}));
+                // A refused prompt keeps the instructions for the next one.
+                if let Some(instructions) = preamble.clone() { *c.instructions_preamble.lock().await = Some(instructions); }
                 c.process.active_turns.lock().await.remove(&provider_id);
                 let (was_cancelled, had_active_turn) = {
                     let _lifecycle = c.turn_lifecycle.lock().await;

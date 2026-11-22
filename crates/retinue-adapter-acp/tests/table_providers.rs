@@ -101,3 +101,35 @@ async fn opencode_still_behaves_as_before() {
     assert!(saw_delta);
     adapter.close_session(&handle).await.unwrap();
 }
+
+/// 22 November 2026: an agent with no `retinue` mode (Antigravity) gets the
+/// employee's instructions at the top of the session's first message, and its
+/// effort through its own option, never OpenCode's `model/effort` value.
+#[tokio::test]
+async fn an_agent_without_a_retinue_mode_gets_the_instructions_in_its_first_message() {
+    let adapter = Arc::new(AcpAdapter::default());
+    let (tx, mut events) = tokio::sync::mpsc::channel(64);
+    let options = ExecOptions { model: Some("model-a".into()), thinking: Some("low".into()), instructions: Some("You are Wu.".into()), ..ExecOptions::default() };
+    let handle = adapter
+        .new_session(&runtime_for("antigravity", "no-agent-mode"), NewSessionRequest { session_id: "table-agy-instructions".into(), project_path: std::env::current_dir().unwrap(), exec_options: options.clone() }, tx)
+        .await
+        .expect("a session opens although the agent offers no retinue mode");
+    let mut seen = Vec::new();
+    for text in ["first", "second"] {
+        adapter.prompt(&handle, PromptRequest { attachments: Vec::new(), turn_id: format!("turn-{text}"), text: text.into(), exec_options: options.clone() }).await.expect("the prompt is accepted");
+        let mut said = String::new();
+        while let Ok(Some(event)) = tokio::time::timeout(EVENT_TIMEOUT, events.recv()).await {
+            match event {
+                AgentEvent::AssistantDelta { text } => said.push_str(&text),
+                AgentEvent::ExecApplied { outcomes, .. } if outcomes.contains_key("thinking") => assert_ne!(outcomes["thinking"].reason.as_deref(), Some("requested effort is not offered")),
+                AgentEvent::TurnCompleted => break,
+                _ => {}
+            }
+        }
+        seen.push(said);
+    }
+    assert!(seen[0].starts_with("fixture prompt:<instructions>"), "{}", seen[0]);
+    assert!(seen[0].contains("You are Wu.") && seen[0].ends_with("first"), "{}", seen[0]);
+    assert_eq!(seen[1], "fixture prompt:second", "the instructions go once per session");
+    adapter.close_session(&handle).await.unwrap();
+}

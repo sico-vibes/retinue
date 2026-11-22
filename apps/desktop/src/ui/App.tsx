@@ -1930,7 +1930,7 @@ export function App() {
     if (current && sameProject && !isSideSession(current) && (current.messages ?? []).length === 0 && current.agentId === agent.id) { selectAgent(agent); return }
     void createConversation(agent, { projectId })
   }
-  const createConversation = async (agent: Agent, options: { quiet?: boolean; projectId?: string | null } = {}): Promise<Session | null> => {
+  const createConversation = async (agent: Agent, options: { quiet?: boolean; projectId?: string | null; onFailure?: (message: string) => void } = {}): Promise<Session | null> => {
     if (ensuringConversation.current.has(agent.id)) return null
     ensuringConversation.current.add(agent.id)
     return withFinally(async () => { try {
@@ -1946,7 +1946,7 @@ export function App() {
       if (!options.quiet) setRosterAnnouncement(`Started a new conversation with ${agent.name}.`)
       requestAnimationFrame(() => composerRef.current?.focus())
       return result.session
-    } catch (reason) { if (!options.quiet) setError(messageOf(reason)); return null } }, () => { ensuringConversation.current.delete(agent.id) })
+    } catch (reason) { options.onFailure?.(messageOf(reason)); if (!options.quiet) setError(messageOf(reason)); return null } }, () => { ensuringConversation.current.delete(agent.id) })
   }
   const renameConversation = async (session: Session, title: string) => {
     try { await rpc('session.rename', { sessionId: session.id, title }); await refresh() } catch (reason) { setError(messageOf(reason)) }
@@ -2238,8 +2238,11 @@ ${fileReferenceText(sentFile)}` : typed
       const agent = activeSelectedAgent
       const named = projectNamedInText(text, projects)
       if (named && 'ambiguous' in named) { setError(`More than one project answers to #${named.ambiguous}. Rename one or use its full name.`); return }
-      const created = agent ? await createConversation(agent, { quiet: true, projectId: named?.project.id }) : null
-      if (!created) { setError('Could not start the conversation. Try again.'); return }
+      // The daemon's own reason, when it gave one (22 November 2026: the generic
+      // sentence hid an execution gate that refused every Antigravity employee).
+      let failure: string | null = null
+      const created = agent ? await createConversation(agent, { quiet: true, projectId: named?.project.id, onFailure: (reason) => { failure = reason } }) : null
+      if (!created) { setError(failure ?? 'Could not start the conversation. Try again.'); return }
       target = created
     }
     const sessionId = target.id
@@ -3123,8 +3126,9 @@ ${fileReferenceText(sentFile)}` : typed
         let sessionId = draftOrSessionId
         if (isDraftSession({ id: draftOrSessionId } as Session)) {
           const draftAgent = agents.find((item) => draftOrSessionId === `${DRAFT_SESSION_PREFIX}${item.id}`)
-          const created = draftAgent ? await createConversation(draftAgent, { quiet: true }) : null
-          if (!created) throw new Error('Could not start the conversation. Try again.')
+          let failure: string | null = null
+          const created = draftAgent ? await createConversation(draftAgent, { quiet: true, onFailure: (reason) => { failure = reason } }) : null
+          if (!created) throw new Error(failure ?? 'Could not start the conversation. Try again.')
           sessionId = created.id
         }
         const sendTarget = sessions.find((item) => item.id === sessionId)

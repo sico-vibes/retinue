@@ -32,6 +32,15 @@ function finishPrompt(sessionId, stopReason) {
 }
 
 function configOptions() {
+  // Like Antigravity's `agy acp`: no `retinue` mode, and effort is its own
+  // `thought_level` option (22 November 2026).
+  if (mode === "no-agent-mode") {
+    return [
+      { id: "model", category: "model", currentValue: "model-default", options: [{ value: "model-default", name: "Default" }, { value: "model-a", name: "Model A" }] },
+      { id: "thought_level", category: "thought_level", currentValue: "high", options: [{ value: "low", name: "Low" }, { value: "high", name: "High" }] },
+      { id: "mode", category: "mode", currentValue: "default", options: [{ value: "default", name: "Default" }, { value: "plan", name: "Plan" }] },
+    ];
+  }
   return [
     { id: "model", currentValue: "model-default", options: [
       { value: "model-default", name: "Default" },
@@ -89,7 +98,7 @@ input.on("line", (line) => {
         sessionId,
         update: {
           sessionUpdate: "agent_message_chunk",
-          content: { type: "text", text: `fixture response:${sessionId}` },
+          content: { type: "text", text: mode === "no-agent-mode" ? `fixture prompt:${message.params.prompt?.[0]?.text}` : `fixture response:${sessionId}` },
         },
       },
     });

@@ -347,6 +347,31 @@ fn ensure_pi_gates(c: &Connection) -> Result<(), StorageError> {
     for key in ["exec_gate.pi.model", "exec_gate.pi.thinking", "exec_gate.pi.instructions", "exec_gate.pi.steer"] {
         c.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?1,'true')", [key])?;
     }
+    ensure_acp_table_gates(c)
+}
+
+/// The ACP table providers (`retinue_runtime::ACP_PROVIDERS`: Qwen Code, Cursor,
+/// Grok and Antigravity) got no gate rows when they were added, so every employee
+/// on one with a model, an effort or instructions was refused before the CLI
+/// started ("The requested setting is unavailable for this runtime until its
+/// execution check passes"; the owner's Antigravity employee, 22 November 2026).
+/// They run the same ACP adapter as OpenCode, which applies the model and the
+/// instructions. Effort is opened only where a real CLI was seen to echo a
+/// changed value: Antigravity's `thought_level` (`agy` 1.5.14, high to low, 22
+/// November 2026). Qwen, Cursor and Grok keep effort behind its gate until the
+/// same check runs for them. No steer row: these providers cannot steer.
+/// `OR IGNORE`, so an owner's choice stands.
+pub(crate) const ACP_TABLE_GATES: [&str; 9] = [
+    "exec_gate.qwen.model", "exec_gate.qwen.instructions",
+    "exec_gate.cursor.model", "exec_gate.cursor.instructions",
+    "exec_gate.grok.model", "exec_gate.grok.instructions",
+    "exec_gate.antigravity.model", "exec_gate.antigravity.thinking", "exec_gate.antigravity.instructions",
+];
+
+fn ensure_acp_table_gates(c: &Connection) -> Result<(), StorageError> {
+    for key in ACP_TABLE_GATES {
+        c.execute("INSERT OR IGNORE INTO settings(key,value) VALUES(?1,'true')", [key])?;
+    }
     Ok(())
 }
 

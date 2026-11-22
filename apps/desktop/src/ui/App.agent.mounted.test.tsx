@@ -964,6 +964,22 @@ describe('blob roster and editor', () => {
     expect(h.rpc).toHaveBeenCalledWith('session.prompt', expect.objectContaining({ sessionId: 'session-invoice', text: 'Parse the March invoices' }))
   })
 
+  // 22 November 2026: the daemon's reason reached nobody; the owner saw only the
+  // generic sentence while an execution gate refused every Antigravity employee.
+  it("shows the daemon's own reason when a conversation cannot start", async () => {
+    withRpc((method) => { if (method === 'agent.conversation.create') throw new Error('The requested setting is unavailable for this runtime until its execution check passes.'); return undefined })
+    const view = startApp()
+    await view.settle()
+    await click(view.host.querySelector('.team-row[data-agent-id="agent-invoice"]'))
+    await view.settle()
+    await typeInto(view.host.querySelector('.composer-box textarea'), 'Parse the March invoices')
+    await act(async () => { view.host.querySelector<HTMLButtonElement>('.send-button')!.click() })
+    await view.settle()
+    expect(view.host.textContent).toContain('The requested setting is unavailable for this runtime until its execution check passes.')
+    expect(view.host.textContent).not.toContain('Could not start the conversation. Try again.')
+    expect(h.rpc).not.toHaveBeenCalledWith('session.prompt', expect.anything())
+  })
+
   it('starts a new conversation next to the old one, without archiving it', async () => {
     const busy = session({ id: 'session-claude', runtimeId: 'runtime-claude', agentId: 'agent-claude', title: 'Landing page copy', updatedAt: '2026-10-02T03:00:00.000Z', messages: [{ id: 'm1', role: 'user', content: 'Hello' }] })
     const fresh = session({ id: 'session-claude-fresh', runtimeId: 'runtime-claude', agentId: 'agent-claude', title: 'New chat', updatedAt: '2026-10-02T04:00:00.000Z', messages: [] })

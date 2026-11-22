@@ -11543,6 +11543,26 @@ mod phase2a_tests {
         let requested=ExecOptions{model:Some("gpt-test".into()),..ExecOptions::default()};let rejection=exec_option_rejection(&st,"codex",&requested).unwrap().unwrap();assert_eq!(rejection.0,"model");assert_eq!(rejection.1,EXEC_UNAVAILABLE);
         assert!(exec_option_rejection(&st,"codex",&ExecOptions::default()).unwrap().is_none());
     }
+    // 22 November 2026: an Antigravity employee (model, effort, instructions) was
+    // refused before `agy` started, because no table provider had gate rows.
+    #[test]
+    fn acp_table_providers_accept_their_verified_settings(){
+        let(st,_)=state();
+        let requested=ExecOptions{model:Some("gemini-3.8-flash".into()),thinking:Some("high".into()),instructions:Some("Be brief.".into()),..ExecOptions::default()};
+        assert!(exec_option_rejection(&st,"antigravity",&requested).unwrap().is_none());
+        // The others take a model and instructions; effort stays behind its gate
+        // until a real CLI is seen to echo it (`an_unknown_provider_gets_honest_capabilities`).
+        let without_effort=ExecOptions{thinking:None,..requested.clone()};
+        for provider in ["qwen","cursor","grok"]{
+            assert!(exec_option_rejection(&st,provider,&without_effort).unwrap().is_none(),"{provider}");
+            assert_eq!(exec_option_rejection(&st,provider,&requested).unwrap().unwrap().0,"thinking","{provider}");
+        }
+        // Still the owner's off-switch, and still no service tier.
+        st.db.set_setting("exec_gate.antigravity.model",&json!(false)).unwrap();
+        assert_eq!(exec_option_rejection(&st,"antigravity",&requested).unwrap().unwrap().0,"model");
+        let tier=ExecOptions{service_tier:Some("priority".into()),..ExecOptions::default()};
+        assert_eq!(exec_option_rejection(&st,"antigravity",&tier).unwrap().unwrap().0,"serviceTier");
+    }
     #[test]
     fn opencode_thinking_support_and_gate_share_one_source_of_truth(){
         let(st,_)=state();

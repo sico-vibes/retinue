@@ -208,6 +208,20 @@ pub(crate) fn config_option<'a>(options: &'a [Value], id: &str) -> Option<&'a Va
     options.iter().find(|option| option["id"].as_str() == Some(id))
 }
 
+/// Whether the session's `mode` option offers this value. OpenCode offers the
+/// `retinue` agent Retinue wrote into its config; Antigravity, Qwen, Cursor and
+/// Grok have no such agent (22 November 2026).
+pub(crate) fn offers_mode(options: &[Value], value: &str) -> bool {
+    config_option(options, "mode").is_some_and(|mode| option_values(mode).contains(value))
+}
+
+/// The first message of a new session for an agent with no `retinue` mode: the
+/// employee's instructions, then what the owner wrote. The owner's text is
+/// stored on its own; only the agent sees this.
+pub(crate) fn with_instructions(instructions: &str, text: &str) -> String {
+    format!("<instructions>\n{instructions}\n</instructions>\n\n{text}")
+}
+
 /// Resolves the option id to send for a logical setting. The id wins when it
 /// is present; otherwise `effort` is matched by its ACP category
 /// `thought_level`, because OpenCode's own option id is not guaranteed.
@@ -312,6 +326,9 @@ pub(crate) struct Echoes {
     pub model: Option<String>,
     pub mode: Option<String>,
     pub effort: Option<String>,
+    /// The instructions went in the session's first message, because the agent
+    /// offers no `retinue` mode (every ACP agent but OpenCode).
+    pub instructions_in_prompt: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -405,8 +422,8 @@ pub(crate) fn turn_outcomes(
         );
     }
     if normalize_instructions(&options.instructions).is_some() {
-        let matched = echoes.mode.as_deref() == Some(AGENT_NAME);
-        outcomes.insert(
+        let matched = echoes.mode.as_deref() == Some(AGENT_NAME) || echoes.instructions_in_prompt;
+        if !echoes.instructions_in_prompt { outcomes.insert(
             "mode".into(),
             SettingOutcome {
                 requested: Some(json!(AGENT_NAME)),
@@ -419,7 +436,7 @@ pub(crate) fn turn_outcomes(
                     Some("mode echo is not application proof without a successful turn".into())
                 },
             },
-        );
+        ); }
         outcomes.insert(
             "instructions".into(),
             SettingOutcome {
@@ -660,6 +677,7 @@ mod tests {
             model: Some("opencode/ling".into()),
             mode: Some(AGENT_NAME.into()),
             effort: Some("low".into()),
+            instructions_in_prompt: false,
         };
         let outcomes = turn_outcomes(&options, &echoes, Some("end_turn"));
         assert_eq!(outcomes["model"].applied, Some(true));
