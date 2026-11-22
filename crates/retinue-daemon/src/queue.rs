@@ -356,7 +356,8 @@ pub async fn send_now(st: &AppState, p: Value) -> Result<Value, DispatchError> {
             None => return Err(derr("conflict", "That item is no longer queued.", StatusCode::CONFLICT)),
         };
         let text = claimed["text"].as_str().unwrap_or("").to_owned();
-        match crate::steer_live(st, session_id, &text, Some(&send_id), None).await {
+        // A message an MCP client queued keeps its "via" label when it is steered.
+        match crate::steer_live(st, session_id, &text, Some(&send_id), mcp_client_of(&claimed)).await {
             Ok(crate::SteerAttempt::Accepted { .. }) => {
                 if st.db.queue_mark_sent(id).is_err() {
                     // The text is in the turn; keep the item off the queue and say
@@ -404,6 +405,16 @@ pub async fn send_now(st: &AppState, p: Value) -> Result<Value, DispatchError> {
 /// Whether a stored item can go into a live turn as ordinary text: no
 /// attachments, command, references, reply, annotations or internal meta, and
 /// not a scheduled or limit-waiting item.
+/// The sending client's name when the item's only meta is the MCP sender label
+/// (`{kind: "mcp", client}`, written by `queue.add` above). That label is not
+/// content, so it does not stop a steer (22 November 2026: a message queued
+/// through the Retinue MCP could not be sent into the running turn).
+fn mcp_client_of(item: &Value) -> Option<&str> {
+    let meta = item.get("meta")?.as_object()?;
+    if meta.get("kind").and_then(Value::as_str) != Some("mcp") || meta.keys().any(|key| key != "kind" && key != "client") { return None; }
+    meta.get("client").and_then(Value::as_str).filter(|client| !client.trim().is_empty())
+}
+
 fn plain_text_item(item: &Value) -> bool {
     item["kind"] == "user"
         && item["attachments"].as_array().is_none_or(|items| items.is_empty())
@@ -411,7 +422,7 @@ fn plain_text_item(item: &Value) -> bool {
         && item.get("replyTo").is_none_or(Value::is_null)
         && item.get("command").is_none_or(Value::is_null)
         && item.get("annotations").and_then(Value::as_array).is_none_or(|notes| notes.is_empty())
-        && item.get("meta").is_none_or(|meta| !meta.is_object())
+        && (item.get("meta").is_none_or(|meta| !meta.is_object()) || mcp_client_of(item).is_some())
         && item["whenLimitResets"] != true
 }
 
@@ -620,5 +631,23 @@ pub async fn queue_rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, 
         "session.queue.send_now" => send_now(st, p.clone()).await,
         "session.queue.resume" => resume(st, p.clone()).await,
         _ => Err(derr("not_found", "unknown queue method", StatusCode::NOT_FOUND)),
+    }
+}
+
+#[cfg(test)]
+mod steer_meta_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn an_mcp_sender_label_is_still_plain_text_but_other_meta_is_not() {
+        let mcp = json!({"kind":"user","text":"hi","meta":{"kind":"mcp","client":"claude-code"}});
+        assert!(plain_text_item(&mcp));
+        assert_eq!(mcp_client_of(&mcp), Some("claude-code"));
+        assert!(plain_text_item(&json!({"kind":"user","text":"hi"})));
+        let extra = json!({"kind":"user","text":"hi","meta":{"kind":"mcp","client":"cc","retryOf":"x"}});
+        assert!(!plain_text_item(&extra));
+        assert!(!plain_text_item(&json!({"kind":"user","text":"hi","meta":{"kind":"question_answer"}})));
+        assert!(!plain_text_item(&json!({"kind":"user","text":"hi","meta":{"kind":"mcp","client":" "}})));
     }
 }
