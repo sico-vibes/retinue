@@ -300,4 +300,22 @@ describe('Agents scan feedback', () => {
     await act(async () => { (host.querySelector('.runtime-entry-head') as HTMLButtonElement).click() })
     expect(host.querySelector('.runtime-recovery-guidance')?.textContent).toContain('Update or repair this CLI, then choose Scan again above.')
   })
+
+  it('leaves coding agents switched off in Providers out of the Agents list, and says where they are', async () => {
+    mocks.invoke.mockResolvedValue(false)
+    mocks.rpc.mockImplementation(async (method: string) => method === 'settings.get' ? { settings: { 'runtimes.disabled': ['cursor', 'grok'] } } : method === 'provider.list' ? { providers: [] } : {})
+    host = document.createElement('div'); document.body.append(host); root = createRoot(host)
+    const runtimes = [{ id: 'rt-codex', provider: 'codex' }, { id: 'rt-agy', provider: 'antigravity' }, { id: 'rt-cursor', provider: 'cursor' }, { id: 'rt-grok', provider: 'grok' }]
+    await act(async () => root.render(<SettingsSheet snapshot={{ runtimes }} scanStatus={EMPTY_DISCOVERY_STATUS} initialPage="Agents" onClose={vi.fn()} onRefresh={vi.fn()} onError={vi.fn()} onOpenAgent={vi.fn()} />))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    const rows = [...host.querySelectorAll('.runtime-entry-head strong')].map((node) => node.textContent)
+    expect(rows).toEqual(['Codex', 'Antigravity'])
+    const note = [...host.querySelectorAll('.provider-note')].find((node) => node.textContent?.startsWith('Turned off in Providers'))
+    expect(note?.textContent).toContain('Cursor')
+    expect(note?.textContent).toContain('Grok')
+    await act(async () => { [...note!.querySelectorAll('button')].find((button) => button.textContent === 'Open Providers')!.click() })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+    expect(host.querySelector('.runtime-entry-head')).toBeNull()
+    expect(host.textContent).toContain('These three are always available.')
+  })
 })

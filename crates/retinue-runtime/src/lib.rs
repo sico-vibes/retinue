@@ -27,13 +27,19 @@ pub use account::{from_claude_status, from_codex_account_read, from_opencode_aut
 const SIGN_IN_TIMEOUT_SECS: u64 = 5;
 /// The ACP sign-in probe is a full `initialize` + `session/new` exchange, so it
 /// gets more room than a status subcommand (the ACP adapter itself bounds
-/// `session/new` at 20 s; discovery's own budget is 31 s).
-const ACP_SIGN_IN_TIMEOUT_SECS: u64 = 10;
+/// `session/new` at 20 s). 22 November 2026: 10 s was too short inside a full
+/// scan. Every provider's probes start at once, and on the owner's machine
+/// `agy`'s exchange (about 3 s alone) ran past 10 s, so a signed-in Antigravity
+/// read as "unknown" on every scan.
+const ACP_SIGN_IN_TIMEOUT_SECS: u64 = 25;
+/// The version and protocol probes' budget. 22 November 2026: 6 s timed out for
+/// Claude Code, Codex and OpenCode in a cold full scan on the owner's machine.
+const PROBE_TIMEOUT_SECS: u64 = 15;
 /// OpenCode 2 answers commands through a background service, so a cold
 /// `auth list` can take several seconds. The whole OpenCode sign-in phase gets
 /// 15 s, and each probe in it may use the full budget: the first probe can
 /// answer with 15 s while the phase as a whole still fits the 31 s discovery
-/// budget alongside the 6 s version and protocol probes.
+/// budget alongside the version and protocol probes.
 const OPENCODE_SIGN_IN_TIMEOUT_SECS: u64 = 15;
 /// Upper bound for a credential file read, matching the daemon's quota reader.
 const MAX_CREDENTIAL_FILE_BYTES: u64 = 1024 * 1024;
@@ -286,17 +292,33 @@ fn quoted_tokens(input: &str) -> Vec<String> {
     result
 }
 
+/// Variables a read-only probe sets for a CLI that would otherwise do work of its
+/// own. Antigravity's `agy` starts a detached auto-updater on every run and may
+/// open a browser for sign-in; Synara sets these two on every `agy` health probe
+/// for the same reason (its issue #1029), and a probe whose child updater kept
+/// the output pipe open timed out here while `agy` moved from 1.5.13 to 1.5.14.
+/// Only probes are quieted: a conversation's own `agy acp` updates as usual.
+pub(crate) fn quiet_probe_variables(exe: &Path) -> &'static [(&'static str, &'static str)] {
+    let stem = exe.file_stem().and_then(|stem| stem.to_str()).unwrap_or("").to_ascii_lowercase();
+    if stem == "agy" { &[("AGY_CLI_DISABLE_AUTO_UPDATE", "true"), ("NO_BROWSER", "true")] } else { &[] }
+}
+
+fn quiet_probe_environment(command: &mut Command, exe: &Path) {
+    for (key, value) in quiet_probe_variables(exe) { command.env(key, value); }
+}
+
 // All diagnostics are fixed text; provider stdout/stderr never becomes an error.
 async fn bounded_output(exe: &Path, args: &[&str], spawns: &SpawnCounter) -> Result<String, &'static str> {
     let mut cmd = Command::new(exe);
     prepare_command(&mut cmd);
+    quiet_probe_environment(&mut cmd, exe);
     cmd.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     let mut child = cmd.spawn().map_err(|_| "Could not start the coding agent.")?;
     spawns.count();
     let process_tree = ProcessTree::attach(&mut child).map_err(|_| "Could not supervise the coding agent.")?;
     let stdout = child.stdout.take().ok_or("Could not read the probe result.")?;
     let stderr = child.stderr.take().ok_or("Could not read the probe result.")?;
-    let result = timeout(Duration::from_secs(6), async {
+    let result = timeout(Duration::from_secs(PROBE_TIMEOUT_SECS), async {
         tokio::try_join!(child.wait(), read_probe_stream(stdout), read_probe_stream(stderr))
     }).await;
     let _ = process_tree.terminate();
@@ -628,7 +650,7 @@ async fn auth_status(provider: &str, exe: &Path, args: &[String], environment: &
     // then `session/new`. No credential file or keyring is opened; the CLI
     // answers from the sign-in it already holds (Google's keyring for `agy`).
     if is_acp_provider(provider) {
-        return acp_auth_status(provider, exe, args, spawns).await;
+        return acp_auth_status(provider, exe, &acp_server_args(provider, args), spawns).await;
     }
     let mut av = args.iter().map(String::as_str).collect::<Vec<_>>();
     match provider {
@@ -661,6 +683,16 @@ async fn auth_status(provider: &str, exe: &Path, args: &[String], environment: &
     SignIn { state, gateways: BTreeMap::new(), error: None, output: Some(out) }
 }
 
+/// The command line that starts a table provider's ACP server: the resolved
+/// command's own arguments (an npm shim's script, say) followed by the row's
+/// launch arguments (`acp` for `agy`, `--acp` for Qwen). 22 November 2026: the
+/// sign-in check was given the resolved arguments alone, so it started the
+/// interactive `agy` instead of `agy acp`, waited out its budget on a terminal
+/// UI that never answers JSON-RPC, and every table provider read "unknown".
+pub(crate) fn acp_server_args(provider: &str, resolved: &[String]) -> Vec<String> {
+    resolved.iter().cloned().chain(acp_launch_args(provider).iter().map(|arg| (*arg).to_owned())).collect()
+}
+
 /// An ACP provider's sign-in, asked over its own protocol. `initialize` is
 /// followed by a throwaway `session/new`: a session that opens proves the server
 /// accepted the CLI's stored sign-in, and the auth error an ACP server returns
@@ -687,6 +719,7 @@ async fn acp_sign_in_probe(provider: &str, exe: &Path, args: &[String], spawns: 
     let cwd_arg = cwd.path().to_string_lossy().into_owned();
     let mut command = Command::new(exe);
     prepare_command(&mut command);
+    quiet_probe_environment(&mut command, exe);
     command
         .args(args)
         .current_dir(cwd.path())
@@ -1152,6 +1185,29 @@ fn short_hash(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    // 22 November 2026: an `agy` probe never starts its updater or a browser, and
+    // no other CLI's probe gets those variables.
+    #[test]
+    fn the_sign_in_check_starts_the_acp_server_not_the_interactive_cli() {
+        assert_eq!(acp_server_args("antigravity", &[]), ["acp"]);
+        assert_eq!(acp_server_args("antigravity", &["C:/npm/agy.js".to_owned()]), ["C:/npm/agy.js", "acp"]);
+        for row in ACP_PROVIDERS {
+            let args = acp_server_args(row.provider, &[]);
+            assert!(!args.is_empty() && args.iter().map(String::as_str).eq(row.args.iter().copied()), "{}", row.provider);
+        }
+    }
+
+    #[test]
+    fn only_agy_probes_are_quieted() {
+        let agy = quiet_probe_variables(Path::new("C:/Users/you/AppData/Local/agy/bin/agy.exe"));
+        assert!(agy.contains(&("AGY_CLI_DISABLE_AUTO_UPDATE", "true")));
+        assert!(agy.contains(&("NO_BROWSER", "true")));
+        assert_eq!(quiet_probe_variables(Path::new("/usr/local/bin/agy")), agy);
+        for other in ["claude.exe", "codex", "opencode.cmd", "agent.exe", "agyx"] {
+            assert!(quiet_probe_variables(Path::new(other)).is_empty(), "{other}");
+        }
+    }
+
     use super::*;
     use tokio::io::AsyncWriteExt;
     #[test]
@@ -1190,7 +1246,10 @@ mod tests {
     // its own protocol. These fixtures speak the request/response pair the probe
     // sends, one reply per request, so the exchange is deterministic.
     fn acp_probe_fixture(name: &str) -> (PathBuf, Vec<String>) {
-        (std::env::current_exe().unwrap(), vec!["--exact".to_owned(), format!("tests::{name}"), "--nocapture".to_owned()])
+        // The trailing `--skip` swallows the first launch argument the sign-in check
+        // appends (`acp`, `--acp`, `agent`), so libtest still runs only this fixture;
+        // the fixture itself checks the argument arrived (22 November 2026).
+        (std::env::current_exe().unwrap(), vec!["--exact".to_owned(), format!("tests::{name}"), "--nocapture".to_owned(), "--skip".to_owned()])
     }
 
     fn acp_fixture_answer(init: &str, session: &str) {
@@ -1198,6 +1257,11 @@ mod tests {
         // Only a probe's child speaks: the ordinary suite run prints nothing and
         // never waits on the terminal's input.
         if std::env::var_os("RETINUE_ACP_PROBE_FIXTURE").is_none() {
+            return;
+        }
+        // A real CLI speaks ACP only when started with its launch argument; without
+        // it, `agy` is an interactive terminal app that never answers JSON-RPC.
+        if !std::env::args().any(|arg| ["acp", "--acp", "agent"].contains(&arg.as_str())) {
             return;
         }
         let mut request = String::new();
@@ -1249,11 +1313,14 @@ mod tests {
     #[tokio::test]
     async fn an_acp_session_that_opens_is_signed_in_and_a_refusal_is_signed_out() {
         let (exe, args) = acp_probe_fixture("acp_fixture_signed_in");
+        let args = acp_server_args("antigravity", &args);
         assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args, &SpawnCounter::detached()).await, Some(AuthState::Authenticated)));
         let (exe, args) = acp_probe_fixture("acp_fixture_signed_out");
+        let args = acp_server_args("antigravity", &args);
         assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args, &SpawnCounter::detached()).await, Some(AuthState::Unauthenticated)));
         // Any other refusal says nothing about the sign-in.
         let (exe, args) = acp_probe_fixture("acp_fixture_refused");
+        let args = acp_server_args("antigravity", &args);
         assert!(matches!(acp_sign_in_probe("antigravity", &exe, &args, &SpawnCounter::detached()).await, Some(AuthState::Unknown)));
     }
 

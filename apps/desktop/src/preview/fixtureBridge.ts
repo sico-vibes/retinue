@@ -36,7 +36,7 @@ type Unlisten = () => void
 const noop: Unlisten = () => undefined
 let discoveryAttempts = 0
 const pendingDeletes = new Map<string, { deadline: number; timer: number; archived: boolean }>()
-const fixtureSettings: Record<string, unknown> = { 'notifications.enabled': true, 'claude.enableWorkflows': true }
+const fixtureSettings: Record<string, unknown> = { 'notifications.enabled': true, 'claude.enableWorkflows': true, ...(new URLSearchParams(location.search).has('providers-off') ? { 'runtimes.disabled': ['cursor', 'grok'] } : {}) }
 const daemonListeners = new Set<(event: DaemonEvent) => void>()
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
 const flags = () => new URLSearchParams(location.search)
@@ -78,6 +78,8 @@ const baseRuntimes: Runtime[] = [
   { id: 'runtime-codex', provider: 'codex', status: 'online', protocolFamily: 'codex_app_server', version: 'codex-cli 0.159.3', authState: 'signed_in' },
   { id: 'runtime-claude', provider: 'claude', status: 'online', protocolFamily: 'claude_stream', version: '2.1.286' },
   { id: 'runtime-opencode', provider: 'opencode', status: 'online', protocolFamily: 'acp', version: '1.18.34', authState: 'authenticated', gatewayAuthStates: { opencode: 'authenticated', 'opencode-go': 'authenticated' } },
+  // `?providers-off`: two optional coding agents switched off in Providers, and Antigravity on (22 November 2026).
+  ...(flags().has('providers-off') ? [{ id: 'runtime-antigravity', provider: 'antigravity', status: 'online', protocolFamily: 'acp', version: '1.5.14', authState: 'authenticated' }, { id: 'runtime-cursor', provider: 'cursor', status: 'online', protocolFamily: 'acp', version: '1.9.0' }, { id: 'runtime-grok', provider: 'grok', status: 'online', protocolFamily: 'acp', version: '0.4.0' }] as Runtime[] : []),
 ]
 
 // All catalog/session values below are preview-only visual fixtures. They do

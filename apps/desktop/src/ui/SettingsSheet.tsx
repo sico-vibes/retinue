@@ -393,6 +393,8 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
   /** Settings › Coding agents: turn a coding agent off (owner, 9 November 2026). The provider id when it is the only copy, so the daemon skips probing it at startup; else this copy's id. */
   const [disabledRuntimes, setDisabledRuntimes] = useState<string[]>([])
   const [steerGates, setSteerGates] = useState({ claude: true, opencode: true })
+  /** An optional coding agent switched off in Providers, with nobody on it: the Agents list leaves it out (owner, 22 November 2026). */
+  const providerOff = (runtime: Runtime) => !!runtime.provider && !MAIN_PROVIDERS.includes(runtime.provider) && disabledRuntimes.includes(runtime.provider) && !agents.some((agent) => !agent.parentAgentId && agent.runtimeId === runtime.id)
   const runtimeOff = (runtime: Runtime) => disabledRuntimes.includes(runtime.id) || (!!runtime.provider && disabledRuntimes.includes(runtime.provider)) || runtime.status === 'disabled'
   const setRuntimeOff = (runtime: Runtime, off: boolean) => {
     const only = runtimes.filter((item) => item.provider === runtime.provider).length <= 1
@@ -734,7 +736,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
                 {scanStatus.failure ? <span>{scanStatus.failure.step}: {scanStatus.failure.message} <time dateTime={new Date(scanStatus.failure.at).toISOString()} title={new Date(scanStatus.failure.at).toLocaleString()}>{scanTime(scanStatus.failure.at)}</time>{scanStatus.retrying ? ' · Retrying automatically' : ''}</span> : !scanStatus.scanning && <span>{discoveryResultText(scanStatus)} · <time dateTime={new Date(scanStatus.completedAt!).toISOString()} title={new Date(scanStatus.completedAt!).toLocaleString()}>{scanTime(scanStatus.completedAt!)}</time></span>}
               </p>}
               {runtimes.length === 0 && !scanStatus.scanning && <ScanRecovery runtimes={runtimes} scanning={scanStatus.scanning} error={scanStatus.failure ? scanStatus.failure.message : null} onScan={() => void onRefresh()} />}
-              {runtimes.map((runtime) => {
+              {runtimes.filter((runtime) => !providerOff(runtime)).map((runtime) => {
                 const open = openRuntimes[runtime.id] === true
                 const probe = runtimeProbeDetail(runtime)
                 const owned = agents.filter((agent) => !agent.parentAgentId && agent.runtimeId === runtime.id)
@@ -765,6 +767,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
                 <div className="runtime-entry-body">{orphanAgents.map((agent) => <BlobLink key={agent.id} agent={agent} mode={modeFor(agent)} onOpen={() => onOpenAgent(agent.id)} />)}</div>
               </div>}
             </SettingsGroup>
+            {runtimes.some(providerOff) && <p className="provider-note">Turned off in Providers: {runtimes.filter(providerOff).map((runtime) => providerDisplayName(runtime.provider)).join(', ')}. <button type="button" className="queue-link" onClick={() => switchPage('Providers')}>Open Providers</button></p>}
             <HarnessUpdatesNotice runtimes={runtimes} onRefresh={onRefresh} />
             <SettingsGroup title="Claude Code">
               <SettingsRow label="Dynamic workflows and Ultracode" hint="New Claude Code sessions ask for workflows, which also makes the Ultracode effort available. Retinue doesn't edit Claude's config.">{pageSwitch('Claude dynamic workflows', claudeWorkflowsEnabled, 'claude.enableWorkflows', (next) => onClaudeWorkflowsChange?.(next))}</SettingsRow>

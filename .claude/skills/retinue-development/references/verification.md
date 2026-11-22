@@ -4,6 +4,7 @@ Last reviewed: 2026-10-22 (Rust 1.94.0 stable, Node 24, OpenCode 2.0.32, Codex C
 
 ## Smart App Control on the owner's PC (14 November 2026)
 
+- **22 November 2026: the owner turned Smart App Control off for development** (`HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy` `VerifiedAndReputablePolicyState` reads `0`; `1` is on). Local `cargo test` and `cargo clippy` run again in the main checkout. Read that value before assuming either way: since the April 2026 Windows updates it can be switched back on without a reinstall, and then everything below applies again. Never change it yourself.
 - `cargo check`/`cargo test` in the main checkout's own `target` can stop at a build script with `An Application Control policy has blocked this file. (os error 4551)`. Use a lane worktree's target whose build scripts already ran: `CARGO_TARGET_DIR='C:\Users\Sico Vibes\Desktop\DevCN\Retinue-retinue\<worktree>\target'`, with `TEMP`/`TMP` at `C:\tmp`.
 - A freshly linked **test binary** is often blocked the same way. Build it with `--no-run`, copy `deps\retinued-<hash>.exe` to `C:\tmp\`, and run the copy with the test filter; the copy runs (17 November 2026, all 7 connector tests). See `lessons.md`, "Smart App Control blocks a fresh proc-macro dll".
 - **The same block on a proc-macro DLL reads as `error[E0463]: can't find crate for `async_trait``** (also seen for `tokio_macros`, `futures_macro`, `tracing_attributes`). Cargo passed the `.dll`; rustc could not load it. Delete the crate's artifacts (`cargo clean -p async-trait`) and rebuild, sometimes twice.
