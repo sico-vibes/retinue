@@ -1640,4 +1640,69 @@ async fn installed_version_of(provider: &str) -> Option<String> {
 
 pub(crate) fn startup(st: &AppState) {
     sweep_at_startup(st);
+    // Keep-up-to-date (22 November 2026): a provider whose `autoUpdate` switch is
+    // on is checked a few minutes after start and then every six hours. Only a
+    // runtime is needed; a unit test's bare state never calls `startup`.
+    if tokio::runtime::Handle::try_current().is_ok() {
+        let state = st.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(AUTO_FIRST_CHECK).await;
+            loop {
+                let _ = auto_update_once(&state).await;
+                tokio::time::sleep(AUTO_CHECK_EVERY).await;
+            }
+        });
+    }
+}
+
+/// How long after start the first keep-up-to-date check waits, so it never
+/// competes with the app's own start.
+const AUTO_FIRST_CHECK: Duration = Duration::from_secs(5 * 60);
+/// How often a keep-up-to-date provider is checked afterwards.
+const AUTO_CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
+
+/// One keep-up-to-date pass. A provider is updated only when its switch is on,
+/// the owner already consented to a download from the plan's source host (so a
+/// new host still needs its card), something is installed to update, the
+/// publisher's version is newer, and (for the owner's own copy) no bot is using
+/// it. Answers the providers whose install it started.
+pub(crate) async fn auto_update_once(st: &AppState) -> Vec<String> {
+    let mut started = Vec::new();
+    for row in ROWS.iter() {
+        if row.source.is_none() || !auto_update_on(st, row.provider) {
+            continue;
+        }
+        let Ok(plan) = build_plan(st, row.provider).await else { continue };
+        if !plan.supported || (plan.mode == MODE_ADOPT && plan.runs_turn) || !auto_update_allowed(st, &plan) {
+            continue;
+        }
+        let Some(latest) = plan.version.clone() else { continue };
+        let current = if plan.mode == MODE_MANAGE { plan.installed_version.clone() } else { installed_version_of(row.provider).await };
+        if !is_newer(&latest, current.as_deref()) {
+            continue;
+        }
+        if let Ok(reply) = install(st, &json!({"provider": row.provider, "confirm": true})).await {
+            if reply["joined"] != true {
+                started.push(row.provider.to_owned());
+            }
+        }
+    }
+    started
+}
+
+/// Whether the publisher's version is newer than what is installed, comparing the
+/// first dotted number in each (`2.1.322 (Claude Code)` reads as 2.1.322). Nothing
+/// installed, or a version that cannot be read, is never "newer": keep-up-to-date
+/// updates a copy, it never installs one.
+pub(crate) fn is_newer(latest: &str, installed: Option<&str>) -> bool {
+    fn parts(text: &str) -> Option<Vec<u64>> {
+        let start = text.find(|c: char| c.is_ascii_digit())?;
+        let run: String = text[start..].chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+        let numbers = run.split('.').filter(|part| !part.is_empty()).map(|part| part.parse::<u64>().ok()).collect::<Option<Vec<_>>>()?;
+        (!numbers.is_empty()).then_some(numbers)
+    }
+    let (Some(next), Some(current)) = (parts(latest), installed.and_then(parts)) else { return false };
+    let width = next.len().max(current.len());
+    let padded = |numbers: &[u64]| numbers.iter().copied().chain(std::iter::repeat(0)).take(width).collect::<Vec<_>>();
+    padded(&next) > padded(&current)
 }

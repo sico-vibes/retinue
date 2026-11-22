@@ -78,6 +78,19 @@ describe('coding-agent install', () => {
     expect(button('Update to 1.6.0')?.disabled).toBe(true)
   })
 
+  it('saves the keep-up-to-date switch for that coding agent only', async () => {
+    h.rpc.mockImplementation(async (method: string) => method === 'runtime.install.plan' ? { plan: MANAGE } : { saved: true })
+    await act(async () => { root.render(<AgentInstallDialog provider="pi" found onClose={vi.fn()} onChanged={vi.fn()} />) })
+    await settle()
+    const toggle = host.querySelector<HTMLButtonElement>('[aria-label="Keep Pi up to date"]')!
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(host.textContent).toContain('A different source still asks you first.')
+    await act(async () => { toggle.click() })
+    await settle()
+    expect(h.rpc).toHaveBeenCalledWith('settings.set', { key: 'agents.pi.autoUpdate', value: true })
+    expect(host.querySelector('[aria-label="Keep Pi up to date"]')?.getAttribute('aria-checked')).toBe('true')
+  })
+
   it('asks before removing Retinue\'s copy, and removes only on confirm', async () => {
     h.rpc.mockImplementation(async (method: string) => method === 'runtime.install.plan' ? { plan: { ...MANAGE, installed: { version: '1.5.2', digestPrefix: '4be1c0de9a71', damaged: false } } } : { removed: true, provider: 'pi', kept: [] })
     const onChanged = vi.fn()

@@ -71,6 +71,35 @@ describe('import dialog', () => {
   })
 })
 
+describe('hiring from the import review', () => {
+  it('hires only on the owner\'s click, then gives that agent\'s conversations to the new employee', async () => {
+    h.rpc.mockImplementation(async (method: string, params: Record<string, unknown>) => {
+      if (method === 'import.scan') return { sinceDays: 30, scannedAt: '', sources: [{ source: 'codex', label: 'Codex', folder: null, conversations: 1, recent: 1, newest: null, oldest: null, bytes: 1, error: null }] }
+      if (method === 'import.projects') return { projects: [{ key: 'k', path: 'C:/work/api', name: 'api', exists: true, existingProjectId: null, total: 1, shown: 1, sources: ['codex'], bytes: 1, newest: null, conversations: [row('x', 'codex')] }], older: 0, truncated: false, errors: [], sinceDays: 30, scannedAt: '' }
+      if (method === 'import.distribute') return { suggestions: [{ conversationId: 'x', sessionId: null, title: 'Title x', source: 'codex', agentId: null, reason: 'balance', detail: 'no employee uses Codex', hire: { name: 'Cody', runtimeId: 'rt-codex', presetId: null, model: null, role: 'Backend' } }] }
+      if (method === 'agent.create') return { agent: agent('cody', String(params.name), String(params.runtimeId)) }
+      if (method === 'import.apply') return { importId: 'i', imported: 1, skipped: 0, failed: 0, sessions: ['s1'] }
+      throw new Error(method)
+    })
+    await act(async () => { root.render(<ImportDialog agents={[AGENTS[0]!]} ceo={AGENTS[0]!} onClose={vi.fn()} />) })
+    await settle()
+    await act(async () => { button('Next')!.click() })
+    await settle()
+    await act(async () => { button('Choose all listed')!.click() })
+    await act(async () => { button('Next · 1 chosen')!.click() })
+    await act(async () => { button('Next')!.click() })
+    await settle()
+    expect(h.rpc.mock.calls.some(([method]) => method === 'agent.create')).toBe(false)
+    await act(async () => { button('Hire Cody')!.click() })
+    await settle()
+    expect(h.rpc).toHaveBeenCalledWith('agent.create', { name: 'Cody', runtimeId: 'rt-codex', role: 'Backend' })
+    expect(host.querySelector('.import-hire')?.textContent).toContain('Hired Cody.')
+    await act(async () => { button('Import 1')!.click() })
+    await settle()
+    expect(h.rpc).toHaveBeenCalledWith('import.apply', { items: [{ source: 'codex', conversationId: 'x' }], assign: { agentId: 'cody' }, sinceDays: 30 })
+  })
+})
+
 describe('imported conversation bar', () => {
   const imported = { id: 's1', runtimeId: 'rt-claude', agentId: 'ada', imported: { source: 'claude', conversationId: 'c1', canResumeWith: null, readOnly: true } } as unknown as Session
 

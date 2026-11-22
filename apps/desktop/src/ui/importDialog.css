@@ -51,7 +51,10 @@
 .import-project-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 2px 6px 4px; }
 .import-project > .import-note { padding: 0 10px; font-size: var(--fs-xs); }
 .import-review li > svg, .import-review li > img { flex: 0 0 auto; }
-.import-hire { margin: 0; padding: 8px 10px; color: var(--text-2); border: 1px solid var(--line); border-radius: 10px; font-size: var(--fs-xs); line-height: 1.5; }
+.import-hire { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0; padding: 8px 10px; color: var(--text-2); border: 1px solid var(--line); border-radius: 10px; font-size: var(--fs-xs); line-height: 1.5; }
+
+/* stretch the sentence beside the hire button */
+.import-hire > span { flex: 1 1 240px; }
 
 /* An imported, read-only conversation: the bar in place of the message box. */
 .imported-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 auto 12px; width: min(760px, calc(100% - 32px)); padding: 10px 14px; color: var(--text-2); font-size: var(--fs-sm); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); }

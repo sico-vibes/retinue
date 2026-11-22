@@ -19,3 +19,7 @@
 .agent-install-bar i { display: block; height: 100%; border-radius: inherit; background: var(--text-1); transition: width 200ms ease; }
 .agent-install-error { margin: 0; color: var(--danger-ink); font-size: var(--fs-sm); }
 .provider-row-actions { display: inline-flex; align-items: center; gap: 10px; }
+.agent-install-auto { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; }
+.agent-install-auto > span { flex: 1; min-width: 0; display: grid; gap: 2px; font-size: var(--fs-sm); }
+.agent-install-auto strong { color: var(--text-1); font-weight: 500; }
+.agent-install-auto small { color: var(--text-3); font-size: var(--fs-2xs); line-height: 1.45; }

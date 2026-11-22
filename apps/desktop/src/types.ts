@@ -912,7 +912,7 @@ export interface ImportSuggestion {
   reason: 'project' | 'agent' | 'role' | 'balance'
   detail: string
   /** Offered when no employee uses the source's coding agent. Never hired without the owner. */
-  hire?: { name: string; runtimeId: string; presetId?: string | null } | null
+  hire?: { name: string; runtimeId: string; presetId?: string | null; model?: string | null; role?: string | null } | null
 }
 
 

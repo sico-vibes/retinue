@@ -93,6 +93,14 @@ export function planSentences(plan: InstallPlan): string[] {
   return lines
 }
 
+/** What the keep-up-to-date switch does, in one line. */
+export function autoUpdateLine(plan: Pick<InstallPlan, 'autoUpdate' | 'sourceHost' | 'mode'>): string {
+  const from = plan.sourceHost ? ` from ${plan.sourceHost}` : ''
+  const turn = plan.mode === 'adopt' ? 'never while a bot is using it' : 'and a bot that is working keeps its version until its turn ends'
+  const what = plan.mode === 'adopt' ? 'your own copy' : "Retinue's copy"
+  return `After your first install or update here, Retinue checks every six hours and updates ${what}${from} on its own, ${turn}. A different source still asks you first.`
+}
+
 const message = (error: unknown, fallback: string) => error instanceof Error && error.message ? error.message : fallback
 
 export function AgentInstallDialog({ provider, found, onClose, onChanged }: { provider: string; found: boolean; onClose: () => void; onChanged: () => void }) {
@@ -152,6 +160,15 @@ export function AgentInstallDialog({ provider, found, onClose, onChanged }: { pr
     setBusy(false)
   }
 
+  const keepUpToDate = async (on: boolean) => {
+    if (!plan) return
+    setBusy(true); setError(null)
+    try {
+      await rpc('settings.set', { key: `agents.${provider}.autoUpdate`, value: on })
+      setPlan({ ...plan, autoUpdate: on })
+    } catch (reason) { setError(message(reason, 'That choice could not be saved.')) } finally { setBusy(false) }
+  }
+
   const remove = async () => {
     setBusy(true); setError(null)
     try {
@@ -179,6 +196,10 @@ export function AgentInstallDialog({ provider, found, onClose, onChanged }: { pr
           {plan.digestPrefix && <><dt>Checksum</dt><dd><code>{plan.digestAlgorithm ? `${plan.digestAlgorithm} ` : ''}{plan.digestPrefix}…</code></dd></>}
           <dt>Folder</dt><dd className="agent-install-path" title={plan.target}>{plan.target}</dd>
         </dl>}
+        {plan.supported && plan.mode !== 'link' && <div className="agent-install-auto">
+          <span><strong>Keep {name} up to date</strong><small>{autoUpdateLine(plan)}</small></span>
+          <button type="button" className={`toggle ${plan.autoUpdate ? 'on' : ''}`} role="switch" aria-label={`Keep ${name} up to date`} aria-checked={plan.autoUpdate} disabled={busy} onClick={() => void keepUpToDate(!plan.autoUpdate)}><i /></button>
+        </div>}
         <div className="agent-install-switch">
           {plan.mode === 'adopt' && <button type="button" className="queue-link" disabled={busy} onClick={() => void switchMode('manage')}>Use a copy Retinue keeps instead</button>}
           {plan.mode === 'manage' && found && <button type="button" className="queue-link" disabled={busy} onClick={() => void switchMode('adopt')}>Update my own copy instead</button>}

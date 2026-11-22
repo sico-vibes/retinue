@@ -599,6 +599,44 @@ async fn auto_update_installs_without_a_second_card_only_from_the_consented_host
     let _ = std::fs::remove_dir_all(&data);
 }
 
+#[test]
+fn keep_up_to_date_compares_versions_and_never_installs_from_nothing() {
+    assert!(agent_install::is_newer("1.6.0", Some("1.5.2")));
+    assert!(agent_install::is_newer("2.1.330", Some("2.1.322 (Claude Code)")));
+    assert!(agent_install::is_newer("0.160.0", Some("codex-cli 0.159.3")));
+    assert!(agent_install::is_newer("1.10.0", Some("1.9.9")));
+    assert!(!agent_install::is_newer("1.6.0", Some("1.6.0")));
+    assert!(!agent_install::is_newer("1.6", Some("1.6.0")));
+    assert!(!agent_install::is_newer("1.5.0", Some("1.6.0")));
+    assert!(!agent_install::is_newer("1.6.0", None));
+    assert!(!agent_install::is_newer("1.6.0", Some("unknown")));
+}
+
+#[tokio::test]
+async fn keep_up_to_date_updates_only_a_copy_that_is_older_and_consented() {
+    let _lock = lock().await;
+    let (st, _rx, data) = state_with_data("autopass");
+    let zip = zip_bytes(&[("pi.exe", b"MZ")]);
+    let checksum = sha256_hex(&zip);
+    let origin = serve_with(|origin| pi_routes(origin, &zip, &checksum)).await;
+    let _origin = Origin::set(&origin);
+    st.db.set_setting(&agent_install::mode_key("pi"), &json!("manage")).unwrap();
+    st.db.set_setting(&agent_install::consent_key("pi"), &json!({"sourceHost": "api.github.com", "version": "1.5.0"})).unwrap();
+    // The switch off: nothing happens.
+    assert!(agent_install::auto_update_once(&st).await.is_empty());
+    // On, but nothing installed yet: keep-up-to-date never installs a first copy.
+    st.db.set_setting(&agent_install::auto_update_key("pi"), &json!(true)).unwrap();
+    assert!(agent_install::auto_update_once(&st).await.is_empty());
+    assert!(retinue_runtime::managed_entry(&data.join("agents"), "pi").is_none());
+    // Once a copy is installed at the publisher's version, a pass has nothing to do.
+    let plan = agent_install::rpc(&st, "runtime.install.plan", &json!({"provider": "pi"})).await.unwrap();
+    let started = agent_install::rpc(&st, "runtime.install", &json!({"provider": "pi", "confirm": true, "version": plan["plan"]["version"], "digestPrefix": plan["plan"]["digestPrefix"]})).await.unwrap();
+    let finished = wait_for_job(&st, started["jobId"].as_str().unwrap()).await;
+    assert_eq!(finished["phase"], "done", "{finished}");
+    assert!(agent_install::auto_update_once(&st).await.is_empty());
+    let _ = std::fs::remove_dir_all(&data);
+}
+
 #[tokio::test]
 async fn a_second_install_for_the_same_provider_joins_the_first() {
     let _lock = lock().await;

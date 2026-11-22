@@ -62,6 +62,18 @@ export function outcomeSentence(outcome: Outcome, nameOf: (id: string) => string
   return `${parts.join('; ')}.`
 }
 
+/** Hires the suggested employee: from its preset when the daemon named one, otherwise a plain employee on that coding agent. Only on the owner's click. */
+export async function hireFromSuggestion(offer: NonNullable<ImportSuggestion['hire']>): Promise<Agent> {
+  if (offer.presetId) {
+    const reply = await rpc<{ agentId?: string }>('project.hire', { projectId: null, presetId: offer.presetId, name: offer.name, runtimeId: offer.runtimeId, ...(offer.model ? { model: offer.model } : {}) })
+    if (!reply.agentId) throw new Error(`${offer.name} could not be hired.`)
+    return { id: reply.agentId, name: offer.name, runtimeId: offer.runtimeId, role: offer.role ?? undefined } as unknown as Agent
+  }
+  const reply = await rpc<{ agent?: Agent }>('agent.create', { name: offer.name, runtimeId: offer.runtimeId, ...(offer.model ? { model: offer.model } : {}), ...(offer.role ? { role: offer.role } : {}) })
+  if (!reply.agent) throw new Error(`${offer.name} could not be hired.`)
+  return reply.agent
+}
+
 export function ImportDialog({ agents, ceo, initialAgentId, onClose, onOpen }: { agents: readonly Agent[]; ceo: Agent | null; initialAgentId?: string | null; onClose: () => void; onOpen?: (sessionId: string) => void }) {
   const { ref, close } = useDialogAccessibility(onClose)
   const [step, setStep] = useState<Step>('sources')
@@ -81,9 +93,11 @@ export function ImportDialog({ agents, ceo, initialAgentId, onClose, onOpen }: {
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const [busy, setBusy] = useState(false)
   const base = useRef(0)
-  const bots = useMemo(() => agents.filter((agent) => !agent.archived && !agent.hidden && agent.id !== ceo?.id), [agents, ceo])
+  const [hired, setHired] = useState<Agent[]>([])
+  const [hiring, setHiring] = useState<string | null>(null)
+  const bots = useMemo(() => [...agents, ...hired].filter((agent) => !agent.archived && !agent.hidden && agent.id !== ceo?.id), [agents, hired, ceo])
   const ceoName = ceo?.name ?? 'The CEO'
-  const nameOf = (id: string) => !id || id === ceo?.id ? ceoName : agents.find((agent) => agent.id === id)?.name ?? 'an employee'
+  const nameOf = (id: string) => !id || id === ceo?.id ? ceoName : [...agents, ...hired].find((agent) => agent.id === id)?.name ?? 'an employee'
 
   useEffect(() => {
     let live = true
@@ -184,6 +198,18 @@ export function ImportDialog({ agents, ceo, initialAgentId, onClose, onOpen }: {
       setChoices(Object.fromEntries(reply.suggestions.map((item) => [`${item.source}:${item.conversationId}`, item.agentId && bots.some((agent) => agent.id === item.agentId) ? item.agentId : ''])))
       setStep('review')
     } catch (reason) { setError(message(reason, 'Retinue could not suggest who gets them.')) } finally { setBusy(false) }
+  }
+
+  /** The owner's own hire, from the suggestion: then that source's conversations go to the new employee. */
+  const hire = async (item: ImportSuggestion) => {
+    const offer = item.hire
+    if (!offer) return
+    setHiring(item.source); setError(null)
+    try {
+      const agent = await hireFromSuggestion(offer)
+      setHired((current) => [...current, agent])
+      setChoices((current) => Object.fromEntries(Object.entries(current).map(([id, who]) => [id, id.startsWith(`${item.source}:`) && !who ? agent.id : who])))
+    } catch (reason) { setError(message(reason, `${offer.name} could not be hired.`)) } finally { setHiring(null) }
   }
 
   const next = () => {
@@ -291,7 +317,13 @@ export function ImportDialog({ agents, ceo, initialAgentId, onClose, onOpen }: {
             <Select ariaLabel={`Who gets ${item.title || 'this conversation'}`} variant="muted" value={choices[id] ?? ''} onChange={(value) => setChoices((current) => ({ ...current, [id]: value }))} options={[{ value: '', label: ceoName }, ...bots.map((agent) => ({ value: agent.id, label: agent.name }))]} />
           </li>
         })}</ul>
-        {hires.map((item) => <p key={item.source} className="import-hire">No employee uses {providerBrand(item.source).name} yet, so its conversations stay read-only. To carry them on, hire one in Team, such as {item.hire!.name}.</p>)}
+        {hires.map((item) => {
+          const done = hired.find((agent) => agent.runtimeId === item.hire!.runtimeId)
+          return <div key={item.source} className="import-hire" role="group" aria-label={`Hire for ${providerBrand(item.source).name}`}>
+            <span>{done ? <>Hired {done.name}. Their {providerBrand(item.source).name} conversations go to {done.name}, who can carry them on.</> : <>No employee uses {providerBrand(item.source).name} yet, so these conversations stay read-only. Hire {item.hire!.name}{item.hire!.role ? `, ${item.hire!.role},` : ''} to carry them on.</>}</span>
+            {!done && <button type="button" className="secondary-button small" disabled={!!hiring} aria-busy={hiring === item.source || undefined} onClick={() => void hire(item)}>{hiring === item.source ? 'Hiring…' : `Hire ${item.hire!.name}`}</button>}
+          </div>
+        })}
         <div className="blob-dialog-actions"><button type="button" className="secondary-button" onClick={() => setStep('who')}>Back</button><button type="button" className="primary-button" onClick={() => void start(groupByChoice(suggestions.map((item) => ({ source: item.source as ImportSourceId, conversationId: item.conversationId })), choices))}>Import {suggestions.length}</button></div>
       </div>}
 
