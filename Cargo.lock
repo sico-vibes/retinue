@@ -4885,6 +4885,7 @@ dependencies = [
  "image",
  "portable-pty",
  "reqwest 0.12.28",
+ "retinue-process",
  "retinue-speech",
  "semver",
  "serde",

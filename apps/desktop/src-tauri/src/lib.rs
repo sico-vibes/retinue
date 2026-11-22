@@ -515,8 +515,8 @@ fn start_daemon(app: &AppHandle, state: &AppState) -> Result<(), String> {
             command.env("RETINUE_REMOTE_WEB_DIR", &remote_web);
         }
     }
-    #[cfg(windows)]
-    command.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    // The daemon is a console program started by a GUI-subsystem shell.
+    retinue_process::hide_std_window(&mut command);
     let mut child = command.spawn().map_err(|error| {
         let _ = fs::remove_file(&executable_copy);
         format!("Could not start retinued.exe: {error}")

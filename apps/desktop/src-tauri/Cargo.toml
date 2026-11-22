@@ -12,6 +12,7 @@ tauri-build = { version = "2", features = [] }
 arboard = "3.7"
 base64.workspace = true
 chrono.workspace = true
+retinue-process = { path = "../../../crates/retinue-process" }
 retinue-speech = { path = "../../../crates/retinue-speech", features = ["native"] }
 futures-util.workspace = true
 image = { version = "0.25", default-features = false, features = ["png"] }

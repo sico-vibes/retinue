@@ -502,7 +502,10 @@ pub fn key_is_single(key: &str) -> bool {
 /// `Command` on purpose: Tokio's `.status()` is a future that does nothing until
 /// awaited, so the kill never ran (clippy `let_underscore_future`, 14 November 2026).
 fn kill_tree(pid: u32) {
-    let _ = std::process::Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status();
+    let mut command = std::process::Command::new("taskkill");
+    command.args(["/PID", &pid.to_string(), "/T", "/F"]).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null());
+    retinue_process::hide_std_window(&mut command);
+    let _ = command.status();
 }
 
 /// One driver call: start the pinned child, handshake, call one tool, read one
@@ -511,6 +514,7 @@ fn kill_tree(pid: u32) {
 async fn driver_call(exe: &Path, tool: &str, arguments: Value, limit: Duration) -> Result<String, String> {
     verify_driver(exe)?;
     let mut command = Command::new(exe);
+    retinue_process::hide_window(&mut command);
     command
         .arg("mcp")
         .stdin(std::process::Stdio::piped())

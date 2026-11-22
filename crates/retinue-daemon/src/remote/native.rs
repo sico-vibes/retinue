@@ -389,7 +389,12 @@ pub(crate) fn apply_key_permissions(path: &Path) -> Vec<String> {
             "/grant:r".to_string(),
             format!("{user}:F"),
         ];
-        let _ = std::process::Command::new(&args[0]).args(&args[1..]).output();
+        let _ = {
+            let mut command = std::process::Command::new(&args[0]);
+            command.args(&args[1..]);
+            retinue_process::hide_std_window(&mut command);
+            command.output()
+        };
         args
     }
     #[cfg(not(windows))]

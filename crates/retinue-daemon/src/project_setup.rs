@@ -228,15 +228,6 @@ fn copy_files_into(main: &Path, worktree: &Path, files: &[String]) -> Copied {
     out
 }
 
-/// Starts with no window and, until `ProcessTree::attach`, paused, so nothing the command starts escapes its tree.
-/// Stopping a tree is all at once: `taskkill /T` stops one process at a time, and a `cmd` whose `ping` had just
-/// died could run the script's next step before its own turn came.
-fn prepare(command: &mut tokio::process::Command) {
-    retinue_process::prepare_command(command);
-    #[cfg(windows)]
-    { command.creation_flags(0x0800_0004); }
-}
-
 /// Whether the owner pressed Stop for this turn: the stop is recorded for a turn that has no provider yet,
 /// or the conversation is already marked as cancelling.
 async fn stop_requested(st: &AppState, sid: &str, turn: &str) -> bool {
@@ -251,6 +242,9 @@ fn last_line(bytes: &[u8]) -> Option<String> {
 }
 
 /// `cmd /d /s /c <script>` in `dir`: no stdin, no window, killed when dropped or when the time is up.
+/// `retinue_process::prepare_command` is the no-window, paused-until-the-tree-attaches pair, and the
+/// tree is stopped all at once: `taskkill /T` stops one process at a time, and a `cmd` whose `ping`
+/// had just died could run the script's next step before its own turn came.
 async fn run(st: &AppState, sid: &str, turn: &str, script: &str, dir: &Path) -> (&'static str, Option<String>) {
     let mut command = if cfg!(windows) { tokio::process::Command::new("cmd") } else { tokio::process::Command::new("sh") };
     #[cfg(windows)]
@@ -263,7 +257,7 @@ async fn run(st: &AppState, sid: &str, turn: &str, script: &str, dir: &Path) -> 
         let upper = name.to_string_lossy().to_ascii_uppercase();
         if upper.starts_with("RETINUE_") || upper.starts_with("RETINUE_") { command.env_remove(&name); }
     }
-    prepare(&mut command);
+    retinue_process::prepare_command(&mut command);
     let Ok(mut child) = command.spawn() else { return ("failed", Some("The script could not be started.".to_owned())) };
     let Ok(tree) = retinue_process::ProcessTree::attach(&mut child) else { return ("failed", Some("The script could not be started.".to_owned())) };
     // Read the output on the side, so the child stays ours: it must be alive when its tree is killed.
@@ -304,7 +298,7 @@ async fn submodules_update(st: &AppState, sid: &str, turn: &str, dir: &Path) -> 
         let upper = name.to_string_lossy().to_ascii_uppercase();
         if upper.starts_with("RETINUE_") || upper.starts_with("RETINUE_") { command.env_remove(&name); }
     }
-    prepare(&mut command);
+    retinue_process::prepare_command(&mut command);
     if stop_requested(st, sid, turn).await { return ("cancelled", None); }
     let Ok(mut child) = command.spawn() else { return ("failed", Some("git could not be started.".to_owned())) };
     let Ok(tree) = retinue_process::ProcessTree::attach(&mut child) else { return ("failed", Some("git could not be started.".to_owned())) };
