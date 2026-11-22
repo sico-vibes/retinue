@@ -81,6 +81,9 @@ export function BlobSettings({ draft, runtimes, projects = [], errors, execution
   const noun = useEntityNoun()
   const Noun = useEntityNoun({ capital: true })
   const runtime = runtimes.find((item) => item.id === draft.runtimeId) ?? null
+  // 22 November 2026: a bot whose coding agent Retinue retired (Gemini CLI) keeps its saved runtime id, which no
+  // longer reaches the roster. It asks for a new agent instead of probing one that is gone.
+  const runtimeGone = !!draft.runtimeId && runtimes.length > 0 && !runtime
   const provider = runtime?.provider ?? ''
   const described = (id: string, errorId?: string) => errorId ? `${id} ${errorId}` : id
   const show = (id: BotSection) => !sections || sections.includes(id)
@@ -98,7 +101,7 @@ export function BlobSettings({ draft, runtimes, projects = [], errors, execution
   const [detailsOpen, setDetailsOpen] = useDetailsOpen()
 
   useEffect(() => {
-    if (!draft.runtimeId) {
+    if (!draft.runtimeId || runtimeGone) {
       setCapabilities(null)
       setCatalog(null)
       setCatalogError(null)
@@ -137,7 +140,7 @@ export function BlobSettings({ draft, runtimes, projects = [], errors, execution
       setLoading(false)
     })
     return () => { cancelled = true }
-  }, [draft.runtimeId, draft.model, agentId, savedRuntimeId, provider])
+  }, [draft.runtimeId, draft.model, agentId, savedRuntimeId, provider, runtimeGone])
 
   useEffect(() => {
     if (agentId || custom || draft.model || !catalog?.validated) return
@@ -183,7 +186,7 @@ export function BlobSettings({ draft, runtimes, projects = [], errors, execution
   useEffect(() => { onExecutionGate?.(gate) }, [gate, onExecutionGate])
 
   const refreshCatalog = async () => {
-    if (!draft.runtimeId) return
+    if (!draft.runtimeId || runtimeGone) return
     setLoading(true)
     setCatalogError(null)
     setCatalogUnavailable(false)
@@ -277,13 +280,14 @@ export function BlobSettings({ draft, runtimes, projects = [], errors, execution
       </div>}
     </EditGroup>}
 
-    {show('model') && <EditGroup id="model" title="Model" label="Execution" action={<span className="catalog-refresh-action">{catalog?.fetchedAt && <small>Updated {formatCatalogTime(catalog.fetchedAt)}</small>}<button type="button" className="ghost-button small" onClick={() => void refreshCatalog()} disabled={!draft.runtimeId || loading}><RefreshCw size={13} className={loading ? 'spinning' : ''} />Refresh models</button></span>}>
+    {show('model') && <EditGroup id="model" title="Model" label="Execution" action={<span className="catalog-refresh-action">{catalog?.fetchedAt && <small>Updated {formatCatalogTime(catalog.fetchedAt)}</small>}<button type="button" className="ghost-button small" onClick={() => void refreshCatalog()} disabled={!draft.runtimeId || runtimeGone || loading}><RefreshCw size={13} className={loading ? 'spinning' : ''} />Refresh models</button></span>}>
       <div className="settings-row">
         <RowCopy label="Coding agent" hint="New conversations use it. Existing ones keep theirs." />
         <span className="settings-row-control">
-          <Select ariaLabel="Runtime" variant="muted" value={draft.runtimeId} onChange={(value) => { setCustom(false); onDraftChange({ ...draft, runtimeId: value, model: null, thinking: null, serviceTier: null }) }} options={runtimes.map((item) => ({ value: item.id, label: runtimeOptionLabel(item, runtimes), provider: item.provider }))} />
+          <Select ariaLabel="Runtime" variant="muted" placeholder="Choose a coding agent" value={draft.runtimeId} onChange={(value) => { setCustom(false); onDraftChange({ ...draft, runtimeId: value, model: null, thinking: null, serviceTier: null }) }} options={runtimes.map((item) => ({ value: item.id, label: runtimeOptionLabel(item, runtimes), provider: item.provider }))} />
         </span>
       </div>
+      {runtimeGone && !errors.runtimeId && <p className="blob-error blob-inset" role="status">Its coding agent is no longer available. Choose another one.</p>}
       {errors.runtimeId && <p className="blob-error blob-inset">{errors.runtimeId}</p>}
       {(catalogError || (!loading && catalog && catalog.models.length === 0)) && <div className="blob-notes model-notes">
         {catalogError && <div className="blob-error" role="alert">

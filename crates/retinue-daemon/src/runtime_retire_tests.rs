@@ -16,6 +16,75 @@ fn stored_runtime(st: &AppState, id: &str) -> Value {
 }
 
 #[tokio::test]
+async fn runtime_retire_at_startup_hides_an_unsupported_provider_and_keeps_its_bot() {
+    let (st, mut events) = state();
+    // Both rows still point to a real executable. The removed provider must
+    // retire regardless of what is installed or which providers are switched off.
+    let executable = std::env::current_exe().unwrap();
+    let gemini = "rt_gemini_3f3b386c";
+    let antigravity = "rt_antigravity_saved";
+    for (id, provider) in [(gemini, "gemini"), (antigravity, "antigravity")] {
+        st.db.upsert_runtime(&json!({
+            "id": id, "provider": provider, "protocolFamily": "acp",
+            "executablePath": executable, "launchArgs": [], "status": "online"
+        })).unwrap();
+    }
+    st.db.set_setting("runtimes.disabled", &json!(["antigravity"])).unwrap();
+    let (bot, _) = st.db.agent_create(&json!({"name": "Legacy bot", "runtimeId": gemini})).unwrap();
+    let bot_id = bot["id"].as_str().unwrap();
+    let project = std::env::current_dir().unwrap();
+    let session = "legacy-gemini-session";
+    st.db.create_session_for_agent(session, gemini, "gemini", &project.to_string_lossy(), "Legacy chat", Some(bot_id)).unwrap();
+    st.db.set_session_state_quietly(session, "idle").unwrap();
+    let legacy = stored_runtime(&st, gemini);
+    st.emit("runtime.changed", json!({"runtimes": [legacy.clone()]})).await;
+    assert_eq!(events.try_recv().unwrap().event_type, "runtime.changed");
+
+    load_saved_runtimes(&st).await.unwrap();
+    assert_eq!(stored_runtime(&st, gemini)[RETIRED], true);
+    let listed = dispatch(&st, "runtime.list", json!({})).await.unwrap();
+    let snapshot = dispatch(&st, "app.snapshot", json!({})).await.unwrap();
+    for result in [listed, snapshot] {
+        let rows = result["runtimes"].as_array().unwrap();
+        assert!(rows.iter().all(|row| row["id"] != gemini));
+        assert!(rows.iter().any(|row| row["id"] == antigravity));
+    }
+
+    let new_chat = new_session(&st, json!({"agentId": bot_id, "projectPath": project})).await.unwrap_err();
+    assert_eq!(new_chat.1.code, "not_found");
+    assert!(new_chat.1.message.contains("Choose a coding agent"));
+    let send = dispatch(&st, "session.prompt", json!({"sessionId": session, "text": "Hello"})).await.unwrap_err();
+    assert_eq!(send.1.code, "provider_unavailable", "{}", send.1.message);
+    assert!(send.1.message.contains("no longer supported"));
+    assert_eq!(st.db.session_detail(session).unwrap()["runtimeId"], gemini);
+
+    publish_runtime_value(&st, legacy).await;
+    let executable = executable.to_string_lossy();
+    let codex = "rt_codex_3f3b386c";
+    let scanned = publish_runtime_discovery(&st, vec![
+        retire_fixture(gemini, "gemini", &executable),
+        retire_fixture(codex, "codex", &executable),
+    ]).await.unwrap();
+    assert!(scanned.iter().any(|row| row["id"] == antigravity));
+    assert!(scanned.iter().any(|row| row["id"] == codex));
+    assert_eq!(stored_runtime(&st, gemini)[RETIRED], true);
+    assert_eq!(st.db.agent_get(bot_id).unwrap()["runtimeId"], gemini);
+    let mut runtime_changes = 0;
+    while let Ok(event) = events.try_recv() {
+        if event.event_type == "runtime.changed" {
+            runtime_changes += 1;
+            assert!(event.payload["runtimes"].as_array().unwrap().iter().all(|row| row["id"] != gemini));
+        }
+        assert!(event.event_type != "agent.changed" || event.payload["action"] != "moved");
+    }
+    assert_eq!(runtime_changes, 2);
+    let replay = dispatch(&st, "events.replay", json!({"afterSequence": 0})).await.unwrap();
+    let runtime_events = replay["events"].as_array().unwrap().iter().filter(|event| event["type"] == "runtime.changed").collect::<Vec<_>>();
+    assert_eq!(runtime_events.len(), 3);
+    assert_eq!(runtime_events[0]["payload"]["runtimes"], json!([]));
+}
+
+#[tokio::test]
 async fn one_provider_never_shows_two_runtimes_and_the_stale_row_is_retired() {
     // Owner report (21 November 2026): the Agents page listed "OpenCode 2.3.2"
     // and a stale "OpenCode 2.0.28" shim, both signed in. The shim's executable

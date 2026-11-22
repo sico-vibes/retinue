@@ -4,7 +4,7 @@
 //! `manager.troubleshoot { sessionId, turnId? }` writes a report from facts only
 //! (the employee, the coding agent, the failure class, the public error text, the
 //! last tool names and states, the app version) and sends it as the first message of
-//! a NEW conversation with the CEO. It carries no message text and no tool output,
+//! a conversation with the CEO, reused for the same source turn. It carries no message text and no tool output,
 //! and everything passes through `issue_report::clean`.
 //!
 //! `open_issue { title, body }` (CEO only) never posts. It makes an approval card
@@ -40,7 +40,7 @@ pub(crate) fn pick_turn(session: &Value, wanted: Option<&str>) -> Result<Value, 
         Some(id) => turns.into_iter().find(|turn| turn["id"].as_str() == Some(id)),
         None => turns.into_iter().rev().find(|turn| turn["state"].as_str() == Some("error")),
     };
-    found.ok_or_else(|| derr("not_found", "There is no failed turn to look into in that conversation.", StatusCode::NOT_FOUND))
+    found.filter(|turn| turn["state"] == "error").ok_or_else(|| derr("not_found", "There is no failed turn to look into in that conversation.", StatusCode::NOT_FOUND))
 }
 
 /// Facts only: no message text, no tool output. Every line is cleaned again at the end.
@@ -98,7 +98,7 @@ pub(crate) async fn report(st: &AppState, session: &Value, turn: &Value) -> Stri
     crate::issue_report::clean(&lines.join("\n"))
 }
 
-/// `manager.troubleshoot { sessionId, turnId? }` returns `{sessionId}` of the new CEO conversation.
+/// `manager.troubleshoot { sessionId, turnId? }` returns `{sessionId}` of the CEO conversation for that turn.
 pub(crate) async fn rpc(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
     let session_id = p["sessionId"].as_str().map(str::trim).filter(|id| !id.is_empty()).ok_or_else(|| invalid("sessionId is required."))?;
     let wanted = match p.get("turnId") {
@@ -109,18 +109,64 @@ pub(crate) async fn rpc(st: &AppState, p: &Value) -> Result<Value, DispatchError
         .ok_or_else(|| derr("conflict", "There is no CEO yet. Set up a CEO first, then ask them to troubleshoot.", StatusCode::CONFLICT))?;
     let session = st.db.session_detail(session_id).map_err(|_| derr("not_found", "That conversation is no longer available.", StatusCode::NOT_FOUND))?;
     let turn = pick_turn(&session, wanted)?;
+    // Serialize presses and keep the target on the source turn so it survives a restart.
+    let gate = crate::gate_for_session(st, session_id).await;
+    let _guard = gate.lock().await;
+    let turn_id = turn["id"].as_str().ok_or_else(|| invalid("The failed turn has no id."))?;
+    let data = st.db.turn_data(turn_id).map_err(crate::agent_error)?;
+    let mut existing_id = None;
+    if let Some(id) = data["troubleshootSessionId"].as_str() {
+        if st.db.session_exists(id).map_err(crate::agent_error)? {
+            let existing = st.db.session_detail(id).map_err(crate::agent_error)?;
+            if existing["lastMessageAt"].is_string() || existing["messages"].as_array().is_some_and(|messages| !messages.is_empty()) {
+                return Ok(json!({"sessionId": id}));
+            }
+            existing_id = Some(id.to_owned());
+        }
+    }
     let text = report(st, &session, &turn).await;
     let employee = session["agentId"].as_str().and_then(|id| st.db.agent_get(id).ok()).and_then(|agent| agent["name"].as_str().map(str::to_owned)).unwrap_or_else(|| "employee".into());
     let short = turn["detail"].as_str().filter(|text| !text.trim().is_empty()).map(one_line).or_else(|| turn["failureMessage"].as_str().map(one_line)).unwrap_or_else(|| "error".into());
     let title = crate::issue_report::clean(&format!("Troubleshoot: {employee} {}", clip(&short, 40)));
-    let mut params = json!({"agentId": manager["id"], "title": title.trim()});
+    let mut params = json!({"agentId": manager["id"], "title": title.trim(), "projectId": null, "lazy": true});
     if let Some(project) = session["projectId"].as_str().filter(|id| !id.is_empty() && st.db.project_get(id).is_ok_and(|row| row["path"].as_str().is_some_and(|path| std::path::Path::new(path).is_dir()))) {
         params["projectId"] = json!(project);
     }
-    let created = crate::new_session_with(st, params, None).await?;
-    let new_id = created["id"].as_str().unwrap_or("").to_owned();
-    crate::session_prompt(st, json!({"sessionId": &new_id, "text": text})).await?;
+    let new_id = match existing_id {
+        Some(id) => id,
+        None => {
+            let created = crate::new_session_with(st, params, None).await.map_err(|error| ceo_start_error(&error))?;
+            let id = created["id"].as_str().unwrap_or("").to_owned();
+            st.db.merge_turn_data(turn_id, &json!({"troubleshootSessionId": id})).map_err(crate::agent_error)?;
+            id
+        }
+    };
+    // The normal prompt stores the report before launching the provider. If
+    // admission itself fails, keep the same report and a failed turn to open.
+    if let Err(error) = crate::session_prompt(st, json!({"sessionId": &new_id, "text": text})).await {
+        let error = ceo_start_error(&error);
+        let gate = crate::gate_for_session(st, &new_id).await;
+        let _guard = gate.lock().await;
+        let saved = st.db.session_detail(&new_id).map_err(crate::agent_error)?;
+        if saved["messages"].as_array().is_some_and(Vec::is_empty) {
+            let failed_turn = uuid::Uuid::new_v4().to_string();
+            st.db.create_turn(&failed_turn, &new_id).map_err(crate::agent_error)?;
+            let message = st.db.append_message(&new_id, &failed_turn, "user", &text).map_err(crate::agent_error)?;
+            st.emit("message.completed", json!({"sessionId":new_id,"turnId":failed_turn,"messageId":message["id"],"role":"user","message":message})).await;
+            crate::finish_turn_failed(st, &new_id, &failed_turn, "provider_unavailable", crate::failure_public_message("provider_unavailable"), Some(error.1.message.clone()), "error").await;
+        }
+        return Err(error);
+    }
     Ok(json!({"sessionId": new_id}))
+}
+
+fn ceo_start_error(error: &DispatchError) -> DispatchError {
+    // Prompt admission can decline before queueing. Its regular concurrency
+    // message ends with a queue promise that does not apply to this report.
+    let reason = error.1.message.strip_suffix("; this one will start when one finishes").unwrap_or(&error.1.message);
+    let reason = crate::safe_provider_error_detail(reason).unwrap_or_else(|| "The turn could not be started.".into());
+    let suffix = if reason.ends_with(['.', '?', '!']) { "" } else { "." };
+    derr(&error.1.code, &format!("The CEO couldn’t start: {reason}{suffix}"), error.0)
 }
 
 // ---------------------------------------------------------------------------

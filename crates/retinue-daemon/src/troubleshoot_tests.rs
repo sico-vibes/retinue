@@ -87,3 +87,29 @@ async fn troubleshoot_refuses_without_a_ceo_or_a_failed_turn_and_reports_facts_o
     assert!(!text.contains("SECRET OUTPUT") && !text.contains("read_file"), "tool output is never included, only the last three calls: {text}");
     assert!(text.contains("run_tests: failed") && text.contains("grep: failed"));
 }
+
+#[tokio::test]
+async fn troubleshoot_keeps_the_report_when_send_is_refused_and_reuses_the_conversation() {
+    let (st, _events) = state();
+    ceo_session(&st).await;
+    let folder = std::env::current_dir().unwrap();
+    let (project, _) = st.db.project_create("Troubleshoot fixture", Some(&folder.to_string_lossy())).unwrap();
+    st.db.create_session_for_agent("source-failed", "rt-test", "codex", &folder.to_string_lossy(), "Source", None).unwrap();
+    st.db.merge_session_data("source-failed", &json!({"projectId": project["id"]})).unwrap();
+    st.db.create_turn("source-turn", "source-failed").unwrap();
+    st.db.update_turn_outcome("source-turn", "error", Some("provider_error")).unwrap();
+    for n in 0..global_concurrency_limit(&st) {
+        st.active_turns.lock().await.insert(format!("busy-{n}"), format!("busy-turn-{n}"));
+    }
+    let params = json!({"sessionId":"source-failed"});
+    let failed = dispatch(&st, "manager.troubleshoot", params.clone()).await.unwrap_err();
+    assert!(failed.1.message.starts_with("The CEO couldn’t start:"));
+    let found = dispatch(&st, "manager.troubleshoot", params).await.unwrap();
+    let id = found["sessionId"].as_str().unwrap();
+    let saved = st.db.session_detail(id).unwrap();
+    assert_eq!(saved["state"], "error");
+    assert_eq!(saved["messages"].as_array().unwrap().len(), 1);
+    assert!(saved["messages"][0]["content"].as_str().unwrap_or_default().contains("source-turn"), "{saved}");
+    assert_eq!(saved["turns"][0]["detail"], failed.1.message);
+    assert_eq!(st.db.sessions().unwrap().iter().filter(|row| row["title"].as_str().is_some_and(|title| title.starts_with("Troubleshoot:"))).count(), 1);
+}

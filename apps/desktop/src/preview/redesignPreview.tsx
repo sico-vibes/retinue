@@ -443,7 +443,7 @@ function AgentsPage() {
     { name: 'Claude Code', version: '2.4.1', state: 'Ready', tone: 'ok' as const, bots: 2, icon: 'CC' },
     { name: 'Codex', version: '0.71.0', state: 'Update available', tone: 'warn' as const, bots: 2, icon: 'CX' },
     { name: 'OpenCode', version: '1.9.3', state: 'Ready', tone: 'ok' as const, bots: 1, icon: 'OC' },
-    { name: 'Gemini CLI', version: '—', state: 'Not found', tone: 'plain' as const, bots: 0, icon: 'GM' },
+    { name: 'Antigravity', version: '—', state: 'Not found', tone: 'plain' as const, bots: 0, icon: 'AG' },
   ]
   return <>
     <PageHead title="Coding agents" sub="Command line tools Retinue found on this device, and the employees that use them." />

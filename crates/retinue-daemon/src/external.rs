@@ -22,6 +22,9 @@ use crate::{agent_error, derr, AppState, DispatchError};
 use axum::http::StatusCode;
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde_json::{json, Value};
+
+#[path = "external_clients.rs"]
+mod clients;
 use std::{
     collections::HashSet,
     path::{Path, PathBuf},
@@ -59,6 +62,10 @@ const TOOL_DETAIL_CHARS: usize = 4_000;
 /// client that said hello and the last call.
 #[derive(Default)]
 pub struct External {
+    clients_lock: tokio::sync::Mutex<()>,
+    client_errors: StdMutex<std::collections::HashMap<&'static str, String>>,
+    #[cfg(test)]
+    client_fixture: StdMutex<Option<clients::Environment>>,
     token: StdMutex<Option<String>>,
     last_call_at: StdMutex<Option<String>>,
     last_client: StdMutex<Option<String>>,
@@ -296,7 +303,9 @@ fn requested_tier(p: &Value, default: Option<Tier>) -> Result<Tier, DispatchErro
 }
 
 pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, DispatchError> {
+    let _clients = st.external.clients_lock.lock().await;
     match method {
+        "external.clients.list" | "external.clients.connect" | "external.clients.disconnect" => clients::rpc(st, method, p).await,
         "external.status" => Ok(status(st)),
         "external.enable" => {
             if p["confirm"] != true { return Err(derr("invalid_argument", "Confirm turning on the Retinue MCP first.", StatusCode::BAD_REQUEST)); }
@@ -314,6 +323,7 @@ pub async fn rpc(st: &AppState, method: &str, p: &Value) -> Result<Value, Dispat
             Ok(status(st))
         }
         "external.disable" => {
+            if p["removeClients"] == true { clients::disconnect_all(st).await?; }
             st.external.set_token(None);
             remove_endpoint(st);
             st.external.reset_seen();

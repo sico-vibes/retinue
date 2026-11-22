@@ -1185,6 +1185,27 @@
       "params": null
     },
     {
+      "method": "external.clients.list",
+      "class": "never",
+      "minTier": null,
+      "why": "Coding agent installation and config paths are local to the owner's computer.",
+      "params": null
+    },
+    {
+      "method": "external.clients.connect",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may register the Retinue MCP in a coding agent.",
+      "params": null
+    },
+    {
+      "method": "external.clients.disconnect",
+      "class": "never",
+      "minTier": null,
+      "why": "Only the owner at the computer may remove a coding agent registration.",
+      "params": null
+    },
+    {
       "method": "external.disable",
       "class": "never",
       "minTier": null,

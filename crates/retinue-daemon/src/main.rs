@@ -431,6 +431,8 @@ fn failure_detail_and_sign_in(provider: &str, failure_class: &str, raw: &str) ->
     if failure_class == "permission_denied" {
         return (None, false);
     }
+    let parsed = provider_rpc_text(raw, provider == "opencode");
+    let raw = parsed.as_deref().unwrap_or(raw);
     let mut detail = safe_provider_error_detail(raw);
     // Judge the sign-in from what the provider said, never from the redacted
     // detail: a hidden billing link once made "Insufficient balance" read as an
@@ -465,7 +467,21 @@ fn sign_in_hint(provider: &str, detail: &str) -> Option<String> {
     })
 }
 
+fn provider_rpc_text(raw: &str, opencode: bool) -> Option<String> {
+    retinue_adapter_acp::rpc_error_text(raw.strip_prefix("provider protocol error: ").unwrap_or(raw), opencode)
+}
+
+fn provider_start_error(provider: &str, error: &retinue_agent_core::AdapterError) -> String {
+    let raw = error.to_string();
+    if let Some(text) = provider_rpc_text(&raw, provider == "opencode") {
+        return safe_provider_error_detail(&text).unwrap_or_else(|| failure_public_message("provider_error").to_owned());
+    }
+    raw
+}
+
 fn safe_provider_error_detail(raw: &str) -> Option<String> {
+    let parsed = provider_rpc_text(raw, false);
+    let raw = parsed.as_deref().unwrap_or(raw);
     let first_line = raw.lines().next()?;
     let normalized = first_line
         .chars()
@@ -507,6 +523,17 @@ fn redact_secret_words(text: &str) -> String {
         hide_next = label;
         if hide { "[hidden]" } else { word }
     }).collect::<Vec<_>>().join(" ")
+}
+
+#[test]
+fn opencode_rpc_errors_show_parsed_and_redacted_details() {
+    let detail = |error: Value| failure_detail_and_sign_in("opencode", "provider_unavailable", &format!("provider protocol error: {error}")).0.unwrap();
+    assert_eq!(detail(json!({"message":"Internal service failure", "data":{"errorName":"UnknownError"}})), "OpenCode had an internal error (UnknownError). This is usually temporary: retry the turn.");
+    assert_eq!(detail(json!({"message":"Internal service failure"})), "OpenCode had an internal error. This is usually temporary: retry the turn.");
+    assert_eq!(detail(json!({"message":"Internal error","data":{"safeMessage":"Internal service failure","errorName":"UnknownError","service":"catalog"}})), "OpenCode had an internal error (UnknownError, catalog). This is usually temporary: retry the turn.");
+    assert_eq!(detail(json!({"message":"OpenCode server is unavailable","data":{"service":"catalog"}})), "OpenCode’s server was unavailable (catalog). This is usually temporary: retry the turn.");
+    assert_eq!(detail(json!({"message":"Catalogue error","data":{"errorName":"ACPCatalogNotReadyError"}})), "OpenCode’s model catalogue wasn’t ready (ACPCatalogNotReadyError). This is usually temporary: retry the turn.");
+    assert_eq!(detail(json!({"message":"Provider rejected Bearer abc123","data":{"service":"catalog","private":"ignore this"}})), "Provider rejected [hidden] [hidden] (catalog)");
 }
 
 fn safe_timeout_diagnostic(provider: &str, diagnostic: Option<retinue_agent_core::AgentDiagnostic>) -> Option<String> {
@@ -927,6 +954,9 @@ fn persist_runtime_discovery(
     let disabled = disabled_runtimes(db);
     let mut values = Vec::with_capacity(discovered.len());
     for runtime in discovered {
+        if !retinue_runtime::discovery_ids().contains(&runtime.provider.as_str()) {
+            continue;
+        }
         let mut value = serde_json::to_value(runtime).unwrap_or(Value::Null);
         // Phase 5, section 4: Codex's protocol pin beside its version. A newer
         // CLI is a warning in the Doctor, never a refusal, so the row carries
@@ -964,7 +994,7 @@ fn persist_runtime_discovery(
     for previous in saved {
         if values.iter().any(|value| value["id"] == previous["id"]) || previous[RETIRED] == true { continue; }
         let provider = previous["provider"].as_str().unwrap_or("").to_owned();
-        if discovered_providers.contains(&provider) || probed.contains(provider.as_str()) || executable_is_gone(&previous) {
+        if !runtime_provider_supported(&previous) || discovered_providers.contains(&provider) || probed.contains(provider.as_str()) || executable_is_gone(&previous) {
             db.upsert_runtime(&retired_row(&previous))?;
             continue;
         }
@@ -991,6 +1021,17 @@ fn persist_runtime_discovery(
 /// stays in the table (old conversations and sessions name it) but every list
 /// the window reads drops it; it revives when discovery finds that path again.
 const RETIRED: &str = "retired";
+
+fn runtime_provider_supported(runtime: &Value) -> bool {
+    runtime["provider"].as_str().is_some_and(|provider| retinue_runtime::discovery_ids().contains(&provider))
+}
+
+fn filter_replayed_runtime_roster(event: &mut Value) {
+    if event["type"] != "runtime.changed" { return; }
+    if let Some(rows) = event.get_mut("payload").and_then(|payload| payload.get_mut("runtimes")).and_then(Value::as_array_mut) {
+        rows.retain(|row| row[RETIRED] != true && runtime_provider_supported(row));
+    }
+}
 
 /// Whether the executable a saved row names is no longer on disk. An empty path
 /// (a row written before the field existed) is not evidence either way.
@@ -1043,7 +1084,7 @@ async fn publish_runtime_values(st: &AppState, values: Vec<Value>) {
         for value in values {
             // A retired row is kept for old conversations but never reaches a
             // list, even when a turn on an old session reports a sign-in for it.
-            if value[RETIRED] == true {
+            if value[RETIRED] == true || !runtime_provider_supported(&value) {
                 runtimes.retain(|runtime| runtime["id"] != value["id"]);
                 continue;
             }
@@ -1232,19 +1273,23 @@ async fn move_bots_off_retired_runtimes(st: &AppState, live: &[Value]) {
 /// immediately after boot can still resolve its runtime. A row whose `main` and
 /// `enabled` stamp changed is written back, so `app.snapshot` (which reads the
 /// table) agrees with the roster from the first paint.
-async fn load_saved_runtimes(st: &AppState) {
-    if let Ok(mut saved) = st.db.runtimes() {
-        // A retired row is kept for old conversations, never shown or used to
-        // launch. It is stamped only if discovery brings that path back.
-        saved.retain(|runtime| runtime[RETIRED] != true);
-        let disabled = disabled_runtimes(&st.db);
-        for runtime in &mut saved {
-            let before = runtime.clone();
-            stamp_runtime_state(runtime, &disabled);
-            if *runtime != before { let _ = st.db.upsert_runtime(runtime); }
+async fn load_saved_runtimes(st: &AppState) -> Result<(), retinue_storage::StorageError> {
+    let disabled = disabled_runtimes(&st.db);
+    let mut live = Vec::new();
+    for mut runtime in st.db.runtimes()? {
+        if runtime[RETIRED] == true { continue; }
+        // Retire before serving snapshots, which also read the saved table.
+        if !runtime_provider_supported(&runtime) {
+            st.db.upsert_runtime(&retired_row(&runtime))?;
+            continue;
         }
-        *st.runtimes.write().await = saved;
+        let before = runtime.clone();
+        stamp_runtime_state(&mut runtime, &disabled);
+        if runtime != before { let _ = st.db.upsert_runtime(&runtime); }
+        live.push(runtime);
     }
+    *st.runtimes.write().await = live;
+    Ok(())
 }
 
 // A launch refresh joins startup discovery instead of spawning duplicate CLI probes.
@@ -1516,7 +1561,8 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
     match method {
         "project.list" | "project.create" | "project.update" | "project.delete" | "agent.team.update" | "agent.conversation" | "agent.conversation.create" | "agent.conversations" | "agent.projects" | "preset.list" | "project.members" | "project.hire" | "project.release" => team::team_rpc(st, method, &p).await,
         "outside.status" | "outside.preview" | "outside.enable" | "outside.disable" | "outside.sessions" => outside::rpc(st, method, &p).await,
-        "external.status" | "external.enable" | "external.disable" | "external.setTier" | "external.setFullAccess" | "external.rotate" => external::rpc(st, method, &p).await,
+        "external.status" | "external.enable" | "external.disable" | "external.setTier" | "external.setFullAccess" | "external.rotate"
+        | "external.clients.list" | "external.clients.connect" | "external.clients.disconnect" => external::rpc(st, method, &p).await,
         "automation.create" | "automation.list" | "automation.get" | "automation.update" | "automation.pause" | "automation.resume" | "automation.delete" | "automation.run_now" | "automation.runs" | "automation.preview" => automations::rpc(st, method, &p).await,
         "task.create" | "task.list" | "task.get" | "task.update" | "task.dispatch" | "task.unassign" | "task.reorder" | "task.cancel" | "task.stop" | "task.review" | "task.runs" | "task.image" | "task.checkBack" => tasks::rpc(st, method, &p).await,
         "delegation.list" | "delegation.cancel" | "delegation.cancelGroup" => delegations::rpc(st, method, &p).await,
@@ -1793,13 +1839,14 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
         }
         "events.replay" => {
             let after = p["afterSequence"].as_u64().unwrap_or(0);
-            let ev = st.db.replay_events(after, 1000).map_err(|e| {
+            let mut ev = st.db.replay_events(after, 1000).map_err(|e| {
                 derr(
                     "internal",
                     &e.to_string(),
                     StatusCode::INTERNAL_SERVER_ERROR,
                 )
             })?;
+            ev.iter_mut().for_each(filter_replayed_runtime_roster);
             Ok(
                 json!({"replayAvailable":!ev.first().is_some_and(|e|e["replayAvailable"]==false),"events":ev}),
             )
@@ -2776,7 +2823,7 @@ async fn resolve_session_model_lock(
     mut options: ExecOptions,
 ) -> (ExecOptions, Value) {
     let catalog = if options.model.is_none() || options.thinking.is_none() {
-        catalog::get(st, runtime, None, None, catalog::Mode::CachedOnly).await.ok().flatten()
+        catalog::get(st, runtime, None, None, catalog::Mode::Execution).await.ok().flatten()
             .map(|served| served.value)
             .filter(|catalog| catalog["validated"] == true && catalog["fallback"] != true)
     } else { None };
@@ -2804,7 +2851,7 @@ async fn resolve_session_model_lock(
 async fn project_model_override(st: &AppState, runtime: &Value, provider: &str, project_id: Option<&str>) -> Option<Value> {
     let project = st.db.project_get(project_id?).ok()?;
     let wanted = project["overrides"]["models"][provider].as_str().filter(|id| !id.is_empty())?.to_owned();
-    let served = catalog::get(st, runtime, None, None, catalog::Mode::CachedOnly).await.ok().flatten()?;
+    let served = catalog::get(st, runtime, None, None, catalog::Mode::Execution).await.ok().flatten()?;
     if served.value["validated"] != true || served.value["fallback"] == true { return None; }
     served.value["models"].as_array()?.iter().find(|model| model["id"].as_str() == Some(wanted.as_str())).cloned()
 }
@@ -3143,7 +3190,7 @@ async fn validate_exec_catalog(st:&AppState,runtime:&Value,options:&ExecOptions)
         return Err(derr("invalid_argument",OPENCODE_PAID_ZEN_MESSAGE,StatusCode::BAD_REQUEST));
     }
     let workflow_scope = (runtime["provider"] == "claude").then_some(options.enable_workflows);
-    let catalog = catalog::get(st, runtime, workflow_scope, options.model.as_deref(), catalog::Mode::CachedOnly).await.ok().flatten().map(|served| served.value);
+    let catalog = catalog::get(st, runtime, workflow_scope, options.model.as_deref(), catalog::Mode::Execution).await.ok().flatten().map(|served| served.value);
     if options.model.is_none() && catalog.as_ref().is_some_and(|catalog| catalog["validated"] == true && catalog["fallback"] != true) {
         return Err(derr("invalid_argument", "Choose a concrete model before sending a prompt.", StatusCode::BAD_REQUEST));
     }
@@ -3236,7 +3283,7 @@ async fn capability_selected_model(st:&AppState,p:&Value,runtime_id:&str)->Optio
 /// when the model lists at least one level, `Some(false)` when it lists none,
 /// `None` when the catalog is unavailable or does not carry the model.
 async fn opencode_thinking_support(st:&AppState,runtime:&Value,model:&str)->Option<bool>{
-    let catalog=catalog::get(st,runtime,None,Some(model),catalog::Mode::CachedOnly).await.ok().flatten()?.value;
+    let catalog=catalog::get(st,runtime,None,Some(model),catalog::Mode::Execution).await.ok().flatten()?.value;
     if catalog["validated"]!=true||catalog["fallback"]==true{return None;}
     let models=catalog["models"].as_array()?;
     let selected=models.iter().find(|candidate|candidate["id"].as_str()==Some(model))?;
@@ -3352,9 +3399,8 @@ fn recognized_cli_version(provider: &str, version: &str) -> bool {
         "claude" => major >= 2,
         "codex" => major <= 1,
         "opencode" => major >= 1,
-        // Gemini CLI and Qwen Code are versioned independently and are still
-        // 0.x, so there is no bound to claim: any dotted version is recognised
-        // as a version, and no more than that.
+        // ACP providers are versioned independently. No version bound is
+        // claimed here, so any dotted version is recognised.
         p if retinue_runtime::acp_provider(p).is_some() => true,
         _ => false,
     }
@@ -3500,7 +3546,14 @@ async fn new_session_in(st: &AppState, p: Value, pin: Option<&ModePin>, origin: 
         .iter()
         .find(|r| r["id"] == runtime_id)
         .cloned()
-        .ok_or_else(|| derr("not_found", "runtime not found", StatusCode::NOT_FOUND))?;
+        .ok_or_else(|| {
+            let message = if agent_id.is_some() {
+                "This coding agent is unavailable. Choose a coding agent in employee settings."
+            } else {
+                "runtime not found"
+            };
+            derr("not_found", message, StatusCode::NOT_FOUND)
+        })?;
     if runtime_is_disabled(&runtime, &disabled_runtimes(&st.db)) { return Err(runtime_off_for(&st.db, &runtime)); }
     let spec = runtime_from(&runtime);
     validate_spawn_target(&spec)?;
@@ -3622,7 +3675,7 @@ async fn new_session_in(st: &AppState, p: Value, pin: Option<&ModePin>, origin: 
         Err(e)=>{
             let _=st.db.update_session_state(&id,"error");
             if provider=="codex"&&matches!(&e,retinue_agent_core::AdapterError::Rejected(_)) {emit_codex_startup_rejections(st,&id,agent_id.as_deref(),&runtime_id,&startup_options).await;}
-            return Err(derr("provider_error",&e.to_string(),StatusCode::BAD_GATEWAY));
+            return Err(derr("provider_error",&provider_start_error(&provider, &e),StatusCode::BAD_GATEWAY));
         }
     };
     st.db
@@ -3802,7 +3855,7 @@ async fn resume_inner(st: &AppState, sid: &str, allow_states: &[&str]) -> Result
     secrets::add_to_environment(st, row["agentId"].as_str(), &mut base_options.env)?;
     let (exec_options, model_lock, migrate_lock) = if row["modelLock"].is_object() {
         let current_lock = row["modelLock"].clone();
-        let catalog = catalog::get(st, &rt, None, None, catalog::Mode::CachedOnly).await.ok().flatten().map(|served| served.value);
+        let catalog = catalog::get(st, &rt, None, None, catalog::Mode::Execution).await.ok().flatten().map(|served| served.value);
         let migrated = catalog.as_ref().and_then(|catalog| normalize_legacy_session_model_lock(&provider, &current_lock, catalog));
         if let Some(model_lock) = migrated {
             let mut options = base_options;
@@ -3859,7 +3912,7 @@ async fn resume_inner(st: &AppState, sid: &str, allow_states: &[&str]) -> Result
         }
         Err(other) => {
             if provider=="codex"&&matches!(&other,retinue_agent_core::AdapterError::Rejected(_)) {emit_codex_startup_rejections(st,&sid,row["agentId"].as_str(),&runtime,&startup_options).await;}
-            return Err(derr("provider_error",&other.to_string(),StatusCode::BAD_GATEWAY));
+            return Err(derr("provider_error",&provider_start_error(&provider, &other),StatusCode::BAD_GATEWAY));
         }
     };
     let current_gate = gate_for_session(st, &sid).await;
@@ -4003,7 +4056,8 @@ async fn finish_activation_failure(st: &AppState, sid: &str, turn: &str, error: 
     st.starting_cancels.lock().await.remove(turn);
     let failure_class = activation_failure_class(error);
     let public_message = failure_public_message(failure_class);
-    let detail = safe_provider_error_detail(&error.1.message);
+    let provider = st.db.session_brief(sid).ok().and_then(|row| row["provider"].as_str().map(str::to_owned)).unwrap_or_default();
+    let (detail, _) = failure_detail_and_sign_in(&provider, failure_class, &error.1.message);
     retry::note_failure(st, sid, turn, failure_class, &error.1.message);
     finish_turn_failed(st, sid, turn, failure_class, public_message, detail.clone(), "error").await;
     after_provider_failure(st, sid, turn, detail.or_else(|| Some(public_message.to_owned())));
@@ -4978,6 +5032,9 @@ async fn session_prompt_impl(st: &AppState, p: Value, origin: PromptOrigin) -> R
         }
         (row, state)
     };
+    if !runtime_provider_supported(&session_options) {
+        return Err(derr("provider_unavailable", "This conversation's coding agent is no longer supported.", StatusCode::BAD_GATEWAY));
+    }
     let mut exec_options=exec_options_for_session(st,&session_options)?;
     secrets::add_to_environment(st,session_options["agentId"].as_str(),&mut exec_options.env)?;
     let turn = Uuid::new_v4().to_string();
@@ -6411,7 +6468,12 @@ async fn forward_events_with_timeouts(
                     json!({"id":usage["id"],"runtimeId":runtime_id,"sessionId":sid,"turnId":turn,"provider":provider,"model":model,"timestamp":usage["timestamp"],"inputTokens":input_tokens,"outputTokens":output_tokens,"cacheReadTokens":cache_read_tokens,"cacheWriteTokens":cache_write_tokens,"reasoningTokens":null,"source":"fallback","usageStatus":usage_status}),
                 )
             }
-            AgentEvent::ExecApplied { turn_id, outcomes } => {
+            AgentEvent::ExecApplied { turn_id, mut outcomes } => {
+                if retinue_runtime::is_acp_provider(&provider) {
+                    for outcome in outcomes.values_mut() {
+                        outcome.reason = outcome.reason.as_deref().and_then(safe_provider_error_detail);
+                    }
+                }
                 if let Ok((_snapshot,event))=st.db.update_exec_snapshot_evidence(&turn_id,&serde_json::to_value(&outcomes).unwrap_or(Value::Null)) {
                     st.broadcast_persisted(vec![event.clone()]);
                     ("exec.options.changed",event["payload"].clone())
@@ -6678,13 +6740,14 @@ async fn ws_client(mut socket: WebSocket, st: AppState) {
     loop {
         let replay = st.db.replay_events(after, 1000).unwrap_or_default();
         let count = replay.len();
-        for ev in replay {
+        for mut ev in replay {
             if ev["replayAvailable"] == false {
                 let _=socket.send(Message::Text(json!({"v":1,"eventId":"gap","sequence":after,"timestamp":Utc::now().to_rfc3339(),"type":"replay.gap","payload":ev}).to_string().into())).await;
                 return;
             }
             let seq = ev["sequence"].as_u64().unwrap_or(0);
             if seq > after {
+                filter_replayed_runtime_roster(&mut ev);
                 if socket
                     .send(Message::Text(ev.to_string().into()))
                     .await
@@ -6940,7 +7003,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // A provider added after those defaults ran (Pi, 16 November 2026) starts off
     // the same way, once, unless the owner already uses it.
     if provider_gate::apply_new_provider_defaults(&st.db).is_err() { tracing::warn!("provider defaults could not be saved"); }
-    load_saved_runtimes(&st).await;
+    load_saved_runtimes(&st).await?;
     clock.step("saved-runtimes");
     // 22 November 2026: only a queue that may safely go on is sent after a
     // restart; the rest stay paused (and the lists show them).
@@ -10367,8 +10430,8 @@ mod phase2a_tests {
             assert_eq!(caps["settings"]["instructions"]["supported"], true, "{runtime_id}");
             assert_eq!(caps["settings"]["serviceTier"]["supported"], false, "{runtime_id} has no service tier");
             assert_eq!(caps["settings"]["steer"]["supported"], false, "{runtime_id} cannot steer mid-turn");
-            // Effort exists in the ACP protocol but no real Gemini or Qwen CLI
-            // verified it here, so it stays behind its gate.
+            // Effort exists in ACP but was not verified for Qwen here, so it
+            // stays behind its gate.
             assert_eq!(caps["settings"]["thinking"]["supported"], true, "{runtime_id}");
             assert_eq!(caps["settings"]["thinking"]["enabled"], false, "{runtime_id}");
         }
@@ -12133,6 +12196,25 @@ mod phase2a_tests {
     }
 
     #[tokio::test]
+    async fn opencode_catalog_execution_does_not_probe_and_failed_refresh_keeps_models() {
+        let (mut st, _) = state();
+        let adapter = Arc::new(CatalogProbeAdapter::new(std::time::Duration::ZERO, true, false));
+        install_catalog_probe_adapter(&mut st, &adapter);
+        let runtime = json!({"id":"rt-opencode-cache","provider":"opencode","executablePath":"x","launchArgs":[]});
+        assert!(catalog::get(&st, &runtime, None, None, catalog::Mode::Execution).await.unwrap().is_none());
+        tokio::task::yield_now().await;
+        assert_eq!(adapter.calls.load(std::sync::atomic::Ordering::SeqCst), 0);
+        let good = json!({"models":[{"id":"opencode-go/deepseek-v4.1-flash"}],"validated":true,"fallback":false});
+        catalog::seed(&st, &runtime, good.clone());
+        let served = catalog::get(&st, &runtime, None, None, catalog::Mode::Refresh).await.unwrap().unwrap();
+        assert!(served.stale);
+        assert_eq!(served.value["models"], good["models"]);
+        let again = catalog::get(&st, &runtime, None, None, catalog::Mode::Fresh).await.unwrap().unwrap();
+        assert!(again.stale);
+        assert_eq!(adapter.calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
     async fn catalog_failure_negative_cached_30s() {
         let (mut st, _) = state();
         st.catalog = Arc::new(catalog::CatalogCache::new(
@@ -12158,7 +12240,7 @@ mod phase2a_tests {
         let (st, _) = state();
         st.db.upsert_runtime(&json!({"id":"rt-saved","provider":"opencode","status":"online","executablePath":"x","launchArgs":[]})).unwrap();
         *st.runtimes.write().await = Vec::new();
-        load_saved_runtimes(&st).await;
+        load_saved_runtimes(&st).await.unwrap();
         let runtimes = st.runtimes.read().await;
         assert!(runtimes.iter().any(|runtime| runtime["id"] == "rt-saved"), "the saved roster is available before discovery");
         assert!(runtimes.iter().any(|runtime| runtime["id"] == "rt-test"));

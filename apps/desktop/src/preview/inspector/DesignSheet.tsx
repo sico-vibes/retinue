@@ -122,7 +122,7 @@ function Sheet() {
     <Section id="status" title="Status, chips and banners">
       <Row label="Working">{STATUSES.map((status) => <span key={status} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><StatusDot status={status} showIdle /><small style={{ color: 'var(--text-2)' }}>{status}</small></span>)}</Row>
       <Row label="Access"><ApprovalBadge mode="auto" /><ApprovalBadge mode="accept_edits" /><ApprovalBadge mode="bypass" /><ApprovalPill mode="auto" /><ApprovalPill mode="accept_edits" /><ApprovalPill mode="bypass" /><ApprovalPill mode="auto" compact /></Row>
-      <Row label="Coding agents">{['claude', 'codex', 'opencode', 'gemini', 'qwen'].map((provider) => <span key={provider} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--text-2)', fontSize: 12 }}><ProviderLogo provider={provider} />{providerBrand(provider).name}</span>)}</Row>
+      <Row label="Coding agents">{['claude', 'codex', 'opencode', 'antigravity', 'qwen'].map((provider) => <span key={provider} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--text-2)', fontSize: 12 }}><ProviderLogo provider={provider} />{providerBrand(provider).name}</span>)}</Row>
       <Row label="File chip"><FileReferenceChip file={{ fileName: 'invoice.test.ts', path: 'tests/invoice.test.ts', size: '4 KB' }} /></Row>
       <Row label="Context ring"><ContextWindowIndicator used={14_000} size={400_000} model="gpt-6.1-sol" /><ContextWindowIndicator used={250_000} size={400_000} model="gpt-6.1-sol" /><ContextWindowIndicator used={380_000} size={400_000} model="gpt-6.1-sol" /></Row>
       <Row label="Update banner"><UpdateAvailableBanner version="0.1.0-beta.99" onView={() => undefined} onLater={() => undefined} /></Row>

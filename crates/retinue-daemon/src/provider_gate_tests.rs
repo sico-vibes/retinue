@@ -33,7 +33,7 @@ async fn main_providers_are_always_on_and_the_optional_ones_start_off() {
     assert_eq!(disabled_runtimes(&fresh.db), vec!["qwen".to_owned()]);
     // Every published runtime row says whether it is a main provider and whether
     // it is offered.
-    load_saved_runtimes(&fresh).await;
+    load_saved_runtimes(&fresh).await.unwrap();
     let row = fresh.runtimes.read().await.iter().find(|row| row["id"] == "rt-test").cloned().unwrap();
     assert_eq!(row["main"], true);
     assert_eq!(row["enabled"], true);

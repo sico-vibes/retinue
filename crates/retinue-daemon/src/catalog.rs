@@ -1,7 +1,7 @@
 //! Model catalog cache.
 //!
 //! A catalog probe starts a provider CLI (Claude 2–8 s, Codex app-server 5 s,
-//! OpenCode `models --verbose` up to 20 s), so the daemon caches the result and
+//! OpenCode CLI and ACP model discovery), so the daemon caches the result and
 //! never makes an execution path wait on one. This module owns the cache that
 //! replaces the old 60-second `MODEL_CATALOG_CACHE` static:
 //!
@@ -13,7 +13,7 @@
 //! - a failed probe is remembered for 30 seconds so a broken CLI is not
 //!   restarted on every call;
 //! - `CachedOnly` reads never wait: they return what is cached (or nothing) and
-//!   start one background refresh.
+//!   start one background refresh. OpenCode execution reads skip that refresh.
 
 use crate::{
     adapter_for, claude_workflows_enabled, derr, model_presentation, provider_display_name,
@@ -48,6 +48,8 @@ pub enum Mode {
     Refresh,
     /// Never wait: return fresh or stale or `None`, and refresh in the background.
     CachedOnly,
+    /// Execution may read the OpenCode cache without starting a competing CLI.
+    Execution,
 }
 
 /// A catalog served from the cache. `stale` marks a value past its fresh window
@@ -168,7 +170,7 @@ impl CatalogCache {
 
     fn insert(&self, key: &str, value: Value, stale: bool) -> DateTime<Utc> {
         let cached_at = Utc::now();
-        let persisted = value["fallback"] != true && value["validated"] == true;
+        let persisted = persistable_catalog(&value);
         if let Ok(mut entries) = self.entries.lock() {
             entries.insert(key.to_owned(), Entry { fetched: Instant::now(), cached_at, value, persisted, stale });
         }
@@ -265,7 +267,7 @@ pub(crate) fn seed(st: &AppState, runtime: &Value, value: Value) {
 }
 
 /// Fetch a catalog. `Fresh` and `Refresh` always yield a value or an error;
-/// `CachedOnly` yields `None` on a miss without waiting.
+/// Cache-only modes yield `None` on a miss without waiting.
 pub async fn get(
     st: &AppState,
     runtime: &Value,
@@ -278,14 +280,14 @@ pub async fn get(
     let served = match mode {
         Mode::Fresh => match st.catalog.fresh_value(&probe.key) {
             Some(served) => Some(served),
-            None => Some(fetch(st, runtime, &probe, false).await?),
+            None => Some(fetch_or_stale(st, runtime, &probe, false).await?),
         },
-        Mode::Refresh => Some(fetch(st, runtime, &probe, true).await?),
-        Mode::CachedOnly => {
+        Mode::Refresh => Some(fetch_or_stale(st, runtime, &probe, true).await?),
+        Mode::CachedOnly | Mode::Execution => {
             let served = st.catalog.usable_value(&probe.key).or_else(|| st.catalog.load_persisted(st, &probe.key));
             // A stale or missing read starts one background refresh, unless a
             // recent probe already failed and is negative-cached.
-            if served.as_ref().is_none_or(|value| value.stale) && st.catalog.failure(&probe.key).is_none() {
+            if !(opencode && mode == Mode::Execution) && served.as_ref().is_none_or(|value| value.stale) && st.catalog.failure(&probe.key).is_none() {
                 spawn_refresh(st, runtime.clone(), probe);
             }
             served
@@ -329,6 +331,14 @@ fn keep_opencode_included_models(runtime: &Value, catalog: &mut Value) {
     }
 }
 
+async fn fetch_or_stale(st: &AppState, runtime: &Value, probe: &Probe, force: bool) -> Result<Served, DispatchError> {
+    match fetch(st, runtime, probe, force).await {
+        Err(error) if probe.provider == "opencode" => st.catalog.usable_value(&probe.key)
+            .or_else(|| st.catalog.load_persisted(st, &probe.key)).ok_or(error),
+        result => result,
+    }
+}
+
 /// Run (or join) one probe for `probe.key`, then cache its outcome.
 async fn fetch(st: &AppState, runtime: &Value, probe: &Probe, force: bool) -> Result<Served, DispatchError> {
     let requested = Instant::now();
@@ -359,7 +369,7 @@ async fn fetch(st: &AppState, runtime: &Value, probe: &Probe, force: bool) -> Re
         Ok(value) => {
             let cached_at = st.catalog.insert(&probe.key, value.clone(), false);
             st.catalog.clear_failure(&probe.key);
-            if value["fallback"] != true && value["validated"] == true {
+            if persistable_catalog(&value) {
                 let fetched_at = cached_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
                 let _ = st.db.catalog_cache_put(&probe.key, runtime["id"].as_str().unwrap_or(""), &probe.provider, &fetched_at, &value);
             }
@@ -367,6 +377,11 @@ async fn fetch(st: &AppState, runtime: &Value, probe: &Probe, force: bool) -> Re
             Ok(Served { value, stale: false, cached_at })
         }
         Err(error) => {
+            if probe.provider == "opencode" {
+                if let Ok(mut entries) = st.catalog.entries.lock() {
+                    if let Some(entry) = entries.get_mut(&probe.key) { entry.stale = true; }
+                }
+            }
             st.catalog.remember_failure(&probe.key, error.clone());
             st.catalog.inflight.lock().await.remove(&probe.key);
             Err(error)
@@ -385,6 +400,9 @@ async fn probe_runtime(st: &AppState, runtime: &Value, probe: &Probe) -> Result<
         AdapterError::Process(_) => derr("provider_unavailable", "runtime model catalog is unavailable", StatusCode::BAD_GATEWAY),
         _ => derr("provider_error", "runtime returned an invalid model catalog", StatusCode::BAD_GATEWAY),
     })?;
+    if probe.provider == "opencode" && catalog.models.is_empty() {
+        return Err(derr("provider_unavailable", "OpenCode returned no models", StatusCode::BAD_GATEWAY));
+    }
     model_presentation::apply(&mut catalog.models, catalog.validated, catalog.fallback);
     Ok(json!({
         "runtimeId": spec.runtime_id,
@@ -397,6 +415,10 @@ async fn probe_runtime(st: &AppState, runtime: &Value, probe: &Probe) -> Result<
         "source": catalog.source,
         "validated": catalog.validated,
     }))
+}
+
+fn persistable_catalog(value: &Value) -> bool {
+    value["fallback"] != true && (value["validated"] == true || value["provider"] == "opencode")
 }
 
 fn spawn_refresh(st: &AppState, runtime: Value, probe: Probe) {
@@ -483,7 +505,9 @@ pub fn warm_when_opened(st: &AppState, session_id: &str) {
         let Some(runtime_id) = st.db.session_brief(&session_id).ok().and_then(|row| row["runtimeId"].as_str().map(str::to_owned)) else { return; };
         let runtime = st.runtimes.read().await.iter().find(|runtime| runtime["id"].as_str() == Some(runtime_id.as_str())).cloned();
         let Some(runtime) = runtime.filter(runtime_usable) else { return; };
-        if cached(&st, &runtime).is_some() { return; }
+        // Opening an OpenCode conversation can also activate it immediately.
+        // Discovery and the explicit model picker own OpenCode refreshes.
+        if runtime["provider"] == "opencode" || cached(&st, &runtime).is_some() { return; }
         prewarm_one(&st, &runtime).await;
     });
 }

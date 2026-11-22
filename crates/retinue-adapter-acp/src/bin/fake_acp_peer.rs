@@ -159,6 +159,14 @@ fn csv(value: &str) -> Vec<String> {
 
 fn catalog_main(flags: &Flags) {
     write_record(flags, &[], None);
+    if env::args().any(|arg| arg == "--plain-list-only") {
+        if env::args().any(|arg| arg == "--verbose") {
+            eprintln!("Help requested");
+            std::process::exit(2);
+        }
+        println!("opencode-go/deepseek-v4.1-flash");
+        return;
+    }
     if env::args().any(|arg| arg == "--verbose-invalid") {
         std::process::exit(2);
     }
@@ -347,6 +355,11 @@ fn acp_main(_args: &[String], flags: &Flags) {
                 respond(&mut stdout, &id, result);
             }
             "session/new" | "session/load" => {
+                if method == "session/new" && env::args().any(|arg| arg == "--catalog-starts-slowly")
+                    && rpc.iter().filter(|entry| entry["method"] == "session/new").count() == 1 {
+                    error(&mut stdout, &id, -32000, "Internal service failure");
+                    continue;
+                }
                 // `--fail-load` returns a non-resume provider error (the
                 // reconnect must surface it); `--reject-load` returns the
                 // "session not found" evidence that lets the adapter fall back

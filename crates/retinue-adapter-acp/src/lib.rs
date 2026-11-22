@@ -726,6 +726,18 @@ impl AcpAdapter {
     }
 
     async fn request(c: &Conn, method: &str, params: Value) -> Result<Value, AdapterError> {
+        if c.runtime.provider == "opencode" && matches!(method, "session/new" | "session/load" | "session/set_config_option") {
+            let result = Self::request_once(c, method, params.clone()).await;
+            if !matches!(&result, Err(AdapterError::Protocol(raw)) if opencode_startup_fault(raw)) {
+                return result;
+            }
+            // Keep the same server alive while its catalogue finishes starting.
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+        Self::request_once(c, method, params).await
+    }
+
+    async fn request_once(c: &Conn, method: &str, params: Value) -> Result<Value, AdapterError> {
         let id = c.process.next.fetch_add(1, Ordering::Relaxed).to_string();
         let (tx, rx) = oneshot::channel();
         c.process.pending.lock().await.insert(id.clone(), tx);
@@ -870,18 +882,15 @@ impl AcpAdapter {
             json!({"sessionId": provider_session_id, "configId": option_id, "value": value}),
         )
         .await
-        .map_err(|error| Self::rpc_error_message(&error))?;
+        .map_err(|error| Self::rpc_error_message(c, &error))?;
         let updated = exec::options_from_result(&result);
         *c.config_options.lock().await = updated.clone();
         Ok(updated)
     }
 
-    fn rpc_error_message(error: &AdapterError) -> String {
+    fn rpc_error_message(c: &Conn, error: &AdapterError) -> String {
         let text = match error {
-            AdapterError::Protocol(raw) => serde_json::from_str::<Value>(raw)
-                .ok()
-                .and_then(|value| value["message"].as_str().map(str::to_owned))
-                .unwrap_or_else(|| raw.clone()),
+            AdapterError::Protocol(raw) => rpc_error_text(raw, c.runtime.provider == "opencode").unwrap_or_else(|| raw.clone()),
             other => other.to_string(),
         };
         text.chars().take(200).collect()
@@ -1082,6 +1091,43 @@ impl AcpAdapter {
 /// Whether a refused prompt means the agent is still running the previous turn.
 fn is_busy_reason(reason: &str) -> bool {
     reason.to_ascii_lowercase().contains("busy")
+}
+
+fn opencode_fault(error: &Value) -> Option<&'static str> {
+    let message = error["message"].as_str()?;
+    let safe_message = error["data"]["safeMessage"].as_str().unwrap_or_default();
+    let message = format!("{message} {safe_message}").to_ascii_lowercase().replace(['-', '_'], " ");
+    let name = error["data"]["errorName"].as_str().unwrap_or_default();
+    if ["catalog not ready", "catalog is not ready", "catalogue not ready", "catalogue is not ready"].iter().any(|text| message.contains(text))
+        || name == "ACPCatalogNotReadyError" {
+        Some("OpenCode’s model catalogue wasn’t ready")
+    } else if message.contains("opencode server is unavailable") || name == "ACPServerUnavailableError"
+        || error["code"].as_i64() == Some(503) || message.split(|ch: char| !ch.is_ascii_alphanumeric()).any(|word| word == "503") {
+        Some("OpenCode’s server was unavailable")
+    } else if message.contains("internal service failure") || name == "ACPServiceFailureError" {
+        Some("OpenCode had an internal error")
+    } else {
+        None
+    }
+}
+
+fn opencode_startup_fault(raw: &str) -> bool {
+    serde_json::from_str(raw).ok().as_ref().and_then(opencode_fault).is_some()
+}
+
+/// Only ACP’s public message and named diagnostic fields leave the error object.
+pub fn rpc_error_text(raw: &str, opencode: bool) -> Option<String> {
+    let error: Value = serde_json::from_str(raw).ok()?;
+    let message = error["message"].as_str()?;
+    let name = error["data"]["errorName"].as_str().filter(|name| !name.trim().is_empty());
+    let service = error["data"]["service"].as_str().filter(|service| !service.trim().is_empty());
+    let context = name.into_iter().chain(service).map(|text| text.split_whitespace().collect::<Vec<_>>().join(" ")).collect::<Vec<_>>().join(", ");
+    let context = if context.is_empty() { String::new() } else { format!(" ({context})") };
+    if let Some(fault) = opencode.then(|| opencode_fault(&error)).flatten() {
+        Some(format!("{fault}{context}. This is usually temporary: retry the turn."))
+    } else {
+        Some(format!("{}{context}", message.split_whitespace().collect::<Vec<_>>().join(" ")))
+    }
 }
 
 /// What the owner reads for a failed prompt: the provider's own reason, on one line, or the plain
@@ -1617,21 +1663,27 @@ impl AgentAdapter for AcpAdapter {
                     (c.cancelled_turn.swap(false, Ordering::AcqRel), c.active_turn_id.lock().await.take().is_some())
                 };
                 if was_cancelled { return Ok(()); }
+                let temporary = matches!(&error, AdapterError::Protocol(raw) if c.runtime.provider == "opencode" && opencode_startup_fault(raw));
                 // Retinue is giving this turn up. If the agent is still running it (the request failed on
                 // our side, not because it answered), tell it to stop so nothing carries on unseen.
                 // A "busy" refusal is about the previous turn, which must keep running.
-                if !matches!(error, AdapterError::Process(_)) && !is_busy_reason(&Self::rpc_error_message(&error)) { Self::stop_provider_turn(&c, &provider_id).await; }
+                if !matches!(error, AdapterError::Process(_)) && !is_busy_reason(&Self::rpc_error_message(&c, &error)) { Self::stop_provider_turn(&c, &provider_id).await; }
                 if had_active_turn {
                     // The hint and the terminal event share one ordered stream,
                     // and the hint is only sent when an Error actually follows
                     // it, so a cancelled turn never leaves a stale hint behind.
-                    if let Some(kind) = retinue_agent_core::recovery::provider_recovery(&value) {
+                    if let Some(kind) = retinue_agent_core::recovery::provider_recovery(&value)
+                        .filter(|_| !temporary) {
                         let _ = c.events.send(AgentEvent::RecoveryHint { kind, retry_after_secs: retinue_agent_core::recovery::provider_retry_after(&value, chrono::Utc::now().timestamp()).map(|secs| secs.max(0) as u64) }).await;
                     }
                     Self::emit_turn_evidence(&c, &req.turn_id, &req.exec_options, None).await;
                     // TurnErrorReported keeps Result failure for callers while
                     // making that stream the daemon's only terminal owner.
-                    let _ = c.events.send(AgentEvent::Error { message: failed_prompt_message(&Self::rpc_error_message(&error)) }).await;
+                    let message = match &error {
+                        AdapterError::Protocol(raw) if temporary => rpc_error_text(raw, true).unwrap_or_else(|| "OpenCode prompt failed".to_owned()),
+                        _ => failed_prompt_message(&Self::rpc_error_message(&c, &error)),
+                    };
+                    let _ = c.events.send(AgentEvent::Error { message }).await;
                     return Err(failed_prompt_terminal(true));
                 }
                 // No active turn: no Error was queued, so the event stream has

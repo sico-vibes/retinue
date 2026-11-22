@@ -100,6 +100,14 @@ const fixtureRuns: Record<string, Array<Record<string, unknown>>> = {}
 const fixtureFanouts: Array<{ id: string; title: string; text: string; projectId: string | null; projectName: string | null; createdAt: string; chosenSessionId: string | null; rows: Array<{ agentId: string; sessionId: string }> }> = []
 const fixtureStash: Array<{ id: string; text: string; attachments: Array<{ file: string; name: string }>; agentId: string | null; agentName: string | null; projectId: string | null; projectName: string | null; createdAt: string; updatedAt: string }> = []
 const fixtureExternal: { enabled: boolean; tier: string; lastCallAt: string | null; lastClient: string | null; allowFullAccess: boolean } = fixturePreset() === 'mcp' ? { enabled: true, tier: 'operator', lastCallAt: new Date(Date.now() - 4 * 60_000).toISOString(), lastClient: 'claude-code', allowFullAccess: false } : { enabled: false, tier: 'chat', lastCallAt: null, lastClient: null, allowFullAccess: false }
+type FixtureExternalClient = { id: string; name: string; installed: boolean; state: 'connected' | 'not_connected' | 'different'; configPath: string | null; addedByRetinue: boolean; error: string | null }
+const fixtureExternalClients: FixtureExternalClient[] = [
+  { id: 'claude-code', name: 'Claude Code', installed: true, state: fixturePreset() === 'mcp' ? 'connected' : 'not_connected', configPath: 'C:/Users/you/.claude.json', addedByRetinue: fixturePreset() === 'mcp', error: null },
+  { id: 'codex', name: 'Codex', installed: true, state: 'not_connected', configPath: 'C:/Users/you/.codex/config.toml', addedByRetinue: false, error: null },
+  { id: 'opencode', name: 'OpenCode', installed: true, state: 'not_connected', configPath: 'C:/Users/you/.config/opencode/opencode.json', addedByRetinue: false, error: null },
+  { id: 'cursor', name: 'Cursor', installed: true, state: 'different', configPath: 'C:/Users/you/.cursor/mcp.json', addedByRetinue: false, error: null },
+  { id: 'qwen', name: 'Qwen Code', installed: false, state: 'not_connected', configPath: null, addedByRetinue: false, error: null },
+]
 // The computer on the owner's server. `?preset=computer` is linked, awake and shared with employees;
 // `computer-asleep`, `computer-away` (the server does not answer) and `computer-linked` (linked, not shared yet).
 // `?flag=computer-no-input` is an awake computer missing the screen tools, for the setup card.
@@ -350,6 +358,12 @@ if (fixtureScene) {
   setPreviewSelection('agent-codex')
   sessions.push({ id: SCENE_SESSION_ID, runtimeId: 'runtime-codex', agentId: 'agent-codex', title: fixtureScene.title ?? 'Preview', projectPath: 'C:/work/korus', state: fixtureScene.state ?? 'idle', model: 'gpt-6.1-sol', updatedAt: new Date().toISOString(), messages: fixtureScene.messages ?? [], tools: fixtureScene.tools ?? [], files: fixtureScene.files ?? [], ...fixtureScene.session } as Session)
   for (const extra of fixtureScene.extraSessions ?? []) sessions.push(extra as unknown as Session)
+}
+// 22 November 2026: an employee whose coding agent Retinue retired (Gemini CLI). The daemon keeps its saved runtime
+// id, which no longer appears in the roster.
+if (flags().has('demo-runtime-gone')) {
+  const agent = agents.find((item) => item.id === 'agent-codex')
+  if (agent) agent.runtimeId = 'rt_gemini_retired'
 }
 if (flags().has('demo-troubleshoot')) {
   const session = sessions.find((item) => item.id === 'session-codex')
@@ -1650,6 +1664,29 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
       return changed()
     }
     if (method === 'external.rotate') return changed()
+    // 22 November 2026: Connect coding agents. Claude Code is already connected under `?preset=mcp`; Cursor
+    // carries a hand-made entry; Qwen Code isn't installed.
+    const client = (id: string) => {
+      const row = fixtureExternalClients.find((item) => item.id === id)
+      if (!row) throw rpcError('invalid_argument', 'Unknown coding agent.')
+      return row
+    }
+    if (method === 'external.clients.list') return { clients: fixtureExternalClients.map((item) => ({ ...item })) } as T
+    if (method === 'external.clients.connect') {
+      if (!fixtureExternal.enabled) throw rpcError('conflict', 'Turn the Retinue MCP on first.')
+      if (params.confirm !== true) throw rpcError('invalid_argument', 'Confirm connecting the coding agent first.')
+      const row = client(String(params.id))
+      if (!row.installed) throw rpcError('conflict', `${row.name} isn't installed on this computer.`)
+      Object.assign(row, { state: 'connected', addedByRetinue: true, error: null })
+      notifyFixtureDaemon('external.changed', status())
+      return { client: { ...row } } as T
+    }
+    if (method === 'external.clients.disconnect') {
+      const row = client(String(params.id))
+      if (row.addedByRetinue) Object.assign(row, { state: 'not_connected', addedByRetinue: false, error: null })
+      notifyFixtureDaemon('external.changed', status())
+      return { client: { ...row } } as T
+    }
   }
   if (method === 'session.handoff.draft') {
     const source = sessions.find((item) => item.id === params.fromSessionId)

@@ -1307,6 +1307,30 @@ async fn opencode2_session_selects_the_model_before_its_effort() {
 }
 
 #[tokio::test]
+async fn opencode_2_3_uses_plain_models_when_verbose_and_acp_are_unavailable() {
+    let adapter = AcpAdapter::default();
+    let args = vec!["--plain-list-only".into(), "--catalog-no-config-options".into()];
+    let catalog = adapter.model_catalog(&runtime(args)).await.unwrap();
+    assert_eq!(catalog.source, "cli_list");
+    assert!(!catalog.validated);
+    assert_eq!(catalog.models.len(), 1);
+    assert_eq!(catalog.models[0].id, "opencode-go/deepseek-v4.1-flash");
+}
+
+#[tokio::test]
+async fn opencode_retries_catalogue_start_before_sending_one_prompt() {
+    let temp = Temp::new();
+    let adapter = AcpAdapter::default();
+    let args = vec!["--record".into(), temp.record().to_string_lossy().into(), "--catalog-starts-slowly".into()];
+    let exec = options(None, None, None);
+    let (handle, _) = open_session(&adapter, args, exec.clone()).await;
+    adapter.prompt(&handle, PromptRequest { attachments: Vec::new(), turn_id: "turn-retry".into(), text: "hello".into(), exec_options: exec }).await.unwrap();
+    let trace = rpc_trace(&read_record(&temp.record()));
+    assert_eq!(trace.iter().filter(|call| *call == "session/new" || *call == "session/prompt").map(String::as_str).collect::<Vec<_>>(), ["session/new", "session/new", "session/prompt"]);
+    adapter.close_session(&handle).await.unwrap();
+}
+
+#[tokio::test]
 async fn failing_verbose_listing_falls_through_quickly_without_lingering_children() {
     let temp = Temp::new();
     let adapter = AcpAdapter::default();

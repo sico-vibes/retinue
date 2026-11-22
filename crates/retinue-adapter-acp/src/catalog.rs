@@ -17,7 +17,7 @@ pub(crate) async fn fetch_model_catalog(
     runtime: &RuntimeSpec,
     timeout: Duration,
 ) -> Result<ModelCatalog, AdapterError> {
-    match fetch_verbose_catalog(runtime, timeout).await {
+    match fetch_cli_catalog(runtime, timeout, true).await {
         Ok(models) => {
             let fetched = unix_now();
             return Ok(ModelCatalog {
@@ -32,32 +32,38 @@ pub(crate) async fn fetch_model_catalog(
         Err(AdapterError::Process(message)) if message == ERR_CATALOG_TIMEOUT => return Err(AdapterError::Process(message)),
         Err(_) => {}
     }
-    let catalog = fetch_config_options(runtime, timeout).await.ok_or_else(|| AdapterError::Process(ERR_CATALOG.into()))?;
+    // Modern OpenCode dropped --verbose. Prefer ACP when it can supply effort
+    // metadata, then fall back to the plain CLI list if ACP is unavailable.
+    let (models, validated, source) = match fetch_config_options(runtime, timeout).await {
+        Some(catalog) if !catalog.models.is_empty() => (catalog.models, catalog.validated, "config_options"),
+        _ => (fetch_cli_catalog(runtime, timeout, false).await?, false, "cli_list"),
+    };
     let fetched = unix_now();
     Ok(ModelCatalog {
-        models: catalog.models,
+        models,
         fetched_at: rfc3339_from_unix(fetched),
         expires_at: rfc3339_from_unix(fetched.saturating_add(60)),
         fallback: false,
-        source: "config_options".into(),
-        validated: catalog.validated,
+        source: source.into(),
+        validated,
     })
 }
 
-async fn fetch_verbose_catalog(
+async fn fetch_cli_catalog(
     runtime: &RuntimeSpec,
     timeout: Duration,
+    verbose: bool,
 ) -> Result<Vec<ModelInfo>, AdapterError> {
     let mut command = Command::new(&runtime.executable);
     prepare_command(&mut command);
     command
         .args(&runtime.args)
         .arg("models")
-        .arg("--verbose")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .kill_on_drop(true);
+    if verbose { command.arg("--verbose"); }
     prepare_listing_environment(&mut command);
     let mut child = command
         .spawn()
@@ -90,7 +96,8 @@ async fn fetch_verbose_catalog(
     if !status.success() {
         return Err(AdapterError::Process(ERR_CATALOG.into()));
     }
-    parse_verbose_catalog(&text).map_err(|_| AdapterError::Process(ERR_CATALOG.into()))
+    let models = if verbose { parse_verbose_catalog(&text) } else { parse_plain_catalog(&text) };
+    models.map_err(|_| AdapterError::Process(ERR_CATALOG.into()))
 }
 
 /// A config-options catalog plus whether the provider answered the effort
@@ -330,6 +337,17 @@ pub(crate) fn parse_verbose_catalog(text: &str) -> Result<Vec<ModelInfo>, String
     Ok(models)
 }
 
+fn parse_plain_catalog(text: &str) -> Result<Vec<ModelInfo>, String> {
+    let mut models = BTreeMap::new();
+    for line in text.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        let (provider, id) = line.split_once('/').filter(|_| is_header(line)).ok_or("invalid plain model row")?;
+        let model = model_from(line, &serde_json::json!({"id": id, "providerID": provider}))?;
+        models.insert(line, model);
+    }
+    if models.is_empty() { return Err("plain catalog contained no models".into()); }
+    Ok(models.into_values().collect())
+}
+
 fn is_header(line: &str) -> bool {
     let mut parts = line.split('/');
     match (parts.next(), parts.next(), parts.next()) {
@@ -513,6 +531,15 @@ fn civil_from_days(days: u64) -> (i32, u32, u32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_opencode_2_3_plain_catalog_without_claiming_effort() {
+        let models = parse_plain_catalog("opencode-go/deepseek-v4.1-flash\r\nopencode/big-pickle\r\n").unwrap();
+        assert_eq!(models.iter().map(|model| model.id.as_str()).collect::<Vec<_>>(), ["opencode-go/deepseek-v4.1-flash", "opencode/big-pickle"]);
+        assert!(models.iter().all(|model| model.supported_thinking.is_empty()));
+        assert!(parse_plain_catalog("Help requested").is_err());
+        assert!(parse_plain_catalog("").is_err());
+    }
 
     #[test]
     fn unix_epoch_formats_as_rfc3339() {

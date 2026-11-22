@@ -1,13 +1,14 @@
 // Wave 14: the Retinue MCP. A Claude Code session (or another MCP client) started outside Retinue can see
 // and drive the bots through `retinue-mcp.exe mcp-server`. The daemon owns the key and the endpoint file; this
-// page only turns it on, picks the level and shows the command that connects a client. The key never reaches
-// the UI.
+// page only turns it on, picks the level, connects the coding agents on this computer (`ExternalClients`) and
+// shows the command for any other MCP app. The key never reaches the UI.
 import { useEffect, useState } from 'react'
 import { Check, Copy, Eye, MessageSquare, ShieldAlert, Wrench } from 'lucide-react'
 import { listenForDaemonEvents, rpc } from '../tauri'
 import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
 import { SettingsGroup, SettingsRow } from './SettingsParts'
 import { clientLabel } from './messageOrigin'
+import { ExternalClients } from './ExternalClients'
 import './blobPage.css'
 
 export type ExternalTier = 'viewer' | 'chat' | 'operator'
@@ -119,7 +120,7 @@ export function ConnectionsPage({ connected }: { connected: boolean }) {
   const on = !!status?.enabled
   const ago = usedAgo(status?.lastCallAt ?? null)
   return <>
-    <p className="settings-intro">Let a Claude Code session work with your employees. It uses its own key, never your sign-ins.</p>
+    <p className="settings-intro">Let your coding agents, such as Claude Code and Codex, work with your employees. They use Retinue's own key, never your sign-ins.</p>
     <SettingsGroup title="Access">
       <SettingsRow label="Let outside sessions use Retinue" hint="Sessions you connect can do what the level below allows. Turning this off cuts them off at once.">
         <button type="button" className={`toggle ${on ? 'on' : ''}`} role="switch" aria-label="Let outside sessions use Retinue" aria-checked={on} disabled={!connected || busy || !status} onClick={() => on ? void run('external.disable', {}, 'Off. Connected sessions can no longer reach Retinue.') : setConsent(status?.tier ?? 'chat')}><i /></button>
@@ -132,18 +133,21 @@ export function ConnectionsPage({ connected }: { connected: boolean }) {
         {status.tier === 'operator' && <SettingsRow label="Let them give employees Full access" hint="An employee on Full access runs commands and edits files without asking you. Turning the MCP off turns this off too.">
           <button type="button" className={`toggle ${status.allowFullAccess ? 'on' : ''}`} role="switch" aria-label="Let outside sessions give employees Full access" aria-checked={status.allowFullAccess} disabled={busy} onClick={() => status.allowFullAccess ? void run('external.setFullAccess', { allow: false }, 'Outside sessions can no longer give employees Full access.') : setFullConsent(true)}><i /></button>
         </SettingsRow>}
-        <SettingsRow stacked label="Connect Claude Code" detail={status.command ? 'Run this once in a terminal. Claude Code then lists Retinue under /mcp.' : 'The connection program is still being prepared. Check again in a moment.'}>
-          {status.command && <div className="connect-command">
-            <code>{status.command}</code>
-            <button type="button" className="icon-button tiny connect-command-copy" onClick={() => void copy()} aria-label={copied ? 'Copied' : 'Copy the connect command'} title={copied ? 'Copied' : 'Copy'}>{copied ? <Check size={13} /> : <Copy size={13} />}</button>
-          </div>}
-        </SettingsRow>
         <SettingsRow label="Last used" detail={ago ? `${ago}, by ${clientLabel(status.lastClient)}` : 'Not used yet'} />
         <SettingsRow label="Reset access" hint="Makes a new key. A connected session picks it up on its next call; anything holding the old key stops working.">
           <button type="button" className="secondary-button small" disabled={busy} onClick={() => void run('external.rotate', {}, 'Access reset. The old key no longer works.')}>Reset access</button>
         </SettingsRow>
       </>}
     </SettingsGroup>
+    {status && <ExternalClients enabled={on} onNotice={setNotice} onProblem={setProblem} />}
+    {on && status && <SettingsGroup title="Other apps">
+      <SettingsRow stacked label="Connect another app" detail={status.command ? 'For an MCP app not listed above, run this once in a terminal, or put the same program and arguments in that app’s MCP settings.' : 'The connection program is still being prepared. Check again in a moment.'}>
+        {status.command && <div className="connect-command">
+          <code>{status.command}</code>
+          <button type="button" className="icon-button tiny connect-command-copy" onClick={() => void copy()} aria-label={copied ? 'Copied' : 'Copy the connect command'} title={copied ? 'Copied' : 'Copy'}>{copied ? <Check size={13} /> : <Copy size={13} />}</button>
+        </div>}
+      </SettingsRow>
+    </SettingsGroup>}
     {notice && <p className="backup-done settings-row-note" role="status">{notice}</p>}
     {problem && <p className="memory-problem settings-row-note" role="alert">{problem}</p>}
     {consent && <ConnectConsentDialog tier={consent} busy={busy} onPick={setConsent} onCancel={() => setConsent(null)} onConfirm={() => void enable(consent)} />}
