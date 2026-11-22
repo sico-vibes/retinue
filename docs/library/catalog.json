@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "a73b461b",
-  "documentCount": 454,
+  "revision": "9dbe7d30",
+  "documentCount": 455,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -3366,7 +3366,7 @@
       "title": "Invariants",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "b5b9ad8418d56d298729a443973e9904cba0511d1c388c3be03877431aaa068b",
+      "sha256": "f247ec3c48ae5eb6ec1eafec02d0e42f1e499a804ae9d5674ba62bfa1ef259da",
       "headings": [
         {
           "id": "safety-and-privacy",
@@ -24229,6 +24229,31 @@
       ]
     },
     {
+      "id": "project/releases/0.2.0-beta.10",
+      "source": "docs/releases/0.2.0-beta.10.md",
+      "title": "Retinue 0.2.0-beta.10",
+      "section": "Release notes",
+      "status": "Release note",
+      "sha256": "edeefd55df06bdcdceda60d6737f3006db847d358268fb97fc8c66c58a9f6ac8",
+      "headings": [
+        {
+          "id": "new",
+          "text": "New",
+          "level": 2
+        },
+        {
+          "id": "fixed",
+          "text": "Fixed",
+          "level": 2
+        },
+        {
+          "id": "installation",
+          "text": "Installation",
+          "level": 2
+        }
+      ]
+    },
+    {
       "id": "project/releases/0.2.0-beta.2",
       "source": "docs/releases/0.2.0-beta.2.md",
       "title": "Retinue 0.2.0-beta.2",
@@ -24729,7 +24754,7 @@
       "title": "Remote mode: threat model",
       "section": "Remote specifications",
       "status": "Remote specification",
-      "sha256": "89a7333d1f63f0f3f351bdb902c2868f045dca55e086b2b87c22e22c97f645db",
+      "sha256": "822e9a1f598e209154a235bbee701354f1fad269772c97ec0025397e4438d46b",
       "headings": [
         {
           "id": "1-the-core-fact",
