@@ -25,8 +25,11 @@ on:
 permissions:
   contents: read
 
+# One group per ref *and* event (22 November 2026): with one group per ref, the
+# nightly run cancelled the push run of the 0.2.0-beta.8 release commit, and
+# the release's `require-ci` then judged that commit by the nightly run alone.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 env:
@@ -150,7 +153,8 @@ jobs:
           if ($base -and $base -ne '0000000000000000000000000000000000000000') {
             & $env:GITLEAKS_PATH git --config .gitleaks.toml --redact --no-banner --verbose --timeout 600 --max-target-megabytes 1 --log-opts="$base..HEAD" .
           } else {
-            & $env:GITLEAKS_PATH git --config .gitleaks.toml --redact --no-banner --verbose --timeout 300 --max-target-megabytes 1 --log-opts=HEAD .
+            # The whole history from HEAD: 300 s ran out on 22 November 2026.
+            & $env:GITLEAKS_PATH git --config .gitleaks.toml --redact --no-banner --verbose --timeout 900 --max-target-megabytes 1 --log-opts=HEAD .
           }
           if ($LASTEXITCODE -ne 0) { exit 1 }
 
