@@ -11,6 +11,9 @@
 //! - how long `settings.get` waits while a snapshot is being built, which is
 //!   what a single `Mutex<Connection>` costs;
 //! - one message delta write, which is what every streamed token pays;
+//! - one whole streamed turn of 1,000 chunks, before and after the daemon's
+//!   coalescing (21 November 2026): the commits, event rows and wall time each
+//!   way, counted, so the saving is a number and not a claim;
 //! - what changing effort and assigning a task cost, idle and while every
 //!   conversation is read back to back, and the same again with
 //!   `synchronous=NORMAL` (the shipped value stays `FULL`);
@@ -40,6 +43,7 @@ use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
+use std::time::Duration;
 use uuid::Uuid;
 
 /// The query `session_context_locked` runs per session on every snapshot
@@ -496,6 +500,65 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         delta_ms = json!(round(started.elapsed().as_secs_f64() * 1000.0 / rounds as f64));
     }
 
+    // 21 November 2026: a whole streamed turn, before and after the daemon's
+    // coalescing (performance item 1). "Before" is one row update and one event
+    // row per chunk, each its own commit on `synchronous=FULL`. "After" holds
+    // the text and writes one pair per flush, using the daemon's own rule:
+    // 8 KiB, or 40 ms since the buffer opened. Chunks are given a simulated
+    // arrival 2 ms apart, so the grouping is the same on every machine while
+    // every write it does is real. The counts are what the item asks for: the
+    // commits and events for one 1,000-chunk turn.
+    let delta_turn = {
+        let session = format!("perf-delta-turn-{}", std::process::id());
+        let turn = "perf-delta-turn";
+        let chunk = "The migration adds the accounts ";
+        let deltas = 1_000usize;
+        let coalesced = |store: &Storage| -> (usize, f64) {
+            let mut buffered = String::new();
+            let mut opened = Duration::from_millis(0);
+            let mut commits = 0usize;
+            let started = Instant::now();
+            for index in 0..deltas {
+                let arrival = Duration::from_millis(2 * index as u64);
+                buffered.push_str(chunk);
+                let due = buffered.len() >= 8 * 1024 || arrival.saturating_sub(opened) >= Duration::from_millis(40);
+                if due {
+                    let _ = store.append_message_delta(&session, turn, &buffered);
+                    let _ = store.push_event("message.delta", &json!({"sessionId":session,"turnId":turn,"deltaBytes":buffered.len()}));
+                    commits += 1;
+                    buffered.clear();
+                    opened = arrival;
+                }
+            }
+            if !buffered.is_empty() {
+                let _ = store.append_message_delta(&session, turn, &buffered);
+                let _ = store.push_event("message.delta", &json!({"sessionId":session,"turnId":turn,"deltaBytes":buffered.len()}));
+                commits += 1;
+            }
+            (commits, started.elapsed().as_secs_f64() * 1000.0)
+        };
+        match store.create_session(&session, "rt-perf", "claude", ".", "Delta timing").and_then(|_| store.create_turn(turn, &session)) {
+            Ok(()) => {
+                let started = Instant::now();
+                for _ in 0..deltas {
+                    let _ = store.append_message_delta(&session, turn, chunk);
+                    let _ = store.push_event("message.delta", &json!({"sessionId":session,"turnId":turn,"deltaBytes":chunk.len()}));
+                }
+                let before_ms = started.elapsed().as_secs_f64() * 1000.0;
+                let (after_commits, after_ms) = coalesced(&store);
+                json!({
+                    "deltas": deltas,
+                    "chunkBytes": chunk.len(),
+                    "before": {"commits": deltas, "events": deltas, "ms": round(before_ms)},
+                    "after": {"commits": after_commits, "events": after_commits, "ms": round(after_ms)},
+                    "commitsSaved": deltas.saturating_sub(after_commits),
+                    "factor": if after_commits == 0 { Value::Null } else { json!(round(deltas as f64 / after_commits as f64)) },
+                })
+            }
+            Err(error) => json!({"error": error.to_string()}),
+        }
+    };
+
     // What a read waits for while a snapshot is being built. A snapshot holds
     // the one connection lock for its whole run; `settings.get` is what Settings
     // opens with.
@@ -696,6 +759,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "answersIdentical": turns_identical,
         },
         "deltaWriteMs": delta_ms,
+        "deltaTurn": delta_turn,
         "settingsWhileSnapshotting": {
             "requests": waits.len(),
             "snapshotsCompleted": snapshots_during,

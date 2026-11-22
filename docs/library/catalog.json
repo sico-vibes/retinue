@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "b9438d1f",
+  "revision": "1576b490",
   "documentCount": 450,
   "assets": [
     {
@@ -5889,7 +5889,7 @@
       "title": "Retinue daemon IPC contract (v1)",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "4f06d852a30a64cbbadb48370c3a37a27ea0a236c8bb344c2a1ea379a2e611d8",
+      "sha256": "4048c27436c56a5d66b91b73454f51b7b8a721b9d3c00e552f78e61cc51f9984",
       "headings": [
         {
           "id": "update-commands",
@@ -6124,6 +6124,11 @@
         {
           "id": "providers-main-providers-always-on-the-rest-behind-switches-11-november-2026",
           "text": "Providers: main providers always on, the rest behind switches (11 November 2026)",
+          "level": 2
+        },
+        {
+          "id": "performance-a-warmer-start-and-coalesced-deltas-21-november-2026",
+          "text": "Performance: a warmer start and coalesced deltas (21 November 2026)",
           "level": 2
         },
         {

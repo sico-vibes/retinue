@@ -431,6 +431,63 @@ pub async fn prewarm_all(st: &AppState) {
     }
 }
 
+/// How many of the most recently used conversations are warmed at launch.
+const PREWARM_RECENT: usize = 5;
+
+/// Warm only what a launch needs now (21 November 2026, performance item 7):
+/// every conversation with a turn live or waiting, and the few most recently
+/// used ones, which are what the window opens first. Every other runtime is
+/// warmed when the owner opens one of its conversations
+/// ([`warm_when_opened`]) or by [`prewarm_all`] once the window's first requests
+/// are done, so a launch does not start a CLI for a bot nobody is looking at.
+/// Returns how many runtimes it warmed.
+pub async fn prewarm_wanted(st: &AppState) -> usize {
+    let sessions = st.db.session_list(false).unwrap_or_default();
+    warm_runtimes(st, &wanted_runtime_ids(&sessions)).await
+}
+
+/// The runtime ids a launch warms now, from the conversation list (newest
+/// first): every conversation with a turn live or waiting, and the runtimes of
+/// the first [`PREWARM_RECENT`] rows otherwise. Pure, so the choice can be
+/// tested without starting a CLI.
+fn wanted_runtime_ids(sessions: &[Value]) -> Vec<String> {
+    let mut wanted: Vec<String> = Vec::new();
+    for (index, session) in sessions.iter().enumerate() {
+        let live = matches!(session["state"].as_str(), Some("working" | "starting" | "waiting_permission"));
+        if !live && index >= PREWARM_RECENT { break; }
+        if let Some(id) = session["runtimeId"].as_str().filter(|id| !id.is_empty()) {
+            if !wanted.iter().any(|seen| seen == id) { wanted.push(id.to_owned()); }
+        }
+    }
+    wanted
+}
+
+async fn warm_runtimes(st: &AppState, ids: &[String]) -> usize {
+    if ids.is_empty() { return 0; }
+    let runtimes = st.runtimes.read().await.iter()
+        .filter(|runtime| runtime_usable(runtime) && runtime["id"].as_str().is_some_and(|id| ids.iter().any(|wanted| wanted == id)))
+        .cloned().collect::<Vec<_>>();
+    for runtime in &runtimes {
+        prewarm_one(st, runtime).await;
+    }
+    runtimes.len()
+}
+
+/// Warm one conversation's runtime when the window shows it, if that runtime
+/// has no catalog yet. It is deliberately not a refresh: every probe starts a
+/// CLI, so a cached catalog is left alone and `prewarm_all` owns freshness.
+pub fn warm_when_opened(st: &AppState, session_id: &str) {
+    let st = st.clone();
+    let session_id = session_id.to_owned();
+    tokio::spawn(async move {
+        let Some(runtime_id) = st.db.session_brief(&session_id).ok().and_then(|row| row["runtimeId"].as_str().map(str::to_owned)) else { return; };
+        let runtime = st.runtimes.read().await.iter().find(|runtime| runtime["id"].as_str() == Some(runtime_id.as_str())).cloned();
+        let Some(runtime) = runtime.filter(runtime_usable) else { return; };
+        if cached(&st, &runtime).is_some() { return; }
+        prewarm_one(&st, &runtime).await;
+    });
+}
+
 async fn prewarm_one(st: &AppState, runtime: &Value) {
     let probe = resolve_probe(st, runtime, None, None);
     // Compared as served, so the OpenCode filter alone never reads as a change.
@@ -463,6 +520,34 @@ fn model_signature(value: &Value) -> Vec<(String, Vec<String>, Vec<String>)> {
             (model["id"].as_str().unwrap_or("").to_owned(), thinking, tiers)
         }).collect()
     }).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod warm_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn session(runtime: &str, state: &str) -> Value {
+        json!({"id": format!("s-{runtime}-{state}"), "runtimeId": runtime, "state": state})
+    }
+
+    #[test]
+    fn a_launch_warms_the_recent_conversations_and_every_live_turn() {
+        // Newest first, as `session_list` orders them. Five recent rows warm two
+        // distinct runtimes; a sixth is not warmed just for being near.
+        let rows = vec![
+            session("rt-claude", "idle"), session("rt-claude", "completed"), session("rt-codex", "idle"),
+            session("rt-claude", "idle"), session("rt-open", "idle"), session("rt-unused", "idle"),
+        ];
+        assert_eq!(wanted_runtime_ids(&rows), ["rt-claude", "rt-codex", "rt-open"]);
+        // A live turn below that line is warmed anyway: its conversation is open.
+        let mut rows = rows;
+        rows.push(session("rt-live", "working"));
+        assert_eq!(wanted_runtime_ids(&rows), ["rt-claude", "rt-codex", "rt-open", "rt-live"]);
+        // A conversation with no runtime (a retired row) warms nothing.
+        assert!(wanted_runtime_ids(&[session("", "working")]).is_empty());
+        assert!(wanted_runtime_ids(&[]).is_empty());
+    }
 }
 
 #[cfg(test)]
