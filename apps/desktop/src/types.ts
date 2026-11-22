@@ -356,6 +356,8 @@ export interface Session extends JsonRecord {
   archived?: boolean
   state?: string
   resumable?: boolean
+  /** Present only on a conversation imported from another coding agent. `readOnly` while it cannot resume natively here. */
+  imported?: { source: ImportSourceId; conversationId: string | null; canResumeWith: ImportSourceId | null; readOnly: boolean }
   messages?: ChatMessage[]
   events?: ChatMessage[]
   turns?: SessionTurn[]
@@ -860,12 +862,31 @@ export interface ImportRow {
   canResumeWith: ImportSourceId | null
   alreadyImported: boolean
   importedSessionId: string | null
+  /** The source's own archived flag; null when it does not record one. */
+  archived?: boolean | null
   error: string | null
 }
+/** One folder from `import.projects`: the conversations recorded in it, and whether Retinue already has it as a project. */
+export interface ImportProject {
+  key: string
+  path: string
+  name: string
+  exists: boolean
+  existingProjectId: string | null
+  total: number
+  shown: number
+  sources: ImportSourceId[]
+  bytes: number
+  newest: string | null
+  conversations: ImportRow[]
+}
+export interface ImportProjects { projects: ImportProject[]; older: number; truncated: boolean; errors: { source: ImportSourceId; label: string; message: string }[]; sinceDays: number; scannedAt: string }
+/** `import.continue`: `continue` made this conversation live again; `carry_over` started a new one with a draft for its composer. */
+export interface ImportContinueResult { mode: 'continue' | 'carry_over'; session: Session; draft: { text: string; importedSessionId: string } | null; importedSessionId: string }
 export interface ImportPreview { source: ImportSourceId; total: number; offset: number; limit: number; next: number | null; rows: ImportRow[] }
 export interface ImportItem { source: ImportSourceId; conversationId: string }
 export interface ImportAssign { agentId?: string | null; projectId?: string | null }
-export interface ImportApplyResult { importId: string; imported: number; skipped: number; failed: number; sessions: string[] }
+export interface ImportApplyResult { importId: string; imported: number; skipped: number; failed: number; sessions: string[]; next?: number | null; remaining?: number; project?: { id: string; name: string } | null }
 /** One `import.progress` event. `importedSessionId` is present once a conversation has a Retinue session. */
 export interface ImportProgress {
   importId: string
@@ -883,12 +904,15 @@ export interface ImportCompleted { importId: string; imported: number; skipped: 
 /** The daemon's suggestion for one imported conversation. `conversationId` is the Retinue session id; a null `agentId` means the CEO. */
 export interface ImportSuggestion {
   conversationId: string
-  sessionId: string
+  /** Null for a conversation that is not imported yet (a suggestion made before anything is written). */
+  sessionId: string | null
   title: string
   source: string
   agentId: string | null
   reason: 'project' | 'agent' | 'role' | 'balance'
   detail: string
+  /** Offered when no employee uses the source's coding agent. Never hired without the owner. */
+  hire?: { name: string; runtimeId: string; presetId?: string | null } | null
 }
 
 

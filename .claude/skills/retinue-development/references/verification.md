@@ -109,6 +109,8 @@ Useful URLs: `/` (main window; add `?style=retinue|stone`, `&theme=light|dark`, 
 
 The app plays a launch intro and fades the shell in; screenshots taken in the first seconds show a dimmed or empty window. Wait or check `getComputedStyle(document.querySelector('.app-shell')).opacity === '1'`. The real window is at least 1000 px wide; layout overlaps seen only below that width are not bugs.
 
+**Open the preview at `http://127.0.0.1:<port>`, not `localhost`** (2026-11-22). The server binds `127.0.0.1` only. A `localhost` tab may load the first page from a cached module graph, then go blank: the HMR socket fails and every module edited since then fails to load (`WebSocket connection to 'ws://localhost:5175/' failed`, and an earlier `[vite] Failed to reload` 500). If the pane's server stops answering a `fetch`, `preview_stop` and `preview_start` it, then navigate with `127.0.0.1`. A fresh load takes 8 to 15 seconds after edits while Vite transforms them.
+
 **A background preview tab draws no frames** (2026-11-16). While the browser pane is hidden, CSS transitions and smooth scrolls stay at `currentTime 0`: `getComputedStyle` reports the start value (a grid column read as `0px`, a `scrollTop` that never moves) and screenshots time out. A screenshot forces a frame. Before calling a layout broken, check `element.getAnimations()`, take a screenshot, or read the value again after one.
 
 **The preview is Vite's dev server, not the production bundle.** Anything that depends on bundling (dynamic imports, CSS chunking, asset URLs, preloads), on native APIs or on WebView2 must also be checked in `npm run build` output or in the installed app.

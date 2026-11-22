@@ -1,7 +1,7 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "5e4e89a0",
+  "revision": "9218d58d",
   "documentCount": 451,
   "assets": [
     {
@@ -2831,7 +2831,7 @@
       "title": "Demo inventory: production app vs the browser preview",
       "section": "Project documentation",
       "status": "Project reference",
-      "sha256": "0369f2b004dfb5436b70fa6a34d001f357a8a13191035850c4a45fc951ba2271",
+      "sha256": "1863b4ef2bd85e29d034e2f60c49816574b776edf9ea895f0b821fa97a701576",
       "headings": [
         {
           "id": "method",

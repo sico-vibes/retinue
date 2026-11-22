@@ -173,7 +173,7 @@ let agents: Agent[] = [
 
 let sessions: Session[] = [
   {
-    id: 'session-codex', runtimeId: 'runtime-codex', agentId: 'agent-codex', title: 'Invoice parser tests', projectPath: 'C:/work/korus', ...(fixturePreset() === 'moved' ? { link: { movedTo: { machineId: 'preview-laptop', name: 'Work laptop', at: new Date().toISOString() } } } : {}), state: flags().has('idle') ? 'idle' : 'working', model: 'gpt-6.1-sol', updatedAt: minutesAgo(fixturePreset() === 'generated-image' ? 0 : 2),
+    id: 'session-codex', runtimeId: 'runtime-codex', agentId: 'agent-codex', title: 'Invoice parser tests', projectPath: 'C:/work/korus', ...(fixturePreset() === 'moved' ? { link: { movedTo: { machineId: 'preview-laptop', name: 'Work laptop', at: new Date().toISOString() } } } : {}), ...(fixturePreset() === 'imported' ? { imported: { source: 'codex', conversationId: 'rollout-2026-11-13T11-00-00-0190aaaa-bbbb-cccc-dddd-eeeeffff0000', canResumeWith: null, readOnly: true } } : {}), state: flags().has('idle') ? 'idle' : 'working', model: 'gpt-6.1-sol', updatedAt: minutesAgo(fixturePreset() === 'generated-image' ? 0 : 2),
     messages: [
       { id: 'm1', role: 'user', content: 'Can you make the invoice parser tests pass?', createdAt: minutesAgo(9), ...(fixturePreset() === 'mcp' ? { meta: { origin: { kind: 'mcp', client: 'claude-code' } } } : {}) },
       ...(flags().has('demo-image') ? [{ id: 'm-image', role: 'user', content: 'Here is the invoice screenshot.', createdAt: minutesAgo(8), attachments: [{ name: 'invoice.png' }] }] : []),
@@ -545,6 +545,33 @@ function fixtureImportRows(): ImportRow[] {
 
 function fixtureImportedRow() {
   return { ...fixtureImportRows()[0], conversationId: 'seen-1', title: 'Old migration notes', alreadyImported: true, importedSessionId: 'preview-import-seen-1' }
+}
+
+// The coding-agent installer in the preview. Synthetic versions, hosts and digests only.
+let fixtureInstallJob: { jobId: string; provider: string; mode: string; startedAt: number; version: string | null; bytesTotal: number; cancelled: boolean } | null = null
+const fixtureManagedCopies = new Set<string>(['pi'])
+function fixtureInstallPlan(provider: string) {
+  const names: Record<string, string> = { claude: 'Claude Code', codex: 'Codex', opencode: 'OpenCode', pi: 'Pi', cursor: 'Cursor CLI', grok: 'Grok CLI', antigravity: 'Antigravity', qwen: 'Qwen Code' }
+  const pages: Record<string, string> = { cursor: 'https://cursor.com/cli', grok: 'https://x.ai/cli', antigravity: 'https://antigravity.google/docs/getting-started', qwen: 'https://github.com/QwenLM/qwen-code' }
+  const damaged = fixturePreset() === 'agent-install-damaged' && provider === 'pi'
+  const managed = fixtureManagedCopies.has(provider)
+  const base = { provider, displayName: names[provider] ?? provider, target: `C:\\Users\\you\\AppData\\Local\\Retinue\\agents\\${provider}`, freeBytes: 182_000_000_000, runsTurn: false, page: pages[provider] ?? 'https://example.com', installed: { version: managed && !damaged ? '1.5.2' : null, digestPrefix: managed && !damaged ? '4be1c0de9a71' : null, damaged }, previousVersion: null, autoUpdate: false }
+  if (pages[provider]) return { ...base, mode: 'link', version: null, sourceHost: null, bytes: null, digestPrefix: null, digestAlgorithm: null, supported: false, reason: 'Retinue does not download this coding agent yet. Open its install page instead.', owner: null }
+  if (provider === 'claude' || provider === 'codex' || provider === 'opencode') return { ...base, mode: 'adopt', version: provider === 'claude' ? '2.1.330' : provider === 'codex' ? '0.160.0' : '2.2.9', sourceHost: 'registry.npmjs.org', bytes: null, digestPrefix: null, digestAlgorithm: null, supported: true, reason: null, owner: 'npm', runsTurn: provider === 'codex' && flags().has('install-busy') }
+  return { ...base, mode: 'manage', version: '1.6.0', sourceHost: 'github.com', bytes: 62_400_000, digestPrefix: '9f2c41ab07de', digestAlgorithm: 'sha256', supported: true, reason: null, owner: 'none' }
+}
+function fixtureInstallJobValue(job: NonNullable<typeof fixtureInstallJob>) {
+  const elapsed = Date.now() - job.startedAt
+  const total = job.bytesTotal
+  const value = { jobId: job.jobId, provider: job.provider, mode: job.mode, version: job.version, bytesTotal: total, line: null as string | null, error: null as string | null }
+  if (job.cancelled) return { ...value, phase: 'cancelled', bytesDone: 0, error: 'The install was cancelled. Nothing was changed.' }
+  if (fixturePreset() === 'agent-install-progress') return { ...value, phase: 'downloading', bytesDone: Math.round(total * 0.41) }
+  if (elapsed < 3000) return { ...value, phase: 'downloading', bytesDone: Math.round(total * Math.min(1, elapsed / 3000)) }
+  if (fixturePreset() === 'agent-install-failed') return { ...value, phase: 'failed', bytesDone: total, error: "The download did not match the publisher's checksum. Nothing was installed.", line: 'sha256 mismatch: expected 9f2c41ab07de, got 1d0e77c2b8a4' }
+  if (elapsed < 4000) return { ...value, phase: 'checking', bytesDone: total }
+  if (elapsed < 5000) return { ...value, phase: 'installing', bytesDone: total }
+  if (job.mode === 'manage') fixtureManagedCopies.add(job.provider)
+  return { ...value, phase: 'done', bytesDone: total }
 }
 
 function fixtureImportedIds() {
@@ -1727,6 +1754,15 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     window.setTimeout(() => notifyFixtureDaemon('import.completed', { importId: 'preview-import', imported: importedSessions.length, skipped: 0, failed: 0, conversationIds: importedSessions }), 400 * (items.length + 1))
     return { importId: 'preview-import', imported: importedSessions.length, skipped: 0, failed: 0, sessions: importedSessions } as T
   }
+  if (method === 'import.distribute' && Array.isArray(params.items)) {
+    const items = params.items as Array<{ source: string; conversationId: string }>
+    const rows = fixtureImportRows()
+    return { suggestions: items.map((item) => {
+      const row = rows.find((candidate) => candidate.source === item.source && candidate.conversationId === item.conversationId)
+      const agentId = item.source === 'codex' ? 'agent-codex' : item.source === 'claude' ? 'agent-claude' : item.source === 'opencode' && !flags().has('import-hire') ? 'agent-opencode' : null
+      return { conversationId: item.conversationId, sessionId: null, title: row?.title ?? 'Untitled', source: item.source, agentId, reason: agentId ? 'agent' : 'balance', detail: agentId ? `uses ${row?.agentLabel ?? item.source}, so it can carry on` : 'no employee uses this coding agent; the CEO can file it', hire: agentId ? null : { name: 'OpenCode helper', runtimeId: 'runtime-opencode', presetId: null } }
+    }) } as T
+  }
   if (method === 'import.distribute') {
     const ids = Array.isArray(params.ids) ? params.ids.map(String) : fixtureImportedIds()
     return { suggestions: ids.map((id, index) => ({ conversationId: id, sessionId: id, title: 'Invoice parser tests', source: 'claude', agentId: index % 2 === 0 ? 'agent-codex' : null, reason: index % 2 === 0 ? 'project' : 'balance', detail: index % 2 === 0 ? 'same folder as Retinue' : 'no bot is free; the CEO can file it' })) } as T
@@ -1735,6 +1771,58 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     const session = sessions.find((item) => item.id === params.sessionId)
     if (!session) throw rpcError('not_found', 'session not found')
     return { session: { ...session, agentId: params.agentId ?? null } } as T
+  }
+  if (method === 'import.projects') {
+    const wanted = Array.isArray(params.sources) ? (params.sources as string[]) : ['claude', 'codex', 'opencode']
+    const rows = fixtureImportRows().filter((row) => wanted.includes(row.source))
+    if (flags().has('import-seen')) rows.push(fixtureImportedRow())
+    const byPath = new Map<string, ImportRow[]>()
+    for (const row of rows) byPath.set(row.projectPath, [...(byPath.get(row.projectPath) ?? []), row])
+    const projects = [...byPath.entries()].map(([path, list]) => ({ key: path.toLowerCase(), path, name: path.split('/').pop() ?? path, exists: !path.includes('Default Project'), existingProjectId: path.endsWith('Retinue') ? 'project-retinue' : null, total: list.length + (path.endsWith('Retinue') ? 3 : 0), shown: list.length, sources: [...new Set(list.map((row) => row.source))], bytes: list.reduce((sum, row) => sum + row.bytes, 0), newest: list.map((row) => row.updatedAt).sort().pop() ?? null, conversations: list }))
+    return { projects, older: 4, truncated: false, errors: [], sinceDays: Number(params.sinceDays ?? 30), scannedAt: new Date().toISOString() } as T
+  }
+  if (method === 'import.continue') {
+    const session = sessions.find((item) => item.id === params.sessionId)
+    if (!session?.imported) throw rpcError('invalid_argument', 'That conversation was not imported.')
+    const agent = agents.find((item) => item.id === params.agentId)
+    if (!agent) throw rpcError('invalid_argument', 'That bot no longer exists.')
+    const provider = baseRuntimes.find((runtime) => runtime.id === agent.runtimeId)?.provider
+    if (provider === session.imported.source && !flags().has('import-gone')) {
+      delete session.imported
+      session.agentId = agent.id
+      notifyFixtureDaemon('session.changed', { session: { ...session } })
+      return { mode: 'continue', session: { ...session }, draft: null, importedSessionId: session.id } as T
+    }
+    const created: Session = { id: `preview-carried-${session.id}`, runtimeId: agent.runtimeId, agentId: agent.id, title: session.title, projectPath: session.projectPath, state: 'idle', messages: [], updatedAt: new Date().toISOString() }
+    sessions = [created, ...sessions.filter((item) => item.id !== created.id)]
+    notifyFixtureDaemon('session.changed', { session: created })
+    return { mode: 'carry_over', session: created, draft: { text: `Picking up "${session.title}" from Codex. The last exchange was about the failing invoice parser tests.\n\nThe full history is the imported conversation ${session.id} (from Codex). Read it with read_conversation before you start.`, importedSessionId: session.id }, importedSessionId: session.id } as T
+  }
+  // The coding-agent installer (`runtime.install.*`): `?preset=agent-install` runs one to the end,
+  // `-progress` holds at 41%, `-failed` fails the checksum and `-damaged` shows a damaged copy.
+  if (method === 'runtime.install.plan') return { plan: fixtureInstallPlan(String(params.provider)) } as T
+  if (method === 'runtime.install') {
+    const plan = fixtureInstallPlan(String(params.provider))
+    if (params.confirm !== true) throw rpcError('invalid_argument', 'Confirm the install first: runtime.install needs confirm: true.')
+    if (!plan.supported) throw rpcError('provider_unavailable', plan.reason ?? 'This coding agent cannot be installed here.')
+    if (params.version !== plan.version) throw rpcError('conflict', 'The plan changed since it was shown. Review it again.')
+    fixtureInstallJob = { jobId: `preview-install-${plan.provider}`, provider: plan.provider, mode: plan.mode, startedAt: Date.now(), version: plan.version, bytesTotal: plan.bytes ?? 0, cancelled: false }
+    return { jobId: fixtureInstallJob.jobId, provider: plan.provider, mode: plan.mode, version: plan.version } as T
+  }
+  if (method === 'runtime.install.status') {
+    if (!fixtureInstallJob || fixtureInstallJob.jobId !== params.jobId) throw rpcError('not_found', 'That install is not known here.')
+    return { job: fixtureInstallJobValue(fixtureInstallJob) } as T
+  }
+  if (method === 'runtime.install.cancel') {
+    if (!fixtureInstallJob || fixtureInstallJob.jobId !== params.jobId) throw rpcError('not_found', 'That install is not known here.')
+    fixtureInstallJob.cancelled = true
+    return { cancellationRequested: true } as T
+  }
+  if (method === 'runtime.install.remove') {
+    if (params.confirm !== true) throw rpcError('invalid_argument', 'Confirm removing the copy first: runtime.install.remove needs confirm: true.')
+    if (!fixtureManagedCopies.has(String(params.provider))) throw rpcError('not_found', 'Retinue did not install this coding agent.')
+    fixtureManagedCopies.delete(String(params.provider))
+    return { removed: true, provider: params.provider, kept: [] } as T
   }
   if (method === 'session.git.scopes') {
     return { sessionId: params.sessionId, scopes: [

@@ -7,6 +7,7 @@ import { rpc } from '../tauri'
 import { ProviderLogo } from './providerBrand'
 import { SettingsGroup, SettingsRow } from './SettingsParts'
 import { SettingsSkeleton } from './SettingsSkeleton'
+import { AgentInstallDialog, INSTALL_PROVIDERS } from './AgentInstall'
 import './accounts.css'
 
 export interface ProviderRow {
@@ -49,6 +50,7 @@ export function ProvidersPage({ disabled, saving, onChange }: {
 }) {
   const [rows, setRows] = useState<ProviderRow[] | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
+  const [installing, setInstalling] = useState<ProviderRow | null>(null)
   const load = useCallback(() => {
     void rpc<unknown>('provider.list', {}).then((reply) => { setRows(parseProviders(reply)); setProblem(null) }).catch(() => { setRows([]); setProblem('The list of coding agents could not be read.') })
   }, [])
@@ -63,15 +65,18 @@ export function ProvidersPage({ disabled, saving, onChange }: {
   if (rows === null) return <SettingsSkeleton />
   const main = rows.filter((row) => row.main)
   const optional = rows.filter((row) => !row.main)
-  const rowOf = (row: ProviderRow) => <SettingsRow key={row.provider} label={<span className="provider-row-name"><ProviderLogo provider={row.provider} size={16} />{row.displayName}</span>} hint={providerLine(row)}>
+  const installable = (row: ProviderRow) => (INSTALL_PROVIDERS as readonly string[]).includes(row.provider)
+  const rowOf = (row: ProviderRow) => <SettingsRow key={row.provider} label={<span className="provider-row-name"><ProviderLogo provider={row.provider} size={16} />{row.displayName}</span>} hint={providerLine(row)}><span className="provider-row-actions">
+    {installable(row) && <button type="button" className="secondary-button small" aria-label={`${row.found ? 'Update' : 'Install'} ${row.displayName}`} onClick={() => setInstalling(row)}>{row.found ? 'Update…' : 'Install…'}</button>}
     {row.main
       ? <span className="provider-row-fixed">Always on</span>
-      : <button type="button" className={`toggle ${row.enabled ? 'on' : ''}`} role="switch" aria-label={`Use ${row.displayName}`} aria-checked={row.enabled} disabled={saving} onClick={() => void toggle(row)}><i /></button>}
+      : <button type="button" className={`toggle ${row.enabled ? 'on' : ''}`} role="switch" aria-label={`Use ${row.displayName}`} aria-checked={row.enabled} disabled={saving} onClick={() => void toggle(row)}><i /></button>}</span>
   </SettingsRow>
   return <>
     {problem && <p className="form-error" role="alert">{problem}</p>}
+    {installing && <AgentInstallDialog provider={installing.provider} found={installing.found} onClose={() => setInstalling(null)} onChanged={load} />}
     <SettingsGroup title="Main">{main.map(rowOf)}</SettingsGroup>
-    <p className="provider-note">These three are always available. To turn off one installed copy, use Agents.</p>
+    <p className="provider-note">These three are always available. To turn off one installed copy, use Agents. Install and Update run without a terminal window, and show you what they will download first.</p>
     {optional.length > 0 && <>
       <SettingsGroup title="Optional">{optional.map(rowOf)}</SettingsGroup>
       <p className="provider-note">Off until you switch one on. One that an employee or a conversation already uses stays on.</p>

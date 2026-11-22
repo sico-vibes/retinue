@@ -10,10 +10,10 @@
 .import-body { min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .import-note { margin: 0; color: var(--text-2); font-size: var(--fs-sm); line-height: 1.5; }
 .import-error { margin: 0; color: var(--danger-ink); font-size: var(--fs-sm); }
-.import-sources, .import-group ul, .import-review { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
-.import-sources label, .import-group label { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
-.import-sources label:hover, .import-group label:hover { background: var(--surface-hover); }
-.import-sources label.disabled, .import-group label.disabled { opacity: .55; cursor: default; }
+.import-sources, .import-group ul, .import-project ul, .import-review { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.import-sources label, .import-group label, .import-project label { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; cursor: pointer; }
+.import-sources label:hover, .import-group label:hover, .import-project label:hover { background: var(--surface-hover); }
+.import-sources label.disabled, .import-group label.disabled, .import-project label.disabled { opacity: .55; cursor: default; }
 .import-source-copy, .import-row-copy { min-width: 0; flex: 1; display: grid; gap: 2px; }
 .import-source-copy small, .import-row-copy small { color: var(--text-3); font-size: var(--fs-2xs); }
 .import-row-copy strong { overflow: hidden; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
@@ -34,3 +34,29 @@
 .import-review li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .import-review select { max-width: 180px; }
 .import-done { display: flex; align-items: center; gap: 8px; margin: 0; font-weight: 500; }
+
+/* Project-first picker and suggestions before writing (22 November 2026). */
+.import-window { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; color: var(--text-2); font-size: var(--fs-sm); }
+.import-window label { display: inline-flex; align-items: center; gap: 8px; color: var(--text-3); font-size: var(--fs-xs); }
+.import-search { display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--text-3); border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); }
+.import-search:focus-within { border-color: var(--line-strong); box-shadow: var(--focus-ring); }
+.import-search input { flex: 1; min-width: 0; height: 34px; padding: 0; color: var(--text-1); border: 0; outline: none; background: transparent; font: inherit; font-size: var(--fs-sm); }
+.import-project { display: grid; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; }
+.import-project header { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.import-project-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 6px; color: var(--text-1); border: 0; border-radius: 8px; background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.import-project-toggle:hover { background: var(--surface-hover); }
+.import-project-toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.import-project-toggle > svg { flex: 0 0 auto; color: var(--text-3); }
+.import-project-logos { display: inline-flex; gap: 4px; }
+.import-project-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 2px 6px 4px; }
+.import-project > .import-note { padding: 0 10px; font-size: var(--fs-xs); }
+.import-review li > svg, .import-review li > img { flex: 0 0 auto; }
+.import-hire { margin: 0; padding: 8px 10px; color: var(--text-2); border: 1px solid var(--line); border-radius: 10px; font-size: var(--fs-xs); line-height: 1.5; }
+
+/* An imported, read-only conversation: the bar in place of the message box. */
+.imported-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0 auto 12px; width: min(760px, calc(100% - 32px)); padding: 10px 14px; color: var(--text-2); font-size: var(--fs-sm); border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface-raised); }
+.imported-bar > svg { flex: 0 0 auto; color: var(--text-3); }
+.imported-bar > span { flex: 1 1 220px; min-width: 0; }
+.imported-bar strong { color: var(--text-1); font-weight: 500; }
+.imported-bar-actions { display: inline-flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.imported-bar em { color: var(--danger-ink); font-style: normal; }

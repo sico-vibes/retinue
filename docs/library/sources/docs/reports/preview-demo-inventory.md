@@ -334,6 +334,8 @@ Path notes: where a component has no `export` line that could be cited, the file
 | Updates | Development build, Store copy | `ui/UpdatesPanel.tsx:17` | yes: `?updates=dev`, `?updates=store` | none | no |
 | Updates | Stable and beta channel | `ui/UpdatesPanel.tsx:17` | yes: `?channel=stable` | none | no |
 | Updates | Coding agent (harness) update available or in progress | `ui/HarnessUpdatesNotice.tsx:35` | yes: `?preset=harness-update`, `?preset=harness-update-progress` | none | no |
+| Updates | Install or update a coding agent: consent card, progress, done | `ui/AgentInstall.tsx`, `ui/ProvidersPage.tsx`, `runtime.install.*` | yes: Settings > Providers with `?preset=agent-install` (demo `agent-install`, `agent-update-adopt`, `agent-install-link`) | none | no |
+| Updates | Coding agent install downloading, failed, damaged, or waiting for a turn | `ui/AgentInstall.tsx` (`jobLine`, `planSentences`) | yes: `?preset=agent-install-progress`, `-failed`, `-damaged`, `&install-busy`; `demo-rpc-error=runtime.install.plan` | none | no |
 | Updates | Update check: network or signature failure, installer error | `ui/updatesContract.ts`, `ui/UpdatesPanel.tsx` | partly: only the `error` state; the specific failure texts are not each seeded | a `?update=` value per failure | no |
 | Usage and limits | Usage analytics page (overview, panels) | `ui/AnalyticsView.tsx:49` | yes: `/?open=usage` (inspector "Usage") | none | no |
 | Usage and limits | Usage analytics: no data | `ui/AnalyticsView.tsx:49` | yes: `/?open=usage&analytics=empty` | none | no |
@@ -421,6 +423,8 @@ Path notes: where a component has no `export` line that could be cited, the file
 | Desktop only (OS integration) | Backup import conflicts and resolutions | `ui/BackupPage.tsx:46` (`importResolutions`) | partly: preview import preview returns one shape | a conflict seed | no |
 | Desktop only (OS integration) | Import progress and failures | `ui/ImportDialog.tsx`, `import.progress`, `import.completed` | partly: progress and completed are emitted; a failure is not seeded | an import failure branch | no |
 | Desktop only (OS integration) | Import from other tools (conversation sources) | `ui/ImportDialog.tsx` (`ImportTemplate`), `fixtureBridge.ts:486-500` | yes: `?import-seen` and default | none | no |
+| Desktop only (OS integration) | Import: project cards, search, Import all, suggestions before writing, hire note | `ui/ImportDialog.tsx`, `import.projects`, `import.distribute` (`items`) | yes: `open=import`, `&import-hire`, `&import-seen`; `demo-rpc-error=import.projects` | none | no |
+| Conversation | Imported conversation, read only: Continue with …, Give this to another employee… | `ui/ImportedBar.tsx`, `import.continue` | yes: `?preset=imported` (continue), `&import-gone` (carry over); `demo-rpc-error=import.continue` | none | no |
 | Onboarding and tour | In-app tour | `ui/App.tsx` (`onboarding.tour`), `ui/App.tsx:1122` | yes: `?tour`, `?tour-invite` | none | no |
 | Onboarding and tour | Hints (seen, reset) | `ui/App.tsx` (`hints.seen`) | yes: `?hints-reset`, `?seen-hints` | none | no |
 | Onboarding and tour | What's new (once per version) | `ui/WhatsNew.tsx:74`, `ui/App.tsx:233` | yes: `?open=whats-new` | none | no |

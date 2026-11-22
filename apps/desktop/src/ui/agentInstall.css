@@ -1,0 +1,21 @@
+/* Installing a coding agent from Settings › Providers (22 November 2026). */
+.agent-install { width: min(520px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 12px; }
+.agent-install h2 { display: flex; align-items: center; gap: 8px; margin: 0; }
+.agent-install-note { margin: 0; color: var(--text-2); font-size: var(--fs-sm); line-height: 1.5; }
+.agent-install-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: var(--fs-xs); }
+.agent-install-facts dt { color: var(--text-3); }
+.agent-install-facts dd { min-width: 0; margin: 0; color: var(--text-1); overflow-wrap: anywhere; }
+.agent-install-facts code { font-family: var(--font-mono, ui-monospace, monospace); font-size: var(--fs-2xs); }
+.agent-install-path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-install-switch { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.agent-install-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; color: var(--text-2); border: 1px solid var(--line); border-radius: 10px; font-size: var(--fs-xs); line-height: 1.5; }
+.agent-install-confirm > span { flex: 1 1 240px; }
+.agent-install-job { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: center; gap: 6px 10px; padding: 10px 12px; color: var(--text-1); border: 1px solid var(--line); border-radius: 10px; font-size: var(--fs-sm); }
+.agent-install-job > svg { color: var(--text-2); }
+.agent-install-job > span { display: grid; gap: 2px; min-width: 0; }
+.agent-install-job small { color: var(--text-3); font-size: var(--fs-2xs); overflow-wrap: anywhere; }
+.agent-install-job.failed > svg { color: var(--status-danger-text); }
+.agent-install-bar { grid-column: 2; height: 6px; overflow: hidden; border-radius: 3px; background: var(--surface-hover); }
+.agent-install-bar i { display: block; height: 100%; border-radius: inherit; background: var(--text-1); transition: width 200ms ease; }
+.agent-install-error { margin: 0; color: var(--danger-ink); font-size: var(--fs-sm); }
+.provider-row-actions { display: inline-flex; align-items: center; gap: 10px; }

@@ -23,7 +23,7 @@ import { ApprovalCard, type PermissionReplyOptions } from './ApprovalCard'
 import { sessionsForPauseRequest } from './trayActions'
 import { SuggestionTextarea } from './SuggestionTextarea'
 import { FOLLOW_UP_SETTING, useSessionSuggestion, type FollowUpSuggestion } from './sessionSuggestions'
-import { applyEvent, formatUnknownSafe, isPermissionReplyAllowed, labelize, isAutomation, normalizeQueueState, type Agent, type AutomationRun, type QueuedPrompt, type ChatMessage, type ConnectionState, type DaemonEvent, type PermissionRequest, type Project, type Runtime, type Session, type Snapshot } from '../types'
+import { applyEvent, formatUnknownSafe, isPermissionReplyAllowed, labelize, isAutomation, normalizeQueueState, type Agent, type AutomationRun, type ImportContinueResult, type QueuedPrompt, type ChatMessage, type ConnectionState, type DaemonEvent, type PermissionRequest, type Project, type Runtime, type Session, type Snapshot } from '../types'
 import { agentColorHex } from './agentColor'
 import { TeamPage, type TeamTab } from './TeamPage'
 import { announceMembersChanged } from './projectMembers'
@@ -154,6 +154,7 @@ import { doingNowStep } from './doingNow'
 import { ProjectsContext, splitProjectTags } from './projectMentions'
 import { ProjectIcon } from './ProjectIcon'
 import { ImportDialog } from './ImportDialog'
+import { ImportedBar } from './ImportedBar'
 import { OwnerComputerBar, useOwnerGrants } from './OwnerComputer'
 import { TurnPlan, planOf } from './TurnPlan'
 import { BrandLockup } from './BrandLockup'
@@ -1759,6 +1760,7 @@ export function App() {
       'quick-switcher': () => setQuickSwitcherOpen(true),
       'ask-several': () => setFanoutOpen(true),
       'new-project': () => { void openNewProject() },
+      import: () => setImportOpen(true),
       'project-search': () => setProjectSearchOpen(true),
       'project-settings': () => setProjectSettings(projects[0] ?? null),
       'delete-project': () => setProjectDelete(projects[0] ?? null),
@@ -2697,6 +2699,16 @@ ${fileReferenceText(sentFile)}` : typed
     const exists = (current.sessions ?? []).some((item) => item.id === session.id)
     return exists ? mergeHydratedSession(current, session.id, session) : { ...current, sessions: [session, ...(current.sessions ?? [])] }
   })
+  /** `import.continue` answered: the same conversation is live again, or a new one for that employee waits with a summary in its composer. */
+  const continueImported = (result: ImportContinueResult, agent: Agent) => {
+    upsertSession(result.session)
+    if (result.mode === 'carry_over') {
+      if (result.draft?.text) saveDraft(result.session.id, result.draft.text)
+      selectSession({ ...result.session, agentId: result.session.agentId ?? agent.id })
+      requestAnimationFrame(() => composerRef.current?.focus())
+    }
+    void refresh()
+  }
   const openSideConversation = (sessionId: string | undefined | null) => {
     if (!sessionId) return
     if (!sideSessionId) sideReturn.current = { agentId: activeSelectedAgent?.id ?? null, sessionId: selectedSession?.id ?? null }
@@ -3320,7 +3332,7 @@ ${fileReferenceText(sentFile)}` : typed
           </div>
           {!sideSession && <ReplyAnnotator container={messageListRef} full={annotations.length >= MAX_ANNOTATIONS} onAdd={addAnnotation} />}
           {!sideSession && selectedSession && !isDraftSession(selectedSession) && <SubbotFleet sessionId={selectedSession.id} parent={activeSelectedAgent ?? undefined} onOpen={openSideConversation} />}
-          {sideSession?.link?.subbot === true ? <SubbotComposer sessionId={sideSession.id} name={agents.find((agent) => agent.id === sideSession.agentId)?.name ?? 'this helper'} onClose={closeSideConversation} /> : sideSession ? <div className="side-close"><button type="button" className="secondary-button" onClick={closeSideConversation}>Close chat</button></div> : selectedSession?.link?.movedTo ? <MovedBar sessionId={selectedSession.id} movedTo={selectedSession.link.movedTo} machines={machines} onMoved={() => { void refresh(); void reloadMachines() }} /> : <div className="composer-wrap">
+          {sideSession?.link?.subbot === true ? <SubbotComposer sessionId={sideSession.id} name={agents.find((agent) => agent.id === sideSession.agentId)?.name ?? 'this helper'} onClose={closeSideConversation} /> : sideSession ? <div className="side-close"><button type="button" className="secondary-button" onClick={closeSideConversation}>Close chat</button></div> : selectedSession?.imported?.readOnly ? <ImportedBar session={selectedSession} agents={agents} providerOf={(agent) => runtimes.find((runtime) => runtime.id === agent.runtimeId)?.provider ?? null} onContinued={(result, agent) => continueImported(result, agent)} /> : selectedSession?.link?.movedTo ? <MovedBar sessionId={selectedSession.id} movedTo={selectedSession.link.movedTo} machines={machines} onMoved={() => { void refresh(); void reloadMachines() }} /> : <div className="composer-wrap">
             {ownerGrants.filter((grant) => grant.sessionId === selectedSession?.id).map((grant) => <OwnerComputerBar key={grant.sessionId} grant={grant} name={agents.find((agent) => agent.id === grant.agentId)?.name ?? agentName} />)}
             {farFromBottom && <button type="button" className="jump-latest" aria-label="Back to the latest message" title="Back to the latest message" onClick={() => { const node = messageListRef.current; if (!node) return; stickToBottom.current = true; node.scrollTo({ top: node.scrollHeight, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }) }}><ArrowDown size={15} aria-hidden="true" /></button>}
             {usageTip && <UsageTip tip={usageTip} onDismiss={() => dismissUsageTip(usageTip)} onViewUsage={() => showUsage()} />}

@@ -261,6 +261,14 @@ async fn a_claude_conversation_imports_its_text_and_tools_and_nothing_private() 
     assert_eq!(import["source"], "claude");
     assert_eq!(import["messageCount"], 3);
     assert_eq!(import["sha256"].as_str().unwrap().len(), 64);
+    // The list row carries the same read-only mark as the event summary, so the
+    // window's banner survives a restart (22 November 2026).
+    let listed = st.db.session_list(true).unwrap().into_iter().find(|row| row["id"] == session_id.as_str()).unwrap();
+    assert_eq!(listed["imported"], st.db.session_event_summary(&session_id).unwrap()["imported"], "{listed}");
+    assert_eq!(listed["imported"]["source"], "claude");
+    assert_eq!(listed["imported"]["readOnly"], true);
+    let own = st.db.session_list(true).unwrap();
+    assert!(own.iter().filter(|row| row["id"] != session_id.as_str()).all(|row| row.get("imported").is_none()), "a conversation started here has no imported mark");
 }
 
 #[tokio::test]
