@@ -4830,6 +4830,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "embed-resource",
+ "flate2",
  "futures-util",
  "gethostname",
  "hkdf 0.12.4",

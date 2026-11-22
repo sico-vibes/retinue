@@ -2222,3 +2222,9 @@ The computer's screen (`computer.view`, `computer.rs`) is the first route on the
 ## 2026-11-13 · Computer · An employee's workplace
 
 - `computerWorkplace` on an employee (`agents.computer_workplace`, added by `ensure_computer_link_schema` in `crates/retinue-storage/src/computer_link.rs`) adds a `## Your workplace` section to new conversations' instructions (`computer::workplace_instructions`, from `team::runtime_instructions_in`) and wakes a sleeping computer once per conversation at the top of `run_turn` (`computer::before_first_turn`, claimed through `Storage::session_take_computer_wake`, 20 s budget, never sleeps it). Only when a computer is linked and shared with employees. The window's switch is `ComputerWorkplaceRow` in `ui/BlobSettings.tsx`, shown only when a computer is shared or the switch is already on.
+
+## 2026-11-22 - Daemon - Never `cargo clean -p` in a shared target
+
+- A lane build that points `CARGO_TARGET_DIR` at the main checkout's target shares unit hashes with every other lane. `cargo clean -p retinue-runtime` removed 2,227 files, including the **build scripts of its dependencies** (`zip`, the daemon's own `build.rs`). Smart App Control then refused their freshly rebuilt copies (`os error 4551`) on every attempt, so the shared target itself stopped building. Do not clean, delete or relink inside a target you do not own.
+- The same sharing can also hand a lane a *stale* `retinue-runtime` rlib: the daemon then fails with `cannot find MANAGED_FOLDER in retinue_runtime` although the source has it. That is contamination, not a missing `pub`.
+- What worked once: after a fresh link, copy the test exe to `C:\tmp` and run it there (22 of 23 new tests ran). It did not work on the next link. A blocked build script cannot be fixed by deleting it; SAC blocks by content, not path.

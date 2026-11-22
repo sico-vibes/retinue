@@ -268,6 +268,41 @@
       "params": null
     },
     {
+      "method": "runtime.install.plan",
+      "class": "never",
+      "minTier": null,
+      "why": "What installing a coding agent would do names the publisher, the version and the digest, and reading it sends the host to the internet on a device's word (21 November 2026).",
+      "params": null
+    },
+    {
+      "method": "runtime.install",
+      "class": "never",
+      "minTier": null,
+      "why": "An install downloads and runs a build on the host. Only the owner at the desktop, or a headless host's own console, may start one.",
+      "params": null
+    },
+    {
+      "method": "runtime.install.status",
+      "class": "never",
+      "minTier": null,
+      "why": "An install's progress belongs to the owner's own window; nothing about it leaves the host.",
+      "params": null
+    },
+    {
+      "method": "runtime.install.cancel",
+      "class": "never",
+      "minTier": null,
+      "why": "Only whoever started an install may stop it, and no device may start one.",
+      "params": null
+    },
+    {
+      "method": "runtime.install.remove",
+      "class": "never",
+      "minTier": null,
+      "why": "Deleting Retinue's own copy of a coding agent changes what this host can run, which is a desktop decision.",
+      "params": null
+    },
+    {
       "method": "model.custom.*",
       "class": "never",
       "minTier": null,
@@ -2196,6 +2231,7 @@
     "project.clone.changed": "drop",
     "project.members.changed": "drop",
     "runtime.changed": "drop",
+    "runtime.install.changed": "drop",
     "session.context.reset": "drop",
     "session.context.updated": "drop",
     "session.context_exhausted": "drop",

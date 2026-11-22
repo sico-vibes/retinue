@@ -1011,3 +1011,84 @@ Both events are `drop` in `tiers.json`, so no paired device ever sees one. A cle
 - `session.suggestion.dismiss { sessionId }` gives `{ sessionId, cleared: boolean }`; `false` when there was nothing to clear. A missing or empty `sessionId` is `invalid_argument`.
 
 **Who is affected.** The window (composer ghost text, Tab and Right Arrow, the Settings switch) is a separate lane; the daemon keeps the contract above. No existing reply shape changed, and a window that does not know these events ignores them.
+
+## Installing and updating the coding-agent CLIs (21 November 2026)
+
+The owner's rule is that an install or an update never shows a terminal window. The
+daemon does it, in one module (`crates/retinue-daemon/src/agent_install.rs`), from
+the design in `docs/research/cli-install-and-update.md`, section 8. Two modes per
+provider: **Adopt** runs the installer that owns the CLI the owner already has;
+**Manage** downloads a pinned, digest-checked build into
+`<data>/agents/<provider>/<version>/` and launches it by path.
+
+All five methods are class `never` in `tiers.json` and the event is `drop`: no
+paired device, no phone, no other machine and no bot reaches them. The Retinue MCP
+has no install tool and `machine.*` has no pass-through.
+
+| Method | Params | Answer |
+|---|---|---|
+| `runtime.install.plan` | `{ provider }` | `{ plan }`: everything the consent card names (below). Reads the publisher's release data, so it needs the network; writes nothing. |
+| `runtime.install` | `{ provider, confirm: true, version, digestPrefix }` | `{ jobId, provider, mode, version }`, or `{ jobId, joined: true }` when this provider already has an install running. |
+| `runtime.install.status` | `{ jobId }` | `{ job }`: `phase`, `bytesDone`, `bytesTotal`, `version`, the installer's last line (redacted, 200 characters) and a fixed failure sentence. |
+| `runtime.install.cancel` | `{ jobId }` | `{ cancellationRequested: true }`; the staging folder is removed and nothing is published. |
+| `runtime.install.remove` | `{ provider, confirm: true }` | `{ removed: true, provider, kept: [folder names] }`. Only Retinue's own copy is ever deleted; a folder a process is using is kept and named. |
+
+**The plan** is `{ provider, displayName, mode, version, sourceHost, bytes,
+digestPrefix, digestAlgorithm, target, freeBytes, runsTurn, supported, reason, page,
+owner, installed: { version, digestPrefix, damaged }, previousVersion, autoUpdate }`.
+`mode` is `adopt`, `manage` or `link`. `digestPrefix` is the first 12 hex characters
+of the publisher's digest and nothing more. No URL is ever returned.
+
+- **Modes.** `agents.<provider>.mode` is `adopt` or `manage`, defaulting to Adopt
+  when a CLI is found on PATH and Manage when not. `agents.<provider>.autoUpdate`
+  is a boolean, off by default; `settings.set` accepts both keys and refuses
+  `agents.<provider>.consent`, which the installer writes itself with
+  `{ version, digest, sourceHost, at }`.
+- **Link providers.** Cursor, Grok, Antigravity and Qwen have no settled digest
+  story in this version: the plan answers `mode: "link"`, `supported: false` and
+  the publisher's `page`, and `runtime.install` refuses with that sentence.
+- **Consent.** `runtime.install` requires `confirm: true` and the `version` and
+  `digestPrefix` the plan returned. A publisher that moved the release in between
+  answers `conflict` and "The plan changed since it was shown. Review it again."
+  The one exception is `agents.<provider>.autoUpdate` on **and** a stored consent
+  for the same `sourceHost`: then a caller may omit both, and the daemon installs
+  only the version and digest its own fresh plan read. A different host, or no
+  consent yet, still needs the exact pair. The switch changes who sees a card, never
+  what is checked.
+- **A running turn.** Manage proceeds (its version folders never collide) and the
+  row says "takes effect after this turn"; Adopt refuses with "A bot is using this
+  coding agent. Try again when its turn has finished." After a Manage install the
+  daemon rescans discovery, closes this provider's idle sessions so their shared
+  adapter process exits, and leaves a running one alone.
+- **Discovery.** After PATH, discovery reads `<data>/agents/<provider>/current.json`.
+  PATH wins unless the provider's mode is Manage. For a managed copy the runtime id
+  hashes the provider's managed root, not the version folder, so an update never
+  changes the runtime id (the lesson of 21 November 2026). A receipt that is absent,
+  malformed or names an entry outside its version folder is not launched; the plan
+  reports `installed.damaged`.
+
+**Event.** `runtime.install.changed { provider, phase, version, bytesDone,
+bytesTotal }` on every phase change and at most every 500 ms while downloading.
+Phases: `downloading`, `checking`, `installing`, `done`, `failed`, `cancelled`.
+No path, no URL, no file content.
+
+**The rules.** HTTPS only from `downloads.claude.ai`, `registry.npmjs.org`,
+`api.github.com`, `github.com` and GitHub's two release-asset hosts; redirects only
+to those hosts; no proxy; the publisher's digest compared while the bytes stream and
+before anything is unpacked; archive entries canonicalised and refused if they
+escape (no `..`, absolute names, symlinks or hard links); a 1 GiB unpacked cap, a
+512 MiB download cap, a free-space check in the plan and a 30-minute limit; one
+install per provider; the receipt written last through a temp file; the previous
+version kept for one "Go back", swept at daemon start and after each install with
+any file in use left alone. Every child goes through `retinue_process::prepare_command`,
+so none shows a window.
+
+**Headless hosts.** `console.agent.plan`, `console.agent.install` (with
+`confirm: true`, which is the `--yes`) and `console.agent.status` are the console's
+own reach, token file only. `retinued agents install <provider> [--yes]` prints the
+plan card and then the progress.
+
+**Who is affected.** The window's Install/Update buttons, consent card and progress
+row in Settings › Providers are the Director's lane; this is the contract they use.
+A daemon that does not know these methods answers `unsupported`, and an older
+window ignores the event.

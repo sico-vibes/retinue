@@ -161,6 +161,11 @@ mod plan;
 mod docs_search;
 /// 17 November 2026 (multi-device piece 8): where this host keeps Retinue's data.
 mod paths;
+/// Installing and updating the coding-agent CLIs from inside Retinue
+/// (21 November 2026): Adopt the owner's own copy, or Manage one Retinue owns.
+mod agent_install;
+#[cfg(test)]
+mod provider_install_tests;
 /// 17 November 2026 (multi-device piece 8): the console of a host with no window.
 mod console;
 /// 20 November 2026: the background cleanup of old tool payloads and events,
@@ -240,6 +245,9 @@ struct AppState {
     /// 21 November 2026: the composer's follow-up suggestion, one per
     /// conversation. Memory only: never in the database, a log or a backup.
     follow_up: Arc<follow_up::FollowUp>,
+    /// 21 November 2026: the agent installs this boot has run, and the one job
+    /// each provider may have at a time. Memory only.
+    agent_install: Arc<agent_install::Installs>,
 }
 #[derive(Clone)]
 struct Adapters {
@@ -808,7 +816,22 @@ fn runtime_off_for(db: &Storage, runtime: &Value) -> DispatchError {
 /// saved row simply has no runtime until it is turned on, and then the next scan
 /// probes it.
 async fn discover_enabled(st: &AppState) -> Vec<retinue_runtime::DiscoveredRuntime> {
-    retinue_runtime::discover_except(&providers_to_skip(&st.db)).await
+    retinue_runtime::discover_except_with(&providers_to_skip(&st.db), &managed_sources(st)).await
+}
+
+/// Retinue's own copies of the CLIs (21 November 2026): where they live, and the
+/// providers the owner chose to run from one. PATH still wins for every other
+/// provider, so the owner's own install is never displaced by accident.
+fn managed_sources(st: &AppState) -> retinue_runtime::ManagedSources {
+    let settings = st.db.settings().unwrap_or(Value::Null);
+    retinue_runtime::ManagedSources {
+        root: sandbox::data_folder(st).map(|data| data.join(retinue_runtime::MANAGED_FOLDER)),
+        prefer: retinue_runtime::discovery_ids()
+            .into_iter()
+            .filter(|provider| settings[agent_install::mode_key(provider)].as_str() == Some(agent_install::MODE_MANAGE))
+            .map(str::to_owned)
+            .collect(),
+    }
 }
 
 /// The provider ids discovery must leave alone: exactly the ones the owner
@@ -1165,7 +1188,7 @@ async fn refresh_runtime_discovery(st: &AppState, work: impl std::future::Future
 
 /// A scan that cannot join an earlier one: the setting just changed, so the
 /// cached answer is stale.
-async fn refresh_runtime_discovery_now(st: &AppState) {
+pub(crate) async fn refresh_runtime_discovery_now(st: &AppState) {
     *st.discovery.lock().await = None;
     if refresh_runtime_discovery(st, discover_enabled(st)).await.is_err() { tracing::warn!("runtime discovery could not be persisted"); }
 }
@@ -1499,6 +1522,11 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             st.db.exec_snapshot_latest(sid).map(|v|v.unwrap_or(Value::Null)).map_err(|e|derr("internal",&e.to_string(),StatusCode::INTERNAL_SERVER_ERROR))
         }
         "runtime.capabilities" => runtime_capabilities(st,&p).await,
+        // 21 November 2026: installing and updating the coding-agent CLIs. Every
+        // one of these is `never` remote (tiers.json): an install is a download
+        // and an execution, and only the owner at this desktop, or a headless
+        // host's own console, may start one.
+        "runtime.install.plan" | "runtime.install" | "runtime.install.status" | "runtime.install.cancel" | "runtime.install.remove" => agent_install::rpc(st, method, &p).await,
         "runtime.models" => runtime_models(st, &p).await,
         "agent.list" => {
             let include=match p.get("includeArchived"){None=>false,Some(v)=>v.as_bool().ok_or_else(||derr("invalid_argument","includeArchived must be a boolean",StatusCode::BAD_REQUEST))?};
@@ -2264,7 +2292,7 @@ async fn dispatch(st: &AppState, method: &str, p: Value) -> Result<Value, Dispat
             }
             let value = validate_setting(k, &p["value"])?;
             if k == "permissions.default_mode" && value == "bypass" && p["confirm"] != true { return Err(derr("invalid_argument", "Confirm making Full access the default first.", StatusCode::BAD_REQUEST)); }
-            let validation_key = k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k==project_share::SETTING_ENABLED||k==project_share::SETTING_FOLDER||k=="composer.sendShortcut"||k=="shortcuts.bindings"||k=="experimental.ownerComputer"||k=="ownerComputer.denyList"||k=="prompts.contextFirst"||k=="chat.followUpSuggestions";
+            let validation_key = k.starts_with("agents.")||k.starts_with("exec_gate.")||k=="permissions.default_mode"||k=="notifications.enabled"||k=="experimental.autoRetry"||k=="experimental.memory"||k=="memory.sharedAgentWrites"||k=="skills.enabled"||k=="profile.about"||k=="retry.maxWaitSecs"||k=="automations.paused"||k=="automations.maxConcurrent"||k=="task.concurrency.max"||k=="task.globalPaused"||k=="questions.expirySecs"||k=="appearance.style"||k=="appearance.accent"||k=="appearance.density"||k=="appearance.wallpaper"||k=="appearance.glass"||k=="appearance.font"||k=="appearance.monoFont"||k=="hints.seen"||k=="onboarding.tour"||k=="companion.focusMode"||k=="companion.positions"||k=="concurrency.botsAtOnce"||k=="usage.readCliSignIns"||k=="projects.folder"||k==project_share::SETTING_ENABLED||k==project_share::SETTING_FOLDER||k=="composer.sendShortcut"||k=="shortcuts.bindings"||k=="experimental.ownerComputer"||k=="ownerComputer.denyList"||k=="prompts.contextFirst"||k=="chat.followUpSuggestions";
             let events=st.db.set_setting(k, &value).map_err(|e| {
                 derr(
                     if validation_key{"invalid_argument"}else{"internal"},
@@ -2418,6 +2446,9 @@ fn validate_setting(k: &str, value: &Value) -> Result<Value, DispatchError> {
     // (not in `tiers.json`'s `settingsAllowlist`), on by default, and travelling
     // in a backup like any other preference.
     if k == "chat.followUpSuggestions" && !value.is_boolean() { return Err(derr("invalid_argument", "chat.followUpSuggestions requires a JSON boolean", StatusCode::BAD_REQUEST)); }
+    // 21 November 2026: the install choice per provider, and its "keep this one up
+    // to date" switch. The consent record is the installer's alone.
+    if k.starts_with("agents.") { agent_install::validate_setting(k, value)?; }
     if k == "delegation.paused" && !value.is_boolean() { return Err(derr("invalid_argument", "delegation.paused requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "companion.focusMode" && !value.is_boolean() { return Err(derr("invalid_argument", "companion.focusMode requires a JSON boolean", StatusCode::BAD_REQUEST)); }
     if k == "companion.positions" && !valid_companion_positions(value) { return Err(derr("invalid_argument", "companion.positions must map at most 8 display names to {x,y} numbers", StatusCode::BAD_REQUEST)); }
@@ -4077,7 +4108,7 @@ async fn cancel_session_turn_matched(st: &AppState, id: &str, expected: Option<&
 
 /// Close a conversation's adapter process and release its turn. Shared by the
 /// `session.close` RPC and warm-up eviction.
-async fn close_session(st: &AppState, id: &str) -> Result<Value, DispatchError> {
+pub(crate) async fn close_session(st: &AppState, id: &str) -> Result<Value, DispatchError> {
     st.warm_lru.lock().await.retain(|warmed| warmed != id);
     let gate = gate_for_session(st, id).await;
     let (active, active_turn) = {
@@ -6735,6 +6766,7 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
         channels: Arc::new(channels::Channels::default()),
         console: Arc::new(console::Console::default()),
         follow_up: Arc::new(follow_up::FollowUp::default()),
+        agent_install: Arc::new(agent_install::Installs::default()),
     };
     // A send right after boot must not fail with "runtime is not installed":
     // show the saved roster until discovery replaces it. `validate_spawn_target`
@@ -6796,6 +6828,10 @@ async fn run() -> Result<(), Box<dyn std::error::Error>> {
     // gone, before anything is served from them.
     sandbox::at_startup(&st);
     console::startup(&st);
+    // 21 November 2026: the version folders beyond the current one and the one
+    // kept for going back, and any staging folder a crash left. An in-use file is
+    // skipped and retried next start.
+    agent_install::startup(&st);
     // The outside-session hook needs this run's address and token, and an MCP
     // client needs its endpoint, so both are written before the ready line.
     outside::startup(&st);
@@ -8366,7 +8402,7 @@ mod phase2a_tests {
     /// a second state on the same file.
     pub(crate) fn state_with(db:Storage)->(AppState,broadcast::Receiver<EventEnvelope>){
         let db=Arc::new(db);db.upsert_runtime(&json!({"id":"rt-test","provider":"codex","status":"offline"})).unwrap();let(events,rx)=broadcast::channel(64);
-        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default()),channels:Arc::new(channels::Channels::default()),console:Arc::new(console::Console::default()),follow_up:Arc::new(follow_up::FollowUp::default())};(st,rx)
+        let st=AppState{token:Arc::new("test-only".into()),started:Instant::now(),db,events,runtimes:Arc::new(RwLock::new(vec![json!({"id":"rt-test","provider":"codex","status":"offline"})])),catalog:Arc::new(catalog::CatalogCache::default()),discovery:Arc::new(Mutex::new(None)),adapters:Arc::new(Adapters{acp:Arc::new(AcpAdapter::default()),codex:Arc::new(CodexAdapter::default()),claude:Arc::new(ClaudeAdapter::default())}),sessions:Arc::new(Mutex::new(HashMap::new())),active_turns:Arc::new(Mutex::new(HashMap::new())),denied_turns:Arc::new(Mutex::new(HashSet::new())),accepted_turns:Arc::new(Mutex::new(HashSet::new())),session_gates:Arc::new(Mutex::new(HashMap::new())),deleted_sessions:Arc::new(Mutex::new(HashSet::new())),quota_poll_gate:Arc::new(Mutex::new(QuotaPollGate::default())),stopping:Arc::new(tokio::sync::Notify::new()),team:Arc::new(team::Team::default()),queue:Arc::new(queue::Queue::default()),automations:Arc::new(automations::Automations::default()),outside:Arc::new(outside::Outside::default()),external:Arc::new(external::External::default()),memory:Arc::new(memory::Memory::default()),knowledge:Arc::new(knowledge::Knowledge::default()),skills:Arc::new(skills::Skills::default()),backup_previews:Arc::new(backup::BackupPreviews::default()),remote:Arc::new(remote::RemoteState::new()),machines:Arc::new(machines::Machines::default()),activation_locks:Arc::new(Mutex::new(HashMap::new())),starting_cancels:Arc::new(Mutex::new(HashSet::new())),warm_lru:Arc::new(Mutex::new(Vec::new())),preview:Arc::new(preview::Preview::default()),attention:Arc::new(attention::Attention::default()),computer:Arc::new(computer::Computer::default()),browser:Arc::new(browser::Browser::default()),owner_computer:Arc::new(owner_computer::OwnerComputer::default()),channels:Arc::new(channels::Channels::default()),console:Arc::new(console::Console::default()),follow_up:Arc::new(follow_up::FollowUp::default()),agent_install:Arc::new(agent_install::Installs::default())};(st,rx)
     }
     #[tokio::test]
     async fn bot_purge_is_confirmed_atomic_and_removes_both_sides_only() {

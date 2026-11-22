@@ -109,6 +109,11 @@ export const ALLOWLIST = [
   },
   {
     rule: 'daemon-network',
+    path: 'crates/retinue-daemon/src/agent_install.rs',
+    reason: 'downloads a pinned, digest-checked coding-agent build from the fixed host list, HTTPS only (21 November 2026)',
+  },
+  {
+    rule: 'daemon-network',
     path: 'crates/retinue-daemon/src/remote/',
     reason: 'the Remote gateway, its push sender and its native TLS listener',
   },
