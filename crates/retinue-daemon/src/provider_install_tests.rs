@@ -494,11 +494,15 @@ fn one_previous_version_is_kept_and_an_in_use_one_is_left() {
     };
     let kept = agent_install::sweep_versions(&folder, &["1.0.0".to_owned(), "2.0.0".to_owned()]);
     assert!(folder.join("1.0.0").is_dir() && folder.join("2.0.0").is_dir(), "the current and the previous version stay");
-    if cfg!(windows) {
+    // `held` exists only on Windows, so the two halves are compiled apart.
+    #[cfg(windows)]
+    {
         assert_eq!(kept, vec!["0.9.0".to_owned()], "a file in use is left, and reported");
         assert!(folder.join("0.9.0").is_dir());
         drop(held);
-    } else {
+    }
+    #[cfg(not(windows))]
+    {
         assert!(kept.is_empty());
         assert!(!folder.join("0.9.0").exists());
     }

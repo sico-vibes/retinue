@@ -1622,7 +1622,7 @@ async fn drain_tail<R: tokio::io::AsyncRead + Unpin>(stream: Option<R>) -> Strin
 /// The last non-empty line of an installer's output, redacted and bounded. Never a
 /// path, never a secret.
 pub(crate) fn last_line(text: &str) -> String {
-    let line = text.lines().map(str::trim).filter(|line| !line.is_empty()).next_back().unwrap_or("");
+    let line = text.lines().map(str::trim).rfind(|line| !line.is_empty()).unwrap_or("");
     crate::diagnostics::redact(line).chars().take(MAX_LINE_CHARS).collect()
 }
 
