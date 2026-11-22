@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "d2d74344",
-  "documentCount": 450,
+  "revision": "6ef654e2",
+  "documentCount": 451,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -24325,6 +24325,36 @@
       "section": "Release notes",
       "status": "Release note",
       "sha256": "4a37fe22b265047ed8a6eb1fd373d29f6d9c890ebd97e15c038e6f3a18b18e8d",
+      "headings": [
+        {
+          "id": "new",
+          "text": "New",
+          "level": 2
+        },
+        {
+          "id": "changed",
+          "text": "Changed",
+          "level": 2
+        },
+        {
+          "id": "for-the-curious",
+          "text": "For the curious",
+          "level": 2
+        },
+        {
+          "id": "installation",
+          "text": "Installation",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/releases/0.2.0-beta.6",
+      "source": "docs/releases/0.2.0-beta.6.md",
+      "title": "Retinue 0.2.0-beta.6",
+      "section": "Release notes",
+      "status": "Release note",
+      "sha256": "26fe4bdadaa19f50941aa8b726c216d6fc6e974b5728dc0d64920c9076f38891",
       "headings": [
         {
           "id": "new",

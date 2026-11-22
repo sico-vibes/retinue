@@ -810,7 +810,10 @@ pub(crate) fn classify(executable: &Path) -> &'static str {
         "npm"
     } else if path.contains("\\microsoft\\winget\\") {
         "winget"
-    } else if path.contains("\\program files") || path.contains("\\programdata\\chocolatey\\") || path.contains("\\windows\\system32") {
+    } else if path.contains("\\program files") || path.contains("\\programdata\\chocolatey\\") || path.contains("\\windows\\system32")
+        // On Linux and macOS a copy under /usr or /opt belongs to the system package manager or root.
+        || path.starts_with("\\usr\\") || path.starts_with("\\opt\\")
+    {
         "system"
     } else {
         "own"

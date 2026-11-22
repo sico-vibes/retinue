@@ -272,13 +272,13 @@ fn table_has_column(connection: &Connection, table: &str, column: &str) -> Resul
 fn opencode_files(db: &Path) -> Result<Vec<Found>, String> {
     let copy = TempCopy::of(db)?;
     let connection = open_copy(&copy.path)?;
-    let archived = if table_has_column(&connection, "session_v2", "archived")? { "COALESCE(s.archived,0)" } else { "0" };
+    let archived = if table_has_column(&connection, "session_v2", "archived")? { "COALESCE(s.archived,0)" } else { "NULL" };
     let sql = format!(
         "SELECT s.id,s.time_updated,COALESCE(s.directory,''),COALESCE((SELECT SUM(LENGTH(m.data)) FROM session_message m WHERE m.session_id=s.id),0),{archived} FROM session_v2 s WHERE s.parent_id IS NULL ORDER BY s.time_updated DESC"
     );
     let mut statement = connection.prepare(&sql).map_err(|error| format!("the OpenCode database could not be read: {error}"))?;
     let rows = statement
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?, row.get::<_, i64>(4)?)))
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?, row.get::<_, Option<i64>>(4)?)))
         .map_err(|error| format!("the OpenCode database could not be read: {error}"))?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|error| format!("the OpenCode database could not be read: {error}"))?;
@@ -291,7 +291,8 @@ fn opencode_files(db: &Path) -> Result<Vec<Found>, String> {
             bytes: bytes.max(0) as u64,
             updated: chrono::DateTime::<Utc>::from_timestamp_millis(updated).map(SystemTime::from).unwrap_or(SystemTime::UNIX_EPOCH),
             folder,
-            archived: Some(archived != 0),
+            // Unknown when this OpenCode has no archived column, not "not archived".
+            archived: archived.map(|flag| flag != 0),
         })
         .collect())
 }
