@@ -54,6 +54,9 @@ tracing-appender = "0.2"
 tracing-subscriber.workspace = true
 uuid.workspace = true
 zip = { version = "2", default-features = false, features = ["deflate"] }
+# 21 November 2026: npm publishes its platform binaries as `.tgz`, so a managed
+# OpenCode copy is a gzip'd tar. `flate2` is already in the tree through `zip`.
+flate2 = "1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_ToolHelp", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }

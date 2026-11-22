@@ -20,6 +20,8 @@ This page explains the four adapters and the execution options they accept. Exac
 - aggregate auth state and per-gateway auth states where a CLI has more than one gateway;
 - a status: online, error or unavailable.
 
+After PATH, discovery also reads Retinue's own copies: `<data>/agents/<provider>/current.json`, written last by the installer (`runtime.install.*`, 21 November 2026). The owner's own install wins unless that provider's `agents.<provider>.mode` is `manage`. A managed copy's runtime id hashes the provider's managed root, not the version folder, so an update does not change it. A receipt that is missing, malformed or names an entry outside its version folder is reported damaged and never launched. See [IPC and events](ipc-and-events.md) for the install methods.
+
 `runtime.models` returns a catalog with a `source`:
 
 | Source | Meaning |

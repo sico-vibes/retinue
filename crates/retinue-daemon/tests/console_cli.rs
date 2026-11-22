@@ -47,10 +47,12 @@ fn run_client(args: &[&str]) -> (Option<i32>, String, String, bool) {
 
 #[test]
 fn every_console_verb_is_reached_before_a_daemon_starts() {
-    let verbs: [&[&str]; 5] = [
+    let verbs: [&[&str]; 6] = [
         &["settings", "get"],
         &["settings", "set", "projects.devices.enabled", "true"],
         &["agents"],
+        // 21 November 2026: the headless install verb, added beside `agents`.
+        &["agents", "install", "claude"],
         &["bot", "list"],
         &["status"],
     ];

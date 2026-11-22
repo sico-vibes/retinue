@@ -87,6 +87,88 @@ pub struct ResolvedCommand {
     pub args: Vec<String>,
 }
 
+/// Where Retinue's own copies of the CLIs live (21 November 2026): one folder per
+/// provider under `<data>/agents`, each with version folders and a `current.json`
+/// receipt written last by the daemon's installer (`agent_install.rs`).
+pub const MANAGED_FOLDER: &str = "agents";
+/// The receipt discovery reads. A version folder without one is damaged and is
+/// never launched.
+pub const MANAGED_RECEIPT: &str = "current.json";
+
+/// What discovery should do with the managed copies: where they are, and which
+/// providers the owner chose to run from one (`agents.<provider>.mode` = manage).
+/// The empty value is the behaviour before this existed: PATH only.
+#[derive(Debug, Clone, Default)]
+pub struct ManagedSources {
+    pub root: Option<PathBuf>,
+    /// Providers whose stored choice is Manage: the managed copy wins over PATH.
+    pub prefer: Vec<String>,
+}
+
+/// One managed copy discovery found: the executable, and the provider's managed
+/// root, which is what the runtime id hashes so an update never changes it.
+#[derive(Debug, Clone)]
+pub struct ManagedEntry {
+    pub command: ResolvedCommand,
+    pub root: PathBuf,
+    pub version: String,
+    pub digest: String,
+}
+
+/// The folder one provider's managed copies live in.
+pub fn managed_folder(root: &Path, provider: &str) -> PathBuf {
+    root.join(provider)
+}
+
+/// The managed copy a provider's receipt names, or `None` when there is none,
+/// when the receipt is damaged, or when its entry escapes the version folder.
+/// Nothing here executes or trusts the file beyond its path.
+pub fn managed_entry(root: &Path, provider: &str) -> Option<ManagedEntry> {
+    let folder = managed_folder(root, provider);
+    let metadata = std::fs::metadata(folder.join(MANAGED_RECEIPT)).ok()?;
+    if metadata.len() > 64 * 1024 {
+        return None;
+    }
+    let text = std::fs::read_to_string(folder.join(MANAGED_RECEIPT)).ok()?;
+    let receipt: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let version = receipt["version"].as_str()?;
+    if !safe_version_folder(version) {
+        return None;
+    }
+    let entry = receipt["entry"].as_str()?;
+    if !safe_relative_entry(entry) {
+        return None;
+    }
+    let version_folder = folder.join(version);
+    // The check is on the canonical paths; the path handed out stays plain, so a
+    // `\\?\` prefix never reaches an adapter's command line.
+    let canonical_root = std::fs::canonicalize(&version_folder).ok()?;
+    let canonical_executable = std::fs::canonicalize(version_folder.join(entry)).ok()?;
+    if !canonical_executable.starts_with(&canonical_root) || !canonical_executable.is_file() {
+        return None;
+    }
+    Some(ManagedEntry {
+        command: ResolvedCommand { executable: version_folder.join(entry), args: vec![] },
+        root: folder,
+        version: version.to_owned(),
+        digest: receipt["digest"].as_str().unwrap_or("").to_owned(),
+    })
+}
+
+/// A version used as a folder name: a label the installer wrote, never a path.
+pub fn safe_version_folder(version: &str) -> bool {
+    !version.is_empty() && version.len() <= 64 && version != "." && version != ".." && version.chars().all(|c| c.is_ascii_alphanumeric() || "._+-".contains(c))
+}
+
+/// A receipt's entry: a relative path inside its version folder.
+pub fn safe_relative_entry(entry: &str) -> bool {
+    let path = Path::new(entry);
+    !entry.is_empty()
+        && entry.len() <= 200
+        && !path.is_absolute()
+        && path.components().all(|component| matches!(component, std::path::Component::Normal(_)))
+}
+
 fn executable_extensions() -> Vec<&'static str> {
     #[cfg(windows)]
     {
@@ -252,45 +334,67 @@ pub async fn discover() -> Vec<DiscoveredRuntime> { discover_except(&[]).await }
 pub async fn discover_except(disabled: &[String]) -> Vec<DiscoveredRuntime> {
     // No memory and no forgiveness: the old behaviour, for a caller that does
     // not hold a cache (the account tests, and the daemon's own tests).
-    discover_except_cached(disabled, &mut ProbeCache::empty(), false).await.runtimes
+    discover_except_managed(disabled, &ManagedSources::default(), &mut ProbeCache::empty(), false).await.runtimes
 }
 
-/// The scan the daemon runs, with the version and protocol answers kept per
-/// binary (21 November 2026). `force` is an explicit "Scan again": it bypasses
+/// Discovery with Retinue's own copies in the answer (21 November 2026): after
+/// PATH, `<root>/<provider>/current.json`. PATH wins unless the provider's stored
+/// choice is Manage, so the owner's own install keeps working as it always did.
+pub async fn discover_except_with(disabled: &[String], sources: &ManagedSources) -> Vec<DiscoveredRuntime> {
+    discover_except_managed(disabled, sources, &mut ProbeCache::empty(), false).await.runtimes
+}
+
+/// The scan with the version and protocol answers kept per binary (21 November
+/// 2026) and no managed copies. `force` is an explicit "Scan again": it bypasses
 /// the cache and probes every installed CLI, and the fresh answers replace the
 /// cached ones. A turned-off provider is still never resolved or probed.
 pub async fn discover_except_cached(disabled: &[String], cache: &mut ProbeCache, force: bool) -> DiscoveryReport {
+    discover_except_managed(disabled, &ManagedSources::default(), cache, force).await
+}
+
+/// The scan the daemon runs: Retinue's own copies of the CLIs and the probe
+/// cache together (22 November 2026, when the installer and the start-up speed
+/// work met). A managed copy is cached by its own executable, like any other.
+pub async fn discover_except_managed(disabled: &[String], sources: &ManagedSources, cache: &mut ProbeCache, force: bool) -> DiscoveryReport {
     let skip: Vec<bool> = discovery_ids().iter().map(|id| disabled.iter().any(|off| off == id)).collect();
     // Resolve away from the async executor; PATH may include slow network drives.
     // A table provider's executable is its row's `command` (Cursor's CLI is `agent`, not `cursor`).
     let specs = tokio::task::spawn_blocking({
         let skip = skip.clone();
-        move || discovery_ids().into_iter().zip(skip).map(|(id, off)| (id, if off { None } else { resolve_command(acp_provider(id).map_or(id, |row| row.command)) }, off)).collect::<Vec<_>>()
+        let root = sources.root.clone();
+        move || discovery_ids().into_iter().zip(skip).map(|(id, off)| if off { (id, None, None, off) } else {
+            (id, resolve_command(acp_provider(id).map_or(id, |row| row.command)), root.as_deref().and_then(|root| managed_entry(root, id)), off)
+        }).collect::<Vec<_>>()
     }).await;
     let Ok(specs) = specs else { return DiscoveryReport { runtimes: Vec::new(), cached: 0, probed: 0, spawns: 0 } };
     // The OpenCode stored-credential check and Pi's `auth.json` check are
     // CLI-free and only ever read these variables; tests pass a synthetic set
     // instead.
     let environment = discovery_environment();
+    let prefer = &sources.prefer;
     let mut prepared = Vec::with_capacity(specs.len());
     let mut candidate = std::collections::BTreeSet::new();
     let mut cached = 0usize;
     let mut probed = 0usize;
-    for (id, resolved, off) in specs {
+    for (id, resolved, managed, off) in specs {
+        let (resolved, identity) = match managed {
+            Some(entry) if resolved.is_none() || prefer.iter().any(|chosen| chosen == id) => (Some(entry.command), Some(entry.root)),
+            _ => (resolved, None),
+        };
         if let Some(resolved) = resolved.as_ref() { candidate.insert(resolved.executable.to_string_lossy().to_lowercase()); }
         // A turned-off provider is never asked, so it is never a cache hit either.
         let hit = if off || force { None } else { resolved.as_ref().and_then(|resolved| cache.lookup(&resolved.executable)).cloned() };
         if !off {
             if hit.is_some() { cached += 1 } else { probed += 1 }
         }
-        prepared.push((id, resolved, off, hit));
+        prepared.push((id, resolved, identity, off, hit));
     }
     let spawns = SpawnCounter::new();
-    let probes = prepared.into_iter().map(|(id, resolved, off, hit)| {
+    let probes = prepared.into_iter().map(|(id, resolved, identity, off, hit)| {
         let environment = &environment;
         let spawns = spawns.clone();
         async move {
-            if off { (None, None) } else { discover_one_with(id, resolved, environment, hit, &spawns).await }
+            if off { (None, None) } else { discover_one_with(id, resolved, identity.as_deref(), environment, hit, &spawns).await }
         }
     });
     let answered = futures_util::future::join_all(probes).await;
@@ -342,23 +446,26 @@ pub async fn version_of(executable: &Path, args: &[String]) -> Option<String> {
 /// One provider's probes, public so the account tests can drive a fake CLI
 /// through the exact discovery path. It never reads or writes a cache.
 pub async fn discover_one(id: &str, resolved: Option<ResolvedCommand>, environment: &[(String, String)]) -> Option<DiscoveredRuntime> {
-    discover_one_with(id, resolved, environment, None, &SpawnCounter::detached()).await.0
+    discover_one_with(id, resolved, None, environment, None, &SpawnCounter::detached()).await.0
 }
 
 /// One provider's probes, with the binary's version and protocol answer served
 /// from `cached` when it describes this exact file (21 November 2026). The
 /// second value is an entry to store: written only when a protocol check passed,
-/// so a failure is retried on the next scan.
+/// so a failure is retried on the next scan. `identity` is the path the runtime
+/// id hashes: for a managed copy that is the provider's managed root, not the
+/// version folder, so an update never orphans a bot (lesson of 21 November 2026).
 async fn discover_one_with(
     id: &str,
     resolved: Option<ResolvedCommand>,
+    identity: Option<&Path>,
     environment: &[(String, String)],
     cached: Option<ProbeEntry>,
     spawns: &SpawnCounter,
 ) -> (Option<DiscoveredRuntime>, Option<ProbeEntry>) {
     let Some(resolved) = resolved else { return (None, None) };
     let mut runtime = DiscoveredRuntime {
-        id: format!("rt_{id}_{}", short_hash(&resolved.executable.to_string_lossy())),
+        id: format!("rt_{id}_{}", short_hash(&identity.unwrap_or(resolved.executable.as_path()).to_string_lossy())),
         host_id: "host_windows_local".into(), provider: id.into(), display_name: provider_display_name(id).into(),
         protocol_family: match id { "codex" => ProtocolFamily::CodexAppServer, "pi" => ProtocolFamily::PiRpc, p if is_acp_provider(p) => ProtocolFamily::Acp, _ => ProtocolFamily::ClaudeStream },
         executable_path: resolved.executable.to_string_lossy().into_owned(), launch_args: resolved.args.clone(),
@@ -1575,5 +1682,59 @@ mod tests {
         let row = discover_one("qwen", Some(useless), &[]).await.expect("a failed probe keeps its row");
         assert_eq!(row.status, "error");
         assert_eq!(row.probe_step.as_deref(), Some("Protocol check"));
+    }
+
+    // 21 November 2026: Retinue's own copy, and the receipt that names it.
+    #[test]
+    fn a_managed_receipt_names_the_executable_and_the_root_it_hashes() {
+        use serde_json::json;
+        let data = std::env::temp_dir().join(format!("retinue-managed-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&data);
+        let folder = managed_folder(&data, "claude");
+        std::fs::create_dir_all(folder.join("2.1.330").join("bin")).unwrap();
+        std::fs::write(folder.join("2.1.330").join("bin").join("claude.exe"), b"MZ").unwrap();
+        let receipt = serde_json::json!({"version": "2.1.330", "entry": "bin/claude.exe", "digest": "abc", "bytes": 2});
+        std::fs::write(folder.join(MANAGED_RECEIPT), receipt.to_string()).unwrap();
+        let entry = managed_entry(&data, "claude").expect("the receipt names a real file");
+        assert_eq!(entry.version, "2.1.330");
+        assert_eq!(entry.digest, "abc");
+        assert_eq!(entry.root, folder);
+        assert_eq!(entry.command.executable, folder.join("2.1.330").join("bin").join("claude.exe"));
+        assert_eq!(entry.command.args, Vec::<String>::new());
+        // The runtime id hashes the provider's managed root, so a new version
+        // folder is the same runtime (21 November 2026: a moved executable
+        // orphaned every bot on it).
+        assert_eq!(short_hash(&entry.root.to_string_lossy()), short_hash(&managed_folder(&data, "claude").to_string_lossy()));
+        // The receipt is what discovery reads, and every damage shape is
+        // refused rather than launched.
+        for damaged in [
+            json!({"version": "2.1.330", "entry": "../outside.exe"}),
+            json!({"version": "..", "entry": "claude.exe"}),
+            json!({"version": "2.1.330", "entry": "C:/Windows/System32/cmd.exe"}),
+            json!({"version": "2.1.330", "entry": "bin/missing.exe"}),
+            json!({"entry": "bin/claude.exe"}),
+        ] {
+            std::fs::write(folder.join(MANAGED_RECEIPT), damaged.to_string()).unwrap();
+            assert!(managed_entry(&data, "claude").is_none(), "{damaged}");
+        }
+        std::fs::write(folder.join(MANAGED_RECEIPT), b"{not json").unwrap();
+        assert!(managed_entry(&data, "claude").is_none());
+        std::fs::remove_file(folder.join(MANAGED_RECEIPT)).unwrap();
+        assert!(managed_entry(&data, "claude").is_none(), "no receipt is no managed copy");
+        let _ = std::fs::remove_dir_all(&data);
+    }
+
+    #[test]
+    fn a_receipt_entry_cannot_be_a_path_that_escapes() {
+        for good in ["claude.exe", "bin/claude.exe", "package\\bin\\opencode.exe"] {
+            assert!(safe_relative_entry(good), "{good}");
+        }
+        for bad in ["", "../claude.exe", "/etc/passwd", "C:\\Windows\\cmd.exe", "bin/../../x.exe", ".."] {
+            assert!(!safe_relative_entry(bad), "{bad}");
+        }
+        assert!(safe_version_folder("2.1.330") && safe_version_folder("1.6.0-beta.2"));
+        for bad in ["", ".", "..", "a/b", "a\\b", "a b"] {
+            assert!(!safe_version_folder(bad), "{bad}");
+        }
     }
 }

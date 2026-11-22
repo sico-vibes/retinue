@@ -218,6 +218,12 @@ pub async fn route(st: &AppState, method: &str, p: &Value) -> Result<Value, Disp
         "console.settings.get" => settings_get(st, p),
         "console.settings.set" => settings_set(st, p).await,
         "console.agents" => Ok(agents(st).await),
+        // 21 November 2026: installing and updating a CLI on a host with no
+        // window. The plan is the card: the terminal shows the version, host,
+        // size and digest prefix, and `--yes` is the owner's consent.
+        "console.agent.plan" => crate::agent_install::plan_reply(st, provider_arg(p)?).await,
+        "console.agent.install" => console_agent_install(st, p).await,
+        "console.agent.status" => crate::agent_install::rpc(st, "runtime.install.status", p).await,
         "console.bot.list" => bot_list(st).await,
         "console.bot.create" => bot_create(st, p).await,
         _ => Err(derr("unsupported", "method is not supported", StatusCode::NOT_FOUND)),
@@ -290,6 +296,30 @@ async fn settings_set(st: &AppState, p: &Value) -> Result<Value, DispatchError> 
     };
     remote::audit(st, None, "console", line).await;
     Ok(json!({"saved": true, "key": key, "value": value}))
+}
+
+/// The provider a console install names.
+fn provider_arg(p: &Value) -> Result<&str, DispatchError> {
+    p["provider"].as_str().map(str::trim).filter(|provider| !provider.is_empty()).ok_or_else(|| derr("invalid_argument", "provider is required: retinued agents install <provider>", StatusCode::BAD_REQUEST))
+}
+
+/// `console.agent.install`: without `confirm`, the plan the terminal shows; with
+/// it, the install, consented to by the version and digest that same plan named.
+/// The split exists because a terminal has no card to click: showing the plan and
+/// asking for `--yes` is the consent step.
+async fn console_agent_install(st: &AppState, p: &Value) -> Result<Value, DispatchError> {
+    let provider = provider_arg(p)?;
+    let plan = crate::agent_install::plan_reply(st, provider).await?;
+    if p["confirm"] != true {
+        return Ok(json!({"plan": plan["plan"], "confirmed": false}));
+    }
+    let params = json!({
+        "provider": provider,
+        "confirm": true,
+        "version": plan["plan"]["version"],
+        "digestPrefix": plan["plan"]["digestPrefix"],
+    });
+    crate::agent_install::rpc(st, "runtime.install", &params).await
 }
 
 /// `console.agents`: what the runtime discovery found on this host, whether each is
@@ -508,7 +538,7 @@ pub async fn run_cli(args: &[String]) -> i32 {
         "pair" => pair_command(rest).await,
         "remote" => remote_command(rest).await,
         "settings" => settings_command(rest).await,
-        "agents" => agents_command().await,
+        "agents" => agents_command(rest).await,
         "bot" => bot_command(rest).await,
         other => {
             eprintln!("Unknown command: {other}");
@@ -520,7 +550,8 @@ pub async fn run_cli(args: &[String]) -> i32 {
 
 fn usage() {
     eprintln!(
-        "usage:\n  retinued status                   show this host's version, folders and Remote state\n  retinued remote on [--method M]   turn the gateway on (tailscale or native)\n  retinued remote off               turn it off\n  retinued pair                     print a code and wait for a device\n  retinued pair list                show the waiting request\n  retinued pair confirm --tier T    approve it (viewer, chat or operator)\n  retinued pair deny                refuse it\n  retinued pair cancel              throw the open code away\n  retinued settings get [key]       show projects.devices.enabled and projects.devices.folder\n  retinued settings set <key> <value>   change one of those two\n  retinued agents                   what coding agents are installed and signed in\n  retinued bot add --name N --agent A [--model M] [--effort E] [--project F]\n  retinued bot list                 show this host's bots"
+        "usage:\n  retinued status                   show this host's version, folders and Remote state\n  retinued remote on [--method M]   turn the gateway on (tailscale or native)\n  retinued remote off               turn it off\n  retinued pair                     print a code and wait for a device\n  retinued pair list                show the waiting request\n  retinued pair confirm --tier T    approve it (viewer, chat or operator)\n  retinued pair deny                refuse it\n  retinued pair cancel              throw the open code away\n  retinued settings get [key]       show projects.devices.enabled and projects.devices.folder\n  retinued settings set <key> <value>   change one of those two\n  retinued agents                   what coding agents are installed and signed in
+  retinued agents install <provider> [--yes]   install or update one, with no window\n  retinued bot add --name N --agent A [--model M] [--effort E] [--project F]\n  retinued bot list                 show this host's bots"
     );
 }
 
@@ -713,7 +744,138 @@ fn setting_word(value: &Value) -> String {
 /// `retinued agents`: what the discovery found, and whether each is signed in. Never
 /// a credential: the state word and the CLI's own sign-in command, both of which the
 /// desktop's Agents page already shows.
-async fn agents_command() -> i32 {
+///
+/// `retinued agents install <provider> [--yes]` (21 November 2026) is the headless
+/// host's install and update. Without `--yes` it prints the same plan card the
+/// window shows and changes nothing; with it, the daemon downloads the version
+/// that card named, checks the publisher's digest and installs it under
+/// `<data>/agents/`.
+async fn agents_command(rest: &[String]) -> i32 {
+    let action = rest.first().map(String::as_str).unwrap_or("");
+    match action {
+        "" | "list" => agents_list().await,
+        "install" => match rest.get(1).map(String::as_str).filter(|provider| !provider.is_empty()) {
+            Some(provider) => agents_install(provider, rest.iter().any(|arg| arg == "--yes")).await,
+            None => {
+                eprintln!("Usage: retinued agents install <claude|codex|opencode|pi> [--yes]");
+                2
+            }
+        },
+        other => {
+            eprintln!("Unknown agents command: {other}");
+            usage();
+            2
+        }
+    }
+}
+
+/// The plan card, in words a terminal can show. No URL: the host and the digest
+/// prefix are what the owner checks.
+fn plan_lines(plan: &Value) -> Vec<String> {
+    let name = plan["displayName"].as_str().unwrap_or("This coding agent");
+    let mode = plan["mode"].as_str().unwrap_or("-");
+    let version = plan["version"].as_str().unwrap_or("-");
+    let mut lines = vec![format!("{name}: {mode}, version {version}")];
+    if let Some(host) = plan["sourceHost"].as_str() {
+        lines.push(format!("  from {host}"));
+    }
+    match plan["bytes"].as_u64() {
+        Some(bytes) => lines.push(format!("  {:.1} MB", bytes as f64 / (1024.0 * 1024.0))),
+        None => lines.push("  size not stated by the publisher".into()),
+    }
+    if let (Some(prefix), Some(algorithm)) = (plan["digestPrefix"].as_str(), plan["digestAlgorithm"].as_str()) {
+        lines.push(format!("  {algorithm} {prefix}…"));
+    }
+    if let Some(free) = plan["freeBytes"].as_u64() {
+        lines.push(format!("  {:.1} GB free", free as f64 / (1024.0 * 1024.0 * 1024.0)));
+    }
+    if let Some(page) = plan["page"].as_str().filter(|_| plan["supported"] != true) {
+        lines.push(format!("  {page}"));
+    }
+    if let Some(reason) = plan["reason"].as_str() {
+        lines.push(format!("  {reason}"));
+    }
+    if plan["runsTurn"] == true {
+        lines.push("  a bot is using this coding agent".into());
+    }
+    lines
+}
+
+async fn agents_install(provider: &str, confirmed: bool) -> i32 {
+    let Some((address, token)) = endpoint() else { return 3 };
+    let method = if confirmed { "console.agent.install" } else { "console.agent.plan" };
+    let params = if confirmed { json!({"provider": provider, "confirm": true}) } else { json!({"provider": provider}) };
+    let reply = match call(&address, &token, method, params).await {
+        Ok(reply) => reply,
+        Err(message) => {
+            eprintln!("{message}");
+            return 1;
+        }
+    };
+    if !confirmed {
+        let plan = &reply["plan"];
+        for line in plan_lines(plan) {
+            println!("{line}");
+        }
+        if plan["supported"] == true {
+            println!("Run again with --yes to install it.");
+        }
+        return 0;
+    }
+    let job = reply["jobId"].as_str().unwrap_or("").to_string();
+    if job.is_empty() {
+        println!("{}", reply["state"].as_str().unwrap_or("The install did not start."));
+        return 1;
+    }
+    println!("Installing {provider}…");
+    let mut last = String::new();
+    let deadline = std::time::Instant::now() + Duration::from_secs(30 * 60 + 30);
+    loop {
+        match call(&address, &token, "console.agent.status", json!({"jobId": job})).await {
+            Ok(reply) => {
+                let row = &reply["job"];
+                let phase = row["phase"].as_str().unwrap_or("");
+                let line = match (phase, row["bytesTotal"].as_u64(), row["bytesDone"].as_u64()) {
+                    ("downloading", Some(total), Some(done)) if total > 0 => format!("Downloading {:.0}%", done as f64 * 100.0 / total as f64),
+                    ("downloading", _, Some(done)) => format!("Downloading {:.1} MB", done as f64 / (1024.0 * 1024.0)),
+                    ("checking", _, _) => "Checking the download".into(),
+                    ("installing", _, _) => "Installing".into(),
+                    (other, _, _) => other.to_string(),
+                };
+                if line != last {
+                    println!("  {line}");
+                    last = line;
+                }
+                match phase {
+                    "done" => {
+                        println!("Done · {}", row["version"].as_str().unwrap_or("-"));
+                        return 0;
+                    }
+                    "failed" | "cancelled" => {
+                        eprintln!("{}", row["error"].as_str().unwrap_or("The install did not finish."));
+                        if let Some(line) = row["line"].as_str().filter(|line| !line.is_empty()) {
+                            eprintln!("  {line}");
+                        }
+                        return 1;
+                    }
+                    _ => {}
+                }
+            }
+            Err(message) => {
+                eprintln!("{message}");
+                return 1;
+            }
+        }
+        if std::time::Instant::now() >= deadline {
+            eprintln!("The install did not answer in time.");
+            return 1;
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;
+    }
+}
+
+/// `retinued agents` and `retinued agents list`.
+async fn agents_list() -> i32 {
     let Some((address, token)) = endpoint() else { return 3 };
     let reply = match call(&address, &token, "console.agents", json!({})).await {
         Ok(reply) => reply,
