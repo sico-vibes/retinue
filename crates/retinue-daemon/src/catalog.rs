@@ -454,7 +454,7 @@ fn wanted_runtime_ids(sessions: &[Value]) -> Vec<String> {
     let mut wanted: Vec<String> = Vec::new();
     for (index, session) in sessions.iter().enumerate() {
         let live = matches!(session["state"].as_str(), Some("working" | "starting" | "waiting_permission"));
-        if !live && index >= PREWARM_RECENT { break; }
+        if !live && index >= PREWARM_RECENT { continue; }
         if let Some(id) = session["runtimeId"].as_str().filter(|id| !id.is_empty()) {
             if !wanted.iter().any(|seen| seen == id) { wanted.push(id.to_owned()); }
         }
