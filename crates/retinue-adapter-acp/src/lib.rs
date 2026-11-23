@@ -1434,7 +1434,12 @@ impl AgentAdapter for AcpAdapter {
     // prompting when the agent does not accept it.
     fn model_switch(&self) -> ModelSwitch { ModelSwitch::KeepsSession }
     async fn model_catalog(&self, runtime: &RuntimeSpec) -> Result<ModelCatalog, AdapterError> {
-        catalog::fetch_model_catalog(runtime, self.catalog_timeout()).await
+        self.model_catalog_for_version(runtime, None).await
+    }
+
+    async fn model_catalog_for_version(&self, runtime: &RuntimeSpec, version: Option<&str>) -> Result<ModelCatalog, AdapterError> {
+        let skip_verbose = runtime.provider == "opencode" && !retinue_runtime::opencode_supports_verbose_models(version);
+        catalog::fetch_model_catalog(runtime, self.catalog_timeout(), skip_verbose).await
     }
 
     async fn probe(&self, runtime: &RuntimeSpec) -> Result<ProbeResult, AdapterError> {

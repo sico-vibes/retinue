@@ -16,21 +16,24 @@ use uuid::Uuid;
 pub(crate) async fn fetch_model_catalog(
     runtime: &RuntimeSpec,
     timeout: Duration,
+    skip_verbose: bool,
 ) -> Result<ModelCatalog, AdapterError> {
-    match fetch_cli_catalog(runtime, timeout, true).await {
-        Ok(models) => {
-            let fetched = unix_now();
-            return Ok(ModelCatalog {
-                models,
-                fetched_at: rfc3339_from_unix(fetched),
-                expires_at: rfc3339_from_unix(fetched.saturating_add(60)),
-                fallback: false,
-                source: "cli_list".into(),
-                validated: true,
-            });
+    if !skip_verbose {
+        match fetch_cli_catalog(runtime, timeout, true).await {
+            Ok(models) => {
+                let fetched = unix_now();
+                return Ok(ModelCatalog {
+                    models,
+                    fetched_at: rfc3339_from_unix(fetched),
+                    expires_at: rfc3339_from_unix(fetched.saturating_add(60)),
+                    fallback: false,
+                    source: "cli_list".into(),
+                    validated: true,
+                });
+            }
+            Err(AdapterError::Process(message)) if message == ERR_CATALOG_TIMEOUT => return Err(AdapterError::Process(message)),
+            Err(_) => {}
         }
-        Err(AdapterError::Process(message)) if message == ERR_CATALOG_TIMEOUT => return Err(AdapterError::Process(message)),
-        Err(_) => {}
     }
     // Modern OpenCode dropped --verbose. Prefer ACP when it can supply effort
     // metadata, then fall back to the plain CLI list if ACP is unavailable.

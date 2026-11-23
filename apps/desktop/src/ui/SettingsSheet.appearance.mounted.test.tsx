@@ -169,7 +169,7 @@ describe('General settings mounted controls', () => {
     host = document.createElement('div'); document.body.append(host); root = createRoot(host)
     await act(async () => root.render(<SettingsSheet snapshot={null} initialPage="Appearance" onClose={vi.fn()} onRefresh={vi.fn()} onError={vi.fn()} onOpenAgent={vi.fn()} />))
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
-    expect([...host.querySelectorAll('.settings-nav-label')].map((label) => label.textContent)).toEqual(['App', 'Employees', 'Connections', 'System'])
+    expect([...host.querySelectorAll('.settings-nav-label')].map((label) => label.textContent)).toEqual(['App', 'Work', 'Connections', 'Privacy & security', 'System'])
     expect(host.querySelector('.settings-nav')?.textContent).not.toContain('Experimental')
     expect(host.querySelector('[aria-label="Model and effort under the name"]')).toBeNull()
     act(() => setThemeStyle('stone'))

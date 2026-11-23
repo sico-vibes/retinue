@@ -12,6 +12,7 @@
 //!   database hit counts as stale so a restart begins warm;
 //! - a failed probe is remembered for 30 seconds so a broken CLI is not
 //!   restarted on every call;
+//! - window reads serve stale data immediately and only wait on a cache miss;
 //! - `CachedOnly` reads never wait: they return what is cached (or nothing) and
 //!   start one background refresh. OpenCode execution reads skip that refresh.
 
@@ -28,7 +29,7 @@ use std::{
     sync::{Arc, Mutex as StdMutex},
     time::{Duration, Instant},
 };
-use tokio::sync::Mutex;
+use tokio::sync::OnceCell;
 
 /// A cached catalog is fresh for this long before a probe is preferred.
 pub const FRESH_TTL: Duration = Duration::from_secs(15 * 60);
@@ -44,6 +45,8 @@ pub const FAILURE_TTL: Duration = Duration::from_secs(30);
 pub enum Mode {
     /// Serve a fresh value, otherwise probe (joining one already in flight).
     Fresh,
+    /// Serve any usable value and refresh stale data in the background. Wait on a miss.
+    Window,
     /// Always probe (joining one already in flight).
     Refresh,
     /// Never wait: return fresh or stale or `None`, and refresh in the background.
@@ -55,6 +58,7 @@ pub enum Mode {
 /// A catalog served from the cache. `stale` marks a value past its fresh window
 /// (served while a background refresh runs); `cached_at` is when the daemon
 /// stored it.
+#[derive(Clone)]
 pub struct Served {
     pub value: Value,
     pub stale: bool,
@@ -85,6 +89,8 @@ pub(crate) struct Probe {
     pub(crate) key: String,
 }
 
+type ProbeFlight = Arc<OnceCell<Result<Served, DispatchError>>>;
+
 /// The daemon-wide catalog cache, held as `AppState.catalog`.
 pub struct CatalogCache {
     fresh: Duration,
@@ -93,7 +99,7 @@ pub struct CatalogCache {
     failure: Duration,
     entries: StdMutex<HashMap<String, Entry>>,
     failures: StdMutex<HashMap<String, Failure>>,
-    inflight: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+    inflight: StdMutex<HashMap<String, ProbeFlight>>,
 }
 
 impl Default for CatalogCache {
@@ -112,7 +118,7 @@ impl CatalogCache {
             failure,
             entries: StdMutex::new(HashMap::new()),
             failures: StdMutex::new(HashMap::new()),
-            inflight: Mutex::new(HashMap::new()),
+            inflight: StdMutex::new(HashMap::new()),
         }
     }
 
@@ -143,14 +149,18 @@ impl CatalogCache {
     /// wall-clock cache time because they may have been loaded from disk.
     fn usable_value(&self, key: &str) -> Option<Served> {
         let entry = self.read_entry(key)?;
+        self.usable_value_of(&entry)
+    }
+
+    fn usable_value_of(&self, entry: &Entry) -> Option<Served> {
         if !entry.stale {
             let age = entry.fetched.elapsed();
-            if age < self.fresh_ttl(entry.persisted) { return Some(Self::served(&entry, false)); }
-            if age < self.stale_ttl(entry.persisted) { return Some(Self::served(&entry, true)); }
+            if age < self.fresh_ttl(entry.persisted) { return Some(Self::served(entry, false)); }
+            if age < self.stale_ttl(entry.persisted) { return Some(Self::served(entry, true)); }
             return None;
         }
         let age = Utc::now().signed_duration_since(entry.cached_at).to_std().unwrap_or_default();
-        (age < self.stale_ttl(entry.persisted)).then(|| Self::served(&entry, true))
+        (age < self.stale_ttl(entry.persisted)).then(|| Self::served(entry, true))
     }
 
     fn failure(&self, key: &str) -> Option<DispatchError> {
@@ -185,13 +195,14 @@ impl CatalogCache {
             .unwrap_or_else(|_| Utc::now());
         let entry = Entry { fetched: Instant::now(), cached_at, value, persisted: true, stale: true };
         let served = self.usable_value_of(&entry)?;
-        if let Ok(mut entries) = self.entries.lock() { entries.insert(key.to_owned(), entry); }
+        if let Ok(mut entries) = self.entries.lock() {
+            // A concurrent probe may have finished while SQLite was being read.
+            if let Some(current) = entries.get(key).and_then(|current| self.usable_value_of(current)) {
+                return Some(current);
+            }
+            entries.insert(key.to_owned(), entry);
+        }
         Some(served)
-    }
-
-    fn usable_value_of(&self, entry: &Entry) -> Option<Served> {
-        let age = Utc::now().signed_duration_since(entry.cached_at).to_std().unwrap_or_default();
-        (age < self.stale_ttl(entry.persisted)).then(|| Self::served(entry, true))
     }
 
     /// Mark every entry stale (keeping its value) and drop the negative cache.
@@ -266,7 +277,7 @@ pub(crate) fn seed(st: &AppState, runtime: &Value, value: Value) {
     st.catalog.insert(&probe.key, value, false);
 }
 
-/// Fetch a catalog. `Fresh` and `Refresh` always yield a value or an error;
+/// Fetch a catalog. `Fresh`, `Window` and `Refresh` yield a value or an error;
 /// Cache-only modes yield `None` on a miss without waiting.
 pub async fn get(
     st: &AppState,
@@ -283,6 +294,17 @@ pub async fn get(
             None => Some(fetch_or_stale(st, runtime, &probe, false).await?),
         },
         Mode::Refresh => Some(fetch_or_stale(st, runtime, &probe, true).await?),
+        Mode::Window => {
+            match st.catalog.usable_value(&probe.key).or_else(|| st.catalog.load_persisted(st, &probe.key)) {
+                Some(served) => {
+                    if served.stale && st.catalog.failure(&probe.key).is_none() {
+                        spawn_refresh(st, runtime.clone(), probe);
+                    }
+                    Some(served)
+                }
+                None => Some(fetch_or_stale(st, runtime, &probe, false).await?),
+            }
+        }
         Mode::CachedOnly | Mode::Execution => {
             let served = st.catalog.usable_value(&probe.key).or_else(|| st.catalog.load_persisted(st, &probe.key));
             // A stale or missing read starts one background refresh, unless a
@@ -341,39 +363,42 @@ async fn fetch_or_stale(st: &AppState, runtime: &Value, probe: &Probe, force: bo
 
 /// Run (or join) one probe for `probe.key`, then cache its outcome.
 async fn fetch(st: &AppState, runtime: &Value, probe: &Probe, force: bool) -> Result<Served, DispatchError> {
-    let requested = Instant::now();
-    let key_lock = {
-        let mut inflight = st.catalog.inflight.lock().await;
-        inflight.entry(probe.key.clone()).or_insert_with(|| Arc::new(Mutex::new(()))).clone()
-    };
-    let _guard = key_lock.lock().await;
-    // Another caller may have filled the entry while we waited. A forced
-    // refresh only accepts a result that was fetched after it arrived.
-    let ready: Option<Served> = if force {
-        st.catalog.read_entry(&probe.key).filter(|entry| !entry.stale && entry.fetched >= requested).map(|entry| CatalogCache::served(&entry, false))
-    } else {
-        st.catalog.fresh_value(&probe.key)
-    };
-    if let Some(served) = ready {
-        st.catalog.inflight.lock().await.remove(&probe.key);
-        return Ok(served);
-    }
-    if !force {
-        if let Some(error) = st.catalog.failure(&probe.key) {
-            st.catalog.inflight.lock().await.remove(&probe.key);
-            return Err(error);
+    let flight = {
+        let mut inflight = st.catalog.inflight.lock().unwrap();
+        // A cancelled caller may leave an uninitialised cell held by the map alone.
+        if let Some(flight) = inflight.get(&probe.key).filter(|flight| Arc::strong_count(flight) > 1) {
+            flight.clone()
+        } else {
+            if !force {
+                if let Some(served) = st.catalog.fresh_value(&probe.key) { return Ok(served); }
+                if let Some(error) = st.catalog.failure(&probe.key) { return Err(error); }
+            }
+            let flight = Arc::new(OnceCell::new());
+            inflight.insert(probe.key.clone(), flight.clone());
+            flight
         }
-    }
-    let result = probe_runtime(st, runtime, probe).await;
-    match result {
+    };
+    let result = flight.get_or_init(|| async {
+        let result = run_probe(st, runtime, probe).await;
+        st.catalog.inflight.lock().unwrap().remove(&probe.key);
+        result
+    }).await;
+    result.clone()
+}
+
+async fn run_probe(st: &AppState, runtime: &Value, probe: &Probe) -> Result<Served, DispatchError> {
+    match probe_runtime(st, runtime, probe).await {
         Ok(value) => {
+            let previous = st.catalog.usable_value(&probe.key).or_else(|| st.catalog.load_persisted(st, &probe.key));
             let cached_at = st.catalog.insert(&probe.key, value.clone(), false);
             st.catalog.clear_failure(&probe.key);
             if persistable_catalog(&value) {
                 let fetched_at = cached_at.to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
                 let _ = st.db.catalog_cache_put(&probe.key, runtime["id"].as_str().unwrap_or(""), &probe.provider, &fetched_at, &value);
             }
-            st.catalog.inflight.lock().await.remove(&probe.key);
+            if previous.as_ref().is_none_or(|previous| previous.stale || model_signature(&previous.value) != model_signature(&value)) {
+                st.emit("runtime.models.changed", json!({"runtimeId": runtime["id"]})).await;
+            }
             Ok(Served { value, stale: false, cached_at })
         }
         Err(error) => {
@@ -383,7 +408,6 @@ async fn fetch(st: &AppState, runtime: &Value, probe: &Probe, force: bool) -> Re
                 }
             }
             st.catalog.remember_failure(&probe.key, error.clone());
-            st.catalog.inflight.lock().await.remove(&probe.key);
             Err(error)
         }
     }
@@ -395,7 +419,7 @@ async fn probe_runtime(st: &AppState, runtime: &Value, probe: &Probe) -> Result<
     let adapter = adapter_for(&st.adapters, &probe.provider).ok_or_else(|| {
         derr("unsupported", "model catalogs are unsupported for this runtime", StatusCode::BAD_REQUEST)
     })?;
-    let mut catalog = adapter.model_catalog(&spec).await.map_err(|error| match error {
+    let mut catalog = adapter.model_catalog_for_version(&spec, runtime["version"].as_str()).await.map_err(|error| match error {
         AdapterError::Unsupported(_) => derr("unsupported", "model catalogs are unsupported for this runtime", StatusCode::BAD_REQUEST),
         AdapterError::Process(_) => derr("provider_unavailable", "runtime model catalog is unavailable", StatusCode::BAD_GATEWAY),
         _ => derr("provider_error", "runtime returned an invalid model catalog", StatusCode::BAD_GATEWAY),
@@ -513,25 +537,10 @@ pub fn warm_when_opened(st: &AppState, session_id: &str) {
 }
 
 async fn prewarm_one(st: &AppState, runtime: &Value) {
-    let probe = resolve_probe(st, runtime, None, None);
-    // Compared as served, so the OpenCode filter alone never reads as a change.
-    let previous = st.catalog.read_entry(&probe.key).map(|mut entry| {
-        if probe.provider == "opencode" { keep_opencode_included_models(runtime, &mut entry.value); }
-        entry.value
-    });
-    if let Ok(Some(served)) = get(st, runtime, None, None, Mode::Fresh).await {
-        if catalog_changed(previous.as_ref(), &served.value) {
-            st.emit("runtime.models.changed", json!({"runtimeId": runtime["id"]})).await;
-        }
-    }
+    let _ = get(st, runtime, None, None, Mode::Fresh).await;
 }
 
-/// Compare two catalogs by the model ids and their effort/speed capabilities.
-fn catalog_changed(previous: Option<&Value>, next: &Value) -> bool {
-    let Some(previous) = previous else { return true; };
-    model_signature(previous) != model_signature(next)
-}
-
+/// Compare catalogs by model ids and their effort/speed capabilities.
 fn model_signature(value: &Value) -> Vec<(String, Vec<String>, Vec<String>)> {
     value["models"].as_array().map(|models| {
         models.iter().map(|model| {

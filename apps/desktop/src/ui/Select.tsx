@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown, Search } from 'lucide-react'
+import { Check, ChevronDown, ChevronsUpDown, Search } from 'lucide-react'
+import { useLookStyle } from './lookStyle'
 import { ProviderLogo } from './providerBrand'
 
 export interface SelectOption {
@@ -161,6 +162,8 @@ export function Select({ value, options, onChange, ariaLabel, disabled = false, 
     }
   }
 
+  // 22 November 2026: Haze's select trigger carries Zephium's double chevron.
+  const haze = useLookStyle() === 'haze'
   return <div ref={rootRef} className={`select ${variant === 'inline' ? '' : variant} ${open ? 'open' : ''} ${className}`.replace(/\s+/g, ' ').trim()}>
     <button
       ref={triggerRef}
@@ -177,7 +180,7 @@ export function Select({ value, options, onChange, ariaLabel, disabled = false, 
       onKeyDown={onTriggerKeyDown}
     >
       <span className={selected?.provider ? 'select-provider-label' : undefined}>{selected?.provider && <ProviderLogo provider={selected.provider} size={16} />}{visibleTriggerLabel}</span>
-      <ChevronDown size={14} aria-hidden="true" />
+      {haze ? <ChevronsUpDown size={13} aria-hidden="true" /> : <ChevronDown size={14} aria-hidden="true" />}
     </button>
     {open && wrapFloat(floating, <SearchShell enabled={showSearch} className={placement} shellRef={menuRef} style={floatStyle}>
     {showSearch && <label className="select-search">

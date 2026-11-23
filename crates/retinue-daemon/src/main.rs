@@ -3041,7 +3041,7 @@ async fn runtime_models(st: &AppState, p: &Value) -> Result<Value, DispatchError
     if model_hint.as_deref().is_some_and(|model| model.trim().is_empty() || model.len() > 256 || model.chars().any(char::is_control)) {
         return Err(derr("invalid_argument", "model must be a valid model identifier", StatusCode::BAD_REQUEST));
     }
-    let mode = if refresh { catalog::Mode::Refresh } else { catalog::Mode::Fresh };
+    let mode = if refresh { catalog::Mode::Refresh } else { catalog::Mode::Window };
     let served = catalog::get(st, &runtime, workflow_override, model_hint.as_deref(), mode).await?
         .ok_or_else(|| derr("unsupported", "model catalogs are unsupported for this runtime", StatusCode::BAD_REQUEST))?;
     let mut catalog = served.value;
@@ -12043,6 +12043,7 @@ mod phase2a_tests {
         catalog: retinue_agent_core::ModelCatalog,
         calls: std::sync::atomic::AtomicUsize,
         delay: std::time::Duration,
+        release: Option<tokio::sync::Notify>,
         fail: bool,
     }
     impl CatalogProbeAdapter {
@@ -12058,6 +12059,7 @@ mod phase2a_tests {
                 },
                 calls: std::sync::atomic::AtomicUsize::new(0),
                 delay,
+                release: None,
                 fail,
             }
         }
@@ -12066,6 +12068,7 @@ mod phase2a_tests {
     impl AgentAdapter for CatalogProbeAdapter {
         async fn model_catalog(&self, _: &RuntimeSpec) -> Result<retinue_agent_core::ModelCatalog, retinue_agent_core::AdapterError> {
             let call = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if let Some(release) = &self.release { release.notified().await; }
             if !self.delay.is_zero() { tokio::time::sleep(self.delay).await; }
             if self.fail { return Err(retinue_agent_core::AdapterError::Process("catalog unavailable".into())); }
             let mut catalog = self.catalog.clone();
@@ -12193,6 +12196,45 @@ mod phase2a_tests {
         assert_eq!(served.value["fallback"], true);
         let key = catalog::resolve_probe(&st, &runtime, None, None).key;
         assert!(st.db.catalog_cache_get(&key).unwrap().is_none(), "a fallback catalog is never written to disk");
+    }
+
+    #[tokio::test]
+    async fn opencode_catalog_window_serves_persisted_while_refresh_joins_probe() {
+        let (mut st, _) = state();
+        let mut adapter = CatalogProbeAdapter::new(std::time::Duration::ZERO, false, false);
+        adapter.release = Some(tokio::sync::Notify::new());
+        let adapter = Arc::new(adapter);
+        install_catalog_probe_adapter(&mut st, &adapter);
+        let runtime = json!({"id":"rt-open-window","provider":"opencode","version":"2.3.2","executablePath":"x","launchArgs":[]});
+        *st.runtimes.write().await = vec![runtime.clone()];
+        let key = catalog::resolve_probe(&st, &runtime, None, None).key;
+        let old = json!({"provider":"opencode","models":[{"id":"cached-model"}],"validated":true,"fallback":false});
+        let fetched_at = (Utc::now() - chrono::Duration::hours(1)).to_rfc3339();
+        st.db.catalog_cache_put(&key, "rt-open-window", "opencode", &fetched_at, &old).unwrap();
+
+        let params = json!({"runtimeId":"rt-open-window"});
+        let limit = std::time::Duration::from_secs(2);
+        for _ in 0..3 {
+            let served = tokio::time::timeout(limit, dispatch(&st, "runtime.models", params.clone())).await.unwrap().unwrap();
+            assert_eq!(served["stale"], true);
+            assert_eq!(served["models"][0]["id"], "cached-model");
+        }
+        tokio::task::yield_now().await;
+        let calls = || adapter.calls.load(std::sync::atomic::Ordering::SeqCst);
+        assert_eq!(calls(), 1);
+
+        let refresh = dispatch(&st, "runtime.models", json!({"runtimeId":"rt-open-window","refresh":true}));
+        tokio::pin!(refresh);
+        tokio::select! {
+            biased;
+            _ = &mut refresh => panic!("explicit refresh returned before the probe finished"),
+            _ = tokio::task::yield_now() => {}
+        }
+        adapter.release.as_ref().unwrap().notify_one();
+        let refreshed = tokio::time::timeout(limit, refresh).await.unwrap().unwrap();
+        assert_eq!(refreshed["stale"], false);
+        assert_eq!(refreshed["models"][0]["id"], "alpha");
+        assert_eq!(calls(), 1);
     }
 
     #[tokio::test]

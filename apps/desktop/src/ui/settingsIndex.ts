@@ -2,10 +2,10 @@
 // group heading on that page, which the sheet scrolls to and flashes. Keep the
 // `group` strings equal to the `SettingsGroup title` values in SettingsSheet.
 
-export type SettingsPageName = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Computer' | 'Secrets' | 'Connectors' | 'Vault' | 'Channels' | 'Pi' | 'Updates' | 'Backup' | 'Health'
+export type SettingsPageName = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Computer' | 'Secrets' | 'Connectors' | 'Vault' | 'Channels' | 'Pi' | 'Updates' | 'Backup' | 'Health' | 'About'
 
 /** The page list, for anything that has to validate an incoming page name. */
-export const SETTINGS_PAGE_NAMES: readonly SettingsPageName[] = ['General', 'Appearance', 'Chat', 'Speech', 'Keyboard', 'Companion', 'Agents', 'Accounts', 'Providers', 'Manager', 'Approvals', 'Memory', 'Skills', 'Remote', 'Machines', 'Connections', 'Computer', 'Secrets', 'Connectors', 'Vault', 'Channels', 'Pi', 'Updates', 'Backup', 'Health']
+export const SETTINGS_PAGE_NAMES: readonly SettingsPageName[] = ['General', 'Appearance', 'Chat', 'Speech', 'Keyboard', 'Companion', 'Agents', 'Accounts', 'Providers', 'Manager', 'Approvals', 'Memory', 'Skills', 'Remote', 'Machines', 'Connections', 'Computer', 'Secrets', 'Connectors', 'Vault', 'Channels', 'Pi', 'Updates', 'Backup', 'Health', 'About']
 
 /**
  * The page out of an open-settings event payload (C13): a known page name, or
@@ -116,6 +116,7 @@ export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
   { page: 'Backup', group: 'Export', label: 'Export a backup', keywords: 'save file employees memory skills automations settings' },
   { page: 'Backup', group: 'Restore', label: 'Restore a backup', keywords: 'import load file recover move computer' },
   { page: 'Health', group: 'Health check', label: 'Health check', keywords: 'doctor diagnose repair fix broken sign in login database hook problems' },
+  { page: 'About', group: 'Retinue', label: 'About Retinue', keywords: 'version release notes licence license github source report problem' },
   { page: 'Health', group: 'Support', label: 'Run setup again', keywords: 'welcome onboarding first run' },
   { page: 'Health', group: 'Support', label: 'Export diagnostics', keywords: 'logs report problem support zip upload debug' },
 ]

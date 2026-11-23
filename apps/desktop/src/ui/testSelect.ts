@@ -56,9 +56,12 @@ export function helpTipBubble(scope: ParentNode | null | undefined) {
   return id ? document.getElementById(id) : null
 }
 
-/** The text of the "?" explanation inside `scope` (its bubble portals to document.body). */
+/**
+ * A row's explanation: the "?" bubble (it portals to document.body), or in Haze the description written under
+ * the row's name (22 November 2026, Zephium-style Haze).
+ */
 export function helpTipText(scope: ParentNode | null | undefined) {
-  return helpTipBubble(scope)?.textContent ?? null
+  return helpTipBubble(scope)?.textContent ?? scope?.querySelector('.settings-row-desc')?.textContent ?? null
 }
 
 /**

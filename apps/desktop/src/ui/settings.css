@@ -238,3 +238,22 @@
 .settings-sheet:has(.settings-subtabs) .settings-content > div:first-child > .settings-group:first-child { margin-top: 0; }
 .settings-content > .settings-intro:first-child { margin-top: 0; }
 .runtime-entry.is-off .runtime-entry-head { opacity: .55; }
+
+/* Settings › About (22 November 2026): the hero, the link tiles, then the software rows. */
+.about-hero { margin: 18px 0 6px; display: grid; justify-items: center; gap: 6px; text-align: center; }
+.about-tile { position: relative; width: 88px; height: 88px; padding: 16px; display: block; border-radius: 22px; background: var(--surface-raised); box-sizing: border-box; }
+.about-tile img { width: 100%; height: 100%; display: block; border-radius: 20px; }
+.about-tile .theme-on-light { display: none; }
+:root[data-theme="light"] .about-tile .theme-on-dark { display: none; }
+:root[data-theme="light"] .about-tile .theme-on-light { display: block; }
+.about-wordmark { margin: 10px 0 0; color: var(--text-1); font-size: 26px; font-weight: 600; letter-spacing: .32em; text-transform: uppercase; padding-left: .32em; }
+.about-version { margin: 0; color: var(--text-1); font-size: var(--fs-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
+.about-tagline { max-width: 46ch; margin: 2px 0 0; color: var(--text-3); font-size: var(--fs-xs); line-height: 1.5; }
+.about-links { margin-top: 20px; display: flex; flex-wrap: wrap; justify-content: center; gap: 18px; }
+.about-link { width: 104px; padding: 0; display: grid; justify-items: center; gap: 8px; color: var(--text-1); border: 0; background: transparent; font: inherit; font-size: var(--fs-xs); cursor: pointer; }
+.about-link-tile { width: 52px; height: 52px; display: grid; place-items: center; color: var(--text-2); border-radius: 14px; background: var(--surface-raised); transition: background-color 70ms linear, color 70ms linear, scale 200ms cubic-bezier(.22,1,.36,1); }
+.about-link:hover .about-link-tile { color: var(--text-1); background: var(--surface-selected); }
+.about-link:active .about-link-tile { scale: .94; }
+.about-link:focus-visible { outline: none; }
+.about-link:focus-visible .about-link-tile { box-shadow: 0 0 0 2px var(--text-3); }
+.about-page .secondary-button.small { display: inline-flex; align-items: center; gap: 6px; }

@@ -2,6 +2,7 @@ import { useId, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { CircleHelp } from 'lucide-react'
 import { useTooltip } from './useTooltip'
+import { useLookStyle } from './lookStyle'
 import './tooltipPortal.css'
 
 /** A titled group of rows in a rounded card. Shared by Settings pages. */
@@ -33,8 +34,11 @@ export function HelpTip({ text, id, align = 'center', placement = 'top', bubbleC
  * `detail` is for live values (a version, a folder, a status) that stay visible.
  */
 export function RowCopy({ label, hint, hintId, detail, tipAlign = 'center' }: { label: ReactNode; hint?: ReactNode; hintId?: string; detail?: ReactNode; tipAlign?: 'center' | 'start' | 'end' }) {
+  // 22 November 2026 (Zephium-style Haze): Haze states a row's explanation under its name; other looks keep the "?".
+  const inline = useLookStyle() === 'haze'
   return <span className="settings-row-copy">
-    <span className="settings-row-title"><strong>{label}</strong>{hint && <HelpTip text={hint} id={hintId} align={tipAlign} />}</span>
+    <span className="settings-row-title"><strong>{label}</strong>{hint && !inline && <HelpTip text={hint} id={hintId} align={tipAlign} />}</span>
+    {hint && inline && <small className="settings-row-desc" id={hintId}>{hint}</small>}
     {detail && <small>{detail}</small>}
   </span>
 }

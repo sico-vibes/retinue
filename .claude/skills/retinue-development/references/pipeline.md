@@ -118,6 +118,10 @@ Read the full diff, not only the report. Check claims against the code; a lane's
 
 When the owner's baseline is the uncommitted working tree, not `HEAD`: `git worktree add -b <branch> D:\fxNN main`, then `git diff HEAD --binary > baseline.patch` in the main checkout and `git apply` it in the worktree, copy the untracked files (`git ls-files --others --exclude-standard`, minus `output/`, `.playwright-cli/`, `docs/history/` and staged `binaries/`) and junction `node_modules`. Record the baseline without committing: with `GIT_INDEX_FILE=<tmp>` run `git add -A .` and `git write-tree` in the worktree; later do the same for the result and `git diff --binary <baselineTree> <resultTree> -- <paths>` gives only the lane's change, which `git apply --check` then `git apply` takes into the main checkout. Keep the brief and lane log under the worktree's git-ignored `target/lane/` (the Write tool cannot create files in the `D:\` root). With the owner's "no tests" rule the lane may still `cargo check` (and `cargo check --tests` to prove old tests compile), never `cargo test`. Run the isolated dev app from that worktree with `scripts/dev-windows.ps1` (its database defaults to `<target>/desktop-dev/dev-data`), after copying the merged files into it.
 
+## OpenCode only (owner, 22 November 2026, late)
+
+"Don't use Codex, only rely on OpenCode, as Codex is rate limited." Every Retinue lane (Ada backend, Grey research, Fifi UI capture) runs on OpenCode Go `opencode-go/deepseek-v4.1-flash` until the owner says otherwise. Ada: effort max; Grey and Fifi: high. Switching an employee only changes new conversations; a turn already running finishes on its old agent.
+
 ## Codex lanes and the shared sign-in (22 November 2026)
 
 - **Start Codex lanes about a minute apart.** Three Codex conversations started within a minute all refresh the same ChatGPT sign-in. One failed with "your refresh token was already used", and the other two ended "completed" with no report. The owner moved Ada to Codex (`gpt-6.2-sol`, medium) on 22 November 2026 because OpenCode turns could not start.

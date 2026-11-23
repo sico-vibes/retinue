@@ -8,6 +8,7 @@ import { SegmentedControl } from './SegmentedControl'
 import { SettingsGroup, SettingsRow } from './SettingsParts'
 import { AccentPicker } from './AccentPicker'
 import { DEFAULT_HAZE, HAZE_LIMITS, resetHazeTuning, updateHazeTuning, useHazeTuning } from './hazeTuning'
+import { HomeSky } from './sky/HomeSky'
 import { WALLPAPER_CATEGORIES, WALLPAPER_PRESETS, wallpaperPreset, type WallpaperCategory } from './wallpaperPresets'
 import './chatBackground.css'
 
@@ -23,6 +24,8 @@ export function ChatBackgroundLayer({ empty }: { empty: boolean }) {
   const haze = useThemeStyle() === 'haze'
   const prefs = useChatBackgroundPrefs()
   const url = useChatBackgroundUrl(haze)
+  // With no picture chosen, an empty conversation shows Retinue's own sky, as Zephium's new tab does.
+  if (haze && !url && empty) return <HomeSky />
   if (!haze || !url || (prefs.scope === 'empty' && !empty)) return null
   return <Layer url={url} effect={prefs.effect} opacity={empty ? prefs.emptyOpacity : prefs.sessionOpacity} empty={empty} />
 }

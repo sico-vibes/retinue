@@ -379,6 +379,8 @@ if (flags().has('demo-first-run') || flags().has('empty')) {
 // `?chatbg=dither`: a generated chat background, so the inspector can show each effect.
 if (flags().get('chatbg')) void import('../ui/chatBackgroundStore').then((module) => module.seedChatBackgroundForPreview(flags().get('chatbg') as never))
 else if (flags().has('clean')) void import('../ui/chatBackgroundStore').then((module) => module.updateChatBackgroundPrefs({ hasImage: false }))
+// `?demo-no-name`: the owner has not set a name yet, so the profile plate asks for one.
+if (flags().has('demo-no-name')) { try { localStorage.removeItem('retinue.profile.name') } catch { /* Preview storage is optional. */ } }
 // `?clean`: no first-run hints, tour or What's New over the screen being inspected.
 if (flags().has('clean')) {
   try {

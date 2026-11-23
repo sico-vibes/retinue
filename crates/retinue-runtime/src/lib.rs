@@ -561,7 +561,7 @@ async fn discover_one_with(
             });
         }
     }
-    let sign_in = auth_status(id, &resolved.executable, &resolved.args, environment, spawns).await;
+    let sign_in = auth_status(id, &resolved.executable, &resolved.args, runtime.version.as_deref(), environment, spawns).await;
     runtime.auth_state = sign_in.state;
     runtime.gateway_auth_states = sign_in.gateways;
     if let Some(error) = sign_in.error {
@@ -636,9 +636,9 @@ impl SignIn {
     }
 }
 
-async fn auth_status(provider: &str, exe: &Path, args: &[String], environment: &[(String, String)], spawns: &SpawnCounter) -> SignIn {
+async fn auth_status(provider: &str, exe: &Path, args: &[String], version: Option<&str>, environment: &[(String, String)], spawns: &SpawnCounter) -> SignIn {
     if provider == "opencode" {
-        return opencode_auth_status(exe, args, environment, spawns).await;
+        return opencode_auth_status(exe, args, version, environment, spawns).await;
     }
     // Pi keeps its own sign-ins in `auth.json`; reading which providers have an
     // entry is a presence check that never builds a value, and it cannot see the
@@ -818,19 +818,19 @@ impl Drop for AcpProbeDirectory {
 /// source of truth for "a credential is stored"; only when it finds nothing
 /// does the CLI get asked. OpenCode 2 answers through a background service, so
 /// the whole phase is capped at 15 s.
-async fn opencode_auth_status(exe: &Path, args: &[String], environment: &[(String, String)], spawns: &SpawnCounter) -> SignIn {
+async fn opencode_auth_status(exe: &Path, args: &[String], version: Option<&str>, environment: &[(String, String)], spawns: &SpawnCounter) -> SignIn {
     // A stored credential proves a credential is stored, never that it is
     // valid; the label stays "signed in" as it does today for `stored`.
     if let Some(states) = opencode_stored_gateways(environment) {
         return SignIn::new(aggregate_auth_states(&states), states, None);
     }
     let limit = Duration::from_secs(OPENCODE_SIGN_IN_TIMEOUT_SECS);
-    match timeout(limit, opencode_auth_status_from_cli(exe, args, spawns)).await {
+    match timeout(limit, opencode_auth_status_from_cli(exe, args, version, spawns)).await {
         Ok(result) => result,
         Err(_) => SignIn::new(AuthState::Unknown, BTreeMap::new(), Some("Sign-in status could not be checked.")),
     }
 }
-async fn opencode_auth_status_from_cli(exe: &Path, args: &[String], spawns: &SpawnCounter) -> SignIn {
+async fn opencode_auth_status_from_cli(exe: &Path, args: &[String], version: Option<&str>, spawns: &SpawnCounter) -> SignIn {
     let limit = Duration::from_secs(OPENCODE_SIGN_IN_TIMEOUT_SECS);
     let mut av = args.iter().map(String::as_str).collect::<Vec<_>>();
     av.extend(["auth", "list"]);
@@ -848,12 +848,14 @@ async fn opencode_auth_status_from_cli(exe: &Path, args: &[String], spawns: &Spa
     }
     // v1 `models --verbose` still exposes gateway JSON. A non-zero exit
     // falls through to the plain v2 listing rather than ending the check.
-    let mut verbose_args = args.iter().map(String::as_str).collect::<Vec<_>>();
-    verbose_args.extend(["models", "--verbose"]);
-    if let Ok((true, output)) = safe_status_output_within(exe, &verbose_args, limit, spawns).await {
-        let states = opencode_model_gateways(&output);
-        if !states.is_empty() {
-            return SignIn::new(aggregate_auth_states(&states), states, None);
+    if opencode_supports_verbose_models(version) {
+        let mut verbose_args = args.iter().map(String::as_str).collect::<Vec<_>>();
+        verbose_args.extend(["models", "--verbose"]);
+        if let Ok((true, output)) = safe_status_output_within(exe, &verbose_args, limit, spawns).await {
+            let states = opencode_model_gateways(&output);
+            if !states.is_empty() {
+                return SignIn::new(aggregate_auth_states(&states), states, None);
+            }
         }
     }
     // v2 `models` (no flags) prints one `provider/model` per line. A
@@ -868,6 +870,12 @@ async fn opencode_auth_status_from_cli(exe: &Path, args: &[String], spawns: &Spa
         }
     }
     SignIn::new(AuthState::Unknown, BTreeMap::new(), Some("Sign-in status could not be checked."))
+}
+
+/// OpenCode 2 removed `models --verbose`. Keep trying it when the version is unknown.
+pub fn opencode_supports_verbose_models(version: Option<&str>) -> bool {
+    version.and_then(|version| version.trim().trim_start_matches('v').split('.').next()?.parse::<u64>().ok())
+        .is_none_or(|major| major < 2)
 }
 /// The environment variables discovery's CLI-free checks honour: OpenCode's
 /// data-dir rules and Pi's config directory. In the same shape the daemon's
@@ -1327,14 +1335,14 @@ mod tests {
     #[tokio::test]
     async fn the_acp_sign_in_answer_is_quiet_and_routed_for_every_table_provider() {
         let (exe, args) = acp_probe_fixture("acp_fixture_signed_in");
-        let SignIn { state, gateways, error, .. } = auth_status("antigravity", &exe, &args, &[], &SpawnCounter::detached()).await;
+        let SignIn { state, gateways, error, .. } = auth_status("antigravity", &exe, &args, None, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Authenticated));
         assert!(gateways.is_empty());
         assert!(error.is_none(), "a sign-in answer the server gave is not a probe failure");
         // The other table providers take the same path.
         let (exe, args) = acp_probe_fixture("acp_fixture_signed_out");
         for provider in ["qwen", "cursor", "grok"] {
-            let SignIn { state, error, .. } = auth_status(provider, &exe, &args, &[], &SpawnCounter::detached()).await;
+            let SignIn { state, error, .. } = auth_status(provider, &exe, &args, None, &[], &SpawnCounter::detached()).await;
             assert!(matches!(state, AuthState::Unauthenticated), "{provider}");
             assert!(error.is_none(), "{provider}");
         }
@@ -1560,7 +1568,7 @@ mod tests {
     #[tokio::test]
     async fn opencode_v2_auth_list_row_signs_in_on_the_calling_path() {
         let command = auth_fixture("OpenCode Console  Default                     stored");
-        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[], &SpawnCounter::detached()).await;
+        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, None, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Authenticated));
         assert_eq!(gateways.len(), 1);
         assert!(matches!(gateways.get("opencode"), Some(AuthState::Authenticated)));
@@ -1569,10 +1577,20 @@ mod tests {
     #[tokio::test]
     async fn opencode_v2_auth_list_unknown_status_is_a_quiet_unknown() {
         let command = auth_fixture("OpenCode Console  Default  mystery-state");
-        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[], &SpawnCounter::detached()).await;
+        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, None, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Unknown));
         assert!(gateways.is_empty());
         assert!(error.is_none());
+    }
+
+    #[tokio::test]
+    async fn opencode_v2_sign_in_skips_verbose_models_fallback() {
+        let command = auth_fixture("opencode-go/glm-5.2");
+        let spawns = SpawnCounter::new();
+        let sign_in = auth_status("opencode", &command.executable, &command.args, Some("2.3.2"), &[], &spawns).await;
+        assert!(matches!(sign_in.state, AuthState::Unknown));
+        assert!(sign_in.error.is_none());
+        assert_eq!(spawns.total(), 2, "only auth list and plain models run");
     }
     #[test]
     fn plain_models_listing_only_says_that_a_gateway_answered() {
@@ -1585,7 +1603,7 @@ mod tests {
     #[tokio::test]
     async fn opencode_go_plain_models_is_a_quiet_unknown_not_a_sign_in() {
         let command = auth_fixture("opencode-go/glm-5.2");
-        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[], &SpawnCounter::detached()).await;
+        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, None, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Unknown), "a model listing is not proof of sign-in");
         assert!(gateways.is_empty());
         assert!(error.is_none());
@@ -1593,7 +1611,7 @@ mod tests {
     #[tokio::test]
     async fn opencode_zen_only_plain_models_is_a_quiet_unknown() {
         let command = auth_fixture("opencode/big-pickle");
-        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[], &SpawnCounter::detached()).await;
+        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, None, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Unknown));
         assert!(gateways.is_empty());
         assert!(error.is_none());
@@ -1684,7 +1702,7 @@ mod tests {
             executable: PathBuf::from("/bin/sh"),
             args: vec!["-c".into(), "sleep 30".into()],
         };
-        let result = timeout(Duration::from_secs(2), auth_status("opencode", &command.executable, &command.args, &environment, &SpawnCounter::detached())).await;
+        let result = timeout(Duration::from_secs(2), auth_status("opencode", &command.executable, &command.args, None, &environment, &SpawnCounter::detached())).await;
         let SignIn { state, gateways, error, .. } = result.expect("a stored credential must not wait on a slow CLI");
         assert!(matches!(state, AuthState::Authenticated));
         assert!(matches!(gateways.get("opencode"), Some(AuthState::Authenticated)));
@@ -1694,7 +1712,7 @@ mod tests {
     #[tokio::test]
     async fn opencode_presence_check_without_a_credential_falls_through_to_the_cli() {
         let command = auth_fixture("OpenCode Console  Default  stored");
-        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, &[], &SpawnCounter::detached()).await;
+        let SignIn { state, gateways, error, .. } = auth_status("opencode", &command.executable, &command.args, None, &[], &SpawnCounter::detached()).await;
         assert!(matches!(state, AuthState::Authenticated));
         assert!(matches!(gateways.get("opencode"), Some(AuthState::Authenticated)));
         assert!(error.is_none());

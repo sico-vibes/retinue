@@ -26,6 +26,7 @@ import './ui/polish.css'
 // one preload of the last branch (beta.35 loaded Dot CSS for Frost and Pop).
 // Keep all looks in the entry stylesheet; their rules are scoped by data-style.
 import './ui/themes/haze.css'
+import './ui/themes/haze-zephium.css'
 
 const dictation = new URLSearchParams(window.location.search).has('dictation')
 // The native frosted backdrop belongs to the main window only (the helper also skips the companion).

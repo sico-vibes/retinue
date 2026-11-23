@@ -1,6 +1,6 @@
 import { rpc } from '../tauri'
 import { usePlatform } from '../transport/platform'
-import { useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode, type RefObject } from 'react'
 import { ArchiveRestore, CalendarClock, ChevronsUpDown, Compass, Gauge, LogOut, Pencil, Settings2, Keyboard, Smartphone, Newspaper } from 'lucide-react'
 import { startTour } from './tour/startTour'
 import { useRemoteStatus } from '../remote/useRemote'
@@ -59,6 +59,9 @@ export function ProfileMenu({ connection, usageActive, schedulesActive = false, 
   const [name, setName] = useState(readProfileName)
   const { available: remoteAvailable } = useRemoteStatus()
   const [open, setOpen] = useState(false)
+  // 22 November 2026 (Zephium-style Haze): the menu stays drawn for the 120 ms it takes to leave. While it
+  // leaves it is no longer a menu (no role, hidden from assistive tech), so nothing can act on it.
+  const [closing, setClosing] = useState(false)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(name)
   const platform = usePlatform()
@@ -72,13 +75,22 @@ export function ProfileMenu({ connection, usageActive, schedulesActive = false, 
     if (!open) return
     menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]:not(:disabled)')?.focus()
     const close = (event: PointerEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) setOpen(false)
+      if (wrapRef.current && !wrapRef.current.contains(event.target as Node)) { setClosing(true); setOpen(false) }
     }
     document.addEventListener('pointerdown', close)
     return () => document.removeEventListener('pointerdown', close)
   }, [open])
 
+  useEffect(() => {
+    if (!closing) return
+    const timer = window.setTimeout(() => setClosing(false), 140)
+    return () => window.clearTimeout(timer)
+  }, [closing])
+  useEffect(() => {
+    if (open) { setClosing(false); return }
+  }, [open])
   const closeMenu = (refocus = true) => {
+    if (open) setClosing(true)
     setOpen(false)
     if (refocus) window.setTimeout(() => trigger.current?.focus(), 0)
   }
@@ -107,6 +119,24 @@ export function ProfileMenu({ connection, usageActive, schedulesActive = false, 
   }
 
   const initials = profileInitials(name)
+  type Row = { kind: 'item'; key: string; label: string; icon: ReactNode; action: () => void; disabled?: boolean; current?: boolean; danger?: boolean; hint?: string } | { kind: 'separator'; key: string } | { kind: 'head'; key: string }
+  const item = (key: string, label: string, icon: ReactNode, action: () => void, extra: Partial<Extract<Row, { kind: 'item' }>> = {}): Row => ({ kind: 'item', key, label, icon, action, ...extra })
+  const menuRows: Row[] = [
+    { kind: 'head', key: 'head' },
+    { kind: 'separator', key: 'sep-head' },
+    item('settings', 'Settings', <Settings2 size={15} />, onSettings),
+    ...(onShortcuts ? [item('shortcuts', 'Keyboard shortcuts', <Keyboard size={15} />, onShortcuts)] : []),
+    { kind: 'separator', key: 'sep-1' },
+    item('usage', 'Usage', <Gauge size={15} />, onUsage, { disabled: !connected }),
+    ...(onSchedules ? [item('schedules', 'Schedules', <CalendarClock size={15} />, onSchedules, { disabled: !connected, current: schedulesActive })] : []),
+    ...(remoteAvailable === true && onRemote ? [item('remote', 'Remote', <Smartphone size={15} />, onRemote)] : []),
+    ...(onBackup ? [item('backup', 'Backup', <ArchiveRestore size={15} />, onBackup, { disabled: !connected })] : []),
+    ...(onArchivedBots ? [item('archived', 'Archived employees', <ArchiveRestore size={15} />, onArchivedBots, { disabled: !connected })] : []),
+    { kind: 'separator', key: 'sep-2' },
+    ...(onWhatsNew ? [item('whats-new', 'What’s new', <Newspaper size={15} />, onWhatsNew)] : []),
+    item('tour', 'Take the tour', <Compass size={15} />, startTour),
+    ...(platform.tray ? [{ kind: 'separator', key: 'sep-3' } as Row, item('quit', 'Quit Retinue', <LogOut size={15} />, onQuit, { danger: true })] : []),
+  ]
   const hasName = name.trim().length > 0
   const statusText = hasName ? (connected ? 'On this device' : connection === 'connecting' ? 'Connecting…' : 'Offline') : 'Set your name'
 
@@ -129,28 +159,24 @@ export function ProfileMenu({ connection, usageActive, schedulesActive = false, 
       aria-haspopup={hasName ? 'menu' : undefined}
       aria-expanded={hasName ? open : undefined}
       aria-current={usageActive ? 'page' : undefined}
-      onClick={() => { if (!hasName) { setDraft(name); setEditing(true); return } setOpen((current) => !current) }}
+      title={hasName ? name : 'Set your name'}
+      onClick={() => { if (!hasName) { setDraft(name); setEditing(true); return } if (open) closeMenu(false); else setOpen(true) }}
     >
       <span className={`profile-avatar ${initials ? '' : 'empty'}`} aria-hidden="true">{initials || '?'}<i className={`presence ${connection}`} /></span>
       <span className="profile-copy"><strong>{name || 'Your profile'}</strong><small>{statusText}</small></span>
       {!trailing && <ChevronsUpDown size={14} aria-hidden="true" />}
     </button>
     {trailing}
-    {open && <div ref={menuRef} className="menu-surface profile-menu" role="menu" aria-label="Account" onKeyDown={onMenuKeyDown}>
-      <button type="button" role="menuitem" className="menu-item" onClick={() => run(onSettings)}><Settings2 size={15} />Settings</button>
-      {onShortcuts && <button type="button" role="menuitem" className="menu-item" onClick={() => run(onShortcuts)}><Keyboard size={15} />Keyboard shortcuts</button>}
-      <span className="menu-separator" role="separator" />
-      <button type="button" role="menuitem" className="menu-item" disabled={!connected} onClick={() => run(onUsage)}><Gauge size={15} />Usage</button>
-      {onSchedules && <button type="button" role="menuitem" className="menu-item" aria-current={schedulesActive ? "page" : undefined} disabled={!connected} onClick={() => run(onSchedules)}><CalendarClock size={15} />Schedules</button>}
-      {remoteAvailable === true && onRemote && <button type="button" role="menuitem" className="menu-item" onClick={() => run(onRemote)}><Smartphone size={15} />Remote</button>}
-      {onBackup && <button type="button" role="menuitem" className="menu-item" disabled={!connected} onClick={() => run(onBackup)}><ArchiveRestore size={15} />Backup</button>}
-      {onArchivedBots && <button type="button" role="menuitem" className="menu-item" disabled={!connected} onClick={() => run(onArchivedBots)}><ArchiveRestore size={15} />Archived employees</button>}
-      <span className="menu-separator" role="separator" />
-      {onWhatsNew && <button type="button" role="menuitem" className="menu-item" onClick={() => run(onWhatsNew)}><Newspaper size={15} />What’s new</button>}
-      <button type="button" role="menuitem" className="menu-item" onClick={() => run(startTour)}><Compass size={15} />Take the tour</button>
-      <span className="menu-separator" role="separator" />
-      <button type="button" role="menuitem" className="menu-item" onClick={() => run(() => { setDraft(name); setEditing(true) })}><Pencil size={15} />{name ? 'Edit name' : 'Add your name'}</button>
-      {platform.tray && <button type="button" role="menuitem" className="menu-item danger" onClick={() => run(onQuit)}><LogOut size={15} />Quit Retinue</button>}
+    {(open || closing) && <div ref={open ? menuRef : undefined} className={`menu-surface profile-menu ${open ? 'is-open' : 'is-closing'}`} role={open ? 'menu' : undefined} aria-hidden={open ? undefined : true} aria-label={open ? 'Account' : undefined} onKeyDown={open ? onMenuKeyDown : undefined}>
+      {menuRows.map((row, index) => {
+        // Rows rise nearest-first: the bottom row moves first, the name at the top arrives last.
+        const style = { '--step': menuRows.length - 1 - index } as CSSProperties
+        if (row.kind === 'separator') return <span key={row.key} className="menu-separator" role="separator" style={style} />
+        if (row.kind === 'head') return <button key={row.key} type="button" role="menuitem" className="menu-item profile-menu-head" aria-label={`Edit name (${name})`} style={style} onClick={() => run(() => { setDraft(name); setEditing(true) })}>
+          <span className="profile-menu-head-avatar" aria-hidden="true">{initials || '?'}</span><strong title={name}>{name}</strong><Pencil size={13} aria-hidden="true" className="profile-menu-head-edit" />
+        </button>
+        return <button key={row.key} type="button" role="menuitem" className={`menu-item${row.danger ? ' danger' : ''}`} style={style} disabled={row.disabled} aria-current={row.current ? 'page' : undefined} onClick={() => run(row.action)}>{row.icon}{row.label}{row.hint && <kbd className="menu-hint">{row.hint}</kbd>}</button>
+      })}
     </div>}
     </div>
   </div>

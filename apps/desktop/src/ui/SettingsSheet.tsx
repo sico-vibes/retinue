@@ -1,10 +1,11 @@
+import { AboutPage } from './AboutPage'
 import { EXPERIMENTS, DEFAULT_EXPERIMENTS, type Experiments, type ExperimentName } from './experiments'
 import { KeybindingEditor } from './KeybindingEditor'
 import { Keys } from './Keys'
 import { normalizeBindings, normalizeSendShortcut, oppositeKeys, SEND_SHORTCUTS, type SendShortcut, type ShortcutBindings } from './shortcuts'
 import type { ApprovalMode } from '../types'
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
-import { Bot, Cable, Brain, Check, ChevronDown, ChevronRight, Download, MessageSquare, Plus, RefreshCw, ShieldAlert, ShieldCheck, SlidersHorizontal, Wrench, X, Palette, Search, Smartphone, BriefcaseBusiness, Sparkles, LockKeyhole } from 'lucide-react'
+import { Info, Bot, Cable, Brain, Check, ChevronDown, ChevronRight, Download, MessageSquare, Plus, RefreshCw, ShieldAlert, ShieldCheck, SlidersHorizontal, X, Palette, Search, Smartphone, BriefcaseBusiness, Sparkles, LockKeyhole, Keyboard, Mic, Wand2, Monitor, MessagesSquare, Plug, MousePointer2, KeyRound, ArchiveRestore, HeartPulse } from 'lucide-react'
 import { emitNative, invokeNative, listenNative } from '../transport/nativeBridge'
 import { SettingsSkeleton } from './SettingsSkeleton'
 import { usePlatform } from '../transport/platform'
@@ -59,31 +60,47 @@ import './retinueUi.css'
 
 import { FOLLOW_UP_SETTING } from './sessionSuggestions'
 
-export type SettingsPageId = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Computer' | 'Secrets' | 'Connectors' | 'Vault' | 'Channels' | 'Pi' | 'Updates' | 'Backup' | 'Health'
+export type SettingsPageId = 'General' | 'Appearance' | 'Chat' | 'Speech' | 'Keyboard' | 'Companion' | 'Agents' | 'Accounts' | 'Providers' | 'Manager' | 'Approvals' | 'Memory' | 'Skills' | 'Remote' | 'Machines' | 'Connections' | 'Computer' | 'Secrets' | 'Connectors' | 'Vault' | 'Channels' | 'Pi' | 'Updates' | 'Backup' | 'Health' | 'About'
 
 type SettingsTab = { label: string; icon: typeof SlidersHorizontal; pages: Array<{ id: SettingsPageId; label: string }> }
 
 // Ten tabs in four groups (owner, 31 October 2026). A tab with several pages shows them as tabs under its title.
+// Every page has its own row, grouped by what the owner is doing there, as Zephium's settings are (owner, 23 November
+// 2026: "rearrange and group them in a nice way that makes sense"). Only Coding agents keeps tabs: its pages are four
+// views of the same installed agents.
 const NAV: Array<{ label: string; tabs: SettingsTab[] }> = [
   { label: 'App', tabs: [
     { label: 'General', icon: SlidersHorizontal, pages: [{ id: 'General', label: 'General' }] },
     { label: 'Appearance', icon: Palette, pages: [{ id: 'Appearance', label: 'Appearance' }] },
-    { label: 'Chat', icon: MessageSquare, pages: [{ id: 'Chat', label: 'Messages' }, { id: 'Speech', label: 'Dictation' }, { id: 'Keyboard', label: 'Keyboard' }] },
     { label: 'Companion', icon: Sparkles, pages: [{ id: 'Companion', label: 'Companion' }] },
+    { label: 'Keyboard', icon: Keyboard, pages: [{ id: 'Keyboard', label: 'Keyboard' }] },
+    { label: 'Dictation', icon: Mic, pages: [{ id: 'Speech', label: 'Dictation' }] },
   ] },
-  { label: 'Employees', tabs: [
-    { label: 'Coding agents', icon: Bot, pages: [{ id: 'Agents', label: 'Agents' }, { id: 'Accounts', label: 'Accounts' }, { id: 'Providers', label: 'Providers' }, { id: 'Pi', label: 'Pi' }] },
+  { label: 'Work', tabs: [
+    { label: 'Chat', icon: MessageSquare, pages: [{ id: 'Chat', label: 'Messages' }] },
     { label: 'CEO', icon: BriefcaseBusiness, pages: [{ id: 'Manager', label: 'CEO' }] },
-    { label: 'Approvals', icon: ShieldCheck, pages: [{ id: 'Approvals', label: 'Approvals' }] },
-    { label: 'Memory and skills', icon: Brain, pages: [{ id: 'Memory', label: 'Memory' }, { id: 'Skills', label: 'Skills' }] },
+    { label: 'Coding agents', icon: Bot, pages: [{ id: 'Agents', label: 'Agents' }, { id: 'Accounts', label: 'Accounts' }, { id: 'Providers', label: 'Providers' }, { id: 'Pi', label: 'Pi' }] },
+    { label: 'Memory', icon: Brain, pages: [{ id: 'Memory', label: 'Memory' }] },
+    { label: 'Skills', icon: Wand2, pages: [{ id: 'Skills', label: 'Skills' }] },
   ] },
   { label: 'Connections', tabs: [
-    { label: 'Remote access', icon: Smartphone, pages: [{ id: 'Remote', label: 'Remote' }, { id: 'Channels', label: 'Chat apps' }, { id: 'Machines', label: 'Machines' }] },
+    { label: 'Remote access', icon: Smartphone, pages: [{ id: 'Remote', label: 'Remote' }] },
+    { label: 'Machines', icon: Monitor, pages: [{ id: 'Machines', label: 'Machines' }] },
+    { label: 'Chat apps', icon: MessagesSquare, pages: [{ id: 'Channels', label: 'Chat apps' }] },
+    { label: 'Connectors', icon: Cable, pages: [{ id: 'Connectors', label: 'Connectors' }] },
+    { label: 'Retinue MCP', icon: Plug, pages: [{ id: 'Connections', label: 'Retinue MCP' }] },
+    { label: 'Computer use', icon: MousePointer2, pages: [{ id: 'Computer', label: 'Computer' }] },
+  ] },
+  { label: 'Privacy & security', tabs: [
+    { label: 'Approvals', icon: ShieldCheck, pages: [{ id: 'Approvals', label: 'Approvals' }] },
     { label: 'Vault', icon: LockKeyhole, pages: [{ id: 'Vault', label: 'Vault' }] },
-    { label: 'Integrations', icon: Cable, pages: [{ id: 'Connectors', label: 'Connectors' }, { id: 'Connections', label: 'Retinue MCP' }, { id: 'Computer', label: 'Computer' }, { id: 'Secrets', label: 'Secrets' }] },
+    { label: 'Secrets', icon: KeyRound, pages: [{ id: 'Secrets', label: 'Secrets' }] },
   ] },
   { label: 'System', tabs: [
-    { label: 'System', icon: Wrench, pages: [{ id: 'Updates', label: 'Updates' }, { id: 'Backup', label: 'Backup' }, { id: 'Health', label: 'Health check' }] },
+    { label: 'Updates', icon: RefreshCw, pages: [{ id: 'Updates', label: 'Updates' }] },
+    { label: 'Backup', icon: ArchiveRestore, pages: [{ id: 'Backup', label: 'Backup' }] },
+    { label: 'Health check', icon: HeartPulse, pages: [{ id: 'Health', label: 'Health check' }] },
+    { label: 'About', icon: Info, pages: [{ id: 'About', label: 'About' }] },
   ] },
 ]
 const TABS = NAV.flatMap((group) => group.tabs)
@@ -589,6 +606,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
         {tab.pages.length > 1 && <div className="blob-tabs settings-subtabs" role="tablist" aria-label={tab.label}>{tab.pages.map((item) => <button type="button" role="tab" key={item.id} aria-selected={page === item.id} onClick={() => switchPage(item.id)}>{item.label}</button>)}</div>}
       </header>
       <nav className="settings-nav" aria-label="Settings pages">
+        <div className="settings-nav-title" aria-hidden="true">Settings</div>
         <label className="settings-search"><Search size={14} aria-hidden="true" /><input type="search" aria-label="Search settings" placeholder="Search settings" value={settingsQuery} onChange={(event) => setSettingsQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Escape' && settingsQuery) { event.preventDefault(); event.stopPropagation(); setSettingsQuery('') } else if (event.key === 'Enter' && searchResults[0]) { event.preventDefault(); openSearchResult(searchResults[0]) } }} /></label>
         {settingsQuery.trim() ? <div className="settings-search-results" role="listbox" aria-label="Settings search results">
           {searchResults.map((entry) => <button type="button" role="option" aria-selected="false" key={entry.page + entry.group + entry.label} onClick={() => openSearchResult(entry)}><span>{entry.label}</span><small>{tabOf(entry.page as SettingsPageId).label} · {entry.group}</small></button>)}
@@ -807,6 +825,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
             </SettingsGroup>
             <ApprovalRulesPage agents={snapshot?.agents ?? []} projects={snapshot?.projects ?? []} />
           </>}
+          {!loading && page === 'About' && <AboutPage canUpdate={platform.updater} onOpenPage={(next) => switchPage(next)} />}
           {!loading && page === 'Health' && <>
             <HealthPage />
             <SettingsGroup title="Support">

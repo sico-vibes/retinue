@@ -1474,6 +1474,10 @@ pub trait AgentAdapter: Send + Sync {
     async fn model_catalog(&self, _runtime: &RuntimeSpec) -> Result<ModelCatalog, AdapterError> {
         Err(AdapterError::Unsupported("model catalog is unavailable".into()))
     }
+    /// Use the discovered CLI version when catalog commands differ by version.
+    async fn model_catalog_for_version(&self, runtime: &RuntimeSpec, _version: Option<&str>) -> Result<ModelCatalog, AdapterError> {
+        self.model_catalog(runtime).await
+    }
     /// Returns a provider's structured account quota response when the native
     /// protocol exposes one. Callers must normalize it before persistence/UI.
     async fn read_account_quota(&self, _runtime: &RuntimeSpec) -> Result<Value, AdapterError> {

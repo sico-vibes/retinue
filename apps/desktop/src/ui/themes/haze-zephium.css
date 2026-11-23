@@ -1,0 +1,511 @@
+/* Haze in the style of the Zephium browser (owner, 22 November 2026).
+   Re-implemented from measured values (Grey's notes in zephium-ref/notes), never
+   copied from Zephium's MPL-2.0 sources. Loaded after haze.css, so every rule here
+   is scoped to Haze and wins over the older glass look; Stone is untouched.
+   Retinue's own rules still hold: rounded rectangles (no pills, no circles beyond
+   the listed badges), no glow, no decorative gradients. */
+
+/* ── Tokens ─────────────────────────────────────────────────────────────── */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) {
+  /* Zephium's graphite ladder: chrome around a solid page pane. */
+  --z-canvas: #1a1a1d;
+  --z-page: #1a1a1d;
+  --z-chrome: #1f1f22;
+  --z-surface: #26262a;
+  --z-raised: #2c2c30;
+  --z-float: #3d3d44;
+  --z-menu: rgb(61 61 68 / .62);
+  --z-fill: rgb(255 255 255 / .05);
+  --z-fill-hover: rgb(255 255 255 / .08);
+  --z-fill-pressed: rgb(255 255 255 / .16);
+  --z-row-hover: rgb(255 255 255 / .04);
+  --z-row-active: rgb(255 255 255 / .075);
+  --z-row-pressed: rgb(255 255 255 / .1);
+  --z-row-rim: inset 0 0 0 1px rgb(255 255 255 / .06);
+  --z-control: rgb(255 255 255 / .09);
+  --z-control-hover: rgb(255 255 255 / .13);
+  --z-field: rgb(255 255 255 / .09);
+  --z-field-ring: rgb(255 255 255 / .16);
+  --z-lit: #ededf0;
+  --z-lit-hover: #f7f7fa;
+  --z-on-lit: #161619;
+  --z-faint: rgb(244 244 246 / .44);
+  --z-shine-top: inset 0 1px 0 0 rgb(255 255 255 / .1);
+  --z-shadow-menu: 0 0 0 1px rgb(255 255 255 / .08), 0 14px 44px -10px rgb(0 0 0 / .34);
+  --z-shadow-float: 0 6px 22px rgb(0 0 0 / .34), 0 0 0 .5px rgb(255 255 255 / .08);
+  --z-shadow-overlay: 0 12px 36px rgb(0 0 0 / .3), 0 0 0 .5px rgb(255 255 255 / .08);
+  --z-shadow-thumb: 0 1px 2.5px rgb(0 0 0 / .2), 0 0 0 .5px rgb(0 0 0 / .07);
+
+  /* Radii by job. Retinue keeps rounded rectangles where Zephium uses a capsule. */
+  --z-radius-row: 12px;
+  --z-radius-control: 10px;
+  --z-radius-card: 18px;
+  --z-radius-panel: 22px;
+  --z-radius-pane: 12px;
+
+  /* Motion: named by purpose. Leaving is always quicker than arriving. */
+  --z-instant: 70ms;
+  --z-fast: 120ms;
+  --z-base: 200ms;
+  --z-slow: 300ms;
+  --z-page-motion: 400ms;
+  --z-ease-out: cubic-bezier(.22, 1, .36, 1);
+  --z-ease-smooth: cubic-bezier(.2, .8, .2, 1);
+  --z-ease-emphasized: cubic-bezier(.16, 1, .3, 1);
+  --z-ease-exit: cubic-bezier(.4, 0, 1, 1);
+
+  /* Retinue tokens, retuned to the graphite ladder. */
+  --haze-base: var(--z-chrome);
+  --haze-glass: var(--z-raised);
+  --surface-app: var(--z-chrome);
+  --surface-sidebar: transparent;
+  --surface-panel: var(--z-surface);
+  --surface-raised: var(--z-surface);
+  --surface-overlay: var(--z-raised);
+  --surface-input: var(--z-field);
+  --surface-hover: var(--z-row-hover);
+  --surface-selected: var(--z-row-active);
+  --surface-selected-strong: var(--z-row-pressed);
+  --surface-avatar: var(--z-fill);
+  --text-1: #f4f4f6;
+  --text-2: rgb(244 244 246 / .68);
+  --text-3: rgb(244 244 246 / .44);
+  --line: rgb(255 255 255 / .07);
+  --line-strong: rgb(255 255 255 / .13);
+  --accent: var(--user-accent, var(--z-lit));
+  --bubble-user: var(--user-accent-soft, var(--z-fill-hover));
+  --status-working: #dcb977;
+  --status-success: #7fcaa1;
+  --status-danger: #ef8a8e;
+  --status-info: #8fbcf7;
+  --shadow-pop: var(--z-shadow-menu);
+  --radius-md: var(--z-radius-control);
+  --radius-lg: var(--z-radius-card);
+  background: var(--z-chrome);
+}
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface)[data-theme="light"]:not(.companion-surface):not(.dictation-surface) {
+  --z-canvas: #f1f1f3;
+  --z-page: #f1f1f3;
+  --z-chrome: #e6e6e9;
+  --z-surface: #fff;
+  --z-raised: #fff;
+  --z-float: #fff;
+  --z-menu: rgb(255 255 255 / .62);
+  --z-fill: rgb(24 24 27 / .05);
+  --z-fill-hover: rgb(24 24 27 / .08);
+  --z-fill-pressed: rgb(24 24 27 / .11);
+  --z-row-hover: rgb(255 255 255 / .16);
+  --z-row-active: rgb(255 255 255 / .3);
+  --z-row-pressed: rgb(255 255 255 / .4);
+  --z-row-rim: 0 0 0 0 transparent;
+  --z-control: #fff;
+  --z-control-hover: #f9f9f9;
+  --z-field: rgb(228 228 230 / .7);
+  --z-field-ring: rgb(0 0 0 / .14);
+  --z-lit: #222226;
+  --z-lit-hover: #2e2e35;
+  --z-on-lit: #fff;
+  --z-faint: rgb(28 28 31 / .42);
+  --z-shine-top: inset 0 1px 0 0 rgb(255 255 255 / .6);
+  --z-shadow-menu: 0 0 0 1px rgb(24 24 27 / .08), 0 14px 44px -10px rgb(0 0 0 / .18);
+  --z-shadow-thumb: 0 1px 2.5px rgb(0 0 0 / .18), 0 0 0 .5px rgb(0 0 0 / .07);
+  --text-1: #1c1c1f;
+  --text-2: rgb(28 28 31 / .62);
+  --text-3: rgb(28 28 31 / .42);
+  --line: rgb(24 24 27 / .07);
+  --line-strong: rgb(24 24 27 / .13);
+  --status-working: #8c6a2a;
+  --status-success: #2f7f5a;
+  --status-danger: #c0474f;
+  --status-info: #2f6fd6;
+}
+
+/* ── Window frame: an 8px gutter, chrome around one rounded page pane ──── */
+/* The picture is back behind the window (owner, 23 November 2026): Haze's backdrop stays, and the chrome is a wash
+   of its colour over it, as Zephium washes its native material, so the picture shows through the frame only. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) body { background: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell { padding: 8px; background-color: color-mix(in srgb, var(--z-chrome) var(--z-wash, 78%), transparent); grid-template-columns: 240px var(--convos-w) minmax(0, 1fr) 0; transition: grid-template-columns var(--z-page-motion) var(--z-ease-emphasized); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell.inspector-open { grid-template-columns: 240px var(--convos-w) minmax(0, 1fr) 300px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell.convos-open { --convos-w: 240px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversations-panel,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .context-pane { background: transparent; border: 0; box-shadow: none; backdrop-filter: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversations-panel { margin-left: 8px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane { margin-left: 8px; min-width: 0; border-radius: var(--z-radius-pane); background: var(--z-page); overflow: hidden; border: 0; box-shadow: none; animation: z-stage-in var(--z-page-motion) var(--z-ease-emphasized) backwards; transform-origin: 50% 40%; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell.inspector-open .context-pane { margin-left: 8px; border-radius: var(--z-radius-pane); background: var(--z-page); overflow: hidden; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .chat-header,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .convo-head,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar-top { border: 0; background: transparent; }
+@keyframes z-stage-in { from { opacity: 0; scale: .985; } }
+
+/* ── Sidebar and conversation rows: 12px plates, fill only, a rim when current ── */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.ps-bot, .ps-convo, .bot-row, .convo-row, .sidebar-search, .convo-new, .foot-row, .remote-chip) { border-radius: var(--z-radius-row); transition: background-color var(--z-instant) linear, box-shadow var(--z-fast) var(--z-ease-out); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.ps-bot, .ps-convo, .bot-row, .convo-row, .foot-row, .remote-chip):hover { background: var(--z-row-hover); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.ps-bot, .ps-convo, .bot-row, .convo-row):active { background: var(--z-row-pressed); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.ps-bot.selected, .ps-convo.selected, .bot-row.selected, .convo-row.active) { background: var(--z-row-active); box-shadow: var(--z-row-rim); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.ps-bot.selected, .ps-convo.selected, .convo-row.active) :is(strong, .ps-bot-name, .convo-title) { font-weight: 550; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar-search,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .convo-new,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .convo-new-pick { background: var(--z-field); border: 0; box-shadow: none; color: var(--text-2); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar-search:hover,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .convo-new:hover,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .convo-new-pick:hover { background: var(--z-fill-hover); color: var(--text-1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .convo-new-split { border: 0; gap: 2px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .convo-new-split .convo-new { border-radius: var(--z-radius-row) 4px 4px var(--z-radius-row); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .convo-new-split .convo-new-pick { border-radius: 4px var(--z-radius-row) var(--z-radius-row) 4px; }
+
+/* Section heads and segmented switches in the column */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.ps-project-head, .convo-project-head, .team-group h3) { color: var(--text-3); font-weight: 500; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar-view-switch { background: var(--z-fill); border: 0; border-radius: var(--z-radius-row); padding: 3px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar-view-switch [aria-pressed="true"],
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar-view-switch .active { background: var(--z-control-hover); box-shadow: var(--z-shine-top); border-radius: 9px; color: var(--text-1); }
+
+/* Icon buttons: flat, muted at rest, a fill plate on hover */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .icon-button { border: 0; background: transparent; color: var(--text-2); border-radius: var(--z-radius-control); transition: background-color var(--z-instant) linear, color var(--z-instant) linear; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .icon-button:hover { background: var(--z-fill-hover); color: var(--text-1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .icon-button:active { background: var(--z-fill-pressed); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane { animation: none; }
+  :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell { transition: none; }
+}
+
+/* ── The dock: the profile plate, a rule, then Remote and Usage as tiles ── */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar { display: grid; grid-template-columns: 40px 1px 44px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; column-gap: 8px; padding-bottom: 0; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > * { grid-column: 1 / -1; min-width: 0; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > .team-sidebar { grid-row: 2; min-height: 0; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar::before { content: ""; grid-row: 3; grid-column: 2; align-self: center; width: 1px; height: 30px; background: var(--line); margin-top: 8px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > .sidebar-foot { grid-row: 3; grid-column: 1; padding: 8px 0 0; border: 0; align-self: end; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > .remote-chip { grid-row: 3; grid-column: 3; align-self: end; width: 44px; height: 44px; margin: 8px 0 0; padding: 0; justify-content: center; background: var(--z-fill); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > .remote-chip:hover { background: var(--z-fill-hover); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > .remote-chip .remote-chip-copy { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > .sidebar-usage-root { grid-row: 3; grid-column: 4; align-self: end; margin-top: 8px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > .sidebar-usage-root .foot-row { width: 100%; height: 44px; margin: 0; padding: 0 12px; background: var(--z-fill); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > .sidebar-usage-root .foot-row:hover { background: var(--z-fill-hover); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > .sidebar-usage-root .foot-row-label { display: none; }
+
+/* The plate: 40px, a rounded rectangle (Retinue keeps circles for badges only), one inner top light. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-button { width: 40px; height: 40px; padding: 0; justify-content: center; border-radius: var(--z-radius-row); background: var(--z-row-active); box-shadow: var(--z-shine-top); transition: background-color var(--z-fast) var(--z-ease-out), scale var(--z-slow) var(--z-ease-out); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-button:hover,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-button.open { background: var(--z-row-pressed); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-button:active { scale: .94; transition-duration: var(--z-instant); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-button > .profile-copy,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-button > svg { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-button .profile-avatar { width: 40px; height: 40px; border-radius: var(--z-radius-row); background: transparent; font-size: 13px; font-weight: 600; letter-spacing: .01em; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-button .profile-avatar .presence { right: 3px; bottom: 3px; border-color: var(--z-chrome); }
+
+/* The stack: rises out of the plate, nearest row first, the name last. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.menu-surface { position: absolute; z-index: 50; bottom: calc(100% + 8px); left: 0; right: auto; min-width: 232px; max-height: calc(100vh - 120px); overflow: auto; overscroll-behavior: contain; padding: 6px; display: grid; gap: 0; border: 0; border-radius: var(--z-radius-panel); background: var(--z-menu); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: var(--z-shadow-menu), var(--z-shine-top); transform-origin: bottom left; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.is-open { animation: z-menu-fade-in var(--z-base) var(--z-ease-smooth) both, z-menu-rise-in var(--z-page-motion) var(--z-ease-smooth) both; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.is-closing { pointer-events: none; animation: z-menu-out var(--z-fast) var(--z-ease-smooth) forwards; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.is-open > * { animation: z-row-in var(--z-page-motion) var(--z-ease-smooth) both; animation-delay: calc(var(--step, 0) * 22ms); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item { min-height: 34px; padding: 6px 8px; gap: 10px; border-radius: 16px; font-size: 13px; font-weight: 450; color: var(--text-1); background: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item > svg { width: 16px; color: var(--text-2); transition: color var(--z-instant) linear; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item:is(:hover, :focus-visible) { background: var(--z-row-active); outline: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item:is(:hover, :focus-visible) > svg { color: var(--text-1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item:active { background: var(--z-row-pressed); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item.danger,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item.danger > svg { color: var(--status-danger); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-separator { min-height: 1px; margin: 4px 8px; background: var(--line); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-hint { margin-left: auto; color: var(--z-faint); font: inherit; font-size: 12px; font-variant-numeric: tabular-nums; background: none; border: 0; padding: 0; }
+.profile-menu-head { display: flex; align-items: center; }
+.profile-menu-head-avatar { display: none; }
+.profile-menu-head-edit { display: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .profile-menu-head { min-height: 38px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .profile-menu-head-avatar { width: 24px; height: 24px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 7px; background: var(--z-fill-hover); box-shadow: var(--z-shine-top); font-size: 10px; font-weight: 600; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .profile-menu-head strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .profile-menu-head-edit { display: block; margin-left: auto; color: var(--z-faint); opacity: 0; transition: opacity var(--z-instant) linear; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .profile-menu-head:is(:hover, :focus-visible) .profile-menu-head-edit { opacity: 1; }
+
+/* While the stack is open the rest of the column steps back. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > :not(.sidebar-foot) { transition: opacity var(--z-base) var(--z-ease-out); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar:has(.profile-menu.is-open) > :not(.sidebar-foot) { opacity: .18; }
+
+@keyframes z-menu-fade-in { from { opacity: 0; } }
+@keyframes z-menu-rise-in { from { scale: .98; translate: 0 6px; } }
+@keyframes z-menu-out { to { opacity: 0; scale: .98; translate: 0 6px; } }
+@keyframes z-row-in { from { opacity: 0; translate: 0 6px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.is-open,
+  :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.is-open > *,
+  :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.is-closing { animation: none; }
+}
+
+/* ── Lines that Zephium's chrome does without ── */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar { border-right: 0; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-crumb { border-left-color: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .composer-box { border: 0; border-radius: var(--z-radius-card); background: var(--z-surface); box-shadow: var(--z-shine-top); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .turn-plan { border: 0; border-radius: var(--z-radius-card); background: var(--z-surface); }
+
+/* ── Settings as a full window: the column becomes the settings list, the page pane holds the page ── */
+.settings-nav-title { display: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sheet-backdrop.settings-backdrop { padding: 8px; display: block; background: var(--z-chrome); backdrop-filter: none; animation: z-menu-fade-in var(--z-base) var(--z-ease-out) both; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet { width: 100%; height: 100%; max-width: none; max-height: none; grid-template-columns: 240px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); column-gap: 8px; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; animation: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet::before { content: ""; grid-column: 2; grid-row: 1 / 3; border-radius: var(--z-radius-pane); background: var(--z-page); animation: z-stage-in var(--z-page-motion) var(--z-ease-emphasized) backwards; transform-origin: 50% 40%; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet > .settings-page-head,
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet > .settings-content { grid-column: 2; position: relative; z-index: 1; padding-inline: max(clamp(22px, 5vw, 60px), calc((100% - 850px) / 2)); animation: z-stage-in var(--z-page-motion) var(--z-ease-emphasized) backwards; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet > .settings-page-head { grid-row: 1; padding-top: 52px; padding-bottom: 6px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet > .settings-content { grid-row: 2; padding-top: 0; padding-bottom: 64px; scrollbar-width: thin; scrollbar-color: rgb(255 255 255 / .16) transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-page-head h2 { font-size: 27px; font-weight: 550; letter-spacing: -.035em; color: var(--text-1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-page-head > .icon-button { position: absolute; top: 14px; right: 14px; }
+
+/* The list column */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav { grid-column: 1; grid-row: 1 / 3; padding: 0 0 8px; gap: 2px; border: 0; background: transparent; animation: z-nav-in var(--z-page-motion) var(--z-ease-emphasized) backwards; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav-title { display: block; padding: 14px 10px 12px; color: var(--text-1); font-size: 13px; font-weight: 600; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav .settings-search { margin: 0 0 6px; height: 28px; border: 0; border-radius: var(--z-radius-control); background: var(--z-field); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav-label { margin: 16px 0 4px; padding: 0 10px; color: var(--text-3); font-size: 12px; font-weight: 500; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav button { height: 32px; padding: 0 10px; gap: 10px; border-radius: var(--z-radius-row); color: var(--text-1); font-size: 13px; font-weight: 450; transition: background-color var(--z-instant) linear; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav button svg { width: 16px; height: 16px; color: var(--text-2); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav button:hover { background: var(--z-row-hover); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav button.selected { background: var(--z-row-active); box-shadow: var(--z-row-rim); font-weight: 550; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav button.selected svg { color: var(--text-1); }
+
+/* Groups and rows: a bold heading over an 18px card of 58px rows, divided from 16px in */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet .settings-group { margin-top: 34px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet .settings-group-head { margin: 0 0 10px; padding: 0 16px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet .settings-group-head h3 { color: var(--text-1); font-size: 14px; font-weight: 600; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet .settings-card { border-radius: var(--z-radius-card); background: var(--z-surface); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet .settings-row { min-height: 58px; padding: 12px 18px; gap: 24px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet .settings-card > * + * { position: relative; border-top: 0; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet .settings-card > * + *::before { content: ""; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--line); pointer-events: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-row-title > strong { font-size: 13px; font-weight: 600; color: var(--text-1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-row-desc { display: block; margin-top: 2px; color: var(--text-2); font-size: 12px; line-height: 1.45; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-intro { margin: 6px 0 0; color: var(--text-2); font-size: 13px; }
+
+@keyframes z-nav-in { from { opacity: 0; translate: 20px 0; } }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.settings-sheet::before, .settings-sheet > .settings-page-head, .settings-sheet > .settings-content, .settings-nav) { animation: none; }
+}
+
+/* ── Switch: a 45×20 track, a 26×16 thumb that travels 15px; Retinue keeps rounded rectangles ── */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .toggle { position: relative; width: 45px; height: 20px; padding: 2px; border-radius: 7px; background: rgb(255 255 255 / .14); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .07); transition: background-color var(--z-slow) var(--z-ease-out); }
+:root[data-style="haze"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) .toggle { background: rgb(24 24 27 / .12); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .toggle:hover:not(:disabled):not(.on) { background: color-mix(in srgb, rgb(255 255 255 / .14), var(--text-1) 5%); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .toggle > :is(i, b, span) { width: 26px; height: 16px; border-radius: 5px; background: #e5e5e8; box-shadow: var(--z-shadow-thumb); transform: none; translate: 0 0; transition: translate var(--z-page-motion) cubic-bezier(.34, 1.25, .64, 1), width var(--z-base) var(--z-ease-out); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .toggle.on { background: var(--user-accent, #9c9ca1); }
+:root[data-style="haze"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) .toggle.on { background: var(--user-accent, #55555c); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .toggle.on > :is(i, b, span) { transform: none; translate: 15px 0; background: #fff; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .toggle:active:not(:disabled) > :is(i, b, span) { width: 32px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .toggle.on:active:not(:disabled) > :is(i, b, span) { translate: 9px 0; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .toggle:disabled { opacity: .45; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .rail-remote .toggle.small { width: 34px; height: 16px; border-radius: 6px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .rail-remote .toggle.small > i { width: 18px; height: 12px; border-radius: 4px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .rail-remote .toggle.small.on > i { translate: 12px 0; }
+
+/* ── Select: a filled 24px trigger with a double chevron; a solid menu of 34px rows ── */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select-trigger { height: 26px; min-width: 0; padding: 0 8px 0 10px; gap: 8px; border: 0; border-radius: var(--z-radius-control); background: var(--z-row-active); box-shadow: var(--z-shine-top); color: var(--text-1); font-size: 12px; font-weight: 450; transition: background-color var(--z-instant) linear, scale var(--z-base) var(--z-ease-out); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select-trigger:hover:not(:disabled),
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select.open .select-trigger { background: var(--z-row-pressed); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select-trigger:active:not(:disabled) { scale: .97; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select-trigger > svg { color: var(--text-2); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select.muted .select-trigger { color: var(--text-1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select.field .select-trigger { height: 34px; border: 0; background: var(--z-field); box-shadow: none; font-size: 13px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.select-menu, .menu-surface:not(.profile-menu)) { padding: 6px; border: 0; border-radius: var(--z-radius-panel); background: var(--z-float); box-shadow: var(--z-shadow-menu), var(--z-shine-top); backdrop-filter: none; max-height: 340px; animation: z-select-in var(--z-base) var(--z-ease-out) both; transform-origin: top center; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select-menu.open-up { transform-origin: bottom center; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.select-option, .menu-surface:not(.profile-menu) .menu-item) { min-height: 34px; padding: 6px 10px; gap: 10px; border-radius: 16px; font-size: 13px; font-weight: 450; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.select-option.active, .select-option:hover:not(:disabled), .menu-surface:not(.profile-menu) .menu-item:hover:not(:disabled), .menu-surface:not(.profile-menu) .menu-item:focus-visible) { background: var(--z-row-active); outline: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select-option > svg { order: 2; margin-left: auto; color: var(--text-1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select-search { height: 30px; border-radius: var(--z-radius-control); background: var(--z-field); }
+@keyframes z-select-in { from { opacity: 0; scale: .97; } }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .toggle > :is(i, b, span) { transition: none; }
+  :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.select-menu, .menu-surface) { animation: none; }
+}
+
+/* Settings close button sits in the list's header, beside "Settings", as Zephium's does. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-page-head > .icon-button { position: fixed; top: 16px; left: 220px; right: auto; z-index: 3; width: 26px; height: 26px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-row .select.muted .select-trigger { height: 26px; padding: 0 8px 0 10px; border: 0; color: var(--text-1); background: var(--z-row-active); box-shadow: var(--z-shine-top); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-row .select.muted .select-trigger:hover:not(:disabled),
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-row .select.muted.open .select-trigger { background: var(--z-row-pressed); }
+
+/* About, in Haze: link tiles take the raised control fill with one inner top light. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .about-link-tile { background: var(--z-row-active); box-shadow: var(--z-shine-top); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .about-link:hover .about-link-tile { background: var(--z-row-pressed); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .about-tile img { border-radius: 22px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet :is(.secondary-button, .primary-button).small { height: 26px; padding: 0 12px; border: 0; border-radius: var(--z-radius-control); background: var(--z-row-active); box-shadow: var(--z-shine-top); color: var(--text-1); font-size: 12px; font-weight: 500; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet :is(.secondary-button, .primary-button).small:hover:not(:disabled) { background: var(--z-row-pressed); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet .primary-button.small { background: var(--z-lit); color: var(--z-on-lit); box-shadow: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-sheet .primary-button.small:hover:not(:disabled) { background: var(--z-lit-hover); }
+
+/* ── First run: Zephium's step layout. A 40px heading and one line of body high on the
+   screen, the step's controls under it, and a bottom bar: Back, the progress rail, Continue ↵. ── */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-screen { background: var(--z-chrome); padding: 74px 56px 120px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-content { width: min(640px, 100%); margin: 0 auto; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-content.wide { width: min(760px, 100%); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-step { gap: 14px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-step h1 { font-size: 40px; font-weight: 500; line-height: 1.1; letter-spacing: -.032em; animation: z-rise 900ms var(--z-ease-emphasized) 250ms backwards; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-step > p { max-width: 52ch; margin: 0 auto 18px; color: var(--text-2); font-size: 15px; line-height: 1.5; text-wrap: balance; animation: z-rise 900ms var(--z-ease-emphasized) 360ms backwards; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-step > :not(h1):not(p):not(.onboarding-actions) { animation: z-rise 900ms var(--z-ease-emphasized) 420ms backwards; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-character { animation: z-rise 900ms var(--z-ease-emphasized) 120ms backwards; }
+
+/* The bottom bar: the step's own action row, pinned. Back on the left, the primary on the right. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-actions { position: fixed; z-index: 5; left: 56px; right: 56px; bottom: 34px; height: 44px; margin: 0; display: flex; align-items: center; justify-content: flex-end; gap: 10px; pointer-events: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-actions > * { pointer-events: auto; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-actions.split > :first-child { margin-right: auto; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-actions :is(.primary-button, .ghost-button, .secondary-button) { height: 34px; padding: 0 18px; border: 0; border-radius: var(--z-radius-row); font-size: 13px; font-weight: 500; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-actions .primary-button { min-width: 132px; padding: 0 12px 0 20px; display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; background: var(--z-lit); color: var(--z-on-lit); box-shadow: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-actions .primary-button:hover:not(:disabled) { background: var(--z-lit-hover); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-actions .primary-button::after { content: "↵"; min-width: 20px; height: 20px; display: grid; place-items: center; border-radius: 6px; background: rgb(0 0 0 / .1); font-size: 12px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-actions .primary-button:disabled { opacity: .45; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-actions :is(.ghost-button, .secondary-button) { background: transparent; color: var(--text-2); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-actions :is(.ghost-button, .secondary-button):hover:not(:disabled) { background: var(--z-fill); color: var(--text-1); }
+
+/* The progress rail sits in the bar's centre: 18×3 marks, the current one 34px wide. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-progress { position: fixed; z-index: 6; left: 50%; bottom: 54px; margin: 0; padding: 0; gap: 5px; translate: -50% 0; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-progress span { width: 18px; height: 3px; border-radius: 1.5px; background: rgb(255 255 255 / .22); transition: width var(--z-page-motion) var(--z-ease-emphasized), background-color var(--z-slow) var(--z-ease-out); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-progress span.done { background: var(--z-faint); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-progress span.active { width: 34px; background: var(--text-1); }
+
+/* Choices on the first run: plates with the raised fill, a lit inner ring when chosen. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-runtime { border: 0; border-radius: var(--z-radius-card); background: var(--z-surface); box-shadow: var(--z-shine-top); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-field input.text-input { height: 38px; border: 0; border-radius: var(--z-radius-row); background: var(--z-field); font-size: 15px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-field input.text-input:focus-visible { box-shadow: inset 0 0 0 1px var(--z-field-ring); outline: none; }
+
+@keyframes z-rise { from { opacity: 0; translate: 0 10px; } }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.onboarding-step h1, .onboarding-step > p, .onboarding-step > *, .onboarding-character) { animation: none; }
+}
+/* A transform on the step would trap the pinned bar inside it; Haze animates the step's children instead. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-step { animation: none; transform: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .onboarding-screen { display: block; }
+/* The scroll fade under the header takes the page's colour, not the chrome's. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-frame::before { background: linear-gradient(var(--z-page), transparent); }
+
+/* ── The sky (owner, 23 November 2026) ──────────────────────────────────────
+   An empty conversation shows Retinue's own printed sky (ui/sky/skyPrint.ts), as Zephium's new tab shows its sky.
+   The pane is its paper until the print is ready, then the print fades up. What stands on the sky is white with a
+   close edge of shade, and cards on it are sheets of sky glass. While the sky is up, the chrome takes its colour. */
+.home-sky { position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: #0a1e36; }
+.home-sky[data-sky="day"] { background: #a9c6ea; }
+.home-sky-print { position: absolute; top: 0; left: 50%; translate: -50% 0; image-rendering: pixelated; opacity: 0; transition: opacity 560ms cubic-bezier(.4, 0, .2, 1); }
+.home-sky[data-ready="true"] .home-sky-print { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .home-sky-print { transition: none; } }
+.sky-clock { margin: 2px 0 10px !important; font-size: 14px !important; font-weight: 500; letter-spacing: -.005em; }
+.sky-clock b { font-weight: 600; }
+.sky-clock small { font-size: 10px; font-weight: 600; letter-spacing: .04em; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane:has(.home-sky) { --sky-ink: rgb(255 255 255); --sky-muted: rgb(255 255 255 / .78); --sky-type-edge: rgb(2 8 24 / .46); --sky-type-halo: rgb(2 8 24 / .4); --sky-card: rgb(20 30 44 / .62); --sky-card-hover: rgb(28 40 58 / .72); --sky-card-edge: rgb(200 212 232 / .13); --sky-card-rim: rgb(200 212 232 / .22); background: #0a1e36; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface)[data-theme="light"] .conversation-pane:has(.home-sky) { --sky-type-edge: rgb(28 58 112 / .34); --sky-type-halo: rgb(18 48 112 / .22); --sky-card: rgb(255 255 255 / .64); --sky-card-hover: rgb(255 255 255 / .78); --sky-card-edge: rgb(255 255 255 / .7); --sky-card-rim: rgb(255 255 255 / .9); background: #a9c6ea; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane:has(.home-sky) :is(.session-first-state h2, .session-first-state > p, .sky-clock) { color: var(--sky-ink); text-shadow: 0 0 1px var(--sky-type-edge), 0 1px 18px var(--sky-type-halo); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane:has(.home-sky) .session-first-state > p { color: var(--sky-muted); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane:has(.home-sky) .session-first-state code { color: var(--sky-ink); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane:has(.home-sky) .session-first-state h2 { font-size: 30px; font-weight: 550; letter-spacing: -.03em; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane:has(.home-sky) :is(.project-suggestion, .composer-box) { background: var(--sky-card); box-shadow: inset 0 1px 0 var(--sky-card-rim), inset 0 0 0 1px var(--sky-card-edge); backdrop-filter: blur(18px) saturate(1.1); border: 0; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane:has(.home-sky) .project-suggestion:hover { background: var(--sky-card-hover); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane:has(.home-sky) .conversation-frame::before { display: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .conversation-pane:has(.home-sky) .chat-header :is(.chat-title-button, .crumb, button, a) { color: var(--sky-ink); text-shadow: 0 0 1px var(--sky-type-edge), 0 1px 12px var(--sky-type-halo); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface)[data-theme="light"] .conversation-pane:has(.home-sky) :is(.project-suggestion, .composer-box) { color: #18181b; }
+/* The window's glass is evened out toward the sky's colour while it is up (Zephium's sky light, without the edge). */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell { transition: grid-template-columns var(--z-page-motion) var(--z-ease-emphasized), background-color 560ms cubic-bezier(.4, 0, .2, 1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell:has(.home-sky[data-sky="night"]) { background-color: color-mix(in srgb, var(--z-chrome) 62%, rgb(10 30 54 / .9)); transition-duration: var(--z-page-motion), 320ms; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell:has(.home-sky[data-sky="day"]) { background-color: color-mix(in srgb, var(--z-chrome) 66%, rgb(196 214 238 / .9)); transition-duration: var(--z-page-motion), 320ms; }
+
+/* ── Polish pass (owner, 23 November 2026): the inspector, chat cards, dialogs, Team and Tasks ──────────────── */
+/* The inspector is a second page pane; its contents hold the pane's width so the column's motion does not reflow them. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .context-pane > * { min-width: 292px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .context-pane { border: 0; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .session-rail > * { border-color: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .session-rail :is(h3, h4, .rail-section-title, .rail-head) { color: var(--text-3); font-weight: 500; }
+
+/* Chat: the agent's words sit on the surface, the owner's one step up; every card in the stream is a flat 18px sheet. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .message-bubble { border-radius: var(--z-radius-card); background: var(--z-surface); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .message-row.user .message-bubble { background: var(--z-raised); box-shadow: var(--z-shine-top); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.plan-card, .proposal-card, .permission-card, .question-card, .activity-card, .schedule-card, .delegate-scheduled-card, .media-card, .tree-card, .team-card) { border: 0; border-radius: var(--z-radius-card); background: var(--z-surface); box-shadow: var(--z-shine-top); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.plan-card > header, .proposal-head, .proposal-actions, .permission-card header, .question-card header) { border-color: var(--z-fill); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.change-banner, .update-banner, .connection-banner) { border: 0; border-radius: var(--z-radius-row); background: var(--z-surface); box-shadow: var(--z-shine-top); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .message-list code:not(pre code) { border: 0; border-radius: 6px; background: var(--z-fill-hover); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .message-list pre { border: 0; border-radius: var(--z-radius-control); background: var(--z-canvas); box-shadow: inset 0 0 0 1px var(--z-fill); }
+
+/* Dialogs, as Zephium's: a 30% scrim, a raised 18px panel with 26px of room, a 20px title, the actions right-aligned. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sheet-backdrop:not(.settings-backdrop),
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.team-dialog-backdrop, .tag-editor-backdrop, .media-dialog-backdrop) { background: rgb(0 0 0 / .3); backdrop-filter: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.blob-dialog, .team-dialog, .tag-editor, .media-dialog) { width: min(480px, calc(100% - 48px)); padding: 26px; border: 1px solid rgb(255 255 255 / .1); border-radius: 18px; background: var(--z-raised); box-shadow: var(--z-shadow-overlay); backdrop-filter: none; }
+:root[data-style="haze"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) :is(.blob-dialog, .team-dialog, .tag-editor, .media-dialog) { border-color: rgb(24 24 27 / .1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.blob-dialog, .team-dialog) h2 { font-size: 20px; font-weight: 550; letter-spacing: -.02em; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.blob-dialog, .team-dialog) h2 + p { margin-top: -4px; color: var(--text-3); font-size: 12px; line-height: 1.6; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.blob-dialog, .team-dialog) :is(input.text-input, textarea, .text-input) { border: 0; border-radius: var(--z-radius-control); background: var(--z-field); box-shadow: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.blob-dialog, .team-dialog) :is(input.text-input, textarea, .text-input):focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--z-field-ring); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.blob-dialog, .team-dialog) :is(.dialog-actions, .blob-dialog-actions, footer) { gap: 8px; }
+/* Buttons and fields everywhere in Haze: no outlines. Secondary is a filled plate with the top shine, primary is lit. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .secondary-button { border: 0; border-radius: var(--z-radius-control); background: var(--z-row-active); box-shadow: var(--z-shine-top); color: var(--text-1); transition: background-color var(--z-instant) linear; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .secondary-button:hover:not(:disabled) { background: var(--z-row-pressed); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .primary-button { border: 0; border-radius: var(--z-radius-control); background: var(--z-lit); color: var(--z-on-lit); box-shadow: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .primary-button:hover:not(:disabled) { background: var(--z-lit-hover); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .primary-button:disabled { opacity: .45; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.blob-dialog, .team-dialog, .tag-editor, .task-dialog) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select) { border: 0; border-radius: var(--z-radius-control); background: var(--z-field); box-shadow: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.blob-dialog, .team-dialog, .tag-editor, .task-dialog) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]), textarea, select):focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--z-field-ring); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .change-review { border: 0; border-radius: var(--z-radius-card); background: var(--z-surface); box-shadow: var(--z-shine-top); }
+
+/* Pages in the page pane (Tasks, Schedules, Usage, an employee, Team): no outlines; panels are surfaces, cards one step up. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .blob-page-header { border-bottom-color: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.blob-page, .tasks-page, .schedules-page, .analytics-page, .team-page) :is(input.text-input, input:not([type]), input[type="text"], input[type="search"], input[type="number"], textarea) { border: 0; border-radius: var(--z-radius-control); background: var(--z-field); box-shadow: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.blob-page, .tasks-page, .schedules-page, .analytics-page, .team-page) :is(input.text-input, input:not([type]), input[type="text"], input[type="search"], input[type="number"], textarea):focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--z-field-ring); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.delegate-backlog, .delegate-bots, .schedules-empty, .analytics-activity) { border: 0; border-radius: var(--z-radius-panel); background: var(--z-surface); box-shadow: var(--z-shine-top); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.delegate-draft, .delegate-lane, .schedules-template) { border: 0; border-radius: var(--z-radius-card); background: var(--z-raised); box-shadow: var(--z-shine-top); transition: background-color var(--z-instant) linear; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .schedules-template:hover { background: var(--z-float); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .delegate-finished { border-color: var(--z-fill); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.delegate-chip, .preset-chip, .ghost-button.small, .approval-choice) { border: 0; border-radius: var(--z-radius-control); background: var(--z-fill); box-shadow: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.delegate-chip, .preset-chip, .ghost-button.small, .approval-choice):hover:not(:disabled) { background: var(--z-fill-hover); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.approval-choice.on, .preset-chip.on, .preset-chip[aria-pressed="true"]) { background: var(--z-row-active); box-shadow: var(--z-row-rim); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.analytics-switch, .segmented) { border: 0; border-radius: var(--z-radius-row); background: var(--z-fill); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.analytics-cards, .blob-tabs, .analytics-leader-row) { border-bottom-color: var(--z-fill); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.usage-provider, .analytics-card) { border-left: 0; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.blob-page .settings-row, .blob-form, .blob-group, .blob-session-row, .blob-manage-row, .auto-approvals-summary, .look-colour, .settings-empty) { border-color: var(--z-fill); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .look-stage { border-right-color: var(--z-fill); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.terminal-dock, .terminal-head) { border-color: var(--z-fill); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .team-search { border: 0; border-radius: var(--z-radius-row); background: var(--z-field); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .team-search:focus-within { box-shadow: inset 0 0 0 1px var(--z-field-ring); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .team-page .team-search input { background: transparent; box-shadow: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .rail-pr { height: 28px; border: 0; border-radius: var(--z-radius-control); background: var(--z-row-active); box-shadow: var(--z-shine-top); color: var(--text-1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .rail-pr:hover:not(:disabled) { background: var(--z-row-pressed); }
+
+/* The name form (no name yet, or "Edit name") opens out of the profile plate as the menu does, not inside the
+   40px dock slot it used to be squeezed into (owner, 23 November 2026: "the your name ... clipping"). */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > .sidebar-foot { position: relative; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-onboarding { position: absolute; z-index: 50; bottom: calc(100% + 8px); left: 0; width: 232px; margin: 0; padding: 16px; gap: 10px; border: 0; border-radius: var(--z-radius-panel); background: var(--z-menu); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: var(--z-shadow-menu), var(--z-shine-top); transform-origin: bottom left; animation: z-menu-fade-in 200ms var(--z-ease-out) both, z-menu-rise-in 400ms var(--z-ease-emphasized) both; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-onboarding strong { font-size: 14px; font-weight: 600; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-onboarding p { color: var(--text-2); font-size: 12px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-onboarding .text-input { width: 100%; height: 32px; border: 0; border-radius: var(--z-radius-control); background: var(--z-field); box-shadow: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-onboarding .text-input:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--z-field-ring); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-onboarding :is(.ghost-button, .primary-button).small { height: 28px; padding: 0 12px; border: 0; border-radius: var(--z-radius-control); font-size: 12px; font-weight: 500; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-onboarding .ghost-button.small { background: transparent; color: var(--text-2); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar:has(.profile-onboarding) > :not(.sidebar-foot) { opacity: .18; }
+@media (prefers-reduced-motion: reduce) { :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-onboarding { animation: none; } }
+
+/* Settings, regrouped (owner, 23 November 2026): 23 rows in six groups. The column scrolls on its own with a soft
+   edge, rows are Zephium's compact 30px, and Coding agents' four views are a segmented control, not underlined tabs. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; align-content: start; gap: 1px; -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent); padding-bottom: 24px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav::-webkit-scrollbar { display: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav-group { display: grid; gap: 1px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav-label { margin: 12px 0 3px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav button { height: 30px; flex: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-subtabs { width: fit-content; margin-top: 14px; padding: 3px; gap: 2px; border: 0; border-radius: var(--z-radius-row); background: var(--z-fill); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-subtabs button { height: 26px; padding: 0 14px; border: 0; border-radius: 9px; color: var(--text-2); font-size: 12.5px; font-weight: 500; box-shadow: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-subtabs button::after { display: none; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-subtabs button:hover { color: var(--text-1); background: var(--z-row-hover); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-subtabs button[aria-selected="true"] { color: var(--text-1); background: var(--z-control-hover); box-shadow: var(--z-shine-top); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav-title { position: sticky; top: 0; z-index: 2; background: var(--z-chrome); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav .settings-search { position: sticky; top: 42px; z-index: 2; box-shadow: 0 -2px 0 var(--z-chrome), 0 6px 0 var(--z-chrome); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav .settings-search { background: linear-gradient(var(--z-field), var(--z-field)), var(--z-chrome); }
+/* A long name never widens the menu past the column; it ends in an ellipsis and the full name is in the title. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.menu-surface { width: 232px; max-width: 232px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu-head { min-width: 0; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu-head strong { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu-head :is(.profile-menu-head-avatar, .profile-menu-head-edit) { flex: none; }
+
+/* The sky's light on the columns (from Zephium's home screen, 23 November 2026). Painted inside the window frame,
+   under the columns' content; it falls off toward the window's far side and eases in and out round the pane's ends. */
+.sky-light { position: absolute; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 560ms cubic-bezier(.4, 0, .2, 1);
+  -webkit-mask-image: linear-gradient(to left, #000 0, rgb(0 0 0 / 66%) 16%, rgb(0 0 0 / 34%) 38%, rgb(0 0 0 / 13%) 64%, rgb(0 0 0 / 3%) 86%, transparent), linear-gradient(transparent 0, rgb(0 0 0 / 35%) 14px, #000 56px, #000 calc(100% - 56px), rgb(0 0 0 / 35%) calc(100% - 14px), transparent);
+  -webkit-mask-composite: source-in; mask-image: linear-gradient(to left, #000 0, rgb(0 0 0 / 66%) 16%, rgb(0 0 0 / 34%) 38%, rgb(0 0 0 / 13%) 64%, rgb(0 0 0 / 3%) 86%, transparent), linear-gradient(transparent 0, rgb(0 0 0 / 35%) 14px, #000 56px, #000 calc(100% - 56px), rgb(0 0 0 / 35%) calc(100% - 14px), transparent); mask-composite: intersect; }
+.sky-light[data-ready="true"] { opacity: .5; transition-duration: 320ms; }
+.sky-light[data-sky="day"][data-ready="true"] { opacity: .4; }
+@media (prefers-reduced-motion: reduce) { .sky-light { transition: none; } }
+
+/* The inspector is a frosted tool panel, as Zephium's side panels are (assistant, notes): a light fill over the window
+   frame, a half-pixel edge and the top shine, not a second solid page. The sky's light comes through it too. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell.inspector-open .context-pane { background: rgb(255 255 255 / .045); box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .09), var(--z-shine-top); backdrop-filter: blur(24px) saturate(1.1); }
+:root[data-style="haze"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) .app-shell.inspector-open .context-pane { background: rgb(255 255 255 / .42); box-shadow: inset 0 0 0 .5px rgb(24 24 27 / .08), var(--z-shine-top); }
+/* Zephium's current row carries a rim you can see; ours was a touch fainter. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) { --z-row-rim: inset 0 0 0 1px rgb(255 255 255 / .08); }
+:root[data-style="haze"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) { --z-row-rim: inset 0 0 0 1px rgb(255 255 255 / .55); }

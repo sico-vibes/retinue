@@ -1307,6 +1307,19 @@ async fn opencode2_session_selects_the_model_before_its_effort() {
 }
 
 #[tokio::test]
+async fn opencode_2_catalog_starts_acp_without_a_verbose_command() {
+    let temp = Temp::new();
+    let adapter = AcpAdapter::default();
+    let pid_log = temp.dir.join("pids.log");
+    let args = vec!["--pid-log".into(), pid_log.to_string_lossy().into()];
+    let catalog = adapter.model_catalog_for_version(&runtime(args), Some("2.3.2")).await.unwrap();
+    assert_eq!(catalog.source, "config_options");
+    let log = std::fs::read_to_string(&pid_log).unwrap();
+    assert!(log.lines().any(|line| line.ends_with(" acp")), "{log}");
+    assert!(!log.lines().any(|line| line.ends_with(" verbose")), "{log}");
+}
+
+#[tokio::test]
 async fn opencode_2_3_uses_plain_models_when_verbose_and_acp_are_unavailable() {
     let adapter = AcpAdapter::default();
     let args = vec!["--plain-list-only".into(), "--catalog-no-config-options".into()];
