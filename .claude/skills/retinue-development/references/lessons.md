@@ -2326,3 +2326,8 @@ The computer's screen (`computer.view`, `computer.rs`) is the first route on the
 - **Fix:** `apps/desktop/src/preview/productionFrame.ts` (+ `.css`, `frameState.ts`) draws a stand-in desktop, acrylic, the title bar and the minimum size around `/`, and `fixtureBridge` reports acrylic while it is on. `?frame=0` turns it off. The body is `transform`ed so the app's `position: fixed` layers fill the client area. The wallpaper and tint are approximations (not measured against Windows); the Demo badge is mounted on `<html>` in the title bar. Companion, dictation, iframes and other HTML pages get no frame.
 - **Still different on purpose:** fixture data, no native windows (companion, dictation, tray), Vite dev rather than the production bundle, headless Edge has no WebGL (so the launch backdrop and logo paint don't show in screenshots).
 - **Not a flaky test:** the CI failures on 22-24 November were the scheduled `hygiene` secret scan hitting `context deadline exceeded`, and the beta.12 release failure was the `require-ci` gate firing before CI finished. `the_other_machines_conversations_are_listed_from_memory` passed 6 of 6 alone; check the job log before blaming a test.
+
+## 2026-11-24 `docs:build` needs two runs after a new document is added
+- **Symptom:** CI `docs` failed with "Document inventory has changed; rebuild the library" although `docs:check` passed locally.
+- **Cause:** the first build writes the new document's snapshot under `docs/library/sources/`; the catalogue was counted before it existed. The snapshot file was also left uncommitted.
+- **Fix:** run `npm run docs:build` twice, then `npm run docs:check`, and commit `docs/library/sources/...` with the rest.

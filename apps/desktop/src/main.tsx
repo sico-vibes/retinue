@@ -29,6 +29,7 @@ import './ui/themes/haze.css'
 import './ui/themes/haze-zephium.css'
 import './ui/themes/haze-polish.css'
 import { installHazeSpotlight } from './ui/hazeSpotlight'
+import { applyWorkMode } from './ui/workMode'
 
 const dictation = new URLSearchParams(window.location.search).has('dictation')
 // The native frosted backdrop belongs to the main window only (the helper also skips the companion).
@@ -37,6 +38,7 @@ if (!dictation) startWindowBackdrop()
 if (!dictation) watchFrameStrain()
 
 installHazeSpotlight()
+applyWorkMode()
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>{dictation ? <DictationBubble /> : <App />}</React.StrictMode>,
 )

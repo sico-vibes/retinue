@@ -1,6 +1,8 @@
 // Bot-first sidebar (Phase 1A, owner decision 29 October 2026): one list of
 // bots, the CEO pinned on top. Bots work in every project; a bot's
 // conversations are grouped by project in its conversations panel.
+import { ProfessionalSidebar } from './ProfessionalSidebar'
+import { useWorkMode } from './workMode'
 import { useQueueWaiting, type QueueWaiting } from './queueOverview'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ProjectIcon } from './ProjectIcon'
@@ -217,6 +219,7 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
   onOpenSearch: () => void
   actions: TeamSidebarActions
 }) {
+  const pro = useWorkMode() === 'professional'
   const haze = useThemeStyle() === 'haze'
   const noun = useEntityNoun()
   const nouns = useEntityNoun({ plural: true })
@@ -429,7 +432,8 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
       <span>Search</span><kbd aria-hidden="true">Ctrl K</kbd>
     </button>
     {banner}
-    <nav className="sidebar-scroll" aria-label={Nouns} data-tour="roster"><div role="tree" aria-label={Nouns}>
+    <nav className="sidebar-scroll" aria-label={Nouns} data-tour="roster">{pro && onOpenConversation && onStartInProject ? <ProfessionalSidebar agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} selectedSessionId={selectedSessionId ?? null} approvalSessionIds={approvalSessionIds} canCreate={connected && canCreate} onOpenConversation={onOpenConversation} onStartInProject={onStartInProject} onCreateProject={actions.onCreateProject} machines={machines} /> : <>
+      <div role="tree" aria-label={Nouns}>
       {manager && <section className="team-group manager-group" aria-label="CEO">
         <div className="team-group-rows">{withSubbots(manager)}</div>
       </section>}
@@ -456,7 +460,7 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
       </div>
       {machines}
       {hiddenCount > 0 && <button type="button" className="team-hidden-toggle" onClick={() => setShowHidden((value) => !value)}>{showHidden ? <EyeOff size={13} /> : <Eye size={13} />}{showHidden ? `Hide hidden ${nouns}` : `Show ${hiddenCount} hidden ${noun}${hiddenCount === 1 ? '' : 's'}`}</button>}
-    </nav>
+    </>}</nav>
     {sortMenu && <TeamMenu label={`Sort ${nouns}`} position={sortMenu} onClose={() => { setSortMenu(null); requestAnimationFrame(() => menuTrigger.current?.focus()) }} items={[
       ...SIDEBAR_SORTS.map((item): MenuItem => ({ label: item.label, checked: sort === item.id, onSelect: () => { setSort(item.id); storeSidebarSort(item.id) } })),
       'separator',

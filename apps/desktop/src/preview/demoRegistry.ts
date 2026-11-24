@@ -77,6 +77,7 @@ export const demoEntries: readonly DemoEntry[] = [
   }),
   demo('machine-remote-conversation', 'Linked machines', 'An employee on another machine opens in the conversation pane', '/?no-intro&clean&machines=2&demo-machine-view'),
   demo('conversations-settled', 'Conversation', 'Old conversations settle under a collapsed Settled shelf', '/?no-intro&clean&idle&session=session-codex&agent=agent-codex&settled'),
+  demo('professional-mode', 'Main shell', 'Professional mode: plain chat list with provider logos and tabs', '/?no-intro&clean&idle&session=session-codex&agent=agent-codex&settled&machines=2&mode=professional'),
   demo('machine-sidebar-folded', 'Linked machines', 'Other devices in the sidebar, foldable', '/?no-intro&clean&machines=2'),
   demo('machine-invalid-address', 'Linked machines', 'Address fails form validation', pairing, [click('Link a machine'), { type: ['.machine-pair input.text-input', 'not an address'] }]),
   demo('machine-unreachable', 'Linked machines', 'Machine address is unreachable', pairing + '&demo-machine-probe=unreachable', probeMachine),
