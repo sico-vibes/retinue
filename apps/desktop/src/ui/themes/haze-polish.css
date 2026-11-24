@@ -22,23 +22,14 @@
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .composer-box { border: 1px solid transparent; transition: box-shadow 300ms var(--polish-ease); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .composer-box:focus-within { border-color: color-mix(in srgb, var(--polish-accent) 55%, transparent); }
 
-/* Entrances: rows and messages rise in, a few milliseconds apart. */
+/* No entrance animation on sidebar rows or messages: they are navigated all day (Emil Kowalski: never animate what is seen 100+ times a day). Entrances stay on the occasional views below. */
 @keyframes polish-rise { from { opacity: 0; transform: translateY(6px) scale(.985); } }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.bot-row, .ps-bot, .convo-row, .ps-convo) { animation: polish-rise 360ms var(--polish-ease) backwards; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.bot-row, .ps-bot, .convo-row, .ps-convo):nth-child(2) { animation-delay: 40ms; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.bot-row, .ps-bot, .convo-row, .ps-convo):nth-child(3) { animation-delay: 80ms; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.bot-row, .ps-bot, .convo-row, .ps-convo):nth-child(4) { animation-delay: 120ms; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.bot-row, .ps-bot, .convo-row, .ps-convo):nth-child(n+5) { animation-delay: 160ms; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .message-row { animation: polish-rise 320ms var(--polish-ease) backwards; }
 
-/* Press feedback and the logo's small lift. */
+/* Press feedback. */
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(button, .icon-button, .menu-item):not(:disabled):active { transform: scale(.98); transition: transform 120ms var(--polish-ease); }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .brand-logo-stack { transition: transform 300ms var(--polish-ease); }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .brand-lockup:hover .brand-logo-stack { transform: rotate(-6deg) scale(1.06); }
 
 @media (prefers-reduced-motion: reduce) {
   :root[data-style="haze"] :is(.bot-row, .ps-bot, .convo-row, .ps-convo, .message-row, .composer-box) { animation: none !important; }
-  :root[data-style="haze"] .brand-lockup:hover .brand-logo-stack { transform: none; }
 }
 
 /* Other machines in Haze: no outlines, plates like the rest of the shell. */
@@ -59,23 +50,23 @@
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid > .usage-provider:last-child { padding: 14px 16px 16px; gap: 14px; border: 0; border-radius: var(--z-radius-card, 18px); background: var(--z-surface); box-shadow: var(--z-shine-top); transition: background-color 200ms ease, transform 300ms var(--polish-ease); animation: polish-rise 420ms var(--polish-ease) backwards; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid > .usage-provider:nth-child(2) { animation-delay: 60ms; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid > .usage-provider:nth-child(3) { animation-delay: 120ms; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid > .usage-provider:hover { background: var(--z-raised); transform: translateY(-1px); }
+@media (hover: hover) and (pointer: fine) { :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid > .usage-provider:hover { background: var(--z-raised); transform: translateY(-1px); } }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid .limit-row { grid-template-columns: minmax(0, 1fr) auto auto; row-gap: 6px; column-gap: 10px; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid .limit-row > .quota-meter { grid-column: 1 / -1; grid-row: 2; height: 6px; border-radius: 3px; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid .limit-row > .quota-meter > b { background: linear-gradient(90deg, var(--polish-bar-soft), var(--polish-bar)); transform-origin: left; animation: polish-grow 700ms var(--polish-ease) backwards; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid .limit-row > .quota-meter > b { background: var(--polish-bar); transform-origin: left; animation: polish-grow 480ms var(--polish-ease) backwards; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid .limit-row > .quota-meter.tone-warning > b { background: var(--status-working); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid .limit-row > .quota-meter.tone-critical > b { background: var(--status-danger); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-limits-grid .limit-value { font-size: var(--fs-sm); }
 @keyframes polish-grow { from { transform: scaleX(0); } }
 @keyframes polish-grow-up { from { transform: scaleY(0); } }
 
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-chart .analytics-bar { fill: var(--polish-bar-soft); transform-box: fill-box; transform-origin: bottom; animation: polish-grow-up 620ms var(--polish-ease) backwards; transition: fill 140ms ease; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-chart .analytics-bar { fill: var(--polish-bar-soft); transform-box: fill-box; transform-origin: bottom; animation: polish-grow-up 420ms var(--polish-ease) backwards; transition: fill 140ms ease; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-chart .analytics-bar.is-hover,
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-chart rect:focus-visible { fill: var(--polish-bar); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-leader-track { height: 6px; border-radius: 3px; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-leader-fill { background: linear-gradient(90deg, var(--polish-bar-soft), var(--polish-bar)); transform-origin: left; animation: polish-grow 700ms var(--polish-ease) backwards; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-leader-fill { background: var(--polish-bar); transform-origin: left; animation: polish-grow 480ms var(--polish-ease) backwards; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-leader-row { transition: background-color 140ms linear; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-leader-row:hover { background-image: linear-gradient(90deg, transparent, var(--z-row-hover), transparent); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-leader-row:hover { background-color: var(--z-row-hover); }
 @media (prefers-reduced-motion: reduce) {
   :root[data-style="haze"] :is(.analytics-limits-grid > .usage-provider, .quota-meter > b, .analytics-chart .analytics-bar, .analytics-leader-fill) { animation: none !important; transition: none; }
 }
@@ -86,16 +77,16 @@
 :root[data-style="haze"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) .toggle.on { background: color-mix(in srgb, var(--polish-accent) 82%, #1d2a44); }
 /* Settings rows light up under the pointer, the page's cards rise in one after another, the open page title eases in. */
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-row { transition: background-color 140ms linear; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-row:hover { background-image: linear-gradient(90deg, var(--z-row-hover), transparent 85%); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-row:hover { background-color: var(--z-row-hover); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-group { animation: polish-rise 380ms var(--polish-ease) backwards; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-group:nth-child(2) { animation-delay: 50ms; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-group:nth-child(3) { animation-delay: 100ms; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-group:nth-child(n+4) { animation-delay: 150ms; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav button { transition: background-color 140ms linear, color 140ms linear, transform 120ms ease-out; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav button:hover:not([aria-current="page"]):not([aria-selected="true"]) { transform: translateX(2px); }
+@media (hover: hover) and (pointer: fine) { :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-nav button:hover:not([aria-current="page"]):not([aria-selected="true"]) { transform: translateX(2px); } }
 /* Tasks: cards lift a little and follow the pointer with light, lanes rise in. */
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.tree-card, .delegate-chip, .delegate-lane) { transition: background-color 160ms linear, transform 260ms var(--polish-ease); }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.tree-card, .delegate-chip):hover { transform: translateY(-1px); }
+@media (hover: hover) and (pointer: fine) { :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.tree-card, .delegate-chip):hover { transform: translateY(-1px); } }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .delegate-lane { animation: polish-rise 400ms var(--polish-ease) backwards; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .delegate-lane:nth-child(2) { animation-delay: 45ms; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .delegate-lane:nth-child(3) { animation-delay: 90ms; }
@@ -106,12 +97,12 @@
 
 /* Figures settle in (a short blur-and-rise, as React Bits' Blur Text does), and the Projects/Team switch slides one plate between its two options. */
 @keyframes polish-figure { from { opacity: 0; transform: translateY(8px); filter: blur(6px); } }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.analytics-card [data-figure], .usage-figure) { animation: polish-figure 560ms var(--polish-ease) backwards; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.analytics-card [data-figure], .usage-figure) { animation: polish-figure 360ms var(--polish-ease) backwards; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-card:nth-child(2) [data-figure] { animation-delay: 70ms; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .analytics-card:nth-child(3) [data-figure] { animation-delay: 140ms; }
 
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar-view-switch { position: relative; isolation: isolate; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar-view-switch::before { content: ''; position: absolute; z-index: -1; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 2); border-radius: 9px; background: var(--z-control-hover); box-shadow: var(--z-shine-top); transition: transform 320ms cubic-bezier(.34, 1.25, .64, 1); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar-view-switch::before { content: ''; position: absolute; z-index: -1; top: 3px; bottom: 3px; left: 3px; width: calc((100% - 6px) / 2); border-radius: 9px; background: var(--z-control-hover); box-shadow: var(--z-shine-top); transition: transform 220ms var(--polish-ease); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar-view-switch:has(> button:last-child[aria-pressed="true"])::before { transform: translateX(100%); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar-view-switch > button[aria-pressed="true"] { background: transparent; box-shadow: none; }
 @media (prefers-reduced-motion: reduce) {

@@ -310,7 +310,7 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
           <ul className="machine-view-list" aria-label={`${bot.name}'s conversations`}>
             {conversations === null && <li><LoadingBlock label="Loading…" lines={3} /></li>}
             {conversations?.length === 0 && <li><small>No conversations yet.</small></li>}
-            {conversations?.map((item) => <li key={item.id} className={item.offline ? 'offline' : undefined}><button type="button" aria-current={item.id === selected ? 'true' : undefined} title={item.offline ? `Last known, while ${machine.name} can't be reached` : undefined} onClick={() => setSelected(item.id)}>
+            {conversations?.map((item) => <li key={item.id} className={item.offline ? 'offline' : undefined}><button type="button" aria-current={item.id === selected ? 'true' : undefined} title={item.offline ? `${item.title || 'Conversation'}. Last known, while ${machine.name} can't be reached` : item.title || undefined} onClick={() => setSelected(item.id)}>
               <strong>{item.title || 'Conversation'}</strong>
               <small>{[item.projectName, item.updatedAt ? shortTime(item.updatedAt) : null].filter(Boolean).join(' · ')}</small>
             </button></li>)}
@@ -321,7 +321,7 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
       <header className="machine-view-head">
         <span className="machine-pane-avatar"><BlobCanvas decorative color={agentColorHex(bot.color ?? 'mint')} size={34} mood={!remoteOnline ? 'offline' : busy ? 'tool_activity' : 'idle'} look={agentLook(bot as unknown as Agent)} label={bot.name} /><span className="machine-pane-device" title={`Running on ${machine.name}`}><MachineKindIcon kind={machine.kind} size={10} /></span></span>
         <div className="machine-view-title">
-          <h2 id="machine-view-title">{bot.name}<span className="machine-remote-chip" title={`This conversation runs on ${machine.name}`}><MachineKindIcon kind={machine.kind} size={11} />{machine.name}</span></h2>
+          <h2 id="machine-view-title"><span className="machine-pane-name" title={bot.name}>{bot.name}</span><span className="machine-remote-chip" title={`This conversation runs on ${machine.name}`}><MachineKindIcon kind={machine.kind} size={11} />{machine.name}</span></h2>
           <small>On {machine.name}{machine.lastSeenAt && machine.state !== 'online' ? ` · last seen ${shortTime(machine.lastSeenAt)}` : ''} <span className={`machine-live-mark${machine.live && machine.state === 'online' ? ' live' : ''}`} title={machine.live ? 'Changes arrive as they happen.' : 'No live link right now; this view checks every few seconds.'}><i aria-hidden="true" />{machine.state !== 'online' ? 'Offline' : machine.live ? 'Live' : 'Checking every few seconds'}</span></small>
         </div>
         <button type="button" className="icon-button" aria-label="Close" onClick={close}><X size={16} aria-hidden="true" /></button>

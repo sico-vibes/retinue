@@ -197,3 +197,11 @@
 .machine-convo-new { margin: 0 10px 8px; align-self: stretch; justify-content: center; }
 .machine-convos .machine-view-list { flex: 1; margin: 0; padding: 0 6px; border: 0; }
 .app-shell.remote-open .sidebar :is(.ps-bot, .ps-convo, .bot-row, .convo-row, .team-row).active, .app-shell.remote-open .sidebar :is(.ps-bot, .ps-convo, .bot-row, .convo-row)[aria-current="true"] { background: transparent; box-shadow: none; }
+
+/* Worst-case data (break-ui pass, 24 November 2026): long names, long machine names, long unbreakable text. */
+.machine-view-title h2 { min-width: 0; }
+.machine-pane-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.machine-remote-chip { flex: none; max-width: 45%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.machine-convos .machine-remote-chip { max-width: 60%; }
+.machine-message > div, .machine-message.user > div { overflow-wrap: anywhere; }
+.machine-approval code { overflow-wrap: anywhere; white-space: pre-wrap; }
