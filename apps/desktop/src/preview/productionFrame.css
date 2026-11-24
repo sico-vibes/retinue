@@ -1,0 +1,36 @@
+/* The installed window in a browser tab: title bar, desktop, acrylic, minimum size. See productionFrame.ts. Preview only. */
+:root[data-pv-frame] { --pv-caption: 32px; overflow: auto; background: #000; }
+/* The page is the window's client area. A transformed body is the containing block of `position: fixed`, so the app's
+   fixed layers (backdrop, dialogs, menus) fill the client area and not the tab, exactly as they fill the window. */
+:root[data-pv-frame] body { height: calc(100% - var(--pv-caption)); min-width: 1000px; min-height: 680px; transform: translateY(var(--pv-caption)); }
+
+.pv-desktop { position: fixed; z-index: -1; inset: var(--pv-caption) 0 0 0; overflow: hidden; pointer-events: none; background: #0a0d14; }
+/* A stand-in wallpaper (Windows 11 "bloom" colours), blurred the way acrylic blurs what is behind the window. */
+.pv-wall { position: absolute; inset: -140px; filter: blur(46px) saturate(1.3);
+  background:
+    radial-gradient(60% 70% at 18% 24%, #2b6fe0 0%, transparent 62%),
+    radial-gradient(52% 60% at 82% 18%, #8a4fe6 0%, transparent 60%),
+    radial-gradient(60% 70% at 70% 84%, #19a7b8 0%, transparent 62%),
+    radial-gradient(46% 56% at 22% 88%, #d2478f 0%, transparent 60%),
+    #0b1226; }
+.pv-acrylic { position: absolute; inset: 0; background: rgb(32 32 34 / .66); }
+:root[data-theme="light"][data-pv-frame] .pv-desktop { background: #dfe6f2; }
+:root[data-theme="light"][data-pv-frame] .pv-wall { filter: blur(46px) saturate(1.1);
+  background:
+    radial-gradient(60% 70% at 18% 24%, #8bb4f5 0%, transparent 62%),
+    radial-gradient(52% 60% at 82% 18%, #cdb3f5 0%, transparent 60%),
+    radial-gradient(60% 70% at 70% 84%, #9ee0e8 0%, transparent 62%),
+    radial-gradient(46% 56% at 22% 88%, #f3b7d4 0%, transparent 60%),
+    #e8eefb; }
+:root[data-theme="light"][data-pv-frame] .pv-acrylic { background: rgb(243 243 243 / .72); }
+
+.pv-caption { position: fixed; z-index: 2147483000; top: 0; left: 0; right: 0; height: var(--pv-caption); display: flex; align-items: center; gap: 8px; padding-left: 12px; color: #fff; background: #1f1f1f; font: 12px/1 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; user-select: none; pointer-events: none; }
+.pv-caption-icon { width: 16px; height: 16px; object-fit: contain; }
+.pv-caption-title { flex: 1; }
+.pv-caption-buttons { display: flex; height: 100%; }
+.pv-caption-buttons i { width: 46px; display: grid; place-items: center; font-style: normal; }
+:root[data-theme="light"][data-pv-frame] .pv-caption { color: #000; background: #f3f3f3; }
+
+/* The Demo badge belongs to the preview, not the window: it sits in the title bar, over no app control (demoMenu.ts
+   mounts it on <html>, outside the transformed body). */
+:root[data-pv-frame] .retinue-preview-demo { top: 3px; right: 150px; }

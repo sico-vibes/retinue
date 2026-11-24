@@ -196,7 +196,7 @@
 .machine-convos .convo-head { gap: 8px; }
 .machine-convo-new { margin: 0 10px 8px; align-self: stretch; justify-content: center; }
 .machine-convos .machine-view-list { flex: 1; margin: 0; padding: 0 6px; border: 0; }
-.app-shell.remote-open .sidebar :is(.ps-bot, .ps-convo, .bot-row, .convo-row, .team-row).active, .app-shell.remote-open .sidebar :is(.ps-bot, .ps-convo, .bot-row, .convo-row)[aria-current="true"] { background: transparent; box-shadow: none; }
+.app-shell.remote-open .sidebar :is(.ps-bot, .ps-convo, .bot-row, .convo-row, .team-row):is(.selected, .active, [aria-current="true"]), :root[data-style] .app-shell.remote-open .sidebar :is(.ps-bot.selected, .ps-convo.selected, .bot-row.selected, .convo-row.active) { background: transparent; box-shadow: none; }
 
 /* Worst-case data (break-ui pass, 24 November 2026): long names, long machine names, long unbreakable text. */
 .machine-view-title h2 { min-width: 0; }

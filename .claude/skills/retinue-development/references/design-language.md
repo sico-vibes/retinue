@@ -245,3 +245,9 @@ Hide the Colour control when a premade `char-*` portrait is selected. Show it ag
 - **Images**: images made one after another sit in one horizontal strip; while one is being made a picture-sized placeholder breathes where it will land. The enlarged image covers the whole window with everything behind it blurred, and zooms (wheel, buttons, +/-, double-click) and pans by dragging (`ui/ImageLightbox.tsx`).
 - **Conversation rows** carry one "More" button instead of four hover buttons, the same menu on right-click (with Copy conversation ID), and an MCP mark when another program started the conversation. A bot with a single conversation can still be folded. A **Back to the latest message** button appears above the composer once the owner scrolls well up.
 - **Sidebar order** is by the last message (`activityAt` in `teamSelectors.ts`), never `updatedAt`.
+
+## Haze polish, second pass (24 November 2026)
+- Hovers are flat colour changes (no gradient edge washes); lifts are gated by `@media (hover: hover) and (pointer: fine)`.
+- No entrance animation on sidebar rows or messages (high frequency). Occasional views (Schedules cards, dialogs) may enter: dialogs from `translateY(8px) scale(.975)`, 240ms, `--polish-ease`; never from scale 0.
+- The sidebar status label stays on one line (`.ps-bot-line > :not(.ps-bot-name) { white-space: nowrap }`); the name is what ellipsizes.
+- The preview draws the installed window around Haze (see lessons, 2026-11-24): judge Haze there, not on a bare tab.

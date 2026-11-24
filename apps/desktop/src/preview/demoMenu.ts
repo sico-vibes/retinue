@@ -2,6 +2,7 @@ import { demoEntries, type DemoEntry } from './demoRegistry'
 import { subscribeToUnknownRpcs, unknownRpcMethods } from './demoDiagnostics'
 import { runSteps } from './inspector/scenarioSteps'
 import './demoMenu.css'
+import './productionFrame'
 
 const preference = 'retinue.preview.demoArea'
 const areas = [...new Set(demoEntries.map((entry) => entry.area))]
@@ -113,7 +114,8 @@ document.addEventListener('pointerdown', (event) => {
 renderEntries()
 renderUnknown()
 subscribeToUnknownRpcs(renderUnknown)
-document.body.append(host)
+// In the production frame the body is the window's client area; the badge lives beside the title bar, outside it.
+;(document.documentElement.dataset.pvFrame ? document.documentElement : document.body).append(host)
 
 if (current?.steps) void runSteps(() => document, current.steps).then((problem) => {
   if (!problem) return

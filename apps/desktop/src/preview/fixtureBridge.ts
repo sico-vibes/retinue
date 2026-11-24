@@ -1,4 +1,5 @@
 import type { SharedSettings } from '../ui/ProjectSettingsDialog'
+import { previewBackdrop } from './frameState'
 import { clipboardReadFailures, pairingFailures, scaffoldFailures, workflowError } from './demoWorkflowErrors'
 import type { Connector, ConnectorSignIn } from '../ui/ConnectorsPage'
 import type { LearnedSkill } from '../ui/SkillsPage'
@@ -2922,11 +2923,12 @@ export async function setApprovalBadge(_count: number): Promise<void> { /* No na
 // reports itself unavailable instead of pretending.
 export async function mainWindowReady(): Promise<void> { /* the preview has no native window */ }
 
-export async function applyWindowBackdrop(_enabled: boolean, _dark: boolean): Promise<WindowBackdrop> {
-  return { effect: 'none', active: false, transparencyOff: false, reason: 'Not running in the desktop app.' }
+// The preview reports the acrylic the installed window has while its production frame is on (productionFrame.ts).
+export async function applyWindowBackdrop(enabled: boolean, _dark: boolean): Promise<WindowBackdrop> {
+  return previewBackdrop(enabled)
 }
 export async function windowBackdropState(): Promise<WindowBackdrop> {
-  return { effect: 'none', active: false, transparencyOff: false, reason: 'Not running in the desktop app.' }
+  return previewBackdrop(document.documentElement.dataset.style === 'haze')
 }
 
 // The browser preview has no shell: terminals are a desktop-only feature.
