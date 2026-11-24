@@ -234,7 +234,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
           <Collapse open={!folded}><ul role="tree" className="convo-list">{live.map((node) => renderNode(node, 0))}</ul>
             {settled.length > 0 && <div className="convo-settled">
               <button type="button" className="convo-settled-head" aria-expanded={settledShown} onClick={() => setSettledOpen((current) => { const next = new Set(current); if (settledShown) next.delete(key); else next.add(key); return next })}>
-                <ChevronRight size={12} aria-hidden="true" className={`fold-chevron${settledShown ? ' open' : ''}`} /><span>Settled</span><span className="convo-settled-count">{settled.length}</span>
+                <ChevronRight size={12} aria-hidden="true" className={`fold-chevron${settledShown ? ' open' : ''}`} /><CheckCheck size={13} aria-hidden="true" /><span>Settled</span><span className="convo-settled-count">{settled.length}</span>
               </button>
               <Collapse open={settledShown}><ul role="tree" className="convo-list convo-list-settled">{settled.map((node) => renderNode(node, 0))}</ul></Collapse>
             </div>}</Collapse>

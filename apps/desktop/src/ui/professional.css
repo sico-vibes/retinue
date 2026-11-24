@@ -13,21 +13,45 @@
 .pro-group-head:hover .pro-group-add, .pro-group-add:focus-visible { opacity: 1; }
 .pro-count { margin-left: auto; color: var(--text-3); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
 .pro-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 1px; }
-.pro-row { width: 100%; min-width: 0; padding: 6px 8px 6px 10px; display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: start; gap: 8px; color: var(--text-2); border: 0; border-radius: var(--radius-md); background: none; font: inherit; text-align: left; cursor: pointer; transition: background-color 120ms linear; }
-.pro-row:hover { background: var(--surface-hover); }
-.pro-row.selected { color: var(--text-1); background: var(--surface-selected, var(--surface-hover)); }
-.pro-row-logo { height: 20px; display: grid; place-items: center; }
-.pro-row-copy { min-width: 0; display: grid; gap: 1px; }
-.pro-row-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-1); font-size: var(--fs-sm); font-weight: 500; line-height: 20px; }
-.pro-row-meta { min-width: 0; display: flex; align-items: center; gap: 5px; color: var(--text-3); font-size: var(--fs-2xs); white-space: nowrap; }
-.pro-row-project { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.pro-row-meta > :not(.pro-row-project) { flex: 0 0 auto; }
-.pro-row-time { color: var(--text-3); font-size: var(--fs-2xs); line-height: 20px; font-variant-numeric: tabular-nums; }
 .pro-settled { margin-top: 2px; }
 .pro-settled-head { width: 100%; min-height: 26px; padding: 0 8px 0 6px; display: flex; align-items: center; gap: 5px; color: var(--text-3); border: 0; border-radius: var(--radius-sm); background: none; font: inherit; font-size: var(--fs-xs); text-align: left; cursor: pointer; }
 .pro-settled-head:hover { color: var(--text-2); background: var(--surface-hover); }
 .pro-list-settled { opacity: .78; }
 .pro-empty { margin: 12px 10px; color: var(--text-3); font-size: var(--fs-xs); }
+
+/* A chat row: logo and title on the first line, then its status, project and the time of the last message. */
+.pro-row { width: 100%; min-width: 0; padding: 7px 8px 7px 10px; display: grid; gap: 5px; color: var(--text-2); border: 0; border-radius: var(--radius-md); background: none; font: inherit; text-align: left; cursor: pointer; transition: background-color 120ms linear; }
+.pro-row:hover { background: var(--surface-hover); }
+.pro-row.selected { color: var(--text-1); background: var(--surface-selected, var(--surface-hover)); }
+.pro-row.dimmed { opacity: .6; }
+.pro-row-line { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.pro-row-logo { flex: none; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+.pro-row-logo > * { display: inline-flex; align-items: center; justify-content: center; }
+.pro-row-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-1); font-size: var(--fs-sm); font-weight: 500; line-height: 18px; }
+.pro-row-foot { min-width: 0; padding-left: 26px; display: flex; align-items: center; gap: 7px; color: var(--text-3); font-size: var(--fs-2xs); white-space: nowrap; }
+.pro-row-project { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pro-row-time { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; }
+
+/* Status badges. */
+.pro-badge { --tone: var(--text-2); --pro-badge-ink: var(--surface-app, #111); flex: none; height: 20px; padding: 0 8px 0 5px; display: inline-flex; align-items: center; gap: 4px; color: color-mix(in srgb, var(--tone) 86%, var(--text-1) 14%); border-radius: 8px; background: color-mix(in srgb, var(--tone) 15%, transparent); font-size: var(--fs-2xs); font-weight: 500; line-height: 1; }
+.pro-badge svg { flex: none; }
+.pro-badge.draft { --tone: var(--text-3); }
+.pro-badge.working { --tone: #e8923a; }
+.pro-badge.needs { --tone: #4c8dff; }
+.pro-badge.done { --tone: #36b37e; }
+.pro-badge.bad { --tone: #e5534b; }
+.pro-badge.limited { --tone: #d4a12e; }
+:root[data-theme="light"] .pro-badge { --pro-badge-ink: #fff; color: color-mix(in srgb, var(--tone) 78%, #000 22%); }
+
+/* The chat header's logo sits on the title line. */
+:root[data-mode="professional"] .chat-title { align-items: center; }
+:root[data-mode="professional"] .chat-title > :is(.runtime-mark, [class*="runtime-mark"]) { display: inline-flex; align-items: center; flex: none; }
+
+/* Other devices, as groups of the same rows. */
+.pro-machines { margin-top: 8px; padding-top: 6px; display: grid; gap: 2px; border-top: 1px solid var(--line); }
+.pro-machines-label { min-height: 24px; padding: 0 10px; display: flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.pro-dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--text-3); }
+.pro-dot.on { background: #36b37e; }
 
 /* The tab strip above the open conversation. */
 .pro-tabs { flex: none; min-height: 36px; padding: 4px 10px 0; display: flex; align-items: flex-end; gap: 2px; overflow-x: auto; scrollbar-width: none; }
@@ -45,3 +69,10 @@
 :root[data-mode="professional"] .app-shell { --convos-w: 0px; }
 :root[data-mode="professional"] .conversations-panel { width: 0; min-width: 0; padding: 0; overflow: hidden; visibility: hidden; border: 0; }
 @media (prefers-reduced-motion: reduce) { .pro-row, .pro-tab, .pro-group-add { transition: none; } }
+
+/* Replies read as plain text, a sent prompt stays a bubble on the right (T3 Code, Synara): no avatar, no name, no bubble for the agent. */
+:root[data-mode="professional"] .message-row.agent .message-avatar, :root[data-mode="professional"] .message-author-line { display: none; }
+:root[data-mode="professional"] .message-row.agent .message-content { max-width: min(46rem, 100%); width: 100%; }
+:root[data-mode="professional"]:not(.companion-surface):not(.dictation-surface) .message-row.agent .message-bubble { width: 100%; padding: 2px 0; border-radius: 0; background: transparent; box-shadow: none; }
+:root[data-mode="professional"] .message-row.agent .message-time { display: none; }
+:root[data-mode="professional"] .message-author .blob-canvas-frame, :root[data-mode="professional"] .message-author canvas { display: none; }

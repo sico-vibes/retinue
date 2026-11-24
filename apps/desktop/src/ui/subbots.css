@@ -36,3 +36,5 @@
 .companion-fleet button { padding: 0; color: inherit; font: inherit; border: 0; background: transparent; cursor: pointer; }
 .companion-fleet button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .fleet-row-name small { font-family: inherit; }
+
+.subbot-glyph { flex: none; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; color: var(--text-3); }

@@ -9,8 +9,11 @@ export type WorkMode = 'employees' | 'professional'
 const KEY = 'retinue.workMode'
 const listeners = new Set<() => void>()
 
+/** Only the browser preview can choose Professional mode (a test double of the shell may not define the flag at all). */
+const inPreview = () => { try { return (previewMode as boolean) === true } catch { return false } }
+
 export function currentWorkMode(): WorkMode {
-  if (!previewMode) return 'employees'
+  if (!inPreview()) return 'employees'
   try {
     const forced = new URLSearchParams(window.location.search).get('mode')
     if (forced === 'professional' || forced === 'employees') return forced

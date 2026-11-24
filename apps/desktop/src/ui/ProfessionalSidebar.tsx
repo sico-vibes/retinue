@@ -2,10 +2,10 @@
 // project (or one flat list), working and waiting ones on top, old ones on a collapsed Settled shelf. Other machines
 // keep their own groups below. See workMode.ts.
 import { useMemo, useState } from 'react'
-import { ChevronRight, FolderOpen, ListFilter, Plus } from 'lucide-react'
+import { CheckCheck, ChevronRight, FolderOpen, ListFilter, Plus } from 'lucide-react'
 import type { Agent, Project, Runtime, Session } from '../types'
 import { RuntimeMark, providerBrand } from './providerBrand'
-import { StatusLabel, conversationStatus } from './ProjectsSidebar'
+import { ProBadge, proBadgeFor, type ProTone } from './ProBadge'
 import { ProjectIcon } from './ProjectIcon'
 import { Collapse } from './Collapse'
 import { TeamMenu, type MenuItem } from './TeamSidebar'
@@ -35,15 +35,11 @@ function projectKeyOf(session: Session, byId: ReadonlyMap<string, Project>, byPa
   return path ?? 'none'
 }
 
-function ProRow({ session, project, runtime, selected, status, showProject, onOpen }: { session: Session; project: Project | null | undefined; runtime: Runtime | undefined; selected: boolean; status: ReturnType<typeof conversationStatus>; showProject: boolean; onOpen: () => void }) {
-  const title = session.title?.trim() || 'New chat'
-  return <li role="none"><button type="button" role="treeitem" aria-current={selected ? 'true' : undefined} className={`pro-row${selected ? ' selected' : ''}`} onClick={onOpen} title={title}>
-    <span className="pro-row-logo"><RuntimeMark provider={runtime?.provider} size={16} /></span>
-    <span className="pro-row-copy">
-      <span className="pro-row-title">{title}</span>
-      <span className="pro-row-meta">{showProject && <span className="pro-row-project">{project?.name ?? 'No project'}</span>}{showProject && <span aria-hidden="true">·</span>}<StatusLabel {...status} /></span>
-    </span>
-    <time className="pro-row-time" dateTime={activityAt(session)}>{shortTime(activityAt(session))}</time>
+/** One chat: provider logo and title on the first line; its status, project and last-message time on the second. */
+export function ProRow({ title, provider, badge, project, stamp, selected, dimmed = false, onOpen }: { title: string; provider: string | null | undefined; badge: { tone: ProTone; label: string }; project?: string | null; stamp: string; selected: boolean; dimmed?: boolean; onOpen: () => void }) {
+  return <li role="none"><button type="button" role="treeitem" aria-current={selected ? 'true' : undefined} className={`pro-row${selected ? ' selected' : ''}${dimmed ? ' dimmed' : ''}`} onClick={onOpen} title={title}>
+    <span className="pro-row-line"><span className="pro-row-logo"><RuntimeMark provider={provider} size={16} /></span><span className="pro-row-title">{title}</span></span>
+    <span className="pro-row-foot"><ProBadge {...badge} />{project !== undefined && <span className="pro-row-project">{project || 'No project'}</span>}<time className="pro-row-time" dateTime={stamp}>{shortTime(stamp)}</time></span>
   </button></li>
 }
 
@@ -89,8 +85,9 @@ export function ProfessionalSidebar({ agents, projects, sessions, runtimes, sele
 
   const renderRow = (session: Session, showProject: boolean) => {
     const agent = agentById.get(session.agentId ?? '')
-    const status = conversationStatus(session, approvalSessionIds?.has(session.id) ?? false)
-    return <ProRow key={session.id} session={session} project={projectById.get(projectKeyOf(session, projectById, projectByPath))} runtime={runtimeById.get(session.runtimeId ?? agent?.runtimeId ?? '')} selected={session.id === selectedSessionId} status={status} showProject={showProject} onOpen={() => { if (agent) onOpenConversation(agent, session) }} />
+    const runtime = runtimeById.get(session.runtimeId ?? agent?.runtimeId ?? '')
+    const projectId = projectKeyOf(session, projectById, projectByPath)
+    return <ProRow key={session.id} title={session.title?.trim() || 'New chat'} provider={runtime?.provider} badge={proBadgeFor(session, approvalSessionIds?.has(session.id) ?? false)} project={showProject ? projectById.get(projectId)?.name ?? null : undefined} stamp={activityAt(session)} selected={session.id === selectedSessionId} onOpen={() => { if (agent) onOpenConversation(agent, session) }} />
   }
 
   return <div className="pro-sidebar">
@@ -119,7 +116,7 @@ export function ProfessionalSidebar({ agents, projects, sessions, runtimes, sele
           <ul role="tree" className="pro-list">{live.map((session) => renderRow(session, flat))}</ul>
           {settled.length > 0 && <div className="pro-settled">
             <button type="button" className="pro-settled-head" aria-expanded={settledShown} onClick={() => setSettledOpen((current) => { const next = new Set(current); if (settledShown) next.delete(group.key); else next.add(group.key); return next })}>
-              <ChevronRight size={12} aria-hidden="true" className={`fold-chevron${settledShown ? ' open' : ''}`} /><span>Settled</span><span className="pro-count">{settled.length}</span>
+              <ChevronRight size={12} aria-hidden="true" className={`fold-chevron${settledShown ? ' open' : ''}`} /><CheckCheck size={13} aria-hidden="true" /><span>Settled</span><span className="pro-count">{settled.length}</span>
             </button>
             <Collapse open={settledShown}><ul role="tree" className="pro-list pro-list-settled">{settled.map((session) => renderRow(session, flat))}</ul></Collapse>
           </div>}

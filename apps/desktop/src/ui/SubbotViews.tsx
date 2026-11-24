@@ -1,5 +1,7 @@
 // Phase 8: sub-bots, kept in plain sight. Under their parent in the sidebar, as a fleet in the
 // conversation that started them, as a count in the companion, and with a box to message each one.
+import { GitFork } from 'lucide-react'
+import { useWorkMode } from './workMode'
 import { useState } from 'react'
 import { ArrowUp, ArrowUpRight, Square } from 'lucide-react'
 import type { Agent } from '../types'
@@ -14,6 +16,8 @@ import './subbots.css'
 const messageOf = (reason: unknown, fallback: string) => reason instanceof Error && reason.message ? reason.message : typeof reason === 'string' && reason ? reason : fallback
 
 function Art({ parent, name, status }: { parent?: Agent; name: string; status: Subbot['status'] }) {
+  // Professional mode (24 November 2026): a sub-agent is a plain branch glyph, not its parent's cartoon.
+  if (useWorkMode() === 'professional') return <span className="subbot-glyph" aria-hidden="true"><GitFork size={13} /></span>
   const mood = status === 'running' ? 'tool_activity' : status === 'failed' ? 'error' : 'idle'
   return parent
     ? <BlobCanvas decorative color={agentColorHex(parent.color)} size={16} mini mood={mood} look={agentLook(parent)} label={name} />

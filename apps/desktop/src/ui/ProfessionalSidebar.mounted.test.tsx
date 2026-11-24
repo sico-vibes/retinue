@@ -30,7 +30,7 @@ describe('Professional mode sidebar', () => {
     const { host, done } = mount([chat('old', 5), chat('new', 1), chat('ask', 9)], vi.fn(), new Set(['ask']))
     try {
       expect([...host.querySelectorAll('.pro-row-title')].map((node) => node.textContent)).toEqual(['ask', 'new', 'old'])
-      expect(host.querySelector('.pro-row .ps-state.needs')).not.toBeNull()
+      expect(host.querySelector('.pro-row .pro-badge.needs')).not.toBeNull()
     } finally { done() }
   })
   it('files a chat idle for over a week under Settled, and opens a row with its employee underneath', () => {

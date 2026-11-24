@@ -1,10 +1,10 @@
 // The CEO's assignments in the conversation that made them: a centred "Messaged ..." chip per run of messages sent
 // in a turn (like "Message from"), opening in place to a row per bot with its art, a status the daemon recorded, elapsed time, and a way into the teammate's
 // own conversation. Approving stays in that conversation; nothing here decides anything for the owner.
-import { useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { ArrowUpRight, ChevronDown, ChevronRight, Square } from 'lucide-react'
 import { rpc } from '../tauri'
-import type { Agent } from '../types'
+import type { Agent, Runtime } from '../types'
 import { BlobCanvas } from '../blob/BlobCanvas'
 import type { BlobMood } from '../blob/characterState'
 import { agentLook } from '../blob/look'
@@ -13,12 +13,21 @@ import { useSessionRepository, repositoryRefreshKey } from './sessionRepository'
 import { sessionIsBusy } from './teamSelectors'
 import { useEntityNoun } from './vocabulary'
 import { groupElapsed, isActiveBucket, rowElapsed, summarizeBuckets, type DelegationBucket, type DelegationRowModel } from './delegations'
+import { RuntimeMark } from './providerBrand'
+import { ProBadge, type ProTone } from './ProBadge'
+import { useWorkMode } from './workMode'
 import './delegationGroup.css'
 
 const MOOD: Record<DelegationBucket, BlobMood> = { queued: 'idle', working: 'working', approval: 'permission', done: 'idle', failed: 'error', cancelled: 'idle', interrupted: 'idle', earlier: 'idle' }
 const baseName = (path: string) => path.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || path
 
+/** In Professional mode a delegate shows its provider's logo, not a cartoon (24 November 2026). */
+const BADGE: Record<DelegationBucket, ProTone> = { queued: 'draft', working: 'working', approval: 'needs', done: 'done', failed: 'bad', cancelled: 'limited', interrupted: 'limited', earlier: 'done' }
+const RuntimesContext = createContext<readonly Runtime[]>([])
+
 function Art({ agent, name, size, mood }: { agent: Agent | undefined; name: string; size: number; mood: BlobMood }) {
+  const runtimes = useContext(RuntimesContext)
+  if (useWorkMode() === 'professional') return <span className="delegation-logo" style={{ width: size, height: size }} aria-hidden="true"><RuntimeMark provider={runtimes.find((runtime) => runtime.id === agent?.runtimeId)?.provider} size={Math.round(size * 0.72)} /></span>
   return agent
     ? <BlobCanvas decorative color={agentColorHex(agent.color)} size={size} mini mood={mood} look={agentLook(agent)} label={name} />
     : <span className="delegation-art-fallback" style={{ width: size, height: size }} aria-hidden="true">{name.slice(0, 1)}</span>
@@ -57,6 +66,7 @@ const stoppable = (row: DelegationRowModel) => row.recorded && !!row.delegationI
 
 function Row({ row, now, onOpen, onError, onFollowUp }: { row: DelegationRowModel; now: number; onOpen: (sessionId: string) => void; onError: (message: string) => void; onFollowUp?: (row: DelegationRowModel) => void }) {
   const [open, setOpen] = useState(false)
+  const professional = useWorkMode() === 'professional'
   const panel = `delegation-${row.key}`.replace(/[^A-Za-z0-9_-]/g, '')
   const elapsed = rowElapsed(row, now)
   return <li className={`delegation-row ${row.bucket}`} data-delegation-id={row.delegationId ?? undefined} data-status={row.bucket}>
@@ -67,7 +77,7 @@ function Row({ row, now, onOpen, onError, onFollowUp }: { row: DelegationRowMode
         <span className="delegation-row-copy"><strong>{row.name}</strong><span className="delegation-row-topic" title={row.topic}>{row.topic}</span></span>
       </button>
       {/* Its own column, so the status sits on the same line as Open (owner, 28 October 2026). */}
-      <span className="delegation-status"><i className="delegation-mark" aria-hidden="true" />{row.label}{elapsed !== '—' && <><span aria-hidden="true"> · </span><time aria-label="Elapsed time">{elapsed}</time></>}</span>
+      <span className="delegation-status">{professional ? <ProBadge tone={BADGE[row.bucket]} label={row.label} /> : <><i className="delegation-mark" aria-hidden="true" />{row.label}</>}{elapsed !== '—' && <><span aria-hidden="true"> · </span><time aria-label="Elapsed time">{elapsed}</time></>}</span>
       {stoppable(row) && <StopControl row={row} onError={onError} />}
       <button type="button" className="delegation-open" disabled={!row.sideSessionId} onClick={() => row.sideSessionId && onOpen(row.sideSessionId)} aria-label={`${row.bucket === 'approval' ? 'Open to approve' : 'Open'} the conversation with ${row.name}: ${row.topic}`}>{row.bucket === 'approval' ? 'Review' : 'Open'}<ArrowUpRight size={12} aria-hidden="true" /></button>
     </div>
@@ -85,7 +95,8 @@ function Row({ row, now, onOpen, onError, onFollowUp }: { row: DelegationRowMode
   </li>
 }
 
-export function DelegationGroup({ rows, onOpen, originSessionId, onFollowUp }: { rows: readonly DelegationRowModel[]; onOpen: (sessionId: string) => void; /** The CEO's conversation the group belongs to; the group stop is scoped to it. */ originSessionId?: string; /** Puts a follow-up question in the CEO's message box; the owner sends it. */ onFollowUp?: (row: DelegationRowModel) => void }) {
+export function DelegationGroup({ rows, onOpen, originSessionId, onFollowUp, runtimes = [] }: { runtimes?: readonly Runtime[]; rows: readonly DelegationRowModel[]; onOpen: (sessionId: string) => void; /** The CEO's conversation the group belongs to; the group stop is scoped to it. */ originSessionId?: string; /** Puts a follow-up question in the CEO's message box; the owner sends it. */ onFollowUp?: (row: DelegationRowModel) => void }) {
+  const professional = useWorkMode() === 'professional'
   const [problem, setProblem] = useState<string | null>(null)
   const [stopping, setStopping] = useState(false)
   const [confirmAll, setConfirmAll] = useState(false)
@@ -115,11 +126,11 @@ export function DelegationGroup({ rows, onOpen, originSessionId, onFollowUp }: {
   const attention = rows.some((row) => row.bucket === 'approval')
   const failed = rows.some((row) => row.bucket === 'failed' || row.bucket === 'interrupted')
   const id = `delegation-group-${rows[0].key}`.replace(/[^A-Za-z0-9_-]/g, '')
-  return <section className={`delegation-group${expanded ? ' open' : ''}${anyActive ? ' active' : ''}${attention ? ' attention' : ''}${failed ? ' failed' : ''}`} aria-label={title}>
+  return <RuntimesContext.Provider value={runtimes}><section className={`delegation-group${expanded ? ' open' : ''}${anyActive ? ' active' : ''}${attention ? ' attention' : ''}${failed ? ' failed' : ''}`} aria-label={title}>
     {/* Owner, 28 October 2026: a "Messaged" chip like "Message from", centred, that opens in place. */}
     <div className="team-chip-row delegation-chip-row">
       <button type="button" className="team-chip delegation-head" aria-expanded={expanded} aria-controls={id} onClick={() => setManual(!expanded)}>
-        <span>Messaged</span>
+        <span>{professional ? 'Subagents' : 'Messaged'}</span>
         <span className="delegation-faces" aria-hidden="true">{faces.slice(0, 3).map((row) => <Art key={row.agent?.id ?? row.key} agent={row.agent} name={row.name} size={18} mood={MOOD[row.bucket]} />)}{faces.length > 3 && <span className="delegation-more">+{faces.length - 3}</span>}</span>
         <b className="delegation-names">{names}</b>
         <em className="delegation-summary">{summarizeBuckets(rows)}{total !== '—' && <> · <time aria-label="Elapsed time">{total}</time></>}</em>
@@ -133,5 +144,5 @@ export function DelegationGroup({ rows, onOpen, originSessionId, onFollowUp }: {
         ? <span className="delegation-stop-confirm" role="group" aria-label="Stop all assignments?"><button type="button" className="delegation-stop danger" disabled={stopping} onClick={() => void stopAll()}>{stopping ? 'Stopping…' : `Stop all ${stopRows.length}`}</button><button type="button" className="delegation-stop" disabled={stopping} onClick={() => setConfirmAll(false)}>Keep</button></span>
         : <button type="button" className="delegation-stop" onClick={() => setConfirmAll(true)}><Square size={10} aria-hidden="true" />Stop all {stopRows.length}</button>)}
     </div>}
-  </section>
+  </section></RuntimesContext.Provider>
 }

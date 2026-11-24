@@ -1017,6 +1017,10 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     const rows = fixtureMachines().flatMap((machine) => (machine.bots as Array<Record<string, unknown>>).flatMap((bot) => bot.id === 'preview-rae' ? [
       { machineId: machine.id, machineName: machine.name, kind: machine.kind ?? null, id: 'preview-remote-1', title: 'Fix the invoice export', agentId: bot.id, agentName: bot.name, projectName: 'korus', state: 'working', updatedAt: new Date(Date.now() - 120_000).toISOString(), archived: false },
       { machineId: machine.id, machineName: machine.name, kind: machine.kind ?? null, id: 'preview-remote-2', title: 'Tidy the settings page', agentId: bot.id, agentName: bot.name, projectName: 'korus', state: 'idle', updatedAt: new Date(Date.now() - 86_400_000).toISOString(), archived: false },
+    ] : bot.id === 'preview-tom' ? [
+      { machineId: machine.id, machineName: machine.name, kind: machine.kind ?? null, id: 'preview-remote-3', title: 'Review the pricing page PR', agentId: bot.id, agentName: bot.name, projectName: 'korus', state: 'idle', updatedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(), archived: false },
+    ] : bot.id === 'preview-ivy' ? [
+      { machineId: machine.id, machineName: machine.name, kind: machine.kind ?? null, id: 'preview-remote-4', title: 'Rotate the deploy keys', agentId: bot.id, agentName: bot.name, projectName: 'infra', state: 'idle', updatedAt: new Date(Date.now() - 9 * 86_400_000).toISOString(), archived: false },
     ] : []))
     return { sessions: params.machineId ? rows.filter((row) => row.machineId === params.machineId) : rows } as T
   }

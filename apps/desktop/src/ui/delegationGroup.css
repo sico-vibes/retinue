@@ -64,3 +64,9 @@
 .delegation-followup { justify-self: start; height: 26px; padding: 0 9px; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: transparent; font: inherit; font-size: var(--fs-xs); cursor: pointer; }
 .delegation-followup:hover { color: var(--text-1); background: var(--surface-hover); }
 .delegation-followup:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* Professional mode (24 November 2026): the delegates read as a card in the thread, left aligned, with provider logos and status badges. */
+.delegation-logo { flex: none; display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
+:root[data-mode="professional"] .delegation-chip-row { justify-content: flex-start; }
+:root[data-mode="professional"] .delegation-faces .delegation-logo + .delegation-logo { margin-left: 4px; }
+:root[data-mode="professional"] .delegation-status { display: inline-flex; align-items: center; gap: 6px; }
