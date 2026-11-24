@@ -108,3 +108,18 @@
 @media (prefers-reduced-motion: reduce) {
   :root[data-style="haze"] :is(.analytics-card [data-figure], .sidebar-view-switch::before) { animation: none !important; transition: none !important; }
 }
+
+/* Schedules, dialogs and the review screen in Haze (24 November 2026). Occasional views, so they may enter; nothing here is a stripe or edge wash. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.schedules-template, .schedule-idea) { transition: background-color 160ms linear, transform 220ms var(--polish-ease); animation: polish-rise 380ms var(--polish-ease) backwards; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.schedules-template, .schedule-idea):nth-child(2) { animation-delay: 40ms; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.schedules-template, .schedule-idea):nth-child(3) { animation-delay: 80ms; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.schedules-template, .schedule-idea):nth-child(n+4) { animation-delay: 120ms; }
+@media (hover: hover) and (pointer: fine) {
+  :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.schedules-template, .schedule-idea):hover { transform: translateY(-1px); background-color: var(--z-raised); }
+}
+/* Dialogs scale in from just under full size (never from zero) and leave quickly. */
+@keyframes polish-dialog { from { opacity: 0; transform: translateY(8px) scale(.975); } }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .blob-dialog.is-entered, :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sheet-backdrop.is-entered > .blob-dialog { animation: polish-dialog 240ms var(--polish-ease) backwards; }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-style="haze"] :is(.schedules-template, .schedule-idea, .blob-dialog) { animation: none !important; transform: none !important; }
+}
