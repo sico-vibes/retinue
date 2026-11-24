@@ -27,6 +27,8 @@ import './ui/polish.css'
 // Keep all looks in the entry stylesheet; their rules are scoped by data-style.
 import './ui/themes/haze.css'
 import './ui/themes/haze-zephium.css'
+import './ui/themes/haze-polish.css'
+import { installHazeSpotlight } from './ui/hazeSpotlight'
 
 const dictation = new URLSearchParams(window.location.search).has('dictation')
 // The native frosted backdrop belongs to the main window only (the helper also skips the companion).
@@ -34,6 +36,7 @@ if (!dictation) startWindowBackdrop()
 // Haze's frosted sheets use their solid colour while frames are long (frameStrain.ts).
 if (!dictation) watchFrameStrain()
 
+installHazeSpotlight()
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>{dictation ? <DictationBubble /> : <App />}</React.StrictMode>,
 )

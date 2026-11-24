@@ -19,7 +19,7 @@ export function WorkingMark({ label, timer = true, compact = false, step = null 
   const style = useThemeStyle()
   const Icon = step ? STEP_ICON[step.kind] : null
   return <span className={`working-step${step ? ' is-doing' : ''}`} data-kind={step?.kind}>
-    {Icon && <span className="working-step-icon" aria-hidden="true"><Icon size={compact ? 12 : 14} strokeWidth={2} />{step!.kind === 'command' && <i className="working-step-caret" />}</span>}
+    {Icon && <span className="working-step-icon" aria-hidden="true"><Icon size={compact ? 12 : 14} strokeWidth={2} /></span>}
     <LatticeLoader className="working-mark" label={step ? step.label : label} pattern="arrow" grid={3} shape={style === 'stone' ? 'round' : 'square'} cellSize={compact ? 3 : 4} gap={compact ? 1 : 1.5} fontSize={compact ? 12 : 13} showTimer={timer} />
   </span>
 }

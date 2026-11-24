@@ -26,6 +26,8 @@ export interface MetallicPaintProps {
   intro?: boolean;
   paused?: boolean;
   dpr?: number;
+  /** Called once when the canvas cannot draw (no WebGL 2, a failed shader, a lost context), so a parent can show its plain picture. */
+  onUnavailable?: () => void;
   className?: string;
   style?: CSSProperties;
 }
@@ -638,6 +640,7 @@ export default function MetallicPaint({
   intro = true,
   paused = false,
   dpr,
+  onUnavailable,
   className = '',
   style
 }: MetallicPaintProps) {
@@ -645,6 +648,8 @@ export default function MetallicPaint({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<Engine | null>(null);
   const settingsRef = useRef<Settings>(null as unknown as Settings);
+  const unavailableRef = useRef(onUnavailable);
+  unavailableRef.current = onUnavailable;
 
   settingsRef.current = {
     tint: parseColor(color, [1, 1, 1, 1]),
@@ -670,7 +675,7 @@ export default function MetallicPaint({
     const canvas = canvasRef.current;
     if (!container || !canvas) return undefined;
     const gl = canvas.getContext('webgl2', { alpha: true, premultipliedAlpha: true, antialias: false });
-    if (!gl) return undefined;
+    if (!gl) { unavailableRef.current?.(); return undefined; }
     const parallel = gl.getExtension('KHR_parallel_shader_compile');
     const vertex = compile(gl, gl.VERTEX_SHADER, VERTEX);
     const fragment = compile(gl, gl.FRAGMENT_SHADER, FRAGMENT);
@@ -679,6 +684,7 @@ export default function MetallicPaint({
       gl.deleteShader(vertex);
       gl.deleteShader(fragment);
       gl.deleteProgram(program);
+      unavailableRef.current?.();
       return undefined;
     }
     gl.attachShader(program, vertex);
@@ -702,6 +708,7 @@ export default function MetallicPaint({
     };
     if (!parallel && !link()) {
       gl.deleteProgram(program);
+      unavailableRef.current?.();
       return undefined;
     }
 
@@ -955,9 +962,11 @@ export default function MetallicPaint({
       cancelAnimationFrame(state.raf);
       // A lost canvas steps aside, so the plain picture underneath shows instead of a blank or broken square.
       canvas.style.visibility = 'hidden';
+      unavailableRef.current?.();
     };
 
     canvas.addEventListener('webglcontextlost', onLost);
+    if (gl.isContextLost()) onLost(new Event('webglcontextlost'));
     container.addEventListener('pointermove', onMove);
     container.addEventListener('pointerleave', onLeave);
 

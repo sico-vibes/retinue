@@ -10,7 +10,11 @@ import { rpc } from '../tauri'
 import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
 import { canChat, canTakeOver, machineBusyBots, normalizeMachineSessions, useMachineSessionChanges, useMachines, type Machine, type MachineBot, type TakeOverJob, type TakeOverPreview } from './machines'
 import { doingNowLabel } from './doingNow'
-import { MachineBadge, openMachineBotInMainWindow } from './MachineBots'
+import { MachineBadge, MachineKindIcon, openMachineBotInMainWindow } from './MachineBots'
+import { BlobCanvas } from '../blob/BlobCanvas'
+import { agentLook } from '../blob/look'
+import { agentColorHex } from './agentColor'
+import type { Agent } from '../types'
 import { openSafeLink } from './openSafeLink'
 import { SafeMarkdown } from './SafeMarkdown'
 import { shortTime } from './rosterSelectors'
@@ -294,19 +298,14 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
   const movedAway = !!session?.link?.movedTo
   const waitingForYou = session?.state === 'waiting_permission'
 
-  return <div className={`sheet-backdrop blob-dialog-backdrop ${entered ? 'is-entered' : ''}`}>
-    <section ref={ref} className="blob-dialog machine-view" role="dialog" aria-modal="true" aria-labelledby="machine-view-title" tabIndex={-1}>
-      <header className="machine-view-head">
-        <div className="machine-view-title">
-          <h2 id="machine-view-title">{bot.name}</h2>
-          <small>On {machine.name}{machine.lastSeenAt && machine.state !== 'online' ? ` · last seen ${shortTime(machine.lastSeenAt)}` : ''} <span className={`machine-live-mark${machine.live && machine.state === 'online' ? ' live' : ''}`} title={machine.live ? 'Changes arrive as they happen.' : 'No live link right now; this view checks every few seconds.'}><i aria-hidden="true" />{machine.state !== 'online' ? 'Offline' : machine.live ? 'Live' : 'Checking every few seconds'}</span></small>
-        </div>
-        <button type="button" className="icon-button" aria-label="Close" onClick={close}><X size={16} aria-hidden="true" /></button>
-      </header>
-      <div className="machine-view-layout">
-        <div className="machine-view-side">
+  // A conversation on another machine opens in the conversation pane, as if it ran here, marked as remote (23 November 2026);
+  // with no pane around it (the component on its own) it renders in place.
+  const host = typeof document === 'undefined' ? null : document.querySelector<HTMLElement>('.conversation-pane')
+  const remoteOnline = machine.state === 'online'
+  const side = <div className="machine-convos">
+          <div className="convo-head"><strong>Conversations</strong><span className="machine-remote-chip" title={`These conversations run on ${machine.name}`}><MachineKindIcon kind={machine.kind} size={11} />{machine.name}</span></div>
           {chat
-            ? <button type="button" className="secondary-button small machine-view-new" disabled={starting} onClick={() => void startConversation()}><Plus size={13} aria-hidden="true" />{starting ? 'Starting…' : 'New conversation'}</button>
+            ? <button type="button" className="convo-new machine-convo-new" disabled={starting} onClick={() => void startConversation()}><Plus size={13} aria-hidden="true" />{starting ? 'Starting…' : 'New conversation'}</button>
             : <span />}
           <ul className="machine-view-list" aria-label={`${bot.name}'s conversations`}>
             {conversations === null && <li><LoadingBlock label="Loading…" lines={3} /></li>}
@@ -317,6 +316,17 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
             </button></li>)}
           </ul>
         </div>
+  const sideHost = host?.closest('.app-shell')?.querySelector<HTMLElement>('.conversations-panel') ?? null
+  const pane = <section ref={ref} className={`machine-pane${entered ? ' is-entered' : ''}`} role="dialog" aria-label={`${bot.name} on ${machine.name}`} data-remote-state={remoteOnline ? (machine.live ? 'live' : 'online') : 'offline'} tabIndex={-1}>
+      <header className="machine-view-head">
+        <span className="machine-pane-avatar"><BlobCanvas decorative color={agentColorHex(bot.color ?? 'mint')} size={34} mood={!remoteOnline ? 'offline' : busy ? 'tool_activity' : 'idle'} look={agentLook(bot as unknown as Agent)} label={bot.name} /><span className="machine-pane-device" title={`Running on ${machine.name}`}><MachineKindIcon kind={machine.kind} size={10} /></span></span>
+        <div className="machine-view-title">
+          <h2 id="machine-view-title">{bot.name}<span className="machine-remote-chip" title={`This conversation runs on ${machine.name}`}><MachineKindIcon kind={machine.kind} size={11} />{machine.name}</span></h2>
+          <small>On {machine.name}{machine.lastSeenAt && machine.state !== 'online' ? ` · last seen ${shortTime(machine.lastSeenAt)}` : ''} <span className={`machine-live-mark${machine.live && machine.state === 'online' ? ' live' : ''}`} title={machine.live ? 'Changes arrive as they happen.' : 'No live link right now; this view checks every few seconds.'}><i aria-hidden="true" />{machine.state !== 'online' ? 'Offline' : machine.live ? 'Live' : 'Checking every few seconds'}</span></small>
+        </div>
+        <button type="button" className="icon-button" aria-label="Close" onClick={close}><X size={16} aria-hidden="true" /></button>
+      </header>
+      <div className="machine-view-layout">
         <div className="machine-view-main">
           <div ref={scroller} className="machine-transcript" tabIndex={0} aria-label={chat ? "Conversation" : "Conversation, read only"} onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48 }}>
             {selected && !session && !failure && <p role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading…</p>}
@@ -354,5 +364,5 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
       </div>
       {takingOver && selected && <TakeOverDialog machine={machine} sessionId={selected} onClose={() => setTakingOver(false)} onMoved={onMoved} />}
     </section>
-  </div>
+  return host ? <>{createPortal(pane, host)}{sideHost && createPortal(side, sideHost)}</> : <>{pane}{side}</>
 }

@@ -3,22 +3,9 @@
 .working-step { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
 .working-step.is-doing .lattice-loader__grid { display: none; }
 .working-step-icon { position: relative; flex: 0 0 auto; width: 22px; height: 22px; display: inline-grid; place-items: center; color: var(--text-1); border-radius: 6px; background: color-mix(in srgb, var(--text-1) 9%, transparent); }
-.working-step[data-kind="command"] .working-step-icon svg { animation: working-step-type 1.4s ease-in-out infinite; }
-.working-step-caret { position: absolute; right: 3px; bottom: 4px; width: 4px; height: 1.5px; border-radius: 1px; background: currentColor; animation: working-step-caret 1s steps(2, end) infinite; }
-.working-step[data-kind="read"] .working-step-icon svg { animation: working-step-scan 1.6s ease-in-out infinite; }
-.working-step[data-kind="edit"] .working-step-icon svg { animation: working-step-write 1.2s ease-in-out infinite; }
-.working-step[data-kind="search"] .working-step-icon svg { animation: working-step-seek 1.8s ease-in-out infinite; }
-.working-step[data-kind="web"] .working-step-icon svg, .working-step[data-kind="tool"] .working-step-icon svg { animation: working-step-turn 2.4s linear infinite; }
 /* The step's words shimmer: a lighter band runs across the text. */
 .working-step.is-doing .lattice-loader__text[data-active] { color: transparent; background: linear-gradient(90deg, var(--text-3) 0%, var(--text-3) 35%, var(--text-1) 50%, var(--text-3) 65%, var(--text-3) 100%) 0 0 / 250% 100%; -webkit-background-clip: text; background-clip: text; animation: working-step-shimmer 2s linear infinite; }
 @keyframes working-step-shimmer { from { background-position: 100% 0; } to { background-position: -150% 0; } }
-@keyframes working-step-caret { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-@keyframes working-step-type { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1px); } }
-@keyframes working-step-scan { 0%, 100% { transform: translateY(-1px); } 50% { transform: translateY(1px); } }
-@keyframes working-step-write { 0%, 100% { transform: rotate(0); } 40% { transform: rotate(-8deg) translateX(-.5px); } 70% { transform: rotate(5deg) translateX(.5px); } }
-@keyframes working-step-seek { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(1.5px, -1px); } 50% { transform: translate(0, 1px); } 75% { transform: translate(-1.5px, -1px); } }
-@keyframes working-step-turn { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .working-step-icon svg, .working-step-caret { animation: none !important; }
   .working-step.is-doing .lattice-loader__text[data-active] { animation: none; color: var(--text-1); background: none; }
 }

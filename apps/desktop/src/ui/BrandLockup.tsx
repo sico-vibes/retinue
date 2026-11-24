@@ -18,11 +18,13 @@ function useLightTheme() {
 
 export function BrandLockup() {
   const light = useLightTheme()
-  return <div className="brand-lockup painting">
+  // The PNG tile stays hidden only while the paint can draw; a lost or missing WebGL canvas gives the tile back (22 November 2026: Chromium's sad-face square replaced the logo).
+  const [failed, setFailed] = useState(false)
+  return <div className={`brand-lockup${failed ? '' : ' painting'}`}>
     <span className="brand-logo-stack">
       <img className="brand-logo theme-on-dark" src={retinueTileDark} alt="Retinue logo" />
       <img className="brand-logo theme-on-light" src={retinueTileLight} alt="" />
-      <MetallicPaintOverlay key={light ? 'light' : 'dark'} playing light={light} />
+      {!failed && <MetallicPaintOverlay key={light ? 'light' : 'dark'} playing light={light} onUnavailable={() => setFailed(true)} />}
     </span>
     <strong>Retinue</strong>
   </div>

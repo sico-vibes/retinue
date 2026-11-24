@@ -37,8 +37,8 @@ export function MetallicMark({ size, playing, intro = false, className = '', lig
 }
 
 /** Only the paint, laid over a picture its parent already shows (the top-left logo). */
-export function MetallicPaintOverlay({ playing, light = false }: { playing: boolean; light?: boolean }) {
+export function MetallicPaintOverlay({ playing, light = false, onUnavailable }: { playing: boolean; light?: boolean; onUnavailable?: () => void }) {
   const able = useMemo(canPaintMetal, [])
   if (!able || !playing) return null
-  return <Suspense fallback={null}><span className="metallic-overlay" aria-hidden="true"><MetallicPaint imageSrc={light ? markBlack : markWhite} lightMode={light} /></span></Suspense>
+  return <Suspense fallback={null}><span className="metallic-overlay" aria-hidden="true"><MetallicPaint imageSrc={light ? markBlack : markWhite} lightMode={light} onUnavailable={onUnavailable} /></span></Suspense>
 }

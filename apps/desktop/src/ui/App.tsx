@@ -3001,6 +3001,9 @@ ${fileReferenceText(sentFile)}` : typed
   const viewedMachine = machineView ? machines.find((item) => item.id === machineView.machineId) ?? null : null
   const viewedMachineBot = machineView ? viewedMachine?.bots.find((bot) => bot.id === machineView.botId) ?? null : null
   useOpenMachineBotRequests(!companion, (machineId, botId) => setMachineView({ machineId, botId }))
+  // Demo (preview only): `?machines=1&demo-machine-view` opens the first other-machine employee in the conversation pane.
+  const demoMachineViewOpened = useRef(false)
+  useEffect(() => { if (!previewMode || demoMachineViewOpened.current || !new URLSearchParams(location.search).has('demo-machine-view')) return; const first = machines.find((item) => item.bots.length); if (first) { demoMachineViewOpened.current = true; setMachineView({ machineId: first.id, botId: first.bots[0].id }) } }, [machines])
   // A conversation just taken over arrives with the next refresh.
   useEffect(() => {
     if (!movedHere) return
@@ -3148,7 +3151,7 @@ ${fileReferenceText(sentFile)}` : typed
     <>
     {!companion && <AppWallpaper />}
     <PhotoOwnersContext.Provider value={photoOwnerMap}><ProjectsContext.Provider value={projects}>
-    <main className={`app-shell ${detailsVisible ? 'inspector-open' : ''} ${docVisible ? `doc-open${docExpanded ? ' doc-expanded' : ''}` : ''} ${convosOpen && activeSelectedAgent && !schedulesOpen && !tasksOpen && !compareOpen ? 'convos-open' : ''} ${reducedLaunchFade ? 'reduced-launch-fade' : ''}`} style={{ ...(accent ? { '--agent-accent': accent } : {}), ...(reducedLaunchFade ? { '--launch-fade-duration': '180ms' } : {}) } as React.CSSProperties}>
+    <main className={`app-shell ${detailsVisible ? 'inspector-open' : ''} ${docVisible ? `doc-open${docExpanded ? ' doc-expanded' : ''}` : ''} ${(convosOpen && activeSelectedAgent && !schedulesOpen && !tasksOpen && !compareOpen) || (viewedMachine && viewedMachineBot) ? 'convos-open' : ''} ${viewedMachine && viewedMachineBot ? 'remote-open' : ''} ${reducedLaunchFade ? 'reduced-launch-fade' : ''}`} style={{ ...(accent ? { '--agent-accent': accent } : {}), ...(reducedLaunchFade ? { '--launch-fade-duration': '180ms' } : {}) } as React.CSSProperties}>
       <aside className="sidebar" aria-label="Agents">
         <div className="sidebar-top">
           <BrandLockup />
