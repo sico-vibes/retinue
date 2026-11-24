@@ -110,3 +110,12 @@
 .convo-title-line .convo-title { min-width: 0; flex: 1; }
 .mcp-mark { flex: 0 0 auto; display: inline-grid; place-items: center; color: var(--text-3); }
 .convo-row.active .mcp-mark { color: var(--text-2); }
+
+/* Settled conversations (24 November 2026): a quiet, collapsed shelf at the foot of each project, as in T3 Code. */
+.convo-settled { margin-top: 4px; }
+.convo-settled-head { width: 100%; min-height: 26px; padding: 0 8px; display: flex; align-items: center; gap: 5px; color: var(--text-3); border: 0; border-radius: var(--radius-sm); background: none; font: inherit; font-size: var(--fs-xs); text-align: left; cursor: pointer; }
+.convo-settled-head:hover { color: var(--text-2); background: var(--surface-hover); }
+.convo-settled-head:focus-visible { box-shadow: var(--focus-ring); }
+.convo-settled-head > svg { flex: 0 0 auto; }
+.convo-settled-count { margin-left: auto; font-variant-numeric: tabular-nums; }
+.convo-list-settled { opacity: .78; }

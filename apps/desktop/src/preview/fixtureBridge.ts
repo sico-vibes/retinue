@@ -253,6 +253,13 @@ let sessions: Session[] = [
     return { id: `session-codex-many-${n}`, runtimeId: 'runtime-codex', agentId: 'agent-codex', title: `Bulk ${n}`, projectPath: 'C:\\work\\korus', state: 'idle' as const, updatedAt: minutesAgo(32 - n), messages: [] }
   }),
 ]
+// `?settled`: three more of Codex's conversations, idle for 9, 12 and 30 days. They file under the Settled shelf (24 November 2026).
+if (flags().has('settled')) {
+  const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString()
+  for (const [id, title, days] of [['session-old-1', 'Move invoices to the new schema', 9], ['session-old-2', 'Tidy the settings copy', 12], ['session-old-3', 'First look at the export bug', 30]] as const) {
+    sessions.push({ id, runtimeId: 'runtime-codex', agentId: 'agent-codex', title, projectPath: 'C:/work/korus', state: 'idle', createdAt: daysAgo(days + 1), updatedAt: daysAgo(days), lastMessageAt: daysAgo(days), messages: [{ id: `${id}-m1`, role: 'user', content: title, createdAt: daysAgo(days) }, { id: `${id}-m2`, role: 'assistant', content: 'Done.', createdAt: daysAgo(days) }] } as unknown as Session)
+  }
+}
 
 try {
   const saved = localStorage.getItem(composerPreviewStorageKey)

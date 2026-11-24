@@ -10,7 +10,8 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { MachineBadge } from './MachineBots'
 import { McpMark } from './McpMark'
 import { attentionOrder, attentionRank, hasSettled, settleOrder } from './sidebarOrder'
-import { Archive, ArrowLeftRight, BellOff, BellRing, ChevronDown, ChevronRight, Copy, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Smile, Tag, Trash2 } from 'lucide-react'
+import { isSettled, setSettledChoice, useSettledChoices } from './settledStore'
+import { Archive, ArchiveRestore, ArrowLeftRight, CheckCheck, BellOff, BellRing, ChevronDown, ChevronRight, Copy, FolderOpen, FolderPlus, MoreHorizontal, Pencil, Plus, Search, SlidersHorizontal, Smile, Tag, Trash2 } from 'lucide-react'
 import type { Agent, Project, Session } from '../types'
 import { BlobCanvas } from '../blob/BlobCanvas'
 import { agentLook } from '../blob/look'
@@ -107,6 +108,8 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [renaming, setRenaming] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const choices = useSettledChoices()
+  const [settledOpen, setSettledOpen] = useState<ReadonlySet<string>>(() => new Set())
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 60_000); return () => window.clearInterval(timer) }, [])
   // Opening a conversation deep in the tree opens the branches above it.
   useEffect(() => {
@@ -130,6 +133,7 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
   const rowItems = (session: Session, title: string, busy: boolean, needsYou: boolean): MenuItem[] => [
     { label: 'Rename', icon: <Pencil size={15} />, onSelect: () => setRenaming(session.id) },
     ...(onSnooze && !needsYou ? [{ label: session.snoozed ? 'Wake' : 'Snooze until it needs you', icon: session.snoozed ? <BellRing size={15} /> : <BellOff size={15} />, onSelect: () => onSnooze(session, session.snoozed !== true) } as MenuItem] : []),
+    ...(!needsYou ? [{ label: isSettled(session, now, choices) ? 'Move back to active' : 'Settle', icon: isSettled(session, now, choices) ? <ArchiveRestore size={15} /> : <CheckCheck size={15} />, disabled: busy, onSelect: () => setSettledChoice(session.id, isSettled(session, now, choices) ? 'active' : 'settled') } as MenuItem] : []),
     copyIdItem(session),
     'separator',
     ...(onArchive ? [{ label: 'Archive', icon: <Archive size={15} />, disabled: busy, onSelect: () => onArchive(session) } as MenuItem] : []),
@@ -209,6 +213,10 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
       {groups.map(({ key, project, nodes }) => {
         const name = project?.name ?? 'No project'
         const folded = collapsedProjects.has(key)
+        // A week idle, or settled by hand, files a conversation under Settled; the open one and a search keep it in view.
+        const live = nodes.filter((node) => node.kind !== 'main' || !isSettled(node.session, now, choices))
+        const settled = nodes.filter((node) => node.kind === 'main' && isSettled(node.session, now, choices))
+        const settledShown = settledOpen.has(key) || words.length > 0 || settled.some((node) => node.session.id === activeId || ancestorIds([node], activeId).length > 0)
         return <section key={key} className="convo-project" aria-label={name} data-project-id={project?.id ?? 'none'}>
           <h3 className="convo-group convo-project-head">
             <button type="button" className="convo-project-fold" aria-expanded={!folded} aria-label={`${folded ? 'Expand' : 'Collapse'} ${name}`} title={folded ? 'Show conversations' : 'Hide conversations'} onClick={() => toggleProject(key)}>
@@ -223,7 +231,13 @@ export function ConversationsPanel({ agent, agents, projects = [], sessions, sel
               {project && projectActions && <button type="button" className="convo-action" aria-label={`${name} options`} aria-haspopup="menu" title="Project options" onClick={(event) => openMenu(event.currentTarget, `${name} actions`, projectItems(project))}><MoreHorizontal size={12} aria-hidden="true" /></button>}
             </span>
           </h3>
-          <Collapse open={!folded}><ul role="tree" className="convo-list">{nodes.map((node) => renderNode(node, 0))}</ul></Collapse>
+          <Collapse open={!folded}><ul role="tree" className="convo-list">{live.map((node) => renderNode(node, 0))}</ul>
+            {settled.length > 0 && <div className="convo-settled">
+              <button type="button" className="convo-settled-head" aria-expanded={settledShown} onClick={() => setSettledOpen((current) => { const next = new Set(current); if (settledShown) next.delete(key); else next.add(key); return next })}>
+                <ChevronRight size={12} aria-hidden="true" className={`fold-chevron${settledShown ? ' open' : ''}`} /><span>Settled</span><span className="convo-settled-count">{settled.length}</span>
+              </button>
+              <Collapse open={settledShown}><ul role="tree" className="convo-list convo-list-settled">{settled.map((node) => renderNode(node, 0))}</ul></Collapse>
+            </div>}</Collapse>
         </section>
       })}
     </div>

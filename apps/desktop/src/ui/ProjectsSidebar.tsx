@@ -5,6 +5,7 @@
 // cards: the title, then when it last changed and what it is doing now. A
 // selected name or title longer than its row scrolls (Marquee). Folding is
 // animated (Collapse). Spacing follows the density tokens in density.css.
+import { isSettled, useSettledChoices } from './settledStore'
 import { useQueueWaiting, waitingLabel } from './queueOverview'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -138,6 +139,8 @@ export function ProjectsSidebar({ agents, projects, sessions, members = null, se
   // An employee's cards follow the selection (open while it holds the selected
   // conversation) until the owner folds or unfolds them; that choice then wins.
   const [folds, setFolds] = useState<ReadonlyMap<string, boolean>>(new Map())
+  const settledChoices = useSettledChoices()
+  const settleNow = Date.now()
   const [menu, setMenu] = useState<{ items: MenuItem[]; label: string; x: number; y: number } | null>(null)
   const trigger = useRef<HTMLElement | null>(null)
   const unfold = (key: string) => setFolded((current) => { const next = new Set(current); next.delete(key); return next })
@@ -180,7 +183,8 @@ export function ProjectsSidebar({ agents, projects, sessions, members = null, se
             {block.bots.map(({ agent, sessions: list }) => {
               const latest = list[0]
               // What needs the owner comes first, so the cut below can never hide it.
-              const recent = attentionOrder(list, (session) => attentionRank(session, approvalSessionIds?.has(session.id) ?? false)).slice(0, RECENT_PER_BOT)
+              // Settled conversations (a week idle, or settled by hand) live in the Conversations column's Settled shelf, not here; the open one stays.
+              const recent = attentionOrder(list.filter((session) => session.id === selectedSessionId || !isSettled(session, settleNow, settledChoices)), (session) => attentionRank(session, approvalSessionIds?.has(session.id) ?? false)).slice(0, RECENT_PER_BOT)
               const rowKey = `${block.key}:${agent.id}`
               const holdsSelection = recent.some((session) => session.id === selectedSessionId)
               const expanded = recent.length > 0 && (folds.get(rowKey) ?? holdsSelection)

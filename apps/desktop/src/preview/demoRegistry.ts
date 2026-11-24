@@ -76,6 +76,7 @@ export const demoEntries: readonly DemoEntry[] = [
     return Object.keys(workflowRpcErrors[method]).map((code) => fail(demo(`workflow-${method}-${code}`, route.area, `${route.label}: ${code.replaceAll('_', ' ')}`, route.url, route.steps), method, code))
   }),
   demo('machine-remote-conversation', 'Linked machines', 'An employee on another machine opens in the conversation pane', '/?no-intro&clean&machines=2&demo-machine-view'),
+  demo('conversations-settled', 'Conversation', 'Old conversations settle under a collapsed Settled shelf', '/?no-intro&clean&idle&session=session-codex&agent=agent-codex&settled'),
   demo('machine-sidebar-folded', 'Linked machines', 'Other devices in the sidebar, foldable', '/?no-intro&clean&machines=2'),
   demo('machine-invalid-address', 'Linked machines', 'Address fails form validation', pairing, [click('Link a machine'), { type: ['.machine-pair input.text-input', 'not an address'] }]),
   demo('machine-unreachable', 'Linked machines', 'Machine address is unreachable', pairing + '&demo-machine-probe=unreachable', probeMachine),

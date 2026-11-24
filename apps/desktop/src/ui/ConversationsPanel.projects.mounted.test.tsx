@@ -25,10 +25,12 @@ const said = [{ id: 'm1', role: 'user', text: 'hi' }] as Session['messages']
 function conversation(id: string, title: string, projectId: string | null, updatedAt: string): Session {
   return { id, runtimeId: 'rt', agentId: bot.id, title, projectId, messages: said, createdAt: updatedAt, updatedAt }
 }
+// Relative to now: a conversation idle for over a week is settled (settledStore.ts).
+const ago = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString()
 const sessions = [
-  conversation('s1', 'Korus layout', 'p1', '2026-10-29T10:00:00.000Z'),
-  conversation('s2', 'Site copy', 'p2', '2026-10-29T12:00:00.000Z'),
-  conversation('s3', 'Just chatting', null, '2026-10-28T09:00:00.000Z'),
+  conversation('s1', 'Korus layout', 'p1', ago(50)),
+  conversation('s2', 'Site copy', 'p2', ago(48)),
+  conversation('s3', 'Just chatting', null, ago(75)),
 ]
 
 let root: Root | null = null
@@ -69,6 +71,21 @@ describe('conversations by project (Phase 1A)', () => {
     expect(groups.map((group) => group.dataset.projectId)).toEqual(['p2', 'p1', 'none'])
     expect(groups.map((group) => group.querySelector('.convo-project-name')?.textContent)).toEqual(['Site', 'Korus', 'No project'])
     expect(groups[1].querySelector('.convo-title')?.textContent).toBe('Korus layout')
+  })
+
+  it('files a conversation idle for over a week under a collapsed Settled shelf', () => {
+    const old = conversation('s-old', 'Old export', 'p1', ago(24 * 9))
+    host = document.createElement('div'); document.body.append(host); root = createRoot(host)
+    act(() => root!.render(<ConversationsPanel agent={bot} agents={[bot]} projects={projects} sessions={[...sessions, old]} selectedSessionId={null} sideSessionId={null} canCreate
+      onSelect={vi.fn()} onOpenSide={vi.fn()} onNew={vi.fn()} projectActions={projectActions()} onRename={vi.fn()} onDelete={vi.fn()} />))
+    const group = host.querySelector<HTMLElement>('.convo-project[data-project-id="p1"]')!
+    const head = group.querySelector<HTMLButtonElement>('.convo-settled-head')!
+    expect(head.textContent).toBe('Settled1')
+    expect(head.getAttribute('aria-expanded')).toBe('false')
+    expect([...group.querySelectorAll('.convo-list:not(.convo-list-settled) .convo-title')].map((node) => node.textContent)).toEqual(['Korus layout'])
+    act(() => head.click())
+    expect(head.getAttribute('aria-expanded')).toBe('true')
+    expect(group.querySelector('.convo-list-settled .convo-title')?.textContent).toBe('Old export')
   })
 
   it('shows a project\u2019s tags as chips on its heading', () => {
