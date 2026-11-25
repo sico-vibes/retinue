@@ -2343,3 +2343,8 @@ The computer's screen (`computer.view`, `computer.rs`) is the first route on the
 - **Cause:** `preview/productionFrame.css` transformed `<body>` (`translateY(32px)`) to draw the title bar. A transformed body is the containing block for `position: fixed`, and portals on `<body>` are placed with `getBoundingClientRect` (tab coordinates), so they were shifted by the caption height.
 - **Fix:** the body is offset with `margin-top` and only `#root` is transformed (`translateZ(0)`), so the app's own fixed layers still fill the client area while body portals land exactly. Don't transform `<body>` in the preview again.
 - **Also:** headless Edge screenshots (Playwright, `channel: 'msedge'`; Chrome isn't installed on this machine) crash or time out while a full `vitest run` is going. Run them one after the other.
+
+## 2026-11-25: a red nightly CI run that is not a code failure
+- **Symptom:** a `schedule` CI run on `main` failed (`hygiene` and `checks`) while the push run on the same commit was green.
+- **Cause:** the nightly `gitleaks` pass scans the whole history and hit its 15-minute limit (`context deadline exceeded`, "no leaks found in partial scan"); `checks` then fails because `hygiene` did. Seen on run 45631593488 (`d3b9cd86`).
+- **How to read it:** check the event (`gh run view <id> --json event`) and the hygiene log tail before treating it as a blocker. The Release build only requires CI on the release commit itself.
