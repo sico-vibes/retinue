@@ -2,6 +2,27 @@
 
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
+
+## 2026-11-25: a red nightly CI run that is not a code failure
+- **Symptom:** a `schedule` CI run on `main` failed (`hygiene` and `checks`) while the push run on the same commit was green.
+- **Cause:** the nightly `gitleaks` pass scans the whole history and hit its 15-minute limit (`context deadline exceeded`, "no leaks found in partial scan"); `checks` then fails because `hygiene` did. Seen on run 45631593488 (`d3b9cd86`).
+- **How to read it:** check the event (`gh run view <id> --json event`) and the hygiene log tail before treating it as a blocker. The Release build only requires CI on the release commit itself.
+
+## 2026-11-25: every tooltip and menu sat 32px low in the preview
+- **Symptom:** in the browser preview, provider-logo tooltips and sidebar menus opened 32px below their anchor; fine in the installed app.
+- **Cause:** `preview/productionFrame.css` transformed `<body>` (`translateY(32px)`) to draw the title bar. A transformed body is the containing block for `position: fixed`, and portals on `<body>` are placed with `getBoundingClientRect` (tab coordinates), so they were shifted by the caption height.
+- **Fix:** the body is offset with `margin-top` and only `#root` is transformed (`translateZ(0)`), so the app's own fixed layers still fill the client area while body portals land exactly. Don't transform `<body>` in the preview again.
+- **Also:** headless Edge screenshots (Playwright, `channel: 'msedge'`; Chrome isn't installed on this machine) crash or time out while a full `vitest run` is going. Run them one after the other.
+
+## 2026-11-18 - Ops - The headless install on a Linux VPS: what `linux-host.md` did not say
+
+From Ada's install on the owner's VPS (Arch, rolling; `retinued` 0.2.0-beta.5 as an ordinary user under a systemd user unit). The install record stays out of the repository: it names the host.
+
+- **`tailscale serve` needs root or the device's operator, so `remote on` fails on a non-root install.** Symptom: `retinued remote on --method tailscale` prints "Tailscale refused to publish the Retinue address." (exit 1); `serve_port` stays `None` and nothing is published. The daemon deliberately swallows Tailscale's stderr, so the reason is visible only by hand: `tailscale serve --bg --https=443 http://127.0.0.1:9` gives `Access denied: serve config denied ... use 'sudo tailscale set --operator=$USER' once`. **Fix:** `sudo tailscale set --operator=<user>`. Since `a595a00` the daemon's own sentence names that command (`remote/tailscale.rs`, pinned by `a_serve_refusal_names_the_operator_fix_and_never_echoes_tailscale`); `docs/operations/linux-host.md` section 4 has the step since 25 November 2026.
+- **On Arch, `enable-linger` does not create `/run/user/<uid>` inside a running session.** `sudo -u <user> systemctl --user ...` answers "Failed to connect to user scope bus via local transport: No such file or directory", and "Operation not permitted" when the runtime dir is missing. `sudo systemctl start user@<uid>.service` brings it up now; after a reboot logind does it by itself. Set `XDG_RUNTIME_DIR=/run/user/<uid>` when acting for that user over SSH.
+- **The capability token was written to `retinued.log` on a headless start (fixed in `a595a00`).** The ready line carried `"capability":"<64 hex>"`; on the desktop the shell reads it from stdout and nothing keeps it, but a systemd unit appends stdout to `~/.local/share/retinue/retinued.log`. Now the ready line has no `capability` when `paths::headless()` is true, and the unit sets `UMask=0077` (log `0600`). **When cleaning an old log, delete it *before* the restart**: `StandardOutput=append:` reopens it at start, so deleting after leaves the running process writing to an unlinked file.
+- **Do not test the gateway from the host itself.** MagicDNS may not be in the host's resolver (`curl: (6) Could not resolve host`), and `--resolve` to its own tailnet IP lands on whatever else serves `0.0.0.0:443` there, because traffic to your own tailnet address never crosses the tunnel. Test from another tailnet device: `curl https://<host>.<tailnet>.ts.net/` answers 200 with "Retinue Remote is not installed" when `RETINUE_REMOTE_WEB_DIR` is unset, which proves the gateway is up and the phone app is absent.
+
 ## 2026-11-22 · OpenCode · Read ACP errors and keep catalogue probes off the prompt path
 
 - In beta.10, a 10 s launch check waited for a cold ACP catalogue whenever the 15 min fresh window expired. Window `runtime.models` reads (`catalog::Mode::Window`) now serve usable stale catalogues immediately (including persisted values up to 7 days old), share one background probe per key and invalidate the window cache on success. Explicit refreshes and cold misses still wait. Reject empty OpenCode refresh results and keep the last usable catalogue on failure.
@@ -2337,14 +2358,3 @@ The computer's screen (`computer.view`, `computer.rs`) is the first route on the
 - **Cause:** the app shell is a four-track grid and its children auto-place; `display: none` on the panel would shift the chat pane into the zero-width track, and the track widths live in several rules (inspector, document, narrow screens).
 - **Fix:** in `professional.css` set the columns explicitly for every shell state, pin the panel to track 2 as a zero-width placeholder and the pane to track 3.
 - **Also:** a mode that hides the employee layer must change the name everywhere it appears, not only the sidebar: chips, mentions, side header and delegation rows all read `usePeerIdentity`.
-
-## 2026-11-25: every tooltip and menu sat 32px low in the preview
-- **Symptom:** in the browser preview, provider-logo tooltips and sidebar menus opened 32px below their anchor; fine in the installed app.
-- **Cause:** `preview/productionFrame.css` transformed `<body>` (`translateY(32px)`) to draw the title bar. A transformed body is the containing block for `position: fixed`, and portals on `<body>` are placed with `getBoundingClientRect` (tab coordinates), so they were shifted by the caption height.
-- **Fix:** the body is offset with `margin-top` and only `#root` is transformed (`translateZ(0)`), so the app's own fixed layers still fill the client area while body portals land exactly. Don't transform `<body>` in the preview again.
-- **Also:** headless Edge screenshots (Playwright, `channel: 'msedge'`; Chrome isn't installed on this machine) crash or time out while a full `vitest run` is going. Run them one after the other.
-
-## 2026-11-25: a red nightly CI run that is not a code failure
-- **Symptom:** a `schedule` CI run on `main` failed (`hygiene` and `checks`) while the push run on the same commit was green.
-- **Cause:** the nightly `gitleaks` pass scans the whole history and hit its 15-minute limit (`context deadline exceeded`, "no leaks found in partial scan"); `checks` then fails because `hygiene` did. Seen on run 45631593488 (`d3b9cd86`).
-- **How to read it:** check the event (`gh run view <id> --json event`) and the hygiene log tail before treating it as a blocker. The Release build only requires CI on the release commit itself.
