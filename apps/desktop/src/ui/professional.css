@@ -1,5 +1,6 @@
 /* Professional mode (24 November 2026): chat list and tab strip. Tokens only, so both looks and both themes follow. No stripes or edge washes. */
-.pro-sidebar { display: grid; gap: 2px; padding: 4px 0 8px; }
+.pro-sidebar { min-height: 100%; display: flex; flex-direction: column; padding: 4px 0 0; }
+.pro-body { flex: 1 1 auto; display: grid; align-content: start; gap: 2px; padding-bottom: 8px; }
 .pro-head { min-height: 30px; padding: 0 6px 0 10px; display: flex; align-items: center; justify-content: space-between; color: var(--text-3); font-size: var(--fs-xs); font-weight: 500; }
 .pro-head-tools { display: inline-flex; gap: 2px; }
 .pro-head-tools .icon-button[aria-pressed="true"] { color: var(--text-1); background: var(--surface-hover); }
@@ -14,7 +15,7 @@
 .pro-count { margin-left: auto; color: var(--text-3); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
 .pro-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 1px; }
 .pro-settled { margin-top: 2px; }
-.pro-settled-head { width: 100%; min-height: 26px; padding: 0 8px 0 6px; display: flex; align-items: center; gap: 5px; color: var(--text-3); border: 0; border-radius: var(--radius-sm); background: none; font: inherit; font-size: var(--fs-xs); text-align: left; cursor: pointer; }
+.pro-settled-head { width: 100%; min-height: 26px; padding: 0 8px 0 6px; display: flex; align-items: center; gap: 6px; color: color-mix(in srgb, var(--text-2) 70%, var(--text-3)); border: 0; border-radius: var(--radius-sm); background: none; font: inherit; font-size: var(--fs-xs); text-align: left; cursor: pointer; }
 .pro-settled-head:hover { color: var(--text-2); background: var(--surface-hover); }
 .pro-list-settled { opacity: .78; }
 .pro-empty { margin: 12px 10px; color: var(--text-3); font-size: var(--fs-xs); }
@@ -28,12 +29,20 @@
 .pro-row-logo { flex: none; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
 .pro-row-logo > * { display: inline-flex; align-items: center; justify-content: center; }
 .pro-row-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-1); font-size: var(--fs-sm); font-weight: 500; line-height: 18px; }
-.pro-row-foot { min-width: 0; padding-left: 26px; display: flex; align-items: center; gap: 7px; color: var(--text-3); font-size: var(--fs-2xs); white-space: nowrap; }
-.pro-row-project { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.pro-row-time { margin-left: auto; flex: none; font-variant-numeric: tabular-nums; }
+.pro-row-foot { min-width: 0; padding-left: 26px; display: flex; align-items: center; gap: 6px; color: color-mix(in srgb, var(--text-2) 70%, var(--text-3)); font-size: var(--fs-2xs); white-space: nowrap; }
+.pro-row-project { min-width: 0; display: inline-flex; align-items: center; gap: 5px; }
+.pro-row-project > :first-child:not(.pro-row-project-name) { flex: none; display: inline-flex; line-height: 0; color: inherit; opacity: .85; }
+.pro-row-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pro-group-fold .project-icon-image, .pro-group-fold > svg:not(.fold-chevron) { flex: none; border-radius: 4px; }
+.pro-row-time { margin-left: auto; flex: none; color: color-mix(in srgb, var(--text-2) 60%, var(--text-3)); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+/* While it works, the time slot counts how long it has been working, in the Working badge's orange. */
+.pro-row-timer { color: color-mix(in srgb, #e8923a 80%, var(--text-1) 20%); font-weight: 600; letter-spacing: .01em; }
+:root[data-theme="light"] .pro-row-timer { color: #b8620f; }
+.pro-row-where { flex: none; display: inline-flex; align-items: center; }
+.pro-row-where .pro-where, .pro-group-fold .pro-where { width: 18px; height: 18px; flex: none; display: inline-flex; align-items: center; justify-content: center; line-height: 0; color: var(--text-3); }
 
 /* Status badges. */
-.pro-badge { --tone: var(--text-2); --pro-badge-ink: var(--surface-app, #111); flex: none; height: 20px; padding: 0 8px 0 5px; display: inline-flex; align-items: center; gap: 4px; color: color-mix(in srgb, var(--tone) 86%, var(--text-1) 14%); border-radius: 8px; background: color-mix(in srgb, var(--tone) 15%, transparent); font-size: var(--fs-2xs); font-weight: 500; line-height: 1; }
+.pro-badge { --tone: var(--text-2); --pro-badge-ink: var(--surface-app, #111); flex: none; height: 19px; padding: 0 7px 0 4px; display: inline-flex; align-items: center; gap: 4px; color: color-mix(in srgb, var(--tone) 80%, var(--text-1) 20%); border-radius: 6px; background: color-mix(in srgb, var(--tone) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 22%, transparent); font-size: var(--fs-2xs); font-weight: 550; line-height: 1; white-space: nowrap; }
 .pro-badge svg { flex: none; }
 .pro-badge.draft { --tone: var(--text-3); }
 .pro-badge.working { --tone: #e8923a; }
@@ -41,23 +50,37 @@
 .pro-badge.done { --tone: #36b37e; }
 .pro-badge.bad { --tone: #e5534b; }
 .pro-badge.limited { --tone: #d4a12e; }
+.pro-badge.online { --tone: #36b37e; }
+.pro-badge.offline { --tone: var(--text-3); }
+/* In a row, the project starts under the title and the badge, sized to its word, sits at the right under the time: no badge
+   carries empty room, and the project still starts at the same place whatever the status says (owner, 25 November 2026). */
+.pro-row-foot .pro-row-project { flex: 1 1 auto; }
+.pro-group-fold .pro-badge { height: 18px; margin-left: 2px; }
 :root[data-theme="light"] .pro-badge { --pro-badge-ink: #fff; color: color-mix(in srgb, var(--tone) 78%, #000 22%); }
 
 /* The chat header's logo sits on the title line. */
 :root[data-mode="professional"] .chat-title { align-items: center; }
 :root[data-mode="professional"] .chat-title > :is(.runtime-mark, [class*="runtime-mark"]) { display: inline-flex; align-items: center; flex: none; }
+/* With no employee name between them, the logo and the crumb sit together (8px), with no divider; the chat's title reads first. */
+:root[data-mode="professional"] .chat-title { gap: 8px; }
+:root[data-mode="professional"] .chat-title > .runtime-mark-tip { margin-right: 0; }
+:root[data-mode="professional"] .chat-title > .conversation-crumb { margin-left: 0; padding-left: 0; border-left: 0; align-items: center; }
+:root[data-mode="professional"] .conversation-crumb-project { color: var(--text-3); }
+:root[data-mode="professional"] .conversation-crumb-sep { color: color-mix(in srgb, var(--text-3) 70%, transparent); }
+:root[data-mode="professional"] .conversation-crumb-title { color: var(--text-1); font-weight: 500; }
 
 /* Other devices, as groups of the same rows. */
 .pro-machines { margin-top: 8px; padding-top: 6px; display: grid; gap: 2px; border-top: 1px solid var(--line); }
-.pro-machines-label { min-height: 24px; padding: 0 10px; display: flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
-.pro-dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--text-3); }
-.pro-dot.on { background: #36b37e; }
+.pro-machines-label { margin-bottom: 2px; }
+
+
 
 /* The tab strip above the open conversation. */
-.pro-tabs { flex: none; min-height: 36px; padding: 4px 10px 0; display: flex; align-items: flex-end; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.pro-tabs { flex: none; min-height: 36px; padding: 4px 10px 0; background: color-mix(in srgb, #000 34%, var(--z-page, var(--surface-app))); display: flex; align-items: flex-end; gap: 2px; overflow-x: auto; scrollbar-width: none; }
 .pro-tab { flex: 0 1 190px; min-width: 96px; height: 30px; padding: 0 4px 0 10px; display: flex; align-items: center; gap: 7px; color: var(--text-2); border: 0; border-radius: var(--radius-md) var(--radius-md) 0 0; background: none; font: inherit; font-size: var(--fs-xs); cursor: pointer; transition: background-color 120ms linear, color 120ms linear; }
-.pro-tab:hover { background: var(--surface-hover); }
-.pro-tab[aria-selected="true"] { color: var(--text-1); background: var(--surface-raised); }
+.pro-tab { color: var(--text-3); }
+.pro-tab:hover { background: color-mix(in srgb, var(--text-1) 7%, transparent); color: var(--text-2); }
+.pro-tab[aria-selected="true"] { color: var(--text-1); background: var(--z-page, var(--surface-app)); }
 .pro-tab-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .pro-tab-close { flex: none; width: 20px; height: 20px; display: grid; place-items: center; color: var(--text-3); border: 0; border-radius: 6px; background: none; cursor: pointer; opacity: 0; }
 .pro-tab:hover .pro-tab-close, .pro-tab[aria-selected="true"] .pro-tab-close, .pro-tab-close:focus-visible { opacity: 1; }
@@ -65,9 +88,15 @@
 .pro-tab-add { flex: none; width: 28px; height: 28px; margin-bottom: 1px; display: grid; place-items: center; color: var(--text-3); border: 0; border-radius: var(--radius-sm); background: none; cursor: pointer; }
 .pro-tab-add:hover { color: var(--text-1); background: var(--surface-hover); }
 
-/* The employee layer steps aside: no Conversations column, no employee name in the pane header. */
-:root[data-mode="professional"] .app-shell { --convos-w: 0px; }
-:root[data-mode="professional"] .conversations-panel { width: 0; min-width: 0; padding: 0; overflow: hidden; visibility: hidden; border: 0; }
+/* The employee layer steps aside: no Conversations column at all (its grid track is gone, not just empty), and the one sidebar is wider
+   so a row has room for its logo, title, status, project icon and time (owner, 25 November 2026). */
+:root[data-mode="professional"] .app-shell { --pro-w: var(--pro-user-w, clamp(340px, 29vw, 420px)); --convos-w: 0px; grid-template-columns: var(--pro-w) 0 minmax(0, 1fr) 0; }
+:root[data-mode="professional"] .app-shell.inspector-open { grid-template-columns: var(--pro-w) 0 minmax(0, 1fr) 320px; }
+:root[data-mode="professional"] .app-shell.doc-open { grid-template-columns: var(--pro-w) 0 minmax(320px, 1fr) clamp(380px, 46vw, 860px); }
+:root[data-mode="professional"] .app-shell.doc-open.doc-expanded { grid-template-columns: var(--pro-w) 0 0 minmax(0, 1fr); }
+:root[data-mode="professional"] .app-shell > .conversation-pane { grid-column: 3; grid-row: 1; }
+:root[data-mode="professional"] .app-shell > .conversations-panel { grid-column: 2; grid-row: 1; width: 0; min-width: 0; padding: 0; overflow: hidden; visibility: hidden; border: 0; }
+.peer-logo { flex: none; display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
 @media (prefers-reduced-motion: reduce) { .pro-row, .pro-tab, .pro-group-add { transition: none; } }
 
 /* Replies read as plain text, a sent prompt stays a bubble on the right (T3 Code, Synara): no avatar, no name, no bubble for the agent. */
@@ -76,3 +105,171 @@
 :root[data-mode="professional"]:not(.companion-surface):not(.dictation-surface) .message-row.agent .message-bubble { width: 100%; padding: 2px 0; border-radius: 0; background: transparent; box-shadow: none; }
 :root[data-mode="professional"] .message-row.agent .message-time { display: none; }
 :root[data-mode="professional"] .message-author .blob-canvas-frame, :root[data-mode="professional"] .message-author canvas { display: none; }
+
+/* A chat on another machine opens in the same pane as a local one: below the tab strip, the same header, replies as plain text,
+   the sent prompt as a bubble on the right, the same composer. */
+:root[data-mode="professional"] .machine-pane { top: 36px; padding: 0 0 16px; gap: 0; animation: none; border-radius: 0; }
+:root[data-mode="professional"] .machine-pane .machine-view-layout { padding: 0 18px; }
+:root[data-mode="professional"] .machine-transcript { padding: 8px 0 12px; gap: 14px; border: 0; border-radius: 0; background: transparent; }
+:root[data-mode="professional"] .machine-message > small { display: none; }
+:root[data-mode="professional"] .machine-message.user > div { padding: 9px 14px; border-radius: 18px; background: var(--surface-raised); }
+:root[data-mode="professional"] .machine-message.assistant { max-width: min(46rem, 100%); }
+:root[data-mode="professional"] .machine-composer { padding: 12px 14px; border-color: transparent; border-radius: 20px; background: var(--surface-raised); }
+:root[data-mode="professional"] .machine-view-list, :root[data-mode="professional"] .machine-convos { display: none; }
+
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .machine-pane .machine-transcript { background: transparent; border-radius: 0; }
+:root[data-mode="professional"] .machine-step { font-family: inherit; }
+:root[data-mode="professional"] .machine-step code { font-family: inherit; font-size: var(--fs-xs); }
+:root[data-mode="professional"] .machine-step > span { display: none; }
+
+/* Haze sets its own shell columns with a heavier selector, so Professional mode repeats the tracks at the same weight. */
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell { --convos-w: 0px; grid-template-columns: var(--pro-w) 0 minmax(0, 1fr) 0; }
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell.inspector-open { grid-template-columns: var(--pro-w) 0 minmax(0, 1fr) 300px; }
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell.doc-open { grid-template-columns: var(--pro-w) 0 minmax(320px, 1fr) clamp(380px, 46vw, 860px); }
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .app-shell.doc-open.doc-expanded { grid-template-columns: var(--pro-w) 0 0 minmax(0, 1fr); }
+
+/* The settled shelf: every settled chat, from every device, docked at the bottom of the list above the foot. */
+/* The settled shelf (owner, 25 November 2026, second look): a flat drawer docked at the foot of the list, the sidebar's own
+   colour with a hairline edge and rounded corners (14px all round, owner 25 November 2026). Closed it is one quiet row (icon tile, "Settled", a count chip, a chevron that turns
+   up when it opens); open, it grows a search box over the settled chats. */
+.pro-shelf { position: sticky; bottom: 0; z-index: 2; margin: 0 -4px; padding: 6px; border: 1px solid color-mix(in srgb, var(--text-1) 8%, transparent); border-radius: 14px; overflow: hidden; background: linear-gradient(var(--surface-sidebar), var(--surface-sidebar)), var(--surface-app); }
+.pro-shelf .pro-settled-head { min-height: 34px; padding: 0 8px 0 6px; gap: 9px; border-radius: 8px; color: var(--text-2); font-size: var(--fs-xs); font-weight: 500; }
+.pro-shelf .pro-settled-head:hover { color: var(--text-1); background: var(--surface-hover); }
+.pro-shelf-icon { width: 22px; height: 22px; flex: none; display: grid; place-items: center; color: var(--text-3); border-radius: 6px; background: color-mix(in srgb, var(--text-1) 6%, transparent); }
+.pro-shelf.open .pro-shelf-icon { color: #36b37e; background: color-mix(in srgb, #36b37e 14%, transparent); }
+.pro-shelf-title { flex: 1 1 auto; min-width: 0; }
+.pro-shelf-count { min-width: 20px; height: 18px; padding: 0 6px; display: inline-grid; place-items: center; color: var(--text-2); border-radius: 5px; background: color-mix(in srgb, var(--text-1) 7%, transparent); font-size: var(--fs-2xs); font-variant-numeric: tabular-nums; }
+.pro-shelf-chevron { flex: none; color: var(--text-3); rotate: -90deg; transition: rotate 160ms var(--polish-ease, ease); }
+.pro-shelf-chevron.open { rotate: 90deg; }
+.pro-shelf-search { margin: 6px 2px 6px; height: 30px; padding: 0 9px; display: flex; align-items: center; gap: 7px; color: var(--text-3); border-radius: 7px; background: color-mix(in srgb, var(--text-1) 5%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-1) 7%, transparent); cursor: text; }
+.pro-shelf-search:focus-within { color: var(--text-2); box-shadow: inset 0 0 0 1px var(--line-focus, var(--line-strong)); }
+.pro-shelf-search input { min-width: 0; flex: 1; height: 100%; padding: 0; color: var(--text-1); border: 0; outline: 0; background: none; font: inherit; font-size: var(--fs-xs); }
+.pro-shelf-search input::placeholder { color: var(--text-3); }
+.pro-shelf-search input::-webkit-search-cancel-button { filter: grayscale(1); opacity: .6; }
+.pro-shelf .pro-list-settled { max-height: min(40vh, 320px); overflow-y: auto; scrollbar-width: thin; opacity: .85; }
+.pro-shelf .pro-empty { margin: 6px 10px 4px; }
+@media (prefers-reduced-motion: reduce) { .pro-shelf-chevron { transition: none; } }
+
+/* Row status as an icon alone, beside the location icon. Working turns; needs you, failed and limited breathe. */
+.pro-status { --tone: var(--text-3); --pro-badge-ink: #16161a; width: 18px; height: 18px; flex: none; display: inline-grid; place-items: center; line-height: 0; color: var(--tone); }
+.pro-status svg { width: 15px; height: 15px; }
+:root[data-theme="light"] .pro-status { --pro-badge-ink: #fff; }
+.pro-status.working { --tone: #e8923a; }
+.pro-status.needs { --tone: #4c8dff; }
+.pro-status.done { --tone: #36b37e; }
+.pro-status.bad { --tone: #e5534b; }
+.pro-status.limited { --tone: #d4a12e; }
+:root[data-theme="light"] .pro-status { color: color-mix(in srgb, var(--tone) 88%, #000 12%); }
+.pro-status.working svg { animation: pro-spin 1.6s linear infinite; }
+/* No ring or glow (design rules): the icon itself breathes, a slow fade with a slight beat. */
+.pro-status:is(.bad, .limited) svg { animation: pro-breathe 1.6s ease-in-out infinite; }
+/* Needs you: the bell rings (after animated Lucide icons), a few swings from its top, then rests; the clapper lags behind. */
+.pro-status.needs .pro-bell { transform-box: view-box; transform-origin: 12px 2px; animation: pro-ring 2.2s ease-in-out infinite; }
+.pro-status.needs .pro-bell-clapper { transform-box: view-box; transform-origin: 12px 2px; animation: pro-ring 2.2s ease-in-out .06s infinite; }
+@keyframes pro-ring { 0%, 50%, 100% { rotate: 0deg; } 8% { rotate: 16deg; } 16% { rotate: -14deg; } 24% { rotate: 10deg; } 32% { rotate: -7deg; } 40% { rotate: 3deg; } }
+@keyframes pro-spin { to { rotate: 360deg; } }
+@keyframes pro-breathe { 0%, 100% { opacity: 1; scale: 1; } 50% { opacity: .45; scale: .86; } }
+@media (prefers-reduced-motion: reduce) { .pro-status svg, .pro-status svg * { animation: none !important; } }
+.pro-row-foot { gap: 4px; }
+.pro-row-foot .pro-row-project { margin-right: 4px; }
+
+/* Devices: drag to reorder, a menu to rename and colour. */
+.pro-device.dragging { opacity: .5; }
+.pro-device.drop-target > .pro-group-head { background: var(--surface-hover); border-radius: var(--radius-sm); }
+.pro-device-menu { position: fixed; z-index: 60; width: 244px; padding: 10px; display: grid; gap: 10px; }
+.pro-device-field { display: grid; gap: 5px; color: var(--text-3); font-size: var(--fs-2xs); }
+.pro-device-field input { height: 30px; padding: 0 8px; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-raised); font: inherit; font-size: var(--fs-sm); }
+.pro-device-field input:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pro-device-colours { display: flex; flex-wrap: wrap; gap: 6px; }
+.pro-device-colours button { width: 20px; height: 20px; padding: 0; border: 2px solid transparent; border-radius: 50%; cursor: pointer; }
+.pro-device-colours button.on { border-color: var(--text-1); }
+.pro-device-colours button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.pro-device-problem { margin: 0; color: var(--danger-ink); font-size: var(--fs-xs); }
+.pro-device-actions { display: flex; justify-content: flex-end; gap: 6px; }
+
+/* The drag handle on the sidebar's right edge. */
+:root[data-mode="professional"] .sidebar { position: relative; }
+.pro-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 7px; z-index: 5; cursor: col-resize; touch-action: none; }
+.pro-resize::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: transparent; transition: background-color 120ms linear; }
+.pro-resize:hover::after, .pro-resize.dragging::after, .pro-resize:focus-visible::after { background: var(--line-strong); }
+.pro-resize:focus-visible { outline: none; }
+body:has(.pro-resize.dragging) { cursor: col-resize; user-select: none; }
+@media (prefers-reduced-motion: reduce) { .pro-resize::after { transition: none; } }
+
+/* A device header reads name, then its status badge right after it; the count sits at the far end. */
+.pro-device .pro-group-fold { gap: 6px; }
+.pro-device-name { flex: 0 1 auto; }
+.pro-device .pro-group-fold .pro-badge { flex: 0 0 auto; }
+.pro-device .pro-group-fold .pro-count { margin-left: auto; }
+
+/* Working: three dots that fill the badge's spare room. */
+.pro-dots { margin-left: 2px; display: inline-flex; align-items: center; gap: 3px; }
+.pro-dots i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; opacity: .3; animation: pro-dot 1.2s ease-in-out infinite; }
+.pro-dots i:nth-child(2) { animation-delay: .15s; }
+.pro-dots i:nth-child(3) { animation-delay: .3s; }
+@keyframes pro-dot { 0%, 70%, 100% { opacity: .3; } 35% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pro-dots i { animation: none; opacity: .7; } }
+
+/* The foot: profile and Remote are the same 44px tile as the usage card. */
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar .profile-button { width: 44px; height: 44px; background: var(--z-fill); box-shadow: none; }
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar .profile-button:is(:hover, .open) { background: var(--z-fill-hover); }
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar .profile-button .profile-avatar { width: 44px; height: 44px; }
+
+/* A chat on another machine uses the local chat's own header, rows and composer; only these small pieces are its own. */
+:root[data-mode="professional"] .machine-pane { background: var(--z-page, var(--surface-app)); }
+:root[data-mode="professional"] .machine-pane .composer-wrap { margin-bottom: 0; }
+.pro-remote-composer .composer-box textarea { width: 100%; }
+.pro-remote-pill { cursor: default; gap: 6px; }
+.pro-remote-note, .pro-remote-problem { margin: 0 auto; width: min(800px, calc(100% - 40px)); color: var(--text-3); font-size: var(--fs-xs); }
+.pro-remote-readonly { padding: 0 0 12px; text-align: center; }
+.pro-remote-step { margin: 0; color: var(--text-3); font-size: var(--fs-xs); }
+.pro-remote-working { margin: 0; display: flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-xs); }
+.pro-remote-working .pro-dots { margin-left: 0; color: var(--status-working, #e8923a); }
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar { grid-template-columns: 44px 1px 44px minmax(0, 1fr); }
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sidebar > .sidebar-foot { padding: 8px 0 0; }
+:root[data-mode="professional"][data-theme="light"] .pro-tabs { background: color-mix(in srgb, #000 7%, var(--z-page, var(--surface-app))); }
+
+/* Working dots sit on the text baseline, right after the word. */
+.pro-badge .pro-dots { align-self: flex-end; margin: 0 0 5px 1px; gap: 2px; }
+.pro-dots i { width: 2.5px; height: 2.5px; }
+
+/* Group actions overlay the count's own spot, so the count never moves: it stays at the far right and the buttons replace it on hover. */
+.pro-group-head { position: relative; }
+.pro-group-head > .pro-group-fold { padding-right: 10px; }
+.pro-group-head > .pro-group-add { position: absolute; top: 50%; right: 4px; translate: 0 -50%; background: var(--surface-hover); }
+.pro-group-head > .pro-group-add ~ .pro-group-add { right: 4px; }
+.pro-group-head > .pro-group-add:nth-last-child(2):not(:last-child) { right: 28px; }
+.pro-group-head:hover .pro-count, .pro-group-head:focus-within .pro-count { opacity: 0; }
+.pro-count { transition: opacity 120ms linear; }
+.pro-device .pro-group-fold .pro-count { margin-left: auto; }
+
+/* The details panel (owner, 25 November 2026): the chat and its provider at the top, not the employee; then quiet sections
+   at one rhythm, each a small heading over its rows, divided by a hairline. */
+:root[data-mode="professional"] .context-pane .pro-context-head { padding: 16px 18px 14px; align-items: center; column-gap: 12px; row-gap: 2px; }
+.pro-context-logo { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; background: color-mix(in srgb, var(--text-1) 7%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-1) 8%, transparent); }
+.pro-context-head h2 { width: 100%; color: var(--text-1); font-size: var(--fs-sm); font-weight: 600; line-height: 1.3; }
+.pro-context-head p { color: color-mix(in srgb, var(--text-2) 70%, var(--text-3)); font-size: var(--fs-2xs); }
+:root[data-mode="professional"] .session-rail { padding: 0 8px 20px; }
+:root[data-mode="professional"] .session-rail > .rail-card, :root[data-mode="professional"] .session-rail > .working-bots { margin: 0; padding: 6px 0 10px; border-top: 1px solid color-mix(in srgb, var(--text-1) 7%, transparent); border-bottom: 0; }
+:root[data-mode="professional"] .session-rail > :first-child { border-top: 0; }
+:root[data-mode="professional"] .session-rail .rail-card-head { min-height: 32px; padding: 0 10px; }
+:root[data-mode="professional"] .session-rail .rail-card-toggle, :root[data-mode="professional"] .working-bots-heading, :root[data-mode="professional"] .working-bots-finished-toggle { color: var(--text-3); font-size: var(--fs-2xs); font-weight: 600; letter-spacing: .01em; }
+:root[data-mode="professional"] .session-rail .rail-card-toggle:hover, :root[data-mode="professional"] .working-bots-finished-toggle:hover { color: var(--text-1); }
+:root[data-mode="professional"] .working-bots-heading, :root[data-mode="professional"] .working-bots-finished-toggle { min-height: 32px; padding: 0 10px; }
+.working-bots-finished-hint { margin-left: -2px; }
+:root[data-mode="professional"] .session-rail .rail-card-body { padding: 0 10px 2px; gap: 4px; }
+:root[data-mode="professional"] .session-rail .rail-row { min-height: 26px; color: var(--text-2); }
+:root[data-mode="professional"] .session-rail .rail-row-main { font-weight: 500; }
+:root[data-mode="professional"] .session-rail .rail-note, :root[data-mode="professional"] .session-rail .rail-scope { color: color-mix(in srgb, var(--text-2) 55%, var(--text-3)); font-size: var(--fs-2xs); line-height: 1.5; }
+:root[data-mode="professional"] .session-rail .rail-tag { color: var(--text-3); font-size: var(--fs-2xs); }
+/* "Open" and the like read as quiet buttons, not underlined web links. */
+:root[data-mode="professional"] .session-rail .rail-link { height: 22px; padding: 0 8px; color: var(--text-2); border-radius: 6px; background: color-mix(in srgb, var(--text-1) 6%, transparent); font-size: var(--fs-2xs); font-weight: 500; text-decoration: none; }
+:root[data-mode="professional"] .session-rail .rail-link:hover { color: var(--text-1); background: color-mix(in srgb, var(--text-1) 11%, transparent); }
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .session-rail .rail-changes-actions .rail-pr { height: 26px; border-radius: 7px; background: color-mix(in srgb, var(--text-1) 6%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-1) 8%, transparent); color: var(--text-2); font-size: var(--fs-xs); font-weight: 500; }
+:root[data-mode="professional"][data-style="haze"]:not(.companion-surface):not(.dictation-surface) .session-rail .rail-changes-actions .rail-pr:hover:not(:disabled) { background: color-mix(in srgb, var(--text-1) 11%, transparent); color: var(--text-1); }
+:root[data-mode="professional"] .session-rail .rail-file { min-height: 26px; padding: 0 4px; border-radius: 6px; }
+:root[data-mode="professional"] .session-rail .rail-file-name { font-weight: 450; }
+:root[data-mode="professional"] .working-bot-row { padding: 7px 10px; align-items: center; border-radius: 8px; }
+:root[data-mode="professional"][data-theme="light"] .session-rail .rail-card-toggle, :root[data-mode="professional"][data-theme="light"] .working-bots-heading, :root[data-mode="professional"][data-theme="light"] .working-bots-finished-toggle { color: color-mix(in srgb, var(--text-2) 75%, var(--text-3)); }
+
+

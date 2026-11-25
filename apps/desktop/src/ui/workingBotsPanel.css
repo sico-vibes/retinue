@@ -12,6 +12,6 @@
 .working-bot-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .working-bot-line strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .working-bot-status { margin-left: auto; flex-shrink: 0; }
-.working-bots-finished-toggle { width: 100%; padding: 8px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: var(--radius-sm, 6px); background: none; font: inherit; font-weight: 500; text-align: left; cursor: pointer; }
+.working-bots-finished-toggle { width: 100%; padding: 8px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: var(--radius-sm, 6px); background: none; font: inherit; font-size: var(--fs-xs); font-weight: 500; text-align: left; cursor: pointer; }
 .working-bots-finished-toggle:hover { color: var(--text-1); background: var(--surface-hover); }
 .working-bots-finished-toggle:focus-visible { box-shadow: var(--focus-ring); }

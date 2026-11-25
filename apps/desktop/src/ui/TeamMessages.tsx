@@ -1,5 +1,6 @@
 // Team surfaces inside a conversation: delegation chips, relayed replies,
 // side-conversation header, proposed plans, inline questions and @mentions.
+import { usePeerIdentity } from './peerIdentity'
 import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
 import { ArrowLeftRight, ArrowUpRight, Check, ChevronDown, ClipboardList, Gauge, Hash, RotateCw, Send, X } from 'lucide-react'
@@ -14,6 +15,8 @@ import { FileMentionOptions, type FileMatch } from './ProjectSearch'
 import { ProjectIcon } from './ProjectIcon'
 
 function MiniBlob({ agent, name, size = 18 }: { agent: Agent | null | undefined; name: string; size?: number }) {
+  const who = usePeerIdentity(agent, name)
+  if (who.professional) return <>{who.logo(size)}</>
   return agent
     ? <BlobCanvas decorative color={agentColorHex(agent.color)} size={size} mood="idle" look={agentLook(agent)} label={name} />
     : <span className="team-chip-dot" aria-hidden="true">{name.slice(0, 1)}</span>
@@ -32,7 +35,8 @@ export function ReplyChip({ from, name, text, onOpenConversation }: { from: Agen
 }
 
 /** A teammate is waiting for the owner's approval or answer. The chip only opens that teammate's request; it decides nothing. */
-export function UpdateChip({ from, name, kind, title, onOpenConversation }: { from: Agent | null | undefined; name: string; kind: 'approval' | 'question'; title?: string; onOpenConversation?: () => void }) {
+export function UpdateChip({ from, name: employee, kind, title, onOpenConversation }: { from: Agent | null | undefined; name: string; kind: 'approval' | 'question'; title?: string; onOpenConversation?: () => void }) {
+  const name = usePeerIdentity(from, employee).name
   return <div className="team-chip-row">
     <button type="button" className="team-chip update" style={accentOf(from)} disabled={!onOpenConversation} aria-label={`${name} is waiting for you to ${kind === 'question' ? 'answer a question' : 'approve a request'}${title ? `: ${title}` : ''}. Open the request.`} onClick={onOpenConversation}>
       <span>{kind === 'question' ? 'Question' : 'Approval'}</span><MiniBlob agent={from} name={name} /><b>{name}</b>{title && <em className="team-chip-topic">{title}</em>}
@@ -53,7 +57,7 @@ export function CreatedBotChip({ agent, name, detail, onOpen }: { agent: Agent |
 }
 
 /** A delegation or relayed-reply chip: a link to the conversation between the two bots. The message shows on hover. */
-function TeamChatChip({ kind, peer, name, topic, failed, text, onOpenConversation }: {
+function TeamChatChip({ kind, peer, name: employee, topic, failed, text, onOpenConversation }: {
   kind: 'outgoing' | 'incoming'
   peer: Agent | null | undefined
   name: string
@@ -62,6 +66,8 @@ function TeamChatChip({ kind, peer, name, topic, failed, text, onOpenConversatio
   text?: string
   onOpenConversation?: () => void
 }) {
+  const who = usePeerIdentity(peer, employee)
+  const name = who.name
   const body = typeof text === 'string' ? text.trim() : ''
   const label = kind === 'outgoing'
     ? failed
@@ -72,7 +78,7 @@ function TeamChatChip({ kind, peer, name, topic, failed, text, onOpenConversatio
     <button type="button" className={`team-chip ${kind === 'incoming' ? 'incoming' : ''} ${failed ? 'failed' : ''}`} style={accentOf(peer)} disabled={!onOpenConversation}
       aria-label={label} title={body ? (body.length > 280 ? `${body.slice(0, 279)}…` : body) : undefined}
       onClick={onOpenConversation}>
-      <span>{kind === 'incoming' ? 'Message from' : failed ? 'Could not reach' : 'Messaged'}</span><MiniBlob agent={peer} name={name} /><b>{name}</b>{topic && !failed && <em className="team-chip-topic">{topic}</em>}
+      <span>{kind === 'incoming' ? who.professional ? 'Reply from' : 'Message from' : failed ? 'Could not reach' : who.professional ? 'Subagent' : 'Messaged'}</span><MiniBlob agent={peer} name={name} /><b>{name}</b>{topic && !failed && <em className="team-chip-topic">{topic}</em>}
       {onOpenConversation && <ArrowUpRight size={12} className="team-chip-caret" aria-hidden="true" />}
     </button>
   </div>
@@ -143,7 +149,9 @@ export function UsageLimitNotice({ id, text, onContinue }: { id?: string; text: 
 }
 
 /** Header for a side conversation between two blobs: a centred pill with both blobs and its topic. */
-export function SideConversationHeader({ peer, peerName, target, targetName, topic, permission }: { peer: Agent | null | undefined; peerName: string; target: Agent | null | undefined; targetName: string; topic?: string | null; permission?: ReactNode }) {
+export function SideConversationHeader({ peer, peerName: peerEmployee, target, targetName: targetEmployee, topic, permission }: { peer: Agent | null | undefined; peerName: string; target: Agent | null | undefined; targetName: string; topic?: string | null;  permission?: ReactNode }) {
+  const peerName = usePeerIdentity(peer, peerEmployee).name
+  const targetName = usePeerIdentity(target, targetEmployee).name
   return <div className="side-header" aria-label={`Side conversation between ${peerName} and ${targetName}${topic ? `: ${topic}` : ''}`}>
     <span className="side-header-pill">
       <span className="side-header-pair"><MiniBlob agent={peer} name={peerName} size={20} /><b style={accentOf(peer)}>{peerName}</b><ArrowLeftRight size={13} aria-hidden="true" /><MiniBlob agent={target} name={targetName} size={20} /><b style={accentOf(target)}>{targetName}</b></span>

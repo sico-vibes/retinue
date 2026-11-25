@@ -41,6 +41,7 @@
   --z-radius-control: 10px;
   --z-radius-card: 18px;
   --z-radius-panel: 22px;
+  --z-radius-menu: 10px; --z-radius-menu-item: 6px;
   --z-radius-pane: 12px;
 
   /* Motion: named by purpose. Leaving is always quicker than arriving. */
@@ -195,11 +196,11 @@
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-button .profile-avatar .presence { right: 3px; bottom: 3px; border-color: var(--z-chrome); }
 
 /* The stack: rises out of the plate, nearest row first, the name last. */
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.menu-surface { position: absolute; z-index: 50; bottom: calc(100% + 8px); left: 0; right: auto; min-width: 232px; max-height: calc(100vh - 120px); overflow: auto; overscroll-behavior: contain; padding: 6px; display: grid; gap: 0; border: 0; border-radius: var(--z-radius-panel); background: var(--z-menu); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: var(--z-shadow-menu), var(--z-shine-top); transform-origin: bottom left; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.menu-surface { position: absolute; z-index: 50; bottom: calc(100% + 8px); left: 0; right: auto; min-width: 232px; max-height: calc(100vh - 120px); overflow: auto; overscroll-behavior: contain; padding: 6px; display: grid; gap: 0; border: 0; border-radius: var(--z-radius-menu); background: var(--z-menu); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: var(--z-shadow-menu), var(--z-shine-top); transform-origin: bottom left; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.is-open { animation: z-menu-fade-in var(--z-base) var(--z-ease-smooth) both, z-menu-rise-in var(--z-page-motion) var(--z-ease-smooth) both; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.is-closing { pointer-events: none; animation: z-menu-out var(--z-fast) var(--z-ease-smooth) forwards; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu.is-open > * { animation: z-row-in var(--z-page-motion) var(--z-ease-smooth) both; animation-delay: calc(var(--step, 0) * 22ms); }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item { min-height: 34px; padding: 6px 8px; gap: 10px; border-radius: 16px; font-size: 13px; font-weight: 450; color: var(--text-1); background: transparent; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item { min-height: 34px; padding: 6px 8px; gap: 10px; border-radius: var(--z-radius-menu-item); font-size: 13px; font-weight: 450; color: var(--text-1); background: transparent; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item > svg { width: 16px; color: var(--text-2); transition: color var(--z-instant) linear; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item:is(:hover, :focus-visible) { background: var(--z-row-active); outline: none; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .profile-menu .menu-item:is(:hover, :focus-visible) > svg { color: var(--text-1); }
@@ -301,9 +302,9 @@
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select-trigger > svg { color: var(--text-2); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select.muted .select-trigger { color: var(--text-1); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select.field .select-trigger { height: 34px; border: 0; background: var(--z-field); box-shadow: none; font-size: 13px; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.select-menu, .menu-surface:not(.profile-menu)) { padding: 6px; border: 0; border-radius: var(--z-radius-panel); background: var(--z-float); box-shadow: var(--z-shadow-menu), var(--z-shine-top); backdrop-filter: none; max-height: 340px; animation: z-select-in var(--z-base) var(--z-ease-out) both; transform-origin: top center; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.select-menu, .menu-surface:not(.profile-menu)) { padding: 6px; border: 0; border-radius: var(--z-radius-menu); background: var(--z-float); box-shadow: var(--z-shadow-menu), var(--z-shine-top); backdrop-filter: none; max-height: 340px; animation: z-select-in var(--z-base) var(--z-ease-out) both; transform-origin: top center; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select-menu.open-up { transform-origin: bottom center; }
-:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.select-option, .menu-surface:not(.profile-menu) .menu-item) { min-height: 34px; padding: 6px 10px; gap: 10px; border-radius: 16px; font-size: 13px; font-weight: 450; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.select-option, .menu-surface:not(.profile-menu) .menu-item) { min-height: 34px; padding: 6px 10px; gap: 10px; border-radius: var(--z-radius-menu-item); font-size: 13px; font-weight: 450; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) :is(.select-option.active, .select-option:hover:not(:disabled), .menu-surface:not(.profile-menu) .menu-item:hover:not(:disabled), .menu-surface:not(.profile-menu) .menu-item:focus-visible) { background: var(--z-row-active); outline: none; }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select-option > svg { order: 2; margin-left: auto; color: var(--text-1); }
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .select-search { height: 30px; border-radius: var(--z-radius-control); background: var(--z-field); }
@@ -509,3 +510,19 @@
 /* Zephium's current row carries a rim you can see; ours was a touch fainter. */
 :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) { --z-row-rim: inset 0 0 0 1px rgb(255 255 255 / .08); }
 :root[data-style="haze"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) { --z-row-rim: inset 0 0 0 1px rgb(255 255 255 / .55); }
+
+
+/* ── Settings as a pop-up dialog (owner, 25 November 2026), both modes ──
+   The full-window settings above (list column, page pane, cards, rows), inside a centred window over the dimmed app.
+   A click outside or Escape closes it. The close button sits at the dialog's top right. The selectors repeat
+   `.settings-backdrop` to outrank the full-window rules. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .sheet-backdrop.settings-backdrop { padding: 28px; display: grid; place-items: center; background: rgb(0 0 0 / .42); }
+:root[data-style="haze"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) .sheet-backdrop.settings-backdrop { background: rgb(20 20 24 / .22); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-backdrop .settings-sheet { position: relative; width: min(1080px, 100%); height: min(780px, 100%); padding: 8px; border-radius: 18px; background: var(--z-chrome); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-1) 9%, transparent), 0 30px 80px -20px rgb(0 0 0 / .6); overflow: hidden; animation: z-dialog-in 220ms var(--z-ease-out, cubic-bezier(.2, .8, .2, 1)) both; }
+:root[data-style="haze"][data-theme="light"]:not(.companion-surface):not(.dictation-surface) .settings-backdrop .settings-sheet { box-shadow: 0 0 0 1px rgb(0 0 0 / .08), 0 30px 80px -24px rgb(0 0 0 / .28); }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-backdrop .settings-sheet > .settings-page-head { padding-top: 36px; }
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-backdrop .settings-sheet > .settings-content { padding-inline: clamp(22px, 4vw, 48px); padding-bottom: 40px; }
+/* Anchored to the page pane's head, so it sits in the dialog's top-right corner. */
+:root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-backdrop .settings-sheet > .settings-page-head > .icon-button { position: absolute; z-index: 2; top: 10px; right: 10px; left: auto; }
+@keyframes z-dialog-in { from { opacity: 0; translate: 0 8px; scale: .975; } }
+@media (prefers-reduced-motion: reduce) { :root[data-style="haze"]:not(.companion-surface):not(.dictation-surface) .settings-backdrop .settings-sheet { animation: none; } }

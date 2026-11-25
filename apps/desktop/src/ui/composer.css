@@ -65,7 +65,7 @@
 .attach-menu .composer-menu-item:disabled .composer-menu-icon { opacity: .6; }
 
 /* Menus share one surface: model list, permission modes. */
-.composer-menu { position: absolute; z-index: 30; bottom: calc(100% + 10px); width: max-content; min-width: 236px; max-width: min(320px, calc(100vw - 32px)); padding: 6px; display: grid; gap: 1px; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); transform-origin: bottom center; animation: composer-menu-in 140ms cubic-bezier(.2,.8,.2,1) both; }
+.composer-menu { position: absolute; z-index: 30; bottom: calc(100% + 10px); width: max-content; min-width: 236px; max-width: min(320px, calc(100vw - 32px)); padding: 6px; display: grid; gap: 1px; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); transform-origin: bottom center; animation: composer-menu-in 140ms cubic-bezier(.2,.8,.2,1) both; }
 .composer-menu.align-right { right: 0; transform-origin: bottom right; }
 .composer-menu.align-left { left: 0; transform-origin: bottom left; }
 @keyframes composer-menu-in { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
@@ -76,7 +76,7 @@
 .effort-icon { flex: 0 0 auto; color: currentColor; opacity: .8; }
 .composer-menu-group { padding: 8px 10px 3px; color: var(--text-3); font-size: var(--fs-2xs); }
 .composer-menu-scroll { max-height: min(300px, 46vh); overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; }
-.composer-menu-item { width: 100%; min-height: 34px; padding: 6px 10px; display: flex; align-items: center; gap: 10px; color: var(--text-1); border: 0; border-radius: 9px; background: transparent; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
+.composer-menu-item { width: 100%; min-height: 34px; padding: 6px 10px; display: flex; align-items: center; gap: 10px; color: var(--text-1); border: 0; border-radius: 6px; background: transparent; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
 .composer-menu-item:hover, .composer-menu-item:focus-visible { outline: none; background: var(--surface-hover); }
 .composer-menu-item.rich { align-items: flex-start; padding-block: 8px; }
 .composer-menu-text { min-width: 0; flex: 1; display: grid; gap: 2px; }
@@ -84,7 +84,7 @@
 .composer-menu-text small { color: var(--text-3); font-size: var(--fs-xs); line-height: 1.4; }
 .composer-menu-tag { padding: 1px 6px; white-space: nowrap; color: var(--text-2) !important; border-radius: var(--radius-pill); background: var(--surface-selected-strong); font-size: var(--fs-2xs) !important; font-weight: 500; }
 .composer-menu-check { flex: 0 0 auto; color: var(--text-1); }
-.composer-menu-icon { width: 28px; height: 28px; flex: 0 0 auto; display: grid; place-items: center; color: var(--text-2); border-radius: 8px; background: var(--surface-selected); }
+.composer-menu-icon { width: 28px; height: 28px; flex: 0 0 auto; display: grid; place-items: center; color: var(--text-2); border-radius: 5px; background: var(--surface-selected); }
 .composer-menu-item.mode-auto .composer-menu-icon { color: var(--good); }
 .composer-menu-item.mode-accept_edits .composer-menu-icon { color: var(--good); }
 .composer-menu-item.mode-bypass .composer-menu-icon { color: var(--mode-bypass); background: color-mix(in srgb, var(--mode-bypass) 10%, transparent); }
@@ -107,7 +107,7 @@
 .context-window-indicator.tone-warning .context-window-ring-value { stroke: var(--warning); }
 .context-window-indicator.tone-critical .context-window-ring-value { stroke: var(--bad); }
 .context-window-indicator.tone-unknown .context-window-ring-track { stroke-dasharray: 2 3; }
-.context-window-popover { position: absolute; z-index: 20; right: -40px; bottom: calc(100% + 10px); width: 300px; max-width: calc(100vw - 32px); padding: 12px 14px; display: grid; gap: 7px; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); font-size: var(--fs-xs); line-height: 1.35; font-variant-numeric: tabular-nums; animation: composer-menu-in 140ms cubic-bezier(.2,.8,.2,1) both; }
+.context-window-popover { position: absolute; z-index: 20; right: -40px; bottom: calc(100% + 10px); width: 300px; max-width: calc(100vw - 32px); padding: 12px 14px; display: grid; gap: 7px; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); font-size: var(--fs-xs); line-height: 1.35; font-variant-numeric: tabular-nums; animation: composer-menu-in 140ms cubic-bezier(.2,.8,.2,1) both; }
 .context-popover-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .context-popover-row strong { color: var(--text-1); font-size: var(--fs-sm); font-weight: 600; }
 .context-popover-value { display: inline-flex; align-items: baseline; gap: 8px; color: var(--text-1); white-space: nowrap; }
@@ -178,7 +178,7 @@
 /* The popover is as wide as its own content: every level label is readable at
    five and six levels, the same layout serves every provider, and the cap keeps
    it inside a narrow window. Labels wrap rather than clip when the cap is hit. */
-.session-effort-popover { position: absolute; z-index: 30; right: 0; bottom: calc(100% + 10px); width: max-content; min-width: min(320px, calc(100vw - 24px)); max-width: min(460px, calc(100vw - 24px)); padding: 13px 14px 12px; display: grid; gap: 12px; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); transform-origin: bottom right; animation: composer-menu-in 140ms cubic-bezier(.2,.8,.2,1) both; }
+.session-effort-popover { position: absolute; z-index: 30; right: 0; bottom: calc(100% + 10px); width: max-content; min-width: min(320px, calc(100vw - 24px)); max-width: min(460px, calc(100vw - 24px)); padding: 13px 14px 12px; display: grid; gap: 12px; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); transform-origin: bottom right; animation: composer-menu-in 140ms cubic-bezier(.2,.8,.2,1) both; }
 .session-effort-popover-heading { min-height: 24px; display: flex; align-items: center; gap: 8px; font-size: var(--fs-sm); }
 .session-effort-title { color: var(--text-3); font-weight: 500; }
 .session-effort-value { position: relative; min-width: 0; flex: 1 1 auto; display: grid; padding-block: .2em; margin-block: -.2em; color: var(--text-1); font-weight: 600; white-space: nowrap; }
@@ -309,7 +309,7 @@
 .send-later-problem { margin: 0; color: var(--danger-ink); font-size: var(--fs-xs); }
 
 /* Slash commands (FIX37 G4): a menu above the composer, never over its text. */
-.slash-menu { position: absolute; z-index: 40; left: 12px; bottom: calc(100% + 8px); width: min(360px, calc(100% - 24px)); max-height: min(360px, 52vh); overflow-y: auto; padding: 5px; display: grid; gap: 1px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; animation: composer-menu-in 120ms ease-out both; }
+.slash-menu { position: absolute; z-index: 40; left: 12px; bottom: calc(100% + 8px); width: min(360px, calc(100% - 24px)); max-height: min(360px, 52vh); overflow-y: auto; padding: 5px; display: grid; gap: 1px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); scrollbar-width: thin; scrollbar-color: var(--scroll-thumb) transparent; animation: composer-menu-in 120ms ease-out both; }
 .slash-menu-group { padding: 6px 9px 3px; color: var(--text-3); font-size: var(--fs-2xs); font-weight: 500; }
 .slash-option { min-height: 38px; padding: 5px 8px; display: flex; align-items: center; gap: 9px; color: var(--text-1); border: 0; border-radius: 8px; background: transparent; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
 .slash-option.active, .slash-option:hover { background: var(--surface-hover); }

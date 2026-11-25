@@ -340,6 +340,10 @@ sessions.push({
   ],
 })
 
+// Professional mode (25 November 2026) never shows an employee's name: the demo conversation speaks of the provider instead.
+const professionalFixture = (() => { try { return new URLSearchParams(window.location.search).get('mode') === 'professional' || window.localStorage.getItem('retinue.workMode') === 'professional' } catch { return false } })()
+if (professionalFixture) sessions = sessions.map((session) => { const text = JSON.stringify(session); return text.includes('Pololo') ? JSON.parse(text.split('Pololo').join('OpenCode')) as Session : session })
+
 // `?demo` (website screenshots): the placeholder employees become real hires with profile photos,
 // and every message, title and delegation uses their names.
 if (flags().has('demo')) {
@@ -627,7 +631,23 @@ function fixtureMachines(): Array<Record<string, unknown>> {
   const vps = { id: 'preview-vps', name: 'VPS', url: 'https://vps.example.ts.net', auth: 'code', fingerprint: null, tier: 'operator', pairedAt: new Date(Date.now() - 3_600_000).toISOString(), lastSeenAt: new Date(Date.now() - 5_000).toISOString(), state: 'online', detail: null, version: '0.2.0-beta.5', kind: 'linux', live: false, bots: [
     { id: 'preview-ivy', name: 'Ivy', color: 'lilac', role: 'Backend', provider: 'opencode', model: null, busy: false, activeSessionId: null, conversations: 1 },
   ] }
+  if (wanted === 'many') {
+    // A full set for the sidebar: two online machines, one offline desktop and an offline phone, each with its own chats.
+    const desktop = { id: 'preview-desktop', name: 'Home desktop', url: 'https://home.example.ts.net', auth: 'code', fingerprint: null, tier: 'operator', pairedAt: new Date(Date.now() - 20 * 86_400_000).toISOString(), lastSeenAt: new Date(Date.now() - 5 * 3_600_000).toISOString(), state: 'offline', detail: null, version: '0.2.0-beta.13', kind: 'windows', live: false, bots: [
+      { id: 'preview-desk-1', name: 'Dex', color: 'peach', role: null, provider: 'codex', model: null, busy: false, activeSessionId: null, conversations: 4 },
+    ] }
+    const phone = { id: 'preview-phone', name: 'Pixel phone', url: 'https://phone.example.ts.net', auth: 'code', fingerprint: null, tier: 'chat', pairedAt: new Date(Date.now() - 9 * 86_400_000).toISOString(), lastSeenAt: new Date(Date.now() - 86_400_000).toISOString(), state: 'offline', detail: null, version: '0.2.0-beta.13', kind: 'android', live: false, bots: [
+      { id: 'preview-phone-1', name: 'Pip', color: 'sky', role: null, provider: 'claude', model: null, busy: false, activeSessionId: null, conversations: 3 },
+    ] }
+    return [laptop, { ...vps, live: true }, desktop, phone]
+  }
   return wanted === '2' ? [laptop, vps] : [laptop]
+}
+const fixtureManyChats: Record<string, string[]> = {
+  'preview-laptop': ['Fix the invoice export', 'Tidy the settings page', 'Review the pricing page PR', 'Add dark mode to the dashboard', 'Why is the login slow?', 'Write release notes for 0.9', 'Upgrade the router to v7', 'Cover the cart reducer with tests'],
+  'preview-vps': ['Rotate the deploy keys', 'Tune nginx caching', 'Check the nightly backup job', 'Move logs to journald', 'Renew the TLS certificate'],
+  'preview-desktop': ['Port the parser to Rust', 'Sort the photo import', 'Clean up the old branches', 'Plan the Q4 migration'],
+  'preview-phone': ['Quick fix for the typo on the pricing page', 'Draft the status update', 'Look into the failed build'],
 }
 // Another machine's shared folder for new projects, and its devices (17 November 2026).
 const fixtureRemoteBase = '/home/owner/projects'
@@ -1022,6 +1042,18 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
     ] : bot.id === 'preview-ivy' ? [
       { machineId: machine.id, machineName: machine.name, kind: machine.kind ?? null, id: 'preview-remote-4', title: 'Rotate the deploy keys', agentId: bot.id, agentName: bot.name, projectName: 'infra', state: 'idle', updatedAt: new Date(Date.now() - 9 * 86_400_000).toISOString(), archived: false },
     ] : []))
+    if (flags().get('machines') === 'many') {
+      const states = ['working', 'idle', 'idle', 'waiting_permission', 'idle', 'idle', 'idle', 'idle']
+      const age = [60_000, 3_600_000, 9_000_000, 30_000_000, 2 * 86_400_000, 4 * 86_400_000, 8 * 86_400_000, 12 * 86_400_000]
+      const generated = fixtureMachines().flatMap((machine) => {
+        const bots = machine.bots as Array<Record<string, unknown>>
+        return (fixtureManyChats[String(machine.id)] ?? []).map((title, index) => {
+          const bot = bots[index % bots.length]!
+          return { machineId: machine.id, machineName: machine.name, kind: machine.kind ?? null, id: `many-${String(machine.id)}-${index}`, title, agentId: bot.id, agentName: bot.name, projectName: ['korus', 'retinue', 'site', 'infra'][index % 4], state: machine.state === 'online' ? states[index % states.length] : 'idle', updatedAt: new Date(Date.now() - age[(index + (String(machine.id).length % 3)) % age.length]!).toISOString(), archived: false }
+        })
+      })
+      return { sessions: params.machineId ? generated.filter((row) => row.machineId === params.machineId) : generated } as T
+    }
     return { sessions: params.machineId ? rows.filter((row) => row.machineId === params.machineId) : rows } as T
   }
   if (method === 'machine.stream.status') return { connected: fixtureMachines().find((item) => item.id === params.machineId)?.live === true, lastSequence: 42 } as T
@@ -2372,6 +2404,8 @@ export async function rpc<T>(method: string, params: Record<string, unknown> = {
   if (method === 'project.favicon') {
     // `?favicon`: the preview's projects each have a favicon in their folder.
     if (!flags().has('favicon')) return { found: false } as T
+    // Each project draws its own, and `project-side` has none, so the folder fallback shows too.
+    if (params.projectId === 'project-side') return { found: false } as T
     return { found: true, path: 'public/favicon.svg', mime: 'image/svg+xml', dataBase64: btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><rect width="16" height="16" rx="4" fill="#3d9bff"/><path d="M4 11V5l4 3 4-3v6" fill="none" stroke="#fff" stroke-width="1.6"/></svg>') } as T
   }
   if (method === 'project.delete') {

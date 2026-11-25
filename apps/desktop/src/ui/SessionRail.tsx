@@ -278,7 +278,7 @@ export function SessionRail({ session, usage, appliedModel, onOpenFile, onReveal
       {repository.loading && !repo && <div className="rail-loading" role="status" aria-busy="true"><span className="sr-only">Reading the repository…</span><Skeleton lines={3} variant="row" /></div>}
       {view.fromRepository && repo && repo.files.length > 0 && <p className="rail-scope" title={repo.repoRoot ?? undefined}>All uncommitted changes in {repoName ?? 'this repository'}, not only this conversation's.</p>}
       {view.fromRepository && (onReview || onCreatePr) && <div className="rail-changes-actions">
-        {onReview && <button type="button" className="rail-pr" disabled={view.repository.length === 0} title="Review these changes, stage them and comment for the employee" onClick={() => onReview(null)}>Review</button>}
+        {onReview && <button type="button" className="rail-pr" disabled={view.repository.length === 0} title="Review these changes, stage them and leave comments" onClick={() => onReview(null)}>Review</button>}
         {onCreatePr && <button type="button" className="rail-pr" disabled={!canPr} title={prTitle} onClick={() => repo && onCreatePr(repo)}>Create PR</button>}
       </div>}
       {notRepo && !readFailed && (isManager

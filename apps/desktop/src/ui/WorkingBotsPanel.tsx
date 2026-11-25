@@ -7,6 +7,8 @@ import { agentColorHex } from './agentColor'
 import { presentedSessionState } from './sessionOutcome'
 import { isSideSession, isWaitingDelegation, sessionIsBusy } from './teamSelectors'
 import { Collapse } from './Collapse'
+import { usePeerIdentity } from './peerIdentity'
+import { useWorkMode } from './workMode'
 import './workingBotsPanel.css'
 
 /** Queued delivery notices are authoritative until a new message/turn arrives. */
@@ -48,6 +50,7 @@ export function WorkingBotsPanel({ sessions, agents, selectedId, onOpen }: { ses
   const [expanded, setExpanded] = useState(true)
   const [showFinished, setShowFinished] = useState(false)
   const [now, setNow] = useState(Date.now)
+  const professional = useWorkMode() === 'professional'
   const tasks = sessions.filter(s => isSideSession(s) && !s.archived).map(session => ({ session, status: taskStatus(session) })).filter(t => t.status !== 'Loading')
   const active = tasks.filter(t => !['Done', 'Failed', 'Cancelled'].includes(t.status))
   const finished = tasks.filter(t => ['Done', 'Failed', 'Cancelled'].includes(t.status))
@@ -57,17 +60,19 @@ export function WorkingBotsPanel({ sessions, agents, selectedId, onOpen }: { ses
     return () => window.clearInterval(timer)
   }, [expanded, active.length])
   if (!tasks.length) return null
-  const row = ({ session, status }: typeof tasks[number]) => {
-    const agent = agents.find(a => a.id === session.agentId)
-    const name = agent?.name ?? 'Teammate'
-    const title = session.link?.topic?.trim() || session.title?.trim() || 'Assigned task'
-    return <li key={session.id}><button type="button" data-task-id={session.id} className={`working-bot-row${selectedId === session.id ? ' active' : ''}`} aria-current={selectedId === session.id ? 'page' : undefined} onClick={() => onOpen(session.id)} title={`${name}: ${title}`}>
-      {agent && <BlobCanvas decorative color={agentColorHex(agent.color)} size={22} mini mood="idle" look={agentLook(agent)} label={name} />}
-      <span className="working-bot-copy"><span className="working-bot-line"><strong>{name}</strong><span className="working-bot-status">{status}<span aria-hidden="true"> · </span><time aria-label="Elapsed time">{taskElapsed(session, status, now)}</time></span></span><span className="working-bot-title">{title}</span></span>
-    </button></li>
-  }
+  const row = ({ session, status }: typeof tasks[number]) => <TaskRow key={session.id} session={session} status={status} agent={agents.find(a => a.id === session.agentId)} selected={selectedId === session.id} now={now} onOpen={onOpen} />
   return <section className="working-bots" aria-label="Working employees">
-    {active.length > 0 && <button type="button" className="working-bots-heading" aria-expanded={expanded} onClick={() => setExpanded(v => !v)}><ChevronRight size={12} className={expanded ? 'open' : ''} aria-hidden="true" /><strong>Working employees</strong><span>{active.length}</span></button>}
-    {(expanded || !active.length) && <>{active.length > 0 && <ul>{active.map(row)}</ul>}{finished.length > 0 && <div className="working-bots-finished"><button type="button" className="working-bots-finished-toggle" aria-expanded={showFinished} onClick={() => setShowFinished((value) => !value)}><ChevronRight size={12} aria-hidden="true" className={`fold-chevron${showFinished ? ' open' : ''}`} /><span>{finished.length} finished</span></button><Collapse open={showFinished}><ul>{finished.map(row)}</ul></Collapse></div>}</>}
+    {active.length > 0 && <button type="button" className="working-bots-heading" aria-expanded={expanded} onClick={() => setExpanded(v => !v)}><ChevronRight size={12} className={expanded ? 'open' : ''} aria-hidden="true" /><strong>{professional ? 'Subagents' : 'Working employees'}</strong><span>{active.length}</span></button>}
+    {(expanded || !active.length) && <>{active.length > 0 && <ul>{active.map(row)}</ul>}{finished.length > 0 && <div className="working-bots-finished"><button type="button" className="working-bots-finished-toggle" aria-expanded={showFinished} onClick={() => setShowFinished((value) => !value)}><ChevronRight size={12} aria-hidden="true" className={`fold-chevron${showFinished ? ' open' : ''}`} /><span>{finished.length} finished</span>{professional && <span className="working-bots-finished-hint">{finished.length === 1 ? 'subagent' : 'subagents'}</span>}</button><Collapse open={showFinished}><ul>{finished.map(row)}</ul></Collapse></div>}</>}
   </section>
+}
+
+/** One assigned task. In Professional mode a teammate reads as its provider, with its logo, never a name or cartoon. */
+function TaskRow({ session, status, agent, selected, now, onOpen }: { session: Session; status: string; agent: Agent | undefined; selected: boolean; now: number; onOpen: (id: string) => void }) {
+  const peer = usePeerIdentity(agent, agent?.name ?? 'Teammate')
+  const title = session.link?.topic?.trim() || session.title?.trim() || 'Assigned task'
+  return <li><button type="button" data-task-id={session.id} className={`working-bot-row${selected ? ' active' : ''}`} aria-current={selected ? 'page' : undefined} onClick={() => onOpen(session.id)} title={`${peer.name}: ${title}`}>
+    {peer.professional ? peer.logo(22) : agent && <BlobCanvas decorative color={agentColorHex(agent.color)} size={22} mini mood="idle" look={agentLook(agent)} label={peer.name} />}
+    <span className="working-bot-copy"><span className="working-bot-line"><strong>{peer.professional ? title : peer.name}</strong><span className="working-bot-status">{status}<span aria-hidden="true"> · </span><time aria-label="Elapsed time">{taskElapsed(session, status, now)}</time></span></span><span className="working-bot-title">{peer.professional ? peer.name : title}</span></span>
+  </button></li>
 }

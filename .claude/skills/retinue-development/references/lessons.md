@@ -2331,3 +2331,15 @@ The computer's screen (`computer.view`, `computer.rs`) is the first route on the
 - **Symptom:** CI `docs` failed with "Document inventory has changed; rebuild the library" although `docs:check` passed locally.
 - **Cause:** the first build writes the new document's snapshot under `docs/library/sources/`; the catalogue was counted before it existed. The snapshot file was also left uncommitted.
 - **Fix:** run `npm run docs:build` twice, then `npm run docs:check`, and commit `docs/library/sources/...` with the rest.
+
+## 2026-11-25 Hiding a grid item is not removing its track
+- **Symptom:** Professional mode still showed an empty column where the old Conversations list had been.
+- **Cause:** the app shell is a four-track grid and its children auto-place; `display: none` on the panel would shift the chat pane into the zero-width track, and the track widths live in several rules (inspector, document, narrow screens).
+- **Fix:** in `professional.css` set the columns explicitly for every shell state, pin the panel to track 2 as a zero-width placeholder and the pane to track 3.
+- **Also:** a mode that hides the employee layer must change the name everywhere it appears, not only the sidebar: chips, mentions, side header and delegation rows all read `usePeerIdentity`.
+
+## 2026-11-25: every tooltip and menu sat 32px low in the preview
+- **Symptom:** in the browser preview, provider-logo tooltips and sidebar menus opened 32px below their anchor; fine in the installed app.
+- **Cause:** `preview/productionFrame.css` transformed `<body>` (`translateY(32px)`) to draw the title bar. A transformed body is the containing block for `position: fixed`, and portals on `<body>` are placed with `getBoundingClientRect` (tab coordinates), so they were shifted by the caption height.
+- **Fix:** the body is offset with `margin-top` and only `#root` is transformed (`translateZ(0)`), so the app's own fixed layers still fill the client area while body portals land exactly. Don't transform `<body>` in the preview again.
+- **Also:** headless Edge screenshots (Playwright, `channel: 'msedge'`; Chrome isn't installed on this machine) crash or time out while a full `vitest run` is going. Run them one after the other.

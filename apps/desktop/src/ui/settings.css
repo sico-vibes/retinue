@@ -2,7 +2,14 @@
    rounded cards of rows (label left, control right). Tokens from theme.css. */
 
 .settings-backdrop { z-index: 45; }
-.settings-sheet { width: min(860px, calc(100vw - 48px)); height: min(640px, calc(100vh - 48px)); display: grid; grid-template-columns: 208px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "nav head" "nav content"; overflow: hidden; border-radius: 16px; background: var(--surface-panel); box-shadow: var(--shadow-pop); animation: sheet-in 160ms ease-out; }
+/* Stone matches Haze's settings dialog (owner, 25 November 2026): the same size, corners, dimmed app and motion; its own colours inside. */
+:root[data-style="stone"] .sheet-backdrop.settings-backdrop { padding: 28px; background: rgb(0 0 0 / .42); backdrop-filter: none; }
+:root[data-style="stone"][data-theme="light"] .sheet-backdrop.settings-backdrop { background: rgb(20 20 24 / .22); }
+:root[data-style="stone"] .settings-backdrop .settings-sheet { width: min(1080px, 100%); height: min(780px, 100%); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-1) 9%, transparent), 0 30px 80px -20px rgb(0 0 0 / .6); animation: z-dialog-in 220ms cubic-bezier(.2, .8, .2, 1) both; }
+:root[data-style="stone"][data-theme="light"] .settings-backdrop .settings-sheet { box-shadow: 0 0 0 1px rgb(0 0 0 / .08), 0 30px 80px -24px rgb(0 0 0 / .28); }
+@keyframes z-dialog-in { from { opacity: 0; translate: 0 8px; scale: .975; } }
+@media (prefers-reduced-motion: reduce) { :root[data-style="stone"] .settings-backdrop .settings-sheet { animation: none; } }
+.settings-sheet { width: min(1080px, calc(100vw - 56px)); height: min(780px, calc(100vh - 56px)); display: grid; grid-template-columns: 208px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "nav head" "nav content"; overflow: hidden; border-radius: 18px; background: var(--surface-panel); box-shadow: var(--shadow-pop); animation: sheet-in 160ms ease-out; }
 .settings-sheet:focus-visible { box-shadow: var(--shadow-pop); }
 
 .settings-nav { grid-area: nav; min-height: 0; padding: 16px 10px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; border-right: 1px solid var(--line); background: var(--surface-sidebar); }

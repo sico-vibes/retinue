@@ -68,5 +68,12 @@
 /* Professional mode (24 November 2026): the delegates read as a card in the thread, left aligned, with provider logos and status badges. */
 .delegation-logo { flex: none; display: inline-flex; align-items: center; justify-content: center; line-height: 0; }
 :root[data-mode="professional"] .delegation-chip-row { justify-content: flex-start; }
-:root[data-mode="professional"] .delegation-faces .delegation-logo + .delegation-logo { margin-left: 4px; }
+:root[data-mode="professional"] .delegation-faces .delegation-logo { border: 1px solid var(--line); border-radius: 50%; background: var(--surface-raised); }
+:root[data-mode="professional"] .delegation-faces .delegation-logo + .delegation-logo { margin-left: -6px; }
+:root[data-mode="professional"] .delegation-row .delegation-logo { border: 1px solid var(--line); border-radius: 50%; background: var(--surface-raised); }
+:root[data-mode="professional"] .delegation-row-copy strong { font-weight: 500; }
+:root[data-mode="professional"] .delegation-names { font-weight: 500; }
 :root[data-mode="professional"] .delegation-status { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Both the subagent card and a relayed reply sit on the left, in line with the agent's text (T3 Code), not centred. */
+:root[data-mode="professional"] .team-chip-row { justify-content: flex-start; }

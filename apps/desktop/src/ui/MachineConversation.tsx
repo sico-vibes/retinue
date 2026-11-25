@@ -4,7 +4,7 @@
 // with `machine.session.changed` (ids only), so this view re-reads on change and polls only as a fallback.
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CircleAlert, CircleCheck, FolderGit2, GitBranch, Info, Laptop, LoaderCircle, Plus, RefreshCw, SendHorizontal, Square, X } from 'lucide-react'
+import { ArrowUp, CircleAlert, CircleCheck, FolderGit2, GitBranch, Info, Laptop, LoaderCircle, Plus, RefreshCw, SendHorizontal, Square, X } from 'lucide-react'
 import type { PermissionRequest, Session } from '../types'
 import { rpc } from '../tauri'
 import { useDialogAccessibility, useDialogEntered } from './dialogFocus'
@@ -18,6 +18,10 @@ import type { Agent } from '../types'
 import { openSafeLink } from './openSafeLink'
 import { SafeMarkdown } from './SafeMarkdown'
 import { shortTime } from './rosterSelectors'
+import { useWorkMode } from './workMode'
+import { RuntimeMark, providerBrand } from './providerBrand'
+import { ProBadge } from './ProBadge'
+import { WhereIcon, whereKindOf } from './ProfessionalDevices'
 import { sessionIsBusy } from './teamSelectors'
 import './machines.css'
 import { LoadingBlock } from './Skeleton'
@@ -158,7 +162,15 @@ export function CompanionMachineBots() {
 
 /** The message box for a conversation that runs on another machine. Sends through this machine's link; the
  * other machine runs the turn and its own coding agent. While a turn runs, a message goes in as a steer. */
-export function MachineComposer({ machine, bot, sessionId, busy, onSent }: { machine: Machine; bot: MachineBot; sessionId: string; busy: boolean; onSent: () => void }) {
+export /** What a machine's bot is called on screen: Professional mode names its provider, never the employee. */
+function useBotLabel(bot: MachineBot): string {
+  const professional = useWorkMode() === 'professional'
+  return professional && bot.provider ? providerBrand(bot.provider).name : bot.name
+}
+
+function MachineComposer({ machine, bot, sessionId, busy, onSent }: { machine: Machine; bot: MachineBot; sessionId: string; busy: boolean; onSent: () => void }) {
+  const label = useBotLabel(bot)
+  const professional = useWorkMode() === 'professional'
   const [text, setText] = useState('')
   const [sending, setSending] = useState<'send' | 'stop' | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
@@ -176,8 +188,19 @@ export function MachineComposer({ machine, bot, sessionId, busy, onSent }: { mac
     setSending('stop'); setProblem(null)
     try { await rpc('machine.cancel', { machineId: machine.id, sessionId }); onSent() } catch (reason) { setProblem(messageOf(reason, `${machine.name} didn't stop it.`)) } finally { setSending(null) }
   }
+  if (professional) return <div className="composer-wrap pro-remote-composer"><form className="composer-box" onSubmit={(event) => { event.preventDefault(); void send() }}>
+    <textarea value={text} rows={1} aria-label={`Message ${label} on ${machine.name}`} placeholder={busy ? `Add to what ${label} is doing` : `Message ${label}`} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() } }} />
+    {problem && <p className="machine-composer-problem" role="alert">{problem}</p>}
+    <div className="composer-control-strip">
+      <div className="composer-controls-start"><span className="composer-pill pro-remote-pill" title={`Runs on ${machine.name}, with its own coding agent and files`}><WhereIcon where={{ kind: whereKindOf(machine), name: machine.name }} size={13} /><span>{machine.name}</span></span></div>
+      <div className="composer-controls-end">
+        {busy && <button type="button" className="composer-icon-button" aria-label="Stop" title="Stop" disabled={!!sending} onClick={() => void stop()}><Square size={13} aria-hidden="true" /></button>}
+        <button type="submit" className="send-button" disabled={!ready} aria-label={busy ? 'Send now' : 'Send message'} title={busy ? 'Send now' : 'Send'}><ArrowUp size={16} aria-hidden="true" /></button>
+      </div>
+    </div>
+  </form></div>
   return <form className="machine-composer" onSubmit={(event) => { event.preventDefault(); void send() }}>
-    <textarea value={text} rows={2} aria-label={`Message ${bot.name} on ${machine.name}`} placeholder={busy ? `Add to what ${bot.name} is doing` : `Message ${bot.name}`} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() } }} />
+    <textarea value={text} rows={2} aria-label={`Message ${label} on ${machine.name}`} placeholder={busy ? `Add to what ${label} is doing` : `Message ${label}`} onChange={(event) => setText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send() } }} />
     {problem && <p className="machine-composer-problem" role="alert">{problem}</p>}
     <div className="machine-composer-foot">
       <span><Laptop size={12} aria-hidden="true" />Runs on {machine.name}, with its own coding agent and files.</span>
@@ -302,6 +325,8 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
   // with no pane around it (the component on its own) it renders in place.
   const host = typeof document === 'undefined' ? null : document.querySelector<HTMLElement>('.conversation-pane')
   const remoteOnline = machine.state === 'online'
+  const professional = useWorkMode() === 'professional'
+  const botLabel = useBotLabel(bot)
   const side = <div className="machine-convos">
           <div className="convo-head"><strong>Conversations</strong><span className="machine-remote-chip" title={`These conversations run on ${machine.name}`}><MachineKindIcon kind={machine.kind} size={11} />{machine.name}</span></div>
           {chat
@@ -318,15 +343,46 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
         </div>
   const sideHost = host?.closest('.app-shell')?.querySelector<HTMLElement>('.conversations-panel') ?? null
   const pane = <section ref={ref} className={`machine-pane${entered ? ' is-entered' : ''}`} role="dialog" aria-label={`${bot.name} on ${machine.name}`} data-remote-state={remoteOnline ? (machine.live ? 'live' : 'online') : 'offline'} tabIndex={-1}>
-      <header className="machine-view-head">
+      {professional && <header className="chat-header pro-machine-head">
+        <div className="chat-title"><RuntimeMark provider={bot.provider} size={16} /><span className="conversation-crumb" title={`${machine.name} / ${session?.title ?? ''}`}><span className="conversation-crumb-project">{machine.name}</span><span className="conversation-crumb-sep" aria-hidden="true">/</span><span className="conversation-crumb-title">{String(session?.title ?? '').trim() || 'Chat'}</span></span></div>
+        <div className="header-actions"><ProBadge tone={remoteOnline ? 'online' : 'offline'} label={remoteOnline ? 'Online' : 'Offline'} />{selected && (!chat || movedAway || canTakeOver(machine)) && <button type="button" className="ghost-button small" title={state.note} disabled={!state.allowed || !session} onClick={() => setTakingOver(true)}>Take over</button>}</div>
+      </header>}
+      {professional && <div className="conversation-frame">
+        <section ref={scroller} className="message-list" tabIndex={0} aria-label={chat ? 'Conversation' : 'Conversation, read only'} onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48 }}>
+          <div className="conversation-layout"><div className="chat-column">
+            {selected && !session && !failure && <p className="pro-remote-note" role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading…</p>}
+            {!selected && conversations?.length !== 0 && conversations !== null && <p className="pro-remote-note">Choose a conversation.</p>}
+            {items.map((item) => item.kind === 'step'
+              ? <p key={`step-${String(item.step.id)}`} className="pro-remote-step" data-state={String(item.step.state ?? '')} title={String(item.step.title ?? '')}>{doingNowLabel(item.step)}</p>
+              : item.message.role === 'user'
+                ? <div key={String(item.message.id)} className="message-action-shell user"><article className="message-row user" aria-label="You"><div className="message-content"><div className="message-bubble-wrap"><div className="message-bubble"><div className="safe-markdown"><p><span>{String(item.message.content)}</span></p></div></div></div><div className="message-time">{item.message.createdAt ? <time>{shortTime(String(item.message.createdAt))}</time> : null}</div></div></article></div>
+                : <div key={String(item.message.id)} className="message-action-shell"><article className={`message-row ${item.message.role === 'notice' ? 'notice' : 'agent'}`} aria-label={botLabel}><span className="message-avatar" aria-hidden="true" /><div className="message-content"><div className="message-bubble-wrap"><div className="message-bubble">{item.message.role === 'assistant' ? <SafeMarkdown text={String(item.message.content)} onOpenLink={openSafeLink} /> : <div className="safe-markdown"><p><span>{String(item.message.content)}</span></p></div>}</div></div></div></article></div>)}
+            {busy && !waitingForYou && <p className="pro-remote-working" role="status">{botLabel} is working on {machine.name}<span className="pro-dots" aria-hidden="true"><i /><i /><i /></span></p>}
+            {approvals.map((card) => <section key={card.id} className="machine-approval" aria-label={`Approval on ${machine.name}`}>
+              <strong>{card.title || `${botLabel} asks to continue`}</strong>
+              {(card.command || card.description) && <code>{String(card.command || card.description)}</code>}
+              <small>Asked on {machine.name}. Your answer goes there.</small>
+              <div className="machine-approval-actions">
+                <button type="button" className="secondary-button small" disabled={!!answering || !canTakeOver(machine)} onClick={() => void answer(card, false)}>Deny</button>
+                <button type="button" className="primary-button small" disabled={!!answering || !canTakeOver(machine)} onClick={() => void answer(card, true)}>{answering === card.id ? 'Sending…' : 'Allow'}</button>
+              </div>
+            </section>)}
+            {waitingForYou && !approvals.length && <p className="pro-remote-note" role="status">{botLabel} is waiting for an approval. Answer it on {machine.name}.</p>}
+          </div></div>
+        </section>
+      </div>}
+      {professional && failure && <p className="new-project-error pro-remote-problem" role="alert">{failure}</p>}
+      {professional && selected && chat && !movedAway && session && <MachineComposer machine={machine} bot={bot} sessionId={selected} busy={busy} onSent={() => { pinned.current = true; setReread((value) => value + 1) }} />}
+      {professional && selected && (!chat || movedAway) && <p className="pro-remote-note pro-remote-readonly">{state.note}</p>}
+      {!professional && <header className="machine-view-head">
         <span className="machine-pane-avatar"><BlobCanvas decorative color={agentColorHex(bot.color ?? 'mint')} size={34} mood={!remoteOnline ? 'offline' : busy ? 'tool_activity' : 'idle'} look={agentLook(bot as unknown as Agent)} label={bot.name} /><span className="machine-pane-device" title={`Running on ${machine.name}`}><MachineKindIcon kind={machine.kind} size={10} /></span></span>
         <div className="machine-view-title">
           <h2 id="machine-view-title"><span className="machine-pane-name" title={bot.name}>{bot.name}</span><span className="machine-remote-chip" title={`This conversation runs on ${machine.name}`}><MachineKindIcon kind={machine.kind} size={11} />{machine.name}</span></h2>
           <small>On {machine.name}{machine.lastSeenAt && machine.state !== 'online' ? ` · last seen ${shortTime(machine.lastSeenAt)}` : ''} <span className={`machine-live-mark${machine.live && machine.state === 'online' ? ' live' : ''}`} title={machine.live ? 'Changes arrive as they happen.' : 'No live link right now; this view checks every few seconds.'}><i aria-hidden="true" />{machine.state !== 'online' ? 'Offline' : machine.live ? 'Live' : 'Checking every few seconds'}</span></small>
         </div>
         <button type="button" className="icon-button" aria-label="Close" onClick={close}><X size={16} aria-hidden="true" /></button>
-      </header>
-      <div className="machine-view-layout">
+      </header>}
+      {!professional && <div className="machine-view-layout">
         <div className="machine-view-main">
           <div ref={scroller} className="machine-transcript" tabIndex={0} aria-label={chat ? "Conversation" : "Conversation, read only"} onScroll={(event) => { const element = event.currentTarget; pinned.current = element.scrollHeight - element.scrollTop - element.clientHeight < 48 }}>
             {selected && !session && !failure && <p role="status"><LoaderCircle size={14} className="spin" aria-hidden="true" /> Loading…</p>}
@@ -339,9 +395,9 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
                   ? <SafeMarkdown text={String(item.message.content)} onOpenLink={openSafeLink} />
                   : <div>{String(item.message.content)}</div>}
               </article>)}
-            {busy && !waitingForYou && <p className="machine-message notice" role="status">{bot.name} is working on {machine.name}…</p>}
+            {busy && !waitingForYou && <p className="machine-message notice" role="status">{botLabel} is working on {machine.name}…</p>}
             {approvals.map((card) => <section key={card.id} className="machine-approval" aria-label={`Approval on ${machine.name}`}>
-              <strong>{card.title || `${bot.name} asks to continue`}</strong>
+              <strong>{card.title || `${botLabel} asks to continue`}</strong>
               {(card.command || card.description) && <code>{String(card.command || card.description)}</code>}
               <small>Asked on {machine.name}. Your answer goes there; {machine.name} may refuse it if approvals from other devices are off there.</small>
               <div className="machine-approval-actions">
@@ -350,7 +406,7 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
               </div>
               {!canTakeOver(machine) && <small>Answering needs the Operator level for this machine on {machine.name}.</small>}
             </section>)}
-            {waitingForYou && !approvals.length && <p className="machine-message notice" role="status">{bot.name} is waiting for an approval. Answer it on {machine.name}.</p>}
+            {waitingForYou && !approvals.length && <p className="machine-message notice" role="status">{botLabel} is waiting for an approval. Answer it on {machine.name}.</p>}
           </div>
           {failure && <p className="new-project-error" role="alert">{failure}</p>}
           {selected && chat && !movedAway && session && <MachineComposer machine={machine} bot={bot} sessionId={selected} busy={busy} onSent={() => { pinned.current = true; setReread((value) => value + 1) }} />}
@@ -361,7 +417,7 @@ export function MachineConversation({ machine, bot, initialSessionId, selfId, on
             <button type="button" className="primary-button small" disabled={!state.allowed || !session} onClick={() => setTakingOver(true)}>Take over</button>
           </div>}
         </div>
-      </div>
+      </div>}
       {takingOver && selected && <TakeOverDialog machine={machine} sessionId={selected} onClose={() => setTakingOver(false)} onMoved={onMoved} />}
     </section>
   return host ? <>{createPortal(pane, host)}{sideHost && createPortal(side, sideHost)}</> : <>{pane}{side}</>

@@ -45,8 +45,8 @@ function Shell({ title, onClose, busy, children, className = '' }: { title: stri
 }
 
 /** Choose a folder on the other machine, or clone a repository there, then start a conversation in it. */
-export function NewProjectOnMachine({ machine, onClose, onStarted }: { machine: Machine; onClose: () => void; onStarted: (bot: MachineBot, sessionId: string) => void }) {
-  const [mode, setMode] = useState<'folder' | 'clone'>('folder')
+export function NewProjectOnMachine({ machine, onClose, onStarted, initialMode = 'folder' }: { machine: Machine; onClose: () => void; onStarted: (bot: MachineBot, sessionId: string) => void; initialMode?: 'folder' | 'clone' }) {
+  const [mode, setMode] = useState<'folder' | 'clone'>(initialMode)
   const [browse, setBrowse] = useState<Browse | null>(null)
   const [browseProblem, setBrowseProblem] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)

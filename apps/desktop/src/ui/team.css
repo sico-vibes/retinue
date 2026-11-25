@@ -43,8 +43,8 @@
 .team-hidden-toggle { margin: 6px 6px 10px; padding: 6px 8px; display: flex; align-items: center; gap: 6px; color: var(--text-3); border: 0; border-radius: 8px; background: transparent; font-size: var(--fs-2xs); cursor: pointer; }
 .team-hidden-toggle:hover { color: var(--text-1); background: var(--surface-hover); }
 
-.team-menu { position: fixed; z-index: 60; width: 228px; padding: 5px; display: grid; gap: 1px; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); animation: composer-menu-in 120ms ease-out both; }
-.team-menu-item { width: 100%; min-height: 32px; padding: 6px 9px; display: flex; align-items: center; gap: 10px; color: var(--text-1); border: 0; border-radius: 8px; background: transparent; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
+.team-menu { position: fixed; z-index: 60; width: 228px; padding: 5px; display: grid; gap: 1px; color: var(--text-1); border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); animation: composer-menu-in 120ms ease-out both; }
+.team-menu-item { width: 100%; min-height: 32px; padding: 6px 9px; display: flex; align-items: center; gap: 10px; color: var(--text-1); border: 0; border-radius: 6px; background: transparent; font-size: var(--fs-sm); text-align: left; cursor: pointer; }
 .team-menu-item:hover:not(:disabled), .team-menu-item:focus-visible, .team-menu-item[aria-expanded="true"] { outline: none; background: var(--surface-hover); }
 .team-menu-item:disabled { color: var(--text-3); cursor: default; }
 .team-menu-item.danger { color: var(--danger-ink); }

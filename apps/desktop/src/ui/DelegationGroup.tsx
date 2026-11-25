@@ -1,7 +1,7 @@
 // The CEO's assignments in the conversation that made them: a centred "Messaged ..." chip per run of messages sent
 // in a turn (like "Message from"), opening in place to a row per bot with its art, a status the daemon recorded, elapsed time, and a way into the teammate's
 // own conversation. Approving stays in that conversation; nothing here decides anything for the owner.
-import { createContext, useContext, useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { ArrowUpRight, ChevronDown, ChevronRight, Square } from 'lucide-react'
 import { rpc } from '../tauri'
 import type { Agent, Runtime } from '../types'
@@ -14,6 +14,7 @@ import { sessionIsBusy } from './teamSelectors'
 import { useEntityNoun } from './vocabulary'
 import { groupElapsed, isActiveBucket, rowElapsed, summarizeBuckets, type DelegationBucket, type DelegationRowModel } from './delegations'
 import { RuntimeMark } from './providerBrand'
+import { RuntimesContext, providerNameOf } from './peerIdentity'
 import { ProBadge, type ProTone } from './ProBadge'
 import { useWorkMode } from './workMode'
 import './delegationGroup.css'
@@ -23,7 +24,6 @@ const baseName = (path: string) => path.replace(/[\\/]+$/, '').split(/[\\/]/).po
 
 /** In Professional mode a delegate shows its provider's logo, not a cartoon (24 November 2026). */
 const BADGE: Record<DelegationBucket, ProTone> = { queued: 'draft', working: 'working', approval: 'needs', done: 'done', failed: 'bad', cancelled: 'limited', interrupted: 'limited', earlier: 'done' }
-const RuntimesContext = createContext<readonly Runtime[]>([])
 
 function Art({ agent, name, size, mood }: { agent: Agent | undefined; name: string; size: number; mood: BlobMood }) {
   const runtimes = useContext(RuntimesContext)
@@ -35,6 +35,7 @@ function Art({ agent, name, size, mood }: { agent: Agent | undefined; name: stri
 
 /** Where the work happens and what Git says there. Only the teammate's own branch is attributed to it. */
 function Workspace({ row, active }: { row: DelegationRowModel; active: boolean }) {
+  const professional = useWorkMode() === 'professional'
   const own = !!row.worktree?.branch
   const repository = useSessionRepository(row.sideSession ?? null, repositoryRefreshKey(row.sideSession ?? null), !!row.sideSession && sessionIsBusy(row.sideSession), active)
   const data = repository.data
@@ -44,8 +45,8 @@ function Workspace({ row, active }: { row: DelegationRowModel; active: boolean }
   const place = !folder ? 'Not recorded' : own ? `Own copy of ${row.worktree!.repo ? baseName(row.worktree!.repo) : 'the project'}` : `Shared folder ${folder}`
   return <dl className="delegation-facts">
     <div><dt>Workspace</dt><dd title={row.workspacePath ?? undefined}>{place}</dd></div>
-    <div><dt>Branch</dt><dd>{branch ? <code>{branch}</code> : data && !data.gitRepo ? 'Not a Git folder' : repository.loading ? 'Reading…' : 'Unknown'}{branch && !own && <span className="delegation-note"> · the folder's current branch</span>}{branch && own && <span className="delegation-note"> · this employee's own branch</span>}</dd></div>
-    {changed !== null && <div><dt>Changes</dt><dd title={own ? undefined : 'Git reports the whole folder, so these changes are not attributed to this employee.'}>{changed === 0 ? 'None' : `${changed} file${changed === 1 ? '' : 's'}`}{changed > 0 && data && <span className="delegation-note"> · +{data.addedLines} −{data.removedLines}{own ? '' : ' · whole folder, not only this employee'}</span>}</dd></div>}
+    <div><dt>Branch</dt><dd>{branch ? <code>{branch}</code> : data && !data.gitRepo ? 'Not a Git folder' : repository.loading ? 'Reading…' : 'Unknown'}{branch && !own && <span className="delegation-note"> · the folder's current branch</span>}{branch && own && <span className="delegation-note"> · {professional ? 'its own branch' : "this employee's own branch"}</span>}</dd></div>
+    {changed !== null && <div><dt>Changes</dt><dd title={own ? undefined : 'Git reports the whole folder, so these changes are not attributed to one subagent.'}>{changed === 0 ? 'None' : `${changed} file${changed === 1 ? '' : 's'}`}{changed > 0 && data && <span className="delegation-note"> · +{data.addedLines} −{data.removedLines}{own ? '' : professional ? ' · whole folder' : ' · whole folder, not only this employee'}</span>}</dd></div>}
   </dl>
 }
 
@@ -67,6 +68,9 @@ const stoppable = (row: DelegationRowModel) => row.recorded && !!row.delegationI
 function Row({ row, now, onOpen, onError, onFollowUp }: { row: DelegationRowModel; now: number; onOpen: (sessionId: string) => void; onError: (message: string) => void; onFollowUp?: (row: DelegationRowModel) => void }) {
   const [open, setOpen] = useState(false)
   const professional = useWorkMode() === 'professional'
+  const runtimes = useContext(RuntimesContext)
+  // Professional mode names the provider, never the employee (owner, 25 November 2026).
+  const who = professional ? providerNameOf(row.agent, runtimes) : row.name
   const panel = `delegation-${row.key}`.replace(/[^A-Za-z0-9_-]/g, '')
   const elapsed = rowElapsed(row, now)
   return <li className={`delegation-row ${row.bucket}`} data-delegation-id={row.delegationId ?? undefined} data-status={row.bucket}>
@@ -74,18 +78,18 @@ function Row({ row, now, onOpen, onError, onFollowUp }: { row: DelegationRowMode
       <button type="button" className="delegation-row-toggle" aria-expanded={open} aria-controls={panel} onClick={() => setOpen((value) => !value)}>
         <ChevronRight size={12} className={open ? 'open' : ''} aria-hidden="true" />
         <Art agent={row.agent} name={row.name} size={24} mood={MOOD[row.bucket]} />
-        <span className="delegation-row-copy"><strong>{row.name}</strong><span className="delegation-row-topic" title={row.topic}>{row.topic}</span></span>
+        <span className="delegation-row-copy">{professional ? <><strong title={row.topic}>{row.topic}</strong><span className="delegation-row-topic">{who}</span></> : <><strong>{row.name}</strong><span className="delegation-row-topic" title={row.topic}>{row.topic}</span></>}</span>
       </button>
       {/* Its own column, so the status sits on the same line as Open (owner, 28 October 2026). */}
       <span className="delegation-status">{professional ? <ProBadge tone={BADGE[row.bucket]} label={row.label} /> : <><i className="delegation-mark" aria-hidden="true" />{row.label}</>}{elapsed !== '—' && <><span aria-hidden="true"> · </span><time aria-label="Elapsed time">{elapsed}</time></>}</span>
       {stoppable(row) && <StopControl row={row} onError={onError} />}
-      <button type="button" className="delegation-open" disabled={!row.sideSessionId} onClick={() => row.sideSessionId && onOpen(row.sideSessionId)} aria-label={`${row.bucket === 'approval' ? 'Open to approve' : 'Open'} the conversation with ${row.name}: ${row.topic}`}>{row.bucket === 'approval' ? 'Review' : 'Open'}<ArrowUpRight size={12} aria-hidden="true" /></button>
+      <button type="button" className="delegation-open" disabled={!row.sideSessionId} onClick={() => row.sideSessionId && onOpen(row.sideSessionId)} aria-label={`${row.bucket === 'approval' ? 'Open to approve' : 'Open'} the conversation with ${who}: ${row.topic}`}>{row.bucket === 'approval' ? 'Review' : 'Open'}<ArrowUpRight size={12} aria-hidden="true" /></button>
     </div>
     {open && <div id={panel} className="delegation-detail">
       {row.preview && <p className="delegation-brief" title={row.preview}>{row.doneGoal ? <span className="delegation-term">Asked for </span> : null}{row.preview}</p>}
       {row.doneGoal && <p className="delegation-brief" title={row.doneGoal}><span className="delegation-term">Done when </span>{row.doneGoal}</p>}
       {row.error && <p className="delegation-error" role="status">{row.error}</p>}
-      {row.bucket === 'approval' && <p className="delegation-hint">{row.asking ? `${row.name} asked you a question and is waiting in its own conversation. Open it to answer; the answer goes only to ${row.name}.` : `Waiting for you in ${row.name}'s conversation. Open it to approve or decline.`}</p>}
+      {row.bucket === 'approval' && <p className="delegation-hint">{row.asking ? `${who} asked you a question and is waiting in its own conversation. Open it to answer; the answer goes only to ${who}.` : `Waiting for you in ${who}'s conversation. Open it to approve or decline.`}</p>}
       {row.bucket === 'interrupted' && <p className="delegation-hint">Retinue restarted before this finished. It was not sent again, so open the conversation to see what was done.</p>}
       {row.bucket === 'queued' && <p className="delegation-hint">Waiting for a free slot. It starts by itself.</p>}
       {!row.recorded && <p className="delegation-hint">Sent before assignments were recorded{row.bucket === 'earlier' ? ', so its own result is in the conversation.' : '; this is the conversation’s current state.'}</p>}
@@ -120,8 +124,11 @@ export function DelegationGroup({ rows, onOpen, originSessionId, onFollowUp, run
     setConfirmAll(false)
   }
   const faces = [...new Map(rows.map((row) => [row.agent?.id ?? row.key, row])).values()]
-  const title = rows.length === 1 ? `Assigned to ${rows[0].name}` : `Assigned to ${rows.length} ${nouns}`
-  const names = faces.length <= 2 ? faces.map((row) => row.name).join(' and ') : `${faces.slice(0, 2).map((row) => row.name).join(', ')} +${faces.length - 2}`
+  const providerName = (row: DelegationRowModel) => professional ? providerNameOf(row.agent, runtimes) : row.name
+  const title = professional ? `${rows.length} ${rows.length === 1 ? 'subagent' : 'subagents'}` : rows.length === 1 ? `Assigned to ${rows[0].name}` : `Assigned to ${rows.length} ${nouns}`
+  // Professional mode counts subagents, as T3 Code does ("2 subagents"), and names providers once each.
+  const providers = [...new Set(faces.map(providerName))]
+  const names = professional ? `${rows.length} ${rows.length === 1 ? 'subagent' : 'subagents'}` : faces.length <= 2 ? faces.map((row) => row.name).join(' and ') : `${faces.slice(0, 2).map((row) => row.name).join(', ')} +${faces.length - 2}`
   const total = groupElapsed(rows, now)
   const attention = rows.some((row) => row.bucket === 'approval')
   const failed = rows.some((row) => row.bucket === 'failed' || row.bucket === 'interrupted')
@@ -130,9 +137,9 @@ export function DelegationGroup({ rows, onOpen, originSessionId, onFollowUp, run
     {/* Owner, 28 October 2026: a "Messaged" chip like "Message from", centred, that opens in place. */}
     <div className="team-chip-row delegation-chip-row">
       <button type="button" className="team-chip delegation-head" aria-expanded={expanded} aria-controls={id} onClick={() => setManual(!expanded)}>
-        <span>{professional ? 'Subagents' : 'Messaged'}</span>
+        {!professional && <span>Messaged</span>}
         <span className="delegation-faces" aria-hidden="true">{faces.slice(0, 3).map((row) => <Art key={row.agent?.id ?? row.key} agent={row.agent} name={row.name} size={18} mood={MOOD[row.bucket]} />)}{faces.length > 3 && <span className="delegation-more">+{faces.length - 3}</span>}</span>
-        <b className="delegation-names">{names}</b>
+        <b className="delegation-names" title={professional ? providers.join(', ') : undefined}>{names}</b>
         <em className="delegation-summary">{summarizeBuckets(rows)}{total !== '—' && <> · <time aria-label="Elapsed time">{total}</time></>}</em>
         <ChevronDown size={12} className={`delegation-caret${expanded ? ' open' : ''}`} aria-hidden="true" />
       </button>

@@ -32,7 +32,7 @@
 .quota-chip-window.tone-critical b { color: var(--status-danger-text, var(--status-danger)); }
 .quota-chip-empty { color: var(--text-3); }
 
-.usage-popover { position: absolute; z-index: 40; left: 8px; bottom: calc(100% + 6px); width: min(340px, calc(100vw - 24px)); padding: 14px 14px 8px; display: grid; gap: 16px; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: 14px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); font-size: var(--fs-xs); transform-origin: bottom left; animation: composer-menu-in 140ms cubic-bezier(.2,.8,.2,1) both; }
+.usage-popover { position: absolute; z-index: 40; left: 8px; bottom: calc(100% + 6px); width: min(340px, calc(100vw - 24px)); padding: 14px 14px 8px; display: grid; gap: 16px; color: var(--text-2); border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface-overlay); box-shadow: var(--shadow-pop); font-size: var(--fs-xs); transform-origin: bottom left; animation: composer-menu-in 140ms cubic-bezier(.2,.8,.2,1) both; }
 .usage-popover:focus-visible { box-shadow: var(--shadow-pop); }
 .usage-rows-empty { margin: 0; color: var(--text-3); line-height: 1.45; }
 .usage-popover-foot { margin-top: -6px; padding-top: 6px; display: flex; align-items: center; gap: 6px; color: var(--text-3); border-top: 1px solid var(--line); }

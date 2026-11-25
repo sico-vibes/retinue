@@ -1,8 +1,11 @@
 /* The installed window in a browser tab: title bar, desktop, acrylic, minimum size. See productionFrame.ts. Preview only. */
 :root[data-pv-frame] { --pv-caption: 32px; overflow: auto; background: #000; }
-/* The page is the window's client area. A transformed body is the containing block of `position: fixed`, so the app's
-   fixed layers (backdrop, dialogs, menus) fill the client area and not the tab, exactly as they fill the window. */
-:root[data-pv-frame] body { height: calc(100% - var(--pv-caption)); min-width: 1000px; min-height: 680px; transform: translateY(var(--pv-caption)); }
+/* The page is the window's client area. The app root is transformed, so it is the containing block of the app's own
+   `position: fixed` layers (backdrop, panes) and they fill the client area, not the tab. The body is NOT transformed
+   (2026-11-25): tooltips and menus are portals on <body> placed with getBoundingClientRect, which is in tab
+   coordinates, so a transformed body put every one of them 32px below its anchor. */
+:root[data-pv-frame] body { height: calc(100% - var(--pv-caption)); min-width: 1000px; min-height: 680px; margin-top: var(--pv-caption); }
+:root[data-pv-frame] #root { transform: translateZ(0); }
 
 .pv-desktop { position: fixed; z-index: -1; inset: var(--pv-caption) 0 0 0; overflow: hidden; pointer-events: none; background: #0a0d14; }
 /* A stand-in wallpaper (Windows 11 "bloom" colours), blurred the way acrylic blurs what is behind the window. */

@@ -9,3 +9,11 @@
 .sidebar-usage-value { flex: 0 0 auto; color: var(--text-1); font-size: var(--fs-xs); font-weight: 500; font-variant-numeric: tabular-nums; }
 .sidebar-usage-value.tone-critical { color: var(--status-danger-text, var(--status-danger)); }
 @media (prefers-reduced-motion: reduce) { .foot-row { transition: none; } }
+
+/* Professional mode: the open conversation's provider, with its 5-hour and weekly limits one under the other. */
+.foot-row.stacked { height: auto; min-height: 44px; padding-top: 6px; padding-bottom: 6px; }
+.usage-lines { min-width: 0; flex: 1 1 auto; display: grid; gap: 5px; }
+.usage-line { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.usage-line em { flex: 0 0 22px; color: var(--text-3); font-size: var(--fs-2xs); font-style: normal; font-variant-numeric: tabular-nums; }
+.usage-line .quota-meter { min-width: 24px; flex: 1 1 auto; width: auto; }
+.usage-line .sidebar-usage-value { flex: 0 0 34px; text-align: right; }

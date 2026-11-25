@@ -1,5 +1,4 @@
 import { Fragment, useCallback, useContext, useMemo, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
-import { ProfessionalMachines } from './ProfessionalMachines'
 import { ProfessionalTabs } from './ProfessionalTabs'
 import { useWorkMode } from './workMode'
 import { KeyRound, Activity, ArrowDown, Download, UserPlus, Stethoscope, Cable, Clock, Split, SquareTerminal, ListChecks, ListPlus, ArrowUp, ArrowUpRight, ChevronDown, ChevronLeft, ChevronUp, CircleAlert, ClipboardCopy, Code2, FileDown, FileText, FolderOpen, FolderInput, FolderPlus, Hash, Import, Gauge, GitCompare, GitPullRequest, LoaderCircle, MessageCircle, Maximize2, Minimize2, MoreHorizontal, PanelLeft, PanelLeftClose, PanelRight, Paperclip, Plus, RefreshCw, RotateCw, Settings2, ShieldAlert, Sparkles, Square, SquarePen, Terminal, Volume2, VolumeX, X, BriefcaseBusiness } from 'lucide-react'
@@ -70,13 +69,16 @@ import { CompanionMachineBots, MovedBar, MachineConversation } from './MachineCo
 import { ManageMachine, NewProjectOnMachine } from './MachineRemote'
 import { ProjectSuggestions } from './ProjectSuggestions'
 import { MachineBadge, MachineGroups, useOpenMachineBotRequests } from './MachineBots'
-import { useMachines } from './machines'
+import { useMachines, type Machine, type MachineBot } from './machines'
 import { CompanionFleetChip, SubbotComposer, SubbotCount, SubbotFleet } from './SubbotViews'
 import { SecretRequests } from './SecretsPage'
 import { DiffBody, DiffModeSwitch, useDiffMode } from './DiffBody'
 import { pullRequestPrompt, repositoryRefreshKey, useSessionRepository, type RepositoryState } from './sessionRepository'
 import { WorkingBotsPanel } from './WorkingBotsPanel'
 import { DelegationGroup } from './DelegationGroup'
+import { RuntimesContext, usePeerIdentity } from './peerIdentity'
+import { rememberRemoteTab } from './ProfessionalTabs'
+import { ProSidebarResize } from './ProSidebarResize'
 import { buildDelegationRows, delegationRuns, newestNoticeBySide, useDelegations } from './delegations'
 import { ChangeBanner } from './ChangeBanner'
 import { conversationPlaceName, conversationsToLoad, hashQuery, HYDRATE_AT_ONCE, isEmptyConversation, isSideSession, isWaitingDelegation, leaveProjectStep, sideTopic, mainSessionFor, mentionQuery, projectMatches, projectNamedInText, projectOfSession, splitMentions, splitReferences } from './teamSelectors'
@@ -1965,6 +1967,16 @@ export function App() {
     } catch (reason) { setError(messageOf(reason)) }
   }
   /** Clicking an employee or conversation in the sidebar leaves any page (settings, tasks, usage, an employee's page) for that chat (owner, 9 November 2026). */
+  // Professional mode: a new chat on another machine, started there by its own daemon and opened as a tab here.
+  const startRemoteChat = async (machine: Machine, bot: MachineBot) => {
+    try {
+      const reply = await rpc<{ sessionId?: string; session?: { id?: string } }>('machine.start', { machineId: machine.id, agentId: bot.id })
+      const id = reply?.sessionId ?? reply?.session?.id ?? null
+      if (!id) return
+      rememberRemoteTab(machine.id, bot.id, id, { title: 'New chat', provider: bot.provider ?? null, machineName: machine.name })
+      setMachineView({ machineId: machine.id, botId: bot.id, sessionId: id })
+    } catch (reason) { setDeliveryNotice(reason instanceof Error ? reason.message : `${machine.name} didn't start a chat.`) }
+  }
   const leavePages = () => { setTeamPage(null); setAnalyticsOpen(false); setSchedulesOpen(false); setTasksOpen(false); setCompareOpen(false); setBlobPage(null); setSettingsSheet(false); setMachineView(null) }
   const selectConversation = (session: Session) => {
     setStopTarget(['error', 'failed'].includes(String(session.state)) ? { sessionId: session.id } : null)
@@ -2999,11 +3011,34 @@ ${fileReferenceText(sentFile)}` : typed
   const professional = useWorkMode() === 'professional'
   const [machineView, setMachineView] = useState<{ machineId: string; botId: string; sessionId?: string } | null>(null)
   // Another machine's projects and devices, from here (17 November 2026).
-  const [machineAction, setMachineAction] = useState<{ kind: 'project' | 'manage'; machineId: string } | null>(null)
+  const [machineAction, setMachineAction] = useState<{ kind: 'project' | 'manage'; machineId: string; mode?: 'folder' | 'clone' } | null>(null)
   const actionMachine = machineAction ? machines.find((item) => item.id === machineAction.machineId) ?? null : null
   const [movedHere, setMovedHere] = useState<string | null>(null)
   const viewedMachine = machineView ? machines.find((item) => item.id === machineView.machineId) ?? null : null
   const viewedMachineBot = machineView ? viewedMachine?.bots.find((bot) => bot.id === machineView.botId) ?? null : null
+  // Preview only: `?open-remote` opens the demo chat on the Work laptop, as a click in the list would.
+  const openedRemoteDemo = useRef(false)
+  // Preview only: `?pro-menu=project|chat|device` opens that Professional-mode menu, `?remote-project=folder|clone` the dialog for the Work laptop.
+  useEffect(() => {
+    if (!previewMode) return
+    const query = new URLSearchParams(window.location.search)
+    const wanted = query.get('pro-menu')
+    const dialog = query.get('remote-project')
+    if (dialog === 'folder' || dialog === 'clone') { const machine = machines.find((item) => item.id === 'preview-laptop'); if (machine) setMachineAction({ kind: 'project', machineId: machine.id, mode: dialog }) }
+    if (!wanted) return
+    const label = wanted === 'project' ? 'New project' : wanted === 'device' ? 'New chat or project on Work laptop' : 'New chat'
+    const timer = window.setTimeout(() => document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)?.click(), 700)
+    return () => window.clearTimeout(timer)
+  }, [machines.length])
+  useEffect(() => {
+    if (!previewMode || openedRemoteDemo.current || !new URLSearchParams(window.location.search).has('open-remote')) return
+    const machine = machines.find((item) => item.id === 'preview-laptop')
+    const bot = machine?.bots.find((item) => item.id === 'preview-rae')
+    if (!machine || !bot) return
+    openedRemoteDemo.current = true
+    rememberRemoteTab(machine.id, bot.id, 'preview-remote-1', { title: 'Fix the invoice export', provider: bot.provider ?? null, machineName: machine.name })
+    setMachineView({ machineId: machine.id, botId: bot.id, sessionId: 'preview-remote-1' })
+  }, [machines])
   useOpenMachineBotRequests(!companion, (machineId, botId) => setMachineView({ machineId, botId }))
   // Demo (preview only): `?machines=1&demo-machine-view` opens the first other-machine employee in the conversation pane.
   const demoMachineViewOpened = useRef(false)
@@ -3154,9 +3189,10 @@ ${fileReferenceText(sentFile)}` : typed
   return (
     <>
     {!companion && <AppWallpaper />}
-    <PhotoOwnersContext.Provider value={photoOwnerMap}><ProjectsContext.Provider value={projects}>
+    <RuntimesContext.Provider value={runtimes}><PhotoOwnersContext.Provider value={photoOwnerMap}><ProjectsContext.Provider value={projects}>
     <main className={`app-shell ${detailsVisible ? 'inspector-open' : ''} ${docVisible ? `doc-open${docExpanded ? ' doc-expanded' : ''}` : ''} ${(convosOpen && activeSelectedAgent && !schedulesOpen && !tasksOpen && !compareOpen) || (viewedMachine && viewedMachineBot) ? 'convos-open' : ''} ${viewedMachine && viewedMachineBot ? 'remote-open' : ''} ${reducedLaunchFade ? 'reduced-launch-fade' : ''}`} style={{ ...(accent ? { '--agent-accent': accent } : {}), ...(reducedLaunchFade ? { '--launch-fade-duration': '180ms' } : {}) } as React.CSSProperties}>
       <aside className="sidebar" aria-label="Agents">
+        {professional && <ProSidebarResize />}
         <div className="sidebar-top">
           <BrandLockup />
           <div className="sidebar-create-actions">
@@ -3189,7 +3225,7 @@ ${fileReferenceText(sentFile)}` : typed
           </div>
         </div>
         <div className="sr-only" aria-live="polite">{rosterAnnouncement}</div>
-        <TeamSidebar canCreate={runtimeReady} onOpenTeam={(tab) => openTeam(tab)} teamOpen={!!teamPage} onHire={(projectId) => openTeam('hire', projectId)} onAskCeo={(projectId) => void askCeoToStaff(projectId)} onOpenConversation={(agent, session) => { leavePages(); selectAgent(agent); selectConversation(session) }} onStartInProject={(agent, projectId) => { leavePages(); newSession(agent.id, null, projectId) }} selectedSessionId={sideSessionId ?? selectedSession?.id ?? null} onOpenSubbot={openSideConversation} machines={machines.length ? professional ? <ProfessionalMachines machines={machines} selected={machineView} onOpen={(machine, bot, sessionId) => setMachineView({ machineId: machine.id, botId: bot.id, sessionId })} /> : <MachineGroups machines={machines} selected={machineView} onOpen={(machine, bot) => setMachineView({ machineId: machine.id, botId: bot.id })} onNewProject={(machine) => setMachineAction({ kind: 'project', machineId: machine.id })} onManage={(machine) => setMachineAction({ kind: 'manage', machineId: machine.id })} /> : null} banner={!managerOf(agents) && connection === 'connected' ? <ManagerSetupCard runtimes={runtimes.filter((runtime) => runtimeUsable(runtime))} disabled={connection !== 'connected'} onCreate={createOnboardedBlob} openSignal={ceoSetupSignal} /> : null} agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} runtimeLogos={runtimeLogos} sidebarModel={experiments.sidebarModel} botLock={experiments.botLock} connected={connection === 'connected'} now={now} pinnedIds={pins.favorites ?? []} unreadSessionIds={unreadSessionIds} approvalSessionIds={approvalSessionIds} selectedAgentId={activeSelectedAgent?.id ?? null} onOpenSearch={openQuickSwitcher} actions={{
+        <TeamSidebar canCreate={runtimeReady} onOpenTeam={(tab) => openTeam(tab)} teamOpen={!!teamPage} onHire={(projectId) => openTeam('hire', projectId)} onAskCeo={(projectId) => void askCeoToStaff(projectId)} onOpenConversation={(agent, session) => { leavePages(); selectAgent(agent); selectConversation(session) }} onStartInProject={(agent, projectId) => { leavePages(); newSession(agent.id, null, projectId) }} selectedSessionId={sideSessionId ?? selectedSession?.id ?? null} onOpenSubbot={openSideConversation} proDevices={professional && machines.length ? { machines, selected: machineView, onOpen: (machine, bot, sessionId) => setMachineView({ machineId: machine.id, botId: bot.id, sessionId }), onReload: () => void reloadMachines(), onNewProject: (machine, mode) => setMachineAction({ kind: 'project', machineId: machine.id, mode }), onStartChat: (machine, bot) => void startRemoteChat(machine, bot) } : undefined} machines={machines.length && !professional ? <MachineGroups machines={machines} selected={machineView} onOpen={(machine, bot) => setMachineView({ machineId: machine.id, botId: bot.id })} onNewProject={(machine) => setMachineAction({ kind: 'project', machineId: machine.id })} onManage={(machine) => setMachineAction({ kind: 'manage', machineId: machine.id })} /> : null} banner={!managerOf(agents) && connection === 'connected' ? <ManagerSetupCard runtimes={runtimes.filter((runtime) => runtimeUsable(runtime))} disabled={connection !== 'connected'} onCreate={createOnboardedBlob} openSignal={ceoSetupSignal} /> : null} agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} runtimeLogos={runtimeLogos} sidebarModel={experiments.sidebarModel} botLock={experiments.botLock} connected={connection === 'connected'} now={now} pinnedIds={pins.favorites ?? []} unreadSessionIds={unreadSessionIds} approvalSessionIds={approvalSessionIds} selectedAgentId={activeSelectedAgent?.id ?? null} onOpenSearch={openQuickSwitcher} actions={{
           onSelect: (agent) => { leavePages(); selectAgent(agent) },
           onCreate: (projectId) => openCreate(projectId),
           onCreateProject: () => void openNewProject().then((project) => { if (project) setStaffProject(project) }),
@@ -3215,7 +3251,7 @@ ${fileReferenceText(sentFile)}` : typed
           onOpenRuntimeSettings: () => { setSettingsInitialPage('Agents'); setSettingsFocus(null); setSettingsSheet(true) },
         }} />
         <RemoteChip onOpen={() => { setSettingsInitialPage('Remote'); setSettingsFocus(null); setSettingsSheet(true) }} />
-        {!usageBarEnabled && <SidebarUsage quotas={snapshot?.quotas ?? []} refreshing={quotaRefreshing} onRefresh={refreshQuota} onOpenDetails={showUsage} onTurnOn={openUsageSetting} />}
+        {!usageBarEnabled && <SidebarUsage provider={professional ? viewedMachineBot?.provider ?? selectedRuntime?.provider ?? null : undefined} quotas={snapshot?.quotas ?? []} refreshing={quotaRefreshing} onRefresh={refreshQuota} onOpenDetails={showUsage} onTurnOn={openUsageSetting} />}
         {platform.updater && <UpdateBadge sidebar />}
         <ProfileMenu
           connection={connection}
@@ -3240,7 +3276,7 @@ ${fileReferenceText(sentFile)}` : typed
         : <aside className="conversations-panel" aria-hidden="true" />}
 
       <section className="conversation-pane">
-        {professional && <ProfessionalTabs sessions={sessions} agents={agents} runtimes={runtimes} selectedSessionId={selectedSession?.id ?? null} onOpen={(agent, session) => { leavePages(); selectAgent(agent); selectConversation(session) }} onNew={() => { const agent = activeSelectedAgent ?? agents.find((item) => !item.archived); if (agent) { leavePages(); newSession(agent.id, null, null) } }} />}
+        {professional && <ProfessionalTabs sessions={sessions} agents={agents} runtimes={runtimes} selectedSessionId={selectedSession?.id ?? null} machines={machines} machineView={machineView} onOpenRemote={(machine, bot, sessionId) => setMachineView({ machineId: machine.id, botId: bot.id, sessionId })} onCloseRemote={() => setMachineView(null)} onOpen={(agent, session) => { leavePages(); selectAgent(agent); selectConversation(session) }} onNew={() => { const agent = activeSelectedAgent ?? agents.find((item) => !item.archived); if (agent) { leavePages(); newSession(agent.id, null, null) } }} />}
         {(launchWarnings.length > 0 || discoveryStatus.retrying) && !agentWarningDismissed && <LaunchWarnings warnings={launchWarnings} details={launchChecks.filter((check) => check.state === 'warning' || check.state === 'failed').map((check) => check.detail.startsWith(`${check.label}:`) ? check.detail : `${check.label}: ${check.detail}`).join('\n')} retrying={discoveryStatus.retrying} onSettings={() => { setSettingsInitialPage('Agents'); setSettingsSheet(true) }} onDismiss={() => setAgentWarningDismissed(true)} />}
         {discoveryConfirmation && <aside className="launch-scan-confirmation" role="status">{discoveryConfirmation}</aside>}
         {teamPage ? <TeamPage agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} connected={connection === 'connected'} initialTab={teamPage.tab} initialProjectId={teamPage.projectId} onBack={() => setTeamPage(null)} onOpenAgent={(agent) => { setTeamPage(null); selectAgent(agent) }} onEditAgent={(agent) => { setTeamPage(null); openEdit(agent) }} onCreateOwn={(projectId) => { setTeamPage(null); openCreate(projectId) }} onError={setError} onChanged={() => void refresh()} /> : compareOpen ? <CompareView initialId={compareId} agents={agents} connected={connection === 'connected'} onBack={() => setCompareOpen(false)} onStartNew={() => setFanoutOpen(true)} onOpenSession={(sessionId) => { setCompareOpen(false); const session = sessions.find((item) => item.id === sessionId); if (session) { setSelectedAgentId(session.agentId || null); setSelectedSessionId(session.id) } }} /> : tasksOpen ? <TasksView agents={agents} projects={projects} runtimes={runtimes} connected={connection === 'connected'} onBack={() => setTasksOpen(false)} onOpenSession={(sessionId) => { setTasksOpen(false); const session = sessions.find((item) => item.id === sessionId); if (session) { setSelectedAgentId(session.agentId || null); setSelectedSessionId(session.id) } }} /> : schedulesOpen ? <SchedulesView automations={snapshot?.automations ?? []} agents={agents} connected={connection === 'connected'} paused={schedulesPaused} nowMs={schedulesNowMs} agentId={schedulesAgentId} loadError={schedulesError} onBack={() => setSchedulesOpen(false)} onCreate={createAutomation} onUpdate={updateAutomation} onSetEnabled={setAutomationEnabled} onRunNow={runAutomationNow} onDelete={deleteAutomation} onLoadRuns={loadAutomationRuns} onPreview={previewAutomation} onSetPaused={setAutomationsPaused} onOpenSession={openAutomationSession} /> : analyticsOpen ? <AnalyticsView sessions={sessions} agents={agents} quotas={snapshot?.quotas ?? []} connected={connection === 'connected'} onRefreshQuota={refreshQuota} onTurnOnUsage={openUsageSetting} onBack={closeAnalytics} /> : blobPage && draft ? <BlobPage mode={blobPage.mode} agent={editingAgent} onOpenMemory={() => { setSettingsInitialPage('Memory'); setSettingsFocus(null); setSettingsSheet(true) }} onOpenSkills={() => { setSettingsInitialPage('Skills'); setSettingsFocus(null); setSettingsSheet(true) }} changes={draft && baseline ? changedFields(draft, baseline) : []} onDuplicate={editingAgent ? () => void duplicateAgent(editingAgent) : undefined} onExport={editingAgent ? () => void exportBlob(editingAgent) : undefined} draft={draft} runtime={draftRuntime} session={blobPage.mode === 'edit' ? selectedSession : null} runtimes={runtimes} projects={projects} sessions={pageSessions} legacyCount={pageLegacy.length} connected={connection === 'connected'} saving={busy} dirty={draftDirty} ready={draftReady} canStartSession={connection === 'connected' && !busy && runtimeUsable(draftRuntime)} error={formError} remoteNotice={remoteNotice} errors={fieldErrors} execution={executionFromAgent(editingAgent)} autoApprovals={snapshot?.autoApprovals ?? []} bypassNotices={snapshot?.bypassNotices ?? []} onDraftChange={(next) => { setDraft(next); setFormError(null) }} onExecutionGate={(gate) => { executionGate.current = gate }} onBack={() => closeBlobPage(editingAgent?.id ?? activeSelectedAgent?.id ?? null)} onSave={() => void saveBlob()} onCancel={() => { const source = remoteNotice && editingAgent ? draftFromAgent(editingAgent) : baseline; if (!source) return; setDraft(source); setBaseline(source); setRemoteNotice(null); setFormError(null) }} onArchive={() => { if (editingAgent) setArchiveTarget(editingAgent) }} onNewSession={() => { if (editingAgent) newSession(editingAgent.id) }} onOpenSession={(session) => { setSelectedSessionId(session.id); closeBlobPage(editingAgent?.id ?? null) }} /> : <>
@@ -3419,11 +3455,15 @@ ${fileReferenceText(sentFile)}` : typed
 
       {docVisible && openDoc && <DocumentPane doc={openDoc} expanded={docExpanded} onToggleExpanded={() => setDocExpanded((value) => !value)} onOpenLink={(url) => void openSafeLink(url)} />}
       <aside className="context-pane" aria-label="Conversation details" aria-hidden={!detailsVisible || docVisible} inert={!detailsVisible || docVisible}>
-        <section className="context-head compact">
-          {activeSelectedAgent ? <BlobCanvas color={accent} size={32} mood={selectedMood} look={agentLook(activeSelectedAgent)} label={activeSelectedAgent.name} /> : <span className="context-head-placeholder"><Code2 size={20} /></span>}
+        {professional ? <section className="context-head compact pro-context-head">
+          <span className="pro-context-logo" aria-hidden="true">{selectedRuntime?.provider ? <ProviderLogo provider={selectedRuntime.provider} size={18} /> : <Code2 size={16} />}</span>
+          <h2 title={selectedSession?.title ?? undefined}>{selectedSession?.title?.trim() || 'New chat'}</h2>
+          <p>{[selectedRuntime ? providerBrand(selectedRuntime.provider).name : null, currentProjectName].filter(Boolean).join(' · ') || 'No coding agent selected'}</p>
+        </section> : <section className="context-head compact">
+          {activeSelectedAgent ?<BlobCanvas color={accent} size={32} mood={selectedMood} look={agentLook(activeSelectedAgent)} label={activeSelectedAgent.name} /> : <span className="context-head-placeholder"><Code2 size={20} /></span>}
           <h2>{agentName}</h2>
           {(() => { const line = selectedSession?.title?.trim() || (selectedRuntime ? [labelize(selectedRuntime.provider), selectedRuntime.version].filter(Boolean).join(' · ') : 'No coding agent selected'); return line.toLowerCase() === agentName.trim().toLowerCase() ? null : <p>{line}</p> })()}
-        </section>
+        </section>}
         <SessionRail agents={agents} isManager={activeSelectedAgent?.systemRole === 'manager'} onOpenSessionById={(sessionId) => { const target = sessions.find((item) => item.id === sessionId); if (!target) return; if (isSideSession(target)) openSideConversation(sessionId); else { setSideSessionId(null); selectSession(target) } }} onOpenSchedules={() => setSchedulesOpen(true)} active={detailsVisible} botName={activeSelectedAgent?.name ?? 'The employee'} canCreatePr={connection === 'connected' && !!selectedSession && !isDraftSession(selectedSession) && !selectedSession.archived && runtimeUsable(selectedRuntime)} onCreatePr={(repository) => selectedSession && setPullRequestFor({ sessionId: selectedSession.id, repository })} onReview={inDesktop && selectedSession && !isDraftSession(selectedSession) ? (path) => setChangesFor({ sessionId: selectedSession.id, path }) : undefined} workingBots={<WorkingBotsPanel sessions={sessions} agents={agents} selectedId={sideSessionId} onOpen={openSideConversation} />} session={selectedSession} usage={snapshot?.usage ?? []} appliedModel={appliedModelState?.sessionId === selectedSession?.id ? appliedModelState?.model ?? null : null} onOpenFile={(path) => void openInEditor(path, selectedSession?.projectPath).catch((reason) => setError(messageOf(reason)))} onRevealFile={(path) => void revealInExplorer(path, selectedSession?.projectPath).catch((reason) => setError(messageOf(reason)))} onCopyPath={async (path) => { try { await navigator.clipboard.writeText(await resolveProjectFile(path, selectedSession?.projectPath)) } catch (reason) { setError(messageOf(reason)) } }} onDiff={(path, content) => setDiffViewer({ path, content })} onOpenFolder={(path) => void revealInExplorer(path, path).catch((reason) => setError(messageOf(reason)))} onOpenRemote={() => { setSettingsInitialPage('Remote'); setSettingsFocus(null); setSettingsSheet(true) }} runtimeFacts={selectedRuntime ? [`${labelize(selectedRuntime.provider)} ${selectedRuntime.version ?? ''}`.trim(), `Sign-in: ${labelize(selectedRuntime.authState, 'unknown')}`, selectedRuntime.executablePath ? `Executable: ${selectedRuntime.executablePath}` : null].filter(Boolean).join(' · ') : undefined} />
       </aside>
 
@@ -3492,7 +3532,7 @@ ${fileReferenceText(sentFile)}` : typed
       {projectSearchOpen && !companion && <ProjectSearchDialog target={fileSearchTarget} canPreview={!!selectedSession && !isDraftSession(selectedSession)} onClose={() => setProjectSearchOpen(false)} onMention={insertReference} />}
       <SecretRequests active={connection === 'connected'} />
       {!companion && <VaultUseRequests active={connection === 'connected'} />}
-      {actionMachine && machineAction?.kind === 'project' && !companion && <NewProjectOnMachine machine={actionMachine} onClose={() => setMachineAction(null)} onStarted={(bot, sessionId) => { setMachineAction(null); setMachineView({ machineId: actionMachine.id, botId: bot.id, sessionId }) }} />}
+      {actionMachine && machineAction?.kind === 'project' && !companion && <NewProjectOnMachine machine={actionMachine} initialMode={machineAction.mode} onClose={() => setMachineAction(null)} onStarted={(bot, sessionId) => { setMachineAction(null); setMachineView({ machineId: actionMachine.id, botId: bot.id, sessionId }) }} />}
       {actionMachine && machineAction?.kind === 'manage' && !companion && <ManageMachine machine={actionMachine} onClose={() => setMachineAction(null)} />}
       {viewedMachine && viewedMachineBot && !companion && <MachineConversation key={`${viewedMachine.id}-${viewedMachineBot.id}-${machineView?.sessionId ?? ''}`} initialSessionId={machineView?.sessionId ?? null} machine={viewedMachine} bot={viewedMachineBot} selfId={machineSelfId} onClose={() => setMachineView(null)} onMoved={(sessionId) => { setMachineView(null); setMovedHere(sessionId); void refresh(); void reloadMachines() }} />}
       {changesFor && selectedSession?.id === changesFor.sessionId && !companion && <ChangesView sessionId={changesFor.sessionId} initialPath={changesFor.path} botName={activeSelectedAgent?.name ?? 'The employee'} onClose={() => setChangesFor(null)} onSendComments={(text) => sendReviewComments(changesFor.sessionId, text)} onCreatePr={(repository) => { setChangesFor(null); setPullRequestFor({ sessionId: changesFor.sessionId, repository }) }} />}
@@ -3505,7 +3545,7 @@ ${fileReferenceText(sentFile)}` : typed
       {projectDelete && <ConfirmDialog title={`Delete ${projectDelete.name}?`} body="The project is removed from Retinue, with any approvals saved only for it. Its conversations stay, under No project. The folder on disk is not touched." confirmLabel="Delete project" cancelLabel="Keep it" tone="danger" onConfirm={() => { const project = projectDelete; setProjectDelete(null); const memberIds = agents.filter((agent) => agent.projectId === project.id).map((agent) => agent.id); if (experiments.undo) void removeProject(project, memberIds); else void projectAction('project.delete', { projectId: project.id }) }} onCancel={() => setProjectDelete(null)} />}
       {pendingBlobImport && <ImportBlobDialog blob={pendingBlobImport} runtimes={runtimes} onCancel={() => { setPendingBlobImport(null); restoreCreateFocus() }} onCreate={(runtimeId) => createImportedBlob(pendingBlobImport, runtimeId)} />}
     </main>
-    </ProjectsContext.Provider></PhotoOwnersContext.Provider>
+    </ProjectsContext.Provider></PhotoOwnersContext.Provider></RuntimesContext.Provider>
     </>
   )
 }
@@ -3561,6 +3601,14 @@ function ImportBlobDialog({ blob, runtimes, onCancel, onCreate }: { blob: Shared
 }
 
 /** "Project / Conversation" beside the bot's name in the chat header. */
+/** An @mention of an employee; Professional mode shows the provider's logo and name instead of the cartoon and the employee's name. */
+function MentionChip({ agent }: { agent: Agent }) {
+  const who = usePeerIdentity(agent, agent.name)
+  return <span className="mention" style={{ ['--mention' as string]: agentColorHex(agent.color) }} title={`@${who.name}`}>
+    {who.professional ? who.logo(16) : <BlobCanvas decorative color={agentColorHex(agent.color)} size={18} mood="idle" look={agentLook(agent)} label={agent.name} />}{who.name}
+  </span>
+}
+
 function ConversationCrumb({ project, title }: { project: string | null; title: string }) {
   const text = project ? `${project} / ${title}` : title
   return <span className="conversation-crumb" title={text}>{project && <><span className="conversation-crumb-project">{project}</span><span className="conversation-crumb-sep" aria-hidden="true">/</span></>}<span className="conversation-crumb-title">{title}</span></span>
@@ -3589,9 +3637,7 @@ function UserMessageText({ text, agents, references, onOpenReference }: { text: 
   return <p className="message-mentions">{segments.map((segment, index) => segment.reference
     ? <button key={index} type="button" className="conversation-ref" title="Open this side conversation" onClick={() => onOpenReference?.(segment.reference!.id)}><Hash size={12} aria-hidden="true" />{segment.reference.title}</button>
     : segment.agent
-    ? <span key={index} className="mention" style={{ ['--mention' as string]: agentColorHex(segment.agent.color) }} title={`@${segment.agent.name}`}>
-        <BlobCanvas decorative color={agentColorHex(segment.agent.color)} size={18} mood="idle" look={agentLook(segment.agent)} label={segment.agent.name} />{segment.agent.name}
-      </span>
+    ? <MentionChip key={index} agent={segment.agent} />
     : segment.project
     ? <span key={index} className="mention project-mention" title={`#${segment.project.name}`}><ProjectIcon project={segment.project} size={14} />{segment.project.name}</span>
     : <span key={index}><SafeMarkdownInline text={segment.text} onOpenLink={(url) => void openSafeLink(url)} /></span>)}</p>

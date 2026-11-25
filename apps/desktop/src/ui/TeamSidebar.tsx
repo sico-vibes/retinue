@@ -1,7 +1,7 @@
 // Bot-first sidebar (Phase 1A, owner decision 29 October 2026): one list of
 // bots, the CEO pinned on top. Bots work in every project; a bot's
 // conversations are grouped by project in its conversations panel.
-import { ProfessionalSidebar } from './ProfessionalSidebar'
+import { ProfessionalSidebar, type ProDevices } from './ProfessionalSidebar'
 import { useWorkMode } from './workMode'
 import { useQueueWaiting, type QueueWaiting } from './queueOverview'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -180,7 +180,7 @@ export type TeamSidebarActions = {
   onOpenRuntimeSettings: () => void
 }
 
-export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos = false, sidebarModel = false, botLock = false, connected, now, pinnedIds, unreadSessionIds, approvalSessionIds, selectedAgentId, onOpenSearch, actions, banner, machines, onOpenSubbot, selectedSessionId, onOpenConversation, onStartInProject, canCreate = true, onOpenTeam, teamOpen = false, onHire, onAskCeo }: {
+export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos = false, sidebarModel = false, botLock = false, connected, now, pinnedIds, unreadSessionIds, approvalSessionIds, selectedAgentId, onOpenSearch, actions, banner, machines, proDevices, onOpenSubbot, selectedSessionId, onOpenConversation, onStartInProject, canCreate = true, onOpenTeam, teamOpen = false, onHire, onAskCeo }: {
   /** Opens the Team page: the hiring list (or who works where). */
   onOpenTeam?: (tab: 'team' | 'hire') => void
   teamOpen?: boolean
@@ -198,6 +198,8 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
   selectedSessionId?: string | null
   /** Phase 4: other machines' bots, under their names. */
   machines?: ReactNode
+  /** Professional mode: the same machines as data, so the sidebar can draw them as chat rows. */
+  proDevices?: ProDevices
   /** A card shown between the search box and the bots (Manager setup). */
   banner?: ReactNode
   agents: Agent[]
@@ -432,7 +434,7 @@ export function TeamSidebar({ agents, projects, sessions, runtimes, runtimeLogos
       <span>Search</span><kbd aria-hidden="true">Ctrl K</kbd>
     </button>
     {banner}
-    <nav className="sidebar-scroll" aria-label={Nouns} data-tour="roster">{pro && onOpenConversation && onStartInProject ? <ProfessionalSidebar agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} selectedSessionId={selectedSessionId ?? null} approvalSessionIds={approvalSessionIds} canCreate={connected && canCreate} onOpenConversation={onOpenConversation} onStartInProject={onStartInProject} onCreateProject={actions.onCreateProject} machines={machines} /> : <>
+    <nav className="sidebar-scroll" aria-label={Nouns} data-tour="roster">{pro && onOpenConversation && onStartInProject ? <ProfessionalSidebar agents={agents} projects={projects} sessions={sessions} runtimes={runtimes} selectedSessionId={selectedSessionId ?? null} approvalSessionIds={approvalSessionIds} canCreate={connected && canCreate} onOpenConversation={onOpenConversation} onStartInProject={onStartInProject} onCreateProject={actions.onCreateProject} devices={proDevices} /> : <>
       <div role="tree" aria-label={Nouns}>
       {manager && <section className="team-group manager-group" aria-label="CEO">
         <div className="team-group-rows">{withSubbots(manager)}</div>

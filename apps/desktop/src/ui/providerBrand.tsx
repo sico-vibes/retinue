@@ -54,7 +54,10 @@ function RuntimeMarkTip({ provider, name, size }: { provider: string; name: stri
       if (!rect) return
       const box = tooltip.current?.getBoundingClientRect()
       const next = placeTooltip(rect, { width: box?.width || 160, height: box?.height || 28 }, 'bottom')
-      setPoint({ left: next.left, top: next.top })
+      // A logo usually starts a line (a header, a row), so the tip starts at the logo's left edge instead of hanging over
+      // whatever is to its left; it still stays inside the window.
+      const left = Math.min(Math.max(8, rect.left - 4), window.innerWidth - next.width - 8)
+      setPoint({ left, top: next.top })
     }
     place()
     window.addEventListener('resize', place)
