@@ -1,5 +1,7 @@
 // Phase 5: Settings > Secrets, and the secure form when a bot asks for one. Values go to the Windows
 // Credential Manager or a one-use file through the daemon. There is no way to read one back here.
+import { platform as hostPlatform } from '../transport/platform'
+import { secretStoreFallbackNote, secretStoreName } from './platformCopy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { KeyRound, Trash2 } from 'lucide-react'
@@ -39,7 +41,7 @@ export function SecretsPage() {
     try { await rpc('secret.set', { name, value, confirm: true }); setName(''); setValue(''); load() } catch (reason) { setProblem(messageOf(reason, 'That secret could not be saved.')) } finally { setBusy(false) }
   }
   return <>
-    <p className="settings-intro">Values stay in Windows Credential Manager, not plain text. A coding agent can read its own environment, so only give a secret to {nouns} you trust.</p>
+    <p className="settings-intro">Values stay in {secretStoreName(hostPlatform().os)}, not plain text.{secretStoreFallbackNote(hostPlatform().os)} A coding agent can read its own environment, so only give a secret to {nouns} you trust.</p>
     <SettingsGroup title="Saved">
       {!secrets.length && <p className="settings-empty">No secrets yet.</p>}
       {secrets.map((secret) => <div key={secret.name} className="secret-row">
@@ -54,7 +56,7 @@ export function SecretsPage() {
       </form>
       {(nameProblem || problem) && <p className="new-project-error" role="alert">{nameProblem ?? problem}</p>}
     </SettingsGroup>
-    {removing && <ConfirmDialog title={`Delete ${removing.name}?`} body="It's removed from the Windows Credential Manager, and it can't be read back." confirmLabel="Delete" cancelLabel="Keep it" tone="warning"
+    {removing && <ConfirmDialog title={`Delete ${removing.name}?`} body={`It's removed from ${hostPlatform().os === 'windows' ? 'the Windows Credential Manager' : secretStoreName(hostPlatform().os)}, and it can't be read back.`} confirmLabel="Delete" cancelLabel="Keep it" tone="warning"
       onConfirm={() => { const target = removing; setRemoving(null); setProblem(null); void rpc('secret.delete', { name: target.name, confirm: true }).then(load).catch((reason) => setProblem(messageOf(reason, 'That secret could not be deleted.'))) }}
       onCancel={() => setRemoving(null)} />}
   </>

@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import { platform as hostPlatform } from '../transport/platform'
+import { thisDevice } from './platformCopy'
 import { Check, Copy, Search } from 'lucide-react'
 import { BlobCanvas } from '../blob/BlobCanvas'
 import type { Agent, Runtime } from '../types'
@@ -147,7 +149,7 @@ export function FirstRunOnboarding({ runtimes, scanning, error, onScan, onCreate
       const matches = runtimes.filter((runtime) => runtime.provider.toLowerCase() === provider)
       const found = matches.length > 0
       const notSignedIn = matches.some((runtime) => runtimeAuthSummary(runtime).state === 'unauthenticated')
-      const status = found ? matches.map((runtime) => [runtime.version ?? 'Version unavailable', runtimeAuthSummary(runtime).label].join(' · ')).join(', ') : 'Not found on this Windows device'
+      const status = found ? matches.map((runtime) => [runtime.version ?? 'Version unavailable', runtimeAuthSummary(runtime).label].join(' · ')).join(', ') : `Not found on ${thisDevice(hostPlatform().os)}`
       return <article key={provider} className={`onboarding-runtime ${found ? 'found' : 'missing'}`} data-provider={provider}>
         <div className="onboarding-runtime-row">
           <ProviderLogo provider={provider} size={22} />

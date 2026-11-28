@@ -181,3 +181,69 @@ test('CLI notes fallback and rejection of bad inputs', async (t) => {
     assert.equal(result.stdout.includes('trimmed-sig'), false)
   }
 })
+
+test('carries a Windows and a Linux entry in one manifest', () => {
+  const linuxUrl = 'https://github.com/sico-vibes/retinue/releases/download/v0.2.0-beta.14/Retinue_0.2.0-beta.14_amd64.AppImage.tar.gz'
+  const manifest = buildManifest({
+    version: '0.2.0-beta.14',
+    notes: 'Linux arrives',
+    pubDate: sampleDate,
+    platforms: {
+      'windows-x86_64': { signature: 'win-sig', url: sampleUrl },
+      'linux-x86_64': { signature: '  linux-sig\n', url: linuxUrl },
+    },
+  })
+  assert.deepEqual(Object.keys(manifest.platforms), ['windows-x86_64', 'linux-x86_64'])
+  assert.deepEqual(manifest.platforms['linux-x86_64'], { signature: 'linux-sig', url: linuxUrl })
+  const parsed = JSON.parse(manifestToJson(manifest))
+  assert.equal(parsed.platforms['windows-x86_64'].url, sampleUrl)
+  assert.equal(parsed.platforms['linux-x86_64'].url, linuxUrl)
+})
+
+test('rejects a platform map with a bad name, a duplicate, an empty signature or a bad URL', () => {
+  const entry = { signature: 'sig', url: sampleUrl }
+  assert.throws(() => buildManifest({ version: '1.2.3', platforms: { 'windows x86_64': entry } }), /Invalid platform/)
+  assert.throws(() => buildManifest({ version: '1.2.3', platforms: { 'linux-x86_64': { ...entry, signature: ' ' } } }), /Signature is empty/)
+  assert.throws(() => buildManifest({ version: '1.2.3', platforms: { 'linux-x86_64': { ...entry, url: 'http://example.com/a' } } }), /https/)
+  assert.throws(() => buildManifest({ version: '1.2.3', platforms: {} }), /At least one platform/)
+  assert.throws(() => buildManifest({ version: '1.2.3', platforms: { 'linux-x86_64': 'sig' } }), /not an object/)
+})
+
+test('CLI writes both platforms, takes one triple per platform, and refuses a mismatch', async (t) => {
+  const root = await tempDir()
+  t.after(() => rm(root, { recursive: true, force: true }))
+  const windowsSig = join(root, 'windows.sig')
+  const linuxSig = join(root, 'linux.sig')
+  const outPath = join(root, 'latest.json')
+  await writeFile(windowsSig, 'win-signature')
+  await writeFile(linuxSig, 'linux-signature')
+  const linuxUrl = 'https://github.com/sico-vibes/retinue/releases/download/v1.2.3/Retinue_1.2.3_amd64.AppImage.tar.gz'
+  const result = runCli([
+    '--version', '1.2.3',
+    '--pub-date', sampleDate,
+    '--platform', 'windows-x86_64',
+    '--signature-file', windowsSig,
+    '--url', sampleUrl,
+    '--platform', 'linux-x86_64',
+    '--signature-file', linuxSig,
+    '--url', linuxUrl,
+    '--out', outPath,
+    '--quiet',
+  ])
+  assert.equal(result.status, 0, result.stderr)
+  assert.equal(result.stdout, '')
+  const parsed = JSON.parse(await readFile(outPath, 'utf8'))
+  assert.equal(parsed.platforms['windows-x86_64'].signature, 'win-signature')
+  assert.equal(parsed.platforms['linux-x86_64'].signature, 'linux-signature')
+  assert.equal(parsed.platforms['linux-x86_64'].url, linuxUrl)
+
+  const mismatched = runCli([
+    '--version', '1.2.3',
+    '--signature-file', windowsSig,
+    '--url', sampleUrl,
+    '--platform', 'windows-x86_64',
+    '--platform', 'linux-x86_64',
+  ])
+  assert.notEqual(mismatched.status, 0)
+  assert.match(mismatched.stderr, /one --signature-file and one --url for every --platform/)
+})

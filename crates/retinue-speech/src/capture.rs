@@ -42,9 +42,33 @@ impl Drop for CaptureSession {
     }
 }
 
+/// Build one input stream for one sample type, converting every frame to the
+/// `f32` in [-1, 1] the rest of the crate works in. Separate from
+/// `start_capture` because the type has to be chosen at the one call that builds
+/// the stream, and a desktop's default device is `f32` on Windows but commonly
+/// `i16` on ALSA (PulseAudio and PipeWire included).
+fn build_typed<T, F>(device: &cpal::Device, config: &cpal::StreamConfig, mut on_frame: F) -> Result<cpal::Stream, cpal::BuildStreamError>
+where
+    T: cpal::SizedSample,
+    f32: cpal::FromSample<T>,
+    F: FnMut(AudioFrame) + Send + 'static,
+{
+    let sample_rate = config.sample_rate.0;
+    let channels = config.channels;
+    device.build_input_stream(
+        config,
+        move |data: &[T], _info| {
+            let samples = data.iter().map(|sample| sample.to_sample::<f32>()).collect();
+            on_frame(AudioFrame { samples, sample_rate, channels });
+        },
+        |error| eprintln!("Retinue audio capture: {error}"),
+        None,
+    )
+}
+
 /// Start capturing from the default input device. The callback runs on the audio
 /// thread, so keep it cheap (send over a channel rather than decoding inline).
-pub fn start_capture<F>(mut on_frame: F) -> SpeechResult<CaptureSession>
+pub fn start_capture<F>(on_frame: F) -> SpeechResult<CaptureSession>
 where
     F: FnMut(AudioFrame) + Send + 'static,
 {
@@ -65,29 +89,25 @@ where
                 return;
             }
         };
-        if supported.sample_format() != cpal::SampleFormat::F32 {
-            let _ = ready_tx.send(Err(format!(
-                "unsupported sample format: {:?}",
-                supported.sample_format()
-            )));
-            return;
-        }
+        let format = supported.sample_format();
         let stream_config: cpal::StreamConfig = supported.into();
-        let sample_rate = stream_config.sample_rate.0;
-        let channels = stream_config.channels;
-
-        let stream = match device.build_input_stream(
-            &stream_config,
-            move |data: &[f32], _info| {
-                on_frame(AudioFrame {
-                    samples: data.to_vec(),
-                    sample_rate,
-                    channels,
-                });
-            },
-            |error| eprintln!("Retinue audio capture: {error}"),
-            None,
-        ) {
+        let stream = match format {
+            cpal::SampleFormat::F32 => build_typed::<f32, _>(&device, &stream_config, on_frame),
+            cpal::SampleFormat::I16 => build_typed::<i16, _>(&device, &stream_config, on_frame),
+            cpal::SampleFormat::U16 => build_typed::<u16, _>(&device, &stream_config, on_frame),
+            cpal::SampleFormat::I32 => build_typed::<i32, _>(&device, &stream_config, on_frame),
+            cpal::SampleFormat::U32 => build_typed::<u32, _>(&device, &stream_config, on_frame),
+            cpal::SampleFormat::F64 => build_typed::<f64, _>(&device, &stream_config, on_frame),
+            cpal::SampleFormat::I8 => build_typed::<i8, _>(&device, &stream_config, on_frame),
+            cpal::SampleFormat::U8 => build_typed::<u8, _>(&device, &stream_config, on_frame),
+            cpal::SampleFormat::I64 => build_typed::<i64, _>(&device, &stream_config, on_frame),
+            cpal::SampleFormat::U64 => build_typed::<u64, _>(&device, &stream_config, on_frame),
+            other => {
+                let _ = ready_tx.send(Err(format!("unsupported sample format: {other:?}")));
+                return;
+            }
+        };
+        let stream = match stream {
             Ok(stream) => stream,
             Err(error) => {
                 let _ = ready_tx.send(Err(error.to_string()));

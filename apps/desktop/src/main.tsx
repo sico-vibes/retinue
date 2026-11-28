@@ -4,10 +4,12 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { App } from './ui/App'
 import { DictationBubble } from './ui/DictationBubble'
+import { WindowFrame } from './ui/WindowFrame'
 import { startWindowBackdrop } from './ui/windowBackdrop'
 import { watchFrameStrain } from './ui/frameStrain'
 import { mainWindowReady, previewMode } from './tauri'
 import './ui/hazeTuning'
+import './ui/fonts/system/system.css'
 import './ui/theme.css'
 import './ui/styles.css'
 import './ui/approval.css'
@@ -32,6 +34,7 @@ import { installHazeSpotlight } from './ui/hazeSpotlight'
 import { applyWorkMode } from './ui/workMode'
 
 const dictation = new URLSearchParams(window.location.search).has('dictation')
+const companionWindow = new URLSearchParams(window.location.search).has('companion')
 // The native frosted backdrop belongs to the main window only (the helper also skips the companion).
 if (!dictation) startWindowBackdrop()
 // Haze's frosted sheets use their solid colour while frames are long (frameStrain.ts).
@@ -40,7 +43,7 @@ if (!dictation) watchFrameStrain()
 installHazeSpotlight()
 applyWorkMode()
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>{dictation ? <DictationBubble /> : <App />}</React.StrictMode>,
+  <React.StrictMode>{dictation ? <DictationBubble /> : <>{!companionWindow && <WindowFrame />}<App /></>}</React.StrictMode>,
 )
 
 // The fixture bridge alone enables the Demo link. Vite removes it from production.
@@ -59,7 +62,6 @@ if (import.meta.env.DEV && previewMode && window.self === window.top && !dictati
 // 2026), then let the shell's own transitions run. index.html adds `booting`,
 // which holds them still so the columns do not slide in on launch. A timer,
 // not animation frames: a hidden WebView2 may not run animation frames.
-const companionWindow = new URLSearchParams(window.location.search).has('companion')
 window.setTimeout(() => {
   if (!dictation && !companionWindow) void mainWindowReady()
   window.setTimeout(() => document.documentElement.classList.remove('booting'), 450)

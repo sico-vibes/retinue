@@ -1,0 +1,14 @@
+/* Open stand-ins for the Windows system fonts, so Retinue sets type the same on
+   Linux as on Windows (owner, 27 November 2026: "the GUI same as Windows 1:1").
+   Selawik is Microsoft's open, metric-compatible fallback for Segoe UI;
+   Cascadia Mono is Windows Terminal's font. Both are SIL OFL 1.1 (licences
+   beside these files). They sit after the Windows names in every font stack,
+   so Windows keeps its own fonts and never downloads these. */
+@font-face { font-family: 'Selawik'; font-style: normal; font-weight: 300; font-display: swap; src: local('Selawik Light'), url('./selawkl.woff2') format('woff2'); }
+@font-face { font-family: 'Selawik'; font-style: normal; font-weight: 350; font-display: swap; src: local('Selawik Semilight'), url('./selawksl.woff2') format('woff2'); }
+@font-face { font-family: 'Selawik'; font-style: normal; font-weight: 400; font-display: swap; src: local('Selawik'), url('./selawk.woff2') format('woff2'); }
+@font-face { font-family: 'Selawik'; font-style: normal; font-weight: 500 600; font-display: swap; src: local('Selawik Semibold'), url('./selawksb.woff2') format('woff2'); }
+@font-face { font-family: 'Selawik'; font-style: normal; font-weight: 700 900; font-display: swap; src: local('Selawik Bold'), url('./selawkb.woff2') format('woff2'); }
+/* A distinct family name: naming it "Cascadia Mono" would shadow the copy Windows installs. */
+@font-face { font-family: 'Retinue Cascadia Mono'; font-style: normal; font-weight: 200 700; font-display: swap; src: url('./cascadia-mono-latin-ext-wght-normal.woff2') format('woff2-variations'); unicode-range: ; }
+@font-face { font-family: 'Retinue Cascadia Mono'; font-style: normal; font-weight: 200 700; font-display: swap; src: url('./cascadia-mono-latin-wght-normal.woff2') format('woff2-variations'); unicode-range: ; }

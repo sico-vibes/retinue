@@ -1,3 +1,4 @@
+import { platform as hostPlatform } from '../transport/platform'
 import type { JsonRecord, Session, Snapshot } from '../types'
 import { entityNoun } from './vocabulary'
 import { themeStyle } from '../blob/retinue'
@@ -15,7 +16,7 @@ export const EXPERIMENTS = [
   { name: 'resumeAfterUsageLimits', label: 'Resume after usage limits', help: () => 'Pick up a limited conversation once, when the provider\'s next window opens.' },
   { name: 'autoRetry', label: 'Automatic retry', help: () => 'After a temporary failure, send "Please continue." up to three times. Your message is never resent.' },
   { name: 'memory', label: 'Memory', help: () => `${entityNoun(themeStyle(), { plural: true, capital: true })} save and recall short notes across conversations. Shared notes wait for your approval.` },
-  { name: 'approvalBadge', label: 'Taskbar badge', help: () => `Show waiting ${entityNoun(themeStyle(), { plural: true })} on the Windows taskbar and tray.` },
+  { name: 'approvalBadge', label: 'Taskbar badge', help: () => `Show waiting ${entityNoun(themeStyle(), { plural: true })} on the ${hostPlatform().os === 'windows' ? 'Windows taskbar' : 'taskbar'} and tray.` },
   { name: 'sidebarModel', label: 'Model and effort under the name', help: () => 'Shown in place of the last message while nothing is running.' },
   { name: 'botLock', label: 'Lock an employee', help: () => `Adds Lock to an ${entityNoun(themeStyle())}'s right-click menu. Nobody can change a locked ${entityNoun(themeStyle())}, the CEO included, until you unlock it.` },
 ] as const

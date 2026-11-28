@@ -67,6 +67,13 @@ pub fn claude_settings_path() -> Option<PathBuf> {
     std::env::var_os("CLAUDE_CONFIG_DIR").map(PathBuf::from).or_else(|| home.map(|home| home.join(".claude"))).map(|base| base.join("settings.json"))
 }
 
+/// The hook bridge's file name: `retinue-hook.exe` on Windows, `retinue-hook`
+/// everywhere else (25 November 2026, Linux port). The Doctor and the path
+/// lookup both read this one answer.
+pub fn hook_bridge_name() -> &'static str {
+    if cfg!(windows) { "retinue-hook.exe" } else { "retinue-hook" }
+}
+
 /// The hook bridge. The desktop shell names it (`RETINUE_HOOK_BRIDGE`), because the
 /// daemon runs from a private copy that has no bridge beside it; a daemon started
 /// by hand finds it beside its own executable.
@@ -74,8 +81,7 @@ pub fn hook_bridge_path() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("RETINUE_HOOK_BRIDGE").map(PathBuf::from).filter(|path| path.is_file()) {
         return Some(path);
     }
-    let name = if cfg!(windows) { "retinue-hook.exe" } else { "retinue-hook" };
-    std::env::current_exe().ok()?.parent().map(|folder| folder.join(name)).filter(|path| path.is_file())
+    std::env::current_exe().ok()?.parent().map(|folder| folder.join(hook_bridge_name())).filter(|path| path.is_file())
 }
 
 fn endpoint_path(st: &AppState) -> Option<PathBuf> {

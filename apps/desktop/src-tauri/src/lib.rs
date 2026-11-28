@@ -276,15 +276,16 @@ fn stable_hook_bridge(runtime_dir: &Path, installed: &Path) -> Option<PathBuf> {
 }
 
 fn reusable_daemon_copy(runtime_dir: &Path, executable: &Path) -> Result<PathBuf, String> {
-    let source = fs::metadata(executable)
-        .map_err(|error| format!("Could not read retinued.exe: {error}"))?;
+    let source = fs::metadata(executable).map_err(|error| {
+        format!("Could not read {}: {error}", program_name("retinued"))
+    })?;
     let stamp = source
         .modified()
         .ok()
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|since| since.as_secs())
         .unwrap_or(0);
-    let copy = runtime_dir.join(format!("retinued-{}-{stamp}.exe", source.len()));
+    let copy = runtime_dir.join(format!("retinued-{}-{stamp}{}", source.len(), exe_suffix()));
     if fs::metadata(&copy).map(|existing| existing.len() == source.len()).unwrap_or(false) {
         return Ok(copy);
     }
@@ -293,14 +294,15 @@ fn reusable_daemon_copy(runtime_dir: &Path, executable: &Path) -> Result<PathBuf
     if let Ok(entries) = fs::read_dir(runtime_dir) {
         for path in entries.flatten().map(|entry| entry.path()) {
             let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("");
-            if name.starts_with("retinued-") && (name.ends_with(".exe") || name.ends_with(".partial")) && path != copy {
+            if is_daemon_copy_name(name) && path != copy {
                 let _ = fs::remove_file(&path);
             }
         }
     }
     // Written under another name, then renamed: Windows can give a file its full
     // size before the bytes arrive, so an interrupted copy under the final name
-    // would pass the size check above and fail every later start.
+    // would pass the size check above and fail every later start. On Unix
+    // `fs::copy` keeps the source's mode, so the copy stays executable.
     let partial = runtime_dir.join(format!("retinued-{}.partial", std::process::id()));
     fs::copy(executable, &partial).map_err(|error| {
         format!("Could not copy the daemon to its private run location: {error}")
@@ -348,29 +350,73 @@ fn connection(state: &State<'_, AppState>) -> Result<DaemonConnection, String> {
         .clone())
 }
 
+/// A private daemon copy this shell made earlier: `retinued-<size>-<stamp><suffix>`
+/// or an interrupted `retinued-<pid>.partial`. Off Windows the suffix is empty, so
+/// the name is matched by its digits rather than by an ending every name has.
+fn is_daemon_copy_name(name: &str) -> bool {
+    let Some(rest) = name.strip_prefix("retinued-") else { return false };
+    if let Some(pid) = rest.strip_suffix(".partial") {
+        return !pid.is_empty() && pid.bytes().all(|b| b.is_ascii_digit());
+    }
+    let Some(stem) = rest.strip_suffix(exe_suffix()) else { return false };
+    let mut parts = stem.split('-');
+    matches!((parts.next(), parts.next(), parts.next()), (Some(size), Some(stamp), None)
+        if !size.is_empty() && !stamp.is_empty() && size.bytes().all(|b| b.is_ascii_digit()) && stamp.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// The suffix a program file carries on this platform (`""` off Windows).
+fn exe_suffix() -> &'static str {
+    if cfg!(windows) {
+        ".exe"
+    } else {
+        ""
+    }
+}
+
+/// The target triple Tauri appends to a sidecar name
+/// (`binaries/retinued-<triple><suffix>`), from the build's own arch and OS.
+fn sidecar_triple() -> String {
+    let arch = std::env::consts::ARCH;
+    if cfg!(windows) {
+        format!("{arch}-pc-windows-msvc")
+    } else {
+        format!("{arch}-unknown-linux-gnu")
+    }
+}
+
+/// The staged name of a sidecar as `externalBin` expects it.
+fn sidecar_name(name: &str) -> String {
+    format!("{name}-{}{}", sidecar_triple(), exe_suffix())
+}
+
+/// The plain name of a bundled program (`retinued.exe`, `retinued`).
+fn program_name(name: &str) -> String {
+    format!("{name}{}", exe_suffix())
+}
+
 fn candidate_daemon_paths(app: &AppHandle) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     if let Ok(path) = app.path().resolve(
-        "binaries/retinued-x86_64-pc-windows-msvc.exe",
+        format!("binaries/{}", sidecar_name("retinued")),
         tauri::path::BaseDirectory::Resource,
     ) {
         candidates.push(path);
     }
     if let Ok(path) = app
         .path()
-        .resolve("retinued.exe", tauri::path::BaseDirectory::Resource)
+        .resolve(program_name("retinued"), tauri::path::BaseDirectory::Resource)
     {
         candidates.push(path);
     }
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    candidates.push(manifest.join("binaries/retinued-x86_64-pc-windows-msvc.exe"));
+    candidates.push(manifest.join(format!("binaries/{}", sidecar_name("retinued"))));
     if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
         let target_dir = PathBuf::from(target_dir);
-        candidates.push(target_dir.join("debug/retinued.exe"));
-        candidates.push(target_dir.join("release/retinued.exe"));
+        candidates.push(target_dir.join(format!("debug/{}", program_name("retinued"))));
+        candidates.push(target_dir.join(format!("release/{}", program_name("retinued"))));
     }
-    candidates.push(manifest.join("../../../target/debug/retinued.exe"));
-    candidates.push(manifest.join("../../../target/release/retinued.exe"));
+    candidates.push(manifest.join(format!("../../../target/debug/{}", program_name("retinued"))));
+    candidates.push(manifest.join(format!("../../../target/release/{}", program_name("retinued"))));
     candidates
 }
 
@@ -473,8 +519,10 @@ fn start_daemon(app: &AppHandle, state: &AppState) -> Result<(), String> {
         .into_iter()
         .find(|path| path.is_file())
         .ok_or_else(|| {
-            "retinued.exe is missing. Build the workspace daemon first (npm run build:daemon)."
-                .to_string()
+            format!(
+                "{} is missing. Build the workspace daemon first (npm run build:daemon).",
+                program_name("retinued")
+            )
         })?;
 
     let mut runtime_dir = app
@@ -519,7 +567,7 @@ fn start_daemon(app: &AppHandle, state: &AppState) -> Result<(), String> {
     retinue_process::hide_std_window(&mut command);
     let mut child = command.spawn().map_err(|error| {
         let _ = fs::remove_file(&executable_copy);
-        format!("Could not start retinued.exe: {error}")
+        format!("Could not start {}: {error}", program_name("retinued"))
     })?;
 
     let stdout = child
@@ -695,7 +743,12 @@ fn set_approval_badge(app: AppHandle, window: tauri::WebviewWindow, count: u32) 
     window.set_overlay_icon(if count == 0 { None } else { Some(approval_overlay(count)) }).map_err(|_| "Could not update the taskbar badge.".to_string())?;
     if let Some(tray) = app.tray_by_id("retinue-tray") {
         let tooltip = if count == 0 { "Retinue".to_owned() } else { format!("Retinue: {count} waiting") };
+        #[cfg(windows)]
         tray.set_tooltip(Some(tooltip)).map_err(|_| "Could not update the tray tooltip.".to_string())?;
+        // AppIndicator, which Linux trays use, draws no tooltip, so a refusal
+        // here is the platform's answer and not a failure of the badge.
+        #[cfg(not(windows))]
+        let _ = tray.set_tooltip(Some(tooltip));
     }
     Ok(())
 }
@@ -1493,10 +1546,35 @@ fn select_backup_import_path(app: AppHandle, state: State<'_, AppState>) -> Resu
 /// The Retinue data folder the daemon uses: `%LOCALAPPDATA%\Retinue` (or the
 /// parent of `RETINUE_DB_PATH` when a test or a portable install overrides it).
 fn retinue_data_dir() -> Option<PathBuf> {
-    std::env::var_os("RETINUE_DB_PATH")
+    if let Some(parent) = std::env::var_os("RETINUE_DB_PATH")
         .map(PathBuf::from)
         .and_then(|path| path.parent().map(Path::to_path_buf))
-        .or_else(|| std::env::var_os("LOCALAPPDATA").map(|local| PathBuf::from(local).join("Retinue")))
+    {
+        return Some(parent);
+    }
+    data_dir_fallback()
+}
+
+/// Where the daemon keeps its files when `RETINUE_DB_PATH` says nothing. The
+/// Linux rule is the daemon's own (`crates/retinue-daemon/src/paths.rs`):
+/// `$XDG_DATA_HOME/retinue`, else `~/.local/share/retinue`, so the shell's log
+/// file sits beside the daemon's.
+#[cfg(windows)]
+fn data_dir_fallback() -> Option<PathBuf> {
+    std::env::var_os("LOCALAPPDATA").map(|local| PathBuf::from(local).join("Retinue"))
+}
+
+#[cfg(not(windows))]
+fn data_dir_fallback() -> Option<PathBuf> {
+    let present = |name: &str| {
+        std::env::var_os(name)
+            .filter(|value| !value.is_empty())
+            .map(PathBuf::from)
+    };
+    if let Some(data) = present("XDG_DATA_HOME") {
+        return Some(data.join("retinue"));
+    }
+    present("HOME").map(|home| home.join(".local").join("share").join("retinue"))
 }
 
 /// FIX39 P12: the shell's own log file, beside the daemon's, under `logs/`.
@@ -1561,8 +1639,7 @@ fn redact_log_line(message: &str) -> String {
     }
     for key in ["token", "password", "secret", "capability", "credential", "authorization", "cookie", "api_key", "apikey"] {
         let mut from = 0;
-        loop {
-            let Some(found) = out[from..].to_ascii_lowercase().find(key) else { break };
+        while let Some(found) = out[from..].to_ascii_lowercase().find(key) {
             let key_start = from + found;
             let mut cursor = key_start + key.len();
             // A closing quote may sit between the key and the separator (JSON).
@@ -1898,20 +1975,29 @@ async fn open_in_editor(
         .filter(|value| !value.is_empty());
     let executable = if let Some(configured) = configured {
         let editor = Path::new(configured);
-        let executable_extension = editor
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| {
-                extension.eq_ignore_ascii_case("exe") || extension.eq_ignore_ascii_case("com")
+        // Windows starts a program only with an .exe or .com; Linux has no such
+        // rule, so any existing program file is accepted.
+        let program_extension = !cfg!(windows)
+            || editor
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| {
+                    extension.eq_ignore_ascii_case("exe") || extension.eq_ignore_ascii_case("com")
+                });
+        if !editor.is_absolute() || !editor.is_file() || !program_extension {
+            return Err(if cfg!(windows) {
+                "The configured editor must be an existing absolute .exe or .com file.".to_string()
+            } else {
+                "The configured editor must be an existing absolute program file.".to_string()
             });
-        if !editor.is_absolute() || !editor.is_file() || !executable_extension {
-            return Err(
-                "The configured editor must be an existing absolute .exe or .com file.".to_string(),
-            );
         }
         configured.to_string()
-    } else {
+    } else if cfg!(windows) {
         "notepad.exe".to_string()
+    } else {
+        // The desktop's own opener: whichever program is registered for the file
+        // type. There is no editor that every Linux desktop has.
+        "xdg-open".to_string()
     };
     let arguments = settings
         .get("editorArgs")
@@ -1951,14 +2037,24 @@ fn resolve_project_file(path: String, project_root: Option<String>) -> Result<St
 #[tauri::command]
 fn reveal_in_explorer(path: String, project_root: Option<String>) -> Result<(), String> {
     let path = canonical_project_file(path, project_root)?;
-    let folder = path
-        .parent()
-        .ok_or_else(|| "This file has no containing folder.".to_string())?;
-    Command::new("explorer.exe")
-        .arg(folder)
-        .spawn()
-        .map_err(|error| format!("Could not open File Explorer: {error}"))?;
-    Ok(())
+    #[cfg(windows)]
+    {
+        let folder = path
+            .parent()
+            .ok_or_else(|| "This file has no containing folder.".to_string())?;
+        Command::new("explorer.exe")
+            .arg(folder)
+            .spawn()
+            .map_err(|error| format!("Could not open File Explorer: {error}"))?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        // The opener plugin's Linux path: the desktop's file manager selects the
+        // file in its folder (FileManager1 over D-Bus when it offers it).
+        tauri_plugin_opener::reveal_item_in_dir(&path)
+            .map_err(|error| format!("Could not open the containing folder: {error}"))
+    }
 }
 
 /// The main window starts hidden (`visible: false` in `tauri.conf.json`) and shows
@@ -2038,6 +2134,92 @@ fn get_active_runtime(state: State<'_, AppState>) -> Option<String> {
         .and_then(|active| active.clone())
 }
 
+/// What this desktop can actually do, so the UI can stay honest where a
+/// platform does not allow something. Wayland has no absolute window placement,
+/// no global key grabs and no keep-above guarantee; X11 and Windows have all
+/// three. `glass` is the frosted backdrop, which only Windows draws.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PlatformCapabilities {
+    os: &'static str,
+    session_type: &'static str,
+    glass: bool,
+    always_on_top: bool,
+    global_shortcuts: bool,
+    position_windows: bool,
+}
+
+/// `win32`, `x11`, `wayland` or `unknown` (a headless start).
+#[cfg(windows)]
+fn session_type() -> &'static str {
+    "win32"
+}
+
+#[cfg(target_os = "linux")]
+fn session_type() -> &'static str {
+    let present = |name: &str| std::env::var_os(name).is_some_and(|value| !value.is_empty());
+    match std::env::var("GDK_BACKEND").ok().as_deref() {
+        Some("x11") => "x11",
+        Some("wayland") => "wayland",
+        // Under Wayland with XWayland both are set, and GTK picks Wayland.
+        _ if present("WAYLAND_DISPLAY") => "wayland",
+        _ if present("DISPLAY") => "x11",
+        _ => "unknown",
+    }
+}
+
+#[cfg(not(any(windows, target_os = "linux")))]
+fn session_type() -> &'static str {
+    "unknown"
+}
+
+#[tauri::command]
+fn platform_capabilities() -> PlatformCapabilities {
+    let session = session_type();
+    // Only a session that really has these keeps them: a headless start or an
+    // unknown compositor answers "no" rather than a hopeful "yes".
+    let windowed = matches!(session, "win32" | "x11");
+    PlatformCapabilities {
+        os: std::env::consts::OS,
+        session_type: session,
+        glass: cfg!(windows),
+        always_on_top: windowed,
+        global_shortcuts: windowed,
+        position_windows: windowed,
+    }
+}
+
+/// Linux/WebKitGTK: a blank window is a known failure of the DMA-BUF renderer on
+/// some drivers, notably NVIDIA's proprietary one, and the documented workaround
+/// is `WEBKIT_DISABLE_DMABUF_RENDERER=1`. It is set only when the owner has not
+/// chosen, and only on hardware that needs it: the variable is read by GTK at
+/// start, so it has to be set before anything creates a window.
+/// `RETINUE_LINUX_DMABUF=1` forces the workaround on (a report says "blank
+/// window" on other hardware), `=0` keeps the faster renderer.
+#[cfg(target_os = "linux")]
+fn configure_linux_webview() {
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_some() {
+        return;
+    }
+    let choice = match std::env::var("RETINUE_LINUX_DMABUF").ok().as_deref() {
+        Some("1") | Some("on") | Some("true") => Some(true),
+        Some("0") | Some("off") | Some("false") => Some(false),
+        _ => None,
+    };
+    let nvidia = Path::new("/proc/driver/nvidia/version").exists()
+        || Path::new("/sys/module/nvidia").exists();
+    if !choice.unwrap_or(nvidia) {
+        return;
+    }
+    // SAFETY: this runs at the top of `run`, before GTK or WebKit is started and
+    // before any other thread reads the environment.
+    std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    log_shell("info", "linux webview: DMA-BUF renderer disabled");
+}
+
+#[cfg(not(target_os = "linux"))]
+fn configure_linux_webview() {}
+
 /// The provider display name used in the terminal window title.
 fn runtime_terminal_name(provider: &str) -> Result<&'static str, String> {
     match provider {
@@ -2095,9 +2277,10 @@ fn account_id_is_safe(id: &str) -> bool {
     !id.is_empty() && id.len() <= 64 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
-/// The `$env:` prefix for one account. PowerShell single-quotes the value and
+/// The assignments for one account. PowerShell single-quotes the value and
 /// doubles an inner quote, so a space, a `$` or a quote in a folder path stays
-/// literal and is never read as code.
+/// literal and is never read as code; on Unix the POSIX single-quote escape
+/// (`'\''`) does the same for `sh`.
 fn environment_prefix(environment: &[(String, String)]) -> Result<String, String> {
     if environment.is_empty() {
         return Err("Retinue does not know how to point that coding agent at an account.".to_string());
@@ -2107,12 +2290,15 @@ fn environment_prefix(environment: &[(String, String)]) -> Result<String, String
         if !environment_name_is_safe(name) {
             return Err("Retinue cannot set this account's environment.".to_string());
         }
-        // A control character would end the one line the terminal hands to
-        // PowerShell; a folder path never holds one.
+        // A control character would end the one line the terminal hands to the
+        // shell; a folder path never holds one.
         if value.is_empty() || value.chars().any(char::is_control) {
             return Err("This account's folder cannot be used for a sign-in.".to_string());
         }
+        #[cfg(windows)]
         parts.push(format!("$env:{name}='{}'", value.replace('\'', "''")));
+        #[cfg(not(windows))]
+        parts.push(format!("export {name}='{}'", value.replace('\'', r"'\''")));
     }
     Ok(parts.join("; "))
 }
@@ -2133,14 +2319,42 @@ fn account_environment_from_reply(reply: &Value, provider: &str) -> Result<Accou
 }
 
 const OPENCODE_DOCS: &str = "https://opencode.ai/docs/";
+/// Only the Unix installer path names it (the Windows one uses Codex's .ps1).
+#[cfg(not(windows))]
+const CODEX_DOCS: &str = "https://developers.openai.com/codex/cli/";
 
 /// The install command for one provider, with its login command chained in the
-/// same window. OpenCode is npm-only, so a missing npm is an error that names
-/// its docs rather than a command that cannot work.
+/// same window. OpenCode and Codex on Unix are npm-only, so a missing npm is an
+/// error that names the docs rather than a command that cannot work.
+#[cfg(windows)]
 fn provider_install_script(provider: &str, npm_available: bool) -> Result<String, String> {
     let install = match provider {
         "claude" => "irm https://claude.ai/install.ps1 | iex",
         "codex" => "irm https://chatgpt.com/codex/install.ps1 | iex",
+        "opencode" => {
+            if !npm_available {
+                return Err(format!("OpenCode is installed with npm, which is not on PATH. Install Node.js first, or see {OPENCODE_DOCS}."));
+            }
+            "npm install -g opencode-ai"
+        }
+        _ => return Err(format!("Unknown coding agent: {provider}")),
+    };
+    Ok(format!("{install}; {}", provider_login_script(provider)?))
+}
+
+/// The Unix installers: Claude's own shell script, and npm for the two packages
+/// that are published there (the same packages the registry check in
+/// `harness_updates.rs` reads).
+#[cfg(not(windows))]
+fn provider_install_script(provider: &str, npm_available: bool) -> Result<String, String> {
+    let install = match provider {
+        "claude" => "curl -fsSL https://claude.ai/install.sh | bash",
+        "codex" => {
+            if !npm_available {
+                return Err(format!("Codex is installed with npm, which is not on PATH. Install Node.js first, or see {CODEX_DOCS}."));
+            }
+            "npm install -g @openai/codex"
+        }
         "opencode" => {
             if !npm_available {
                 return Err(format!("OpenCode is installed with npm, which is not on PATH. Install Node.js first, or see {OPENCODE_DOCS}."));
@@ -2158,10 +2372,13 @@ fn provider_install_script(provider: &str, npm_available: bool) -> Result<String
 struct TerminalLaunch {
     program: String,
     args: Vec<String>,
-    /// The window the renderer is told about: `wt` or `powershell`.
+    /// The window the renderer is told about: `wt` or `powershell` on Windows,
+    /// `terminal` on Linux (an external terminal emulator).
     terminal: &'static str,
     /// True only for the direct `powershell.exe` fallback, which must open its
-    /// own console window (`CREATE_NEW_CONSOLE`). `wt.exe` opens one itself.
+    /// own console window (`CREATE_NEW_CONSOLE`). `wt.exe` opens one itself, and
+    /// so does a Linux terminal emulator.
+    #[cfg_attr(not(windows), allow(dead_code))]
     new_console: bool,
 }
 
@@ -2199,6 +2416,12 @@ fn terminal_launch_with(provider: &str, action: &str, account: Option<&AccountEn
         (None, other) => return Err(format!("Unknown terminal action: {other}")),
     };
     let title = format!("Retinue: {name} sign-in");
+    launch_for_platform(&title, &script, wt_available)
+}
+
+/// The Windows launch: a Windows Terminal tab, or PowerShell with its own console.
+#[cfg(windows)]
+fn launch_for_platform(title: &str, script: &str, wt_available: bool) -> Result<TerminalLaunch, String> {
     if wt_available {
         // Windows Terminal parses its own argument list before PowerShell sees
         // the script, and an unescaped `;` there is wt's command separator: it
@@ -2209,7 +2432,7 @@ fn terminal_launch_with(provider: &str, action: &str, account: Option<&AccountEn
             args: vec![
                 "new-tab".into(),
                 "--title".into(),
-                title,
+                title.to_string(),
                 "powershell".into(),
                 "-NoExit".into(),
                 "-Command".into(),
@@ -2224,11 +2447,46 @@ fn terminal_launch_with(provider: &str, action: &str, account: Option<&AccountEn
         // `std::process::Command`, so nothing re-parses the `|` or `;` in it.
         Ok(TerminalLaunch {
             program: "powershell.exe".into(),
-            args: vec!["-NoExit".into(), "-Command".into(), script],
+            args: vec!["-NoExit".into(), "-Command".into(), script.to_string()],
             terminal: "powershell",
             new_console: true,
         })
     }
+}
+
+/// The login shell a sign-in window runs on Unix: `$SHELL` when it names a real
+/// file, else `/bin/sh`. A login shell puts the agent CLIs on `PATH`.
+#[cfg(not(windows))]
+fn terminal_login_shell() -> String {
+    std::env::var("SHELL")
+        .ok()
+        .filter(|value| value.starts_with('/') && Path::new(value).is_file())
+        .unwrap_or_else(|| "/bin/sh".to_string())
+}
+
+/// The Linux launch: the desktop's own terminal emulator, `-e <shell> -lc <script>`.
+///
+/// `-e` is the one flag every candidate shares (x-terminal-emulator, xterm).
+/// The script ends by starting an interactive login shell, which is what
+/// `-NoExit` does on Windows, so the owner can read the result. The command text
+/// is one argv entry, so no shell re-parses the `;` or `|` before it runs.
+#[cfg(not(windows))]
+fn launch_for_platform(_title: &str, script: &str, terminal_available: bool) -> Result<TerminalLaunch, String> {
+    if !terminal_available {
+        return Err("No terminal emulator was found. Install x-terminal-emulator or xterm.".to_string());
+    }
+    let program = if program_on_path("x-terminal-emulator") {
+        "x-terminal-emulator"
+    } else {
+        "xterm"
+    };
+    let line = format!("{script}; exec \"${{SHELL:-/bin/sh}}\" -l");
+    Ok(TerminalLaunch {
+        program: program.to_string(),
+        args: vec!["-e".into(), terminal_login_shell(), "-lc".into(), line],
+        terminal: "terminal",
+        new_console: false,
+    })
 }
 
 /// Whether a program exists on PATH. Used only to pick the terminal and to
@@ -2248,7 +2506,15 @@ async fn runtime_terminal(provider: String, action: String, account_id: Option<S
         None => None,
         Some(id) => Some(account_environment(&state, id, &provider).await?),
     };
-    let launch = terminal_launch_with(&provider, &action, account.as_ref(), program_on_path("npm.cmd"), program_on_path("wt.exe"))?;
+    // Windows picks Windows Terminal, else PowerShell; Linux picks the desktop's
+    // terminal emulator. The npm name differs too (`.cmd` is a Windows shim).
+    let npm = if cfg!(windows) { program_on_path("npm.cmd") } else { program_on_path("npm") };
+    let terminal = if cfg!(windows) {
+        program_on_path("wt.exe")
+    } else {
+        program_on_path("x-terminal-emulator") || program_on_path("xterm")
+    };
+    let launch = terminal_launch_with(&provider, &action, account.as_ref(), npm, terminal)?;
     let mut command = Command::new(&launch.program);
     command.args(&launch.args);
     // The direct PowerShell fallback is a console app with no window of its own,
@@ -2636,6 +2902,9 @@ fn set_companion_mode(
     Ok(())
 }
 
+/// Both halves of a companion drag land here; the parameter names are the
+/// geometry it needs, and every caller already holds those numbers.
+#[allow(clippy::too_many_arguments)]
 fn clamp_physical_position(
     x: i32,
     y: i32,
@@ -3204,6 +3473,9 @@ fn companion_launch_position(app: &AppHandle, window: &WebviewWindow) -> Physica
     PhysicalPosition::new(x, y)
 }
 
+/// The launch spot on one display, from the saved anchor. The arguments are the
+/// saved point and the work area it was saved on; a struct would only rename them.
+#[allow(clippy::too_many_arguments)]
 fn companion_last_launch_spot(
     saved_x: i32,
     saved_y: i32,
@@ -3221,6 +3493,9 @@ fn companion_last_launch_spot(
     clamp_physical_position(x, y, welcome_width, welcome_height, area_x, area_y, area_width, area_height)
 }
 
+/// The spot a saved anchor maps to on a display of another size. The arguments
+/// are the saved anchor and that work area; a struct would only rename them.
+#[allow(clippy::too_many_arguments)]
 fn companion_saved_compact_spot(
     point: &Point,
     compact_width: i32,
@@ -3652,7 +3927,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
                 "refresh" => {
                     let app = app.clone();
                     thread::spawn(move || {
-                        let _ = tauri::async_runtime::block_on(async {
+                        tauri::async_runtime::block_on(async {
                             if let Some(state) = app.try_state::<AppState>() {
                                 if let Ok(conn) = connection(&state) {
                                     let _ = rpc_call(&conn, "runtime.refresh", json!({})).await;
@@ -3696,6 +3971,7 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 pub fn run() {
+    configure_linux_webview();
     tauri::Builder::default()
         // Must register first: a second launch must never start another daemon.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -3819,7 +4095,14 @@ pub fn run() {
             let dictation = make_dictation(app.handle())?;
             let _ = dictation.hide();
             updates::start_background_checker(app.handle());
+            #[cfg(windows)]
             build_tray(app.handle())?;
+            // A Linux host without libayatana-appindicator has no tray, and that
+            // must not stop the window and the companion from starting.
+            #[cfg(not(windows))]
+            if let Err(error) = build_tray(app.handle()) {
+                log_shell("warn", &format!("the tray is unavailable: {error}"));
+            }
             if let Some(main) = app.get_webview_window("main") {
                 backdrop::restore(app.handle(), &main);
                 let main_for_event = main.clone();
@@ -3893,6 +4176,7 @@ pub fn run() {
             get_active_session,
             set_active_runtime,
             get_active_runtime,
+            platform_capabilities,
             runtime_terminal,
             harness_updates::harness_latest_version,
             harness_updates::harness_update,
@@ -4087,11 +4371,13 @@ mod markdown_export_tests {
 mod runtime_terminal_tests {
     use super::{
         account_environment_from_reply, account_id_is_safe, environment_prefix, provider_install_script,
-        terminal_launch, terminal_launch_with, AccountEnvironment, TerminalLaunch, TerminalLaunched,
+        terminal_launch, terminal_launch_with, AccountEnvironment, TerminalLaunched,
         OPENCODE_DOCS,
     };
     use serde_json::json;
 
+    /// The argv of a Windows launch; the Linux table has its own test.
+    #[cfg(windows)]
     fn argv(provider: &str, action: &str, npm: bool, wt: bool) -> Vec<String> {
         let launch = terminal_launch(provider, action, npm, wt).unwrap();
         assert_eq!(launch.program, if launch.terminal == "wt" { "wt.exe" } else { "powershell.exe" });
@@ -4122,6 +4408,7 @@ mod runtime_terminal_tests {
             .args
     }
 
+    #[cfg(windows)]
     #[test]
     fn an_account_sign_in_sets_its_folder_for_each_provider() {
         let folder = "C:/Retinue data/accounts/0b3c4d5e";
@@ -4155,6 +4442,7 @@ mod runtime_terminal_tests {
         );
     }
 
+    #[cfg(windows)]
     #[test]
     fn a_quote_in_the_folder_is_doubled_and_never_ends_the_string() {
         let prefix = environment_prefix(&[("CLAUDE_CONFIG_DIR".to_string(), "C:/Retinue data/it's mine".to_string())]).unwrap();
@@ -4205,7 +4493,15 @@ mod runtime_terminal_tests {
         for provider in ["claude", "codex", "opencode"] {
             let script = account_argv(provider, "C:/a", true).pop().unwrap();
             assert!(!script.contains("/login"), "a named account signs in without an interactive session: {script}");
-            assert!(script.ends_with(super::account_login_script(provider).unwrap()), "{script}");
+            let login = super::account_login_script(provider).unwrap();
+            // Windows hands the script to PowerShell as it is; the Linux line ends
+            // by starting an interactive shell, so the command sits between `;`.
+            let expected = if cfg!(windows) {
+                script.ends_with(login)
+            } else {
+                script.contains(&format!("; {login};"))
+            };
+            assert!(expected, "{script}");
         }
     }
 
@@ -4221,7 +4517,9 @@ mod runtime_terminal_tests {
         for provider in ["claude", "codex", "opencode"] {
             for action in ["login", "install"] {
                 assert!(terminal_launch(provider, action, true, true).is_ok(), "{provider}/{action} must be allowed");
-                assert!(terminal_launch(provider, action, true, false).is_ok(), "{provider}/{action} must be allowed without wt");
+                // Windows has a second way to open the window (PowerShell without
+                // Windows Terminal); on Linux the emulator is the only way.
+                assert_eq!(terminal_launch(provider, action, true, false).is_ok(), cfg!(windows), "{provider}/{action}");
             }
         }
         for provider in ["", "powershell", "Claude", "claude;calc", "../claude", "unknown"] {
@@ -4232,6 +4530,7 @@ mod runtime_terminal_tests {
         }
     }
 
+    #[cfg(windows)]
     #[test]
     fn login_argv_per_provider_in_a_windows_terminal_tab() {
         assert_eq!(
@@ -4257,6 +4556,7 @@ mod runtime_terminal_tests {
         );
     }
 
+    #[cfg(windows)]
     #[test]
     fn wt_escapes_every_semicolon_in_the_script() {
         for provider in ["claude", "codex", "opencode"] {
@@ -4276,6 +4576,7 @@ mod runtime_terminal_tests {
         assert!(terminal_launch("claude", "login", true, true).unwrap().args[6].contains("\\; claude"));
     }
 
+    #[cfg(windows)]
     #[test]
     fn install_argv_chains_the_login_command() {
         assert_eq!(
@@ -4299,9 +4600,10 @@ mod runtime_terminal_tests {
         assert!(!error.to_lowercase().contains("password"));
     }
 
+    #[cfg(windows)]
     #[test]
     fn the_fallback_spawns_powershell_directly_with_a_new_console() {
-        let launch: TerminalLaunch = terminal_launch("codex", "install", false, false).unwrap();
+        let launch = terminal_launch("codex", "install", false, false).unwrap();
         assert_eq!(launch.terminal, "powershell");
         assert!(
             launch.new_console,
@@ -4318,6 +4620,79 @@ mod runtime_terminal_tests {
                 "irm https://chatgpt.com/codex/install.ps1 | iex; codex login",
             ]
         );
+    }
+
+    /// The Linux launch: the desktop's terminal emulator, `-e <shell> -lc <script>`,
+    /// with the script kept open by an interactive shell the way `-NoExit` does.
+    #[cfg(not(windows))]
+    #[test]
+    fn a_unix_sign_in_exports_the_folder_and_keeps_the_script_as_one_argument() {
+        let folder = "/home/u/Retinue data/0b3c4d5e";
+        let launch = terminal_launch_with("claude", "login", Some(&account("claude", folder)), true, true).unwrap();
+        assert_eq!(launch.terminal, "terminal");
+        assert!(matches!(launch.program.as_str(), "x-terminal-emulator" | "xterm"), "{}", launch.program);
+        assert_eq!(launch.args[0], "-e");
+        assert!(launch.args[1].starts_with('/'), "the login shell is an absolute path: {}", launch.args[1]);
+        assert_eq!(launch.args[2], "-lc");
+        assert_eq!(
+            launch.args[3],
+            format!("export CLAUDE_CONFIG_DIR='{folder}'; claude auth login; exec \"${{SHELL:-/bin/sh}}\" -l")
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_unix_quote_in_the_folder_is_escaped_and_never_ends_the_string() {
+        let prefix = environment_prefix(&[("CLAUDE_CONFIG_DIR".to_string(), "/home/u/it's mine".to_string())]).unwrap();
+        assert_eq!(prefix, r"export CLAUDE_CONFIG_DIR='/home/u/it'\''s mine'");
+        assert!(!prefix.contains('"'), "the folder is quoted with POSIX single quotes: {prefix}");
+        // Read by `sh`: `<open><it><close><escaped quote><open><s mine><close>`.
+        assert_eq!(prefix.matches('\'').count(), 5);
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_unix_install_uses_the_providers_own_installer() {
+        let claude = terminal_launch_with("claude", "install", None, true, true).unwrap();
+        assert!(claude.args[3].starts_with("curl -fsSL https://claude.ai/install.sh | bash;"), "{}", claude.args[3]);
+        let opencode = terminal_launch_with("opencode", "install", None, true, true).unwrap();
+        assert!(opencode.args[3].contains("npm install -g opencode-ai"), "{}", opencode.args[3]);
+        // npm is required where the package is npm-only, and so is an emulator.
+        assert!(terminal_launch_with("codex", "install", None, false, true).is_err());
+        assert!(terminal_launch_with("claude", "install", None, true, false).is_err());
+    }
+}
+
+#[cfg(test)]
+mod platform_capabilities_tests {
+    use super::*;
+
+    /// The flags the UI relies on come from the session, and a headless or
+    /// unknown session claims nothing.
+    #[test]
+    fn the_reported_session_matches_the_capability_flags() {
+        let capabilities = platform_capabilities();
+        assert_eq!(capabilities.os, std::env::consts::OS);
+        let windowed = matches!(capabilities.session_type, "win32" | "x11");
+        assert_eq!(capabilities.always_on_top, windowed);
+        assert_eq!(capabilities.global_shortcuts, windowed);
+        assert_eq!(capabilities.position_windows, windowed);
+        assert_eq!(capabilities.glass, cfg!(windows));
+    }
+
+    /// A sidecar is staged as `<name>-<triple>` plus the platform's suffix, and
+    /// the plain name is what runs beside it.
+    #[test]
+    fn sidecars_and_programs_carry_the_platform_shape() {
+        assert_eq!(exe_suffix() == ".exe", cfg!(windows));
+        let expected_triple = format!(
+            "{}-{}",
+            std::env::consts::ARCH,
+            if cfg!(windows) { "pc-windows-msvc" } else { "unknown-linux-gnu" }
+        );
+        assert_eq!(sidecar_triple(), expected_triple);
+        assert_eq!(sidecar_name("retinued"), format!("retinued-{expected_triple}{}", exe_suffix()));
+        assert_eq!(program_name("retinued"), format!("retinued{}", exe_suffix()));
     }
 }
 
@@ -4341,5 +4716,19 @@ mod companion_persistence_tests {
         drop(send);
         worker.join().unwrap();
         assert!(writes.try_recv().is_err());
+    }
+}
+
+#[cfg(test)]
+mod daemon_copy_name_tests {
+    use super::{exe_suffix, is_daemon_copy_name};
+
+    #[test]
+    fn only_the_shells_own_copies_are_cleaned_up() {
+        assert!(is_daemon_copy_name(&format!("retinued-123-456{}", exe_suffix())));
+        assert!(is_daemon_copy_name("retinued-42.partial"));
+        for other in ["retinued-log.txt", "retinued-", "retinued-1-2-3", "retinued-a-b", "retinued-.partial", "other-1-2"] {
+            assert!(!is_daemon_copy_name(other), "{other}");
+        }
     }
 }

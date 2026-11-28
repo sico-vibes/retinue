@@ -75,7 +75,15 @@ export const demoEntries: readonly DemoEntry[] = [
     const method = key as keyof typeof workflowRpcErrors
     return Object.keys(workflowRpcErrors[method]).map((code) => fail(demo(`workflow-${method}-${code}`, route.area, `${route.label}: ${code.replaceAll('_', ' ')}`, route.url, route.steps), method, code))
   }),
-  demo('machine-remote-conversation', 'Linked machines', 'An employee on another machine opens in the conversation pane', '/?no-intro&clean&machines=2&demo-machine-view'),
+  // Linux port (27 November 2026): `demo-os=linux` shows the Linux wording (secret store, startup, file manager, firewall).
+  demo('linux-general', 'Linux', 'Settings on Linux: start when you sign in, keep awake', settings('General', '&demo-os=linux')),
+  demo('linux-secrets', 'Linux', 'Secrets kept in the system keyring', settings('Secrets', '&demo-os=linux')),
+  demo('linux-vault', 'Linux', 'Vault items kept in the system keyring', settings('Vault', '&demo-os=linux')),
+  demo('linux-connectors', 'Linux', 'Connector tokens kept in the system keyring', settings('Connectors', '&demo-os=linux')),
+  demo('linux-native-remote', 'Linux', 'Native remote: the Linux firewall is not managed', '/?no-intro&clean&open=settings:Remote&remote-method=native&demo-os=linux'),
+  demo('linux-title-bar', 'Linux', 'The drawn Linux title bar: name, minimise, maximise and close', '/?no-intro&clean&idle&demo-os=linux'),
+  demo('linux-conversation', 'Linux', 'A conversation on Linux (file manager wording in the side panel)', `${conversation}&demo-os=linux`),
+  demo('machine-remote-conversation','Linked machines', 'An employee on another machine opens in the conversation pane', '/?no-intro&clean&machines=2&demo-machine-view'),
   demo('conversations-settled', 'Conversation', 'Old conversations settle under a collapsed Settled shelf', '/?no-intro&clean&idle&session=session-codex&agent=agent-codex&settled'),
   demo('professional-remote-chat', 'Main shell', 'Professional mode: a chat on another machine opens in a tab, like a local one', '/?no-intro&clean&idle&session=session-codex&agent=agent-codex&machines=2&favicon&mode=professional&open-remote'),
   demo('professional-add-project-menu', 'Main shell', 'Professional mode: add a project here or on another device', '/?no-intro&clean&idle&session=session-codex&agent=agent-codex&machines=2&favicon&mode=professional&pro-menu=project'),

@@ -64,6 +64,9 @@ windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Secur
 [target.'cfg(unix)'.dependencies]
 # The host's own name for a Native certificate on a host with no `HOSTNAME`.
 gethostname = "1"
+# Free space on the data folder's volume (`statvfs`), the Linux half of
+# `GetDiskFreeSpaceExW`; it keeps the backup and install-space guards real there.
+libc = "0.2"
 
 # 18 November 2026 (owner decision): on a Linux desktop with a running Secret
 # Service keyring, values live there instead of in owner-only files. A pure-Rust

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { createHash, randomBytes } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,6 +13,8 @@ const hostTripleResult = spawnSync('rustc', ['-vV'], { cwd: repoRoot, encoding: 
 assert.equal(hostTripleResult.status, 0, 'Rust host target triple is required for staging tests')
 const hostTriple = hostTripleResult.stdout.match(/^host: (.+)$/m)?.[1]
 assert.ok(hostTriple, 'rustc must report a host target triple')
+// Tauri expects `<name>-<target triple>` and `.exe` only on Windows.
+const executableSuffix = process.platform === 'win32' ? '.exe' : ''
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'retinue-stage-daemon-'))
@@ -33,7 +35,7 @@ async function writePair(targetDirectory, profile, contents = {}) {
   for (const binary of ['retinued', 'retinue-hook']) {
     if (contents[binary] === null) continue
     const bytes = contents[binary] ?? randomBytes(97)
-    const source = join(profileDirectory, `${binary}.exe`)
+    const source = join(profileDirectory, `${binary}${executableSuffix}`)
     await writeFile(source, bytes)
     result[binary] = { source, bytes }
   }
@@ -66,10 +68,15 @@ for (const profile of ['debug', 'release']) {
 
     assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`)
     for (const binary of ['retinued', 'retinue-hook']) {
-      const destination = join(current.destination, `${binary}-${hostTriple}.exe`)
+      const destination = join(current.destination, `${binary}-${hostTriple}${executableSuffix}`)
       assert.equal(sha256(await readFile(destination)), sha256(sources[binary].bytes))
       assert.ok(result.stdout.includes(sources[binary].source), `stdout should report staged source ${sources[binary].source}`)
       assert.ok(result.stdout.includes(destination), `stdout should report staged destination ${destination}`)
+      if (executableSuffix === '') {
+        // Tauri bundles the sidecar as staged; without the bit the daemon
+        // cannot start from the deb or the AppImage.
+        assert.equal((await stat(destination)).mode & 0o777, 0o755, `${destination} should be executable`)
+      }
     }
     assert.equal(await readFile(sources.retinued.source).then(sha256), sha256(sources.retinued.bytes))
     assert.equal(await readFile(sources['retinue-hook'].source).then(sha256), sha256(sources['retinue-hook'].bytes))
@@ -84,8 +91,9 @@ test('fails before copying when either required binary is missing', async (t) =>
   const result = runStage(current)
 
   assert.notEqual(result.status, 0)
-  assert.match(`${result.stdout}\n${result.stderr}`, /retinue-hook\.exe/)
+  const missing = new RegExp(`retinue-hook${executableSuffix.replace('.', '\\.')}`)
+  assert.match(`${result.stdout}\n${result.stderr}`, missing)
   assert.match(`${result.stdout}\n${result.stderr}`, /cargo build/i)
-  assert.equal(await readFile(join(current.destination, `retinued-${hostTriple}.exe`)).catch(() => null), null)
+  assert.equal(await readFile(join(current.destination, `retinued-${hostTriple}${executableSuffix}`)).catch(() => null), null)
   assert.equal(await readFile(sources.retinued.source).then(sha256), sha256(sources.retinued.bytes))
 })

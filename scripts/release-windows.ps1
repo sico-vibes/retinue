@@ -1,5 +1,6 @@
-# Publish a Windows NSIS release and the Tauri updater manifest.
-# Private updater key material is loaded only for the bundle build, then removed.
+# Publish a Windows NSIS release and, when the Linux bundles are supplied, the
+# Linux AppImage/deb/rpm assets, under one updater manifest. Private updater key
+# material is loaded only for bundle and signature work, then removed.
 # Never print, log, or write that key or its password.
 [CmdletBinding()]
 param(
@@ -9,7 +10,11 @@ param(
     [switch]$SkipBuild,
     [string]$BundleDir = '',
     # The installer downloaded from the "Release build" workflow, already code signed by SignPath.
-    [string]$SignedInstaller = ''
+    [string]$SignedInstaller = '',
+    # Folder holding the AppImage, .deb and .rpm from the release workflow's Linux job.
+    [string]$LinuxBundleDir = '',
+    # Publish Windows only. The release then carries no linux-x86_64 entry.
+    [switch]$SkipLinux
 )
 
 $ErrorActionPreference = 'Stop'
@@ -222,6 +227,30 @@ function Find-NsisInstaller {
     }
 }
 
+function Find-LinuxAppImage {
+    param(
+        [string]$Directory,
+        [string]$ReleaseVersion
+    )
+    if (-not (Test-Path -LiteralPath $Directory)) {
+        throw "Linux bundle directory not found: $Directory. Download the release workflow's '-linux' artifact or pass -SkipLinux."
+    }
+    $appImages = @(Get-ChildItem -LiteralPath $Directory -Filter '*.AppImage' -File)
+    if ($appImages.Count -eq 0) {
+        throw "No AppImage (*.AppImage) in $Directory."
+    }
+    $matched = @($appImages | Where-Object { Test-FileNameHasVersion -Name $_.Name -ReleaseVersion $ReleaseVersion })
+    if ($matched.Count -eq 0) {
+        $names = ($appImages | ForEach-Object { $_.Name }) -join ', '
+        throw "No AppImage file name in $Directory matches version ${ReleaseVersion}. Found: $names."
+    }
+    if ($matched.Count -gt 1) {
+        $names = ($matched | ForEach-Object { $_.Name }) -join ', '
+        throw "More than one AppImage matches version ${ReleaseVersion}: $names."
+    }
+    return $matched[0]
+}
+
 function Format-GhArgument([string]$Argument) {
     if ($Argument -cmatch '^[A-Za-z0-9_.:/=@,+\-]+$') { return $Argument }
     return "'" + ($Argument -replace "'", "''") + "'"
@@ -374,6 +403,72 @@ try {
     }
     $assetUrl = "https://github.com/$Repo/releases/download/$tag/$($bundle.Installer.Name)"
 
+    # Linux: the AppImage from the release workflow's Linux job becomes two
+    # assets. The AppImage is what people download; the tar.gz beside it is what
+    # the updater downloads, and its signature is made here, with the same key as
+    # the Windows installer's, because the key never enters CI
+    # (docs/operations/linux-desktop.md).
+    $linuxAppImage = $null
+    $linuxUpdater = $null
+    $linuxSignature = $null
+    $linuxAssetUrl = $null
+    $linuxAssets = @()
+    if ($SkipLinux) {
+        Write-Host 'Linux assets skipped (-SkipLinux): this release carries no linux-x86_64 entry.'
+    } elseif ([string]::IsNullOrWhiteSpace($LinuxBundleDir)) {
+        Assert-OrWarn -Ok $false -Message 'No -LinuxBundleDir was given, so the release would carry no linux-x86_64 entry and Linux installs would see no update. Download the "retinue-<version>-linux" artifact and pass it, or pass -SkipLinux for a Windows-only release.'
+    } else {
+        $LinuxBundleDir = [System.IO.Path]::GetFullPath($LinuxBundleDir)
+        $linuxAppImage = Find-LinuxAppImage -Directory $LinuxBundleDir -ReleaseVersion $Version
+        $linuxUpdaterPath = "$($linuxAppImage.FullName).tar.gz"
+        if (-not (Test-Path -LiteralPath $linuxUpdaterPath)) {
+            & node (Join-Path $repoRoot 'scripts\linux-release.mjs') pack-appimage $linuxAppImage.FullName --out $linuxUpdaterPath
+            if ($LASTEXITCODE -ne 0) {
+                throw "scripts/linux-release.mjs failed with exit code $LASTEXITCODE."
+            }
+        } else {
+            Write-Host "Using the existing updater archive $(Split-Path -Leaf $linuxUpdaterPath)."
+        }
+        $linuxUpdater = Get-Item -LiteralPath $linuxUpdaterPath
+        $linuxSignaturePath = "$linuxUpdaterPath.sig"
+        if (-not (Test-Path -LiteralPath $linuxSignaturePath)) {
+            if ($DryRun) {
+                $utf8 = New-Object System.Text.UTF8Encoding $false
+                [System.IO.File]::WriteAllText($linuxSignaturePath, 'DRY-RUN-SIGNATURE', $utf8)
+                Write-WarningLine 'The AppImage updater archive had no .sig. The dry run wrote a placeholder.'
+            } else {
+                Enable-SigningEnvForBuild
+                try {
+                    Push-Location (Join-Path $repoRoot 'apps\desktop')
+                    try {
+                        & npx tauri signer sign --app-version $Version $linuxUpdater.FullName | Out-Null
+                        if ($LASTEXITCODE -ne 0) {
+                            throw "tauri signer sign failed with exit code $LASTEXITCODE for the AppImage updater archive."
+                        }
+                    } finally {
+                        Pop-Location
+                    }
+                } finally {
+                    Disable-SigningEnv
+                }
+                if (-not (Test-Path -LiteralPath $linuxSignaturePath)) {
+                    throw "No signature was written for $($linuxUpdater.Name)."
+                }
+            }
+        }
+        $linuxSignature = Get-Item -LiteralPath $linuxSignaturePath
+        foreach ($name in @($linuxAppImage.Name, $linuxUpdater.Name)) {
+            if ($name -cnotmatch '^[A-Za-z0-9._+-]+$') {
+                throw "Linux asset file name is not safe to place in a release URL: $name"
+            }
+        }
+        $linuxAssetUrl = "https://github.com/$Repo/releases/download/$tag/$($linuxUpdater.Name)"
+        $linuxAssets = @($linuxAppImage.FullName, $linuxUpdater.FullName, $linuxSignature.FullName)
+        foreach ($extra in @(Get-ChildItem -LiteralPath $LinuxBundleDir -File | Where-Object { $_.Extension -in '.deb', '.rpm' })) {
+            $linuxAssets += $extra.FullName
+        }
+    }
+
     $workDirectory = Join-Path ([System.IO.Path]::GetTempPath()) ('retinue-release-' + [guid]::NewGuid().ToString('n'))
     New-Item -ItemType Directory -Path $workDirectory | Out-Null
     $manifestPath = Join-Path $workDirectory 'latest.json'
@@ -387,14 +482,23 @@ try {
         Write-Host "Release notes docs/releases/$Version.md were not found. Using the default note."
     }
 
-    & node (Join-Path $repoRoot 'scripts\make-update-manifest.mjs') `
-        --version $Version `
-        --notes-file $notesPath `
-        --platform windows-x86_64 `
-        --signature-file $bundle.Signature.FullName `
-        --url $assetUrl `
-        --out $manifestPath `
-        --quiet
+    $manifestArgs = @(
+        (Join-Path $repoRoot 'scripts\make-update-manifest.mjs'),
+        '--version', $Version,
+        '--notes-file', $notesPath,
+        '--platform', 'windows-x86_64',
+        '--signature-file', $bundle.Signature.FullName,
+        '--url', $assetUrl
+    )
+    if ($null -ne $linuxUpdater -and $null -ne $linuxSignature) {
+        $manifestArgs += @(
+            '--platform', 'linux-x86_64',
+            '--signature-file', $linuxSignature.FullName,
+            '--url', $linuxAssetUrl
+        )
+    }
+    $manifestArgs += @('--out', $manifestPath, '--quiet')
+    & node @manifestArgs
     if ($LASTEXITCODE -ne 0) {
         throw "make-update-manifest.mjs failed with exit code $LASTEXITCODE."
     }
@@ -435,12 +539,26 @@ try {
         & node $roundTrip --manifest $manifestPath
         if ($LASTEXITCODE -ne 0) { throw 'latest.json does not read back as a manifest an installed build would accept.' }
     }
+    # The same read for the AppImage entry: a merged manifest with a broken
+    # linux-x86_64 URL or signature would leave Linux installs without an update.
+    if ($null -ne $linuxUpdater) {
+        if ($publishedVersion) {
+            & node $roundTrip --manifest $manifestPath --platform linux-x86_64 --installed $publishedVersion
+            if ($LASTEXITCODE -ne 0) {
+                throw "latest.json does not offer a linux-x86_64 build newer than the published $publishedVersion."
+            }
+        } else {
+            & node $roundTrip --manifest $manifestPath --platform linux-x86_64
+            if ($LASTEXITCODE -ne 0) { throw 'latest.json does not read back as a linux-x86_64 manifest an installed build would accept.' }
+        }
+    }
 
     $createArgs = @(
         'release', 'create', $tag,
         $bundle.Installer.FullName,
         $bundle.Signature.FullName,
-        $manifestPath,
+        $manifestPath
+    ) + $linuxAssets + @(
         '--repo', $Repo,
         '--title', "Retinue $Version",
         '--notes-file', $notesPath
@@ -488,6 +606,14 @@ try {
     Write-Host "Release URL: https://github.com/$Repo/releases/tag/$tag"
     Write-Host "Installer: $($bundle.Installer.Name)"
     Write-Host "SHA-256: $sha256"
+    if ($null -ne $linuxAppImage) {
+        Write-Host "Linux AppImage: $($linuxAppImage.Name)"
+        Write-Host "Linux updater archive: $($linuxUpdater.Name)"
+        Write-Host 'Digests for SHA256SUMS.txt (the script does not upload it):'
+        foreach ($asset in $linuxAssets) {
+            Write-Host ("{0}  {1}" -f (Get-Sha256Hex $asset), (Split-Path -Leaf $asset))
+        }
+    }
 } finally {
     Restore-CallerSigningEnv
 }

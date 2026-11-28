@@ -41,6 +41,7 @@ const COALESCE_WINDOW: Duration = Duration::from_millis(8);
 const MAX_BYTES_PER_SECOND: usize = 4 * 1024 * 1024;
 const EXIT_WAIT: Duration = Duration::from_secs(1);
 const PUMP_WAIT: Duration = Duration::from_secs(2);
+#[cfg(windows)]
 const TASKKILL_WAIT: Duration = Duration::from_secs(2);
 const QUEUE_DEPTH: usize = 64;
 
@@ -221,34 +222,78 @@ fn user_path(path: &Path) -> Result<PathBuf, String> {
 }
 
 struct ShellChoice {
-    id: &'static str,
-    exe: &'static str,
-    args: &'static [&'static str],
+    id: String,
+    exe: String,
+    args: Vec<String>,
 }
 
+#[cfg(windows)]
 fn on_path(exe: &str) -> bool {
     let Some(path) = std::env::var_os("PATH") else { return false };
     std::env::split_paths(&path).any(|dir| !dir.as_os_str().is_empty() && dir.join(exe).is_file())
 }
 
+/// The owner's login shell on Unix: `$SHELL` when it names a real file, else
+/// `/bin/sh`. A login shell matters because agent CLIs the person installed
+/// usually sit on a PATH that only a login profile sets up.
+#[cfg(not(windows))]
+fn login_shell() -> String {
+    std::env::var("SHELL")
+        .ok()
+        .filter(|value| value.starts_with('/') && Path::new(value).is_file())
+        .unwrap_or_else(|| "/bin/sh".to_string())
+}
+
+/// The short name the window shows for a shell path (`/usr/bin/fish` -> `fish`).
+#[cfg(not(windows))]
+fn shell_id(exe: &str) -> String {
+    Path::new(exe)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("sh")
+        .to_string()
+}
+
 /// Only fixed shells: the name comes from the UI and must map to a known one.
 fn choose_shell(requested: Option<&str>) -> Result<ShellChoice, String> {
-    let unknown = || "Choose PowerShell, PowerShell 7 or Command Prompt.".to_string();
     #[cfg(windows)]
     {
+        let unknown = || "Choose PowerShell, PowerShell 7 or Command Prompt.".to_string();
         match requested.unwrap_or("powershell") {
-            "powershell" => Ok(ShellChoice { id: "powershell", exe: "powershell.exe", args: &["-NoLogo"] }),
-            "pwsh" if on_path("pwsh.exe") => Ok(ShellChoice { id: "pwsh", exe: "pwsh.exe", args: &["-NoLogo"] }),
+            "powershell" => Ok(ShellChoice {
+                id: "powershell".into(),
+                exe: "powershell.exe".into(),
+                args: vec!["-NoLogo".into()],
+            }),
+            "pwsh" if on_path("pwsh.exe") => Ok(ShellChoice {
+                id: "pwsh".into(),
+                exe: "pwsh.exe".into(),
+                args: vec!["-NoLogo".into()],
+            }),
             "pwsh" => Err("PowerShell 7 is not installed.".into()),
-            "cmd" => Ok(ShellChoice { id: "cmd", exe: "cmd.exe", args: &[] }),
+            "cmd" => Ok(ShellChoice {
+                id: "cmd".into(),
+                exe: "cmd.exe".into(),
+                args: Vec::new(),
+            }),
             _ => Err(unknown()),
         }
     }
     #[cfg(not(windows))]
     {
-        match requested.unwrap_or("sh") {
-            "sh" | "powershell" | "pwsh" | "cmd" => Ok(ShellChoice { id: "sh", exe: "/bin/sh", args: &[] }),
-            _ => Err(unknown()),
+        // There is no picker here: every name means the owner's login shell. The
+        // Windows names are accepted so a preference saved on Windows still opens
+        // a terminal instead of an error.
+        match requested.unwrap_or("default") {
+            "default" | "sh" | "bash" | "zsh" | "fish" | "powershell" | "pwsh" | "cmd" => {
+                let exe = login_shell();
+                Ok(ShellChoice {
+                    id: shell_id(&exe),
+                    exe,
+                    args: vec!["-l".into()],
+                })
+            }
+            _ => Err("Choose the default shell.".into()),
         }
     }
 }
@@ -345,8 +390,8 @@ pub fn terminal_open(
     let pair = native_pty_system()
         .openpty(size)
         .map_err(|_| "A terminal could not be opened on this device.".to_string())?;
-    let mut command = CommandBuilder::new(shell.exe);
-    command.args(shell.args);
+    let mut command = CommandBuilder::new(&shell.exe);
+    command.args(&shell.args);
     command.cwd(cwd_display.as_path());
     sanitize_environment(&mut command);
     let child = pair
@@ -371,7 +416,7 @@ pub fn terminal_open(
     let session = Arc::new(Session {
         id: id.clone(),
         pid,
-        shell: shell.id.to_string(),
+        shell: shell.id.clone(),
         cwd: cwd_display.to_string_lossy().into_owned(),
         master: Mutex::new(pair.master),
         writer: Mutex::new(writer),
@@ -396,7 +441,7 @@ pub fn terminal_open(
     Ok(TerminalOpened {
         id,
         pid,
-        shell: shell.id.to_string(),
+        shell: shell.id.clone(),
         cwd: cwd_display.to_string_lossy().into_owned(),
     })
 }
@@ -432,8 +477,7 @@ fn pump(receiver: Receiver<Vec<u8>>, app: AppHandle, session: Arc<Session>) {
     let mut pending = Vec::with_capacity(COALESCE_BYTES);
     let mut tail = Vec::with_capacity(4);
     let mut throttle = Throttle::new();
-    loop {
-        let Ok(first) = receiver.recv() else { break };
+    while let Ok(first) = receiver.recv() {
         pending.extend_from_slice(&first);
         // Give the shell a moment to finish the burst before spending an event on it.
         let deadline = Instant::now() + COALESCE_WINDOW;
@@ -596,7 +640,20 @@ fn terminate_process_tree(pid: Option<u32>) {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(unix)]
+fn terminate_process_tree(pid: Option<u32>) {
+    let Some(pid) = pid.and_then(|value| i32::try_from(value).ok()) else { return };
+    // portable-pty starts the shell with `setsid`, so its process group id is its
+    // own pid; the negative argument takes the whole group down, then the shell
+    // itself in case something left the group. `ESRCH` (3) only means it is gone.
+    unsafe extern "C" {
+        fn kill(pid: i32, signal: i32) -> i32;
+    }
+    let _ = unsafe { kill(-pid, 9) };
+    let _ = unsafe { kill(pid, 9) };
+}
+
+#[cfg(not(any(unix, windows)))]
 fn terminate_process_tree(_pid: Option<u32>) {}
 
 #[tauri::command]
@@ -678,4 +735,34 @@ pub fn terminal_list(window: Window, state: State<'_, PtyService>) -> Result<Vec
     let terminals = sessions.values().map(|session| session.info()).collect();
     sessions.retain(|_, session| !session.ended.load(Ordering::Acquire));
     Ok(terminals)
+}
+
+#[cfg(test)]
+mod shell_choice_tests {
+    use super::choose_shell;
+
+    /// The name comes from the renderer, so anything not in the table is refused
+    /// on both platforms.
+    #[test]
+    fn only_known_shells_are_accepted() {
+        for name in ["nonsense", "bash;calc", "../sh", "sh "] {
+            assert!(choose_shell(Some(name)).is_err(), "{name:?} must be refused");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_names_map_to_the_fixed_table() {
+        assert_eq!(choose_shell(Some("cmd")).unwrap().exe, "cmd.exe");
+        assert_eq!(choose_shell(None).unwrap().exe, "powershell.exe");
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_unix_terminal_is_the_owners_login_shell() {
+        let shell = choose_shell(None).unwrap();
+        assert!(shell.exe.starts_with('/'), "{}", shell.exe);
+        assert_eq!(shell.args, vec!["-l".to_string()], "a login shell, so agent CLIs are on PATH");
+        assert!(!shell.id.is_empty() && !shell.id.contains('/'), "{}", shell.id);
+    }
 }

@@ -4,6 +4,7 @@
 // Outputs and Changes read the repository itself (`session.repository`): what Git
 // says differs from HEAD now, whoever made the change, with what the conversation's
 // own coding agent reported kept alongside for anything Git no longer lists.
+import { fileManagerName } from './platformCopy'
 import { useEffect, useState, type ReactNode } from 'react'
 import { Bot, ChevronDown, ChevronRight, CircleAlert, Code2, Copy, FileText, FolderOpen, GitBranch, Globe, Monitor, Moon, Smartphone } from 'lucide-react'
 import { useLocalServers } from './localServers'
@@ -181,7 +182,7 @@ export function SessionRail({ session, usage, appliedModel, onOpenFile, onReveal
   const openFolder = projectPath && platform.editor ? <button type="button" className="rail-link" onClick={() => onOpenFolder(projectPath)}>Open the folder</button> : null
   const fileButtons = (file: RailFile) => <span className="rail-file-actions">
     {platform.editor && file.change !== 'deleted' && <button type="button" title="Open in editor" aria-label={`Open ${file.relative ?? file.path} in editor`} onClick={() => onOpenFile(file.path)}><Code2 size={12} /></button>}
-    {platform.editor && file.change !== 'deleted' && <button type="button" title="Reveal in File Explorer" aria-label={`Reveal ${file.relative ?? file.path} in File Explorer`} onClick={() => onRevealFile(file.path)}><FolderOpen size={12} /></button>}
+    {platform.editor && file.change !== 'deleted' && <button type="button" title={`Reveal in ${fileManagerName(platform.os)}`} aria-label={`Reveal ${file.relative ?? file.path} in ${fileManagerName(platform.os)}`} onClick={() => onRevealFile(file.path)}><FolderOpen size={12} /></button>}
     <button type="button" title="Copy path" aria-label={`Copy ${file.relative ?? file.path}`} onClick={() => onCopyPath(file.path)}><Copy size={12} /></button>
   </span>
   const changeRow = (file: RailFile) => {

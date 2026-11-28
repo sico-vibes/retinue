@@ -6,9 +6,12 @@ import { isNative } from './nativeBridge'
 import { previewMode } from '../tauri'
 
 export type PlatformKind = 'desktop' | 'preview' | 'browser'
+/** The operating system the desktop shell runs on. Copy that names the system (the secret store, the file manager, startup) reads it. */
+export type HostOs = 'windows' | 'linux' | 'other'
 
 export interface PlatformCapabilities {
   kind: PlatformKind
+  os: HostOs
   /** Floating companion window. */
   companion: boolean
   tray: boolean
@@ -28,6 +31,7 @@ export interface PlatformCapabilities {
 /** The Tauri desktop app: everything is available. */
 export const DESKTOP_PLATFORM: PlatformCapabilities = {
   kind: 'desktop',
+  os: 'windows',
   companion: true,
   tray: true,
   nativeDialogs: true,
@@ -46,6 +50,7 @@ export const PREVIEW_PLATFORM: PlatformCapabilities = { ...DESKTOP_PLATFORM, kin
 /** A plain browser build with no native features; used by the remote client. */
 export const BROWSER_PLATFORM: PlatformCapabilities = {
   kind: 'browser',
+  os: 'other',
   companion: false,
   tray: false,
   nativeDialogs: false,
@@ -64,9 +69,21 @@ export const BROWSER_PLATFORM: PlatformCapabilities = {
  * capabilities apply; otherwise a plain browser.
  */
 function detectPlatform(): PlatformCapabilities {
-  if (isNative()) return DESKTOP_PLATFORM
-  if (import.meta.env.MODE === 'test' || previewMode) return PREVIEW_PLATFORM
+  if (isNative()) return { ...DESKTOP_PLATFORM, os: osFromUserAgent(globalThis.navigator?.userAgent ?? '') }
+  // The preview stands in for Windows unless the demo menu asks for Linux (`?demo-os=linux`).
+  if (import.meta.env.MODE === 'test' || previewMode) return { ...PREVIEW_PLATFORM, os: previewOs() }
   return BROWSER_PLATFORM
+}
+
+/** WebView2 says "Windows NT"; WebKitGTK says "X11; Linux" (under Wayland too). Android is never the desktop shell. */
+export function osFromUserAgent(userAgent: string): HostOs {
+  if (/Windows/i.test(userAgent)) return 'windows'
+  if (/Linux/i.test(userAgent) && !/Android/i.test(userAgent)) return 'linux'
+  return 'other'
+}
+
+function previewOs(): HostOs {
+  try { return new URLSearchParams(globalThis.location?.search ?? '').get('demo-os') === 'linux' ? 'linux' : 'windows' } catch { return 'windows' }
 }
 
 let current: PlatformCapabilities = detectPlatform()

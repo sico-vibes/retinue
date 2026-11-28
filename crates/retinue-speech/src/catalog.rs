@@ -54,6 +54,7 @@ fn manifest(
         streaming,
         modeling_unit: modeling_unit.map(str::to_string),
         recommended,
+        available: model_type != SpeechModelType::Needle || cfg!(windows),
     }
 }
 
@@ -216,6 +217,8 @@ fn cactus_whistle() -> SpeechModelManifest {
         streaming: false,
         modeling_unit: None,
         recommended: false,
+        // The pinned engine is `windows-x86_64/needle.exe`; there is no Linux build to run.
+        available: cfg!(windows),
     }
 }
 
@@ -276,6 +279,9 @@ mod tests {
         assert!(engine.url.contains("Cactus-Compute/needle3/resolve/d6c7d6a2e9655505e0f8e23339356dd1705900eb/windows-x86_64/needle.exe"));
         assert_eq!((engine.size_bytes, engine.sha256.as_str()), (1_570_816, "0d4bc1da8c51f5600f5c4f4bb4a92e0abe142fae7b69e695ccab93e6745c883d"));
         assert!(whistle.size_bytes < 20_000_000, "about 17 MB of model plus the 1.5 MB engine");
+        assert_eq!(whistle.available, cfg!(windows), "the pinned Needle engine is a Windows build");
+        assert_eq!(whistle.available_on_this_platform(), cfg!(windows));
+        assert!(catalog().iter().filter(|model| model.model_type != SpeechModelType::Needle).all(|model| model.available), "every sherpa-onnx model runs on every host this crate builds for");
         assert_eq!(default_model().id, "parakeet-tdt-0.6b-v3-int8", "the on-device default does not change");
     }
 }

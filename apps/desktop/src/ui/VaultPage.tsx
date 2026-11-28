@@ -1,6 +1,8 @@
 // Settings > Vault (owner, 16 November 2026): logins, cards, API keys and notes that employees can use without
 // ever seeing them. Values live in Windows Credential Manager through the daemon; a bot asks to use an item, the
 // owner approves, and Retinue types the value itself. Contract: docs/plans/vault-channels-pi.md, section A.
+import { platform as hostPlatform } from '../transport/platform'
+import { secretStoreName } from './platformCopy'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Copy, CreditCard, Eye, EyeOff, FileText, Globe, KeyRound, Pencil, Plus, Search, ShieldCheck, Trash2 } from 'lucide-react'
@@ -157,7 +159,7 @@ function VaultEditor({ item, kind, onClose, onSaved }: { item: VaultItem | null;
           ? <textarea className="text-input vault-note-input" value={draft.secrets[field.id] ?? ''} rows={5} placeholder={item ? 'Unchanged' : ''} onChange={(event) => setSecret(field.id, event.target.value)} />
           : <input className="text-input" type="password" autoComplete="new-password" spellCheck={false} value={draft.secrets[field.id] ?? ''} placeholder={item ? 'Unchanged' : ''} inputMode={field.id === 'number' || field.id === 'cvc' ? 'numeric' : undefined} onChange={(event) => setSecret(field.id, event.target.value)} />}
       </label>)}
-      <small className="project-settings-note">Saved in Windows Credential Manager. Employees never see it: when one needs it, you approve, and Retinue types it in.</small>
+      <small className="project-settings-note">Saved in {secretStoreName(hostPlatform().os)}. Employees never see it: when one needs it, you approve, and Retinue types it in.</small>
       {problem && <p className="new-project-error" role="alert">{problem}</p>}
       <div className="blob-dialog-actions">
         <button type="button" className="secondary-button" disabled={busy} onClick={onClose}>Cancel</button>
@@ -252,7 +254,7 @@ export function VaultPage() {
     {(adding || editing) && <VaultEditor item={editing} kind={editing?.kind ?? adding ?? 'login'} onClose={() => { setAdding(null); setEditing(null) }} onSaved={() => { setAdding(null); setEditing(null); load() }} />}
     {revealing && <ConfirmDialog title={`Reveal the ${FIELD_LABEL[revealing.field]} for ${revealing.item.title}?`} body="It shows here for 30 seconds. The reveal is added to the vault's activity." confirmLabel="Reveal" cancelLabel="Cancel"
       onConfirm={() => void reveal(revealing.item, revealing.field)} onCancel={() => setRevealing(null)} />}
-    {removing && <ConfirmDialog title={`Delete ${removing.title}?`} body="It's removed from the vault and from Windows Credential Manager. Employees can't use it any more, and it can't be brought back." confirmLabel="Delete" cancelLabel="Keep it" tone="warning"
+    {removing && <ConfirmDialog title={`Delete ${removing.title}?`} body={`It's removed from the vault and from ${secretStoreName(hostPlatform().os)}. Employees can't use it any more, and it can't be brought back.`} confirmLabel="Delete" cancelLabel="Keep it" tone="warning"
       onConfirm={() => { const target = removing; setRemoving(null); setProblem(null); void rpc('vault.delete', { id: target.id, confirm: true }).then(load).catch((reason) => setProblem(messageOf(reason, 'That item could not be deleted.'))) }}
       onCancel={() => setRemoving(null)} />}
   </>

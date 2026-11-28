@@ -3,6 +3,18 @@
 Newest first. One entry per lesson: date, area, symptom, root cause with evidence, fix, how to avoid it. Before adding, search this file; if an entry covers the topic, update it. Remove entries that stop being true (the history stays in `docs/history/`).
 
 
+## 2026-11-28 · Linux port · What the Windows-only edges were, and the two facts that decide them
+- **Speech engine.** `sherpa-onnx-sys`'s build script chooses the prebuilt archive itself: `(static, linux, x86_64)` is `sherpa-onnx-v<ver>-linux-x64-static-lib.tar.bz2`, and it emits `-lstdc++ -lm -lpthread -ldl` (no cmake, no source build). `cpal` 0.15 uses ALSA on Linux through `pkg-config`, so the runner needs `libasound2-dev`; PulseAudio and PipeWire are ALSA beneath. A test may never download it: the `native` feature and the Linux CI job are the proof.
+- **Whistle is a subprocess of a Windows binary.** `catalog.rs` pins `windows-x86_64/needle.exe`, so off Windows the model must be listed as unavailable, not merely fail at load. `SpeechModelManifest::available_on_this_platform()` is the one rule; the serialized `available` field lets the window hide it, and `ensure_model`/`SpeechEngine::load` refuse with a plain sentence.
+- **ALSA's default capture format is often I16.** Accepting only `F32` (the old `capture.rs`) made dictation fail on Linux with "unsupported sample format: I16". `build_typed<T>` converts any `cpal::SizedSample` to f32.
+- **A GUI- or systemd-started daemon has no profile PATH.** CLIs in `~/.local/bin`, `~/.bun/bin`, fnm/volta/nvm folders are invisible. `retinue-runtime/src/shell.rs` runs `$SHELL -ilc 'printenv PATH; echo __RETINUE_PATH_END__'` once (5 s, `/bin/bash` then `/bin/zsh` then `/bin/sh`) and merges: login PATH first, inherited PATH after, deduped. `printenv PATH` is used, not `$PATH`, because fish's `PATH` is a list. The marker keeps profile chatter out.
+- **`/proc` is enough for the preview dock.** `/proc/net/tcp{,6}` gives listener state (`0A`) and the socket inode; `/proc/<pid>/fd` maps inode → pid; `/proc/<pid>/stat` field 4 (after the last `)`) is the parent. No `ss`/`netstat` binary, so nothing on PATH can stand in.
+- **Unix-only code cannot be typechecked on the owner's PC**, so keep the parsers (`parse_proc_net`, `proc_address`, `parse_proc_stat`) platform-agnostic and test them on Windows; gate only the file access with `#[cfg(target_os = "linux")]`. Mark helper items used only there `#[cfg(any(target_os = "linux", test))]`, or Windows' `-D warnings` calls them dead.
+- **Publishing a managed CLI must set the Unix execute bit**: the unpacker writes files without it, and a `0755` binary is what discovery launches. `agent_install::make_executable` does it after the version folder is renamed into place.
+- **The publisher's Linux assets (measured 28 Nov 2026):** Codex `codex-x86_64-unknown-linux-musl.tar.gz`, Pi `pi-linux-x64.tar.gz` with `SHA256SUMS`, OpenCode npm platform `opencode-linux-x64`, Claude's manifest key `linux-x64`. Every GitHub asset also carries a `sha256:` `digest`, so the checksum file is only a fallback.
+- **`Command::new` in a `retinue-*` crate is scanned by `spawn_window_tests`.** A new Unix-only spawn (`xdg-open` for an OAuth sign-in, the login shell probe) needs an `ALLOWED` row with its reason and exact count, even though it never runs on Windows.
+
+
 ## 2026-11-25: a red nightly CI run that is not a code failure
 - **Symptom:** a `schedule` CI run on `main` failed (`hygiene` and `checks`) while the push run on the same commit was green.
 - **Cause:** the nightly `gitleaks` pass scans the whole history and hit its 15-minute limit (`context deadline exceeded`, "no leaks found in partial scan"); `checks` then fails because `hygiene` did. Seen on run 45631593488 (`d3b9cd86`).
@@ -2358,3 +2370,10 @@ The computer's screen (`computer.view`, `computer.rs`) is the first route on the
 - **Cause:** the app shell is a four-track grid and its children auto-place; `display: none` on the panel would shift the chat pane into the zero-width track, and the track widths live in several rules (inspector, document, narrow screens).
 - **Fix:** in `professional.css` set the columns explicitly for every shell state, pin the panel to track 2 as a zero-width placeholder and the pane to track 3.
 - **Also:** a mode that hides the employee layer must change the name everywhere it appears, not only the sidebar: chips, mentions, side header and delegation rows all read `usePeerIdentity`.
+
+## 2026-11-28 Linux port merge: three traps
+- **A commented-out Cargo table header moves its crates.** Lane B wrote `#[target.'cfg(unix)'.dependencies]` (a TOML comment), so `gethostname` and `libc` fell into the Windows-only table above it and a Linux build could not compile. After merging a `Cargo.toml` diff, read every `[target...]` header.
+- **`ends_with(exe_suffix())` is always true off Windows**, where the suffix is `""`; match a file name by its whole shape (`is_daemon_copy_name` in `src-tauri/src/lib.rs`).
+- **A module-level call into `transport/platform.ts` from a file `tauri.ts` imports** (`settingsIndex.ts`) throws "Cannot access 'current' before initialization" in every test that imports `tauri.ts`. Read the platform lazily (a getter) there.
+- **A new `tauri.ts` export needs a twin in `remote/remoteTauri.ts`** (the parity test says so); `platformCapabilities` was the case here.
+- **Gates for this branch on Windows:** the desktop crate needs `apps/desktop/dist` (any `index.html`) and the staged sidecars in `src-tauri/binaries/` before `cargo check -p retinue-desktop`; run Vitest from `apps/desktop`, never the repo root (the root run picks up the `node:test` script files and fails them).

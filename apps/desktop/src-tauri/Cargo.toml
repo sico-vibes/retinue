@@ -9,7 +9,6 @@ build = "build.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-arboard = "3.7"
 base64.workspace = true
 chrono.workspace = true
 retinue-process = { path = "../../../crates/retinue-process" }
@@ -40,12 +39,27 @@ uuid.workspace = true
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
 
-# Windows only: the frosted-glass backdrop of the main window. `window-vibrancy`
-# calls the DWM backdrop directly and reports whether it applied, which
+[target.'cfg(windows)'.dependencies]
+# The clipboard backend on Windows. (Linux gets the same crate with its Wayland
+# image feature below.)
+arboard = "3.7"
+# The frosted-glass backdrop of the main window. `window-vibrancy` calls the DWM
+# backdrop directly and reports whether it applied, which
 # `WebviewWindow::set_effects` does not; `windows-sys` reads the
 # `EnableTransparency` preference so the UI can fall back honestly.
-[target.'cfg(windows)'.dependencies]
 window-vibrancy = "0.8"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_Storage_Packaging_Appx"] }
 # The Microsoft Store copy's startup task (`src/distribution.rs`). Already in the tree through Tauri.
 windows = { version = "0.62.2", features = ["ApplicationModel", "Foundation"] }
+
+[target.'cfg(not(windows))'.dependencies]
+# X11 is arboard's default backend and also serves XWayland. `wayland-data-control`
+# adds the native Wayland path, without which pasting an image under a Wayland
+# compositor answers "no image" (`src/clipboard.rs`).
+arboard = { version = "3.7", features = ["wayland-data-control"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Keep-awake through logind's `Inhibit` on the system bus (`src/power.rs`). The
+# same crate and features are already resolved for `tauri-plugin-opener` on Linux,
+# so this adds a dependency edge and no new package. Pure Rust, no libdbus headers.
+zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"] }

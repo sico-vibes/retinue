@@ -76,11 +76,13 @@ fn parse_owner(owner: Option<String>) -> Result<DictationOwner, String> {
 }
 
 fn has_non_ascii(value: &str) -> bool {
-    value.chars().any(|character| !character.is_ascii())
+    !value.is_ascii()
 }
 
 /// sherpa-onnx cannot load models from non-ASCII Windows paths. Fall back to an
-/// ASCII shared location, mirroring Orca's cache-path workaround.
+/// ASCII shared location, mirroring Orca's cache-path workaround. On Linux the
+/// data folder is already a plain path under `$HOME`, and the shared location
+/// (`ProgramData`) does not exist, so the base folder is the answer.
 fn resolve_cache_root(app: &AppHandle) -> PathBuf {
     let base = app
         .path()
@@ -90,19 +92,26 @@ fn resolve_cache_root(app: &AppHandle) -> PathBuf {
     if !has_non_ascii(&base.to_string_lossy()) {
         return base;
     }
-    let digest = model_manager::sha256_bytes(base.to_string_lossy().as_bytes());
-    let short = &digest[..16];
-    std::env::var("ProgramData")
-        .or_else(|_| std::env::var("PROGRAMDATA"))
-        .ok()
-        .map(|root| {
-            PathBuf::from(root)
-                .join("Retinue")
-                .join("speech-models")
-                .join(short)
-        })
-        .filter(|candidate| !has_non_ascii(&candidate.to_string_lossy()))
-        .unwrap_or(base)
+    #[cfg(windows)]
+    {
+        let digest = model_manager::sha256_bytes(base.to_string_lossy().as_bytes());
+        let short = &digest[..16];
+        std::env::var("ProgramData")
+            .or_else(|_| std::env::var("PROGRAMDATA"))
+            .ok()
+            .map(|root| {
+                PathBuf::from(root)
+                    .join("Retinue")
+                    .join("speech-models")
+                    .join(short)
+            })
+            .filter(|candidate| !has_non_ascii(&candidate.to_string_lossy()))
+            .unwrap_or(base)
+    }
+    #[cfg(not(windows))]
+    {
+        base
+    }
 }
 
 fn emit(app: &AppHandle, owner: DictationOwner, kind: &str, text: Option<&str>) {
@@ -547,6 +556,9 @@ fn fallback_to_local(
     true
 }
 
+/// The dictation worker's whole state is its arguments: the window, the model,
+/// its folder, the two shared guards, both channels and the first command.
+#[allow(clippy::too_many_arguments)]
 fn run_worker(
     app: AppHandle,
     manifest: Option<SpeechModelManifest>,

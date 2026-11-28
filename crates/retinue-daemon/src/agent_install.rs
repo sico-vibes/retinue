@@ -122,6 +122,15 @@ pub(crate) struct Row {
 
 /// The one table. A provider Retinue discovers but cannot obtain here answers a
 /// link, which is the "settle the digest story first" half of the design.
+///
+/// The publisher's asset name for this platform is a constant rather than a
+/// field, so one table serves Windows and Linux: every managed provider publishes
+/// both (measured 28 November 2026 against the release APIs and the npm
+/// registry).
+const CODEX_ASSET: &str = if cfg!(windows) { "codex-x86_64-pc-windows-msvc.exe" } else { "codex-x86_64-unknown-linux-musl.tar.gz" };
+const PI_ASSET: &str = if cfg!(windows) { "pi-windows-x64.zip" } else { "pi-linux-x64.tar.gz" };
+const OPENCODE_PLATFORM: &str = if cfg!(windows) { "opencode-windows-x64" } else { "opencode-linux-x64" };
+
 pub(crate) const ROWS: &[Row] = &[
     Row {
         provider: "claude",
@@ -140,8 +149,8 @@ pub(crate) const ROWS: &[Row] = &[
         page: "https://github.com/openai/codex",
         npm: Some("@openai/codex"),
         winget: None,
-        source: Some(Source::GitHubAsset { repo: "openai/codex", asset: "codex-x86_64-pc-windows-msvc.exe", sums: "codex-package_SHA256SUMS", tag_prefix: "rust-v" }),
-        entries: &["codex.exe", "codex"],
+        source: Some(Source::GitHubAsset { repo: "openai/codex", asset: CODEX_ASSET, sums: "codex-package_SHA256SUMS", tag_prefix: "rust-v" }),
+        entries: &["codex.exe", "codex", "codex-x86_64-unknown-linux-musl"],
     },
     Row {
         provider: "opencode",
@@ -150,7 +159,7 @@ pub(crate) const ROWS: &[Row] = &[
         page: "https://github.com/sst/opencode",
         npm: Some("opencode-ai"),
         winget: None,
-        source: Some(Source::NpmPlatform { launcher: "opencode-ai", platform: "opencode-windows-x64" }),
+        source: Some(Source::NpmPlatform { launcher: "opencode-ai", platform: OPENCODE_PLATFORM }),
         entries: &["opencode.exe", "opencode"],
     },
     Row {
@@ -160,8 +169,8 @@ pub(crate) const ROWS: &[Row] = &[
         page: "https://pi.dev",
         npm: Some("@earendil-works/pi-coding-agent"),
         winget: None,
-        source: Some(Source::GitHubAsset { repo: "earendil-works/pi", asset: "pi-windows-x64.zip", sums: "SHA256SUMS", tag_prefix: "v" }),
-        entries: &["pi.exe", "pi"],
+        source: Some(Source::GitHubAsset { repo: "earendil-works/pi", asset: PI_ASSET, sums: "SHA256SUMS", tag_prefix: "v" }),
+        entries: &["pi.exe", "pi", "pi-linux-x64"],
     },
     Row { provider: "cursor", display_name: "Cursor CLI", command: "agent", page: "https://cursor.com/cli", npm: None, winget: None, source: None, entries: &[] },
     Row { provider: "grok", display_name: "Grok CLI", command: "grok", page: "https://x.ai/cli", npm: Some("@xai-official/grok"), winget: None, source: None, entries: &[] },
@@ -452,10 +461,11 @@ pub(crate) fn managed_root(st: &AppState) -> Option<PathBuf> {
     sandbox::data_folder(st).map(|data| data.join(retinue_runtime::MANAGED_FOLDER))
 }
 
-/// Whether this build can obtain a managed copy. v1 ships Windows assets; the
-/// stub origin stands in for a host during tests on any platform.
+/// Whether this build can obtain a managed copy. Windows and Linux ship assets;
+/// the stub origin stands in for a host during tests on any platform, and a host
+/// other than those two still answers a link.
 fn platform_supported() -> bool {
-    cfg!(windows) || test_origin().is_some()
+    cfg!(windows) || cfg!(target_os = "linux") || test_origin().is_some()
 }
 
 /// Whether the named provider has a turn running, from the daemon's own two maps
@@ -536,7 +546,7 @@ async fn managed_plan(mut plan: Plan, source: Source) -> Result<Plan, DispatchEr
     plan.mode = MODE_MANAGE;
     if !platform_supported() {
         plan.supported = false;
-        plan.reason = Some("One-click installs are for Windows in this version.");
+        plan.reason = Some("One-click installs are for Windows and Linux in this version.");
         return Ok(plan);
     }
     let resolved = match source {
@@ -803,16 +813,35 @@ pub(crate) fn hex_encode(bytes: &[u8]) -> String {
 // Adopting the owner's own copy
 
 /// The npm global folder under the user's own profile, a WinGet link folder, a
-/// user-scope install folder, or a machine-wide one.
+/// user-scope install folder, or a machine-wide one. Windows paths and Unix
+/// paths are read by the same rule, with the separators normalised first.
 pub(crate) fn classify(executable: &Path) -> &'static str {
-    let path = executable.to_string_lossy().replace('/', "\\").to_ascii_lowercase();
-    if path.contains("\\appdata\\roaming\\npm\\") || path.contains("\\appdata\\local\\pnpm\\") || path.contains("\\.bun\\bin\\") {
+    let path = executable.to_string_lossy().replace('\\', "/").to_ascii_lowercase();
+    let npm_owned = [
+        "/appdata/roaming/npm/", // npm's global bin on Windows
+        "/appdata/local/pnpm/",
+        "/.bun/bin/",            // bun's global bin, both platforms
+        "/.npm-global/",
+        "/.config/yarn/global/",
+        "/.local/share/pnpm/",
+        "/.volta/bin/",
+        "/.nvm/",
+        "/.fnm/",
+    ];
+    if npm_owned.iter().any(|needle| path.contains(*needle)) {
         "npm"
-    } else if path.contains("\\microsoft\\winget\\") {
+    } else if path.contains("/microsoft/winget/") {
         "winget"
-    } else if path.contains("\\program files") || path.contains("\\programdata\\chocolatey\\") || path.contains("\\windows\\system32")
-        // On Linux and macOS a copy under /usr or /opt belongs to the system package manager or root.
-        || path.starts_with("\\usr\\") || path.starts_with("\\opt\\")
+    } else if path.contains("/program files")
+        || path.contains("/programdata/chocolatey/")
+        || path.contains("/windows/system32")
+        // On Linux a copy under /usr, /opt, /nix or /snap belongs to the system
+        // package manager (or root); /var/lib covers a distro's own installs.
+        || path.starts_with("/usr/")
+        || path.starts_with("/opt/")
+        || path.starts_with("/nix/store/")
+        || path.starts_with("/snap/")
+        || path.starts_with("/var/lib/")
     {
         "system"
     } else {
@@ -1445,6 +1474,7 @@ async fn publish(st: &AppState, id: &str, plan: &Plan, folder: &Path, staging: &
     // A version folder is never launched until the receipt names it, and the
     // receipt is written after the rename, through a temp file.
     std::fs::rename(unpacked, &target).map_err(|_| Failure::Message("The install folder could not be written."))?;
+    make_executable(&target.join(relative));
     let _ = std::fs::remove_dir_all(staging.join("file.part"));
     let receipt = json!({
         "version": version,
@@ -1465,6 +1495,24 @@ async fn publish(st: &AppState, id: &str, plan: &Plan, folder: &Path, staging: &
     rescan(st).await;
     close_idle_sessions(st, plan.provider).await;
     Ok(())
+}
+
+/// The publisher's binary is not run until it is executable, and an archive
+/// does not carry the owner's execute bit through this crate's own unpacker. On
+/// Unix the installed file is made `0755`; Windows has no such bit, and a test
+/// proves the decision rather than the mode.
+pub(crate) fn make_executable(path: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if let Ok(metadata) = std::fs::metadata(path) {
+            let mut permissions = metadata.permissions();
+            permissions.set_mode(metadata.permissions().mode() | 0o755);
+            let _ = std::fs::set_permissions(path, permissions);
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = path;
 }
 
 /// `current.json`, temp-and-rename. The receipt is the only thing discovery reads,

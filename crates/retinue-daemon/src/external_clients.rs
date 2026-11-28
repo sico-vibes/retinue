@@ -40,7 +40,14 @@ impl Client {
 
     #[cfg(not(test))]
     fn cli(self) -> &'static str {
-        if self == Self::Claude { "claude" } else { self.id() }
+        // Cursor's command-line tool is `agent`, not `cursor` (the table in
+        // `agent_install::ROWS` says the same). A `cursor` binary is the editor.
+        match self {
+            Self::Claude => "claude",
+            Self::Codex => "codex",
+            Self::OpenCode => "opencode",
+            Self::Cursor => "agent",
+        }
     }
 
     fn path(self, env: &Environment) -> Option<PathBuf> {

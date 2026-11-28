@@ -12,8 +12,8 @@
   --c-card-flat: var(--companion-surface-flat);
   --c-tab-on: var(--companion-surface-tab);
   --c-hairline: var(--companion-alpha-05);
-  --c-font: var(--font-ui, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif);
-  --c-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --c-font: var(--font-ui, "Segoe UI Variable Text", "Segoe UI", Selawik, system-ui, sans-serif);
+  --c-mono: "Cascadia Mono", Consolas, "Retinue Cascadia Mono", ui-monospace, monospace;
   user-select: none;
 }
 

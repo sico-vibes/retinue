@@ -99,8 +99,8 @@
   --companion-transparent-black: rgba(0, 0, 0, 0);
 
   /* Type */
-  --font-ui: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif;
-  --font-mono: "Cascadia Mono", Consolas, ui-monospace, monospace;
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", Selawik, Inter, system-ui, sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "Retinue Cascadia Mono", ui-monospace, monospace;
   --fs-2xs: 11px;
   --fs-xs: 12px;
   --fs-sm: 13px;

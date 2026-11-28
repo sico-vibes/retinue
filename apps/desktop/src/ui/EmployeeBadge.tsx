@@ -10,8 +10,8 @@ const Lanyard = lazy(() => import('./reactbits/Lanyard'))
 
 const W = 640
 const H = 900
-const FONT = '"Segoe UI", Inter, Arial, sans-serif'
-const MONO = 'Consolas, "Cascadia Mono", monospace'
+const FONT = '"Segoe UI", Selawik, Inter, Arial, sans-serif'
+const MONO = 'Consolas, "Cascadia Mono", "Retinue Cascadia Mono", monospace'
 
 function loadImage(src: string) {
   return new Promise<HTMLImageElement | null>((resolve) => {

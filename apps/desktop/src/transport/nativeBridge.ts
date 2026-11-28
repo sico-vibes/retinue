@@ -28,7 +28,7 @@ export function emitNative(event: string, payload?: unknown): Promise<void> {
 }
 
 /** The current window, narrowed to what the UI uses. */
-export function currentWindow(): Pick<TauriWindow, 'onDragDropEvent' | 'startDragging'> {
+export function currentWindow(): Pick<TauriWindow, 'onDragDropEvent' | 'startDragging' | 'minimize' | 'toggleMaximize' | 'close' | 'isMaximized' | 'onResized'> {
   return getCurrentWindow()
 }
 

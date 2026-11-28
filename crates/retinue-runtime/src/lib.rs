@@ -7,6 +7,9 @@ pub use providers::{acp_launch_args, acp_provider, discovery_ids, install_hint, 
 // 21 November 2026: the version and protocol answers, remembered per binary.
 mod probe_cache;
 pub use probe_cache::{ProbeCache, ProbeEntry, SpawnCounter};
+// 28 November 2026 (Linux port): the login shell's PATH, merged once at start.
+pub mod shell;
+pub use shell::hydrate_login_shell_path;
 use std::{
     collections::BTreeMap,
     env,
@@ -192,6 +195,17 @@ pub fn resolve_command(name: &str) -> Option<ResolvedCommand> {
         for ext in executable_extensions() {
             let candidate = dir.join(format!("{name}{ext}"));
             if candidate.is_file() {
+                // On Unix a file with a CLI's name but no execute bit is a data
+                // file (a manpage, a README), not a program: skip it rather than
+                // hand discovery something that cannot start.
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let executable = std::fs::metadata(&candidate).map(|metadata| metadata.permissions().mode() & 0o111 != 0).unwrap_or(false);
+                    if !executable {
+                        continue;
+                    }
+                }
                 if candidate
                     .extension()
                     .is_some_and(|e| e.eq_ignore_ascii_case("cmd"))

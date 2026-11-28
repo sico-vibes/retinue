@@ -371,7 +371,7 @@ jobs:
   # (a failure, a cancellation, a missing result) fails this job too.
   checks:
     name: checks
-    needs: [scope, hygiene, types, uiTests, build, daemonTests, clippy, docs, perf, linux]
+    needs: [scope, hygiene, types, uiTests, build, daemonTests, clippy, docs, perf, linux, linuxDesktop]
     if: always()
     runs-on: windows-latest
     timeout-minutes: 10
@@ -387,10 +387,16 @@ jobs:
             exit 1
           }
           $problems = @()
-          foreach ($name in 'hygiene', 'types', 'uiTests', 'build', 'daemonTests', 'clippy', 'docs', 'perf', 'linux') {
-            # The Linux daemon job runs whenever the Windows daemon tests do.
-            $output = if ($name -eq 'linux') { 'daemonTests' } else { $name }
-            $selected = $needs.scope.outputs.$output -eq 'true'
+          # A job whose selection comes from another scope output says so here:
+          # `linux` runs with the daemon tests, and `linuxDesktop` with the desktop
+          # bundle or the daemon tests (whose build stages the shell's sidecars).
+          $selectedBy = @{
+            'linux' = @('daemonTests')
+            'linuxDesktop' = @('build', 'daemonTests')
+          }
+          foreach ($name in 'hygiene', 'types', 'uiTests', 'build', 'daemonTests', 'clippy', 'docs', 'perf', 'linux', 'linuxDesktop') {
+            $outputs = if ($selectedBy.ContainsKey($name)) { $selectedBy[$name] } else { @($name) }
+            $selected = @($outputs | Where-Object { $needs.scope.outputs.$_ -eq 'true' }).Count -gt 0
             $result = $needs.$name.result
             if ($selected -and $result -ne 'success') {
               $problems += "$name was selected and ended $result"
@@ -407,9 +413,9 @@ jobs:
           Write-Host "Every selected check passed ($($needs.scope.outputs.reason))."
   # 17 November 2026 (multi-device piece 8): the owner's VPS hosts sessions
   # headless on Linux, and nothing proved that `retinued` builds or passes its
-  # tests there — this job does. It is the daemon crate and what it needs, not
-  # the whole workspace: the desktop crate is Windows-only and the speech crate
-  # downloads a large prebuilt engine that this host never runs.
+  # tests there — this job does. It is the daemon crate and what it needs, the
+  # speech crate (its `native` engine, which is a Linux prebuilt here), and the
+  # platform-shaped helper crates; the desktop shell has its own job (`linuxDesktop`).
   linux:
     needs: scope
     if: needs.scope.outputs.daemonTests == 'true'
@@ -426,9 +432,12 @@ jobs:
 
       # rusqlite is built with `bundled` and rustls with `ring`, so the runner
       # needs a C compiler (and cmake, for ring's assembly) before a failure
-      # here says anything about the code.
+      # here says anything about the code. `libasound2-dev` is cpal's ALSA
+      # backend, which is how on-device dictation captures a microphone on Linux
+      # (PulseAudio and PipeWire go through ALSA); `libstdc++-dev` comes with
+      # build-essential and is what the sherpa-onnx static libraries link against.
       - name: Build the C parts
-        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config cmake
+        run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config cmake libasound2-dev
 
       - name: Check the daemon and every crate it needs
         run: cargo check -p retinue-daemon --all-targets
@@ -438,11 +447,93 @@ jobs:
         # overflow the default test-thread stack.
         run: cargo test -p retinue-daemon --no-fail-fast
 
-      - name: The two platform-shaped crates
-        run: cargo test -p retinue-process
+      - name: The platform-shaped crates
+        run: cargo test -p retinue-process -p retinue-runtime
+
+      # The `native` feature is sherpa-onnx + cpal. sherpa-onnx-sys downloads
+      # `sherpa-onnx-v1.13.8-linux-x64-static-lib.tar.bz2` itself (about 1 GB
+      # unpacked, cached by rust-cache between runs) and links stdc++/m/pthread/dl;
+      # cpal builds its ALSA backend through pkg-config. This is the only job
+      # that compiles the feature, so a Linux-only error in `engine.rs` or
+      # `capture.rs` is caught here.
+      - name: The on-device dictation engine builds and its tests pass
+        run: cargo test -p retinue-speech --features native
 
       - name: Clippy
-        run: cargo clippy -p retinue-daemon --all-targets -- -D warnings
+        run: cargo clippy -p retinue-daemon -p retinue-runtime -p retinue-speech --features retinue-speech/native --all-targets -- -D warnings
 
       - name: The headless binary links
         run: cargo build -p retinue-daemon --bin retinued
+
+  # 27 November 2026 (owner decision, Linux port): Retinue ships the same GUI on
+  # Linux, so the shell crate itself has to compile, lint and pass its own tests
+  # against WebKitGTK 4.1. The `linux` job proves the daemon; this one proves
+  # `retinue-desktop`. It runs when the desktop bundle or the daemon tests run:
+  # the shell embeds the frontend and stages the two sidecars from the workspace.
+  #
+  # Deliberately pinned to ubuntu-22.04: it is the oldest runner with
+  # libwebkit2gtk-4.1, the oldest GTK a Linux user is expected to have, and a
+  # failure there says more than one on a newer image. Every action is pinned by
+  # commit for the same reason the other jobs pin theirs.
+  linuxDesktop:
+    needs: scope
+    if: needs.scope.outputs.linuxDesktop == 'true' || needs.scope.outputs.build == 'true' || needs.scope.outputs.daemonTests == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: '.'
+
+      # WebKitGTK 4.1 is Tauri 2's Linux webview. The tray needs
+      # libayatana-appindicator3 (tauri's `tray-icon` feature fails without it),
+      # librsvg2 and libsoup-3.0 come from the GTK world, and build-essential,
+      # pkg-config, cmake and patchelf are what rusqlite (`bundled`), rustls
+      # (`ring`) and a Tauri bundle need before any failure means anything.
+      - name: The native libraries Tauri and the sidecars need
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libsoup-3.0-dev libssl-dev libasound2-dev \
+            build-essential pkg-config cmake patchelf
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      # `tauri::generate_context!()` reads `frontendDist` (`../dist`) at compile
+      # time, so the production bundle has to exist before any cargo step.
+      - name: Build the frontend the shell embeds
+        working-directory: apps/desktop
+        run: npm run build
+
+      # `bundle.externalBin` names `binaries/<name>-<target triple>`, so both
+      # sidecars are built and staged under the host triple. `build.rs` fills the
+      # remote-web folder with its placeholder.
+      - name: Build and stage the sidecars
+        run: |
+          set -euo pipefail
+          cargo build -p retinue-daemon --bin retinued -p retinue-hook --bin retinue-hook
+          triple="$(rustc -vV | sed -n 's/^host: //p')"
+          mkdir -p apps/desktop/src-tauri/binaries
+          cp target/debug/retinued "apps/desktop/src-tauri/binaries/retinued-${triple}"
+          cp target/debug/retinue-hook "apps/desktop/src-tauri/binaries/retinue-hook-${triple}"
+          ls -l apps/desktop/src-tauri/binaries
+
+      - name: Typecheck the shell
+        run: cargo check -p retinue-desktop --all-targets
+
+      - name: Clippy, warnings are errors
+        run: cargo clippy -p retinue-desktop --all-targets -- -D warnings
+
+      - name: The shell's own tests
+        run: cargo test -p retinue-desktop

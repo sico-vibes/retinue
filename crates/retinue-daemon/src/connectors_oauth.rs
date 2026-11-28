@@ -523,9 +523,27 @@ fn open_in_browser(url: &str) -> Result<(), String> {
     }
 }
 
-#[cfg(all(not(test), not(windows)))]
+#[cfg(all(not(test), not(windows), target_os = "linux"))]
+fn open_in_browser(url: &str) -> Result<(), String> {
+    // The address comes from a connector's own discovery document, so only an
+    // HTTPS address (or the loopback callback) is ever handed to the desktop
+    // opener: `file://` and `mailto:` are not something a connector may open.
+    if !(url.starts_with("https://") || url.starts_with("http://127.0.0.1:") || url.starts_with("http://localhost:")) {
+        return Err("The browser could not be opened.".to_owned());
+    }
+    std::process::Command::new("xdg-open")
+        .arg(url)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map(|_| ())
+        .map_err(|_| "The browser could not be opened. Install xdg-utils so `xdg-open` is on PATH.".to_owned())
+}
+
+#[cfg(all(not(test), not(windows), not(target_os = "linux")))]
 fn open_in_browser(_: &str) -> Result<(), String> {
-    Err("Opening the owner's browser is only available on Windows.".to_owned())
+    Err("Opening the owner's browser is not available on this computer.".to_owned())
 }
 
 // ---------------------------------------------------------------------------
