@@ -7208,8 +7208,53 @@ async fn resume_after_ready(st: AppState) {
 const WORKER_STACK_BYTES: usize = 8 * 1024 * 1024;
 
 fn main() {
+    // 28 November 2026 (Linux port): a GUI- or systemd-started daemon inherits
+    // its launcher's PATH, which usually lacks `~/.local/bin`, `~/.bun/bin` and
+    // version-manager folders where npm and bun put the coding-agent CLIs. Read
+    // the owner's login shell PATH once, here, before any thread exists. A
+    // terminal sub-command (the console client, the stdio bridges, `--version`)
+    // never pays for the probe.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if !cli_only(&args) {
+        retinue_runtime::hydrate_login_shell_path();
+    }
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().thread_stack_size(WORKER_STACK_BYTES).build().expect("the async runtime could not start");
     runtime.block_on(daemon_main());
+}
+
+/// Whether the first argument names a terminal sub-command rather than the
+/// server: `daemon_main` runs these and exits, and none may wait on a shell.
+fn cli_only(args: &[String]) -> bool {
+    matches!(
+        args.first().map(String::as_str),
+        Some("--version")
+            | Some("-V")
+            | Some("pair")
+            | Some("remote")
+            | Some("status")
+            | Some("settings")
+            | Some("agents")
+            | Some("bot")
+            | Some("mcp-bridge")
+            | Some("mcp-server")
+            | Some("computer-server")
+            | Some("owner-server")
+            | Some("browser-server")
+    )
+}
+
+#[cfg(test)]
+mod cli_only_tests {
+    use super::cli_only;
+
+    #[test]
+    fn the_server_is_the_only_mode_that_reads_the_login_shell() {
+        assert!(!cli_only(&[]), "no argument starts the server");
+        assert!(!cli_only(&["unexpected".to_owned()]), "an unknown first argument still starts the server, as before");
+        for verb in ["--version", "-V", "pair", "remote", "status", "settings", "agents", "bot", "mcp-bridge", "mcp-server", "computer-server", "owner-server", "browser-server"] {
+            assert!(cli_only(&[verb.to_owned()]), "{verb}");
+        }
+    }
 }
 
 /// The one line a parent process reads from stdout. On a headless host that line goes wherever

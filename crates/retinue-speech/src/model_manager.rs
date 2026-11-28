@@ -4,6 +4,7 @@
 //! resume support. Mirrors Orca's model-manager behavior (immutable revisions,
 //! per-file hashes, resumable transport) without the Node runtime.
 
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -32,6 +33,42 @@ pub fn sanitize_model_id(model_id: &str) -> String {
 
 pub fn model_directory(cache_root: &Path, model_id: &str) -> PathBuf {
     cache_root.join(sanitize_model_id(model_id))
+}
+
+/// Where a host with no desktop shell keeps speech models: Retinue's data folder
+/// under the platform's own rule. The desktop shell passes its app data folder
+/// instead (Tauri maps that to `$XDG_DATA_HOME` on Linux), so this is the
+/// fallback for a caller that has none; both end up inside the user's data
+/// folder on every platform.
+pub fn default_cache_root() -> PathBuf {
+    cache_root_from(|name| std::env::var_os(name), cfg!(windows), std::env::temp_dir())
+}
+
+/// The rule above, separated from the environment it reads so both platforms'
+/// answers are tested wherever the tests run.
+pub fn cache_root_from(lookup: impl Fn(&str) -> Option<OsString>, windows: bool, temp: PathBuf) -> PathBuf {
+    let present = |name: &str| lookup(name).filter(|value| !value.is_empty()).map(PathBuf::from);
+    if windows {
+        if let Some(local) = present("LOCALAPPDATA") {
+            return local.join("Retinue").join("speech-models");
+        }
+    } else {
+        if let Some(data) = present("XDG_DATA_HOME") {
+            return data.join("retinue").join("speech-models");
+        }
+        if let Some(home) = present("HOME") {
+            return home.join(".local").join("share").join("retinue").join("speech-models");
+        }
+    }
+    temp.join("Retinue").join("speech-models")
+}
+
+/// `None` when the model's engine does not run here. A download is refused
+/// before a byte is fetched, and the refusal names the model rather than a path.
+pub fn unavailable_reason(manifest: &SpeechModelManifest) -> Option<String> {
+    (!manifest.available_on_this_platform()).then(|| {
+        format!("{} needs an engine that is published for Windows only, so it cannot be installed on this computer.", manifest.label)
+    })
 }
 
 pub fn sha256_bytes(bytes: &[u8]) -> String {
@@ -90,6 +127,9 @@ pub async fn ensure_model<F>(
 where
     F: FnMut(u64, u64) + Send,
 {
+    if let Some(reason) = unavailable_reason(manifest) {
+        return Err(SpeechError::Unavailable(reason));
+    }
     let directory = model_directory(cache_root, &manifest.id);
     tokio::fs::create_dir_all(&directory).await?;
     let total = manifest.size_bytes;
@@ -243,5 +283,53 @@ mod tests {
             ..file
         };
         assert!(!has_expected_size(&path, &wrong));
+    }
+
+    fn env(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<std::ffi::OsString> {
+        let map: std::collections::HashMap<String, std::ffi::OsString> =
+            pairs.iter().map(|(key, value)| ((*key).to_owned(), std::ffi::OsString::from(value))).collect();
+        move |name| map.get(name).cloned()
+    }
+
+    #[test]
+    fn the_default_cache_root_follows_each_platforms_own_rule() {
+        use super::cache_root_from;
+        let temp = Path::new("C:/tmp").to_path_buf();
+        assert_eq!(
+            cache_root_from(env(&[("LOCALAPPDATA", "C:/Users/u/AppData/Local")]), true, temp.clone()),
+            Path::new("C:/Users/u/AppData/Local").join("Retinue").join("speech-models")
+        );
+        assert_eq!(
+            cache_root_from(env(&[("XDG_DATA_HOME", "/home/u/.local/share")]), false, temp.clone()),
+            Path::new("/home/u/.local/share").join("retinue").join("speech-models")
+        );
+        assert_eq!(
+            cache_root_from(env(&[("HOME", "/home/u")]), false, temp.clone()),
+            Path::new("/home/u/.local/share/retinue/speech-models"),
+            "a host with no XDG_DATA_HOME uses ~/.local/share"
+        );
+        assert_eq!(
+            cache_root_from(env(&[("LOCALAPPDATA", "C:/Users/u/AppData/Local")]), false, temp.clone()),
+            temp.join("Retinue").join("speech-models"),
+            "a Unix host does not read the Windows variable"
+        );
+        assert_eq!(cache_root_from(env(&[]), true, temp.clone()), temp.join("Retinue").join("speech-models"));
+    }
+
+    #[tokio::test]
+    async fn a_model_whose_engine_runs_elsewhere_is_refused_before_a_download() {
+        use super::ensure_model;
+        let whistle = crate::catalog::get_catalog_model(crate::catalog::WHISTLE_MODEL_ID).unwrap();
+        if whistle.available_on_this_platform() {
+            // Windows is where the pinned Needle engine runs; the download itself
+            // is a network call, and no unit test may make one.
+            return;
+        }
+        let client = reqwest::Client::builder().build().unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let error = ensure_model(&client, directory.path(), whistle, |_, _| {}).await.unwrap_err();
+        assert!(matches!(error, crate::error::SpeechError::Unavailable(_)), "{error}");
+        assert!(error.to_string().contains("Windows only"), "{error}");
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0, "nothing was created");
     }
 }

@@ -7,6 +7,9 @@ pub use providers::{acp_launch_args, acp_provider, discovery_ids, install_hint, 
 // 21 November 2026: the version and protocol answers, remembered per binary.
 mod probe_cache;
 pub use probe_cache::{ProbeCache, ProbeEntry, SpawnCounter};
+// 28 November 2026 (Linux port): the login shell's PATH, merged once at start.
+pub mod shell;
+pub use shell::hydrate_login_shell_path;
 use std::{
     collections::BTreeMap,
     env,
@@ -168,11 +171,13 @@ pub fn safe_version_folder(version: &str) -> bool {
 
 /// A receipt's entry: a relative path inside its version folder.
 pub fn safe_relative_entry(entry: &str) -> bool {
-    let path = Path::new(entry);
+    // Both separators on every platform: a receipt written on Windows is read on
+    // Linux too, where `..\x` or `C:\x` would otherwise be one plain file name.
     !entry.is_empty()
         && entry.len() <= 200
-        && !path.is_absolute()
-        && path.components().all(|component| matches!(component, std::path::Component::Normal(_)))
+        && !entry.contains(':')
+        && !Path::new(entry).is_absolute()
+        && entry.split(['/', '\\']).all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 fn executable_extensions() -> Vec<&'static str> {
@@ -192,6 +197,17 @@ pub fn resolve_command(name: &str) -> Option<ResolvedCommand> {
         for ext in executable_extensions() {
             let candidate = dir.join(format!("{name}{ext}"));
             if candidate.is_file() {
+                // On Unix a file with a CLI's name but no execute bit is a data
+                // file (a manpage, a README), not a program: skip it rather than
+                // hand discovery something that cannot start.
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    let executable = std::fs::metadata(&candidate).map(|metadata| metadata.permissions().mode() & 0o111 != 0).unwrap_or(false);
+                    if !executable {
+                        continue;
+                    }
+                }
                 if candidate
                     .extension()
                     .is_some_and(|e| e.eq_ignore_ascii_case("cmd"))
@@ -1453,6 +1469,8 @@ mod tests {
     fn hash_is_stable() {
         assert_eq!(short_hash("abc"), short_hash("abc"));
     }
+    // npm's `.cmd` shims exist only on Windows.
+    #[cfg(windows)]
     #[test]
     fn npm_wrapper_fixtures_resolve_native_exes_and_node_scripts() {
         let root = std::env::temp_dir().join(format!("retinue-fixture-{}", std::process::id()));
@@ -1814,7 +1832,7 @@ mod tests {
         for good in ["claude.exe", "bin/claude.exe", "package\\bin\\opencode.exe"] {
             assert!(safe_relative_entry(good), "{good}");
         }
-        for bad in ["", "../claude.exe", "/etc/passwd", "C:\\Windows\\cmd.exe", "bin/../../x.exe", ".."] {
+        for bad in ["", "../claude.exe", "/etc/passwd", "C:\\Windows\\cmd.exe", "bin/../../x.exe", "..", "..\\..\\x.exe", "bin//x", "./x"] {
             assert!(!safe_relative_entry(bad), "{bad}");
         }
         assert!(safe_version_folder("2.1.330") && safe_version_folder("1.6.0-beta.2"));

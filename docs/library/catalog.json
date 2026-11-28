@@ -1,8 +1,8 @@
 {
   "version": 1,
   "viewer": "docs/DOCUMENTATION.html",
-  "revision": "9ef9c56b",
-  "documentCount": 459,
+  "revision": "15016c6f",
+  "documentCount": 460,
   "assets": [
     {
       "source": "scripts/docs-library.mjs",
@@ -8948,7 +8948,7 @@
       "title": "Retinue on a Linux host: install, start, update, stop",
       "section": "Operations",
       "status": "Operations",
-      "sha256": "d1860cabb8cdbe569fefc62d2aaf4e34780802e4acfb9cdd19749c22c9a213bd",
+      "sha256": "014077ff4fe1af1b0751244d17c816f60b80f6429c5e2d031e8e940a075c63c4",
       "headings": [
         {
           "id": "1-what-you-need-on-the-host",
@@ -8998,6 +8998,41 @@
         {
           "id": "10-when-something-is-wrong",
           "text": "10. When something is wrong",
+          "level": 2
+        }
+      ]
+    },
+    {
+      "id": "project/operations/linux-desktop",
+      "source": "docs/operations/linux-desktop.md",
+      "title": "Retinue on Linux",
+      "section": "Operations",
+      "status": "Operations",
+      "sha256": "375de0946105776cd49c8b4d80a3886ca4e63acb683df6e1b9f107e475e8ce1c",
+      "headings": [
+        {
+          "id": "install",
+          "text": "Install",
+          "level": 2
+        },
+        {
+          "id": "build-it-locally",
+          "text": "Build it locally",
+          "level": 2
+        },
+        {
+          "id": "how-a-release-adds-linux",
+          "text": "How a release adds Linux",
+          "level": 2
+        },
+        {
+          "id": "updates",
+          "text": "Updates",
+          "level": 2
+        },
+        {
+          "id": "known-caveats",
+          "text": "Known caveats",
           "level": 2
         }
       ]

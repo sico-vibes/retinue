@@ -365,3 +365,16 @@ const NO_DEVICE_BACKDROP: WindowBackdrop = { effect: 'none', active: false, tran
 export async function mainWindowReady(): Promise<void> { /* a device has no native window */ }
 export async function applyWindowBackdrop(enabled: boolean, dark: boolean): Promise<WindowBackdrop> { void enabled; void dark; return NO_DEVICE_BACKDROP }
 export async function windowBackdropState(): Promise<WindowBackdrop> { return NO_DEVICE_BACKDROP }
+
+/** A phone has no desktop window, so it claims no window abilities. */
+export type PlatformCapabilities = {
+  os: string
+  sessionType: 'win32' | 'x11' | 'wayland' | 'unknown'
+  glass: boolean
+  alwaysOnTop: boolean
+  globalShortcuts: boolean
+  positionWindows: boolean
+}
+export async function platformCapabilities(): Promise<PlatformCapabilities> {
+  return { os: 'web', sessionType: 'unknown', glass: false, alwaysOnTop: false, globalShortcuts: false, positionWindows: false }
+}

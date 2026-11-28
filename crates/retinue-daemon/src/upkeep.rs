@@ -281,7 +281,25 @@ pub(crate) fn free_bytes(path: &Path) -> Option<u64> {
     (ok != 0).then_some(free)
 }
 
-#[cfg(not(windows))]
+/// Free bytes on the volume that holds `path`. On Unix this is `statvfs` on the
+/// path itself (the same answer `df` prints); a path with no accessible volume
+/// answers `None`, which only means the guard is skipped, never that space is
+/// short.
+#[cfg(unix)]
+pub(crate) fn free_bytes(path: &Path) -> Option<u64> {
+    use std::os::unix::ffi::OsStrExt;
+    let c_path = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    // SAFETY: `c_path` is a NUL-terminated C string that lives for the call, and
+    // `stat` is a zeroed struct of the right type for the call to fill.
+    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+    let ok = unsafe { libc::statvfs(c_path.as_ptr(), &mut stat) };
+    // The fields are `u64` on 64-bit Linux but narrower on 32-bit targets.
+    #[allow(clippy::unnecessary_cast)]
+    let free = (stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64);
+    (ok == 0).then_some(free)
+}
+
+#[cfg(not(any(windows, unix)))]
 pub(crate) fn free_bytes(_path: &Path) -> Option<u64> {
     None
 }

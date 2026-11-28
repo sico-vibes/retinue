@@ -1,8 +1,14 @@
+// Writes the Tauri updater static manifest (`latest.json`). One release may
+// carry several platforms — Windows NSIS and the Linux AppImage updater
+// archive — under one version and one note, which is what the updater reads to
+// pick the build for the machine it runs on.
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-/** Tauri updater static manifest key for the Windows NSIS artifact. */
 export const DEFAULT_PLATFORM = 'windows-x86_64'
+
+/** Tauri's updater key for the AppImage build of a 64-bit Linux machine. */
+export const LINUX_PLATFORM = 'linux-x86_64'
 
 /**
  * Semver, including pre-release identifiers and optional build metadata.
@@ -11,6 +17,8 @@ export const DEFAULT_PLATFORM = 'windows-x86_64'
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/
 
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/
+
+const PLATFORM_NAME = /^[a-z0-9_-]+$/
 
 export function isSemver(version) {
   return typeof version === 'string' && SEMVER.test(version)
@@ -47,9 +55,28 @@ export function assertHttpsUrl(url) {
 }
 
 /**
- * Build the Tauri updater static manifest object.
- * `notes` falls back to {@link defaultNotes} when omitted or blank.
+ * One `platforms` entry, validated. Returns `[name, { signature, url }]`.
  * `signature` is trimmed; an empty result is rejected.
+ */
+function platformEntry({ platform, signature, url }) {
+  const name = platform || DEFAULT_PLATFORM
+  if (!PLATFORM_NAME.test(name)) {
+    throw new Error(`Invalid platform: ${name}`)
+  }
+  const trimmedSignature = typeof signature === 'string' ? stripBom(signature).trim() : ''
+  if (trimmedSignature === '') {
+    throw new Error('Signature is empty.')
+  }
+  assertHttpsUrl(url)
+  return [name, { signature: trimmedSignature, url }]
+}
+
+/**
+ * Build the Tauri updater static manifest object.
+ *
+ * Pass either one `platform`/`signature`/`url` triple, or a `platforms` object
+ * (`{ 'windows-x86_64': { signature, url }, 'linux-x86_64': { ... } }`).
+ * `notes` falls back to {@link defaultNotes} when omitted or blank.
  * `pubDate` defaults to the current UTC time as ISO 8601.
  */
 export function buildManifest({
@@ -59,18 +86,34 @@ export function buildManifest({
   platform = DEFAULT_PLATFORM,
   signature,
   url,
+  platforms,
 } = {}) {
   if (!isSemver(version)) {
     throw new Error(`Invalid semver version: ${version}`)
   }
-  const trimmedSignature = typeof signature === 'string' ? stripBom(signature).trim() : ''
-  if (trimmedSignature === '') {
-    throw new Error('Signature is empty.')
-  }
-  assertHttpsUrl(url)
-  const platformName = platform || DEFAULT_PLATFORM
-  if (!/^[a-z0-9_-]+$/.test(platformName)) {
-    throw new Error(`Invalid platform: ${platformName}`)
+  const entries = {}
+  if (platforms != null) {
+    if (typeof platforms !== 'object' || Array.isArray(platforms)) {
+      throw new Error('platforms must be an object of platform entries.')
+    }
+    const names = Object.keys(platforms)
+    if (names.length === 0) {
+      throw new Error('At least one platform is required.')
+    }
+    for (const name of names) {
+      const entry = platforms[name]
+      if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+        throw new Error(`The ${name} platform entry is not an object.`)
+      }
+      const [key, value] = platformEntry({ platform: name, ...entry })
+      if (Object.prototype.hasOwnProperty.call(entries, key)) {
+        throw new Error(`Duplicate platform: ${key}`)
+      }
+      entries[key] = value
+    }
+  } else {
+    const [key, value] = platformEntry({ platform, signature, url })
+    entries[key] = value
   }
   let published = pubDate
   if (published == null || published === '') {
@@ -91,12 +134,7 @@ export function buildManifest({
     version,
     notes: noteText,
     pub_date: published,
-    platforms: {
-      [platformName]: {
-        signature: trimmedSignature,
-        url,
-      },
-    },
+    platforms: entries,
   }
 }
 
@@ -111,6 +149,8 @@ function readText(path, label) {
     throw new Error(`Could not read ${label}: ${path}`)
   }
 }
+
+const REPEATABLE = new Set(['platform', 'signature-file', 'url'])
 
 function parseArgs(argv) {
   const args = { quiet: false }
@@ -129,10 +169,15 @@ function parseArgs(argv) {
     if (value === undefined || value.startsWith('--')) {
       throw new Error(`Missing value for --${key}`)
     }
-    if (Object.prototype.hasOwnProperty.call(args, key)) {
-      throw new Error(`Repeated argument --${key}`)
+    if (REPEATABLE.has(key)) {
+      if (!Array.isArray(args[key])) args[key] = []
+      args[key].push(value)
+    } else {
+      if (Object.prototype.hasOwnProperty.call(args, key)) {
+        throw new Error(`Repeated argument --${key}`)
+      }
+      args[key] = value
     }
-    args[key] = value
     index += 1
   }
   return args
@@ -141,16 +186,33 @@ function parseArgs(argv) {
 function main() {
   const args = parseArgs(process.argv.slice(2))
   if (!args.version) throw new Error('Missing --version')
-  if (!args['signature-file']) throw new Error('Missing --signature-file')
-  if (!args.url) throw new Error('Missing --url')
+  const signatureFiles = args['signature-file'] ?? []
+  const urls = args.url ?? []
+  const platforms = args.platform ?? []
+  if (signatureFiles.length === 0) throw new Error('Missing --signature-file')
+  if (urls.length === 0) throw new Error('Missing --url')
+  const count = Math.max(signatureFiles.length, urls.length, platforms.length)
+  if (signatureFiles.length !== count || urls.length !== count || (platforms.length !== 0 && platforms.length !== count)) {
+    throw new Error('Pass one --signature-file and one --url for every --platform.')
+  }
+  const names = platforms.length === count ? platforms : Array.from({ length: count }, () => DEFAULT_PLATFORM)
+  const entries = {}
+  for (let index = 0; index < count; index += 1) {
+    const name = names[index]
+    if (Object.prototype.hasOwnProperty.call(entries, name)) {
+      throw new Error(`Duplicate platform: ${name}`)
+    }
+    entries[name] = {
+      signature: readText(signatureFiles[index], 'signature file'),
+      url: urls[index],
+    }
+  }
   const notes = args['notes-file'] ? readText(args['notes-file'], 'notes file') : undefined
   const manifest = buildManifest({
     version: args.version,
     notes,
     pubDate: args['pub-date'],
-    platform: args.platform,
-    signature: readText(args['signature-file'], 'signature file'),
-    url: args.url,
+    platforms: entries,
   })
   const json = manifestToJson(manifest)
   if (args.out) writeFileSync(args.out, json)

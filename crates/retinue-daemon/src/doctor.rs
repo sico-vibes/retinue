@@ -236,7 +236,7 @@ fn hook_checks() -> Vec<Value> {
     let found = crate::outside::hook_bridge_path().is_some();
     vec![check("hooks.bridge", "hooks", "Hook bridge", if found { "ok" } else { "warn" },
         if found { "Installed. Coding agents can report hook events to Retinue.".to_owned() }
-        else { "Missing: retinue-hook.exe is not in Retinue's install folder, so coding agents cannot report hook events. To fix it, install the latest Retinue release again; your bots and conversations are kept.".to_owned() }, None)]
+        else { format!("Missing: {} is not in Retinue's install folder, so coding agents cannot report hook events. To fix it, install the latest Retinue release again; your bots and conversations are kept.", crate::outside::hook_bridge_name()) }, None)]
 }
 
 /// Where the stored values live, for the owner's own eye: the same name
@@ -267,7 +267,8 @@ fn remote_checks(st: &AppState) -> Vec<Value> {
 
 /// The on-device speech model, only when one is installed. The shell keeps it in
 /// the app's local folder, or in the shared location it falls back to when that
-/// path is not ASCII.
+/// path is not ASCII. On Unix the app-local folder is under `XDG_DATA_HOME`
+/// (Tauri's own rule), with `~/.local/share` as the fallback.
 fn speech_checks() -> Vec<Value> {
     let mut roots: Vec<PathBuf> = Vec::new();
     if let Ok(local) = std::env::var("LOCALAPPDATA") {
@@ -275,6 +276,20 @@ fn speech_checks() -> Vec<Value> {
     }
     if let Ok(program_data) = std::env::var("PROGRAMDATA") {
         roots.push(PathBuf::from(program_data).join("Retinue").join("speech-models"));
+    }
+    if !cfg!(windows) {
+        if let Some(data) = std::env::var("XDG_DATA_HOME").ok().map(PathBuf::from).filter(|path| !path.as_os_str().is_empty()) {
+            roots.push(data.join(APP_LOCAL_FOLDER).join("speech-models"));
+        } else if let Some(home) = std::env::var("HOME").ok().map(PathBuf::from).filter(|path| !path.as_os_str().is_empty()) {
+            roots.push(home.join(".local").join("share").join(APP_LOCAL_FOLDER).join("speech-models"));
+        }
+        // The speech crate's own default for a caller with no desktop shell:
+        // `<XDG_DATA_HOME>/retinue/speech-models` or `~/.local/share/retinue/…`.
+        if let Some(data) = std::env::var("XDG_DATA_HOME").ok().map(PathBuf::from).filter(|path| !path.as_os_str().is_empty()) {
+            roots.push(data.join("retinue").join("speech-models"));
+        } else if let Some(home) = std::env::var("HOME").ok().map(PathBuf::from).filter(|path| !path.as_os_str().is_empty()) {
+            roots.push(home.join(".local").join("share").join("retinue").join("speech-models"));
+        }
     }
     for root in roots {
         if !root.is_dir() { continue; }

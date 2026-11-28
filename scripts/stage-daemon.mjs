@@ -1,14 +1,18 @@
-import { copyFile, mkdir, access } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, access } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const profile = process.argv.includes('--release') ? 'release' : 'debug'
+// Tauri names an external binary `<name>-<target triple>` and adds `.exe` only
+// on Windows, so Linux stages `retinued-x86_64-unknown-linux-gnu`.
+const executableSuffix = process.platform === 'win32' ? '.exe' : ''
 const metadata = spawnSync('cargo', ['metadata', '--no-deps', '--format-version', '1'], {
   cwd: root,
   encoding: 'utf8',
 })
+
 if (metadata.status !== 0) {
   throw new Error(`cargo metadata failed while resolving the active target directory: ${metadata.stderr || metadata.error || 'unknown error'}`)
 }
@@ -31,8 +35,8 @@ const sourceDirectory = resolve(targetDirectory, profile)
 const destinationDirectory = resolve(root, process.env.RETINUE_STAGE_DESTINATION || 'apps/desktop/src-tauri/binaries')
 const sources = binaries.map((binary) => ({
   binary,
-  source: resolve(sourceDirectory, `${binary}.exe`),
-  destination: resolve(destinationDirectory, `${binary}-${targetTriple}.exe`),
+  source: resolve(sourceDirectory, `${binary}${executableSuffix}`),
+  destination: resolve(destinationDirectory, `${binary}-${targetTriple}${executableSuffix}`),
 }))
 
 for (const { binary, source } of sources) {
@@ -47,5 +51,8 @@ for (const { binary, source } of sources) {
 await mkdir(destinationDirectory, { recursive: true })
 for (const { source, destination } of sources) {
   await copyFile(source, destination)
+  // copyFile creates the file 0666 & umask (0644 here), and Tauri bundles the
+  // staged sidecar as it is: without the executable bit the daemon cannot start.
+  if (executableSuffix === '') await chmod(destination, 0o755)
   console.log(`Staged ${source} -> ${destination}`)
 }

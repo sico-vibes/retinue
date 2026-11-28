@@ -1,8 +1,10 @@
-//! How this copy of Retinue was installed: from the Microsoft Store (an MSIX package) or
-//! from the NSIS installer. A Store copy updates through the Store, so the built-in updater
-//! stays off, and it starts at sign-in through the package's startup task
-//! (`packaging/msix/AppxManifest.xml`), because a packaged app's writes to the Run key do
-//! not reach the real registry.
+//! How this copy of Retinue was installed: from the Microsoft Store (an MSIX package), from
+//! the NSIS installer, or, on Linux, as an AppImage. A Store copy updates through the
+//! Store, so the built-in updater stays off, and it starts at sign-in through the package's
+//! startup task (`packaging/msix/AppxManifest.xml`), because a packaged app's writes to the
+//! Run key do not reach the real registry. On Linux nothing is ever packaged: a `.deb` or
+//! `.rpm` copy belongs to the package manager, and only an AppImage is updated from inside
+//! the app (`tauri-plugin-updater` replaces the file `$APPIMAGE` names).
 
 use serde::Serialize;
 
@@ -36,6 +38,19 @@ fn detect_packaged() -> bool {
     false
 }
 
+/// True when this process runs from an AppImage. `tauri-plugin-updater` replaces
+/// the file `$APPIMAGE` names, so that variable is the whole test; a `.deb`,
+/// `.rpm` or development build never has it.
+#[cfg(target_os = "linux")]
+fn detect_app_image() -> bool {
+    std::env::var_os("APPIMAGE").is_some_and(|path| !path.is_empty())
+}
+
+#[cfg(not(target_os = "linux"))]
+fn detect_app_image() -> bool {
+    false
+}
+
 #[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Distribution {
@@ -43,14 +58,34 @@ pub enum Distribution {
     Store,
     /// Installed with the NSIS installer, or a development build.
     Direct,
+    /// A Linux AppImage, which updates itself (added 27 November 2026, Linux port).
+    AppImage,
 }
 
 pub fn distribution() -> Distribution {
-    if is_packaged() {
+    distribution_from(is_packaged(), detect_app_image())
+}
+
+/// The rule, separated from the environment it reads so both shapes can be tested
+/// on whichever platform runs the tests. A Store package is never an AppImage:
+/// package identity wins.
+fn distribution_from(packaged: bool, app_image: bool) -> Distribution {
+    if packaged {
         Distribution::Store
+    } else if app_image {
+        Distribution::AppImage
     } else {
         Distribution::Direct
     }
+}
+
+/// Whether the built-in updater can replace this copy in place.
+///
+/// Windows and macOS builds update themselves (the NSIS copy; a Store copy does
+/// not). On Linux only an AppImage does: a `.deb` or `.rpm` copy is the package
+/// manager's, so the two values have to agree.
+pub fn updates_itself() -> bool {
+    !is_packaged() && (cfg!(target_os = "linux") == detect_app_image())
 }
 
 #[tauri::command]
@@ -163,5 +198,14 @@ mod tests {
     fn distribution_serialises_in_camel_case() {
         assert_eq!(serde_json::to_string(&Distribution::Store).unwrap(), "\"store\"");
         assert_eq!(serde_json::to_string(&Distribution::Direct).unwrap(), "\"direct\"");
+        assert_eq!(serde_json::to_string(&Distribution::AppImage).unwrap(), "\"appImage\"");
+    }
+
+    #[test]
+    fn a_store_package_wins_over_an_app_image_and_a_loose_copy_is_direct() {
+        assert_eq!(distribution_from(true, false), Distribution::Store);
+        assert_eq!(distribution_from(true, true), Distribution::Store, "package identity wins");
+        assert_eq!(distribution_from(false, true), Distribution::AppImage);
+        assert_eq!(distribution_from(false, false), Distribution::Direct);
     }
 }

@@ -1,6 +1,7 @@
 // Native Remote (no Tailscale): pick the method, set the sign-in, and see the
 // addresses and certificate fingerprint a device will use. The daemon owns the
 // listener, the certificate and the password hash; this page only asks.
+import { platform as hostPlatform } from '../transport/platform'
 import { useState } from 'react'
 import { AlertTriangle, Check, CircleDashed, Copy, Globe, KeyRound, RefreshCw, ShieldCheck, Smartphone } from 'lucide-react'
 import type { RemoteMethodId, RemoteNativeStatus } from '../remote/remoteContract'
@@ -131,7 +132,8 @@ export function connectSteps(native: RemoteNativeStatus, on: boolean): ConnectSt
           : { id: 'router', tone: 'todo', title: 'Router forwarding', detail: on ? 'Asking the router…' : `Retinue asks your router to forward port ${port} when Remote turns on.` }
   const steps: ConnectStep[] = [router]
   const firewall = native.firewall ?? 'unknown'
-  if (firewall === 'allowed') steps.push({ id: 'firewall', tone: 'ok', title: 'Windows Firewall lets it in', detail: `An inbound rule allows TCP port ${port}.` })
+  if (hostPlatform().os === 'linux') steps.push({ id: 'firewall', tone: 'todo', title: 'Firewall not managed here', detail: `Retinue doesn’t change the Linux firewall. If you use one (ufw or firewalld), allow TCP port ${port}.` })
+  else if (firewall === 'allowed') steps.push({ id: 'firewall', tone: 'ok', title: 'Windows Firewall lets it in', detail: `An inbound rule allows TCP port ${port}.` })
   else if (firewall === 'missing') steps.push({ id: 'firewall', tone: 'warn', title: 'Windows Firewall blocks it', detail: `Other devices can’t get in until Windows allows port ${port}. Windows asks you to confirm.` })
   else if (firewall === 'unknown') steps.push({ id: 'firewall', tone: 'todo', title: 'Windows Firewall not checked', detail: `Retinue couldn’t read the firewall. Allow port ${port} if devices can’t connect.` })
   const ip = native.externalIp ?? null
@@ -183,6 +185,7 @@ export function NativeConnectivityGroup({ native, on, busy, onConsent, onAddFire
   const saveAddress = () => { if (!looksLikeAddress(address)) return; onExternalIp(address.trim()); setEditing(false); setAddress('') }
   const extra = (step: ConnectStep) => {
     if (step.id === 'router') return <button type="button" role="switch" aria-checked={consent} aria-label="Ask my router to forward the port" className={`toggle ${consent ? 'on' : ''}`} disabled={busy} onClick={() => onConsent(!consent)}><i /></button>
+    if (step.id === 'firewall' && hostPlatform().os === 'linux') return null
     if (step.id === 'firewall' && firewall !== 'allowed') return <button type="button" className="secondary-button small" disabled={busy} onClick={() => void firewallAction(true)}>Allow in firewall</button>
     if (step.id === 'firewall') return <button type="button" className="ghost-button small" disabled={busy} onClick={() => void firewallAction(false)}>Remove rule</button>
     if (step.id === 'address' && !editing) return <button type="button" className="ghost-button small" disabled={busy} onClick={() => { setAddress(native.externalIpSource === 'manual' ? native.externalIp ?? '' : ''); setEditing(true) }}>{native.externalIp ? 'Change' : 'Enter it'}</button>

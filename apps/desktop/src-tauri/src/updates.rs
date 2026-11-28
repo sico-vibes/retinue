@@ -785,6 +785,14 @@ pub async fn updates_install(app: AppHandle) -> Result<(), InstallError> {
             message: "This copy of Retinue updates through the Microsoft Store.",
         });
     }
+    // Linux: only an AppImage can be replaced in place. A `.deb` or `.rpm` copy
+    // belongs to the package manager, and the plugin would fail mid-install.
+    if !crate::distribution::updates_itself() {
+        return Err(InstallError {
+            code: "unavailable",
+            message: "This copy of Retinue is updated by your package manager. Install the AppImage to update from inside the app.",
+        });
+    }
     let Some(service) = app.try_state::<UpdateService>() else {
         return Err(InstallError {
             code: "unavailable",

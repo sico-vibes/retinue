@@ -1,0 +1,13 @@
+/* The drawn Linux title bar (WindowFrame.tsx): the size and buttons of the Windows title bar. */
+:root { --frame-h: 32px; }
+:root[data-frame="drawn"] #root { height: calc(100% - var(--frame-h)); margin-top: var(--frame-h); }
+.window-frame { position: fixed; inset: 0 0 auto 0; z-index: 2147483000; height: var(--frame-h); display: flex; align-items: stretch; justify-content: space-between; background: var(--surface-app); color: var(--text-1); user-select: none; -webkit-user-select: none; }
+.window-frame-title { display: flex; align-items: center; padding-left: 12px; font-size: 12px; color: var(--text-2); }
+.window-frame-controls { display: flex; }
+.window-frame-button { width: 46px; height: 100%; display: grid; place-items: center; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text-1); cursor: default; }
+.window-frame-button svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; shape-rendering: crispEdges; }
+.window-frame-button:hover { background: color-mix(in srgb, var(--text-1) 9%, transparent); }
+.window-frame-button:active { background: color-mix(in srgb, var(--text-1) 6%, transparent); }
+.window-frame-button.close:hover { background: #c42b1c; color: #fff; }
+.window-frame-button.close:active { background: color-mix(in srgb, #c42b1c 85%, transparent); color: #fff; }
+.window-frame-button:focus-visible { outline: 2px solid var(--accent, currentColor); outline-offset: -2px; }

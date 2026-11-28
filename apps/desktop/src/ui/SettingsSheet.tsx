@@ -1,3 +1,4 @@
+import { startAtLoginLabel } from './platformCopy'
 import { AboutPage } from './AboutPage'
 import { EXPERIMENTS, DEFAULT_EXPERIMENTS, type Experiments, type ExperimentName } from './experiments'
 import { KeybindingEditor } from './KeybindingEditor'
@@ -623,8 +624,8 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
 
           {!loading && page === 'General' && <>
             {(platform.autostart || platform.tray) && <SettingsGroup title="Startup">
-              {platform.autostart && <SettingsRow label="Start with Windows">
-                <button type="button" className={`toggle ${startWithWindows ? 'on' : ''}`} role="switch" aria-label="Start with Windows" aria-checked={startWithWindows} onClick={() => void updateAutostart(!startWithWindows)} disabled={saving || !autostartLoaded}><i /></button>
+              {platform.autostart && <SettingsRow label={startAtLoginLabel(platform.os)}>
+                <button type="button" className={`toggle ${startWithWindows ? 'on' : ''}`} role="switch" aria-label={startAtLoginLabel(platform.os)} aria-checked={startWithWindows} onClick={() => void updateAutostart(!startWithWindows)} disabled={saving || !autostartLoaded}><i /></button>
               </SettingsRow>}
               {platform.tray && <SettingsRow label="Close to tray" hint="Closing the window keeps Retinue running in the tray.">
                 <button type="button" className={`toggle ${closeToTray ? 'on' : ''}`} role="switch" aria-label="Close to tray" aria-checked={closeToTray} onClick={() => void updateCloseToTray(!closeToTray)} disabled={saving}><i /></button>
@@ -640,7 +641,7 @@ export function SettingsSheet({ snapshot, scanStatus = EMPTY_DISCOVERY_STATUS, i
               <SettingsRow label={`${Nouns} working at once`} hint={`Across every ${noun}. Extra work waits its turn and says so.`}>
                 <Select ariaLabel={`${nouns} working at once`} variant="muted" value={String(botsAtOnce)} disabled={saving} onChange={(value) => { const next = Number(value); void saveSetting('concurrency.botsAtOnce', next).then((failure) => { if (!failure) setBotsAtOnce(next) }) }} options={Array.from({ length: 16 }, (_, index) => { const count = index + 1; return { value: String(count), label: String(count) } })} />
               </SettingsRow>
-              <SettingsRow label={`Keep this computer awake while ${nouns} work`} hint="Stops Windows sleeping on its own. Closing the lid or choosing Sleep still works.">
+              <SettingsRow label={`Keep this computer awake while ${nouns} work`} hint={`Stops ${platform.os === 'windows' ? 'Windows' : 'the computer'} sleeping on its own. Closing the lid or choosing Sleep still works.`}>
                 <button type="button" className={`toggle ${keepAwake ? 'on' : ''}`} role="switch" aria-label={`Keep this computer awake while ${nouns} work`} aria-checked={keepAwake} disabled={saving} onClick={() => { const next = !keepAwake; void saveSetting('power.keepAwake', next).then((failure) => { if (!failure) setKeepAwake(next) }) }}><i /></button>
               </SettingsRow>
               {featureRow('resumeAfterUsageLimits')}

@@ -54,6 +54,12 @@ impl SpeechEngine {
     /// Load a recognizer from an already-downloaded model directory.
     pub fn load(manifest: &SpeechModelManifest, directory: &Path) -> SpeechResult<Self> {
         if manifest.model_type == SpeechModelType::Needle {
+            if !manifest.available_on_this_platform() {
+                return Err(SpeechError::Unavailable(format!(
+                    "{} needs an engine that is published for Windows only, so it cannot run on this computer.",
+                    manifest.label
+                )));
+            }
             return Self::load_needle(manifest, directory);
         }
         let tokens = resolve_file(&manifest.files, directory, "tokens")?;

@@ -1,3 +1,4 @@
+import { systemName } from './platformCopy'
 import { Fragment, useCallback, useContext, useMemo, useEffect, useLayoutEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react'
 import { ProfessionalTabs } from './ProfessionalTabs'
 import { useWorkMode } from './workMode'
@@ -4135,7 +4136,7 @@ function Companion({ suggestion, dismissSuggestion, sendShortcut = 'enter', deli
         dragPathRef.current = null
         setDragPath(null)
         setDragSize(null)
-        if (!path) setFileError('Windows did not report a file path. Choose a local file again.')
+        if (!path) setFileError(`${systemName(platform.os)} did not report a file path. Choose a local file again.`)
         else if (!sessionRef.current) setDropError('Open or create a session before attaching a local file. The dropped path was not inspected.')
         else if (permissionRef.current) setDropError('Resolve the pending approval before attaching a local file.')
         else {

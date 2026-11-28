@@ -8,6 +8,10 @@ pub enum SpeechError {
     UnknownModel(String),
     #[error("speech model is not ready: {0}")]
     ModelNotReady(String),
+    /// A model whose engine does not run on this platform: a plain sentence the
+    /// window can show as it is.
+    #[error("{0}")]
+    Unavailable(String),
     #[error("dictation is already active")]
     AlreadyActive,
     #[error("dictation owner mismatch")]

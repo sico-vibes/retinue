@@ -289,21 +289,33 @@ async fn snapshot(st: &AppState) -> (Vec<Listener>, HashMap<u32, ProcessRow>) {
 
 /// The listening TCP sockets and the process table, in one pass.
 async fn machine() -> (Vec<Listener>, HashMap<u32, ProcessRow>) {
-    let mut raw = String::new();
-    for protocol in ["tcp", "tcpv6"] {
-        if let Some(text) = netstat(protocol).await {
-            raw.push_str(&text);
-            raw.push('\n');
+    #[cfg(windows)]
+    {
+        let mut raw = String::new();
+        for protocol in ["tcp", "tcpv6"] {
+            if let Some(text) = netstat(protocol).await {
+                raw.push_str(&text);
+                raw.push('\n');
+            }
         }
+        let table = tokio::task::spawn_blocking(process_table).await.unwrap_or_default();
+        (parse_netstat(&raw), table)
     }
-    let table = tokio::task::spawn_blocking(process_table).await.unwrap_or_default();
-    (parse_netstat(&raw), table)
+    #[cfg(target_os = "linux")]
+    {
+        tokio::task::spawn_blocking(proc_snapshot).await.unwrap_or_default()
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        (Vec::new(), HashMap::new())
+    }
 }
 
 /// Reads `netstat -ano -p <protocol>` output. A listening TCP socket is a row
 /// whose foreign address is the zero port, which is the one marker `netstat`
 /// prints the same way in every Windows language. Only a loopback bind is kept:
 /// `0.0.0.0:5173` and a LAN address are somebody else's listener.
+#[cfg(any(windows, test))]
 fn parse_netstat(raw: &str) -> Vec<Listener> {
     let mut listeners: Vec<Listener> = Vec::new();
     for line in raw.lines() {
@@ -336,6 +348,7 @@ fn parse_netstat(raw: &str) -> Vec<Listener> {
 
 /// `127.0.0.1` or `[::1]`, and nothing else. The wildcard binds (`0.0.0.0`,
 /// `[::]`) are deliberately left out: they answer on the network too.
+#[cfg(any(windows, test))]
 fn is_loopback_host(host: &str) -> bool {
     host == "127.0.0.1" || host == "[::1]"
 }
@@ -361,11 +374,6 @@ async fn netstat(protocol: &str) -> Option<String> {
         return None;
     }
     Some(String::from_utf8_lossy(&output.stdout).into_owned())
-}
-
-#[cfg(not(windows))]
-async fn netstat(_protocol: &str) -> Option<String> {
-    None
 }
 
 /// Every process's parent and image name. A failure answers an empty table, and
@@ -398,9 +406,146 @@ fn process_table() -> HashMap<u32, ProcessRow> {
     table
 }
 
-#[cfg(not(windows))]
-fn process_table() -> HashMap<u32, ProcessRow> {
-    HashMap::new()
+// ---------------------------------------------------------------------------
+// Linux: the same facts from /proc, with no external binary
+// ---------------------------------------------------------------------------
+
+/// One listening TCP socket in `/proc/net/tcp` form: the loopback host, the port
+/// and the socket's inode.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) type ProcSocket = (String, u16, u64);
+
+/// Reads `/proc/net/tcp` or `/proc/net/tcp6`. Columns: `sl local_address
+/// rem_address st … uid timeout inode`. Only a LISTEN row (`0A`) on a loopback
+/// address is kept; a wildcard or LAN bind belongs to somebody else, as on
+/// Windows. The address is little-endian per 32-bit word, so `0100007F` is
+/// `127.0.0.1`.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) fn parse_proc_net(text: &str, v6: bool) -> Vec<ProcSocket> {
+    let mut sockets = Vec::new();
+    for line in text.lines().skip(1) {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        if fields.len() < 10 || fields[3] != "0A" {
+            continue;
+        }
+        let Some((host, port)) = proc_address(fields[1], v6) else { continue };
+        let Ok(inode) = fields[9].parse::<u64>() else { continue };
+        if inode == 0 || port == 0 {
+            continue;
+        }
+        let socket = (host, port, inode);
+        if !sockets.contains(&socket) {
+            sockets.push(socket);
+        }
+    }
+    sockets
+}
+
+/// A `/proc/net/tcp` address as a loopback host and a port. `None` for a
+/// wildcard, a LAN address, or anything malformed: only `127.0.0.1` and `::1`
+/// are ever listed, exactly as `netstat`'s rows are filtered on Windows.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) fn proc_address(field: &str, v6: bool) -> Option<(String, u16)> {
+    let (address, port) = field.split_once(':')?;
+    let expected = if v6 { 32 } else { 8 };
+    if address.len() != expected || !address.chars().all(|character| character.is_ascii_hexdigit()) {
+        return None;
+    }
+    let host = if v6 {
+        // ::1 is the last 32-bit word 01000000, little-endian.
+        (address.eq_ignore_ascii_case("00000000000000000000000001000000")).then(|| "[::1]".to_owned())?
+    } else {
+        (address.eq_ignore_ascii_case("0100007F")).then(|| "127.0.0.1".to_owned())?
+    };
+    let port = u16::from_str_radix(port, 16).ok()?;
+    Some((host, port))
+}
+
+/// A `/proc/<pid>/stat` line's parent pid and command name: the command sits in
+/// parentheses and may itself contain a `)`, so the split is at the last one.
+#[cfg(any(target_os = "linux", test))]
+pub(crate) fn parse_proc_stat(text: &str) -> Option<(u32, String)> {
+    let open = text.find('(')?;
+    let close = text.rfind(')')?;
+    if close <= open {
+        return None;
+    }
+    let name = text.get(open + 1..close)?.trim().to_owned();
+    let rest = text.get(close + 1..)?.split_whitespace().collect::<Vec<_>>();
+    // rest[0] is the state, rest[1] the parent pid.
+    let parent = rest.get(1)?.parse::<u32>().ok()?;
+    (!name.is_empty()).then_some((parent, name))
+}
+
+/// Reading `/proc` is the Linux half of the same snapshot: the listeners, the
+/// process tree, and which process owns each socket. A process the daemon may not
+/// inspect is simply absent, so its listener is not attributed to anybody.
+#[cfg(target_os = "linux")]
+fn proc_snapshot() -> (Vec<Listener>, HashMap<u32, ProcessRow>) {
+    let table = proc_process_table();
+    let owners = proc_socket_owners();
+    let mut sockets = Vec::new();
+    for (path, v6) in [("/proc/net/tcp", false), ("/proc/net/tcp6", true)] {
+        if let Ok(text) = std::fs::read_to_string(path) {
+            sockets.extend(parse_proc_net(&text, v6));
+        }
+    }
+    let mut listeners: Vec<Listener> = Vec::new();
+    for (host, port, inode) in sockets {
+        let Some(pid) = owners.get(&inode).copied() else { continue };
+        if pid == 0 {
+            continue;
+        }
+        let listener = Listener { host, port, pid };
+        if !listeners.contains(&listener) {
+            listeners.push(listener);
+        }
+    }
+    listeners.sort_by_key(|listener| listener.port);
+    (listeners, table)
+}
+
+/// Every process in `/proc`, as its pid, parent pid and command name.
+#[cfg(target_os = "linux")]
+fn proc_process_table() -> HashMap<u32, ProcessRow> {
+    let mut table = HashMap::new();
+    let Ok(entries) = std::fs::read_dir("/proc") else { return table };
+    for entry in entries.flatten() {
+        let Some(pid) = entry.file_name().to_str().and_then(|name| name.parse::<u32>().ok()) else { continue };
+        let Ok(stat) = std::fs::read_to_string(entry.path().join("stat")) else { continue };
+        if let Some((parent, name)) = parse_proc_stat(&stat) {
+            table.insert(pid, ProcessRow { parent, name });
+        }
+    }
+    table
+}
+
+/// Which process owns each socket, from `/proc/<pid>/fd`: a socket's entry is the
+/// symlink `socket:[<inode>]`. One pass, bounded, and never a guess: a socket
+/// whose owner is not visible is left out.
+#[cfg(target_os = "linux")]
+fn proc_socket_owners() -> HashMap<u64, u32> {
+    const FD_LIMIT: usize = 200_000;
+    let mut owners = HashMap::new();
+    let Ok(processes) = std::fs::read_dir("/proc") else { return owners };
+    let mut seen = 0usize;
+    for process in processes.flatten() {
+        let Some(pid) = process.file_name().to_str().and_then(|name| name.parse::<u32>().ok()) else { continue };
+        let Ok(fds) = std::fs::read_dir(process.path().join("fd")) else { continue };
+        for fd in fds.flatten() {
+            seen += 1;
+            if seen > FD_LIMIT {
+                return owners;
+            }
+            let Ok(target) = std::fs::read_link(fd.path()) else { continue };
+            let Some(text) = target.to_str() else { continue };
+            let Some(inode) = text.strip_prefix("socket:[").and_then(|rest| rest.strip_suffix(']')) else { continue };
+            if let Ok(inode) = inode.parse::<u64>() {
+                owners.entry(inode).or_insert(pid);
+            }
+        }
+    }
+    owners
 }
 
 // ---------------------------------------------------------------------------
@@ -500,6 +645,33 @@ mod tests {
         assert!(parse_netstat("Active Connections\n").is_empty());
     }
 
+    /// Real `/proc/net/tcp` shape (Linux), header included, with a loopback
+    /// listener, a wildcard listener, an established loopback connection and an
+    /// IPv6 wildcard.
+    const PROC_NET_TCP: &str = "  sl  local_address rem_address   st tx_queue rx_queue tr tm->when retrnsmt   uid  timeout inode\n   0: 0100007F:1F90 00000000:0000 0A 00000000:00000000 00:00000000 00000000  1000        0 4242 1\n   1: 00000000:0050 00000000:0000 0A 00000000:00000000 00:00000000 00000000     0        0 1111 1\n   2: 0100007F:8AE1 0100007F:1F90 01 00000000:00000000 00:00000000 00000000  1000        0 4243 1\n";
+
+    #[test]
+    fn linux_keeps_only_loopback_listening_sockets_and_reads_their_inode() {
+        assert_eq!(parse_proc_net(PROC_NET_TCP, false), vec![("127.0.0.1".to_owned(), 8080, 4242)]);
+        assert_eq!(
+            parse_proc_net("  sl local_address rem_address st inode\n   0: 00000000000000000000000001000000:1F90 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000 1000 0 77 1\n", true),
+            vec![("[::1]".to_owned(), 8080, 77)]
+        );
+        assert_eq!(proc_address("0100007F:1F90", false), Some(("127.0.0.1".to_owned(), 8080)));
+        assert_eq!(proc_address("00000000:0050", false), None, "the wildcard is somebody else's");
+        assert_eq!(proc_address("0A01A8C0:0BB8", false), None, "a LAN address");
+        assert_eq!(proc_address("00000000000000000000000000000000:1F90", true), None, "the IPv6 wildcard");
+        assert_eq!(proc_address("not-hex:1F90", false), None);
+    }
+
+    #[test]
+    fn a_proc_stat_line_gives_the_parent_and_a_name_with_brackets_in_it() {
+        assert_eq!(parse_proc_stat("4242 (node) S 100 4242 4242 0 -1 4194560"), Some((100, "node".to_owned())));
+        assert_eq!(parse_proc_stat("9 (a)b) S 7 9 9 0"), Some((7, "a)b".to_owned())), "the command may contain a bracket");
+        assert_eq!(parse_proc_stat("garbage"), None);
+        assert_eq!(parse_proc_stat("1 () S 0"), None, "a process always has a name");
+    }
+
     #[test]
     fn attribution_follows_the_process_tree() {
         // 100 is the agent, 101 the shell it ran, 102 the dev server.
@@ -527,8 +699,7 @@ mod tests {
         let claims = HashMap::from([
             (100u32, vec!["one".to_string(), "two".to_string()]),
             (200, vec!["three".to_string()]),
-        ]);
-        assert_eq!(only_claims(claims), HashMap::from([("three".to_string(), 200u32)]));
+        ]);        assert_eq!(only_claims(claims), HashMap::from([("three".to_string(), 200u32)]));
     }
 
     #[test]

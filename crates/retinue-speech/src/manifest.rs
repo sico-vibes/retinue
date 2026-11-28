@@ -50,10 +50,26 @@ pub struct SpeechModelManifest {
     pub modeling_unit: Option<String>,
     #[serde(default)]
     pub recommended: bool,
+    /// Whether this build can download and run the model on the host it was
+    /// compiled for. True by default, so an older client that ignores it still
+    /// lists every model; Whistle is false off Windows (the Cactus Needle engine
+    /// is published for Windows only).
+    #[serde(default = "available_by_default")]
+    pub available: bool,
+}
+
+fn available_by_default() -> bool {
+    true
 }
 
 impl SpeechModelManifest {
     pub fn is_local(&self) -> bool {
         matches!(self.provider, SpeechProvider::Local)
+    }
+
+    /// Whether the engine this model needs runs on the platform this build was
+    /// made for. `available` is the serialized form of this answer.
+    pub fn available_on_this_platform(&self) -> bool {
+        self.model_type != SpeechModelType::Needle || cfg!(windows)
     }
 }

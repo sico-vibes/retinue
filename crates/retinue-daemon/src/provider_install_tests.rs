@@ -722,6 +722,41 @@ fn the_owner_of_an_install_is_read_from_its_path() {
     }
 }
 
+#[test]
+fn an_installs_owner_is_read_the_same_way_with_unix_paths() {
+    // Whichever platform runs this test reads the same shapes: bun and npm under
+    // the home folder, and a distro install under /usr or /opt.
+    for (path, owner) in [
+        ("/home/someone/.bun/bin/claude", "npm"),
+        ("/home/someone/.npm-global/bin/codex", "npm"),
+        ("/usr/local/lib/node_modules/opencode/bin/opencode", "system"),
+        ("/opt/claude/claude", "system"),
+        ("/home/someone/.local/bin/pi", "own"),
+    ] {
+        assert_eq!(agent_install::classify(&PathBuf::from(path)), owner, "{path}");
+    }
+}
+
+#[test]
+fn the_managed_assets_are_the_ones_each_platform_publishes() {
+    assert_eq!(agent_install::platform_assets(true), ("codex-x86_64-pc-windows-msvc.exe", "pi-windows-x64.zip", "opencode-windows-x64"));
+    assert_eq!(agent_install::platform_assets(false), ("codex-x86_64-unknown-linux-musl.tar.gz", "pi-linux-x64.tar.gz", "opencode-linux-x64"));
+}
+
+#[cfg(unix)]
+#[test]
+fn a_published_binary_is_made_executable() {
+    use std::os::unix::fs::PermissionsExt;
+    let folder = std::env::temp_dir().join(format!("retinue-exec-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let binary = folder.join("claude");
+    std::fs::write(&binary, b"#!/bin/sh\nexit 0\n").unwrap();
+    std::fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o644)).unwrap();
+    agent_install::make_executable(&binary);
+    assert_ne!(std::fs::metadata(&binary).unwrap().permissions().mode() & 0o111, 0, "a managed copy can be launched");
+    let _ = std::fs::remove_dir_all(&folder);
+}
+
 // ---------------------------------------------------------------------------
 // The edges the module validates
 

@@ -567,3 +567,37 @@ export async function windowBackdropState(): Promise<WindowBackdrop> {
     return NO_DESKTOP_BACKDROP
   }
 }
+
+/** What this desktop can actually do, so a screen can stay honest. */
+export type PlatformCapabilities = {
+  os: string
+  /** `win32`, `x11`, `wayland`, or `unknown` for a headless start. */
+  sessionType: 'win32' | 'x11' | 'wayland' | 'unknown'
+  /** The native frosted backdrop (Windows only). */
+  glass: boolean
+  alwaysOnTop: boolean
+  globalShortcuts: boolean
+  /** Absolute window placement (the companion and the dictation bubble use it). */
+  positionWindows: boolean
+}
+
+/** Nothing is claimed when the page is not in the desktop shell. */
+const NO_PLATFORM_CAPABILITIES: PlatformCapabilities = {
+  os: 'web', sessionType: 'unknown', glass: false, alwaysOnTop: false, globalShortcuts: false, positionWindows: false,
+}
+
+/**
+ * The platform's real window abilities.
+ *
+ * Wayland has no absolute window placement and no global key grabs, so a screen
+ * that positions the companion or registers a shortcut asks first. Never throws:
+ * a shell too old to answer reports nothing available.
+ */
+export async function platformCapabilities(): Promise<PlatformCapabilities> {
+  if (!inDesktop) return NO_PLATFORM_CAPABILITIES
+  try {
+    return await invoke<PlatformCapabilities>('platform_capabilities')
+  } catch {
+    return NO_PLATFORM_CAPABILITIES
+  }
+}

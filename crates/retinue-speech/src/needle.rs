@@ -209,11 +209,11 @@ mod tests {
         assert!(scratch.path().join("keep.txt").exists());
     }
 
-    #[cfg(windows)]
     #[test]
     fn a_missing_executable_is_an_engine_error_not_a_panic() {
         let scratch = tempfile::tempdir().unwrap();
-        let mut runner = NeedleRunner::subprocess(scratch.path().join("no-such-needle.exe"), scratch.path().join("whistle.cact"), scratch.path().join("tmp"));
+        let name = if cfg!(windows) { "no-such-needle.exe" } else { "no-such-needle" };
+        let mut runner = NeedleRunner::subprocess(scratch.path().join(name), scratch.path().join("whistle.cact"), scratch.path().join("tmp"));
         let error = runner.transcribe(&[0.1; 16], 16_000).unwrap_err();
         assert!(error.to_string().contains("could not start the Whistle engine"), "{error}");
     }

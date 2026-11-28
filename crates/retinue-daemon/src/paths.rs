@@ -14,6 +14,13 @@
 //! * Unix: `$XDG_DATA_HOME/retinue/retinue.db`, else
 //!   `~/.local/share/retinue/retinue.db`, else the temp folder.
 //!
+//! Everything else the daemon keeps (logs in `logs/`, endpoint files, managed
+//! agent copies, secrets in owner-only files) is inside this one folder, so a
+//! Linux desktop and its sidecar agree on a path when both derive it from here.
+//! `$XDG_STATE_HOME` is deliberately not used for the logs: a second root would
+//! split the daemon's files, and the Desktop's own log reader (`retinue_data_dir`
+//! in `src-tauri`) already expects the data folder on every platform.
+//!
 //! The rule is a pure function over a lookup closure, so both platforms' rules
 //! are tested on whichever platform runs the tests.
 

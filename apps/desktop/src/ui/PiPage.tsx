@@ -1,6 +1,8 @@
 // Settings > Coding agents > Pi (owner, 16 November 2026): Pi as an optional way to reach many model providers.
 // Retinue keeps each provider's API key in Windows Credential Manager and hands it only to the Pi process it starts.
 // Contract: docs/plans/vault-channels-pi.md, section C.
+import { platform as hostPlatform } from '../transport/platform'
+import { secretStoreName } from './platformCopy'
 import { useCallback, useEffect, useState } from 'react'
 import { Check, ExternalLink, KeyRound, Trash2 } from 'lucide-react'
 import { rpc } from '../tauri'
@@ -53,7 +55,7 @@ export function PiPage() {
   useEffect(load, [load])
   const withKeys = state?.providers.filter((provider) => provider.hasKey).length ?? 0
   return <>
-    <p className="settings-intro">Pi is an optional coding agent that reaches many model providers with your own API keys. Retinue keeps the keys in Windows Credential Manager and gives them only to the Pi it starts.</p>
+    <p className="settings-intro">Pi is an optional coding agent that reaches many model providers with your own API keys. Retinue keeps the keys in {secretStoreName(hostPlatform().os)} and gives them only to the Pi it starts.</p>
     {problem && <p className="new-project-error" role="alert">{problem}</p>}
     {state === null ? <p className="settings-empty">Checking for Pi…</p> : <>
       <SettingsGroup title="Pi">

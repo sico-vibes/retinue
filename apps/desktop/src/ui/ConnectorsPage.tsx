@@ -1,5 +1,7 @@
 // Settings > Integrations > Connectors (owner, 16 November 2026): MCP servers the daemon calls for the employees,
 // so a bot can use Notion, Linear or GitHub without ever holding their tokens. Contract: docs/plans/nod-adoption-plan.md, D.
+import { platform as hostPlatform } from '../transport/platform'
+import { secretStoreName } from './platformCopy'
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronDown, ChevronRight, Plug, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { listenForDaemonEvents, rpc } from '../tauri'
@@ -60,9 +62,9 @@ function AddForm({ preset, busy, onAdd, onCancel }: { preset: CatalogueEntry | n
     </div>
     {how === 'token'
       ? <label className="new-project-field"><span>Token (if the server needs one)</span><input className="text-input" type="password" autoComplete="new-password" spellCheck={false} value={token} autoFocus={!!preset} onChange={(event) => setToken(event.target.value)} />
-        <small className="project-settings-note">{preset ? <>{preset.tokenHint} <button type="button" className="markdown-link" onClick={() => void openSafeLink(preset.docsUrl)}>Where to get it</button></> : 'Kept in Windows Credential Manager. Employees never see it.'}</small>
+        <small className="project-settings-note">{preset ? <>{preset.tokenHint} <button type="button" className="markdown-link" onClick={() => void openSafeLink(preset.docsUrl)}>Where to get it</button></> : `Kept in ${secretStoreName(hostPlatform().os)}. Employees never see it.`}</small>
       </label>
-      : <small className="project-settings-note">Your browser opens the service's own sign-in page. Retinue keeps what it gets in Windows Credential Manager, renews it, and signs out at the service when you remove the connector. Employees never see it.</small>}
+      : <small className="project-settings-note">Your browser opens the service's own sign-in page. Retinue keeps what it gets in {secretStoreName(hostPlatform().os)}, renews it, and signs out at the service when you remove the connector. Employees never see it.</small>}
     {urlProblem && <p className="new-project-error" role="alert">{urlProblem}</p>}
     <div className="connector-actions">
       <button type="button" className="secondary-button small" disabled={busy} onClick={onCancel}>Cancel</button>

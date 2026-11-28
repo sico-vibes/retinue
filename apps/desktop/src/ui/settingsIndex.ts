@@ -1,3 +1,5 @@
+import { platform as hostPlatform } from '../transport/platform'
+import { startAtLoginLabel } from './platformCopy'
 // What the Settings search can find. Each entry points at a page and at the
 // group heading on that page, which the sheet scrolls to and flashes. Keep the
 // `group` strings equal to the `SettingsGroup title` values in SettingsSheet.
@@ -25,7 +27,8 @@ export interface SettingsIndexEntry {
 }
 
 export const SETTINGS_INDEX: readonly SettingsIndexEntry[] = [
-  { page: 'General', group: 'Startup', label: 'Start with Windows', keywords: 'startup login autostart boot' },
+  // A getter: read on use, because `tauri.ts` imports this file before the platform module is ready.
+  { page: 'General', group: 'Startup', get label() { return startAtLoginLabel(hostPlatform().os) }, keywords: 'startup login autostart boot sign in' },
   { page: 'General', group: 'Startup', label: 'Close to tray', keywords: 'minimise background quit exit' },
   { page: 'General', group: 'Notifications', label: 'Notifications', keywords: 'alerts toast approval' },
   { page: 'General', group: 'Notifications', label: 'Taskbar badge', keywords: 'taskbar tray windows waiting approval' },

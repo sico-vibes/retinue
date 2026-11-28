@@ -31,8 +31,8 @@ export async function applyFonts(uiId: string, monoId: string, style: ThemeStyle
   const mono = FONT_CATALOGUE.find((font) => font.id === (monoId || FONT_DEFAULTS[style].mono))
   await Promise.all([ui?.load(), mono?.load()])
   const root = document.documentElement
-  if (ui) root.style.setProperty('--font-ui', `"${ui.family}", "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, sans-serif`)
+  if (ui) root.style.setProperty('--font-ui', `"${ui.family}", "Segoe UI Variable Text", "Segoe UI", Selawik, Inter, system-ui, sans-serif`)
   else root.style.removeProperty('--font-ui')
-  if (mono) root.style.setProperty('--font-mono', `"${mono.family}", "Cascadia Mono", Consolas, ui-monospace, monospace`)
+  if (mono) root.style.setProperty('--font-mono', `"${mono.family}", "Cascadia Mono", Consolas, "Retinue Cascadia Mono", ui-monospace, monospace`)
   else root.style.removeProperty('--font-mono')
 }

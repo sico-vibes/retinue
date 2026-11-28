@@ -10,5 +10,10 @@ export async function emit(name: string, payload?: unknown) {
   for (const handler of eventListeners.get(name) ?? []) handler({ payload })
 }
 export function getCurrentWindow() {
-  return { onDragDropEvent: async () => () => undefined, requestUserAttention: async () => undefined }
+  // The drawn Linux title bar's buttons do nothing in the preview; there is no window to move.
+  return {
+    onDragDropEvent: async () => () => undefined, requestUserAttention: async () => undefined,
+    startDragging: async () => undefined, minimize: async () => undefined, toggleMaximize: async () => undefined,
+    close: async () => undefined, isMaximized: async () => false, onResized: async () => () => undefined,
+  }
 }

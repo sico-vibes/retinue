@@ -30,7 +30,7 @@
   --status-danger: #ff6b6b;
   --status-info: #6ea8ff;
   --shadow-pop: 0 18px 40px -14px rgb(0 0 0 / .5);
-  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", Selawik, system-ui, -apple-system, sans-serif;
   color: var(--text-1);
   background: transparent;
 }
@@ -183,7 +183,7 @@
   --line: #3a3b40; --line-strong: #5a5b61; --accent: var(--user-accent, #f3f3f2);
   --blue: var(--user-accent, #6ea8ff); --bubble-user: #3a3b40; --status-working: #ffae42;
   --status-success: #3ddc97; --status-danger: #ff6b6b; --status-info: #6ea8ff;
-  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", Selawik, system-ui, -apple-system, sans-serif;
   --companion-surface-card: var(--surface-raised); --companion-surface-flat: var(--surface-app);
   --companion-surface-tab: var(--surface-selected); --companion-text-bright: var(--text-1);
   --companion-text-muted: var(--text-2); --c-font: var(--font-ui);
