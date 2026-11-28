@@ -171,11 +171,13 @@ pub fn safe_version_folder(version: &str) -> bool {
 
 /// A receipt's entry: a relative path inside its version folder.
 pub fn safe_relative_entry(entry: &str) -> bool {
-    let path = Path::new(entry);
+    // Both separators on every platform: a receipt written on Windows is read on
+    // Linux too, where `..\x` or `C:\x` would otherwise be one plain file name.
     !entry.is_empty()
         && entry.len() <= 200
-        && !path.is_absolute()
-        && path.components().all(|component| matches!(component, std::path::Component::Normal(_)))
+        && !entry.contains(':')
+        && !Path::new(entry).is_absolute()
+        && entry.split(['/', '\\']).all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 fn executable_extensions() -> Vec<&'static str> {
@@ -1467,6 +1469,8 @@ mod tests {
     fn hash_is_stable() {
         assert_eq!(short_hash("abc"), short_hash("abc"));
     }
+    // npm's `.cmd` shims exist only on Windows.
+    #[cfg(windows)]
     #[test]
     fn npm_wrapper_fixtures_resolve_native_exes_and_node_scripts() {
         let root = std::env::temp_dir().join(format!("retinue-fixture-{}", std::process::id()));
@@ -1828,7 +1832,7 @@ mod tests {
         for good in ["claude.exe", "bin/claude.exe", "package\\bin\\opencode.exe"] {
             assert!(safe_relative_entry(good), "{good}");
         }
-        for bad in ["", "../claude.exe", "/etc/passwd", "C:\\Windows\\cmd.exe", "bin/../../x.exe", ".."] {
+        for bad in ["", "../claude.exe", "/etc/passwd", "C:\\Windows\\cmd.exe", "bin/../../x.exe", "..", "..\\..\\x.exe", "bin//x", "./x"] {
             assert!(!safe_relative_entry(bad), "{bad}");
         }
         assert!(safe_version_folder("2.1.330") && safe_version_folder("1.6.0-beta.2"));

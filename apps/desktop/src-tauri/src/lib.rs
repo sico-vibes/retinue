@@ -846,7 +846,7 @@ mod reusable_daemon_copy_tests {
         fs::create_dir_all(&runtime_dir).unwrap();
         let source = root.join("retinued.exe");
         fs::write(&source, b"first build").unwrap();
-        let older = runtime_dir.join("retinued-1-1.exe");
+        let older = runtime_dir.join(format!("retinued-1-1{}", exe_suffix()));
         let interrupted = runtime_dir.join("retinued-99.partial");
         let unrelated = runtime_dir.join("other.exe");
         for path in [&older, &interrupted, &unrelated] { fs::write(path, b"x").unwrap(); }
