@@ -293,7 +293,10 @@ pub(crate) fn free_bytes(path: &Path) -> Option<u64> {
     // `stat` is a zeroed struct of the right type for the call to fill.
     let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
     let ok = unsafe { libc::statvfs(c_path.as_ptr(), &mut stat) };
-    (ok == 0).then(|| (stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64))
+    // The fields are `u64` on 64-bit Linux but narrower on 32-bit targets.
+    #[allow(clippy::unnecessary_cast)]
+    let free = (stat.f_bavail as u64).saturating_mul(stat.f_frsize as u64);
+    (ok == 0).then_some(free)
 }
 
 #[cfg(not(any(windows, unix)))]
