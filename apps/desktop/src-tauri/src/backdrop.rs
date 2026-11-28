@@ -38,6 +38,8 @@ const UNSUPPORTED_REASON: &str = "Backdrop blur is only built for Windows.";
 
 /// Which native effect the main window currently carries.
 #[derive(Clone, Copy, PartialEq, Eq)]
+// Only Windows applies Acrylic or Blur; other builds only ever hold `None`.
+#[cfg_attr(not(windows), allow(dead_code))]
 enum Effect {
     None,
     Acrylic,
@@ -323,6 +325,7 @@ pub fn window_backdrop_state(
         return Err("The frosted backdrop is only available on the main window.".to_string());
     }
     #[cfg(not(windows))]
+    #[allow(clippy::needless_return)]
     {
         let _ = state;
         return Ok(unsupported_report());

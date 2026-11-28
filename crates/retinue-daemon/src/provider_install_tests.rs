@@ -738,20 +738,9 @@ fn an_installs_owner_is_read_the_same_way_with_unix_paths() {
 }
 
 #[test]
-fn the_managed_asset_is_the_one_this_platform_publishes() {
-    let source = |provider: &str| agent_install::ROWS.iter().find(|row| row.provider == provider).and_then(|row| row.source);
-    let asset = |provider: &str| match source(provider) {
-        Some(agent_install::Source::GitHubAsset { asset, .. }) => asset,
-        _ => panic!("{provider} is a GitHub asset"),
-    };
-    if cfg!(windows) {
-        assert_eq!(asset("codex"), "codex-x86_64-pc-windows-msvc.exe");
-        assert_eq!(asset("pi"), "pi-windows-x64.zip");
-    } else {
-        assert_eq!(asset("codex"), "codex-x86_64-unknown-linux-musl.tar.gz");
-        assert_eq!(asset("pi"), "pi-linux-x64.tar.gz");
-        assert!(matches!(source("opencode"), Some(agent_install::Source::NpmPlatform { platform: "opencode-linux-x64", .. })));
-    }
+fn the_managed_assets_are_the_ones_each_platform_publishes() {
+    assert_eq!(agent_install::platform_assets(true), ("codex-x86_64-pc-windows-msvc.exe", "pi-windows-x64.zip", "opencode-windows-x64"));
+    assert_eq!(agent_install::platform_assets(false), ("codex-x86_64-unknown-linux-musl.tar.gz", "pi-linux-x64.tar.gz", "opencode-linux-x64"));
 }
 
 #[cfg(unix)]

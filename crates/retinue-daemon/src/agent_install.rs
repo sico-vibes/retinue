@@ -127,9 +127,23 @@ pub(crate) struct Row {
 /// field, so one table serves Windows and Linux: every managed provider publishes
 /// both (measured 28 November 2026 against the release APIs and the npm
 /// registry).
-const CODEX_ASSET: &str = if cfg!(windows) { "codex-x86_64-pc-windows-msvc.exe" } else { "codex-x86_64-unknown-linux-musl.tar.gz" };
-const PI_ASSET: &str = if cfg!(windows) { "pi-windows-x64.zip" } else { "pi-linux-x64.tar.gz" };
-const OPENCODE_PLATFORM: &str = if cfg!(windows) { "opencode-windows-x64" } else { "opencode-linux-x64" };
+///
+/// The publisher's names for one platform: Codex's asset, Pi's asset, OpenCode's
+/// npm platform package. Both answers are tested on every platform.
+pub(crate) const fn platform_assets(windows: bool) -> (&'static str, &'static str, &'static str) {
+    if windows {
+        ("codex-x86_64-pc-windows-msvc.exe", "pi-windows-x64.zip", "opencode-windows-x64")
+    } else {
+        ("codex-x86_64-unknown-linux-musl.tar.gz", "pi-linux-x64.tar.gz", "opencode-linux-x64")
+    }
+}
+// Test builds use the Windows names on every platform: the stub host in
+// `provider_install_tests.rs` serves those files (zips and a bare .exe), and the
+// tests exercise the download, check and publish pipeline, not the name.
+const ASSETS: (&str, &str, &str) = platform_assets(cfg!(any(windows, test)));
+const CODEX_ASSET: &str = ASSETS.0;
+const PI_ASSET: &str = ASSETS.1;
+const OPENCODE_PLATFORM: &str = ASSETS.2;
 
 pub(crate) const ROWS: &[Row] = &[
     Row {

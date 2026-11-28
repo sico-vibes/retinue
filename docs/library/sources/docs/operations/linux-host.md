@@ -77,6 +77,14 @@ retinued status                       # the URL other devices will use
 
 Tailscale publishes the gateway with `tailscale serve` (never `funnel`), exactly as on Windows. The method can only be chosen while Remote is off, which is the desktop's own rule.
 
+**One line before that, and the first attempt fails without it.** `tailscale serve` accepts root or the device's *operator* account, and the daemon runs as an ordinary user, so Tailscale answers `Access denied: serve config denied` and `retinued remote on` reports "Tailscale refused to publish the Retinue address.". Run this once, as root, as that user:
+
+```sh
+sudo tailscale set --operator="$USER"
+```
+
+It gives that account the ability to change Tailscale's serve configuration (and its other preferences) without root; it opens nothing.
+
 ## 5. Pair a device (the laptop, a phone)
 
 **From the laptop** (Settings â€º Machines â€º Add machine), with the host's URL `https://<host>.<tailnet>.ts.net`:
@@ -165,6 +173,7 @@ Removing the data folder (`~/.local/share/retinue`) deletes the database **and t
 |---|---|
 | `retinued status` says "No headless daemon is running here." | The daemon is not running, or it was started by a desktop shell (which writes no console file â€” that never happens on a VPS). `systemctl --user status retinued`, then `journalctl --user -u retinued -n 50`. |
 | `Turn Remote on before pairing a device.` | `retinued remote on --method tailscale`. |
+| `Tailscale refused to publish the Retinue address.` | `tailscale serve` needs root or the device's operator. Run `sudo tailscale set --operator="$USER"` once (section 4), then try again. Tailscale's own reason is printed only when you run `tailscale serve` by hand, so run it to see which refusal it is. |
 | `Tailscale is not installed on this computer.` | Install Tailscale (`curl -fsSL https://tailscale.com/install.sh | sh` is Tailscale's own installer), then `sudo systemctl start tailscaled` and `tailscale up`. |
 | A turn fails with "not installed" | The unit's `PATH` does not include the folder the CLI is in. Add it to the unit's `Environment=PATH=â€¦` line and restart. |
 | `retinued status` says `files` although a keyring is running | The keyring is locked, or the unit's environment has no session bus. Unlock the keyring and restart the unit; `journalctl --user -u retinued` says once at start whether a locked keyring was found. Nothing moves on its own until the next start. |
